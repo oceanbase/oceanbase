@@ -1683,13 +1683,31 @@ struct ObMulSourceDataNotifyArg
   bool redo_submitted_;
   bool redo_synced_;
 
+  // force kill trans without abort scn
+  bool is_force_kill_;
+
+  ObMulSourceDataNotifyArg() { reset(); }
+
+  void reset()
+  {
+    tx_id_.reset();
+    scn_.reset();
+    trans_version_.reset();
+    for_replay_ = false;
+    notify_type_ = NotifyType::ON_ABORT;
+    redo_submitted_ = false;
+    redo_synced_ = false;
+    is_force_kill_ = false;
+  }
+
   TO_STRING_KV(K_(tx_id),
                K_(scn),
                K_(trans_version),
                K_(for_replay),
                K_(notify_type),
                K_(redo_submitted),
-               K_(redo_synced));
+               K_(redo_synced),
+               K_(is_force_kill));
 
   // The redo log of current buf_node has been submitted;
   bool is_redo_submitted() const;

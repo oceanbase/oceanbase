@@ -497,7 +497,8 @@ private:
   int notify_data_source_(const NotifyType type,
                           const share::SCN &log_ts,
                           const bool for_replay,
-                          const ObTxBufferNodeArray &notify_array);
+                          const ObTxBufferNodeArray &notify_array,
+                          const bool is_force_kill = false);
   int gen_final_mds_array_(ObTxBufferNodeArray &array, bool is_committing = true) const;
   int gen_total_mds_array_(ObTxBufferNodeArray &mds_array) const;
   int deep_copy_mds_array(const ObTxBufferNodeArray &mds_array, bool need_replace = false);

@@ -5647,7 +5647,8 @@ int ObPartTransCtx::prepare_mul_data_source_tx_end_(bool is_commit)
 int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
                                         const SCN &log_ts,
                                         const bool for_replay,
-                                        const ObTxBufferNodeArray &notify_array)
+                                        const ObTxBufferNodeArray &notify_array,
+                                        const bool is_force_kill)
 {
   int ret = OB_SUCCESS;
   ObMulSourceDataNotifyArg arg;
@@ -5656,6 +5657,7 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
   arg.trans_version_ = ctx_tx_data_.get_commit_version();
   arg.for_replay_ = for_replay;
   arg.notify_type_ = notify_type;
+  arg.is_force_kill_ = is_force_kill;
 
   int64_t total_time = 0;
 
@@ -6432,18 +6434,27 @@ int ObPartTransCtx::do_force_kill_tx_()
 {
   int ret = OB_SUCCESS;
 
-  trans_kill_();
-  // Force kill cannot guarantee the consistency, so we just set end_log_ts
-  // to zero
-  end_log_ts_.set_min();
-  (void)trans_clear_();
-  if (OB_FAIL(unregister_timeout_task_())) {
-    TRANS_LOG(WARN, "unregister timer task error", KR(ret), "context", *this);
-  }
-  // Ignore ret
-  set_exiting_();
-  TRANS_LOG(INFO, "transaction killed success", "context", *this);
+  ObTxBufferNodeArray tmp_array;
 
+  if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
+    TRANS_LOG(WARN, "gen total mds array failed", KR(ret), K(*this));
+  // } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT,
+  //                                        ctx_tx_data_.get_end_log_ts() /*invalid_scn*/, false,
+  //                                        tmp_array, true /*is_force_kill*/))) {
+  //   TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
+  } else {
+    trans_kill_();
+    // Force kill cannot guarantee the consistency, so we just set end_log_ts
+    // to zero
+    end_log_ts_.set_min();
+    (void)trans_clear_();
+    if (OB_FAIL(unregister_timeout_task_())) {
+      TRANS_LOG(WARN, "unregister timer task error", KR(ret), "context", *this);
+    }
+    // Ignore ret
+    set_exiting_();
+    TRANS_LOG(INFO, "transaction killed success", "context", *this);
+  }
   return ret;
 }
 
