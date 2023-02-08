@@ -73,7 +73,7 @@ public:
   ObIAllocator *allocator_;
 };
 
-struct ObMediumCompactionInfo : public memtable::ObIMultiSourceDataUnit
+struct ObMediumCompactionInfo final : public memtable::ObIMultiSourceDataUnit
 {
 public:
   enum ObCompactionType
@@ -86,7 +86,7 @@ public:
   const static char *get_compaction_type_str(enum ObCompactionType type);
 public:
   ObMediumCompactionInfo();
-  ~ObMediumCompactionInfo();
+  virtual ~ObMediumCompactionInfo();
 
   int init(ObIAllocator &allocator, const ObMediumCompactionInfo &medium_info);
   int save_storage_schema(ObIAllocator &allocator, const storage::ObStorageSchema &storage_schema);
