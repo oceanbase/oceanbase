@@ -62,7 +62,8 @@ private:
                                            PlanText &plan_text,
                                            common::ObObj &result);
 
-  static int set_display_result_for_mysql(PlanText &plan_text,
+  static int set_display_result_for_mysql(sql::ObExecContext &ctx,
+                                          PlanText &plan_text,
                                           common::ObObj &result);
 
   static int get_plan_format(const ObString &format,

@@ -138,13 +138,14 @@ int ob_adjust_lob_datum(const ObObj &origin_obj,
         out_datum.set_string(full_data);
       }
     } else { // origin obj does not have lob header, but meta has, build temp lob header
-      OB_ASSERT(0); // should not come here?
-      ObObj out_obj(origin_obj);
-      if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(out_obj, allocator))) {
-        LOG_WARN("Lob: failed to convert plain lob data to temp lob", K(ret));
-      } else if (OB_FAIL(out_datum.from_obj(out_obj, obj_datum_map_))) {
-        LOG_WARN("convert lob obj to datum failed", K(ret), K(out_obj));
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect for input obj, input obj should has lob header", K(ret), K(origin_obj), K(obj_meta));
+      // ObObj out_obj(origin_obj);
+      // if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(out_obj, allocator))) {
+      //   LOG_WARN("Lob: failed to convert plain lob data to temp lob", K(ret));
+      // } else if (OB_FAIL(out_datum.from_obj(out_obj, obj_datum_map_))) {
+      //   LOG_WARN("convert lob obj to datum failed", K(ret), K(out_obj));
+      // }
     }
   }
   return ret;
