@@ -469,7 +469,7 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
                   bool is_wait_tablet_checksum_timeout = check_waiting_tablet_checksum_timeout();
                   if (OB_UNLIKELY(is_wait_tablet_checksum_timeout)) {
                     LOG_ERROR("waiting all tablet checksum has timed out, validate cross-cluster"
-                      "checksum with available tablet checksum" , K_(tenant_id), K(frozen_scn),
+                      " checksum with available tablet checksum" , K_(tenant_id), K(frozen_scn),
                       K_(major_merge_start_us), "current_time_us",
                       ObTimeUtil::current_time());
                   }
@@ -694,6 +694,7 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get tablet_ls pairs of current table schema", KR(ret), K_(tenant_id), K(table_id));
           } else {
+            bool need_udpate_report_scn = true;
             if (is_primary_service_) { // only primary major_freeze_service need to write tablet checksum
               const int64_t write_start_time_us = ObTimeUtil::current_time();
               if (OB_FAIL(contains_first_tablet_in_sys_ls(pairs, is_containing))) {
@@ -703,6 +704,7 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
                 // instead, just record the table_id of this table here. write tablet checksum
                 // and update report_scn of this table in the end of this round of major freeze.
                 special_table_id_ = table_id;
+                need_udpate_report_scn = false;
                 LOG_INFO("this table contains first tablet in sys ls, write tablet checksum and update"
                         " report_scn of this table later", K(table_id), K(pairs));
               } else if (OB_FAIL(write_tablet_checksum_at_table_level(stop, pairs, frozen_scn,
@@ -712,14 +714,16 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
               const int64_t write_cost_time_us = ObTimeUtil::current_time() - write_start_time_us;
               merge_time_statistics.update_merge_status_us_.write_tablet_checksum_us_ += write_cost_time_us;
             }
-            const int64_t update_start_time_us = ObTimeUtil::current_time();
-            if (FAILEDx(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
-                          tenant_id_, frozen_scn.get_val_for_tx(),
-                          pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
-              LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(pairs));
+            if (need_udpate_report_scn) {
+              const int64_t update_start_time_us = ObTimeUtil::current_time();
+              if (FAILEDx(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
+                            tenant_id_, frozen_scn.get_val_for_tx(),
+                            pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
+                LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(pairs));
+              }
+              const int64_t update_cost_time_us = ObTimeUtil::current_time() - update_start_time_us;
+              merge_time_statistics.update_merge_status_us_.update_report_scn_us_ += update_cost_time_us;
             }
-            const int64_t update_cost_time_us = ObTimeUtil::current_time() - update_start_time_us;
-            merge_time_statistics.update_merge_status_us_.update_report_scn_us_ += update_cost_time_us;
           }
         }
       }
@@ -837,8 +841,7 @@ int ObCrossClusterTabletChecksumValidator::try_update_tablet_checksum_items(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("tablet replica checksum is not valid", KR(ret), K(curr_replica_item));
           } else {
-            if (curr_replica_item.is_same_tablet(prev_replica_item)) {
-              continue;
+            if (curr_replica_item.is_same_tablet(prev_replica_item)) { // write one checksum_item per tablet
             } else {
               if (is_first_tablet_in_sys_ls(curr_replica_item)) {
                 contain_first_tablet_in_sys_ls = true;
@@ -863,7 +866,7 @@ int ObCrossClusterTabletChecksumValidator::try_update_tablet_checksum_items(
               if (OB_UNLIKELY(!mark_end_item.is_valid())) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected err about mark_end_item", KR(ret), K(mark_end_item));
-              } else if (OB_FAIL(tablet_checksum_items.push_back(mark_end_item))) {
+              } else if (FAILEDx(tablet_checksum_items.push_back(mark_end_item))) {
                 LOG_WARN("fail to push back tablet checksum item", KR(ret), K(mark_end_item));
               }
             }

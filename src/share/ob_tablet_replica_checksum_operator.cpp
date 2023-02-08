@@ -1615,11 +1615,12 @@ int ObTabletReplicaChecksumOperator::need_verify_checksum_(
       if (OB_SUCC(ret) && need_check) {
         if ((min_compaction_scn == compaction_scn) && (max_compaction_scn == compaction_scn)) {
           need_verify = true;
-        } else if ((min_compaction_scn == compaction_scn) && (max_compaction_scn > compaction_scn)) {
+        } else if ((min_compaction_scn >= compaction_scn) && (max_compaction_scn > compaction_scn)) {
           // This means another medium compaction is launched. Thus, no need to verify checksum.
           need_verify = false;
           LOG_INFO("no need to verify checksum, cuz max_compaction_scn of checksum_items is larger "
-                   "than compaction_scn of major compaction", K(max_compaction_scn), K(compaction_scn));
+                   "than compaction_scn of major compaction", K(min_compaction_scn),
+                   K(max_compaction_scn), K(compaction_scn));
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("unexpected compaction_scn of tablet_replica_checksum_items", KR(ret),
