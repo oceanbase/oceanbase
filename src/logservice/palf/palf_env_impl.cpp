@@ -364,7 +364,7 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
     PALF_LOG(WARN, "alloc palf_handle_impl failed", K(ret));
   } else if (OB_FAIL(palf_handle_impl->init(palf_id, access_mode, palf_base_info, replica_type,
       &fetch_log_engine_, base_dir, log_alloc_mgr_, log_block_pool_, &log_rpc_, &log_io_worker_,
-      this, self_, &election_timer_, palf_epoch))) {
+      this, self_, &election_timer_, palf_epoch, cb_thread_pool_.get_tg_id()))) {
     PALF_LOG(ERROR, "IPalfHandleImpl init failed", K(ret), K(palf_id));
     // NB: always insert value into hash map finally.
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, palf_handle_impl))) {
@@ -917,6 +917,7 @@ int PalfEnvImpl::reload_palf_handle_impl_(const int64_t palf_id)
   LSKey hash_map_key(palf_id);
   bool is_integrity = true;
   const int64_t palf_epoch = ATOMIC_AAF(&last_palf_epoch_, 1);
+  const int cb_pool_tg_id = cb_thread_pool_.get_tg_id();
   if (0 > (pret = snprintf(base_dir, MAX_PATH_SIZE, "%s/%ld", log_dir_, palf_id))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "snprint failed", K(ret), K(pret), K(palf_id));
@@ -924,7 +925,7 @@ int PalfEnvImpl::reload_palf_handle_impl_(const int64_t palf_id)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "alloc ipalf_handle_impl failed", K(ret));
   } else if (OB_FAIL(tmp_palf_handle_impl->load(palf_id, &fetch_log_engine_, base_dir, log_alloc_mgr_,
-          log_block_pool_, &log_rpc_, &log_io_worker_, this, self_, &election_timer_, palf_epoch, is_integrity))) {
+          log_block_pool_, &log_rpc_, &log_io_worker_, this, self_, &election_timer_, palf_epoch, cb_pool_tg_id, is_integrity))) {
     PALF_LOG(ERROR, "PalfHandleImpl init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, tmp_palf_handle_impl))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ insert_and_get failed", K(ret), K(palf_id), K(tmp_palf_handle_impl));

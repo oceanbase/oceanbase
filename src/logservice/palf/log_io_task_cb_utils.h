@@ -46,6 +46,20 @@ struct FlushLogCbCtx
   int64_t begin_ts_;
 };
 
+struct LogSlidingCbCtx
+{
+  LogSlidingCbCtx();
+  LogSlidingCbCtx(const int64_t palf_id, const LSN &log_end_lsn, const int64_t log_proposal_id);
+  ~LogSlidingCbCtx();
+  bool is_valid() const;
+  void reset();
+  LogSlidingCbCtx &operator=(const LogSlidingCbCtx &flush_log_cb_ctx);
+  TO_STRING_KV(K_(palf_id), K_(log_end_lsn), K_(log_proposal_id));
+  int64_t palf_id_;
+  LSN log_end_lsn_;
+  int64_t log_proposal_id_;
+};
+
 struct TruncateLogCbCtx {
   TruncateLogCbCtx(const LSN &lsn);
   TruncateLogCbCtx();

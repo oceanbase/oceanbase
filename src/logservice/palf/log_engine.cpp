@@ -305,6 +305,26 @@ int LogEngine::submit_flush_log_task(const FlushLogCbCtx &flush_log_cb_ctx,
   return ret;
 }
 
+int LogEngine::submit_sliding_cb_task(const int cb_pool_tg_id, const LogSlidingCbCtx &sliding_cb_ctx)
+{
+  int ret = OB_SUCCESS;
+  LogSlidingCbTask *sliding_cb_task = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogEngine not inited!!!");
+  } else if (0 >= cb_pool_tg_id || !sliding_cb_ctx.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "Invalid argument!!!", K(cb_pool_tg_id), K(sliding_cb_ctx));
+  } else if (OB_FAIL(generate_sliding_cb_task_(sliding_cb_ctx, sliding_cb_task))) {
+    PALF_LOG(ERROR, "generate_sliding_cb_task_ failed", K(sliding_cb_ctx));
+  } else if (OB_FAIL(push_task_into_cb_thread_pool(cb_pool_tg_id, sliding_cb_task))) {
+    PALF_LOG(ERROR, "submit sliding_cb_task failed");
+  } else {
+    PALF_LOG(TRACE, "submit_sliding_cb_task success", K(ret), K(cb_pool_tg_id), K(sliding_cb_ctx));
+  }
+  return ret;
+}
+
 int LogEngine::submit_flush_prepare_meta_task(const FlushMetaCbCtx &flush_meta_cb_ctx,
                                               const LogPrepareMeta &prepare_meta)
 {
@@ -1192,6 +1212,23 @@ int LogEngine::generate_flush_log_task_(const FlushLogCbCtx &flush_log_cb_ctx,
   return ret;
 }
 
+int LogEngine::generate_sliding_cb_task_(const LogSlidingCbCtx &sliding_cb_ctx,
+                                         LogSlidingCbTask *&sliding_cb_task)
+{
+  int ret = OB_SUCCESS;
+  // Be careful to handle the duration of this pointer
+  sliding_cb_task = NULL;
+  if (!sliding_cb_ctx.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (NULL == (sliding_cb_task = alloc_mgr_->alloc_log_sliding_cb_task(palf_id_, palf_epoch_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(ERROR, "alloc_log_sliding_cb_task failed");
+  } else if (OB_FAIL(sliding_cb_task->init(sliding_cb_ctx))) {
+    PALF_LOG(ERROR, "init LogSlidingCbTask failed");
+  } else {
+  }
+  return ret;
+}
 int LogEngine::generate_truncate_log_task_(const TruncateLogCbCtx &truncate_log_cb_ctx,
                                            LogIOTruncateLogTask *&truncate_log_task)
 {

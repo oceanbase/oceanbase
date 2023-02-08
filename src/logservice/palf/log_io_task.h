@@ -32,7 +32,8 @@ enum class LogIOTaskType
   FLUSH_META_TYPE = 2,
   TRUNCATE_PREFIX_TYPE = 3,
   TRUNCATE_LOG_TYPE = 4,
-	FLASHBACK_LOG_TYPE = 5
+  FLASHBACK_LOG_TYPE = 5,
+  SLIDING_CB_TYPE = 6
 };
 
 class LogIOTask;
@@ -209,6 +210,25 @@ private:
   int64_t palf_id_;
   bool is_inited_;
 };
+
+class LogSlidingCbTask : public LogIOTask {
+public:
+  LogSlidingCbTask(const int64_t palf_id,const int64_t palf_epoch);
+  ~LogSlidingCbTask();
+public:
+  int init(const LogSlidingCbCtx &sliding_cb_ctx);
+  void destroy();
+  int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final;
+  // IO cb thread will call this function to call fs cb
+  int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
+  LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::SLIDING_CB_TYPE; }
+  void free_this_(IPalfEnvImpl *palf_env_impl) override final;
+  INHERIT_TO_STRING_KV("LogSlidingCbTask", LogIOTask, K_(is_inited), K_(sliding_cb_ctx));
+private:
+  LogSlidingCbCtx sliding_cb_ctx_;
+  bool is_inited_;
+};
+
 } // end namespace palf
 } // end namespace oceanbase
 

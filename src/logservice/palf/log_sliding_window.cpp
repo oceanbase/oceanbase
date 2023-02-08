@@ -112,7 +112,6 @@ LogSlidingWindow::LogSlidingWindow()
     is_rebuilding_(false),
     last_rebuild_lsn_(),
     last_record_end_lsn_(PALF_INITIAL_LSN_VAL),
-    fs_cb_cost_stat_("[PALF STAT FS CB]", 2 * 1000 * 1000),
     log_life_time_stat_("[PALF STAT LOG LIFETIME]", 2 * 1000 * 1000),
     log_submit_wait_stat_("[PALF STAT LOG SUBMIT WAIT]", 2 * 1000 * 1000),
     log_submit_to_slide_cost_stat_("[PALF STAT LOG SLIDE WAIT]", 2 * 1000 * 1000),
@@ -121,6 +120,7 @@ LogSlidingWindow::LogSlidingWindow()
     accum_group_log_size_(0),
     last_record_group_log_id_(FIRST_VALID_LOG_ID - 1),
     freeze_mode_(FEEDBACK_FREEZE_MODE),
+    cb_pool_tg_id_(-1),
     is_inited_(false)
 {}
 
@@ -140,6 +140,7 @@ void LogSlidingWindow::destroy()
   log_engine_ = NULL;
   mm_ = NULL;
   mode_mgr_ = NULL;
+  cb_pool_tg_id_ = -1;
 }
 
 int LogSlidingWindow::flashback(const PalfBaseInfo &palf_base_info, const int64_t palf_id, common::ObILogAllocator *alloc_mgr)
@@ -201,7 +202,8 @@ int LogSlidingWindow::init(const int64_t palf_id,
                            palf::PalfFSCbWrapper *palf_fs_cb,
                            common::ObILogAllocator *alloc_mgr,
                            const PalfBaseInfo &palf_base_info,
-                           const bool is_normal_replica)
+                           const bool is_normal_replica,
+                           const int cb_pool_tg_id)
 {
   int ret = OB_SUCCESS;
   const LogInfo &prev_log_info = palf_base_info.prev_log_info_;
@@ -214,10 +216,11 @@ int LogSlidingWindow::init(const int64_t palf_id,
              || NULL == mm
              || NULL == mode_mgr
              || NULL == log_engine
-             || NULL == palf_fs_cb) {
+             || NULL == palf_fs_cb
+             || 0 >= cb_pool_tg_id) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argumetns", K(ret), K(palf_id), K(self), K(palf_base_info),
-        KP(state_mgr), KP(mm), KP(mode_mgr), KP(log_engine), KP(palf_fs_cb));
+        KP(state_mgr), KP(mm), KP(mode_mgr), KP(log_engine), KP(palf_fs_cb), K(cb_pool_tg_id));
   } else if (is_normal_replica && OB_FAIL(do_init_mem_(palf_id, palf_base_info, alloc_mgr))) {
     PALF_LOG(WARN, "do_init_mem_ failed", K(ret), K(palf_id));
   } else {
@@ -249,6 +252,7 @@ int LogSlidingWindow::init(const int64_t palf_id,
 
     MEMSET(append_cnt_array_, 0, APPEND_CNT_ARRAY_SIZE * sizeof(int64_t));
 
+    cb_pool_tg_id_ = cb_pool_tg_id;
     is_inited_ = true;
     LogGroupEntryHeader group_header;
     LogEntryHeader log_header;
@@ -1951,51 +1955,41 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       const int64_t log_submit_ts = log_task->get_submit_ts();
       log_task->unlock();
 
-      int tmp_ret = OB_SUCCESS;
       const int64_t fs_cb_begin_ts = ObTimeUtility::current_time();
-      if (OB_SUCCESS != (tmp_ret = palf_fs_cb_->update_end_lsn(palf_id_, log_end_lsn, log_proposal_id))) {
-        if (OB_EAGAIN == tmp_ret) {
-          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            PALF_LOG(WARN, "update_end_lsn eagain", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
+      LogSlidingCbCtx sliding_cb_ctx(palf_id_, log_end_lsn, log_proposal_id);
+      if (OB_FAIL(log_engine_->submit_sliding_cb_task(cb_pool_tg_id_, sliding_cb_ctx))) {
+        PALF_LOG(ERROR, "submit_sliding_cb_task failed", K_(palf_id), K_(self), K(log_id), KPC(log_task));
+      }
+
+      if (OB_SUCC(ret)) {
+        const int64_t log_life_time = fs_cb_begin_ts - log_gen_ts;
+        log_life_time_stat_.stat(log_life_time);
+        log_submit_wait_stat_.stat(log_submit_ts - log_gen_ts);
+        log_submit_to_slide_cost_stat_.stat(fs_cb_begin_ts - log_submit_ts);
+
+        if (log_life_time > 100 * 1000) {
+          if (palf_reach_time_interval(100 * 1000, log_life_long_warn_time_)) {
+            PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
+                K(fs_cb_begin_ts), K(log_life_time));
           }
+        }
+
+        if (OB_FAIL(checksum_.verify_accum_checksum(log_task_header.data_checksum_,
+                                                    log_task_header.accum_checksum_))) {
+          PALF_LOG(ERROR, "verify_accum_checksum failed", K_(palf_id), K_(self), K(log_id), KPC(log_task));
         } else {
-          PALF_LOG(WARN, "update_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
+          // update last_slide_lsn_
+          (void) try_update_last_slide_log_info_(log_id, log_max_scn, log_begin_lsn, log_end_lsn, \
+              log_proposal_id, log_accum_checksum);
         }
-      }
-      const int64_t fs_cb_cost = ObTimeUtility::current_time() - fs_cb_begin_ts;
-      fs_cb_cost_stat_.stat(fs_cb_cost);
-      if (fs_cb_cost > 1 * 1000) {
-        PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "fs_cb->update_end_lsn() cost too much time", K(tmp_ret), K_(palf_id), K_(self),
-            K(fs_cb_cost), K(log_id), K(log_begin_lsn), K(log_end_lsn), K(log_proposal_id));
-      }
 
-      const int64_t log_life_time = fs_cb_begin_ts - log_gen_ts;
-      log_life_time_stat_.stat(log_life_time);
-      log_submit_wait_stat_.stat(log_submit_ts - log_gen_ts);
-      log_submit_to_slide_cost_stat_.stat(fs_cb_begin_ts - log_submit_ts);
+        MEM_BARRIER();  // ensure last_slide_log_info_ has been updated before fetch log streamingly
 
-      if (log_life_time > 100 * 1000) {
-        if (palf_reach_time_interval(100 * 1000, log_life_long_warn_time_)) {
-          PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
-              K(fs_cb_begin_ts), K(log_life_time));
+        if (OB_SUCC(ret)
+            && (FOLLOWER == state_mgr_->get_role() || state_mgr_->is_leader_reconfirm())) {
+          // Check if need fetch log streamingly,
+          try_fetch_log_streamingly_(log_end_lsn);
         }
-      }
-
-      if (OB_FAIL(checksum_.verify_accum_checksum(log_task_header.data_checksum_,
-                                                  log_task_header.accum_checksum_))) {
-        PALF_LOG(ERROR, "verify_accum_checksum failed", K_(palf_id), K_(self), K(ret), K(log_id), KPC(log_task));
-      } else {
-        // update last_slide_lsn_
-        (void) try_update_last_slide_log_info_(log_id, log_max_scn, log_begin_lsn, log_end_lsn, \
-            log_proposal_id, log_accum_checksum);
-      }
-
-      MEM_BARRIER();  // ensure last_slide_log_info_ has been updated before fetch log streamingly
-
-      if (OB_SUCC(ret)
-          && (FOLLOWER == state_mgr_->get_role() || state_mgr_->is_leader_reconfirm())) {
-        // Check if need fetch log streamingly,
-        try_fetch_log_streamingly_(log_end_lsn);
       }
     }
     if (0 == log_id % 100) {
