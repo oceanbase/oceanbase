@@ -28,9 +28,12 @@ int ObLoadDataExecutor::check_is_direct_load(const ObLoadDataHint &load_hint, bo
 {
   int ret = OB_SUCCESS;
   int64_t enable_direct = 0;
+  int64_t append = 0;
   if (OB_FAIL(load_hint.get_value(ObLoadDataHint::ENABLE_DIRECT, enable_direct))) {
     LOG_WARN("fail to get value of ENABLE_DIRECT", K(ret));
-  } else if ((enable_direct != 0) && GCONF._ob_enable_direct_load) {
+  } else if (OB_FAIL(load_hint.get_value(ObLoadDataHint::APPEND, append))) {
+    LOG_WARN("fail to get value of APPEND", K(ret));
+  } else if ((enable_direct != 0 || append != 0) && GCONF._ob_enable_direct_load) {
     check_ret = true;
   } else {
     check_ret = false;

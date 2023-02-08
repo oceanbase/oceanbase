@@ -1882,11 +1882,19 @@ int ObLoadDataDirectImpl::init_execute_param()
   }
   // need_sort_
   if (OB_SUCC(ret)) {
+    int64_t append = 0;
+    int64_t enable_direct = 0;
     int64_t hint_need_sort = 0;
-    if (OB_FAIL(hint.get_value(ObLoadDataHint::NEED_SORT, hint_need_sort))) {
+    if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
+      LOG_WARN("fail to get value of APPEND", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::ENABLE_DIRECT, enable_direct))) {
+      LOG_WARN("fail to get value of ENABLE_DIRECT", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::NEED_SORT, hint_need_sort))) {
       LOG_WARN("fail to get value of NEED_SORT", KR(ret), K(hint));
-    } else {
+    } else if (enable_direct != 0) {
       execute_param_.need_sort_ = hint_need_sort > 0 ? true : false;
+    } else {
+      execute_param_.need_sort_ = true;
     }
   }
   // sql_mode_
@@ -1904,6 +1912,8 @@ int ObLoadDataDirectImpl::init_execute_param()
   }
   // online_opt_stat_gather_
   if (OB_SUCC(ret)) {
+    int64_t append = 0;
+    int64_t gather_optimizer_statistics = 0 ;
     ObSQLSessionInfo *session = nullptr;
     ObObj obj;
     if (OB_ISNULL(session = ctx_->get_my_session())) {
@@ -1911,17 +1921,31 @@ int ObLoadDataDirectImpl::init_execute_param()
       LOG_WARN("session is null", KR(ret));
     } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_ONLINE_OPT_STAT_GATHER, obj))) {
       LOG_WARN("fail to get sys variable", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
+      LOG_WARN("fail to get value of APPEND", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::GATHER_OPTIMIZER_STATISTICS, gather_optimizer_statistics))) {
+      LOG_WARN("fail to get value of APPEND", K(ret));
+    } else if ((append != 0) || (gather_optimizer_statistics != 0) || obj.get_bool()) {
+      execute_param_.online_opt_stat_gather_  = true;
     } else {
-      execute_param_.online_opt_stat_gather_ = obj.get_bool();
+      execute_param_.online_opt_stat_gather_ = false;
     }
   }
   // max_error_rows_
   if (OB_SUCC(ret)) {
+    int64_t append = 0;
+    int64_t enable_direct = 0;
     int64_t hint_error_rows = 0;
-    if (OB_FAIL(hint.get_value(ObLoadDataHint::ERROR_ROWS, hint_error_rows))) {
+    if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
+      LOG_WARN("fail to get value of APPEND", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::ENABLE_DIRECT, enable_direct))) {
+      LOG_WARN("fail to get value of ENABLE_DIRECT", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::ERROR_ROWS, hint_error_rows))) {
       LOG_WARN("fail to get value of ERROR_ROWS", KR(ret), K(hint));
-    } else {
+    } else if (enable_direct != 0) {
       execute_param_.max_error_rows_ = hint_error_rows;
+    } else {
+      execute_param_.max_error_rows_ = 0;
     }
   }
   // data_access_param_

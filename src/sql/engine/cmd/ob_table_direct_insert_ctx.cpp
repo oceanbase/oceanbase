@@ -48,13 +48,10 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
       load_exec_ctx_->allocator_ = &(exec_ctx->get_allocator());
       uint64_t sql_mode = 0;
       ObSEArray<int64_t, 16> store_column_idxs;
-      ObObj obj;
       if (OB_FAIL(init_store_column_idxs(MTL_ID(), table_id, store_column_idxs))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
       } else if (OB_FAIL(exec_ctx->get_my_session()->get_sys_variable(SYS_VAR_SQL_MODE, sql_mode))) {
         LOG_WARN("fail to get sys variable", KR(ret));
-      } else if (OB_FAIL(exec_ctx->get_my_session()->get_sys_variable(SYS_VAR_ONLINE_OPT_STAT_GATHER, obj))) {
-        LOG_WARN("fail to get sys variable", K(ret));
       } else {
         ObTableLoadParam param;
         param.column_count_ = store_column_idxs.count();
@@ -64,7 +61,7 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         param.batch_size_ = 100;
         param.session_count_ = parallel;
         param.px_mode_ = true;
-        param.online_opt_stat_gather_ = obj.get_bool();
+        param.online_opt_stat_gather_ = false;
         param.need_sort_ = true;
         param.max_error_row_count_ = 0;
         param.dup_action_ = sql::ObLoadDupActionType::LOAD_STOP_ON_DUP;

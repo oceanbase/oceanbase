@@ -6,6 +6,7 @@
 
 #include "storage/direct_load/ob_direct_load_fast_heap_table_builder.h"
 #include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_stat_define.h"
 #include "share/table/ob_table_load_define.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx.h"
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
@@ -100,7 +101,8 @@ int ObDirectLoadFastHeapTableBuilder::collect_obj(const ObDatumRow &datum_row)
       datum_row.storage_datums_[i + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() + 1];
     const ObColDesc &col_desc = param_.col_descs_->at(i + 1);
     ObOptColumnStat *col_stat = column_stat_array_.at(i);
-    if (col_stat != nullptr) {
+    bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+    if (col_stat != nullptr && is_valid) {
       ObObj obj;
       if (OB_FAIL(datum.to_obj_enhance(obj, col_desc.col_type_))) {
         LOG_WARN("Failed to transform datum to obj", K(ret), K(i), K(datum_row.storage_datums_[i]));
