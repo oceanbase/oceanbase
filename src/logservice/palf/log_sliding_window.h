@@ -53,7 +53,6 @@ class LogModeMgr;
 class LogTask;
 class LogGroupEntry;
 class TruncateLogCbCtx;
-class LogIOTask;
 
 enum FetchTriggerType
 {
@@ -132,8 +131,6 @@ private:
   common::ObMemberList lagged_list_;
 };
 
-extern int push_task_into_cb_thread_pool(const int64_t tg_id, LogIOTask *io_task);
-
 class LogSlidingWindow : public ISlidingCallBack
 {
 public:
@@ -151,8 +148,7 @@ public:
                    palf::PalfFSCbWrapper *palf_fs_cb,
                    common::ObILogAllocator *alloc_mgr,
                    const PalfBaseInfo &palf_base_info,
-                   const bool is_normal_replica,
-                   const int cb_pool_tg_id);
+                   const bool is_normal_replica);
   virtual int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data);
   virtual int64_t get_max_log_id() const;
   virtual const share::SCN get_max_scn() const;
@@ -505,6 +501,7 @@ private:
   bool is_rebuilding_;
   LSN last_rebuild_lsn_;
   LSN last_record_end_lsn_;
+  ObMiniStat::ObStatItem fs_cb_cost_stat_;
   ObMiniStat::ObStatItem log_life_time_stat_;
   ObMiniStat::ObStatItem log_submit_wait_stat_;
   ObMiniStat::ObStatItem log_submit_to_slide_cost_stat_;
@@ -514,7 +511,6 @@ private:
   int64_t last_record_group_log_id_;
   int64_t append_cnt_array_[APPEND_CNT_ARRAY_SIZE];
   FreezeMode freeze_mode_;
-  int cb_pool_tg_id_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(LogSlidingWindow);

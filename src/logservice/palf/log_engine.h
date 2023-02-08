@@ -36,12 +36,10 @@ class LogIOWorker;
 class PalfHandleImpl;
 class LogIOTask;
 class LogIOFlushLogTask;
-class LogSlidingCbTask;
 class LogIOTruncateLogTask;
 class LogIOFlushMetaTask;
 class LogIOTruncatePrefixBlocksTask;
 class FlushLogCbCtx;
-class LogSlidingCbCtx;
 class TruncateLogCbCtx;
 class FlushMetaCbCtx;
 class TruncatePrefixBlocksCbCtx;
@@ -115,8 +113,6 @@ public:
                             const int64_t buf_len);
 
   virtual int submit_flush_log_task(const FlushLogCbCtx &flush_log_cb_ctx, const LogWriteBuf &write_buf);
-  int submit_sliding_cb_task(const int cb_pool_tg_id,
-                             const LogSlidingCbCtx &sliding_cb_ctx);
 
   int submit_flush_prepare_meta_task(const FlushMetaCbCtx &flush_meta_cb_ctx,
                                      const LogPrepareMeta &prepare_meta);
@@ -404,8 +400,6 @@ private:
   int generate_flush_log_task_(const FlushLogCbCtx &flush_log_cb_ctx,
                                const LogWriteBuf &write_buf,
                                LogIOFlushLogTask *&flush_log_task);
-  int generate_sliding_cb_task_(const LogSlidingCbCtx &sliding_cb_ctx,
-                                LogSlidingCbTask *&sliding_cb_task);
 
   int generate_truncate_log_task_(const TruncateLogCbCtx &truncate_log_cb_ctx,
                                   LogIOTruncateLogTask *&truncate_log_task);

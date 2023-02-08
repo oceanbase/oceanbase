@@ -69,7 +69,6 @@ PalfHandleImpl::PalfHandleImpl()
     palf_env_impl_(NULL),
     append_cost_stat_("[PALF STAT WRITE LOG]", 2 * 1000 * 1000),
     flush_cb_cost_stat_("[PALF STAT FLUSH CB]", 2 * 1000 * 1000),
-    fs_cb_cost_stat_("[PALF STAT FS CB]", 2 * 1000 * 1000),
     replica_meta_lock_(),
     rebuilding_lock_(),
     config_change_lock_(),
@@ -107,8 +106,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
                          IPalfEnvImpl *palf_env_impl,
                          const common::ObAddr &self,
                          common::ObOccamTimer *election_timer,
-                         const int64_t palf_epoch,
-                         const int cb_pool_tg_id)
+                         const int64_t palf_epoch)
 {
   int ret = OB_SUCCESS;
   int pret = 0;
@@ -130,12 +128,11 @@ int PalfHandleImpl::init(const int64_t palf_id,
              || NULL == palf_env_impl
              || false == self.is_valid()
              || NULL == election_timer
-             || palf_epoch < 0
-             || cb_pool_tg_id <= 0) {
+             || palf_epoch < 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(palf_base_info), K(replica_type),
         K(access_mode), K(log_dir), K(alloc_mgr), K(log_block_pool), K(log_rpc),
-        K(log_io_worker), K(palf_env_impl), K(self), K(election_timer), K(palf_epoch), K(cb_pool_tg_id));
+        K(log_io_worker), K(palf_env_impl), K(self), K(election_timer), K(palf_epoch));
   } else if (OB_FAIL(log_meta.generate_by_palf_base_info(palf_base_info, access_mode, replica_type))) {
     PALF_LOG(WARN, "generate_by_palf_base_info failed", K(ret), K(palf_id), K(palf_base_info), K(access_mode), K(replica_type));
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
@@ -146,11 +143,11 @@ int PalfHandleImpl::init(const int64_t palf_id,
     PALF_LOG(WARN, "LogEngine init failed", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_meta, log_dir, self, fetch_log_engine,
-          alloc_mgr, log_rpc, log_io_worker, palf_env_impl, election_timer, cb_pool_tg_id))) {
+          alloc_mgr, log_rpc, log_io_worker, palf_env_impl, election_timer))) {
     PALF_LOG(WARN, "PalfHandleImpl do_init_mem_ failed", K(ret), K(palf_id));
   } else {
     PALF_EVENT("PalfHandleImpl init success", palf_id_, K(ret), K(self), K(access_mode), K(palf_base_info),
-        K(replica_type), K(log_dir), K(log_meta), K(palf_epoch), K(cb_pool_tg_id));
+        K(replica_type), K(log_dir), K(log_meta), K(palf_epoch));
   }
   return ret;
 }
@@ -171,7 +168,6 @@ int PalfHandleImpl::load(const int64_t palf_id,
                          const common::ObAddr &self,
                          common::ObOccamTimer *election_timer,
                          const int64_t palf_epoch,
-                         const int cb_pool_tg_id,
                          bool &is_integrity)
 {
   int ret = OB_SUCCESS;
@@ -204,7 +200,7 @@ int PalfHandleImpl::load(const int64_t palf_id,
   } else if (OB_FAIL(construct_palf_base_info_(max_committed_end_lsn, palf_base_info))) {
     PALF_LOG(WARN, "construct_palf_base_info_ failed", K(ret), K(palf_id), K(entry_header), K(palf_base_info));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_engine_.get_log_meta(), log_dir, self,
-          fetch_log_engine, alloc_mgr, log_rpc, log_io_worker, palf_env_impl, election_timer, cb_pool_tg_id))) {
+          fetch_log_engine, alloc_mgr, log_rpc, log_io_worker, palf_env_impl, election_timer))) {
     PALF_LOG(WARN, "PalfHandleImpl do_init_mem_ failed", K(ret), K(palf_id));
   } else if (OB_FAIL(append_disk_log_to_sw_(max_committed_end_lsn))) {
     PALF_LOG(WARN, "append_disk_log_to_sw_ failed", K(ret), K(palf_id));
@@ -2262,8 +2258,7 @@ int PalfHandleImpl::do_init_mem_(
     LogRpc *log_rpc,
     LogIOWorker *log_io_worker,
     IPalfEnvImpl *palf_env_impl,
-    common::ObOccamTimer *election_timer,
-    const int cb_pool_tg_id)
+    common::ObOccamTimer *election_timer)
 {
   int ret = OB_SUCCESS;
   int pret = -1;
@@ -2281,8 +2276,8 @@ int PalfHandleImpl::do_init_mem_(
   if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
-  } else if (OB_FAIL(sw_.init(palf_id, self, &state_mgr_, &config_mgr_, &mode_mgr_, &log_engine_,
-          &fs_cb_wrapper_, alloc_mgr, palf_base_info, is_normal_replica, cb_pool_tg_id))) {
+  } else if (OB_FAIL(sw_.init(palf_id, self, &state_mgr_, &config_mgr_, &mode_mgr_,
+          &log_engine_, &fs_cb_wrapper_, alloc_mgr, palf_base_info, is_normal_replica))) {
     PALF_LOG(WARN, "sw_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(election_.init_and_start(palf_id,
                                               election_timer,
@@ -4065,23 +4060,6 @@ int PalfHandleImpl::get_leader_max_scn_(SCN &max_scn)
   }
   if (need_renew_leader && palf_reach_time_interval(500 * 1000, last_renew_loc_time_us_)) {
     (void) lc_cb_->nonblock_renew_leader(palf_id_);
-  }
-  return ret;
-}
-
-int PalfHandleImpl::file_size_cb(const LogSlidingCbCtx &sliding_cb_ctx)
-{
-  int ret = OB_SUCCESS;
-  const int64_t fs_cb_begin_ts = ObTimeUtility::current_time();
-  if (OB_FAIL(fs_cb_wrapper_.update_end_lsn(sliding_cb_ctx.palf_id_, \
-          sliding_cb_ctx.log_end_lsn_, sliding_cb_ctx.log_proposal_id_))) {
-    PALF_LOG(WARN, "fs_cb_wrapper_.update_end_lsn failed", KPC(this), K(sliding_cb_ctx));
-  }
-  const int64_t fs_cb_cost = ObTimeUtility::current_time() - fs_cb_begin_ts;
-  fs_cb_cost_stat_.stat(fs_cb_cost);
-  if (fs_cb_cost > 1 * 1000) {
-    PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "fs_cb_wrapper_.update_end_lsn() cost too much time",
-        K_(palf_id), K_(self), K(fs_cb_cost), K(sliding_cb_ctx));
   }
   return ret;
 }

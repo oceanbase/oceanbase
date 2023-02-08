@@ -71,45 +71,6 @@ FlushLogCbCtx& FlushLogCbCtx::operator=(const FlushLogCbCtx &arg)
   return *this;
 }
 
-LogSlidingCbCtx::LogSlidingCbCtx()
-    : palf_id_(INVALID_PALF_ID),
-      log_end_lsn_(),
-      log_proposal_id_(INVALID_PROPOSAL_ID)
-{}
-
-LogSlidingCbCtx::LogSlidingCbCtx(const int64_t palf_id,
-                                 const LSN &log_end_lsn,
-                                 const int64_t log_proposal_id)
-    : palf_id_(palf_id),
-      log_end_lsn_(log_end_lsn),
-      log_proposal_id_(log_proposal_id)
-{}
-
-LogSlidingCbCtx::~LogSlidingCbCtx()
-{
-  reset();
-}
-
-bool LogSlidingCbCtx::is_valid() const
-{
-  return (is_valid_palf_id(palf_id_) && log_end_lsn_.is_valid() && INVALID_PROPOSAL_ID != log_proposal_id_);
-}
-
-void LogSlidingCbCtx::reset()
-{
-  palf_id_ = INVALID_PALF_ID;
-  log_end_lsn_.reset();
-  log_proposal_id_ = INVALID_PROPOSAL_ID;
-}
-
-LogSlidingCbCtx& LogSlidingCbCtx::operator=(const LogSlidingCbCtx &arg)
-{
-  palf_id_ = arg.palf_id_;
-  log_end_lsn_ = arg.log_end_lsn_;
-  log_proposal_id_ = arg.log_proposal_id_;
-  return *this;
-}
-
 TruncateLogCbCtx::TruncateLogCbCtx()
     : lsn_()
 {

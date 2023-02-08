@@ -572,7 +572,6 @@ public:
   virtual int get_palf_epoch(int64_t &palf_epoch) const = 0;
   virtual int diagnose(PalfDiagnoseInfo &diagnose_info) const = 0;
   virtual int update_palf_stat() = 0;
-  virtual int file_size_cb(const LogSlidingCbCtx &sliding_cb_ctx) = 0;
 
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
@@ -595,8 +594,7 @@ public:
            IPalfEnvImpl *palf_env_impl,
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
-           const int64_t palf_epoch,
-           const int cb_pool_tg_id);
+           const int64_t palf_epoch);
   bool check_can_be_used() const override final;
   // 重启接口
   // 1. 生成迭代器，定位meta_storage和log_storage的终点;
@@ -614,7 +612,6 @@ public:
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
            const int64_t palf_epoch,
-           const int cb_pool_tg_id,
            bool &is_integrity);
   void destroy();
   int start();
@@ -845,7 +842,6 @@ public:
                 const int64_t timeout_us) override final;
   int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   int update_palf_stat() override final;
-  int file_size_cb(const LogSlidingCbCtx &sliding_cb_ctx);
   TO_STRING_KV(K_(palf_id), K_(self), K_(has_set_deleted));
 private:
   int do_init_mem_(const int64_t palf_id,
@@ -858,8 +854,7 @@ private:
                    LogRpc *log_rpc,
                    LogIOWorker *log_io_worker,
                    IPalfEnvImpl *palf_env_impl,
-                   common::ObOccamTimer *election_timer,
-                   const int cb_pool_tg_id);
+                   common::ObOccamTimer *election_timer);
   int after_flush_prepare_meta_(const int64_t &proposal_id);
   int after_flush_config_change_meta_(const int64_t proposal_id, const LogConfigVersion &config_version);
   int after_flush_mode_meta_(const int64_t proposal_id,
@@ -1039,7 +1034,6 @@ private:
   bool diskspace_enough_;
   ObMiniStat::ObStatItem append_cost_stat_;
   ObMiniStat::ObStatItem flush_cb_cost_stat_;
-  ObMiniStat::ObStatItem fs_cb_cost_stat_;
   // a spin lock for read/write replica_meta mutex
   SpinLock replica_meta_lock_;
   SpinLock rebuilding_lock_;

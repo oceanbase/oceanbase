@@ -29,7 +29,6 @@ namespace common
 ObTenantMutilAllocator::ObTenantMutilAllocator(uint64_t tenant_id)
   : tenant_id_(tenant_id), total_limit_(INT64_MAX), pending_replay_mutator_size_(0),
     LOG_IO_FLUSH_LOG_TASK_SIZE(sizeof(palf::LogIOFlushLogTask)),
-    LOG_SLIDING_CB_TASK_SIZE(sizeof(palf::LogSlidingCbTask)),
     LOG_IO_TRUNCATE_LOG_TASK_SIZE(sizeof(palf::LogIOTruncateLogTask)),
     LOG_IO_FLUSH_META_TASK_SIZE(sizeof(palf::LogIOFlushMetaTask)),
     LOG_IO_TRUNCATE_PREFIX_BLOCKS_TASK_SIZE(sizeof(palf::LogIOTruncatePrefixBlocksTask)),
@@ -44,7 +43,6 @@ ObTenantMutilAllocator::ObTenantMutilAllocator(uint64_t tenant_id)
     inner_table_replay_task_alloc_(ObMemAttr(tenant_id, ObModIds::OB_LOG_REPLAY_ENGINE), ObVSliceAlloc::DEFAULT_BLOCK_SIZE, inner_table_replay_blk_alloc_),
     user_table_replay_task_alloc_(ObMemAttr(tenant_id, ObModIds::OB_LOG_REPLAY_ENGINE), ObVSliceAlloc::DEFAULT_BLOCK_SIZE, user_table_replay_blk_alloc_),
     log_io_flush_log_task_alloc_(LOG_IO_FLUSH_LOG_TASK_SIZE, ObMemAttr(tenant_id, "FlushLog"), choose_blk_size(LOG_IO_FLUSH_LOG_TASK_SIZE), clog_blk_alloc_, this),
-    log_sliding_cb_task_alloc_(LOG_SLIDING_CB_TASK_SIZE, ObMemAttr(tenant_id, "SlidingCb"), choose_blk_size(LOG_SLIDING_CB_TASK_SIZE), clog_blk_alloc_, this),
     log_io_truncate_log_task_alloc_(LOG_IO_TRUNCATE_LOG_TASK_SIZE, ObMemAttr(tenant_id, "TruncateLog"), choose_blk_size(LOG_IO_TRUNCATE_LOG_TASK_SIZE), clog_blk_alloc_, this),
     log_io_flush_meta_task_alloc_(LOG_IO_FLUSH_META_TASK_SIZE, ObMemAttr(tenant_id, "FlushMeta"), choose_blk_size(LOG_IO_FLUSH_META_TASK_SIZE), clog_blk_alloc_, this),
     log_io_truncate_prefix_blocks_task_alloc_(LOG_IO_TRUNCATE_PREFIX_BLOCKS_TASK_SIZE, ObMemAttr(tenant_id, "FlushMeta"), choose_blk_size(LOG_IO_TRUNCATE_PREFIX_BLOCKS_TASK_SIZE), clog_blk_alloc_, this),
@@ -84,7 +82,6 @@ void ObTenantMutilAllocator::try_purge()
   inner_table_replay_task_alloc_.purge_extra_cached_block(0);
   user_table_replay_task_alloc_.purge_extra_cached_block(0);
   log_io_flush_log_task_alloc_.purge_extra_cached_block(0);
-  log_sliding_cb_task_alloc_.purge_extra_cached_block(0);
   log_io_truncate_log_task_alloc_.purge_extra_cached_block(0);
   log_io_flush_meta_task_alloc_.purge_extra_cached_block(0);
   log_io_truncate_prefix_blocks_task_alloc_.purge_extra_cached_block(0);
@@ -182,28 +179,6 @@ void ObTenantMutilAllocator::free_log_io_flush_log_task(LogIOFlushLogTask *ptr)
     ATOMIC_DEC(&flying_log_task_);
   }
 }
-
-LogSlidingCbTask *ObTenantMutilAllocator::alloc_log_sliding_cb_task(
-		const int64_t palf_id, const int64_t palf_epoch)
-{
-  LogSlidingCbTask *ret_ptr = NULL;
-  void *ptr = log_sliding_cb_task_alloc_.alloc();
-  if (NULL != ptr) {
-    ret_ptr = new(ptr)LogSlidingCbTask(palf_id, palf_epoch);
-    ATOMIC_INC(&flying_sliding_cb_task_);
-  }
-  return ret_ptr;
-}
-
-void ObTenantMutilAllocator::free_log_sliding_cb_task(LogSlidingCbTask *ptr)
-{
-  if (OB_LIKELY(NULL != ptr)) {
-    ptr->~LogSlidingCbTask();
-    log_sliding_cb_task_alloc_.free(ptr);
-    ATOMIC_DEC(&flying_sliding_cb_task_);
-  }
-}
-
 
 LogIOTruncateLogTask *ObTenantMutilAllocator::alloc_log_io_truncate_log_task(
 		const int64_t palf_id, const int64_t palf_epoch)
