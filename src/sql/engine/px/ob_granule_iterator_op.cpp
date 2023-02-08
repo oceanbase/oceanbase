@@ -961,9 +961,9 @@ int ObGranuleIteratorOp::fetch_rescan_pw_task_infos(const common::ObIArray<int64
               pwj_rescan_task_infos_.at(rescan_task_idx_)))) {
           LOG_WARN("reset table scan's ranges failed", K(ret));
         } else {
-          rescan_task_idx_++;
           LOG_DEBUG("produce a gi task(PWJ)", K(op_ids.at(idx)),
             K(pwj_rescan_task_infos_.at(rescan_task_idx_)));
+          rescan_task_idx_++;
         }
       }
     }
