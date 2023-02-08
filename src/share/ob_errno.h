@@ -5243,7 +5243,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJ_UNLOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6276, there is an unlock operation doing, unlock conflict."
 #define OB_SCN_OUT_OF_BOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6277, scn is out of bounds of memtable"
 #define OB_TRANS_IDLE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-24761: transaction rolled back: transaction idle timeout"
-#define OB_TRANS_FREE_ROUTE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6279, Query is not supported to be executed on txn temporary node"
+#define OB_TRANS_FREE_ROUTE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-06279: Query is not supported to be executed on txn temporary node"
 #define OB_TRANS_LIVE_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6280, Transaction cost too much without commit or rollback"
 #define OB_TRANS_COMMIT_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6281, Transaction commit cost too much"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"

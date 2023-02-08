@@ -1670,7 +1670,7 @@ DEFINE_ERROR(OB_SCN_OUT_OF_BOUND, -6277, -1, "HY000", "scn is out of bounds of m
 
 DEFINE_ORACLE_ERROR(OB_TRANS_IDLE_TIMEOUT, -6278, 6002, "25000", "Transaction idle timeout occurred, please rollback the transaction, set the variable ob_trx_idle_timeout to a larger value and then restart the transaction", 24761, "transaction rolled back: transaction idle timeout");
 // for transaction free route
-DEFINE_ERROR(OB_TRANS_FREE_ROUTE_NOT_SUPPORTED, -6279, -1, "HY000", "Query is not supported to be executed on txn temporary node");
+DEFINE_ORACLE_ERROR(OB_TRANS_FREE_ROUTE_NOT_SUPPORTED, -6279, 6279, "HY000", "Query is not supported to be executed on txn temporary node", 6279, "Query is not supported to be executed on txn temporary node");
 
 DEFINE_ERROR(OB_TRANS_LIVE_TOO_MUCH_TIME, -6280, -1, "HY000", "Transaction cost too much without commit or rollback");
 DEFINE_ERROR(OB_TRANS_COMMIT_TOO_MUCH_TIME, -6281, -1, "HY000", "Transaction commit cost too much");

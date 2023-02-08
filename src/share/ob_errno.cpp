@@ -18301,13 +18301,13 @@ static const _error _error_OB_TRANS_FREE_ROUTE_NOT_SUPPORTED = {
       .error_name            = "OB_TRANS_FREE_ROUTE_NOT_SUPPORTED",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
-      .mysql_errno           = -1,
+      .mysql_errno           = 6279,
       .sqlstate              = "HY000",
       .str_error             = "Query is not supported to be executed on txn temporary node",
       .str_user_error        = "Query is not supported to be executed on txn temporary node",
-      .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -6279, Query is not supported to be executed on txn temporary node",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -6279, Query is not supported to be executed on txn temporary node"
+      .oracle_errno          = 6279,
+      .oracle_str_error      = "ORA-06279: Query is not supported to be executed on txn temporary node",
+      .oracle_str_user_error = "ORA-06279: Query is not supported to be executed on txn temporary node"
 };
 static const _error _error_OB_TRANS_LIVE_TOO_MUCH_TIME = {
       .error_name            = "OB_TRANS_LIVE_TOO_MUCH_TIME",
