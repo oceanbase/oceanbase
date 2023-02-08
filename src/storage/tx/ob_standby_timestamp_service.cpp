@@ -159,7 +159,7 @@ int ObStandbyTimestampService::switch_to_follower_gracefully()
   if (ObTimestampAccess::ServiceType::STS_LEADER == type) {
     MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::FOLLOWER);
   }
-  TRANS_LOG(INFO, "ObStandbyTimestampService switch to follower gracefully success", K(type), K_(epoch), "service_type", MTL(ObTimestampAccess *)->get_service_type());
+  TRANS_LOG(INFO, "ObStandbyTimestampService switch to follower gracefully success", K(type), "service_type", MTL(ObTimestampAccess *)->get_service_type(), KPC(this));
   return OB_SUCCESS;
 }
 
@@ -169,7 +169,7 @@ void ObStandbyTimestampService::switch_to_follower_forcedly()
   if (ObTimestampAccess::ServiceType::STS_LEADER == type) {
     MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::FOLLOWER);
   }
-  TRANS_LOG(INFO, "ObStandbyTimestampService switch to follower forcedly success", K(type), K_(epoch), "service_type", MTL(ObTimestampAccess *)->get_service_type());
+  TRANS_LOG(INFO, "ObStandbyTimestampService switch to follower forcedly success", K(type), "service_type", MTL(ObTimestampAccess *)->get_service_type(), KPC(this));
 }
 
 int ObStandbyTimestampService::resume_leader()
@@ -182,7 +182,7 @@ int ObStandbyTimestampService::resume_leader()
     if (ObTimestampAccess::ServiceType::FOLLOWER == type) {
       MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::STS_LEADER);
     }
-    TRANS_LOG(INFO, "ObStandbyTimestampService resume leader success", K(type), K_(epoch), "service_type", MTL(ObTimestampAccess *)->get_service_type());
+    TRANS_LOG(INFO, "ObStandbyTimestampService resume leader success", K(type), "service_type", MTL(ObTimestampAccess *)->get_service_type(), KPC(this));
   }
   return ret;
 }
@@ -202,7 +202,7 @@ int ObStandbyTimestampService::switch_to_leader()
     if (ObTimestampAccess::ServiceType::FOLLOWER == type) {
       MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::STS_LEADER);
     }
-    TRANS_LOG(INFO, "ObStandbyTimestampService switch to leader success", K(type), K_(epoch), "service_type", MTL(ObTimestampAccess *)->get_service_type());
+    TRANS_LOG(INFO, "ObStandbyTimestampService switch to leader success", K(type), "service_type", MTL(ObTimestampAccess *)->get_service_type(), KPC(this));
   }
   return ret;
 }
@@ -273,11 +273,11 @@ int ObStandbyTimestampService::get_number(int64_t &gts)
   int ret = OB_SUCCESS;
   bool leader = false;
   if (OB_FAIL(check_leader(leader))) {
-    TRANS_LOG(WARN, "check leader fail", K(ret));
+    TRANS_LOG(WARN, "check leader fail", K(ret), KPC(this));
   } else if (!leader) {
     ret = OB_NOT_MASTER;
     if (EXECUTE_COUNT_PER_SEC(10)) {
-      TRANS_LOG(WARN, "ObStandbyTimestampService is not leader", K(ret));
+      TRANS_LOG(WARN, "ObStandbyTimestampService is not leader", K(ret), KPC(this));
     }
   } else {
     gts = ATOMIC_LOAD(&last_id_);

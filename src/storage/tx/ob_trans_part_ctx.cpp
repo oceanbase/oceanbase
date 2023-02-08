@@ -6567,6 +6567,7 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
                                       bool &is_determined_state)
 {
   int ret = OB_ERR_SHARED_LOCK_CONFLICT;
+  int tmp_ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
@@ -6593,15 +6594,20 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
       }
       switch (tmp_state_info.state_) {
         case ObTxState::UNKNOWN: {
-          // 当前为获取的日志流回放位点，
-          // 但是只依赖日志流回放位点不能知道不存在是未回放还是已经回收
-          // 所以unkonwn不做处理
-          // if (tmp_state_info.version_ != OB_INVALID_TIMESTAMP && tmp_state_info.version_ > snapshot) {
-          //   can_read = false;
-          //   trans_version = 0;
-          //   is_determined_state = false;
-          //   ret = OB_SUCCESS;
-          // }
+          // 当前为获取的日志流回放位点
+          SCN readable_scn;
+          if (tmp_state_info.version_.is_valid()) {
+            if (OB_SUCCESS != (tmp_ret = get_ls_replica_readable_scn_(ls_id_, readable_scn))) {
+              TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(snapshot), KPC(this));
+            } else if (readable_scn >= tmp_state_info.version_) {
+              if (ObTxState::PREPARE == exec_info_.state_) {
+                can_read = false;
+                trans_version.set_min();
+                is_determined_state = false;
+                ret = OB_SUCCESS;
+              }
+            }
+          }
           break;
         }
         case ObTxState::INIT:
@@ -6657,7 +6663,6 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
     }
     if (count == 0 || (OB_ERR_SHARED_LOCK_CONFLICT == ret && min_snapshot <= snapshot)) {
       if (ask_state_info_interval_.reach()) {
-        int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = build_and_post_ask_state_msg_(snapshot))) {
           TRANS_LOG(WARN, "ask state from coord fail", K(ret), K(snapshot), KPC(this));
         }
@@ -6713,7 +6718,7 @@ int ObPartTransCtx::check_ls_state_(const SCN &snapshot, const ObLSID &ls_id)
       }
     } else {
       bool is_contain = false;
-      for (int j = 0, is_contain = false; j<state_info_array_.count() && !is_contain; j++) {
+      for (int j = 0; j<state_info_array_.count() && !is_contain; j++) {
         is_contain = state_info.ls_id_ == state_info_array_.at(j).ls_id_;
       }
       if (!is_contain) {

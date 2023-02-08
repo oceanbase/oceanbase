@@ -3059,6 +3059,26 @@ int ObTransService::check_and_fill_state_info(const ObTransID &tx_id, ObStateInf
   SCN version;
   if (OB_FAIL(get_tx_state_from_tx_table_(state_info.ls_id_, tx_id, tx_state, version))) {
     TRANS_LOG(INFO, "get tx state from tx table fail", K(ret), K(state_info.ls_id_), K(tx_id));
+    if (OB_TRANS_CTX_NOT_EXIST == ret) {
+      ObLSService *ls_svr =  MTL(ObLSService *);
+      ObLSHandle handle;
+      ObLS *ls = nullptr;
+      if (OB_ISNULL(ls_svr)) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "log stream service is NULL", K(ret));
+      } else if (OB_FAIL(ls_svr->get_ls(state_info.ls_id_, handle, ObLSGetMod::TRANS_MOD))) {
+        TRANS_LOG(WARN, "get log stream failed", K(ret));
+      } else if (OB_ISNULL(ls = handle.get_ls())) {
+        ret = OB_TRANS_CTX_NOT_EXIST;
+      } else if (OB_FAIL(ls->get_ls_replica_readable_scn(version))) {
+        TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls_id));
+      } else if (version <= state_info.snapshot_version_) {
+        state_info.state_ = ObTxState::UNKNOWN;
+        state_info.version_ = version;
+      } else {
+        ret = OB_TRANS_CTX_NOT_EXIST;
+      }
+    }
   } else {
     switch (tx_state) {
       case ObTxData::COMMIT:
