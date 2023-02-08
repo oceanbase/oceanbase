@@ -743,6 +743,13 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
     // skip it
   } else if (! in_normal_status_(key)) {
     // skip it
+  } else if (OB_BACKUP_DEVICE_OUT_OF_SPACE == ret_code) {
+    // ret code should report to user
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+      LOG_DBA_ERROR(OB_BACKUP_DEVICE_OUT_OF_SPACE, "msg", "archive device is full", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
   } else if (is_ignore_ret_code_(ret_code)) {
   } else {
     ARCHIVE_LOG(ERROR, "archive sender encounter fatal error", K(ret), K(id), K(key), K(ret_code));
