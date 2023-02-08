@@ -831,7 +831,6 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const bool enable_flt, 
     real_ret_code = (OB_SUCCESS == ret_code || error_need_retry) ? OB_CANCELED : ret_code;
   } else if (SUCCESS == old_status || error_need_retry) {
     LOG_INFO("error code found, but execute again", K(ret_code), K(ret_code_), K(old_status), K(new_status), K(err_code_occurence_cnt_));
-    ret_code_ = OB_SUCCESS;
     new_status = old_status;
     real_ret_code = OB_SUCCESS;
   }
