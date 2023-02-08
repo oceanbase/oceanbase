@@ -11517,6 +11517,9 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
+# 12370: __all_virtual_wait_for_partition_split_tablet
+
 #
 # 余留位置
 #
