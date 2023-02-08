@@ -223,6 +223,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
         // Case 2.0: read the latest written of current txn
         can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
         trans_version_ = SCN::min_scn();
+        is_determined_state_ = false;
       } else if (snapshot_tx_id == data_tx_id) {
         // Case 2.1: data is owned by the read txn
         bool tmp_can_read = false;
@@ -241,6 +242,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
           !tx_data.undo_status_list_.is_contain(data_sql_sequence);
         // Tip 2.1.2: trans version is unnecessary for the running txn
         trans_version_ = SCN::min_scn();
+        is_determined_state_ = false;
       } else {
         // Case 2.2: data is not owned by the read txn
         // NB: we need pay attention to the choice condition when issuing the
@@ -256,6 +258,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
           // unnecessary for the running txn
           can_read_ = false;
           trans_version_ = SCN::min_scn();
+          is_determined_state_ = false;
         } else if (tx_cc_ctx->prepare_version_ > snapshot_version) {
           // Case 2.2.2: data is at least in prepare state and the prepare
           // version is bigger than the read txn's snapshot version, then the
@@ -264,12 +267,15 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
           // the running txn
           can_read_ = false;
           trans_version_ = SCN::min_scn();
+          is_determined_state_ = false;
         } else {
           // Only dml statement can read elr data
           if (ObTxData::ELR_COMMIT == state
               && lock_for_read_arg_.mvcc_acc_ctx_.snapshot_.tx_id_.is_valid()) {
             can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
             trans_version_ = commit_version;
+            // TODO(handora.qc): use better implementaion to remove it
+            is_determined_state_ = true;
           } else {
             // Case 2.2.3: data is in prepare state and the prepare version is
             // smaller than the read txn's snapshot version, then the data's
@@ -279,13 +285,11 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
             ret = OB_ERR_SHARED_LOCK_CONFLICT;
             if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
               TRANS_LOG(WARN, "lock_for_read need retry", K(ret),
-                        K(tx_data), K(lock_for_read_arg_), K(tx_cc_ctx));
+                        K(tx_data), K(lock_for_read_arg_), KPC(tx_cc_ctx));
             }
           }
         }
       }
-      // Tip 2.1: data is during execution, so the state is not decided.
-      is_determined_state_ = false;
       break;
     }
     case ObTxData::ABORT: {
@@ -297,6 +301,9 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
       break;
     }
     default:
+      // unexpected case
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected state", K(tx_data), KPC(tx_cc_ctx), K(lock_for_read_arg_));
       break;
   }
 
