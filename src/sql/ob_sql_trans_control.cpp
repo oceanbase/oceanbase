@@ -1106,9 +1106,11 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
   int ObSqlTransControl::serialize_txn_##name##_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos) \
   {                                                                     \
     int ret = OB_SUCCESS;                                               \
-    transaction::ObTransService *txs = NULL;                            \
-    OZ (get_tx_service(&session, txs));                                 \
-    OZ (txs->txn_free_route__serialize_##name##_state(session.get_sessid(), session.get_tx_desc(), session.get_txn_free_route_ctx(), buf, len, pos)); \
+    MTL_SWITCH(session.get_effective_tenant_id()) {                     \
+      transaction::ObTransService *txs = NULL;                          \
+      OZ (get_tx_service(&session, txs));                               \
+      OZ (txs->txn_free_route__serialize_##name##_state(session.get_sessid(), session.get_tx_desc(), session.get_txn_free_route_ctx(), buf, len, pos)); \
+    }                                                                   \
     LOG_DEBUG("serialize-txn-state", K(session));                       \
     return ret;                                                         \
   }                                                                     \
@@ -1116,9 +1118,9 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
   {                                                                     \
     int ret = OB_SUCCESS;                                               \
     transaction::ObTransService *txs = NULL;                            \
-    OZ (get_tx_service(&session, txs));                                 \
-    if (OB_SUCC(ret)) {                                                 \
-      return txs->txn_free_route__get_##name##_state_serialize_size(session.get_tx_desc(), session.get_txn_free_route_ctx()); \
+    MTL_SWITCH(session.get_effective_tenant_id()) {                     \
+      OZ (get_tx_service(&session, txs));                               \
+      OZ (txs->txn_free_route__get_##name##_state_serialize_size(session.get_tx_desc(), session.get_txn_free_route_ctx())); \
     }                                                                   \
     LOG_DEBUG("get-serialize-size-txn-state", K(session));              \
     return ret;                                                         \
