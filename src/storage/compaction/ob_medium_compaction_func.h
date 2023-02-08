@@ -15,6 +15,7 @@
 #include "share/tablet/ob_tablet_filter.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {
@@ -53,7 +54,7 @@ public:
     ObIAllocator &allocator,
     ObMediumCompactionInfo &medium_info);
 
-  int schedule_next_medium_for_leader(const int64_t major_snapshot);
+  int schedule_next_medium_for_leader(const int64_t major_snapshot, ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat);
 
   int decide_medium_snapshot(
       const bool is_major,
@@ -109,7 +110,7 @@ protected:
       ObTablet &tablet,
       const int64_t schedule_scn,
       const ObMediumCompactionInfo::ObCompactionType compaction_type);
-  int schedule_next_medium_primary_cluster(const int64_t major_snapshot);
+  int schedule_next_medium_primary_cluster(const int64_t major_snapshot, ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat);
 
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
   static int get_schedule_medium_from_memtable(

@@ -1007,7 +1007,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
         } else if (could_major_merge
           && (!tablet_merge_finish || enable_adaptive_compaction)
           && OB_TMP_FAIL(func.schedule_next_medium_for_leader(
-            tablet_merge_finish ? 0 : merge_version))) { // schedule another round
+            tablet_merge_finish ? 0 : merge_version, schedule_stats_))) { // schedule another round
           LOG_WARN("failed to schedule next medium", K(tmp_ret), K(ls_id), K(tablet_id));
         } else {
           schedule_stats_.schedule_cnt_++;

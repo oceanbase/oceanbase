@@ -179,7 +179,8 @@ int ObMediumCompactionScheduleFunc::get_status_from_inner_table(
 
 // cal this func with PLAF LEADER ROLE && wait_check_medium_scn_ = 0
 int ObMediumCompactionScheduleFunc::schedule_next_medium_for_leader(
-      const int64_t major_snapshot)
+      const int64_t major_snapshot,
+      ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat)
 {
   int ret = OB_SUCCESS;
   ObRole role = INVALID_ROLE;
@@ -199,13 +200,14 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_for_leader(
       }
     }
 #endif
-    ret = schedule_next_medium_primary_cluster(major_snapshot);
+    ret = schedule_next_medium_primary_cluster(major_snapshot, schedule_stat);
   }
   return ret;
 }
 
 int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
-      const int64_t schedule_major_snapshot)
+      const int64_t schedule_major_snapshot,
+      ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat)
 {
   int ret = OB_SUCCESS;
   ObAdaptiveMergePolicy::AdaptiveMergeReason adaptive_merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE;
@@ -255,6 +257,8 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
     } else if (ret_info.could_schedule_next_round(last_major->get_snapshot_version())) {
       LOG_INFO("success to check RS major checksum validation finished", K(ret), KPC(this), K(ret_info));
       ret = decide_medium_snapshot(is_major);
+    } else {
+      ++schedule_stat.wait_rs_validate_cnt_;
     }
   } else {
     ret = decide_medium_snapshot(is_major, adaptive_merge_reason);

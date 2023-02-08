@@ -73,7 +73,7 @@ public:
     {
       schedule_cnt_ = 0;
       finish_cnt_ = 0;
-      force_freeze_cnt_ = 0;
+      wait_rs_validate_cnt_ = 0;
     }
     OB_INLINE void start_merge()
     {
@@ -82,13 +82,13 @@ public:
       start_timestamp_ = ObTimeUtility::fast_current_time();
       clear_tablet_cnt();
     }
-    TO_STRING_KV(K_(schedule_cnt), K_(finish_cnt), K_(force_freeze_cnt));
+    TO_STRING_KV(K_(schedule_cnt), K_(finish_cnt), K_(wait_rs_validate_cnt));
     bool add_weak_read_ts_event_flag_;
     int64_t check_weak_read_ts_cnt_;
     int64_t start_timestamp_;
     int64_t schedule_cnt_;
     int64_t finish_cnt_;
-    int64_t force_freeze_cnt_;
+    int64_t wait_rs_validate_cnt_;
   };
 
 public:
