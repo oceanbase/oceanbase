@@ -1187,6 +1187,8 @@ int ObPlanCache::ref_cache_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard
   ObGlobalReqTimeService::check_req_timeinfo();
   if (OB_FAIL(co_mgr_.atomic_get_alloc_cache_obj(obj_id, op))) {
     SQL_PC_LOG(WARN, "failed to get update plan statistic", K(obj_id), K(ret));
+  } else if (NULL == op.get_value()) {
+    ret = OB_HASH_NOT_EXIST;
   } else {
     guard.cache_obj_ = op.get_value();
   }
