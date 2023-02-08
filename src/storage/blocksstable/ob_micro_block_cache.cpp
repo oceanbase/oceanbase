@@ -1034,7 +1034,7 @@ int ObDataMicroBlockCache::init(const char *cache_name, const int64_t priority)
   if (OB_SUCCESS != (ret = common::ObKVCache<ObMicroBlockCacheKey, ObMicroBlockCacheValue>::init(
       cache_name, priority))) {
     STORAGE_LOG(WARN, "Fail to init kv cache, ", K(ret));
-  } else if (OB_FAIL(allocator_.init(mem_limit, OB_MALLOC_BIG_BLOCK_SIZE, OB_MALLOC_BIG_BLOCK_SIZE))) {
+  } else if (OB_FAIL(allocator_.init(mem_limit, OB_MALLOC_MIDDLE_BLOCK_SIZE, OB_MALLOC_MIDDLE_BLOCK_SIZE))) {
     STORAGE_LOG(WARN, "Fail to init io allocator, ", K(ret));
   } else {
     allocator_.set_label(ObModIds::OB_SSTABLE_MICRO_BLOCK_ALLOCATOR);
