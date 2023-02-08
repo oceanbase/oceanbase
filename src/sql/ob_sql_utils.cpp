@@ -4687,6 +4687,7 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
     LOG_WARN("failed to get sql engine", K(ret));
   } else if ((0 == old_view_schema.get_object_status() || 0 == old_view_schema.get_column_count())) {
     if (!reset_column_infos) {
+      ObArray<ObString> dummy_column_list;
       if (OB_ISNULL(select_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get select stmt", K(ret));
@@ -4695,7 +4696,7 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
       } else if (OB_ISNULL(select_stmt->get_ref_obj_table())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ref obj is null", K(ret));
-      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(), *select_stmt, new_view_schema, alloc, session_info))) {
+      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(), *select_stmt, new_view_schema, alloc, session_info, dummy_column_list))) {
         LOG_WARN("failed to update view column info", K(ret));
       } else if (!new_view_schema.is_view_table() || new_view_schema.get_column_count() <= 0) {
         ret = OB_ERR_UNEXPECTED;

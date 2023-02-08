@@ -91,6 +91,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                   ? OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE : OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL;
     ObNameCaseMode mode = OB_NAME_CASE_INVALID;
     bool perserve_lettercase = false; // lib::is_oracle_mode() ? true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
+    ObArray<ObString> column_list;
     if (OB_FAIL(resolve_table_relation_node(parse_tree.children_[VIEW_NODE],
                                             view_name, db_name,
                                             false, false, &dblink_name_ptr, &dblink_name_len))) {
@@ -174,6 +175,8 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         table_schema.set_table_type(USER_VIEW);
       }
       if (OB_FAIL(ret)) {
+      } else if (!is_force_view && !is_sync_ddl_user && OB_FAIL(resolve_column_list(parse_tree.children_[VIEW_COLUMNS_NODE], column_list, table_schema))) {
+        LOG_WARN("fail to resolve view columns", K(ret));
       } else if (OB_ISNULL(select_stmt = view_table_resolver.get_select_stmt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(view_table_resolver.get_select_stmt()));
@@ -183,7 +186,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(check_view_columns(*select_stmt, view_columns_node,
                                             create_arg.error_info_, is_force_view))) {
         LOG_WARN("failed to check view columns", K(ret));
-      } else if (OB_FAIL(add_column_infos(session_info_->get_effective_tenant_id(), *select_stmt->get_real_stmt(), table_schema, *allocator_, *session_info_))) {
+      } else if (OB_FAIL(add_column_infos(session_info_->get_effective_tenant_id(), *select_stmt, table_schema, *allocator_, *session_info_, column_list))) {
         LOG_WARN("failed to add column infos", K(ret));
       } else if (OB_FAIL(collect_dependency_infos(params_.query_ctx_, create_arg))) {
         LOG_WARN("failed to collect dependency infos", K(ret));
@@ -248,11 +251,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       // 基线备份时create view必须都用show create view里面的view definition
       // create force view use origin view_define
       ObString expanded_view;
-      ObArray<ObString> column_list;
-      //view_columns_node may be NULL
-      if (OB_FAIL(resolve_column_list(parse_tree.children_[VIEW_COLUMNS_NODE], column_list, table_schema))) {
-        LOG_WARN("fail to resolve view columns", K(ret));
-      } else if (OB_FAIL(stmt_print(select_stmt, 0 == column_list.count() ? NULL : &column_list,
+      if (OB_FAIL(stmt_print(select_stmt, 0 == column_list.count() ? NULL : &column_list,
                                     expanded_view))) {
         LOG_WARN("fail to expand view definition", K(ret));
       } else if (OB_FAIL(table_schema.set_view_definition(expanded_view))) {
@@ -663,18 +662,12 @@ int ObCreateViewResolver::resolve_column_list(ParseNode *view_columns_node,
     if (OB_ISNULL(view_columns_node->children_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("children_ of view_columns_node is NULL", K(ret));
-    } else if (OB_UNLIKELY(table_schema.get_column_count() != view_columns_node->num_child_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("view column count is not consistent", K(ret), K(table_schema.get_column_count()), K(view_columns_node->num_child_));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < view_columns_node->num_child_; ++i) {
         ParseNode *column_node = view_columns_node->children_[i];
         if (OB_ISNULL(column_node)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column node should not be NULL", K(ret));
-        } else if (OB_ISNULL(table_schema.get_column_schema_by_idx(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column schema should not be NULL", K(ret));
         } else {
           column.reset();
           ObString column_name;
@@ -687,8 +680,6 @@ int ObCreateViewResolver::resolve_column_list(ParseNode *view_columns_node,
               LOG_WARN("Failed to deep copy column_name", K(column.get_column_name_str()), K(ret));
             } else if (OB_FAIL(column_list.push_back(column_name))) {
               LOG_WARN("fail to push back column name", K(column_name), K(ret));
-            } else if (OB_FAIL(table_schema.get_column_schema_by_idx(i)->set_column_name(column_name))) {
-              LOG_WARN("failed to set column name", K(ret));
             } else {}
           }
         }
@@ -738,7 +729,8 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
                                            ObSelectStmt &select_stmt,
                                            ObTableSchema &table_schema,
                                            ObIAllocator &alloc,
-                                           ObSQLSessionInfo &session_info)
+                                           ObSQLSessionInfo &session_info,
+                                           const ObIArray<ObString> &column_list)
 {
   int ret = OB_SUCCESS;
   ObIArray<SelectItem> &select_items = select_stmt.get_select_items();
@@ -748,6 +740,10 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (data_version >= DATA_VERSION_4_1_0_0) {
+    if (!column_list.empty() && OB_UNLIKELY(column_list.count() != select_items.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get wrong column count", K(ret), K(column_list.count()), K(select_items.count()), K(table_schema), K(select_stmt));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
       const SelectItem &select_item = select_items.at(i);
       const ObRawExpr *expr = select_item.expr_;
@@ -756,7 +752,9 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
         LOG_WARN("select item expr is null", K(ret), K(i));
       } else {
         column.reset();
-        if (!select_item.alias_name_.empty()) {
+        if (!column_list.empty()) {
+          column.set_column_name(column_list.at(i));
+        } else if (!select_item.alias_name_.empty()) {
           column.set_column_name(select_item.alias_name_);
         } else {
           column.set_column_name(select_item.expr_name_);

@@ -51,7 +51,8 @@ public:
                               ObSelectStmt &select_stmt,
                               ObTableSchema &table_schema,
                               common::ObIAllocator &alloc,
-                              sql::ObSQLSessionInfo &session_info);
+                              sql::ObSQLSessionInfo &session_info,
+                              const common::ObIArray<ObString> &column_list);
   static int resolve_column_default_value(const sql::ObSelectStmt *select_stmt,
                                         const sql::SelectItem &select_item,
                                         schema::ObColumnSchemaV2 &column_schema,
