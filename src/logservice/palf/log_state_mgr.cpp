@@ -840,7 +840,8 @@ bool LogStateMgr::is_reconfirm_state_changed_(int &ret)
     PALF_LOG(TRACE, "is_reconfirm_state_changed_", K(bool_ret));
     bool_ret = true;
   } else {
-    PALF_LOG(ERROR, "reconfirm failed", K(ret), K_(palf_id));
+    // election leader may has changed, so ret is maybe OB_NOT_MASTER.
+    PALF_LOG(WARN, "reconfirm failed", K_(palf_id));
     bool_ret = true;
   }
   return bool_ret;

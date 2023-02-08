@@ -893,16 +893,21 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
             const LSN prev_lsn = log_task->get_prev_lsn();
             const int64_t prev_log_pid = log_task->get_prev_proposal_id();
             log_task->unlock();
-            if (!state_mgr_->is_leader_active()
+            if (OB_UNLIKELY(last_submit_end_lsn != begin_lsn)) {
+              ret = OB_ERR_UNEXPECTED;
+              PALF_LOG(ERROR, "Current log's begin_lsn is not continuous with last_submit_end_lsn, unexpected",
+                  K_(palf_id), K_(self), K(prev_lsn), K(last_submit_log_id), K(last_submit_lsn),
+                  K(last_submit_end_lsn), K(last_submit_log_pid), K(tmp_log_id), KPC(log_task));
+            } else if (!state_mgr_->is_leader_active()
                 && tmp_log_id > FIRST_VALID_LOG_ID  // the first log doesn't need check prev_proposal_id
                 && (last_submit_lsn != prev_lsn || last_submit_log_pid != prev_log_pid)) {
               ret = OB_STATE_NOT_MATCH;
-              PALF_LOG(WARN, "prev_proposal_id does not match, cannot submit this log", K(ret), K_(palf_id), K_(self),
+              PALF_LOG(WARN, "prev_proposal_id does not match, cannot submit this log", K_(palf_id), K_(self),
                   K(prev_lsn), K(prev_log_pid), K(last_submit_log_id), K(last_submit_lsn), K(last_submit_log_pid),
                   K(tmp_log_id), KPC(log_task));
             } else if (OB_FAIL(generate_group_entry_header_(tmp_log_id, log_task, group_entry_header,
                     group_log_data_checksum))) {
-              PALF_LOG(WARN, "generate_group_entry_header_ failed", K(ret), K_(palf_id), K_(self));
+              PALF_LOG(WARN, "generate_group_entry_header_ failed", K_(palf_id), K_(self));
             } else {
               // set flag for rollback accum_checksum
               is_accum_checksum_acquired = true;
