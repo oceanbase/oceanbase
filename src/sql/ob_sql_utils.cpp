@@ -4281,10 +4281,29 @@ bool ObSQLUtils::is_pl_nested_sql(ObExecContext *cur_ctx)
     ObExecContext *parent_ctx = cur_ctx->get_parent_ctx();
     //parent_sql = is_dml_stmt means this sql is triggered by a sql, not pl procedure
     if (OB_NOT_NULL(parent_ctx->get_sql_ctx())
-        && ObStmt::is_dml_stmt(parent_ctx->get_sql_ctx()->stmt_type_)
         && parent_ctx->get_pl_stack_ctx() != nullptr
         && !parent_ctx->get_pl_stack_ctx()->in_autonomous()) {
-      bret = true;
+      if (ObStmt::is_dml_stmt(parent_ctx->get_sql_ctx()->stmt_type_)) {
+        bret = true;
+      } else if (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_) {
+        /* anonymous block in a store procedure will be send to sql engine as sql, which will make new obexeccontext.
+           consider follow scene:
+            dml1(exec_ctx1)->udf/trigger->procedure->anonymous block(exec_ctx2)->dml2
+          outer dml1 and inner dml2 form a nested scene. bug current code logic cannot identify this scene.
+          so it need to skip anonymous block obexeccontext */
+        do {
+          parent_ctx = parent_ctx->get_parent_ctx();
+        } while (OB_NOT_NULL(parent_ctx) && OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&
+                 (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_));
+
+        if (OB_NOT_NULL(parent_ctx) &&
+            OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&
+            OB_NOT_NULL(parent_ctx->get_pl_stack_ctx()) &&
+            ObStmt::is_dml_stmt(parent_ctx->get_sql_ctx()->stmt_type_) &&
+            !parent_ctx->get_pl_stack_ctx()->in_autonomous()) {
+          bret = true;
+        }
+      }
     }
   }
   return bret;
