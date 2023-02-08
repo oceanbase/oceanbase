@@ -757,12 +757,14 @@ int LogSlidingWindow::handle_committed_log_()
             int64_t data_len = 0;
             LogTaskHeaderInfo log_task_header;
             log_task->lock();
-            log_task_header = log_task->get_header_info();
-            data_len = log_task->get_data_len();
-            log_end_lsn = log_task->get_begin_lsn() + LogGroupEntryHeader::HEADER_SER_SIZE + data_len;
+            // Notice: the following lines' order is vital, it should execute is_freezed() firstly.
+            // This order can ensure log_end_lsn is correct and decided.
             const bool is_freezed = log_task->is_freezed();
             const int64_t ref_cnt = log_task->get_ref_cnt();
+            log_task_header = log_task->get_header_info();
             log_begin_lsn = log_task->get_begin_lsn();
+            data_len = log_task->get_data_len();
+            log_end_lsn = log_task->get_begin_lsn() + LogGroupEntryHeader::HEADER_SER_SIZE + data_len;
             log_task->unlock();
 
             PALF_LOG(TRACE, "handle_committed_log", K_(palf_id), K_(self), K(log_end_lsn), K(committed_end_lsn),
@@ -869,9 +871,11 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
           int64_t group_log_size = 0;
 
           log_task->lock();
+          // Notice: the following lines' order is vital, it should execute try_pre_submit() firstly.
+          // This order can ensure log_end_lsn is correct and decided.
+          is_need_submit = log_task->try_pre_submit();
           begin_lsn = log_task->get_begin_lsn();
           log_end_lsn = begin_lsn + LogGroupEntryHeader::HEADER_SER_SIZE + log_task->get_data_len();
-          is_need_submit = log_task->try_pre_submit();
           log_proposal_id = log_task->get_proposal_id();
           log_cnt = log_task->get_log_cnt();
           log_task->unlock();
