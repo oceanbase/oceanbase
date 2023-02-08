@@ -5320,14 +5320,14 @@ int ObLocationExprOperator::calc_(const ObExpr &expr, const ObExpr &sub_arg,
                                        sub_str.ptr(), sub_str.length(), pos_int);
       res_datum.set_int(static_cast<int64_t>(idx));
     } else { // at least one of the inputs are text tc
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
       ObString sub_str_data;
       ObString ori_str_data;
       bool sub_has_lob_header = sub_arg.obj_meta_.has_lob_header();
       bool ori_has_lob_header = ori_arg.obj_meta_.has_lob_header();
       ObTextStringIter sub_str_iter(sub_arg.datum_meta_.type_, sub_arg.datum_meta_.cs_type_, sub_str, sub_has_lob_header);
       ObTextStringIter ori_str_iter(ori_arg.datum_meta_.type_, ori_arg.datum_meta_.cs_type_, ori_str, ori_has_lob_header);
-      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
       if (OB_FAIL(ori_str_iter.init(0, NULL, &calc_alloc))) {
         LOG_WARN("Lob: init ori_str_iter failed ", K(ret), K(ori_str_iter));
       } else if (OB_FAIL(sub_str_iter.init(0, NULL, &calc_alloc))) {

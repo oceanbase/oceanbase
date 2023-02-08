@@ -588,10 +588,10 @@ int ObExprOracleInstr::calc_oracle_instr_expr(const ObExpr &expr, ObEvalCtx &ctx
           }
         }
       } else { // at least one of the inputs is text tc
-        ObTextStringIter haystack_iter(haystack_type, calc_cs_type, haystack->get_string(), haystack_has_lob_header);
-        ObTextStringIter needle_iter(needle_type, calc_cs_type, needle->get_string(), needle_has_lob_header);
         ObEvalCtx::TempAllocGuard alloc_guard(ctx);
         ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+        ObTextStringIter haystack_iter(haystack_type, calc_cs_type, haystack->get_string(), haystack_has_lob_header);
+        ObTextStringIter needle_iter(needle_type, calc_cs_type, needle->get_string(), needle_has_lob_header);
 
         if (OB_FAIL(calc_oracle_instr_text(haystack_iter, needle_iter,
                                           calc_alloc, calc_cs_type, pos_int, occ_int, idx))) {

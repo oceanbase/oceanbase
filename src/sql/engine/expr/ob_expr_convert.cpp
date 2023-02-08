@@ -226,12 +226,12 @@ int ObExprConvertOracle::calc_convert_oracle_expr(const ObExpr &expr,
           }
         }
       } else { // text tc
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        ObIAllocator &calc_alloc = alloc_guard.get_allocator();
         ObTextStringIter src_iter(expr.args_[0]->datum_meta_.type_,
                                   src_cs_type,
                                   src_param->get_string(),
                                   expr.args_[0]->obj_meta_.has_lob_header());
-        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-        ObIAllocator &calc_alloc = alloc_guard.get_allocator();
         ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
         int64_t src_byte_len = 0;
         int64_t buf_size = 0;
