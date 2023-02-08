@@ -168,7 +168,7 @@ void ObAtomicAppendPartBlockCall::operator() (common::hash::HashMapPair<ObDTLInt
 int ObEraseTenantIntermResultInfo::operator() (common::hash::HashMapPair<ObDTLIntermResultKey, ObDTLIntermResultInfo *> &entry)
 {
   int ret = OB_SUCCESS;
-  if (entry.second->datum_store_->get_tenant_id() == tenant_id_) {
+  if (entry.second->tenant_id_ == tenant_id_) {
     if (OB_FAIL(expire_keys_.push_back(entry.first))) {
       LOG_WARN("push back failed", K(ret));
       ret_ = ret;
@@ -244,6 +244,7 @@ int ObDTLIntermResultManager::create_interm_result_info(ObMemAttr &attr,
     result_info->is_read_ = false;
     result_info->trace_id_ = *ObCurTraceId::get_trace_id();
     result_info->monitor_info_ = monitor_info;
+    result_info->tenant_id_ = attr.tenant_id_;
     result_info_guard.set_result_info(*result_info);
   }
   if (OB_FAIL(ret)) {
@@ -416,6 +417,11 @@ int ObDTLIntermResultManager::erase_tenant_interm_result_info(int64_t tenant_id)
           ret = tmp_ret;
         }
       }
+    }
+    if (eraser.expire_keys_.count() < 100) {
+      LOG_INFO("erase_tenant_interm_result_info", K(tenant_id), K(eraser.expire_keys_));
+    } else {
+      LOG_INFO("erase_tenant_interm_result_info", K(tenant_id), K(eraser.expire_keys_.count()));
     }
   }
   return ret;

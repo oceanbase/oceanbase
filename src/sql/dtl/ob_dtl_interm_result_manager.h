@@ -104,6 +104,7 @@ public:
   int64_t dump_time_;
   int64_t dump_cost_;
   ObDTLIntermResultMonitorInfo monitor_info_;
+  uint64_t tenant_id_;
 };
 
 struct ObDTLIntermResultInfoGuard
@@ -212,7 +213,7 @@ public:
   int operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
       ObDTLIntermResultInfo *> &entry);
 public:
-  bool tenant_id_;
+  uint64_t tenant_id_;
   common::ObSEArray<ObDTLIntermResultKey, 64> expire_keys_;
   int ret_;
 };
