@@ -8,6 +8,7 @@
 #include "lib/lock/ob_mutex.h"
 #include "lib/list/ob_list.h"
 #include "share/ob_errno.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -18,7 +19,7 @@ template<class T>
 class ObDirectLoadEasyQueue //性能很差的一个queue，主要为了方便使用
 {
 public:
-  ObDirectLoadEasyQueue() : malloc_("TLD_easy_queue"), queue_(malloc_) {}
+  ObDirectLoadEasyQueue() : malloc_(ObMemAttr(MTL_ID(), "TLD_EasyQueue")), queue_(malloc_) {}
 
   int push(const T &e) {
     int ret = OB_SUCCESS;

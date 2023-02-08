@@ -125,6 +125,7 @@ int ObDirectLoadFastHeapTableBuilder::init(const ObDirectLoadFastHeapTableBuildP
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
+    allocator_.set_tenant_id(MTL_ID());
     if (param_.online_opt_stat_gather_ && OB_FAIL(init_sql_statistics())) {
       LOG_WARN("fail to inner init sql statistics", KR(ret));
     } else if (OB_FAIL(param_.fast_heap_table_ctx_->get_tablet_context(

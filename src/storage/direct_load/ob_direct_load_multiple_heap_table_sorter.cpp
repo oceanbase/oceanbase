@@ -189,7 +189,7 @@ int ObDirectLoadMultipleHeapTableSorter::work()
           LOG_WARN("some error ocurr", KR(ret));
         }
         if (OB_SUCC(ret)) {
-          chunk = OB_NEW(ChunkType, "TLD_row_chunk", mem_ctx_->table_data_desc_.heap_table_mem_chunk_size_);
+          chunk = OB_NEW(ChunkType, ObMemAttr(MTL_ID(), "TLD_MemChunkVal"), mem_ctx_->table_data_desc_.heap_table_mem_chunk_size_);
           if (chunk == nullptr) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to allocate mem", KR(ret));

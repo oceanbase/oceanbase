@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "lib/list/ob_dlist.h"
 #include "lib/task/ob_timer.h"
 #include "observer/table_load/ob_table_load_manager.h"
 #include "observer/table_load/ob_table_load_struct.h"
@@ -32,9 +31,9 @@ public:
   void destroy();
 public:
   int create_table_ctx(const ObTableLoadParam &param, ObTableLoadTableCtx *&ctx, bool &is_new);
+  int remove_table_ctx(ObTableLoadTableCtx *ctx);
   int get_table_ctx(uint64_t table_id, ObTableLoadTableCtx *&ctx);
   void put_table_ctx(ObTableLoadTableCtx *ctx);
-  int remove_table_ctx(ObTableLoadTableCtx *ctx);
 private:
   static const int64_t GC_INTERVAL = 30LL * 1000 * 1000; // 30s
   static const int64_t RELEASE_INTERVAL = 1LL * 1000 * 1000; // 1s
@@ -65,9 +64,7 @@ private:
     bool is_inited_;
   };
 private:
-  ObTableLoadManager<uint64_t, ObTableLoadTableCtx> table_ctx_manager_;
-  mutable lib::ObMutex mutex_;
-  common::ObDList<ObTableLoadTableCtx> dirty_list_;
+  ObTableLoadManager manager_;
   common::ObTimer gc_timer_;
   ObGCTask gc_task_;
   ObReleaseTask release_task_;

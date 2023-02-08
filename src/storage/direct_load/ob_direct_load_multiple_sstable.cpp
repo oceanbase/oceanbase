@@ -174,6 +174,7 @@ int ObDirectLoadMultipleSSTable::copy(const ObDirectLoadMultipleSSTable &other)
     LOG_WARN("invalid args", KR(ret), K(other));
   } else {
     reset();
+    allocator_.set_tenant_id(MTL_ID());
     meta_ = other.meta_;
     if (OB_FAIL(start_key_.deep_copy(other.start_key_, allocator_))) {
       LOG_WARN("fail to deep copy rowkey", KR(ret));

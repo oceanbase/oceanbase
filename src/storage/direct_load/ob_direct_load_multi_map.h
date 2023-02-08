@@ -27,7 +27,7 @@ public:
 
   int init()
   {
-    return map_.create(1024, "TLD_multi_map", "TLD_multi_map");
+    return map_.create(1024, "TLD_multi_map", "TLD_multi_map", MTL_ID());
   }
 
   virtual ~ObDirectLoadMultiMapNoLock()
