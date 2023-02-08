@@ -23,6 +23,7 @@ namespace logservice
 const int64_t MAX_FETCH_LOG_BUF_LEN = 4 * 1024 * 1024L;
 const int64_t MIN_FETCH_LOG_WORKER_THREAD_COUNT = 1;
 const int64_t MAX_FETCH_LOG_WORKER_THREAD_COUNT = 10;
+const int64_t MAX_LS_FETCH_LOG_TASK_CONCURRENCY = 4;
 
 struct ObLogRestoreErrorContext
 {

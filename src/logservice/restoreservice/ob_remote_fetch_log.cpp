@@ -24,6 +24,7 @@
 #include "ob_log_restore_handler.h"           // ObTenantRole
 #include "ob_remote_fetch_log_worker.h"       // ObRemoteFetchWorker
 #include "ob_fetch_log_task.h"                // ObFetchLogTask
+#include "ob_log_restore_define.h"            // MAX_LS_FETCH_LOG_TASK_CONCURRENCY
 #include "observer/omt/ob_tenant_config_mgr.h"  // tenant_config
 #include "logservice/archiveservice/ob_archive_define.h"
 
@@ -178,8 +179,8 @@ int ObRemoteFetchLogImpl::check_need_schedule_(ObLS &ls,
   bool need_delay = false;
   need_schedule = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-  const int64_t concurrency =
-    tenant_config.is_valid() ? tenant_config->log_restore_concurrency : 1L;
+  const int64_t concurrency = std::min(MAX_LS_FETCH_LOG_TASK_CONCURRENCY,
+    tenant_config.is_valid() ? tenant_config->log_restore_concurrency : 1L);
   if (OB_ISNULL(restore_handler = ls.get_log_restore_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get restore_handler failed", K(ret), "id", ls.get_ls_id());
