@@ -40,7 +40,7 @@ public:
     }
     Ref* next_;
     Page* page_;
-    int64_t allocated_;
+    int64_t allocated_; // the allocated bytes from page
   };
 
   struct Page {
@@ -85,9 +85,9 @@ public:
       return ref;
     }
     int64_t get_actual_hold_size();
-    Ref self_ref_;
-    int64_t limit_;
-    int64_t pos_;
+    Ref self_ref_;  // record the allocated bytes from page, include self_ref_ itself
+    int64_t limit_; // the max bytes of a page that can be used
+    int64_t pos_;   // the position after which can be allocated
     int64_t ref_;
     char buf_[0];
   };
@@ -156,7 +156,8 @@ public:
     TO_STRING_KV(K_(allocated));
     int64_t lock_;
     Ref* ref_[MAX_NWAY];
-    int64_t allocated_;
+    int64_t allocated_;  // record all the memory hold by pages, include the size of page structure, AObject and so on.
+                         // only increase while a page is created.
   };
 
 public:
@@ -286,12 +287,17 @@ private:
   lib::ObMemAttr attr_;
   ObIAllocator* allocator_;
   int64_t nway_;
-  int64_t allocated_;
-  int64_t reclaimed_;
-  int64_t hold_;  // for single tenant
+  int64_t allocated_; // record all the memory hold by pages in history.
+                      // increase while a page created and decrease only if a failed page destroyed.
+  int64_t reclaimed_; // record all the memory reclaimed by pages in history.
+                      // increase while a page freed.
+  int64_t hold_;      // record all the memory hold by pages current.
+                      // increase while a page created and decrease while a page freed or destroyed.
+                      // (may be: hold_ = allocated_ - reclaimed_)
   int64_t last_query_time_;//improve performance
   int64_t remain_;//improve performance
-  int64_t retired_;
+  int64_t retired_;   // record all the memory hold by not active pages in history.
+
   int64_t last_base_ts_;
 
   int64_t last_reclaimed_;
