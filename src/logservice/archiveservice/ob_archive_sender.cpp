@@ -264,11 +264,6 @@ void ObArchiveSender::do_thread_task_()
       ARCHIVE_LOG(TRACE, "after handle task", KPC(task), K(consume_status));
       switch (consume_status) {
         case TaskConsumeStatus::DONE:
-          if (! task->is_task_finish()) {
-            ret = OB_ERR_UNEXPECTED;
-            ARCHIVE_LOG(ERROR, "task consume status is done while task not in finish status",
-                K(ret), K(consume_status), KPC(task));
-          }
           break;
         case TaskConsumeStatus::STALE_TASK:
           task->mark_stale();
@@ -417,7 +412,6 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
   const ObLSID &id = task.get_ls_id();
   const ArchiveWorkStation &station = task.get_station();
   share::ObBackupDest backup_dest;
-  //consume_status = TaskConsumeStatus::DONE;   // 默认task需要被消费掉, 只有补偿piece场景才不会消费
   if (OB_UNLIKELY(! task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(task));
