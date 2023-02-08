@@ -557,7 +557,7 @@ int ObLSRestoreHandler::check_tablet_restore_finish_(
   } else {
     switch (ls_restore_status.get_status()) {
     case ObLSRestoreStatus::RESTORE_TABLETS_META : {
-      if (ObTabletRestoreStatus::is_undefined(restore_status) || ObTabletRestoreStatus::is_empty(restore_status)) {
+      if (!ObTabletRestoreStatus::is_pending(restore_status)) {
         is_finish = true;
       }
       break;
@@ -1976,7 +1976,7 @@ int ObLSRestoreCreateUserTabletState::leader_create_user_tablet_()
   LOG_INFO("ready to create leader user tablet", K(ls_restore_status_), KPC(ls_));
   if (OB_FAIL(tablet_mgr_.pop_restored_tablets(*ls_, restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
-  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(tablet_need_restore))) {
+  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(*ls_, tablet_need_restore))) {
     LOG_WARN("fail to pop need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META);
@@ -2009,7 +2009,7 @@ int ObLSRestoreCreateUserTabletState::follower_create_user_tablet_()
   LOG_INFO("ready to create follower user tablet", K(ls_restore_status_), KPC(ls_));
   if (OB_FAIL(tablet_mgr_.pop_restored_tablets(*ls_, restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
-  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(tablet_need_restore))) {
+  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(*ls_, tablet_need_restore))) {
     LOG_WARN("fail to pop need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META);
@@ -2109,7 +2109,7 @@ int ObLSQuickRestoreState::leader_quick_restore_()
     LOG_WARN("log restore handle can't nullptr", K(ret), K(log_restore_handle));
   } else if (OB_FAIL(tablet_mgr_.pop_restored_tablets(*ls_, restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
-  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(tablet_need_restore))) {
+  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(*ls_, tablet_need_restore))) {
     LOG_WARN("fail to pop need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
     bool is_finish = false;
@@ -2161,7 +2161,7 @@ int ObLSQuickRestoreState::follower_quick_restore_()
     LOG_WARN("log restore handle can't nullptr", K(ret), K(log_restore_handle));
   } else if (OB_FAIL(tablet_mgr_.pop_restored_tablets(*ls_, restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
-  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(tablet_need_restore))) {
+  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(*ls_, tablet_need_restore))) {
     LOG_WARN("fail to pop need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE);
@@ -2396,7 +2396,7 @@ int ObLSRestoreMajorState::leader_restore_major_data_()
   LOG_INFO("ready to restore leader major data", K(ls_restore_status_), KPC(ls_));
   if (OB_FAIL(tablet_mgr_.pop_restored_tablets(*ls_, restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
-  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(tablet_need_restore))) {
+  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(*ls_, tablet_need_restore))) {
     LOG_WARN("fail to pop need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_MAJOR_DATA);
@@ -2429,7 +2429,7 @@ int ObLSRestoreMajorState::follower_restore_major_data_()
   LOG_INFO("ready to restore follower major data", K(ls_restore_status_), KPC(ls_));
   if (OB_FAIL(tablet_mgr_.pop_restored_tablets(*ls_, restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
-  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(tablet_need_restore))) {
+  } else if (OB_FAIL(tablet_mgr_.pop_need_restore_tablets(*ls_, tablet_need_restore))) {
     LOG_WARN("fail to pop need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_MAJOR_DATA);
