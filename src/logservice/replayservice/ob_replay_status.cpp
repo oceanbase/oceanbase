@@ -759,23 +759,26 @@ bool ObReplayStatus::is_enabled_without_lock() const
   return is_replay_enabled_();
 }
 
-void ObReplayStatus::set_pending()
+void ObReplayStatus::block_submit()
 {
   WLockGuard guard(rolelock_);
   is_submit_blocked_ = true;
-  CLOG_LOG(INFO, "replay status set pending", KPC(this));
+  CLOG_LOG(INFO, "replay status block submit", KPC(this));
 }
 
-void ObReplayStatus::erase_pending()
+void ObReplayStatus::unblock_submit()
 {
+  int ret = OB_SUCCESS;
   do {
     WLockGuard guard(rolelock_);
     is_submit_blocked_ = false;
-    CLOG_LOG(INFO, "replay status erase pending", KPC(this));
+    CLOG_LOG(INFO, "replay status unblock submit", KPC(this));
   } while (0);
 
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
+  RLockGuard rlock_guard(rwlock_);
+  if (!is_enabled_) {
+    // do nothing
+  } else if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
     CLOG_LOG(ERROR, "failed to submit submit_log_task to replay service", K(submit_log_task_),
              KPC(this), K(ret));
   }
@@ -802,19 +805,31 @@ void ObReplayStatus::switch_to_leader()
 void ObReplayStatus::switch_to_follower(const palf::LSN &begin_lsn)
 {
   int ret = OB_SUCCESS;
+  // 1.switch role after reset iterator, or fscb may push submit task with
+  //   old iterator, which will fetch logs smaller than max decided scn.
+  // 2.submit task after switch role, or this task may be discarded if role
+  //   still be leader, and no more submit task being submitted.
   do {
-    WLockGuard guard(rolelock_);
+    WLockGuardWithRetryInterval wguard(rwlock_, WRLOCK_TRY_THRESHOLD, WRLOCK_RETRY_INTERVAL);
+    if (!is_enabled_) {
+      // do nothing
+    } else {
+      (void)submit_log_task_.reset_iterator(palf_handle_, begin_lsn);
+    }
+  } while (0);
+  do {
+    WLockGuard role_guard(rolelock_);
     role_ = FOLLOWER;
   } while (0);
-  WLockGuardWithRetryInterval wguard(rwlock_, WRLOCK_TRY_THRESHOLD, WRLOCK_RETRY_INTERVAL);
-  if (is_enabled_) {
-    (void)submit_log_task_.reset_iterator(palf_handle_, begin_lsn);
-    if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
-      CLOG_LOG(ERROR, "failed to submit submit_log_task to replay service", K(submit_log_task_),
-                  KPC(this), K(ret));
-    }
-  } else {
+
+  RLockGuard rguard(rwlock_);
+  if (!is_enabled_) {
     // do nothing
+  } else if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
+    CLOG_LOG(ERROR, "failed to submit submit_log_task to replay service", K(submit_log_task_),
+                KPC(this), K(ret));
+  } else {
+    // success
   }
   CLOG_LOG(INFO, "replay status switch_to_follower", KPC(this), K(begin_lsn));
 }
@@ -909,20 +924,12 @@ int ObReplayStatus::update_end_offset(const LSN &lsn)
     CLOG_LOG(ERROR, "invalid arguments", K(ls_id_), K(lsn), K(ret));
   } else if (!need_submit_log()) {
     // leader do nothing, keep submit_log_task recording last round status as follower
-  } else {
+  } else if (OB_FAIL(submit_log_task_.update_committed_end_lsn(lsn))) {
     // update offset and submit submit_log_task
-    {
-      if (OB_FAIL(submit_log_task_.update_committed_end_lsn(lsn))) {
-        CLOG_LOG(ERROR, "failed to update_apply_end_offset", KR(ret), K(ls_id_),
-                   K(lsn));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
-        CLOG_LOG(ERROR, "failed to submit submit_log_task to replay Service", K(submit_log_task_),
-                   KPC(this), K(ret));
-      }
-    }
+    CLOG_LOG(ERROR, "failed to update_apply_end_offset", KR(ret), K(ls_id_), K(lsn));
+  } else if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
+    CLOG_LOG(ERROR, "failed to submit submit_log_task to replay Service", K(submit_log_task_),
+             KPC(this), K(ret));
   }
   return ret;
 }

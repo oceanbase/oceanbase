@@ -473,7 +473,7 @@ int ObLogReplayService::is_enabled(const share::ObLSID &id, bool &is_enabled)
   return ret;
 }
 
-int ObLogReplayService::set_submit_log_pending(const share::ObLSID &id)
+int ObLogReplayService::block_submit_log(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
   ObReplayStatus *replay_status = NULL;
@@ -487,12 +487,12 @@ int ObLogReplayService::set_submit_log_pending(const share::ObLSID &id)
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "replay status is not exist", K(ret), K(id));
   } else {
-    replay_status->set_pending();
+    replay_status->block_submit();
   }
   return ret;
 }
 
-int ObLogReplayService::erase_submit_log_pending(const share::ObLSID &id)
+int ObLogReplayService::unblock_submit_log(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
   ObReplayStatus *replay_status = NULL;
@@ -506,7 +506,7 @@ int ObLogReplayService::erase_submit_log_pending(const share::ObLSID &id)
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "replay status is not exist", K(ret), K(id));
   } else {
-    replay_status->erase_pending();
+    replay_status->unblock_submit();
   }
   return ret;
 }

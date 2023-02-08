@@ -140,8 +140,8 @@ public:
              const share::SCN &base_scn);
   int disable(const share::ObLSID &id);
   int is_enabled(const share::ObLSID &id, bool &is_enabled);
-  int set_submit_log_pending(const share::ObLSID &id);
-  int erase_submit_log_pending(const share::ObLSID &id);
+  int block_submit_log(const share::ObLSID &id);
+  int unblock_submit_log(const share::ObLSID &id);
   int switch_to_leader(const share::ObLSID &id);
   int switch_to_follower(const share::ObLSID &id,
                          const palf::LSN &begin_lsn);
