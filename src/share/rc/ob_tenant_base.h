@@ -207,9 +207,9 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       transaction::ObStandbyTimestampService*,       \
       transaction::ObTimestampAccess*,               \
       transaction::ObTransIDService*,                \
+      sql::ObPlanBaselineMgr*,                       \
       sql::ObPsCache*,                               \
       sql::ObPlanCache*,                             \
-      sql::ObPlanBaselineMgr*,                  \
       sql::dtl::ObTenantDfc*,                        \
       omt::ObPxPools*,                               \
       lib::Worker::CompatMode,                       \

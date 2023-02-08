@@ -111,7 +111,6 @@ private:
 private:
   lib::MemoryContext mem_context_;
   common::ObIAllocator* inner_allocator_;
-  ObPlanCache* lib_cache_;
   ObPlanBaselineSqlService sql_service_;
   ObPlanBaselineRefreshTask refresh_task_;
   bool inited_;
