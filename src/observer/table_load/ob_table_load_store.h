@@ -75,11 +75,12 @@ public:
   static const int32_t PX_DEFAULT_SESSION_ID = 1;
   int px_start_trans(const table::ObTableLoadTransId &trans_id);
   int px_finish_trans(const table::ObTableLoadTransId &trans_id);
+  int px_abandon_trans(const table::ObTableLoadTransId &trans_id);
   int px_write(const table::ObTableLoadTransId &trans_id,
                const ObTabletID &tablet_id,
                const common::ObIArray<common::ObNewRow> &row_array);
-  int px_clean_up(const table::ObTableLoadTransId &trans_id);
 private:
+  int px_clean_up_trans(ObTableLoadStoreTrans *trans);
   int px_flush(ObTableLoadStoreTrans *trans);
 
 private:
