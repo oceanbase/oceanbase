@@ -43,3 +43,4 @@ ob_unittest_observer(test_change_arb_service_status test_change_arb_service_stat
 ob_unittest_observer(test_big_tx_data test_big_tx_data.cpp)
 ob_unittest_observer(test_fast_commit_report fast_commit_report.cpp)
 ob_unittest_observer(test_mvcc_gc test_mvcc_gc.cpp)
+ob_unittest_observer(test_ob_simple_rto test_ob_simple_rto.cpp)
