@@ -46,6 +46,7 @@ struct ObHashTableSharedTableInfo
   int64_t total_memory_row_count_;
   int64_t total_memory_size_;
   int64_t open_cnt_;
+  int open_ret_;
 };
 
 class ObHashJoinInput : public ObOpInput
@@ -73,7 +74,7 @@ public:
     return ret;
   }
 
-  int sync_wait(ObExecContext &ctx, int64_t &sys_event, EventPred pred, bool ignore_interrupt = false);
+  int sync_wait(ObExecContext &ctx, int64_t &sys_event, EventPred pred, bool ignore_interrupt = false, bool is_open = false);
   int64_t get_sync_val()
   {
     ObHashTableSharedTableInfo *shared_hj_info = reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
@@ -161,6 +162,13 @@ public:
     ObHashTableSharedTableInfo *shared_hj_info = reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
     ATOMIC_SET(&shared_hj_info->ret_, in_ret);
   }
+
+  void set_open_ret(int in_ret)
+  {
+    ObHashTableSharedTableInfo *shared_hj_info = reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
+    ATOMIC_SET(&shared_hj_info->open_ret_, in_ret);
+  }
+
   virtual void reset() override
   {
     if (0 != shared_hj_info_) {
@@ -185,6 +193,7 @@ public:
       shared_hj_info->close_cnt_ = 0;
       shared_hj_info->open_cnt_ = 0;
       shared_hj_info->ret_ = OB_SUCCESS;
+      shared_hj_info->open_ret_ = OB_SUCCESS;
       shared_hj_info->read_null_in_naaj_ = false;
       new (&shared_hj_info->cond_)common::SimpleCond(common::ObWaitEventIds::SQL_SHARED_HJ_COND_WAIT);
       new (&shared_hj_info->lock_)ObSpinLock(common::ObLatchIds::SQL_SHARED_HJ_COND_LOCK);

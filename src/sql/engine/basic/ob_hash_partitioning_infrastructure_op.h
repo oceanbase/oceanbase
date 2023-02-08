@@ -582,6 +582,16 @@ public:
     return ret;
   }
 
+  void destroy_my_skip()
+  {
+    if (OB_NOT_NULL(mem_context_)) {
+      if (OB_NOT_NULL(alloc_)) {
+        alloc_->free(my_skip_);
+        my_skip_ = nullptr;
+      }
+    }
+  }
+
   int init_items(const int64_t batch_size) {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(alloc_)) {
@@ -595,6 +605,16 @@ public:
     return ret;
   }
 
+  void destroy_items()
+  {
+    if (OB_NOT_NULL(mem_context_)) {
+      if (OB_NOT_NULL(alloc_)) {
+        alloc_->free(items_);
+        items_ = nullptr;
+      }
+    }
+  }
+
   int init_distinct_map(const int64_t batch_size) {
     int ret = OB_SUCCESS;
     if (distinct_map_.is_inited()) {
@@ -602,6 +622,11 @@ public:
       SQL_ENG_LOG(WARN,"failed to init distinct map", K(ret), K(batch_size));
     }
     return ret;
+  }
+
+  void destroy_distinct_map()
+  {
+    distinct_map_.destroy();
   }
 
   int set_funcs(const common::ObIArray<ObHashFunc> *hash_funcs,
