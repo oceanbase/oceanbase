@@ -1149,6 +1149,9 @@ public:
     } else {
       meta_.set_collation_level(meta.get_collation_level());
     }
+    if (meta.has_lob_header() && oceanbase::is_lob_storage(get_type())) {
+      set_has_lob_header();
+    }
   }
 
   OB_INLINE void copy_value_to(ObObj &obj, bool &has_null) const {
