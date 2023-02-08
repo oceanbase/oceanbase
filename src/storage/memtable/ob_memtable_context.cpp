@@ -927,7 +927,7 @@ int ObMemtableCtx::remove_callbacks_for_fast_commit()
   return ret;
 }
 
-int ObMemtableCtx::remove_callback_for_uncommited_txn(ObMemtable *mt)
+int ObMemtableCtx::remove_callback_for_uncommited_txn(ObMemtable *mt, const share::SCN max_applied_scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
@@ -937,7 +937,7 @@ int ObMemtableCtx::remove_callback_for_uncommited_txn(ObMemtable *mt)
     TRANS_LOG(WARN, "memtable is NULL", K(mt));
   } else if (OB_FAIL(reuse_log_generator_())) {
     TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
-  } else if (OB_FAIL(trans_mgr_.remove_callback_for_uncommited_txn(mt))) {
+  } else if (OB_FAIL(trans_mgr_.remove_callback_for_uncommited_txn(mt, max_applied_scn))) {
     TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(mt));
   }
 

@@ -1504,8 +1504,8 @@ int ObPartTransCtx::remove_callback_for_uncommited_txn(ObMemtable *mt)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "memtable is NULL", K(mt));
   } else if (OB_UNLIKELY(is_exiting_)) {
-  } else if (OB_FAIL(mt_ctx_.remove_callback_for_uncommited_txn(mt))) {
-    TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(mt_ctx_));
+  } else if (OB_FAIL(mt_ctx_.remove_callback_for_uncommited_txn(mt, exec_info_.max_applied_log_ts_))) {
+    TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(mt_ctx_), K(exec_info_.max_applied_log_ts_));
   }
 
   return ret;
