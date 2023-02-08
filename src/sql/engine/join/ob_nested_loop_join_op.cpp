@@ -847,7 +847,9 @@ int ObNestedLoopJoinOp::process_right_batch()
   } else {
     if (MY_SPEC.enable_px_batch_rescan_) {
       last_save_batch_.extend_save(eval_ctx_, right_brs->size_);
-    } else if (!MY_SPEC.group_rescan_) {
+    } else if (MY_SPEC.group_rescan_) {
+      group_join_buffer_.get_last_batch().extend_save(eval_ctx_, right_brs->size_);
+    } else {
       left_batch_.extend_save(eval_ctx_, right_brs->size_);
     }
     left_expr_extend(right_brs->size_);
