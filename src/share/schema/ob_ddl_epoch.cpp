@@ -71,6 +71,7 @@ int ObDDLEpochMgr::remove_ddl_epoch(const uint64_t tenant_id)
     LOG_WARN("ObDDLEpochMgr not init", KR(ret));
   } else {
     SpinWLockGuard guard(lock_);
+    LOG_INFO("remove_ddl_epoch", K(ddl_epoch_stat_), K(tenant_id));
     for (int i = 0; i < ddl_epoch_stat_.count(); i++) {
       if (ddl_epoch_stat_.at(i).tenant_id_ == tenant_id) {
         if (OB_FAIL(ddl_epoch_stat_.remove(i))) {
@@ -91,6 +92,7 @@ int ObDDLEpochMgr::remove_all_ddl_epoch()
     LOG_WARN("ObDDLEpochMgr not init", KR(ret));
   } else {
     SpinWLockGuard guard(lock_);
+    LOG_INFO("remove_all_ddl_epoch", K(ddl_epoch_stat_));
     ddl_epoch_stat_.reuse();
   }
   return ret;
@@ -149,6 +151,8 @@ int ObDDLEpochMgr::promote_ddl_epoch(const uint64_t tenant_id, int64_t wait_us, 
         } else {
           LOG_WARN("get_ddl_epoch fail", KR(ret), K(tenant_id));
         }
+      } else {
+        ddl_epoch_ret = ddl_epoch_tmp;
       }
       if (OB_SUCC(ret) && need_promote) {
         int64_t new_ddl_epoch = 0;

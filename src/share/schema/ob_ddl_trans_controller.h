@@ -63,7 +63,6 @@ private:
   share::schema::ObMultiVersionSchemaService *schema_service_;
 
   common::hash::ObHashSet<uint64_t> tenants_;
-  common::ObTimer timer_;
 
   // for compat
   common::SpinRWLock lock_for_tenant_set_;

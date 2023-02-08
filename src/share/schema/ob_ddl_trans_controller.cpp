@@ -31,6 +31,9 @@ int ObDDLTransController::init(share::schema::ObMultiVersionSchemaService *schem
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(schema_service)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("schema_service is null", KR(ret));
     } else if (OB_FAIL(tenants_.create(10))) {
       LOG_WARN("hashset create fail", KR(ret));
     } else if (OB_FAIL(tenant_for_ddl_trans_new_lock_.create(10))) {
@@ -51,8 +54,10 @@ ObDDLTransController::~ObDDLTransController()
   wait_cond_.signal();
   ObThreadPool::wait();
   ObThreadPool::destroy();
-  schema_service_ = NULL;
+  tasks_.destroy();
+  tenants_.destroy();
   tenant_for_ddl_trans_new_lock_.destroy();
+  schema_service_ = NULL;
   inited_ = false;
 }
 
