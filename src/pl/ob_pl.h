@@ -387,7 +387,13 @@ class ObPLSqlStmt;
 class ObPLSqlInfo
 {
 public:
-  ObPLSqlInfo() {}
+  ObPLSqlInfo()
+    : loc_(0), forall_sql_(false), for_update_(false), has_hidden_rowid_(false),
+      sql_(), params_(), array_binding_params_(), ps_sql_(),
+      stmt_type_(sql::stmt::StmtType::T_NONE), rowid_table_id_(OB_INVALID_ID),
+      into_(), not_null_flags_(), pl_integer_ranges_(),
+      data_type_(), bulk_(false), allocator_(nullptr) {}
+
   ObPLSqlInfo(common::ObIAllocator &allocator)
     : loc_(0), forall_sql_(false), for_update_(false), has_hidden_rowid_(false),
       sql_(), params_(allocator), array_binding_params_(allocator), ps_sql_(),
