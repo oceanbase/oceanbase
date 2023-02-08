@@ -133,6 +133,7 @@ private:
                 const palf::PalfBaseInfo &palf_base_info,
                 common::ObMemberList &member_list,
                 common::ObMember &arbitration_service);
+ int check_member_list_all_in_meta_table_(const common::ObMemberList &member_list);
  int set_member_list_(const common::ObMemberList &member_list,
                       const common::ObMember &arbitration_service,
                       const int64_t paxos_replica_num);

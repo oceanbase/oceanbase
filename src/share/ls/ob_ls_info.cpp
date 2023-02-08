@@ -42,12 +42,34 @@ const char *ob_replica_status_str(const ObReplicaStatus status)
   return str;
 }
 
+int get_replica_status(const ObString &status_str, ObReplicaStatus &status)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(status_str.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(status_str));
+  } else {
+    status = REPLICA_STATUS_MAX;
+    for (int64_t i = 0; i < ARRAYSIZEOF(replica_display_status_strs); ++i) {
+      if (0 == status_str.case_compare(replica_display_status_strs[i])) {
+        status = static_cast<ObReplicaStatus>(i);
+        break;
+      }
+    }
+    if (REPLICA_STATUS_MAX == status) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("display status str not found", KR(ret), K(status_str));
+    }
+  }
+  return ret;
+}
+
 int get_replica_status(const char* str, ObReplicaStatus &status)
 {
   int ret = OB_SUCCESS;
   if (NULL == str) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(str));
+    LOG_WARN("invalid argument", KR(ret), KP(str));
   } else {
     status = REPLICA_STATUS_MAX;
     for (int64_t i = 0; i < ARRAYSIZEOF(replica_display_status_strs); ++i) {
@@ -58,7 +80,7 @@ int get_replica_status(const char* str, ObReplicaStatus &status)
     }
     if (REPLICA_STATUS_MAX == status) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("display status str not found", K(ret), K(str));
+      LOG_WARN("display status str not found", KR(ret), K(str));
     }
   }
   return ret;
@@ -691,7 +713,9 @@ int ObLSInfo::update_replica_status()
       // 2 non_paxos replicas (READONLY),NORMAL all the time
       // 3 if non_paxos replicas are deleted by partition service, status in meta table is set to REPLICA_STATUS_OFFLINE,
       //    then set replica_status to REPLICA_STATUS_OFFLINE
-      if (in_leader_member_list) {
+      if (REPLICA_STATUS_OFFLINE == r->get_replica_status()) {
+        // do nothing
+      } else if (in_leader_member_list) {
         r->set_replica_status(REPLICA_STATUS_NORMAL);
       } else if (!ObReplicaTypeCheck::is_replica_type_valid(r->get_replica_type())) {
         // invalid replicas

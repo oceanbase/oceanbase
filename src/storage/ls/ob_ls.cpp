@@ -947,6 +947,14 @@ int ObLS::save_base_schema_version()
   return ret;
 }
 
+int ObLS::get_replica_status(ObReplicaStatus &replica_status)
+{
+  int ret = OB_SUCCESS;
+  // Todo: need to get migration status
+  replica_status = REPLICA_STATUS_NORMAL;
+  return ret;
+}
+
 int ObLS::get_ls_role(ObRole &role)
 {
   int ret = OB_SUCCESS;

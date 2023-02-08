@@ -43,6 +43,7 @@ enum ObReplicaStatus
 
 const char *ob_replica_status_str(const ObReplicaStatus status);
 int get_replica_status(const char* str, ObReplicaStatus &status);
+int get_replica_status(const ObString &status_str, ObReplicaStatus &status);
 
 // [class_full_name] SimpleMember
 // [class_functions] Use this class to build a member_list consists of this simple SimpleMember

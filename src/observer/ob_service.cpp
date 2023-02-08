@@ -2306,6 +2306,7 @@ int ObService::fill_ls_replica(
       int64_t proposal_id = 0;
       int64_t paxos_replica_number = 0;
       ObLSRestoreStatus restore_status;
+      ObReplicaStatus replica_status = REPLICA_STATUS_NORMAL;
       if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
@@ -2324,6 +2325,8 @@ int ObService::fill_ls_replica(
         LOG_WARN("open palf failed", KR(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
         LOG_WARN("get role failed", KR(ret), K(tenant_id), K(ls_id));
+      } else if (!is_strong_leader(role) && OB_FAIL(ls_handle.get_ls()->get_replica_status(replica_status))) {
+        LOG_WARN("get replica status failed", KR(ret));
       } else if (OB_FAIL(replica.init(
             0,          /*create_time_us*/
             0,          /*modify_time_us*/
@@ -2334,7 +2337,7 @@ int ObService::fill_ls_replica(
             role,                      /*role*/
             REPLICA_TYPE_FULL,         /*replica_type*/
             proposal_id,              /*proposal_id*/
-            REPLICA_STATUS_NORMAL,     /*replica_status*/
+            replica_status,            /*replica_status*/
             restore_status,            /*restore_status*/
             100,                       /*memstore_percent*/
             unit_id,                   /*unit_id*/

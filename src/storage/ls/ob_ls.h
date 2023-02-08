@@ -170,6 +170,7 @@ public:
   share::ObLSID get_ls_id() const { return ls_meta_.ls_id_; }
   bool is_sys_ls() const { return ls_meta_.ls_id_.is_sys_ls(); }
   ObReplicaType get_replica_type() const { return ls_meta_.replica_type_; }
+  int get_replica_status(ObReplicaStatus &replica_status);
   uint64_t get_tenant_id() const { return ls_meta_.tenant_id_; }
   ObFreezer *get_freezer() { return &ls_freezer_; }
   common::ObMultiModRefMgr<ObLSGetMod> &get_ref_mgr() { return ref_mgr_; }
