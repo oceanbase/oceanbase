@@ -78,7 +78,8 @@ FetchLogEngine::FetchLogEngine()
   : tg_id_(-1),
     is_inited_(false),
     palf_env_impl_(NULL),
-    allocator_(NULL)
+    allocator_(NULL),
+    replayable_point_()
 {}
 
 
@@ -221,7 +222,8 @@ void FetchLogEngine::handle(void *task)
                                                                   fetch_log_task->get_start_lsn(),
                                                                   fetch_log_task->get_log_size(),
                                                                   fetch_log_task->get_log_count(),
-                                                                  fetch_log_task->get_accepted_mode_meta()))) {
+                                                                  fetch_log_task->get_accepted_mode_meta(),
+                                                                  replayable_point_.atomic_load()))) {
         PALF_LOG(WARN, "fetch_log_from_storage failed", K(ret), K(palf_id), KPC(fetch_log_task));
       } else {
         // do nothing
@@ -277,6 +279,17 @@ bool FetchLogEngine::is_task_queue_timeout_(FetchLogTask *task) const
   }
 
   return bool_ret;
+}
+
+int FetchLogEngine::update_replayable_point(const share::SCN &replayable_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    replayable_point_.atomic_store(replayable_scn);
+  }
+  return ret;
 }
 
 } // namespace palf

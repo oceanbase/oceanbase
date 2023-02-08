@@ -1149,6 +1149,16 @@ int64_t PalfEnvImpl::get_tenant_id()
 {
   return tenant_id_;
 }
+int PalfEnvImpl::update_replayable_point(const SCN &replayable_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(fetch_log_engine_.update_replayable_point(replayable_scn))) {
+    PALF_LOG(WARN, "update_replayable_point failed", KPC(this), K(replayable_scn));
+  }
+  return ret;
+}
 
 } // end namespace palf
 } // end namespace oceanbase

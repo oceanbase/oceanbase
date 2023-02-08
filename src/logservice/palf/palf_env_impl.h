@@ -162,6 +162,8 @@ public:
   virtual bool check_disk_space_enough() = 0;
   virtual int get_io_start_time(int64_t &last_working_time) = 0;
   virtual int64_t get_tenant_id() = 0;
+  // should be removed in version 4.2.0.0
+  virtual int update_replayable_point(const SCN &replayable_scn) = 0;
   VIRTUAL_TO_STRING_KV("IPalfEnvImpl", "Dummy");
 
 };
@@ -225,6 +227,7 @@ public:
   common::ObILogAllocator* get_log_allocator() override final;
   int get_io_start_time(int64_t &last_working_time) override final;
   int64_t get_tenant_id() override final;
+  int update_replayable_point(const SCN &replayable_scn) override final;
   INHERIT_TO_STRING_KV("IPalfEnvImpl", IPalfEnvImpl, K_(self), K_(log_dir), K_(disk_options_wrapper),
       KPC(log_alloc_mgr_));
   // =================== disk space management ==================

@@ -1883,6 +1883,7 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
   added_member_has_new_version = is_add_member_list(args.type_)? false: true;
 
   (void) sw_->get_committed_end_lsn(first_leader_committed_end_lsn);
+  const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
   if (new_member_list.get_member_number() == 0) {
     ret = OB_INVALID_ARGUMENT;
   } else if (new_member_list.get_member_number() == 1) {
@@ -1891,6 +1892,10 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
       conn_timeout_us, first_committed_end_lsn, added_member_has_new_version))) {
     PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_member_list),
         K(new_replica_num), K(added_member_has_new_version));
+  } else if (need_skip_log_barrier) {
+    ret = OB_SUCCESS;
+    PALF_LOG(INFO, "PALF is in FLASHBACK mode, skip log barrier", K(ret), K_(palf_id), K_(self), \
+        "accepted_mode_meta", mode_mgr_->get_accepted_mode_meta());
   } else if (is_check_log_barrier) {
     // check log barrier during log appending are stopped
     LSN prev_log_lsn;

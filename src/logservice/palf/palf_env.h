@@ -105,6 +105,8 @@ public:
   int for_each(const ObFunction<int(const PalfHandle&)> &func);
   // just for LogRpc
   palf::IPalfEnvImpl *get_palf_env_impl() { return &palf_env_impl_; }
+  // should be removed in version 4.2.0.0
+  int update_replayable_point(const SCN &replayable_scn);
 private:
   int start_();
   void stop_();

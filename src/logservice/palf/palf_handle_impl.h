@@ -490,7 +490,8 @@ public:
                                      const LSN &log_offset,
                                      const int64_t fetch_log_size,
                                      const int64_t fetch_log_count,
-                                     const int64_t accepted_mode_pid) = 0;
+                                     const int64_t accepted_mode_pid,
+                                     const SCN &replayable_point) = 0;
   virtual int receive_config_log(const common::ObAddr &server,
                                  const int64_t &msg_proposal_id,
                                  const int64_t &prev_log_proposal_id,
@@ -800,7 +801,8 @@ public:
                              const LSN &fetch_start_lsn,
                              const int64_t fetch_log_size,
                              const int64_t fetch_log_count,
-                             const int64_t accepted_mode_pid) override final;
+                             const int64_t accepted_mode_pid,
+                             const SCN &replayable_point) override final;
   int receive_config_log(const common::ObAddr &server,
                          const int64_t &msg_proposal_id,
                          const int64_t &prev_log_proposal_id,
@@ -884,7 +886,8 @@ private:
                               const LSN &prev_lsn,
                               const LSN &fetch_start_lsn,
                               const int64_t fetch_log_size,
-                              const int64_t fetch_log_count);
+                              const int64_t fetch_log_count,
+                              const SCN &replayable_point);
   int submit_fetch_log_resp_(const common::ObAddr &server,
                              const int64_t &msg_proposal_id,
                              const int64_t &prev_log_proposal_id,
@@ -938,7 +941,7 @@ private:
   // =================================================================
   int leader_sync_mode_meta_to_arb_member_();
   void is_in_sync_(bool &is_log_sync, bool &is_use_cache);
-  int get_leader_max_scn_(SCN &max_scn);
+  int get_leader_max_scn_(SCN &max_scn, LSN &end_lsn);
 private:
   class ElectionMsgSender : public election::ElectionMsgSender
   {

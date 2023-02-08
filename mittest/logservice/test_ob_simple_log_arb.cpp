@@ -450,8 +450,11 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_defensive)
   palf_list[another_f_idx]->get_palf_handle_impl()->set_location_cache_cb(&loc_cb);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
   sleep(2);
+  const int64_t added_member_idx = 3;
+  const common::ObMember added_member = ObMember(palf_list[added_member_idx]->palf_handle_impl_->self_, 1);
 
-  LogConfigChangeArgs args(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 3, ADD_MEMBER);
+  // add a member, do not allow to append logs until config log reaches majority
+  LogConfigChangeArgs args(added_member, 3, ADD_MEMBER);
   const int64_t proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
   const int64_t election_epoch = leader.palf_handle_impl_->state_mgr_.get_leader_epoch();
   LogConfigVersion config_version;
@@ -466,6 +469,21 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_defensive)
       ::ob_usleep(10 * 1000);
     }
   }
+
+  // flashback one follower
+  LogEntryHeader header_origin;
+  SCN base_scn;
+  base_scn.set_base();
+  SCN flashback_scn;
+  palf::AccessMode unused_access_mode;
+  int64_t mode_version;
+  EXPECT_EQ(OB_SUCCESS, get_middle_scn(50, leader, flashback_scn, header_origin));
+  switch_append_to_flashback(leader, mode_version);
+  EXPECT_EQ(OB_SUCCESS, palf_list[another_f_idx]->palf_handle_impl_->flashback(mode_version, flashback_scn, CONFIG_CHANGE_TIMEOUT));
+
+  // remove another follower
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(added_member, 2, CONFIG_CHANGE_TIMEOUT));
+
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();
   delete_paxos_group(id);

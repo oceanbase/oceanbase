@@ -443,6 +443,9 @@ int ObLogService::update_replayable_point(const SCN &replayable_point)
     CLOG_LOG(WARN, "log_service is not inited", K(ret));
   } else if (OB_FAIL(replay_service_.update_replayable_point(replayable_point))) {
     CLOG_LOG(WARN, "update_replayable_point failed", K(ret), K(replayable_point));
+    // should be removed in version 4.2.0.0
+  } else if (OB_FAIL(palf_env_->update_replayable_point(replayable_point))) {
+    CLOG_LOG(WARN, "update_replayable_point failed", K(replayable_point));
   }
   return ret;
 }

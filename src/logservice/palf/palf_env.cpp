@@ -180,5 +180,11 @@ int PalfEnv::get_io_start_time(int64_t &last_working_time)
   return palf_env_impl_.get_io_start_time(last_working_time);
 }
 
+// should be removed in version 4.2.0.0
+int PalfEnv::update_replayable_point(const SCN &replayable_scn)
+{
+  return palf_env_impl_.update_replayable_point(replayable_scn);
+}
+
 } // end namespace palf
 } // end namespace oceanbase

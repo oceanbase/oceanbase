@@ -95,6 +95,7 @@ public:
   void handle_drop(void *task);
   FetchLogTask *alloc_fetch_log_task();
   void free_fetch_log_task(FetchLogTask *task);
+  int update_replayable_point(const share::SCN &replayable_scn);
 private:
   bool is_task_queue_timeout_(FetchLogTask *fetch_log_task) const;
 private:
@@ -102,6 +103,7 @@ private:
   bool is_inited_;
   IPalfEnvImpl *palf_env_impl_;
   common::ObILogAllocator *allocator_;
+  share::SCN replayable_point_;
   DISALLOW_COPY_AND_ASSIGN(FetchLogEngine);
 };
 } // namespace logservice

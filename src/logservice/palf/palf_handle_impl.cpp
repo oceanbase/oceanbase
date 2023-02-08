@@ -758,6 +758,12 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "another change_access_mode is running, try again", K(ret), K_(palf_id),
         K_(self), K(proposal_id),K(access_mode), K(ref_scn));
+  } else if (OB_FAIL(config_change_lock_.trylock())) {
+    // forbid to change access mode when reconfiguration is doing
+    mode_change_lock_.unlock();
+    ret = OB_EAGAIN;
+    PALF_LOG(WARN, "reconfiguration is running, try again", K(ret), K_(palf_id),
+        K_(self), K(proposal_id), K(access_mode), K(ref_scn));
   } else {
     PALF_EVENT("start change_access_mode", palf_id_, K(ret), KPC(this),
         K(proposal_id), K(access_mode), K(ref_scn), K_(sw));
@@ -800,6 +806,7 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
         ob_usleep(1000);
       }
     }
+    config_change_lock_.unlock();
     mode_change_lock_.unlock();
   }
   return ret;
@@ -2766,13 +2773,14 @@ int PalfHandleImpl::fetch_log_from_storage(const common::ObAddr &server,
                                            const LSN &fetch_start_lsn,
                                            const int64_t fetch_log_size,
                                            const int64_t fetch_log_count,
-                                           const int64_t accepted_mode_pid)
+                                           const int64_t accepted_mode_pid,
+                                           const SCN &replayable_point)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(fetch_log_from_storage_(server, fetch_type, msg_proposal_id, prev_lsn,
-      fetch_start_lsn, fetch_log_size, fetch_log_count))) {
+      fetch_start_lsn, fetch_log_size, fetch_log_count, replayable_point))) {
     PALF_LOG(WARN, "fetch_log_from_storage_ failed", K(ret), K_(palf_id), K_(self),
         K(server), K(fetch_type), K(msg_proposal_id), K(prev_lsn), K(fetch_start_lsn),
         K(fetch_log_size), K(fetch_log_count), K(accepted_mode_pid));
@@ -2817,7 +2825,8 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
                                             const LSN &prev_lsn,
                                             const LSN &fetch_start_lsn,
                                             const int64_t fetch_log_size,
-                                            const int64_t fetch_log_count)
+                                            const int64_t fetch_log_count,
+                                            const SCN &replayable_point)
 {
   int ret = OB_SUCCESS;
   PalfGroupBufferIterator iterator;
@@ -2857,6 +2866,10 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
   LogInfo prev_log_info;
   const bool no_need_fetch_log = (prev_lsn >= max_flushed_end_lsn) ||
       (AccessMode::FLASHBACK == access_mode);
+  common::ObMemberList member_list;
+  int64_t replica_num = 0;
+  (void) config_mgr_.get_curr_member_list(member_list, replica_num);
+  const bool is_dest_in_memberlist = (member_list.contains(server));
   if (no_need_fetch_log) {
     PALF_LOG(INFO, "no need fetch_log_from_storage", K(ret), KPC(this), K(server), K(fetch_start_lsn), K(prev_lsn),
         K(max_flushed_end_lsn), K(access_mode));
@@ -2864,9 +2877,14 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
       && OB_FAIL(get_prev_log_info_(fetch_start_lsn, prev_log_info))) {
     PALF_LOG(WARN, "get_prev_log_info_ failed", K(ret), K_(palf_id), K(prev_lsn), K(fetch_start_lsn));
   } else if (true == need_check_prev_log && prev_log_info.lsn_ != prev_lsn) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(ERROR, "the LSN between each replica is not same, unexpected error!!!", K(ret),
-        K_(palf_id), K(fetch_start_lsn), K(prev_log_info));
+    if (is_dest_in_memberlist) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "the LSN between each replica is not same, unexpected error!!!", K(ret),
+          K_(palf_id), K(fetch_start_lsn), K(prev_log_info));
+    } else {
+      PALF_LOG(INFO, "the LSN between leader and non paxos member is not same, do not fetch log",
+          K_(palf_id), K(fetch_start_lsn), K(prev_log_info));
+    }
   } else if (OB_FAIL(iterator.init(fetch_start_lsn, get_file_end_lsn, log_engine_.get_log_storage()))) {
     PALF_LOG(WARN, "PalfGroupBufferIterator init failed", K(ret), K_(palf_id));
   } else {
@@ -2892,6 +2910,13 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
         is_reach_end = true;
         PALF_LOG(INFO, "reach committed_end_lsn(not leader active replica), end fetch", K(ret), K_(palf_id), K(server),
             K(msg_proposal_id), K(curr_lsn), K(curr_log_end_lsn), K(committed_end_lsn));
+      } else if (false == is_dest_in_memberlist &&
+          curr_group_entry.get_header().is_raw_write() &&
+          replayable_point.is_valid() &&
+          curr_group_entry.get_scn() > replayable_point) {
+        is_reach_end = true;
+        PALF_LOG(INFO, "non paxos member could not fetch logs which scn is bigger than replayable_point, end fetch",
+            K_(palf_id), K(server), K(msg_proposal_id), K(curr_lsn), K(replayable_point));
       } else if (OB_FAIL(submit_fetch_log_resp_(server, msg_proposal_id, prev_log_proposal_id, \
               each_round_prev_lsn, curr_lsn, curr_group_entry))) {
         PALF_LOG(WARN, "submit_fetch_log_resp_ failed", K(ret), K_(palf_id), K(server),
@@ -4007,20 +4032,26 @@ void PalfHandleImpl::is_in_sync_(bool &is_log_sync, bool &is_use_cache)
 {
   int ret = OB_SUCCESS;
   SCN leader_max_scn;
+  LSN leader_end_lsn;
   is_log_sync = false;
   is_use_cache = false;
-  const share::SCN local_max_scn = sw_.get_max_scn();
+  share::SCN local_max_scn = sw_.get_max_scn();
+  LSN local_end_lsn;
 
   if (state_mgr_.get_leader() == self_) {
     is_log_sync = true;
   } else if (false == local_max_scn.is_valid()) {
   } else if (palf_reach_time_interval(PALF_LOG_SYNC_DELAY_THRESHOLD_US, last_check_sync_time_us_)) {
     // if reachs time interval, get max_scn of leader with sync RPC
-    if (OB_FAIL(get_leader_max_scn_(leader_max_scn))) {
+    if (OB_FAIL(get_leader_max_scn_(leader_max_scn, leader_end_lsn))) {
       CLOG_LOG(WARN, "get_palf_max_scn failed", K(ret), K_(self), K_(palf_id));
       last_check_sync_time_us_ = OB_INVALID_TIMESTAMP;
-    } else if (leader_max_scn.is_valid()) {
-      is_log_sync = (leader_max_scn.convert_to_ts() - local_max_scn.convert_to_ts() <= PALF_LOG_SYNC_DELAY_THRESHOLD_US);
+    } else if (leader_max_scn.is_valid() && leader_end_lsn.is_valid()) {
+      local_max_scn = sw_.get_max_scn();
+      sw_.get_committed_end_lsn(local_end_lsn);
+      const bool is_scn_sync = (leader_max_scn.convert_to_ts() - local_max_scn.convert_to_ts() <= PALF_LOG_SYNC_DELAY_THRESHOLD_US);
+      const bool is_log_size_sync = (leader_end_lsn - local_end_lsn) < 2 * PALF_BLOCK_SIZE;
+      is_log_sync = is_scn_sync || is_log_size_sync;
     }
   } else {
     is_use_cache = true;
@@ -4034,7 +4065,7 @@ void PalfHandleImpl::is_in_sync_(bool &is_log_sync, bool &is_use_cache)
   }
 }
 
-int PalfHandleImpl::get_leader_max_scn_(SCN &max_scn)
+int PalfHandleImpl::get_leader_max_scn_(SCN &max_scn, LSN &end_lsn)
 {
   int ret = OB_SUCCESS;
   common::ObAddr leader;
@@ -4043,6 +4074,7 @@ int PalfHandleImpl::get_leader_max_scn_(SCN &max_scn)
   bool need_renew_leader = false;
 
   max_scn.reset();
+  end_lsn.reset();
   // use lc_cb_ in here without rlock is safe, because we don't reset lc_cb_
   // until this PalfHandleImpl is destoryed.
   if (OB_ISNULL(lc_cb_)) {
@@ -4057,6 +4089,7 @@ int PalfHandleImpl::get_leader_max_scn_(SCN &max_scn)
     need_renew_leader = true;
   } else {
     max_scn = resp.max_scn_;
+    end_lsn = resp.end_lsn_;
   }
   if (need_renew_leader && palf_reach_time_interval(500 * 1000, last_renew_loc_time_us_)) {
     (void) lc_cb_->nonblock_renew_leader(palf_id_);
