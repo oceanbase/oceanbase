@@ -54,7 +54,8 @@ public:
 
 typedef ObSEArray<ObDataDictMetaInfoItem, 16> DataDictMetaInfoItemArr;
 
-class ObDataDictMetaInfoHeader {
+class ObDataDictMetaInfoHeader
+{
 public:
   static const int16_t DATADICT_METAINFO_HEADER_MAGIC = 0x4444; // hex of "DD"
   static const int64_t DATADICT_METAINFO_META_VERSION = 0x0001; // version = 1
@@ -62,11 +63,15 @@ public:
   ObDataDictMetaInfoHeader();
   ~ObDataDictMetaInfoHeader();
   void reset();
-  int generate(const int32_t item_cnt,
+  int generate(
+      const uint64_t tenant_id,
+      const int32_t item_cnt,
       const int64_t max_snapshot_scn,
       const int64_t min_snapshot_scn,
       const char *data,
       const int64_t data_size);
+
+  uint64_t get_tenant_id() const { return tenant_id_; }
   int32_t get_meta_version() const {
     return meta_version_;
   }
@@ -86,7 +91,7 @@ public:
   bool check_integrity(const char *data, const int64_t data_size) const;
 
   bool operator==(const ObDataDictMetaInfoHeader& that) const {
-    return magic_ == that.magic_ && meta_version_ == that.meta_version_ &&
+    return magic_ == that.magic_ && meta_version_ == that.meta_version_ && tenant_id_ == that.tenant_id_ &&
         item_cnt_ == that.item_cnt_ && min_snapshot_scn_ == that.min_snapshot_scn_ &&
         max_snapshot_scn_ == that.max_snapshot_scn_ && data_size_ == that.data_size_ &&
         checksum_ == that.checksum_;
@@ -96,6 +101,7 @@ public:
 
   TO_STRING_KV(K_(magic),
                K_(meta_version),
+               K_(tenant_id),
                K_(item_cnt),
                K_(min_snapshot_scn),
                K_(max_snapshot_scn),
@@ -104,6 +110,7 @@ public:
 private:
   int16_t magic_;
   int16_t meta_version_;
+  int64_t tenant_id_;
   int32_t item_cnt_;
   int64_t min_snapshot_scn_;
   int64_t max_snapshot_scn_;
@@ -111,7 +118,8 @@ private:
   int64_t checksum_;
 };
 
-class ObDataDictMetaInfo {
+class ObDataDictMetaInfo
+{
 public:
   ObDataDictMetaInfo();
   ~ObDataDictMetaInfo();
@@ -127,6 +135,8 @@ public:
     return header_.get_meta_version();
   }
 
+  uint64_t get_tenant_id() const { return header_.get_tenant_id(); }
+
   const ObDataDictMetaInfoHeader& get_header() const {
     return header_;
   }
@@ -138,6 +148,7 @@ public:
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   TO_STRING_KV(K_(header));
+
 private:
   ObDataDictMetaInfoHeader    header_;
   DataDictMetaInfoItemArr     item_arr_;

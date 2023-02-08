@@ -138,8 +138,8 @@ public:
   // root server info for oblog, seperated by `;` between multi rootserver, a root server info format as `ip:rpc_port:sql_port`
   DEF_STR(rootserver_list, OB_CLUSTER_PARAMETER, "|", "OB RootServer list");
   DEF_STR(cluster_url, OB_CLUSTER_PARAMETER, "|", "OB configure url");
-  DEF_STR(cluster_user, OB_CLUSTER_PARAMETER, "", "OB login user");
-  DEF_STR(cluster_password, OB_CLUSTER_PARAMETER, "", "OB login password");
+  DEF_STR(cluster_user, OB_CLUSTER_PARAMETER, "default", "OB login user");
+  DEF_STR(cluster_password, OB_CLUSTER_PARAMETER, "default", "OB login password");
   DEF_STR(cluster_db_name, OB_CLUSTER_PARAMETER, "oceanbase", "OB login database name");
   DEF_STR(config_fpath, OB_CLUSTER_PARAMETER, DEFAULT_CONFIG_FPATN, "configuration file path");
   DEF_STR(timezone, OB_CLUSTER_PARAMETER, DEFAULT_TIMEZONE, "timezone");

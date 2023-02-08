@@ -58,36 +58,38 @@ void ObDataDictMetaInfoItem::reset(const int64_t snapshot_scn,
 DEFINE_SERIALIZE(ObDataDictMetaInfoItem)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, snapshot_scn_))) {
-    DDLOG(WARN, "serialize snapshot_scn failed", K(ret), K(buf), K(buf_len), K(pos), K(snapshot_scn_));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, start_lsn_))) {
-    DDLOG(WARN, "serialize start_lsn failed", K(ret), K(buf), K(buf_len), K(pos), K(start_lsn_));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, end_lsn_))) {
-    DDLOG(WARN, "serialize end_lsn failed", K(ret), K(buf), K(buf_len), K(pos), K(end_lsn_));
-  }
+
+  LST_DO_CODE(OB_UNIS_ENCODE,
+      snapshot_scn_,
+      start_lsn_,
+      end_lsn_);
+
   return ret;
 }
 
 DEFINE_DESERIALIZE(ObDataDictMetaInfoItem)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &snapshot_scn_))) {
-    DDLOG(WARN, "deserialize snapshot_scn failed", K(ret), K(buf), K(data_len), K(pos), K(snapshot_scn_));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &start_lsn_))) {
-    DDLOG(WARN, "deserialize start_lsn failed", K(ret), K(buf), K(data_len), K(pos), K(start_lsn_));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &end_lsn_))) {
-    DDLOG(WARN, "deserialize end_lsn failed", K(ret), K(buf), K(data_len), K(pos), K(end_lsn_));
-  }
+
+  LST_DO_CODE(OB_UNIS_DECODE,
+      snapshot_scn_,
+      start_lsn_,
+      end_lsn_);
+
   return ret;
 }
 
 DEFINE_GET_SERIALIZE_SIZE(ObDataDictMetaInfoItem)
 {
-  return serialization::encoded_length_i64(snapshot_scn_) +
-      serialization::encoded_length_i64(start_lsn_) +
-      serialization::encoded_length_i64(end_lsn_);
-}
+  int len = 0;
 
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+      snapshot_scn_,
+      start_lsn_,
+      end_lsn_);
+
+  return len;
+}
 
 ///////////////////////////////// ObDataDictMetaInfoHeader /////////////////////////////////
 
@@ -105,6 +107,7 @@ void ObDataDictMetaInfoHeader::reset()
 {
   magic_ = 0;
   meta_version_ = 0;
+  tenant_id_ = OB_INVALID_TENANT_ID;
   item_cnt_ = 0;
   min_snapshot_scn_ = 0;
   max_snapshot_scn_ = 0;
@@ -113,6 +116,7 @@ void ObDataDictMetaInfoHeader::reset()
 }
 
 int ObDataDictMetaInfoHeader::generate(
+    const uint64_t tenant_id,
     const int32_t item_cnt,
     const int64_t max_snapshot_scn,
     const int64_t min_snapshot_scn,
@@ -120,18 +124,21 @@ int ObDataDictMetaInfoHeader::generate(
     const int64_t data_size)
 {
   int ret = OB_SUCCESS;
+
   if (OB_ISNULL(data)) {
     ret = OB_INVALID_ARGUMENT;
     DDLOG(WARN, "data is null", K(ret), K(data));
   } else {
     magic_ = DATADICT_METAINFO_HEADER_MAGIC;
     meta_version_ = DATADICT_METAINFO_META_VERSION;
+    tenant_id_ = tenant_id;
     item_cnt_ = item_cnt;
     max_snapshot_scn_ = max_snapshot_scn;
     min_snapshot_scn_ = min_snapshot_scn;
     data_size_ = data_size;
     checksum_ = ob_crc64(data, data_size);
   }
+
   return ret;
 }
 
@@ -166,10 +173,13 @@ bool ObDataDictMetaInfoHeader::check_integrity(const char *data,
 DEFINE_SERIALIZE(ObDataDictMetaInfoHeader)
 {
   int ret = OB_SUCCESS;
+
   if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, magic_))) {
     DDLOG(WARN, "serialize magic failed", K(ret), K(buf), K(buf_len), K(pos), K(magic_));
   } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, meta_version_))) {
     DDLOG(WARN, "serialize meta_version failed", K(ret), K(buf), K(buf_len), K(pos), K(meta_version_));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, tenant_id_))) {
+    DDLOG(WARN, "serialize tenant_id_ failed", K(ret), K(buf), K(buf_len), K(pos), K(tenant_id_));
   } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, item_cnt_))) {
     DDLOG(WARN, "serialize item_cnt failed", K(ret), K(buf), K(buf_len), K(pos), K(item_cnt_));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, min_snapshot_scn_))) {
@@ -181,16 +191,20 @@ DEFINE_SERIALIZE(ObDataDictMetaInfoHeader)
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, checksum_))) {
     DDLOG(WARN, "serialize checksum failed", K(ret), K(buf), K(buf_len), K(pos), K(checksum_));
   }
+
   return ret;
 }
 
 DEFINE_DESERIALIZE(ObDataDictMetaInfoHeader)
 {
   int ret = OB_SUCCESS;
+
   if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &magic_))) {
     DDLOG(WARN, "deserialize magic failed", K(ret), K(buf), K(data_len), K(pos), K(magic_));
   } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &meta_version_))) {
     DDLOG(WARN, "deserialize meta_version failed", K(ret), K(buf), K(data_len), K(pos), K(meta_version_));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &tenant_id_))) {
+    DDLOG(WARN, "deserialize tenant_id_ failed", K(ret), K(buf), K(data_len), K(pos), K(tenant_id_));
   } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &item_cnt_))) {
     DDLOG(WARN, "deserialize item_cnt failed", K(ret), K(buf), K(data_len), K(pos), K(item_cnt_));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &min_snapshot_scn_))) {
@@ -202,6 +216,7 @@ DEFINE_DESERIALIZE(ObDataDictMetaInfoHeader)
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &checksum_))) {
     DDLOG(WARN, "deserialize checksum failed", K(ret), K(buf), K(data_len), K(pos), K(checksum_));
   }
+
   return ret;
 }
 
@@ -209,6 +224,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObDataDictMetaInfoHeader)
 {
   return serialization::encoded_length_i16(magic_) +
       serialization::encoded_length_i16(meta_version_) +
+      serialization::encoded_length_i64(tenant_id_) +
       serialization::encoded_length_i32(item_cnt_) +
       serialization::encoded_length_i64(min_snapshot_scn_) +
       serialization::encoded_length_i64(max_snapshot_scn_) +
@@ -335,6 +351,7 @@ int MetaInfoQueryHelper::get_data(char *data,
 {
   int ret = OB_SUCCESS;
   datadict::DataDictMetaInfoItemArr item_arr;
+
   if (OB_FAIL(get_data_dict_meta_info_(item_arr))) {
     DDLOG(WARN, "get data dict meta info failed", K(ret), K(tenant_id_));
   } else if (item_arr.count() <= 0) {
@@ -343,6 +360,7 @@ int MetaInfoQueryHelper::get_data(char *data,
   } else if (OB_FAIL(generate_data_(item_arr, data, data_size, real_size, scn))) {
     DDLOG(WARN, "generate data from item_arr failed", K(ret), K(tenant_id_));
   }
+
   return ret;
 }
 
@@ -377,7 +395,8 @@ int MetaInfoQueryHelper::generate_data_(const DataDictMetaInfoItemArr &item_arr,
   if (OB_SUCC(ret)) {
     const datadict::ObDataDictMetaInfoItem &max_scn_item = item_arr.at(0);
     const datadict::ObDataDictMetaInfoItem &min_scn_item = item_arr.at(serialized_item_cnt-1);
-    if (OB_FAIL(header.generate(serialized_item_cnt, max_scn_item.snapshot_scn_,
+
+    if (OB_FAIL(header.generate(tenant_id_, serialized_item_cnt, max_scn_item.snapshot_scn_,
         min_scn_item.snapshot_scn_, data + header_size, meta_data_pos - header_size))) {
       DDLOG(WARN, "generate metainfo header failed", K(ret), K(serialized_item_cnt),
           K(data), K(header_size), K(meta_data_pos));

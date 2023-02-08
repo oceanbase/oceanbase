@@ -793,33 +793,35 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     config_url = TCONF.cluster_url.str();
   }
 
-  // TODO
-  INIT(rs_server_provider_, ObLogSQLServerProvider, config_url, rs_list);
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObMemoryDump::get_instance().init())) {
       LOG_ERROR("init memory dump fail", K(ret));
     }
   }
 
-  // init ObLogMysqlProxy
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(mysql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-        rs_sql_conn_timeout_us, rs_sql_query_timeout_us, enable_ssl_client_authentication, rs_server_provider_))) {
-      LOG_ERROR("mysql_proxy_ init fail", KR(ret), K(rs_server_provider_),
-          K(cluster_user), K(cluster_password), K(cluster_db_name), K(rs_sql_conn_timeout_us),
-          K(rs_sql_query_timeout_us), K(enable_ssl_client_authentication));
+  if (! is_online_schema_not_avaliable()) {
+    // init ObLogSQLServerProvider base on config_url or rs_list
+    INIT(rs_server_provider_, ObLogSQLServerProvider, config_url, rs_list);
+
+    // init ObLogMysqlProxy
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(mysql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
+              rs_sql_conn_timeout_us, rs_sql_query_timeout_us, enable_ssl_client_authentication, rs_server_provider_))) {
+        LOG_ERROR("mysql_proxy_ init fail", KR(ret), K(rs_server_provider_),
+            K(cluster_user), K(cluster_password), K(cluster_db_name), K(rs_sql_conn_timeout_us),
+            K(rs_sql_query_timeout_us), K(enable_ssl_client_authentication));
+      }
     }
   }
 
   // init ObCompatModeGetter
   if (OB_SUCC(ret)) {
-    if (is_integrated_fetching_mode(fetching_mode_)) {
-      if (OB_FAIL(share::ObCompatModeGetter::instance().init(&(mysql_proxy_.get_ob_mysql_proxy())))) {
+    if (is_online_schema_not_avaliable()) {
+      if (OB_FAIL(share::ObCompatModeGetter::instance().init_for_obcdc())) {
         LOG_ERROR("compat_mode_getter init fail", KR(ret));
       }
-    } else if (is_direct_fetching_mode(fetching_mode_)) {
-      if (OB_FAIL(share::ObCompatModeGetter::instance().init_for_obcdc())) {
+    } else {
+      if (OB_FAIL(share::ObCompatModeGetter::instance().init(&(mysql_proxy_.get_ob_mysql_proxy())))) {
         LOG_ERROR("compat_mode_getter init fail", KR(ret));
       }
     }
@@ -840,21 +842,22 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(trans_ctx_mgr_, ObLogTransCtxMgr, max_cached_trans_ctx_count, TCONF.sort_trans_participants);
 
-  // TODO
-  INIT(systable_helper_, ObLogSysTableHelper, *rs_server_provider_,
-      TCONF.access_systable_helper_thread_num, TCONF.cluster_user,
-      TCONF.cluster_password, TCONF.cluster_db_name);
+  if (! is_online_schema_not_avaliable()) {
+    INIT(systable_helper_, ObLogSysTableHelper, *rs_server_provider_,
+        TCONF.access_systable_helper_thread_num, TCONF.cluster_user,
+        TCONF.cluster_password, TCONF.cluster_db_name);
 
-  INIT(tenant_server_provider_, ObCDCTenantSQLServerProvider, *systable_helper_);
+    INIT(tenant_server_provider_, ObCDCTenantSQLServerProvider, *systable_helper_);
 
-  // init ObLogTenantSQLProxy
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(tenant_sql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-        tenant_sql_conn_timeout_us, tenant_sql_query_timeout_us, enable_ssl_client_authentication,
-        tenant_server_provider_, true/*is_tenant_server_provider*/))) {
-      LOG_ERROR("tenant_sql_proxy_ init fail", KR(ret), K(tenant_server_provider_),
-          K(cluster_user), K(cluster_password), K(cluster_db_name), K(tenant_sql_conn_timeout_us),
-          K(tenant_sql_query_timeout_us), K(enable_ssl_client_authentication));
+    // init ObLogTenantSQLProxy
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tenant_sql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
+              tenant_sql_conn_timeout_us, tenant_sql_query_timeout_us, enable_ssl_client_authentication,
+              tenant_server_provider_, true/*is_tenant_server_provider*/))) {
+        LOG_ERROR("tenant_sql_proxy_ init fail", KR(ret), K(tenant_server_provider_),
+            K(cluster_user), K(cluster_password), K(cluster_db_name), K(tenant_sql_conn_timeout_us),
+            K(tenant_sql_query_timeout_us), K(enable_ssl_client_authentication));
+      }
     }
   }
 
@@ -992,14 +995,13 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   }
 
   INIT(fetcher_, ObLogFetcher, false/*is_load_data_dict_baseline_data*/, fetching_mode, archive_dest,
-      &dispatcher_, sys_ls_handler_, *systable_helper_, &trans_task_pool_, log_entry_task_pool_,
+      &dispatcher_, sys_ls_handler_, &trans_task_pool_, log_entry_task_pool_,
       &mysql_proxy_.get_ob_mysql_proxy(), err_handler, cluster_info.cluster_id_, TCONF, start_seq);
 
   if (OB_SUCC(ret)) {
     if (is_data_dict_refresh_mode(refresh_mode)) {
       if (OB_FAIL(ObLogMetaDataService::get_instance().init(start_tstamp_ns, fetching_mode, archive_dest,
-              sys_ls_handler_, *systable_helper_,
-              &mysql_proxy_.get_ob_mysql_proxy(), err_handler,
+              sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler,
               cluster_info.cluster_id_, TCONF, start_seq))) {
         LOG_ERROR("ObLogMetaDataService init failed", KR(ret), K(start_tstamp_ns));
       }
@@ -1014,7 +1016,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   }
 
   if (OB_SUCC(ret)) {
-    if (is_direct_fetching_mode(fetching_mode_)) {
+    if (is_online_schema_not_avaliable()) {
       if (OB_FAIL(set_all_tenant_compat_mode_())) {
         LOG_ERROR("set_all_tenant_compat_mode_ failed", KR(ret));
       }
@@ -1136,12 +1138,27 @@ int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
   // Add all tables for all tenants
   // Beforehand, make sure all callbacks are registered
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(tenant_mgr_->add_all_tenants(start_tstamp_ns,
-        sys_schema_version,
-        GET_SCHEMA_TIMEOUT_ON_START_UP))) {
-      LOG_ERROR("add_all_tenants fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
+    if (is_online_schema_not_avaliable()) {
+      bool add_tenant_succ = false;
+      const char *tenant_name = nullptr;
+
+      if (OB_FAIL(tenant_mgr_->add_tenant(
+              start_tstamp_ns,
+              sys_schema_version,
+              tenant_name,
+              GET_SCHEMA_TIMEOUT_ON_START_UP,
+              add_tenant_succ))) {
+        LOG_ERROR("add_tenant fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
+      }
+    } else {
+      if (OB_FAIL(tenant_mgr_->add_all_tenants(start_tstamp_ns,
+              sys_schema_version,
+              GET_SCHEMA_TIMEOUT_ON_START_UP))) {
+        LOG_ERROR("add_all_tenants fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
+      }
     }
   }
+
   return ret;
 }
 
@@ -1170,10 +1187,12 @@ void ObLogInstance::destroy_components_()
   if (is_online_refresh_mode(refresh_mode_)) {
     DESTROY(schema_getter_, ObLogSchemaGetter);
   }
-  tenant_sql_proxy_.destroy();
-  DESTROY(tenant_server_provider_, ObCDCTenantSQLServerProvider);
-  mysql_proxy_.destroy();
-  DESTROY(rs_server_provider_, ObLogSQLServerProvider);
+  if (! is_online_schema_not_avaliable()) {
+    tenant_sql_proxy_.destroy();
+    DESTROY(tenant_server_provider_, ObCDCTenantSQLServerProvider);
+    mysql_proxy_.destroy();
+    DESTROY(rs_server_provider_, ObLogSQLServerProvider);
+  }
   DESTROY(resource_collector_, ObLogResourceCollector);
   DESTROY(meta_manager_, ObLogMetaManager);
   DESTROY(trans_ctx_mgr_, ObLogTransCtxMgr);
