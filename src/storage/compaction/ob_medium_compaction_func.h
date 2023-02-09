@@ -70,15 +70,12 @@ protected:
   int init_parallel_range(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
-  static int prepare_iter_for_major(
+  static int get_result_for_major(
       ObTablet &tablet,
+      const ObMediumCompactionInfo &medium_info,
+      ObGetMergeTablesResult &result);
+  int prepare_iter(
       const ObGetMergeTablesResult &result,
-      ObMediumCompactionInfo &medium_info,
-      ObTableStoreIterator &table_iter);
-  static int prepare_iter_for_medium(
-      ObTablet &tablet,
-      const ObGetMergeTablesResult &result,
-      ObMediumCompactionInfo &medium_info,
       ObTableStoreIterator &table_iter);
   int submit_medium_clog(ObMediumCompactionInfo &medium_info);
   int check_medium_meta_table(
@@ -136,13 +133,6 @@ protected:
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result);
   static ChooseMediumScn choose_medium_scn[MEDIUM_FUNC_CNT];
-
-  typedef int (*PrepareTableIter)(
-      ObTablet &tablet,
-      const ObGetMergeTablesResult &result,
-      ObMediumCompactionInfo &medium_info,
-      ObTableStoreIterator &table_iter);
-  static PrepareTableIter prepare_table_iter[MEDIUM_FUNC_CNT];
 
 private:
   ObArenaAllocator allocator_;
