@@ -930,7 +930,7 @@ int ObDDLMacroBlockRedoWriter::remote_write_macro_redo(const ObAddr &leader_addr
     obrpc::ObRpcRemoteWriteDDLRedoLogArg arg;
     if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id, redo_info))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLRedoLogArg", K(ret));
-    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).remote_write_ddl_redo_log(arg))) {
+    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).by(MTL_ID()).remote_write_ddl_redo_log(arg))) {
       LOG_WARN("fail to remote write ddl redo log", K(ret), K(leader_addr), K(arg));
     }
   }
@@ -998,7 +998,7 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
   return ret;
 }
 
-int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_info, const blocksstable::MacroBlockId &macro_block_id)
+int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_info, const blocksstable::MacroBlockId &macro_block_id, const bool allow_remote_write)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -1020,12 +1020,12 @@ int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_i
     LOG_WARN("allocate memory failed", K(ret), K(BUF_SIZE));
   } else if (!remote_write_) {
     if (OB_FAIL(ObDDLMacroBlockRedoWriter::write_macro_redo(redo_info, ls->get_ls_id(), ls->get_log_handler(), macro_block_id, buffer_, ddl_redo_handle_))) {
-      if (ObDDLUtil::need_remote_write(ret)) {
+      if (ObDDLUtil::need_remote_write(ret) && allow_remote_write) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret));
         }
       } else {
-        LOG_WARN("fail to write ddl redo clog", K(ret));
+        LOG_WARN("fail to write ddl redo clog", K(ret), K(MTL_GET_TENANT_ROLE()));
       }
     }
   }
@@ -1118,7 +1118,7 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
     } else if (OB_ISNULL(srv_rpc_proxy)) {
       ret = OB_ERR_SYS;
       LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
-    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_commit_log(arg, log_ns))) {
+    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).remote_write_ddl_commit_log(arg, log_ns))) {
       LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
     } else if (OB_FAIL(commit_scn.convert_for_tx(log_ns))) {
       LOG_WARN("convert for tx failed", K(ret));
@@ -1217,7 +1217,7 @@ int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
     redo_info_.block_type_ = block_type_;
     redo_info_.logic_id_ = logic_id;
     redo_info_.start_scn_ = ddl_writer_->get_start_scn();
-    if (OB_FAIL(ddl_writer_->write_redo_log(redo_info_, macro_block_id_))) {
+    if (OB_FAIL(ddl_writer_->write_redo_log(redo_info_, macro_block_id_, true/*allow remote write*/))) {
       LOG_WARN("fail to write ddl redo log", K(ret));
     }
   }

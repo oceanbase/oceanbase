@@ -251,7 +251,8 @@ public:
                      const int64_t ddl_cluster_version,
                      ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int write_redo_log(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
-                     const blocksstable::MacroBlockId &macro_block_id);
+                     const blocksstable::MacroBlockId &macro_block_id,
+                     const bool allow_remote_write);
   int wait_redo_log_finish(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                            const blocksstable::MacroBlockId &macro_block_id);
   int write_commit_log(const ObITable::TableKey &table_key,

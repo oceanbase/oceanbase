@@ -831,10 +831,11 @@ int ObDDLUtil::ddl_get_tablet(
 
 bool ObDDLUtil::need_remote_write(const int ret_code)
 {
-  return OB_NOT_MASTER == ret_code
-    || OB_NOT_RUNNING == ret_code
-    || OB_LS_LOCATION_LEADER_NOT_EXIST == ret_code
-    || OB_EAGAIN == ret_code;
+  return ObTenantRole::PRIMARY_TENANT == MTL_GET_TENANT_ROLE()
+    && (OB_NOT_MASTER == ret_code
+        || OB_NOT_RUNNING == ret_code
+        || OB_LS_LOCATION_LEADER_NOT_EXIST == ret_code
+        || OB_EAGAIN == ret_code);
 }
 
 int ObDDLUtil::get_tablet_paxos_member_list(
