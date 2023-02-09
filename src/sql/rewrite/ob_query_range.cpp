@@ -1587,7 +1587,7 @@ int ObQueryRange::pre_extract_single_in_op(
     LOG_WARN("t_expr must be 3 argument", K(ret));
   } else {
     const ObOpRawExpr* r_expr = static_cast<const ObOpRawExpr*>(b_expr->get_param_expr(1));
-    if (NULL == r_expr) {
+    if (OB_ISNULL(r_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("r_expr is null.", K(ret));
     } else {
@@ -1633,17 +1633,11 @@ int ObQueryRange::pre_extract_single_in_op(
           out_key_part = find_false;
         }
         query_range_ctx_->cur_expr_is_precise_ = cur_in_is_precise;
-        int64_t max_pos = -1;
-        bool is_strict_equal = true;
-        if (OB_FAIL(is_strict_equal_graph(out_key_part, out_key_part->pos_.offset_, max_pos, is_strict_equal))) {
-          LOG_WARN("is trict equal graph failed", K(ret));
-        } else if (!is_strict_equal) {
-          ObKeyPartList key_part_list;
-          if (OB_FAIL(split_or(out_key_part, key_part_list))) {
-            LOG_WARN("split temp_result to or_list failed", K(ret));
-          } else if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
-            LOG_WARN("or range graph failed", K(ret));
-          }
+        ObKeyPartList key_part_list;
+        if (OB_FAIL(split_or(out_key_part, key_part_list))) {
+          LOG_WARN("split temp_result to or_list failed", K(ret));
+        } else if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
+          LOG_WARN("or range graph failed", K(ret));
         }
       }
     }
