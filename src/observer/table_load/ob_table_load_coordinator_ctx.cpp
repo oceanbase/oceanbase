@@ -54,7 +54,7 @@ int ObTableLoadCoordinatorCtx::init(ObSQLSessionInfo *session_info,
       LOG_WARN("failed to init ddl processor", KR(ret));
     } else if (OB_FAIL(redef_table_.start())) {
       LOG_WARN("failed to create hidden table", KR(ret));
-    } else if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->param_.database_id_,
+    } else if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_,
                                             ctx_->param_.target_table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
                 K(ctx_->param_.target_table_id_));
@@ -171,7 +171,7 @@ int ObTableLoadCoordinatorCtx::generate_credential(uint64_t user_id)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("user info is null", K(ret), K(ctx_->param_.tenant_id_), K(user_id));
   } else if (OB_FAIL(ObTableLoadUtils::generate_credential(ctx_->param_.tenant_id_, user_id,
-                                                    ctx_->param_.database_id_, expire_ts,
+                                                    0, expire_ts,
                                                     user_info->get_passwd_str().hash(), allocator_, credential_))) {
     LOG_WARN("fail to generate credential", KR(ret));
   }

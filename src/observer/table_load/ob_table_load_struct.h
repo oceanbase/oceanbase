@@ -66,7 +66,6 @@ struct ObTableLoadParam
 {
   ObTableLoadParam()
     : tenant_id_(common::OB_INVALID_ID),
-      database_id_(common::OB_INVALID_ID),
       table_id_(common::OB_INVALID_ID),
       target_table_id_(common::OB_INVALID_ID),
       session_count_(0),
@@ -82,7 +81,6 @@ struct ObTableLoadParam
   {
   }
   uint64_t tenant_id_;
-  uint64_t database_id_;
   uint64_t table_id_;
   uint64_t target_table_id_;
   int32_t session_count_;
@@ -110,7 +108,6 @@ struct ObTableLoadParam
   bool is_valid() const
   {
     return common::OB_INVALID_ID != tenant_id_ &&
-           common::OB_INVALID_ID != database_id_ &&
            common::OB_INVALID_ID != table_id_ &&
            //common::OB_INVALID_ID != target_table_id_ &&
            session_count_ > 0 && session_count_ <= MAX_TABLE_LOAD_SESSION_COUNT &&
@@ -118,7 +115,7 @@ struct ObTableLoadParam
            column_count_ > 0;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(target_table_id), K_(session_count),
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(target_table_id), K_(session_count),
                K_(batch_size), K_(max_error_row_count), K_(column_count),
                K_(need_sort), K_(px_mode), K_(data_type), K_(dup_action));
 };

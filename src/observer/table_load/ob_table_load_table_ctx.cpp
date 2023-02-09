@@ -47,7 +47,7 @@ int ObTableLoadTableCtx::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTableCtx init twice", KR(ret));
   } else {
-    if (OB_FAIL(schema_.init(param_.tenant_id_, param_.database_id_, param_.table_id_))) {
+    if (OB_FAIL(schema_.init(param_.tenant_id_, param_.table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(param_.tenant_id_),
                K(param_.table_id_));
     } else if (OB_FAIL(task_allocator_.init("TLD_TaskPool", param_.tenant_id_))) {

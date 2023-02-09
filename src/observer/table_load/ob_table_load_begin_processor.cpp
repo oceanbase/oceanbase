@@ -66,7 +66,6 @@ int ObTableLoadBeginP::process()
     bool is_new = false;
     ObTableLoadParam param;
     param.tenant_id_ = credential_.tenant_id_;
-    param.database_id_ = credential_.database_id_;
     param.table_id_ = table_id;
     param.batch_size_ = arg_.config_.batch_size_;
     param.session_count_ = session_count;
@@ -181,7 +180,6 @@ int ObTableLoadPreBeginPeerP::process()
     bool is_new = false;
     ObTableLoadParam param;
     param.tenant_id_ = credential_.tenant_id_;
-    param.database_id_ = credential_.database_id_;
     param.table_id_ = arg_.table_id_;
     param.target_table_id_ = arg_.target_table_id_;
     param.batch_size_ = arg_.config_.batch_size_;

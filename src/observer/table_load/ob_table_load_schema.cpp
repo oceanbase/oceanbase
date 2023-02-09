@@ -63,29 +63,6 @@ int ObTableLoadSchema::get_table_schema(uint64_t tenant_id, uint64_t table_id,
   return ret;
 }
 
-int ObTableLoadSchema::get_database_and_table_schema(uint64_t tenant_id, uint64_t database_id,
-                                                     uint64_t table_id,
-                                                     ObSchemaGetterGuard &schema_guard,
-                                                     const ObDatabaseSchema *&database_schema,
-                                                     const ObTableSchema *&table_schema)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_id, database_schema))) {
-    LOG_WARN("fail to get database schema", KR(ret), K(tenant_id), K(database_id));
-  } else if (OB_ISNULL(database_schema)) {
-    ret = OB_ERR_BAD_DATABASE;
-    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(database_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(database_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(database_id), K(table_id));
-  }
-  return ret;
-}
-
 int ObTableLoadSchema::get_column_names(const ObTableSchema *table_schema, ObIAllocator &allocator,
                                         ObTableLoadArray<ObString> &column_names)
 {
@@ -186,7 +163,6 @@ ObTableLoadSchema::~ObTableLoadSchema()
 
 void ObTableLoadSchema::reset()
 {
-  database_name_.reset();
   table_name_.reset();
   is_partitioned_table_ = false;
   is_heap_table_ = false;
@@ -204,7 +180,7 @@ void ObTableLoadSchema::reset()
   is_inited_ = false;
 }
 
-int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t database_id, uint64_t table_id)
+int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t table_id)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -213,32 +189,13 @@ int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t database_id, uint64_t t
   } else {
     allocator_.set_tenant_id(tenant_id);
     ObSchemaGetterGuard schema_guard;
-    const ObDatabaseSchema *database_schema = nullptr;
     const ObTableSchema *table_schema = nullptr;
-    if (OB_FAIL(get_database_and_table_schema(tenant_id, database_id, table_id, schema_guard,
-                                              database_schema, table_schema))) {
+    if (OB_FAIL(get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get database and table schema", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(init_database_schema(database_schema))) {
-      LOG_WARN("fail to init database schema", KR(ret));
     } else if (OB_FAIL(init_table_schema(table_schema))) {
       LOG_WARN("fail to init table schema", KR(ret));
     } else {
       is_inited_ = true;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::init_database_schema(const ObDatabaseSchema *database_schema)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(database_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(database_schema));
-  } else {
-    if (OB_FAIL(ObTableLoadUtils::deep_copy(database_schema->get_database_name_str(),
-                                            database_name_, allocator_))) {
-      LOG_WARN("fail to deep copy database name", KR(ret));
     }
   }
   return ret;

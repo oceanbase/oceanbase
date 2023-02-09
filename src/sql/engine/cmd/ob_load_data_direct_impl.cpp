@@ -2037,7 +2037,6 @@ int ObLoadDataDirectImpl::init_execute_context()
   execute_ctx_.allocator_ = &ctx_->get_allocator();
   ObTableLoadParam load_param;
   load_param.tenant_id_ = execute_param_.tenant_id_;
-  load_param.database_id_ = execute_param_.database_id_;
   load_param.table_id_ = execute_param_.table_id_;
   load_param.session_count_ = execute_param_.parallel_;
   load_param.batch_size_ = execute_param_.batch_row_count_;

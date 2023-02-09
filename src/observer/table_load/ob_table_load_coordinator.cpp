@@ -72,10 +72,10 @@ int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx, const ObIArray<in
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret));
   } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx->param_.tenant_id_,
-                                                    ctx->param_.database_id_, ctx->schema_.table_name_,
+                                                    ctx->param_.table_id_,
                                                     schema_guard, table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(ctx->param_.tenant_id_),
-                                         K(ctx->param_.database_id_), K(ctx->schema_.table_name_));
+                                         K(ctx->schema_.table_name_));
   } else if (OB_FAIL(ObTableLoadSchema::check_constraints(ctx->param_.tenant_id_,
                                                             schema_guard, table_schema))) {
     LOG_WARN("fail to check schema constraints", KR(ret), K(ctx->param_.tenant_id_));

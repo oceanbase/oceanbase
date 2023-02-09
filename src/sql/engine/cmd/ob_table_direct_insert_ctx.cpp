@@ -56,7 +56,6 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         ObTableLoadParam param;
         param.column_count_ = store_column_idxs.count();
         param.tenant_id_ = MTL_ID();
-        param.database_id_ = exec_ctx->get_my_session()->get_database_id();
         param.table_id_ = table_id;
         param.batch_size_ = 100;
         param.session_count_ = parallel;

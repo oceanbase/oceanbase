@@ -28,11 +28,6 @@ public:
   static int get_table_schema(uint64_t tenant_id, uint64_t table_id,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const share::schema::ObTableSchema *&table_schema);
-  static int get_database_and_table_schema(uint64_t tenant_id, uint64_t database_id,
-                                           uint64_t table_id,
-                                           share::schema::ObSchemaGetterGuard &schema_guard,
-                                           const share::schema::ObDatabaseSchema *&database_schema,
-                                           const share::schema::ObTableSchema *&table_schema);
   static int get_column_names(const share::schema::ObTableSchema *table_schema,
                               common::ObIAllocator &allocator,
                               table::ObTableLoadArray<common::ObString> &column_names);
@@ -44,17 +39,15 @@ public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();
   void reset();
-  int init(uint64_t tenant_id, uint64_t database_id, uint64_t table_id);
+  int init(uint64_t tenant_id, uint64_t table_id);
   bool is_valid() const { return is_inited_; }
-  TO_STRING_KV(K_(database_name), K_(table_name), K_(is_partitioned_table), K_(is_heap_table),
+  TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_heap_table),
                K_(has_autoinc_column), K_(has_identity_column), K_(rowkey_column_count), K_(column_count),
                K_(collation_type), K_(column_descs), K_(is_inited));
 private:
-  int init_database_schema(const share::schema::ObDatabaseSchema *database_schema);
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
 public:
   common::ObArenaAllocator allocator_;
-  common::ObString database_name_;
   common::ObString table_name_;
   bool is_partitioned_table_;
   bool is_heap_table_;
