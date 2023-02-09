@@ -112,6 +112,7 @@ public:
   inline bool is_paxos_replica() const { return common::REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type_
                                                 || common::REPLICA_TYPE_FULL == replica_type_
                                                 || common::REPLICA_TYPE_LOGONLY == replica_type_; }
+  inline bool is_in_restore() const { return !restore_status_.is_restore_none(); }
   // format-related functions
   static int member_list2text(const MemberList &member_list, char *text, const int64_t length);
   static int text2member_list(const char *text, MemberList &member_list);

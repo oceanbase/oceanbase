@@ -249,9 +249,6 @@ int ObRestoreService::process_restore_job(const ObPhysicalRestoreJob &job)
       case PHYSICAL_RESTORE_PRE:
         ret = restore_pre(job);
         break;
-      case PHYSICAL_RESTORE_UPGRADE:
-        ret = restore_upgrade(job);
-        break;
       case PHYSICAL_RESTORE_CREATE_INIT_LS:
         ret = restore_init_ls(job);
         break;
@@ -260,6 +257,9 @@ int ObRestoreService::process_restore_job(const ObPhysicalRestoreJob &job)
         break;
       case PHYSICAL_RESTORE_POST_CHECK:
         ret = post_check(job);
+        break;
+      case PHYSICAL_RESTORE_UPGRADE:
+        ret = restore_upgrade(job);
         break;
       case PHYSICAL_RESTORE_SUCCESS:
         ret = restore_finish(job);

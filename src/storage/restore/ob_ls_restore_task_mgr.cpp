@@ -95,6 +95,8 @@ int ObLSRestoreTaskMgr::pop_need_restore_tablets(
       } else if (is_deleted || is_restored) {
         if (OB_FAIL(need_remove_tablet.push_back(iter->first))) {
           LOG_WARN("failed to push back tablet", K(ret));
+        } else {
+          ++iter;
         }
       } else if (OB_FAIL(tablet_need_restore.push_back(iter->first))) {
         LOG_WARN("fail to push backup tablet", K(ret));
