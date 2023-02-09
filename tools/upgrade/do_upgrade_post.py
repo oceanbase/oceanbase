@@ -95,7 +95,6 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
       if run_modules.MODULE_POST_CHECK in my_module_set:
         logging.info('================begin to run post check action ===============')
         conn.autocommit = True
-        actions.do_end_upgrade(cur, timeout)
         upgrade_post_checker.do_check(conn, cur, query_cur, timeout)
         conn.autocommit = False
         actions.refresh_commit_sql_list()

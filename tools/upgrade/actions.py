@@ -218,59 +218,70 @@ def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
     time.sleep(5)
 
 def do_begin_upgrade(cur, timeout):
-  action_sql = "alter system begin upgrade"
-  rollback_sql = "alter system end upgrade"
 
   if not check_parameter(cur, False, "enable_upgrade_mode", "True"):
+    action_sql = "alter system begin upgrade"
+    rollback_sql = "alter system end upgrade"
     logging.info(action_sql)
+
     cur.execute(action_sql)
+
+    global g_succ_sql_list
+    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 
   wait_parameter_sync(cur, False, "enable_upgrade_mode", "True", timeout)
 
-  global g_succ_sql_list
-  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 
 def do_begin_rolling_upgrade(cur, timeout):
-  action_sql = "alter system begin rolling upgrade"
-  rollback_sql = "alter system end upgrade"
 
   if not check_parameter(cur, False, "_upgrade_stage", "DBUPGRADE"):
+    action_sql = "alter system begin rolling upgrade"
+    rollback_sql = "alter system end upgrade"
+
     logging.info(action_sql)
     cur.execute(action_sql)
+
+    global g_succ_sql_list
+    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 
   wait_parameter_sync(cur, False, "_upgrade_stage", "DBUPGRADE", timeout)
 
-  global g_succ_sql_list
-  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 
 def do_end_rolling_upgrade(cur, timeout):
+
+  # maybe in upgrade_post_check stage or never run begin upgrade
+  if check_parameter(cur, False, "enable_upgrade_mode", "False"):
+    return
+
   current_cluster_version = get_current_cluster_version()
-
-  action_sql = "alter system end rolling upgrade"
-  rollback_sql = "alter system end upgrade"
-
   if not check_parameter(cur, False, "_upgrade_stage", "POSTUPGRADE") or not check_parameter(cur, False, "min_observer_version", current_cluster_version):
+    action_sql = "alter system end rolling upgrade"
+    rollback_sql = "alter system end upgrade"
+
     logging.info(action_sql)
     cur.execute(action_sql)
+
+    global g_succ_sql_list
+    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 
   wait_parameter_sync(cur, False, "min_observer_version", current_data_version, timeout)
   wait_parameter_sync(cur, False, "_upgrade_stage", "POSTUPGRADE", timeout)
 
-  global g_succ_sql_list
-  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 
 def do_end_upgrade(cur, timeout):
-  action_sql = "alter system end upgrade"
-  rollback_sql = ""
 
   if not check_parameter(cur, False, "enable_upgrade_mode", "False"):
+    action_sql = "alter system end upgrade"
+    rollback_sql = ""
+
     logging.info(action_sql)
     cur.execute(action_sql)
 
+    global g_succ_sql_list
+    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
+
   wait_parameter_sync(cur, False, "enable_upgrade_mode", "False", timeout)
 
-  global g_succ_sql_list
-  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 
 class Cursor:
   __cursor = None
