@@ -2075,7 +2075,8 @@ int ObDelUpdLogPlan::is_direct_insert_into_select(bool &result)
   } else if (stmt::T_INSERT == stmt->stmt_type_
       && static_cast<const ObInsertStmt*>(stmt)->value_from_select()
       && GCONF._ob_enable_direct_load
-      && get_optimizer_context().get_global_hint().has_append()) {
+      && get_optimizer_context().get_global_hint().has_append()
+      && get_optimizer_context().use_pdml()) { // Currently direct-insert only supports pdml
     // In direct-insert mode, index will be built by direct loader
     bool auto_commit = false;
     if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
