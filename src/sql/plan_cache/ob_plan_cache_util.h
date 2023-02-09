@@ -275,7 +275,8 @@ struct ObPCConstParamInfo
   TO_STRING_KV(K_(const_idx), K_(const_params));
   bool operator==(const ObPCConstParamInfo &other) const
   {
-    bool cmp_ret = true;
+    bool cmp_ret = const_idx_.count() == other.const_idx_.count()
+                   && const_params_.count() == other.const_params_.count();
     for (int i=0; cmp_ret && i < const_idx_.count(); i++) {
       cmp_ret = const_idx_.at(i) == other.const_idx_.at(i);
     }

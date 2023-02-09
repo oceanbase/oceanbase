@@ -354,7 +354,7 @@ bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
       }
     }
     if (OB_SUCCESS == check_ctx.err_code_ && !found && is_top_select_stmt()) {
-      for (int64_t nth_rollup = 0; !found && nth_rollup < rollup_cnt; ++nth_rollup) {
+      for (int64_t nth_rollup = 0; !found_same_structure && nth_rollup < rollup_cnt; ++nth_rollup) {
         //in oracle mode, only non static const expr will be replaced later in replace_group_by_exprs
         if (is_mysql_mode() || !rollup_exprs_->at(nth_rollup)->is_static_const_expr()) {
           check_ctx.reset();
@@ -448,10 +448,10 @@ bool ObGroupByChecker::find_in_grouping_sets(ObRawExpr &expr)
       }
     }
     if (OB_SUCCESS == check_ctx.err_code_ && !found && is_top_select_stmt()) {
-      for (int64_t nth_gs = 0; !found && nth_gs < gs_cnt; ++nth_gs) {
+      for (int64_t nth_gs = 0; !found_same_structure && nth_gs < gs_cnt; ++nth_gs) {
         int64_t group_by_cnt = grouping_sets_exprs_->at(nth_gs).groupby_exprs_.count();
         //in oracle mode, only non static const expr will be replaced later in replace_group_by_exprs
-        for (int64_t nth_group_by = 0; !found && nth_group_by < group_by_cnt; ++nth_group_by) {
+        for (int64_t nth_group_by = 0; !found_same_structure && nth_group_by < group_by_cnt; ++nth_group_by) {
           check_ctx.reset();
           check_ctx.ignore_param_ = true;
           check_ctx.override_const_compare_ = true;

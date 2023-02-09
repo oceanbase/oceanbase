@@ -3781,5 +3781,506 @@ Outputs & filters:
 drop table if exists t1, t2, t3;
 drop table if exists tt1, tt2, tt3;
 drop table if exists cghldinf, puzdjypf, pujydypf;
+drop table if exists v0;
+CREATE TABLE v0 ( v1 varchar(127));
+EXPLAIN select * from v0 where v1 in (select -127 minus select _BINARY 'x');
+Query Plan
+==============================================
+|ID|OPERATOR     |NAME |EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |MERGE JOIN   |     |1       |2           |
+|1 | SUBPLAN SCAN|VIEW1|1       |1           |
+|2 |  EXPRESSION |     |1       |1           |
+|3 | SORT        |     |1       |2           |
+|4 |  TABLE SCAN |v0   |1       |2           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([v0.v1]), filter(nil), rowset=256
+      equal_conds([v0.v1 = VIEW1.-127]), other_conds(nil)
+      merge_directions([ASC])
+  1 - output([VIEW1.-127]), filter(nil), rowset=256
+      access([VIEW1.-127])
+  2 - output([cast(-127, VARCHAR(20))]), filter(nil)
+      values({cast(-127, VARCHAR(20))})
+  3 - output([v0.v1]), filter(nil), rowset=256
+      sort_keys([v0.v1, ASC])
+  4 - output([v0.v1]), filter(nil), rowset=256
+      access([v0.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([v0.__pk_increment]), range(MIN ; MAX)always true
+select * from v0 where v1 in (select -127 minus select _BINARY 'x');
+ERROR HY000: Internal error
+explain select * from v0 where v1 in (select -127 minus select _BINARY 'x');
+Query Plan
+==============================================
+|ID|OPERATOR     |NAME |EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |MERGE JOIN   |     |1       |2           |
+|1 | SUBPLAN SCAN|VIEW1|1       |1           |
+|2 |  EXPRESSION |     |1       |1           |
+|3 | SORT        |     |1       |2           |
+|4 |  TABLE SCAN |v0   |1       |2           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([v0.v1]), filter(nil), rowset=256
+      equal_conds([v0.v1 = VIEW1.-127]), other_conds(nil)
+      merge_directions([ASC])
+  1 - output([VIEW1.-127]), filter(nil), rowset=256
+      access([VIEW1.-127])
+  2 - output([cast(-127, VARCHAR(20))]), filter(nil)
+      values({cast(-127, VARCHAR(20))})
+  3 - output([v0.v1]), filter(nil), rowset=256
+      sort_keys([v0.v1, ASC])
+  4 - output([v0.v1]), filter(nil), rowset=256
+      access([v0.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([v0.__pk_increment]), range(MIN ; MAX)always true
+drop table if exists v0;
+
+explain_protocol: 0
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+create table t1(c1 decimal(10), c2 varchar(10), c3 varbinary(20));
+insert into t1(c1,c2) values(10,'a'),(20,'ab'),(50,'ad'),(100,'b'),(150,'c');
+create table t2(c1 decimal(20), c2 double, c3 varchar(20));
+insert into t2(c1,c2,c3) values(10,10,'a'),(20,20,'b'),(50,50,NULL),(100,100,NULL),(150,150,NULL);
+create table t3(c1 decimal(16), c2 float);
+insert into t3(c1,c2) values(10,10),(20,20),(50,50),(100,100),(150,150);
+explain_protocol: 2
+test IN pred
+### different accuracy
+EXPLAIN select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t2.c1 in (10,20,40);
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |4       |5           |
+|1 | TABLE SCAN|t1  |4       |2           |
+|2 | TABLE SCAN|t2  |4       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter([t1.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter([t2.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t2.c1 in (10,20,40);
++------+------+
+| c1   | c1   |
++------+------+
+|   10 |   10 |
+|   20 |   20 |
++------+------+
+EXPLAIN select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t1.c1 in (10,20,40);
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |4       |5           |
+|1 | TABLE SCAN|t1  |4       |2           |
+|2 | TABLE SCAN|t2  |4       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter([t1.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter([t2.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t1.c1 in (10,20,40);
++------+------+
+| c1   | c1   |
++------+------+
+|   10 |   10 |
+|   20 |   20 |
++------+------+
+EXPLAIN select t1.c1,t2.c1 from t1,t2,t3 where t1.c1 = t3.c1 and t2.c1 = t3.c1 and t1.c1 in (10,20,40);
+Query Plan
+============================================
+|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------
+|0 |HASH JOIN   |    |4       |8           |
+|1 | TABLE SCAN |t3  |4       |2           |
+|2 | HASH JOIN  |    |4       |5           |
+|3 |  TABLE SCAN|t1  |4       |2           |
+|4 |  TABLE SCAN|t2  |4       |2           |
+============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t3.c1]), other_conds(nil)
+  1 - output([t3.c1]), filter([t3.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=256
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  3 - output([t1.c1]), filter([t1.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c1]), filter([t2.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1,t2.c1 from t1,t2,t3 where t1.c1 = t3.c1 and t2.c1 = t3.c1 and t1.c1 in (10,20,40);
++------+------+
+| c1   | c1   |
++------+------+
+|   10 |   10 |
+|   20 |   20 |
++------+------+
+### different types
+####preds are 'cast(t1.c1,double) = cast(t3.c2,double)' and 'cast(t3.c2,double) in (10,20,40)'. cast(t3.c2,double) is not column ref, so 't1.c1 in (10,20,40)' won't be deduced.
+EXPLAIN select * from t1,t3 where t1.c1 = t3.c2 and t3.c2 in (10,20,40);
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |5       |5           |
+|1 | TABLE SCAN|t3  |4       |3           |
+|2 | TABLE SCAN|t1  |5       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t3.c1], [t3.c2]), filter(nil), rowset=256
+      equal_conds([cast(t1.c1, DOUBLE(-1, -1)) = cast(t3.c2, DOUBLE(-1, -1))]), other_conds(nil)
+  1 - output([t3.c2], [t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([cast(t3.c2, DOUBLE(-1, -1)) IN (cast(10, DOUBLE(-1, -1)), cast(20, DOUBLE(-1, -1)),
+cast(40, DOUBLE(-1, -1)))]), rowset=256
+      access([t3.c2], [t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1,t3 where t1.c1 = t3.c2 and t3.c2 in (10,20,40);
++------+------+------+------+------+
+| c1   | c2   | c3   | c1   | c2   |
++------+------+------+------+------+
+|   10 | a    | NULL |   10 |   10 |
+|   20 | ab   | NULL |   20 |   20 |
++------+------+------+------+------+
+####different collection type
+EXPLAIN select * from t1,t2 where t1.c3 = t2.c3 and t2.c3 in ('a','b','c');
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |4       |7           |
+|1 | TABLE SCAN|t2  |4       |2           |
+|2 | TABLE SCAN|t1  |5       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      equal_conds([t1.c3 = cast(t2.c3, VARCHAR(1048576))]), other_conds(nil)
+  1 - output([t2.c3], [t2.c1], [t2.c2]), filter([t2.c3 IN ('a', 'b', 'c')]), rowset=256
+      access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c3], [t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c3], [t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1,t2 where t1.c3 = t2.c3 and t2.c3 in ('a','b','c');
++------+------+------+------+------+------+
+| c1   | c2   | c3   | c1   | c2   | c3   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1,t2 where t1.c3 = t2.c3 and t1.c3 in ('a','b','c');
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |1       |5           |
+|1 | TABLE SCAN|t2  |1       |2           |
+|2 | TABLE SCAN|t1  |4       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      equal_conds([t1.c3 = cast(t2.c3, VARCHAR(1048576))]), other_conds(nil)
+  1 - output([t2.c3], [t2.c1], [t2.c2], [cast(t2.c3, VARCHAR(1048576))]), filter([cast(t2.c3, VARCHAR(1048576)) IN (cast('a', VARCHAR(1048576)), cast('b',
+VARCHAR(1048576)), cast('c', VARCHAR(1048576)))]), rowset=256
+      access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c3], [t1.c1], [t1.c2]), filter([t1.c3 IN (cast('a', VARCHAR(1048576)), cast('b', VARCHAR(1048576)), cast('c', VARCHAR(1048576)))]), rowset=256
+      access([t1.c3], [t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1,t2 where t1.c3 = t2.c3 and t1.c3 in ('a','b','c');
++------+------+------+------+------+------+
+| c1   | c2   | c3   | c1   | c2   | c3   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+test NOT EQUAL
+EXPLAIN select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t2.c1 <> 20;
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |4       |5           |
+|1 | TABLE SCAN|t1  |4       |2           |
+|2 | TABLE SCAN|t2  |4       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter([t1.c1 != cast(20, DECIMAL(2, 0))]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter([t2.c1 != cast(20, DECIMAL(2, 0))]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t2.c1 <> 20;
++------+------+
+| c1   | c1   |
++------+------+
+|   10 |   10 |
+|   50 |   50 |
+|  100 |  100 |
+|  150 |  150 |
++------+------+
+EXPLAIN select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t1.c1 <> 20;
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |4       |5           |
+|1 | TABLE SCAN|t1  |4       |2           |
+|2 | TABLE SCAN|t2  |4       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter([t1.c1 != cast(20, DECIMAL(2, 0))]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter([t2.c1 != cast(20, DECIMAL(2, 0))]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t1.c1 <> 20;
++------+------+
+| c1   | c1   |
++------+------+
+|   10 |   10 |
+|   50 |   50 |
+|  100 |  100 |
+|  150 |  150 |
++------+------+
+EXPLAIN select t1.c1,t2.c1 from t1,t2,t3 where t1.c1 = t3.c1 and t2.c1 = t3.c1 and t1.c1 <>20;
+Query Plan
+============================================
+|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------
+|0 |HASH JOIN   |    |4       |8           |
+|1 | TABLE SCAN |t3  |4       |2           |
+|2 | HASH JOIN  |    |4       |5           |
+|3 |  TABLE SCAN|t1  |4       |2           |
+|4 |  TABLE SCAN|t2  |4       |2           |
+============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t3.c1]), other_conds(nil)
+  1 - output([t3.c1]), filter([t3.c1 != cast(20, DECIMAL(2, 0))]), rowset=256
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  3 - output([t1.c1]), filter([t1.c1 != cast(20, DECIMAL(2, 0))]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c1]), filter([t2.c1 != cast(20, DECIMAL(2, 0))]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1,t2.c1 from t1,t2,t3 where t1.c1 = t3.c1 and t2.c1 = t3.c1 and t1.c1 <>20;
++------+------+
+| c1   | c1   |
++------+------+
+|   10 |   10 |
+|   50 |   50 |
+|  100 |  100 |
+|  150 |  150 |
++------+------+
+EXPLAIN select * from t1,t3 where t1.c1 = t3.c2 and t3.c2 <> 20;
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |5       |6           |
+|1 | TABLE SCAN|t3  |4       |3           |
+|2 | TABLE SCAN|t1  |5       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t3.c1], [t3.c2]), filter(nil), rowset=256
+      equal_conds([cast(t1.c1, DOUBLE(-1, -1)) = cast(t3.c2, DOUBLE(-1, -1))]), other_conds(nil)
+  1 - output([t3.c2], [t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([cast(t3.c2, DOUBLE(-1, -1)) != cast(20, DOUBLE(-1, -1))]), rowset=256
+      access([t3.c2], [t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1,t3 where t1.c1 = t3.c2 and t3.c2 <> 20;
++------+------+------+------+------+
+| c1   | c2   | c3   | c1   | c2   |
++------+------+------+------+------+
+|   10 | a    | NULL |   10 |   10 |
+|   50 | ad   | NULL |   50 |   50 |
+|  100 | b    | NULL |  100 |  100 |
+|  150 | c    | NULL |  150 |  150 |
++------+------+------+------+------+
+
+test BETWEEN
+### differnt types
+EXPLAIN select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t2.c2 between 10 and cast(100 as float);
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |1       |4           |
+|1 | TABLE SCAN|t3  |1       |2           |
+|2 | TABLE SCAN|t2  |1       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t3.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([cast(t3.c2, DOUBLE(-1, -1)) = t2.c2]), other_conds(nil)
+  1 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0,
+-1)), DOUBLE(-1, -1)))]), rowset=256
+      access([t3.c2], [t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c2], [t2.c1]), filter([(T_OP_BTW, t2.c2, cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, -1)), DOUBLE(-1, -1)))]), rowset=256
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t2.c2 between 10 and cast(100 as float);
++------+------+
+| c1   | c1   |
++------+------+
+|   10 |   10 |
+|   20 |   20 |
+|   50 |   50 |
+|  100 |  100 |
++------+------+
+EXPLAIN select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t3.c2 between 10 and cast(100 as float);
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |1       |5           |
+|1 | TABLE SCAN|t3  |1       |2           |
+|2 | TABLE SCAN|t2  |5       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t3.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([cast(t3.c2, DOUBLE(-1, -1)) = t2.c2]), other_conds(nil)
+  1 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0,
+-1)), DOUBLE(-1, -1)))]), rowset=256
+      access([t3.c2], [t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c2], [t2.c1]), filter(nil), rowset=256
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t3.c2 between 10 and cast(100 as float);
++------+------+
+| c1   | c1   |
++------+------+
+|   10 |   10 |
+|   20 |   20 |
+|   50 |   50 |
+|  100 |  100 |
++------+------+
+
+test LIKE
+EXPLAIN select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t2.c3 like 'a_';
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |1       |5           |
+|1 | TABLE SCAN|t1  |1       |2           |
+|2 | TABLE SCAN|t2  |1       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c2 = t2.c3]), other_conds(nil)
+  1 - output([t1.c2], [t1.c1]), filter([(T_OP_LIKE, t1.c2, 'a_', '\\')]), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c3], [t2.c1]), filter([(T_OP_LIKE, t2.c3, 'a_', '\\')]), rowset=256
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t2.c3 like 'a_';
++------+------+
+| c1   | c1   |
++------+------+
++------+------+
+EXPLAIN select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t1.c2 like 'a_';
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------
+|0 |HASH JOIN  |    |1       |5           |
+|1 | TABLE SCAN|t1  |1       |2           |
+|2 | TABLE SCAN|t2  |1       |2           |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c2 = t2.c3]), other_conds(nil)
+  1 - output([t1.c2], [t1.c1]), filter([(T_OP_LIKE, t1.c2, 'a_', '\\')]), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c3], [t2.c1]), filter([(T_OP_LIKE, t2.c3, 'a_', '\\')]), rowset=256
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t1.c2 like 'a_';
++------+------+
+| c1   | c1   |
++------+------+
++------+------+
+
+drop table t1;
+drop table t2;
+drop table t3;
+
 USE DB_PREDICATE_DEDUCE;
 drop database DB_PREDICATE_DEDUCE;
