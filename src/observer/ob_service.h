@@ -232,6 +232,11 @@ public:
       const obrpc::ObInitTenantConfigArg &arg,
       obrpc::ObInitTenantConfigRes &result);
 private:
+  int get_role_from_palf_(
+      logservice::ObLogService &log_service,
+      const share::ObLSID &ls_id,
+      common::ObRole &role,
+      int64_t &proposal_id);
   int inner_fill_tablet_info_(
       const int64_t tenant_id,
       const ObTabletID &tablet_id,

@@ -2277,6 +2277,24 @@ int ObService::fill_tablet_report_info(
   return ret;
 }
 
+int ObService::get_role_from_palf_(
+    logservice::ObLogService &log_service,
+    const share::ObLSID &ls_id,
+    common::ObRole &role,
+    int64_t &proposal_id)
+{
+  int ret = OB_SUCCESS;
+  role = FOLLOWER;
+  proposal_id = 0;
+  palf::PalfHandleGuard palf_handle_guard;
+  if (OB_FAIL(log_service.open_palf(ls_id, palf_handle_guard))) {
+    LOG_WARN("open palf failed", KR(ret), K(ls_id));
+  } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
+    LOG_WARN("get role failed", KR(ret), K(ls_id));
+  }
+  return ret;
+}
+
 int ObService::fill_ls_replica(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
@@ -2297,7 +2315,6 @@ int ObService::fill_ls_replica(
   } else {
     MTL_SWITCH(tenant_id) {
       ObLSHandle ls_handle;
-      palf::PalfHandleGuard palf_handle_guard;
       ObLSService *ls_svr = nullptr;
       logservice::ObLogService *log_service = nullptr;
       common::ObRole role = FOLLOWER;
@@ -2318,15 +2335,13 @@ int ObService::fill_ls_replica(
         LOG_WARN("get paxos_member_list from ObLS failed", KR(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_restore_status(restore_status))) {
         LOG_WARN("get restore status failed", KR(ret));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_replica_status(replica_status))) {
+        LOG_WARN("get replica status failed", KR(ret));
       } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
-        LOG_WARN("open palf failed", KR(ret), K(tenant_id), K(ls_id));
-      } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
-        LOG_WARN("get role failed", KR(ret), K(tenant_id), K(ls_id));
-      } else if (!is_strong_leader(role) && OB_FAIL(ls_handle.get_ls()->get_replica_status(replica_status))) {
-        LOG_WARN("get replica status failed", KR(ret));
+      } else if (OB_FAIL(get_role_from_palf_(*log_service, ls_id, role, proposal_id))) {
+        LOG_WARN("failed to get role from palf", KR(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(replica.init(
             0,          /*create_time_us*/
             0,          /*modify_time_us*/
@@ -2337,7 +2352,7 @@ int ObService::fill_ls_replica(
             role,                      /*role*/
             REPLICA_TYPE_FULL,         /*replica_type*/
             proposal_id,              /*proposal_id*/
-            replica_status,            /*replica_status*/
+            is_strong_leader(role) ? REPLICA_STATUS_NORMAL : replica_status,/*replica_status*/
             restore_status,            /*restore_status*/
             100,                       /*memstore_percent*/
             unit_id,                   /*unit_id*/
