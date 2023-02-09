@@ -776,6 +776,7 @@ int ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(ObTabletHandle &tab
   return ret;
 }
 
+// for minor dag, only hold tables_handle(sstable + ref), should not hold tablet(memtable)
 template <class T>
 int ObTenantTabletScheduler::schedule_merge_execute_dag(
     const ObTabletMergeDagParam &param,
@@ -800,8 +801,7 @@ int ObTenantTabletScheduler::schedule_merge_execute_dag(
           param,
           tablet_handle.get_obj()->get_tablet_meta().compat_mode_,
           result,
-          ls_handle,
-          tablet_handle))) {
+          ls_handle))) {
     LOG_WARN("failed to init dag", K(ret), K(result));
   } else if (OB_FAIL(MTL(share::ObTenantDagScheduler *)->add_dag(merge_exe_dag, emergency))) {
     LOG_WARN("failed to add dag", K(ret), KPC(merge_exe_dag));
@@ -1197,7 +1197,12 @@ int ObTenantTabletScheduler::update_report_scn_as_ls_leader(ObLS &ls)
   int ret = OB_SUCCESS;
   ObRole role = INVALID_ROLE;
   const int64_t major_merged_scn = get_inner_table_merged_scn();
-  if (OB_FAIL(ls.get_ls_role(role))) {
+  bool need_merge = false;
+  if (OB_FAIL(check_ls_state(ls, need_merge))) {
+    LOG_WARN("failed to check ls state", K(ret), K(ls_id));
+  } else if (!need_merge) {
+    // do nothing
+  } else if (OB_FAIL(ls.get_ls_role(role))) {
     LOG_WARN("failed to get ls role", K(ret), K(ls));
   } else if (LEADER == role) {
     const ObLSID &ls_id = ls.get_ls_id();
@@ -1206,7 +1211,7 @@ int ObTenantTabletScheduler::update_report_scn_as_ls_leader(ObLS &ls)
       LOG_WARN("failed to get tablet id", K(ret), K(ls_id));
     } else if (major_merged_scn > INIT_COMPACTION_SCN
         && OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_unequal_report_scn_tablet(
-        MTL_ID(), ls_id, major_merged_scn, tablet_id_array))) {
+          MTL_ID(), ls_id, major_merged_scn, tablet_id_array))) {
       LOG_WARN("failed to get unequal report scn", K(ret), K(ls_id), K(major_merged_scn));
     }
   }

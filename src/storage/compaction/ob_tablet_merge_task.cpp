@@ -556,8 +556,7 @@ int ObTabletMergeExecuteDag::direct_init_ctx(
     const ObTabletMergeDagParam &param,
     const lib::Worker::CompatMode compat_mode,
     const ObGetMergeTablesResult &result,
-    ObLSHandle &ls_handle,
-    ObTabletHandle &tablet_handle)
+    ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY((!is_minor_merge_type(result.suggest_merge_type_)
@@ -573,7 +572,6 @@ int ObTabletMergeExecuteDag::direct_init_ctx(
     merge_scn_range_ = result.scn_range_;
     if (OB_FAIL(alloc_merge_ctx())) {
       LOG_WARN("failed to alloc merge ctx", K(ret));
-    } else if (FALSE_IT(ctx_->tablet_handle_ = tablet_handle)) { // assign tablet_handle
     } else if (FALSE_IT(ctx_->ls_handle_ = ls_handle)) { // assign ls_handle
     } else if (FALSE_IT(ctx_->rebuild_seq_ = ls_handle.get_ls()->get_rebuild_seq())) {
     } else if (OB_FAIL(create_first_task(result))) {
@@ -642,6 +640,11 @@ int ObTabletMergeExecutePrepareTask::process()
   } else if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is unexpected null", K(ret), K(ctx_));
+  } else if (OB_FAIL(ctx_->ls_handle_.get_ls()->get_tablet(
+            ctx_->param_.tablet_id_,
+            ctx_->tablet_handle_,
+            storage::ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("failed to get tablet", K(ret), K(ctx_->param_));
   } else if (OB_FAIL(ctx_->try_swap_tablet_handle(result_.handle_))) { // swap tablet before get schema ptr from tablet
     LOG_WARN("failed to try swap tablet handle", K(ret));
   } else if (OB_FAIL(ctx_->get_schema_and_gene_from_result(result_))) {

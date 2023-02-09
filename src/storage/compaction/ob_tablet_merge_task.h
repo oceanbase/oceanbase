@@ -306,8 +306,7 @@ public:
       const ObTabletMergeDagParam &param,
       const lib::Worker::CompatMode compat_mode,
       const ObGetMergeTablesResult &result,
-      storage::ObLSHandle &ls_handle,
-      ObTabletHandle &tablet_handle);
+      storage::ObLSHandle &ls_handle);
   template<class T>
   int create_first_task(const ObGetMergeTablesResult &result);
   virtual bool operator == (const ObIDag &other) const override;
