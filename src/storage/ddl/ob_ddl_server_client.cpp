@@ -20,6 +20,7 @@
 #include "lib/ob_define.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
+#include "rootserver/ddl_task/ob_table_redefinition_task.h"
 
 namespace oceanbase
 {
@@ -228,7 +229,8 @@ int ObDDLServerClient::wait_table_lock(const uint64_t tenant_id, const int64_t t
         } else {
           int task_status = 0;
           EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int);
-          if (share::ObDDLTaskStatus::REPENDING != static_cast<share::ObDDLTaskStatus>(task_status)) {
+          share::ObDDLTaskStatus task_cur_status = static_cast<share::ObDDLTaskStatus>(task_status);
+          if (rootserver::ObTableRedefinitionTask::check_task_status_before_pending(task_cur_status)) {
             LOG_INFO("task status not equal REPENDING, Please Keep Waiting", K(task_status));
             if (OB_FAIL(sql::ObDDLExecutorUtil::handle_session_exception(session))) {
               break;

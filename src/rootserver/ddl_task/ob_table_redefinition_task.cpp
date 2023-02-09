@@ -779,6 +779,11 @@ int ObTableRedefinitionTask::repending(const share::ObDDLTaskStatus next_task_st
   return ret;
 }
 
+bool ObTableRedefinitionTask::check_task_status_before_pending(const share::ObDDLTaskStatus task_status)
+{
+  return task_status == ObDDLTaskStatus::PREPARE || task_status == ObDDLTaskStatus::WAIT_TRANS_END || task_status == ObDDLTaskStatus::LOCK_TABLE;
+}
+
 int ObTableRedefinitionTask::process()
 {
   int ret = OB_SUCCESS;
