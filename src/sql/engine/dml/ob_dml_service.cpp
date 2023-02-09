@@ -1019,6 +1019,9 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   dml_param.is_batch_stmt_ = base_ctdef.is_batch_stmt_;
   dml_param.dml_allocator_ = &das_alloc;
   dml_param.snapshot_ = snapshot;
+  if (base_ctdef.is_batch_stmt_) {
+    dml_param.write_flag_.set_is_dml_batch_opt();
+  }
   return ret;
 }
 
