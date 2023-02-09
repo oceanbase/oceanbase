@@ -348,6 +348,17 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt& stmt, const ObSQL
         is_use_pdml = false;
       }
     }
+    if (is_use_pdml && stmt::T_UPDATE == stmt.get_stmt_type()) {
+      for (int i = 0; OB_SUCC(ret) && is_use_pdml &&
+                      i < pdml_stmt.get_all_table_columns().at(0).index_dml_infos_.at(0).column_exprs_.count();
+           i++) {
+        ObColumnRefRawExpr *column_expr =
+            pdml_stmt.get_all_table_columns().at(0).index_dml_infos_.at(0).column_exprs_.at(i);
+        if (column_expr->get_result_type().has_result_flag(ON_UPDATE_NOW_FLAG)) {
+          is_use_pdml = false;
+        }
+      }
+    }
   }
   LOG_TRACE("check use all pdml feature", K(ret), K(is_use_pdml));
   return ret;
