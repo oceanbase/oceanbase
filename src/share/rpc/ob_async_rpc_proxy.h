@@ -414,8 +414,13 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::wait(
         } else {
           const int rc = cb->get_ret_code();
           if (common::OB_SUCCESS != rc) {
-            RPC_LOG(WARN, "execute rpc failed", K(rc), "server", cb->get_dst(), "timeout", cb->get_timeout(),
-                "packet code", PC, "arg", args_.at(index));
+            if (index <= (args_.count() -1)) {
+              RPC_LOG(WARN, "execute rpc failed", K(rc), "server", cb->get_dst(), "timeout", cb->get_timeout(),
+                  "packet code", PC, "arg", args_.at(index));
+            } else {
+              RPC_LOG(WARN, "execute rpc failed and args_ count is not correct", K(rc), "server", cb->get_dst(), "timeout", cb->get_timeout(),
+                  "packet code", PC, K(args_.count()), K(index));
+            }
           }
           if (NULL != return_code_array) {
             if (OB_FAIL(return_code_array->push_back(rc))) {
