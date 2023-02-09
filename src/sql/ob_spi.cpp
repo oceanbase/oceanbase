@@ -5647,11 +5647,12 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         ObObjParam result_address;
         ObArray<ObPLCollection*> bulk_tables;
         ObArray<ObCastCtx> cast_ctxs;
+        ObArenaAllocator tmp_allocator;
         OZ (bulk_tables.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
         OZ (cast_ctxs.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
         for (int64_t i = 0; OB_SUCC(ret) && i < into_count; ++i) {
           ObPLCollection *table = NULL;
-          ObIAllocator *collection_allocator = NULL;
+          // ObIAllocator *collection_allocator = NULL;
           CK (OB_NOT_NULL(result_expr = into_exprs[i]));
           CK (is_obj_access_expression(*result_expr));
           OZ (spi_calc_expr(ctx, result_expr, OB_INVALID_INDEX, &result_address));
@@ -5668,9 +5669,11 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
                                      ctx, *allocator, *table, 0));
           }
-          CK (OB_NOT_NULL(collection_allocator = table->get_allocator()));
+          // collection may modified by sql fetch, which can be reset and allocator will change, such like stmt a:=b in trigger
+          // so allocator of collection can not be used by collect_cells.
+          // CK (OB_NOT_NULL(collection_allocator = table->get_allocator()));
           for (int64_t j = 0; OB_SUCC(ret) && j < table->get_column_count(); ++j) {
-            OZ (cast_ctxs.push_back(ObCastCtx(collection_allocator,
+            OZ (cast_ctxs.push_back(ObCastCtx(&tmp_allocator,
                                               &dtc_params,
                                               cast_mode,
                                               cast_coll_type)));
@@ -6189,7 +6192,10 @@ int ObSPIService::store_result(ObIArray<ObPLCollection*> &bulk_tables,
               OX (row.reset());
               for (int64_t k = 0; OB_SUCC(ret) && k < table->get_column_count(); ++k) {
                 int64_t idx = j * column_count + start_idx + k;
-                OZ (row.push_back(obj_array.at(idx)));
+                ObObj tmp;
+                CK (OB_NOT_NULL(table->get_allocator()));
+                OZ (deep_copy_obj(*table->get_allocator(), obj_array.at(idx), tmp));
+                OZ (row.push_back(tmp));
               }
               OZ (table->set_row(row, append_mode ? old_count + j : j));
             }
@@ -6205,8 +6211,11 @@ int ObSPIService::store_result(ObIArray<ObPLCollection*> &bulk_tables,
                   LOG_WARN("not null check violated", K(current_obj), K(i), K(j), K(*table), K(ret));
                 }
               }
-              if (OB_SUCC(ret) && OB_FAIL(store_datum(current_datum, current_obj))) {
-                LOG_WARN("failed to arrange store", K(bulk_addr), K(i), K(obj_array.at(i)), K(obj_array), K(ret));
+              if (OB_SUCC(ret)) {
+                ObObj tmp;
+                CK (OB_NOT_NULL(table->get_allocator()));
+                OZ (deep_copy_obj(*table->get_allocator(), current_obj, tmp));
+                OZ (store_datum(current_datum, tmp));
               }
             }
           }
