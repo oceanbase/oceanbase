@@ -1047,14 +1047,14 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
                                          bool &can_read)
 {
   int ret = OB_SUCCESS;
-  can_read = false;
+  can_read = true;
 
   if (!ls_id.is_valid()
       || !addr.is_valid()
       || max_stale_time_ns <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_ns));
-  } else if (observer::ObServer::get_instance().get_self() == addr) {
+  } else {
     // distribute plan and check black list
     ObBLKey blk;
     bool in_black_list = false;
@@ -1064,23 +1064,6 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       LOG_WARN("check in black list error", K(ret), K(blk));
     } else {
       can_read = (in_black_list ? false : true);
-    }
-  } else {
-    storage::ObLSService *ls_svr =  MTL(storage::ObLSService *);
-    storage::ObLSHandle handle;
-    ObLS *ls = nullptr;
-
-    if (OB_ISNULL(ls_svr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("log stream service is NULL", K(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
-      LOG_WARN("get id service log stream failed");
-    } else if (OB_ISNULL(ls = handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("id service log stream not exist");
-    } else if (ObTimeUtility::current_time() - max_stale_time_ns / 1000
-         < ls->get_ls_wrs_handler()->get_ls_weak_read_ts().convert_to_ts()) {
-      can_read = true;
     }
   }
   return ret;
