@@ -54,16 +54,10 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
   // happening.
 
   if (writer_tx_id == locker_tx_id) {
-    // We need guarantee the right sequence of the same txn operations
-    if (writer_seq_no < locker_seq_no) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "wrong row of sequence on one row found", K(reader_seq_no),
-                K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
-                K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
     // For statements during sql and threads during PDML, the following rules is
     // guaranteed:
     // 1. reader seq no is bigger or equal than the seq no of the last statements
-    } else if (reader_seq_no < locker_seq_no) {
+    if (reader_seq_no < locker_seq_no) {
       // Case 1: It may happens that two pdml unique index tasks insert the same
       // row concurrently, so we report duplicate key under the case to prevent
       // the insertion.
@@ -139,6 +133,12 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
                   K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
       }
+    } else if (writer_seq_no < locker_seq_no) {
+      // We need guarantee the right sequence of the same txn operations
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "wrong row of sequence on one row found", K(reader_seq_no),
+                K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
+                K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
     }
   }
 
