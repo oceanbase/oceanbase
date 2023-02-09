@@ -14015,6 +14015,9 @@ int ObDDLService::check_index_table_need_rebuild(const share::schema::ObTableSch
   need_rebuild = true;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
+  } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR == index_table_schema.get_index_status()) {
+    need_rebuild = false;
+    LOG_INFO("skip error index", K(index_table_schema.get_table_id()));
   } else if (is_oracle_mode) {
     // For Oracle mode, index is invalid if its' any rowkey/storing column specified by user is dropped;
     ObSArray<uint64_t> check_columns_id;
