@@ -338,7 +338,7 @@ int print_object_meta(AChunk *chunk, ABlock *block, AObject *object, char *buf,
   int len = end ? (char*)end - (char*)label : sizeof(object->label_);
   ret = databuff_printf(buf, buf_len, pos,
                         "        object: %p, offset: %04d, in_use: %d, is_large: %d, nobjs: %04d," \
-                        " label: \'%.*s\', alloc_bytes: %d\n",
+                        " label: \'%.*s\', alloc_bytes: %u\n",
                         object, offset, object->in_use_, object->is_large_, object->nobjs_,
                         len, (char*)label, object->alloc_bytes_);
   return ret;

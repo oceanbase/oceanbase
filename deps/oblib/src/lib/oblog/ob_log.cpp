@@ -1607,20 +1607,22 @@ int ObLogger::check_tl_log_limiter(const uint64_t location_hash_val,
 {
   int ret = OB_SUCCESS;
   allow = true;
-  auto log_limiter = (nullptr != tl_log_limiter_ ? tl_log_limiter_ : default_log_limiter_);
-  if (enable_log_limit_) {
-    if (nullptr != log_limiter) {
-      allow = OB_SUCCESS == log_limiter->try_acquire(log_size, level, errcode);
-    }
-    if (allow) {
-      int64_t idx0 = (location_hash_val >> 32) % N_LIMITER;
-      int64_t idx1 = ((location_hash_val << 32) >> 32) % N_LIMITER;
-      bool r0 = OB_SUCCESS == per_log_limiters_[idx0].try_acquire(1, level, errcode);
-      bool r1 = OB_SUCCESS == per_log_limiters_[idx1].try_acquire(1, level, errcode);
-      allow = r0 || r1;
-    }
-    if (!allow && nullptr != log_limiter && log_limiter->is_force_allows()) {
-      allow = true;
+  if (OB_LIKELY(is_inited())) {
+    auto log_limiter = (nullptr != tl_log_limiter_ ? tl_log_limiter_ : default_log_limiter_);
+    if (enable_log_limit_) {
+      if (nullptr != log_limiter) {
+        allow = OB_SUCCESS == log_limiter->try_acquire(log_size, level, errcode);
+      }
+      if (allow) {
+        int64_t idx0 = (location_hash_val >> 32) % N_LIMITER;
+        int64_t idx1 = ((location_hash_val << 32) >> 32) % N_LIMITER;
+        bool r0 = OB_SUCCESS == per_log_limiters_[idx0].try_acquire(1, level, errcode);
+        bool r1 = OB_SUCCESS == per_log_limiters_[idx1].try_acquire(1, level, errcode);
+        allow = r0 || r1;
+      }
+      if (!allow && nullptr != log_limiter && log_limiter->is_force_allows()) {
+        allow = true;
+      }
     }
   }
   return ret;
