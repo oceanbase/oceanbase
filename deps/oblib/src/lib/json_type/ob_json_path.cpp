@@ -4268,7 +4268,12 @@ int ObJsonPath::is_legal_comparison(ObJsonPathFilterNode* filter_comp_node)
       case JPN_EQ_REGEX: {
         // could be:(sub_path，string), (sub_path, var) ,(string, string)
         if (left_type == ObJsonPathNodeType::JPN_SUB_PATH) {
-          if (right_type  == ObJsonPathNodeType::JPN_SUB_PATH) {
+          ObJsonPathNodeType last_node_type  = comp_left.filter_path_->get_last_node_type();
+          // check the result of sub_path is string
+          if (JPN_BEGIN_FUNC_FLAG < last_node_type && last_node_type < JPN_STRING) {
+            ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
+            LOG_WARN("type incompatibility to compare.", K(ret));
+          } else if (right_type  == ObJsonPathNodeType::JPN_SUB_PATH) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid comparison of two path expressions!", K(ret), K(index_));
           } else if (right_type  == ObJsonPathNodeType::JPN_SCALAR) {

@@ -955,7 +955,7 @@ int ObRawExprPrinter::print_ora_json_arrayagg(ObAggFunRawExpr *expr)
     }
     // on null
     if (OB_SUCC(ret)
-        && static_cast<ObConstRawExpr *>(expr->get_param_expr(2))->get_value().get_int() == 1) {
+        && static_cast<ObConstRawExpr *>(expr->get_param_expr(2))->get_value().get_int() == 2) {
       DATA_PRINTF(" null on null");
     }
     // returning
