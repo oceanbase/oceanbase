@@ -159,6 +159,7 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr *&expr)
     int64_t factor_num = INT64_MAX;
     // continue processing when one 'and'(ObOpRawExpr) exist at least
     bool do_handle = false;
+    bool expr_copied = false;
     ObOpRawExpr *m_expr = static_cast<ObOpRawExpr *>(expr);
     for (int64_t i = 0; OB_SUCC(ret) && i < m_expr->get_param_count(); ++i) {
       const ObRawExpr *and_expr = m_expr->get_param_expr(i);
@@ -282,6 +283,32 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr *&expr)
               LOG_WARN("failed to add param expr", K(ret));
             }
             // 2. remove from or
+            if (OB_SUCC(ret) && !expr_copied) {
+              // deep copy T_OP_OR and T_OP_AND to make expr unshared
+              ObRawExprCopier expr_copier(ctx_.expr_factory_);
+              ObOpRawExpr *new_or_expr = NULL;
+              ObArray<ObRawExpr *> new_candidate_factors;
+              if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_OR, new_or_expr))) {
+                LOG_WARN("alloc ObOpRawExpr failed", K(ret));
+              } else if (OB_ISNULL(new_or_expr)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("new_or_expr is null");
+              }
+              for (int64_t j = 0; OB_SUCC(ret) && j < m_expr->get_param_count(); ++j) {
+                ObRawExpr *new_or_param = m_expr->get_param_expr(j);
+                if (T_OP_AND == new_or_param->get_expr_type() &&
+                    OB_FAIL(expr_copier.copy_expr_node(new_or_param, new_or_param))) {
+                  LOG_WARN("failed to copy expr node", K(ret));
+                } else if (OB_FAIL(new_or_expr->add_param_expr(new_or_param))) {
+                  LOG_WARN("failed to add param expr", K(ret));
+                }
+              }
+              if (OB_SUCC(ret)) {
+                m_expr = new_or_expr;
+                expr = new_or_expr;
+                expr_copied = true;
+              }
+            }
             for (int64_t j = 0; OB_SUCC(ret) && j < idxs.count(); ++j) {
               ObOpRawExpr *and_expr = NULL;
               if (OB_ISNULL(m_expr->get_param_expr(j))) {

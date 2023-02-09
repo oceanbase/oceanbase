@@ -162,6 +162,7 @@ int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
         expr->is_query_ref_expr() ||
         expr->is_exec_param_expr() ||
         expr->is_pseudo_column_expr() ||
+        expr->get_expr_type() == T_OP_ROW ||
         expr->get_expr_type() == T_QUESTIONMARK) {
       shared_expr = expr;
     } else {

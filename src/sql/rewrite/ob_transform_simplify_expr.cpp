@@ -1590,6 +1590,12 @@ int ObTransformSimplifyExpr::do_convert_nvl_predicate(ObDMLStmt *stmt,
     if (OB_ISNULL(exp1) || OB_ISNULL(exp2)){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(exp1), K(exp2));
+    } else if (nvl_expr->get_collation_level() != exp2->get_collation_level() &&
+               OB_FAIL(ObTransformUtils::add_cast_for_replace(*ctx_->expr_factory_,
+                                                              nvl_expr,
+                                                              exp2,
+                                                              ctx_->session_info_))) {
+      LOG_WARN("failed to add cast for replace", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*(ctx_->expr_factory_),
                                                               ctx_->session_info_,
                                                               parent_expr->get_expr_type(),
