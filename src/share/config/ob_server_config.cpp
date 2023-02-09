@@ -92,7 +92,6 @@ int ObServerConfig::read_config()
   if (OB_UNLIKELY(true != self_addr_.ip_to_string(local_ip, sizeof(local_ip)))) {
     ret = OB_CONVERT_ERROR;
   } else {
-    DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
     key.set_varchar(ObString::make_string("svr_type"), print_server_role(get_server_type()));
     key.set_int(ObString::make_string("svr_port"), rpc_port);
     key.set_varchar(ObString::make_string("svr_ip"), local_ip);
@@ -261,7 +260,7 @@ void ObServerMemoryConfig::set_server_memory_limit(int64_t memory_limit)
   }
 }
 
-OB_DEF_SERIALIZE(ObServerConfig)
+int ObServerConfig::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   ObRecordHeader header;
@@ -285,13 +284,32 @@ OB_DEF_SERIALIZE(ObServerConfig)
     header.data_length_ = static_cast<int32_t>(pos - data_pos);
     header.data_zlength_ = header.data_length_;
     if (header.data_zlength_ != expect_data_len) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected data size", K_(header.data_zlength),
+      LOG_WARN("unexpected data size", K_(header.data_zlength),
                                           K(expect_data_len));
     } else {
       header.data_checksum_ = ob_crc64(p_data, pos - data_pos);
       header.set_header_checksum();
       ret = header.serialize(buf, buf_len, saved_header_pos);
+    }
+  }
+  return ret;
+}
+
+int ObServerConfig::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  SERIALIZE_HEADER(UNIS_VERSION);
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+      LOG_WARN("ObServerConfig serialize fail", K(ret));
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    if (OB_SUCC(ret)) {
+      ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes,
+        size_nbytes, tmp_pos, serial_size);
     }
   }
   return ret;

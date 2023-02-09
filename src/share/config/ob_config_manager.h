@@ -83,13 +83,6 @@ private:
     DISALLOW_COPY_AND_ASSIGN(UpdateTask);
   };
 
-public:
-  static common::DRWLock &get_serialize_lock()
-  {
-    static common::DRWLock serialize_lock_;
-    return serialize_lock_;
-  }
-
 private:
   bool inited_;
   bool init_config_load_; // https://work.aone.alibaba-inc.com/issue/28094065
