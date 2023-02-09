@@ -45,47 +45,6 @@ TEST(TestEncryptionUtil, basic)
   ASSERT_EQ(0, STRNCMP(data2, origin_data2, strlen(origin_data2)));
 }
 
-// TEST(TestWebService, store)
-//{
-//  ObWebServiceRootAddr ws;
-//  ObSystemConfig sys_config;
-//  ASSERT_EQ(OB_SUCCESS, sys_config.init());
-//  ObServerConfig &config = ObServerConfig::get_instance();
-//  ASSERT_EQ(OB_SUCCESS, config.init(sys_config));
-//  ws.init(config);
-//  config.obconfig_url.set_value("http://api.test.ocp.oceanbase.alibaba.net/services?Action=ObRootServiceInfo&User_ID=ocptest&UID=rongwei.drw&ObRegion=xr.admin");
-//  config.cluster_id.set_value("1");
-//  config.cluster.set_value("xr.admin");
-//  ObArray<ObRootAddr> rs_list;
-//  ObArray<ObRootAddr> readonly_rs_list;
-//  for (int64_t i = 0; i < 10; i++) {
-//    ObRootAddr rs;
-//    rs.server_.set_ip_addr("127.0.0.1", 9988);
-//    rs.sql_port_ = 1;
-//    ASSERT_EQ(OB_SUCCESS, rs_list.push_back(rs));
-//  }
-//  for (int64_t i = 0; i < 5; i++) {
-//    ObRootAddr rs;
-//    rs.server_.set_ip_addr("127.0.0.1", 9988);
-//    rs.sql_port_ = 1;
-//    ASSERT_EQ(OB_SUCCESS, readonly_rs_list.push_back(rs));
-//  }
-//  ASSERT_EQ(OB_SUCCESS, ws.store(rs_list, readonly_rs_list, true));
-//  for (int64_t i = 0; i < 800; i++) {
-//    ObRootAddr rs;
-//    rs.server_.set_ip_addr("127.0.0.1", 9988);
-//    rs.sql_port_ = 1;
-//    ASSERT_EQ(OB_SUCCESS, rs_list.push_back(rs));
-//  }
-//  for (int64_t i = 0; i < 300; i++) {
-//    ObRootAddr rs;
-//    rs.server_.set_ip_addr("127.0.0.1", 9988);
-//    rs.sql_port_ = 1;
-//    ASSERT_EQ(OB_SUCCESS, readonly_rs_list.push_back(rs));
-//  }
-//  ASSERT_EQ(OB_OBCONFIG_RETURN_ERROR, ws.store(rs_list, readonly_rs_list, true));
-//
-//}
 }  // end namespace share
 }  // end namespace oceanbase
 int main(int argc, char** argv)
