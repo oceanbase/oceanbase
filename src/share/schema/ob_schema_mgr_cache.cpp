@@ -372,6 +372,8 @@ static const char* ref_info_type_strs[] = {
   "DIS_TASK_SPLITER",
   "DAS_CTX",
   "SCHEMA_RECORDER",
+  "SPI_RESULT_SET",
+  "PL_PREPARE_RESULT",
   "MOD_MAX",
 };
 

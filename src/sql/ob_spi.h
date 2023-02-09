@@ -106,7 +106,7 @@ public:
       allocator_(ObModIds::OB_PL_TEMP),
       result_set_(NULL),
       sql_ctx_(),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_SPI_RESULT_SET),
       orign_nested_count_(-1),
       cursor_nested_count_(-1),
       orign_session_value_(NULL),
@@ -272,7 +272,7 @@ public:
         mem_context_(nullptr),
         mem_context_destroy_guard_(mem_context_),
         sql_ctx_(),
-        schema_guard_() {}
+        schema_guard_(share::schema::ObSchemaMgrItem::MOD_PL_PREPARE_RESULT) {}
     ~PLPrepareResult() { reset(); }
     int init(sql::ObSQLSessionInfo &session_info);
     void reset()
