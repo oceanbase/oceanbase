@@ -38,6 +38,7 @@ int ObArchiveLSSchemaMeta::get_ls_array(common::ObIArray<share::ObLSID> &array)
 }
 
 int ObArchiveLSSchemaMeta::get_data(const share::ObLSID &id,
+    const share::SCN &base_scn,
     char *data,
     const int64_t data_size,
     int64_t &real_size,
@@ -49,11 +50,11 @@ int ObArchiveLSSchemaMeta::get_data(const share::ObLSID &id,
   const uint64_t tenant_id = MTL_ID();
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(WARN, "sql proxy is null, unexpected", K(ret), K(sql_proxy), K(tenant_id));
+    ARCHIVE_LOG(WARN, "sql proxy is null, unexpected", KR(ret), K(sql_proxy), K(tenant_id));
   } else {
     datadict::MetaInfoQueryHelper helper(*sql_proxy, tenant_id);
-    if (OB_FAIL(helper.get_data(data, data_size, real_size, scn))) {
-      ARCHIVE_LOG(WARN, "MetaInfoQueryHelper get data failed", K(ret), K(tenant_id));
+    if (OB_FAIL(helper.get_data(base_scn, data, data_size, real_size, scn))) {
+      ARCHIVE_LOG(WARN, "MetaInfoQueryHelper get data failed", KR(ret), K(tenant_id), K(base_scn), K(real_size));
     }
   }
   return ret;

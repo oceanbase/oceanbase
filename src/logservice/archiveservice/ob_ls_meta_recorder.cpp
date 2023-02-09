@@ -33,9 +33,12 @@
   RecordContext record_context;    \
   ArchiveKey key;                  \
   share::ObArchiveRoundState state;     \
+  share::SCN archive_start_scn;         \
   round_mgr_->get_archive_round_info(key, state);     \
   if (! state.is_doing()) {    \
     ARCHIVE_LOG(TRACE, "not in doing state, just skip", K(key), K(state));   \
+  } else if (OB_FAIL(round_mgr_->get_archive_start_scn(key, archive_start_scn))) {      \
+    ARCHIVE_LOG(WARN, "get archive start scn failed", K(ret), K(key));                  \
   } else if (OB_UNLIKELY(! t.is_valid())) {   \
     ret = common::OB_ERR_UNEXPECTED;   \
     ARCHIVE_LOG(WARN, "invalid task", K(ret), K(task_type));   \
@@ -53,8 +56,10 @@
       share::SCN scn;                          \
       share::ObBackupPath path;                 \
       const share::ObLSID &id = array.at(i);    \
-      if (OB_FAIL(OB_FAIL(t.get_data(id, buf_ + COMMON_HEADER_SIZE, MAX_META_RECORD_DATA_SIZE, real_size, scn)))) {  \
+      if (OB_FAIL(OB_FAIL(t.get_data(id, archive_start_scn, buf_ + COMMON_HEADER_SIZE, MAX_META_RECORD_DATA_SIZE, real_size, scn)))) {  \
         ARCHIVE_LOG(WARN, "get data failed", K(ret));      \
+      } else if (OB_UNLIKELY(! scn.is_valid())) {      \
+        ARCHIVE_LOG(WARN, "scn is invalid", K(ret), K(task_type), K(scn));                  \
       } else if (check_need_delay_(id, key, scn)) {    \
         ARCHIVE_LOG(INFO, "check_need_delay_ return true, just wait", K(id), K(task_type), K(scn)); \
       } else if (OB_FAIL(make_dir_(id, key, scn, task_type))) {   \
@@ -285,7 +290,12 @@ bool ObLSMetaRecorder::check_need_delay_(const share::ObLSID &id,
   } else {
     share::ObArchivePiece archive_piece(archive_scn, piece_switch_interval, genesis_scn, base_piece_id);
     share::ObArchivePiece task_piece(scn, piece_switch_interval, genesis_scn, base_piece_id);
-    bret = archive_piece.get_piece_id() < task_piece.get_piece_id();
+    if (OB_UNLIKELY(!archive_piece.is_valid() || ! task_piece.is_valid())) {
+      bret = true;
+      ARCHIVE_LOG(WARN, "invalid pieces", K(archive_piece), K(scn), K(archive_piece), K(task_piece));
+    } else {
+      bret = archive_piece.get_piece_id() < task_piece.get_piece_id();
+    }
   }
   return bret;
 }

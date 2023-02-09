@@ -59,6 +59,7 @@ void ObArchiveRoundMgr::destroy()
 
 
 int ObArchiveRoundMgr::set_archive_start(const ArchiveKey &key,
+    const share::SCN &round_start_scn,
     const int64_t piece_switch_interval,
     const SCN &genesis_scn,
     const int64_t base_piece_id,
@@ -69,6 +70,7 @@ int ObArchiveRoundMgr::set_archive_start(const ArchiveKey &key,
   WLockGuard guard(rwlock_);
 
   if (OB_UNLIKELY(!key.is_valid()
+        || ! round_start_scn.is_valid()
         || piece_switch_interval <= 0
         || base_piece_id < 1
         || !genesis_scn.is_valid()
@@ -85,6 +87,7 @@ int ObArchiveRoundMgr::set_archive_start(const ArchiveKey &key,
     ARCHIVE_LOG(WARN, "backup dest set failed", K(ret), K(dest));
   } else {
     key_ = key;
+    round_start_scn_ = round_start_scn;
     piece_switch_interval_ = piece_switch_interval;
     genesis_scn_ = genesis_scn;
     base_piece_id_ = base_piece_id;
@@ -166,6 +169,18 @@ int ObArchiveRoundMgr::get_piece_info(const ArchiveKey &key,
     piece_switch_interval = piece_switch_interval_;
     genesis_scn = genesis_scn_;
     base_piece_id = base_piece_id_;
+  }
+  return ret;
+}
+
+int ObArchiveRoundMgr::get_archive_start_scn(const ArchiveKey &key, share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(rwlock_);
+  if (key != key_) {
+    ret = OB_EAGAIN;
+  } else {
+    scn = round_start_scn_;
   }
   return ret;
 }

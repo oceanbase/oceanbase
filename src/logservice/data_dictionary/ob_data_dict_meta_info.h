@@ -33,9 +33,10 @@ public:
   ObDataDictMetaInfoItem();
   ~ObDataDictMetaInfoItem();
   void reset();
-  void reset(const int64_t snapshot_scn,
-       const int64_t start_lsn,
-       const int64_t end_lsn);
+  void reset(
+      const uint64_t snapshot_scn,
+      const uint64_t start_lsn,
+      const uint64_t end_lsn);
 
   bool operator==(const ObDataDictMetaInfoItem &that) const {
     return snapshot_scn_ == that.snapshot_scn_ &&
@@ -47,9 +48,9 @@ public:
 
   TO_STRING_KV(K_(snapshot_scn), K_(start_lsn), K_(end_lsn));
 public:
-  int64_t snapshot_scn_;
-  int64_t start_lsn_;
-  int64_t end_lsn_;
+  uint64_t snapshot_scn_;
+  uint64_t start_lsn_;
+  uint64_t end_lsn_;
 };
 
 typedef ObSEArray<ObDataDictMetaInfoItem, 16> DataDictMetaInfoItemArr;
@@ -66,25 +67,25 @@ public:
   int generate(
       const uint64_t tenant_id,
       const int32_t item_cnt,
-      const int64_t max_snapshot_scn,
-      const int64_t min_snapshot_scn,
+      const uint64_t max_snapshot_scn,
+      const uint64_t min_snapshot_scn,
       const char *data,
       const int64_t data_size);
 
   uint64_t get_tenant_id() const { return tenant_id_; }
-  int32_t get_meta_version() const {
+  OB_INLINE int32_t get_meta_version() const {
     return meta_version_;
   }
-  int32_t get_item_count() const {
+  OB_INLINE int32_t get_item_count() const {
     return item_cnt_;
   }
-  int64_t get_min_snapshot_scn() const {
+  OB_INLINE uint64_t get_min_snapshot_scn() const {
     return min_snapshot_scn_;
   }
-  int64_t get_max_snapshot_scn() const {
+  OB_INLINE uint64_t get_max_snapshot_scn() const {
     return max_snapshot_scn_;
   }
-  int64_t get_data_size() const {
+  OB_INLINE int64_t get_data_size() const {
     return data_size_;
   }
 
@@ -108,14 +109,14 @@ public:
                K_(data_size),
                K_(checksum));
 private:
-  int16_t magic_;
-  int16_t meta_version_;
-  int64_t tenant_id_;
-  int32_t item_cnt_;
-  int64_t min_snapshot_scn_;
-  int64_t max_snapshot_scn_;
-  int64_t data_size_;
-  int64_t checksum_;
+  int16_t   magic_;
+  int16_t   meta_version_;
+  uint64_t  tenant_id_;
+  int32_t   item_cnt_;
+  uint64_t  min_snapshot_scn_;
+  uint64_t  max_snapshot_scn_;
+  int64_t   data_size_;
+  int64_t   checksum_;
 };
 
 class ObDataDictMetaInfo
@@ -162,23 +163,33 @@ public:
       sql_proxy_(sql_proxy),
       tenant_id_(tenant_id) {}
 
-  int get_data(char *data,
+  int get_data(
+      const share::SCN &base_scn,
+      char *data,
       const int64_t data_size,
       int64_t &real_size,
       share::SCN &scn);
 
 private:
-  int get_data_dict_meta_info_(DataDictMetaInfoItemArr &item_arr);
+  // only get data which snapshot_scn larger than base_scn.
+  int get_data_dict_meta_info_(const share::SCN &base_scn, DataDictMetaInfoItemArr &item_arr);
 
-  int parse_record_from_result_(common::sqlclient::ObMySQLResult &result,
+  int parse_record_from_result_(
+      const share::SCN &base_scn,
+      common::sqlclient::ObMySQLResult &result,
       int64_t &record_count,
+      int64_t &valid_record_count,
       DataDictMetaInfoItemArr &item_arr);
 
-  int generate_data_(const DataDictMetaInfoItemArr &arr,
+  int generate_data_(
+      const DataDictMetaInfoItemArr &arr,
       char *data,
       const int64_t data_size,
       int64_t &real_size,
       share::SCN &scn);
+
+  // invoke data_dict_service to do dump async.
+  int mark_dump_data_dict_();
 
 private:
   common::ObMySQLProxy &sql_proxy_;

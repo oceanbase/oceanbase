@@ -39,7 +39,18 @@ public:
   const share::ObArchiveLSMetaType &get_type() const { return type_; }
 
   // NB: we have the limit of no more than 2MB in per write
-  virtual int get_data(const share::ObLSID &id, char *data, const int64_t data_size, int64_t &real_size, share::SCN &scn) = 0;
+  // @param[in] id, the ls id
+  // @param[in] base_scn, the start_scn of archive
+  // @char[in] data, the buffer to save data to persist
+  // @param[in] data_size, the max size of data
+  // @param[out] real_size, the real_size of data to persist
+  // @param[out] scn, the scn corresponding to the data, for example the read version to read data
+  virtual int get_data(const share::ObLSID &id,
+      const share::SCN &base_scn,
+      char *data,
+      const int64_t data_size,
+      int64_t &real_size,
+      share::SCN &scn) = 0;
 
 private:
   share::ObArchiveLSMetaType type_;
@@ -56,7 +67,7 @@ private:
     explicit ObArchiveLS##CLASS(const share::ObArchiveLSMetaType &type) : LSRecordTaskBase(type) {}   \
     virtual int64_t get_record_interval(); \
     virtual int get_ls_array(common::ObIArray<share::ObLSID> &array); \
-    virtual int get_data(const share::ObLSID &id, char *data, const int64_t data_size, int64_t &real_size, share::SCN &scn);  \
+    virtual int get_data(const share::ObLSID &id, const share::SCN &base_scn, char *data, const int64_t data_size, int64_t &real_size, share::SCN &scn);  \
   private:    \
     DISALLOW_COPY_AND_ASSIGN(ObArchiveLS ## CLASS);    \
   };

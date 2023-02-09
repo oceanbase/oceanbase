@@ -39,7 +39,7 @@ using namespace storage;
 namespace datadict
 {
 
-const int64_t ObDataDictService::TIMER_TASK_INTERVAL = 5 * _SEC_; // schedule timer task with interval 5s
+const int64_t ObDataDictService::TIMER_TASK_INTERVAL = 1 * _SEC_; // schedule timer task with interval 5s
 const int64_t ObDataDictService::PRINT_DETAIL_INTERVAL = 60 * _SEC_;
 const int64_t ObDataDictService::SCHEMA_OP_TIMEOUT = 2 * _SEC_;
 const int64_t ObDataDictService::DEFAULT_REPORT_TIMEOUT = 10 * _MIN_;
@@ -56,7 +56,8 @@ ObDataDictService::ObDataDictService()
     ls_service_(NULL),
     dump_interval_(INT64_MAX),
     timer_tg_id_(-1),
-    last_dump_succ_time_(OB_INVALID_TIMESTAMP)
+    last_dump_succ_time_(OB_INVALID_TIMESTAMP),
+    force_need_dump_(false)
 {}
 
 int ObDataDictService::mtl_init(ObDataDictService *&datadict_service)
@@ -147,6 +148,7 @@ void ObDataDictService::destroy()
 {
   if (IS_INIT) {
     TG_DESTROY(timer_tg_id_);
+    force_need_dump_ = false;
     last_dump_succ_time_ = OB_INVALID_TIMESTAMP;
     timer_tg_id_ = -1;
     dump_interval_ = 0;
@@ -170,24 +172,31 @@ void ObDataDictService::runTimerTask()
     bool is_leader = ATOMIC_LOAD(&is_leader_);
     const int64_t start_time = OB_TSC_TIMESTAMP.current_time();
     const bool is_reach_time_interval = (start_time >= ATOMIC_LOAD(&last_dump_succ_time_) + ATOMIC_LOAD(&dump_interval_));
+    const bool force_need_dump = ATOMIC_LOAD(&force_need_dump_);
 
-    if (is_leader && is_reach_time_interval) {
+    if (is_leader && (is_reach_time_interval || force_need_dump)) {
       int ret = OB_SUCCESS;
       uint64_t data_version = 0;
 
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
-        DDLOG(WARN, "get_min_data_version failed", KR(ret), K_(tenant_id));
+        DDLOG(WARN, "get_min_data_version failed", KR(ret), K_(tenant_id), K(force_need_dump));
       } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_1_0_0)) {
         // tenant data_version less than 4100, ignore.
       } else if (OB_FAIL(do_dump_data_dict_())) {
         if (OB_STATE_NOT_MATCH == ret) {
-          DDLOG(WARN, "dump_data_dict_, maybe not ls_leader or lsn not valid, ignore.", KR(ret), K_(tenant_id));
+          DDLOG(WARN, "dump_data_dict_, maybe not ls_leader or lsn not valid, ignore.", KR(ret), K_(tenant_id), K(force_need_dump));
         } else if (OB_IN_STOP_STATE != ret) {
-          DDLOG(WARN, "dump_data_dict_ failed", KR(ret), K_(tenant_id));
+          DDLOG(WARN, "dump_data_dict_ failed", KR(ret), K_(tenant_id), K(force_need_dump));
         }
       } else {
         const int64_t end_time = OB_TSC_TIMESTAMP.current_time();
         ATOMIC_SET(&last_dump_succ_time_, end_time);
+
+        if (force_need_dump) {
+          DDLOG(INFO, "force dump_data_dict done", K_(last_dump_succ_time), K(start_time));
+          mark_force_dump_data_dict(false);
+        }
+
         DDLOG(INFO, "do_dump_data_dict_ success", K_(tenant_id), "cost_time", end_time - start_time);
       }
     }

@@ -40,6 +40,7 @@ public:
    void get_round(ArchiveKey &key) const { key = key_; }
   bool is_compatible() const {return compatible_;}
   int set_archive_start(const ArchiveKey &key,
+      const share::SCN &round_start_scn,
       const int64_t piece_switch_interval,
       const share::SCN &genesis_scn,
       const int64_t base_piece_id,
@@ -55,6 +56,7 @@ public:
       share::SCN &genesis_scn,
       int64_t &base_piece_id);
   void get_archive_round_info(ArchiveKey &key, ObArchiveRoundState &state) const;
+  int get_archive_start_scn(const ArchiveKey &key, share::SCN &scn);
   void get_archive_round_compatible(ArchiveKey &key, bool &compatible);
   bool is_in_archive_status(const ArchiveKey &key) const;
   bool is_in_archive_stopping_status(const ArchiveKey &key) const;

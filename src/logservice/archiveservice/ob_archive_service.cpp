@@ -408,7 +408,7 @@ int ObArchiveService::start_archive_(const ObTenantArchiveRoundAttr &attr)
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(
           *mysql_proxy, attr.key_.tenant_id_, attr.path_, dest))) {
     ARCHIVE_LOG(ERROR, "get backup dest failed", K(ret), K(attr));
-  } else if (OB_FAIL(archive_round_mgr_.set_archive_start(key,
+  } else if (OB_FAIL(archive_round_mgr_.set_archive_start(key, attr.start_scn_,
           attr.piece_switch_interval_, attr.start_scn_, attr.base_piece_id_,
           share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2, dest))) {
     ARCHIVE_LOG(ERROR, "archive round mgr set archive info failed", K(ret), K(attr));
