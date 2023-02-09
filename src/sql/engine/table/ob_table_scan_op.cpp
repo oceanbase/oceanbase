@@ -685,6 +685,13 @@ int ObTableScanOp::prepare_pushdown_limit_param()
     need_final_limit_ = true;
     tsc_rtdef_.scan_rtdef_.limit_param_.offset_ = 0;
     tsc_rtdef_.scan_rtdef_.limit_param_.limit_ = -1;
+
+    if (nullptr != MY_CTDEF.lookup_ctdef_) {
+      OB_ASSERT(nullptr != tsc_rtdef_.lookup_rtdef_);
+      tsc_rtdef_.lookup_rtdef_->limit_param_.offset_ = 0;
+      tsc_rtdef_.lookup_rtdef_->limit_param_.limit_  = -1;
+    }
+
   } else if (tsc_rtdef_.has_lookup_limit() || das_ref_.get_das_task_cnt() > 1) {
     //for index back, need to final limit output rows in TableScan operator,
     //please see me for the reason: https://work.aone.alibaba-inc.com/issue/43232745
