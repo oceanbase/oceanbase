@@ -2965,7 +2965,9 @@ int ObSelectLogPlan::check_if_set_match_rehash(const EqualSets &equal_sets,
   ObSEArray<ObRawExpr*, 8> target_part_keys;
   ObShardingInfo *target_sharding = NULL;
   is_match_single_side_hash = false;
-  if (OB_ISNULL(target_sharding = target_child.get_sharding())) {
+  if (NULL == target_child.get_strong_sharding()) {
+    /* do nothing */
+  } else if (OB_ISNULL(target_sharding = target_child.get_sharding())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (!target_sharding->is_distributed_without_table_location() ||
