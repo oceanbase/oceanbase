@@ -549,6 +549,25 @@ int ObLogGroupBy::print_used_hint(PlanText &plan_text)
   return ret;
 }
 
+int ObLogGroupBy::compute_const_exprs()
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(my_plan_) || OB_UNLIKELY(get_num_of_child() < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operator is invalid", K(ret), K(get_num_of_child()), K(my_plan_));
+  } else if (OB_ISNULL(child = get_child(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is null", K(ret), K(child));
+  } else if (!has_rollup() &&
+             OB_FAIL(append(get_output_const_exprs(), child->get_output_const_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(get_filter_exprs(), get_output_const_exprs()))) {
+    LOG_WARN("failed to compute const conditionexprs", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
 int ObLogGroupBy::compute_fd_item_set()
 {
   int ret = OB_SUCCESS;
