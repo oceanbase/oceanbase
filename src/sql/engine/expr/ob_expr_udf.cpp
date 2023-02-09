@@ -451,7 +451,11 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 
     ObObj *objs = nullptr;
     if (expr.arg_cnt_ > 0) {
-      CK (OB_NOT_NULL(objs = static_cast<ObObj *> (allocator.alloc(expr.arg_cnt_ * sizeof(ObObj)))));
+      objs = static_cast<ObObj *> (allocator.alloc(expr.arg_cnt_ * sizeof(ObObj)));
+      if (OB_ISNULL(objs)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate objs memory failed", K(ret));
+      }
       OZ (fill_obj_stack(expr, ctx, objs));
       OZ (process_in_params(
         objs, expr.arg_cnt_, info->params_desc_, info->params_type_, *udf_params, alloc));
