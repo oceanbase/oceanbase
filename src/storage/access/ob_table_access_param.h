@@ -165,6 +165,7 @@ public:
   // so we can generate from the request cols in readinfo without considering fuse row cache
   bool has_lob_column_out_;
   bool is_for_foreign_check_;
+  bool limit_prefetch_;
   int64_t ss_rowkey_prefix_cnt_;
   union {
     struct {

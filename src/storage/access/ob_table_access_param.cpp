@@ -41,6 +41,7 @@ ObTableIterParam::ObTableIterParam()
       has_virtual_columns_(false),
       has_lob_column_out_(false),
       is_for_foreign_check_(false),
+      limit_prefetch_(false),
       ss_rowkey_prefix_cnt_(0),
       pd_storage_flag_(0)
 {
@@ -70,6 +71,7 @@ void ObTableIterParam::reset()
   has_virtual_columns_ = false;
   has_lob_column_out_ = false;
   is_for_foreign_check_ = false;
+  limit_prefetch_ = false;
 }
 
 bool ObTableIterParam::is_valid() const
@@ -136,7 +138,10 @@ DEF_TO_STRING(ObTableIterParam)
        K_(pd_storage_flag),
        K_(vectorized_enabled),
        K_(has_virtual_columns),
-       K_(has_lob_column_out));
+       K_(has_lob_column_out),
+       K_(is_for_foreign_check),
+       K_(limit_prefetch),
+       K_(ss_rowkey_prefix_cnt));
   J_OBJ_END();
   return pos;
 }
@@ -222,6 +227,7 @@ int ObTableAccessParam::init(
     iter_param_.has_virtual_columns_ = table_param.has_virtual_column();
     // vectorize requires blockscan is enabled(_pushdown_storage_level > 0)
     iter_param_.vectorized_enabled_ = nullptr != op_ && op_->is_vectorized();
+    iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
 
     if (OB_FAIL(iter_param_.check_read_info_valid())) {
       STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
