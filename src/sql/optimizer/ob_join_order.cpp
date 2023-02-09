@@ -201,8 +201,8 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id, const uint64_t 
       if (OB_ISNULL(top_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("top stmt should not be null", K(ret));
-      } else {
-        is_dml_table = top_stmt->check_table_be_modified(ref_table_id);
+      } else if (OB_FAIL(top_stmt->check_table_be_modified(ref_table_id, is_dml_table))) {
+        LOG_WARN("failed to check table be modified", K(ret));
       }
     }
 

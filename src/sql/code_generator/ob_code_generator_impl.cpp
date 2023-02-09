@@ -1983,8 +1983,8 @@ int ObCodeGeneratorImpl::convert_normal_table_scan(
           if (OB_ISNULL(root_stmt = op.get_plan()->get_optimizer_context().get_root_stmt())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("root stmt is invalid", K(ret), K(root_stmt));
-          } else if (FALSE_IT(is_dml_table = root_stmt->check_table_be_modified(filter_table_id))) {
-            // do nothing
+          } else if (OB_FAIL(root_stmt->check_table_be_modified(filter_table_id, is_dml_table))) {
+            LOG_WARN("failed to check table be modified", K(ret));
           } else if (OB_FAIL(part_filter.init_table_location_with_rowkey(*schema_guard,
                                                                          filter_table_id,
                                                                          *session,
@@ -6184,8 +6184,10 @@ int ObCodeGeneratorImpl::convert_duplicate_key_scan_info(
       LOG_WARN("allocate table location buffer failed", K(ret), K(sizeof(ObTableLocation)));
     } else {
       scan_info.index_location_ = new (buf) ObTableLocation(phy_plan_->get_allocator());
-      bool is_dml_table = root_stmt->check_table_be_modified(scan_info.index_tid_);
-      if (OB_FAIL(scan_info.index_location_->init_table_location_with_rowkey(
+      bool is_dml_table = false;
+      if (OB_FAIL(root_stmt->check_table_be_modified(scan_info.index_tid_, is_dml_table))) {
+        LOG_WARN("failed to check table be modified", K(ret));
+      } else if (OB_FAIL(scan_info.index_location_->init_table_location_with_rowkey(
                                             *schema_guard,
                                             scan_info.index_tid_,
                                             *session_info,
@@ -6987,13 +6989,15 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
     if (OB_SUCC(ret)) {
       ObTableLocation& partition_id_getter = table_lookup->get_part_id_getter();
       // the other function may be more effective, TODO
-      bool is_dml_table = root_stmt->check_table_be_modified(lookup_info.table_id_);
-      if (OB_FAIL(partition_id_getter.init_table_location_with_row_desc(
-          *op.get_plan()->get_optimizer_context().get_sql_schema_guard(),
-          lookup_info.ref_table_id_,
-          *child_ops.at(0).second,
-          *my_session,
-          is_dml_table))) {
+      bool is_dml_table = false;
+      if (OB_FAIL(root_stmt->check_table_be_modified(lookup_info.table_id_, is_dml_table))) {
+        LOG_WARN("failed to check table be modified", K(ret));
+      } else if (OB_FAIL(partition_id_getter.init_table_location_with_row_desc(
+                 *op.get_plan()->get_optimizer_context().get_sql_schema_guard(),
+                 lookup_info.ref_table_id_,
+                 *child_ops.at(0).second,
+                 *my_session,
+                 is_dml_table))) {
         LOG_WARN("the partition id init failed", K(ret));
       } else {
         partition_id_getter.set_table_id(op.get_table_id());

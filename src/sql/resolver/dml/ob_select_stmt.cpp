@@ -64,10 +64,10 @@ const char* const ObSelectIntoItem::DEFAULT_FIELD_TERM_STR = "\t";
 const char ObSelectIntoItem::DEFAULT_FIELD_ENCLOSED_CHAR = 0;
 const bool ObSelectIntoItem::DEFAULT_OPTIONAL_ENCLOSED = false;
 
-bool ObSelectStmt::check_table_be_modified(uint64_t ref_table_id) const
+int ObSelectStmt::check_table_be_modified(uint64_t ref_table_id, bool &is_exists) const
 {
-  bool is_exists = false;
   int ret = OB_SUCCESS;
+  is_exists = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_exists && i < table_items_.count(); ++i) {
     TableItem *table_item = table_items_.at(i);
     if (NULL != table_item &&
@@ -87,13 +87,13 @@ bool ObSelectStmt::check_table_be_modified(uint64_t ref_table_id) const
         if (OB_ISNULL(sub_stmt)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sub stmt is null", K(ret));
-        } else {
-          is_exists = sub_stmt->check_table_be_modified(ref_table_id);
+        } else if (OB_FAIL(SMART_CALL(sub_stmt->check_table_be_modified(ref_table_id, is_exists)))) {
+          LOG_WARN("check sub stmt whether has select for update failed", K(ret), K(i));
         }
       }
     }
   }
-  return is_exists;
+  return ret;
 }
 
 bool ObSelectStmt::has_distinct_or_concat_agg() const

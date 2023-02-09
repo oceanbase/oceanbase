@@ -478,10 +478,10 @@ int ObDelUpdStmt::find_index_column(
   return ret;
 }
 
-bool ObDelUpdStmt::check_table_be_modified(uint64_t ref_table_id) const
+int ObDelUpdStmt::check_table_be_modified(uint64_t ref_table_id, bool &is_exists) const
 {
   int ret = OB_SUCCESS;
-  bool is_exists = false;
+  is_exists = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_exists && i < all_table_columns_.count(); ++i) {
     if (all_table_columns_.at(i).index_dml_infos_.at(0).index_tid_ == ref_table_id) {
       is_exists = true;
@@ -489,7 +489,7 @@ bool ObDelUpdStmt::check_table_be_modified(uint64_t ref_table_id) const
     }
   }
   LOG_DEBUG("check duplicate table being modified", K(is_exists), K(ref_table_id), K(all_table_columns_.count()));
-  return is_exists;
+  return ret;
 }
 
 const ObIArray<TableColumns>* ObDelUpdStmt::get_slice_from_all_table_columns(

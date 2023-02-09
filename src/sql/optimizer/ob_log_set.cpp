@@ -1019,7 +1019,7 @@ int ObLogSet::re_est_cost(const ObLogicalOperator* parent, double need_row_count
           if (OB_ISNULL(get_child(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("set operator child is NULL", K(ret), K(i));
-          } else if (OB_FAIL(get_child(i)->re_est_cost(this, need_row_count, re_est))) {
+          } else if (OB_FAIL(SMART_CALL(get_child(i)->re_est_cost(this, need_row_count, re_est)))) {
             LOG_WARN("re-estimate cost first child failed", K(ret));
           }
         }

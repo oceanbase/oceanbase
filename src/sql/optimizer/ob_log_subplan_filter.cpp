@@ -590,7 +590,7 @@ int ObLogSubPlanFilter::re_est_cost(const ObLogicalOperator* parent, double need
     if (OB_ISNULL(first)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("first or second child is NULL", K(ret), K(first));
-    } else if (OB_FAIL(first->re_est_cost(this, first->get_card() * need_row_count / get_card(), re_est))) {
+    } else if (OB_FAIL(SMART_CALL(first->re_est_cost(this, first->get_card() * need_row_count / get_card(), re_est)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("re-estimate cost child failed", K(ret));
     } else if (OB_FAIL(est_cost())) {

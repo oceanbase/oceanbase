@@ -963,7 +963,7 @@ public:
   {
     return get_sample_info_by_table_id(table_id) != nullptr;
   }
-  virtual bool check_table_be_modified(uint64_t ref_table_id) const override;
+  virtual int check_table_be_modified(uint64_t ref_table_id, bool &is_modified) const;
 
   // check aggregation has distinct or group concat e.g.:
   //  count(distinct c1)

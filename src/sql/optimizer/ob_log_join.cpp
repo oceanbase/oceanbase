@@ -22,6 +22,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "common/ob_smart_call.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -791,9 +792,9 @@ int ObLogJoin::re_est_cost(const ObLogicalOperator* parent, double need_row_coun
   } else if (MERGE_JOIN == join_algo_) {
     double left_need_rows = sqrt(need_row_count / get_card()) * left_child->get_card();
     double right_need_rows = sqrt(need_row_count / get_card()) * right_child->get_card();
-    if (OB_FAIL(left_child->re_est_cost(this, left_need_rows, left_child_re_est))) {
+    if (OB_FAIL(SMART_CALL(left_child->re_est_cost(this, left_need_rows, left_child_re_est)))) {
       LOG_WARN("re-estimate cost left child failed", K(ret));
-    } else if (OB_FAIL(right_child->re_est_cost(this, right_need_rows, right_child_re_est))) {
+    } else if (OB_FAIL(SMART_CALL(right_child->re_est_cost(this, right_need_rows, right_child_re_est)))) {
       LOG_WARN("re-estimate cost right child failed", K(ret));
     } else {
       ObSEArray<OrderItem, 4, ModulePageAllocator, true> dummy_need_ordering;
@@ -843,7 +844,7 @@ int ObLogJoin::re_est_cost(const ObLogicalOperator* parent, double need_row_coun
       double op_cost = 0.0;
       double hash_cost = 0.0;
       double right_need_rows = (need_row_count / get_card()) * right_child->get_card();
-      if (OB_FAIL(right_child->re_est_cost(this, right_need_rows, right_child_re_est))) {
+      if (OB_FAIL(SMART_CALL(right_child->re_est_cost(this, right_need_rows, right_child_re_est)))) {
         LOG_WARN("Failed to re est cost", K(ret));
       } else {
         ObCostHashJoinInfo est_cost_info(left_child->get_card(),
@@ -879,7 +880,7 @@ int ObLogJoin::re_est_cost(const ObLogicalOperator* parent, double need_row_coun
     } else {
       anti_or_semi_sel = 1.0;
     }
-    if (OB_FAIL(left_child->re_est_cost(this, left_need_rows, left_child_re_est))) {
+    if (OB_FAIL(SMART_CALL(left_child->re_est_cost(this, left_need_rows, left_child_re_est)))) {
       LOG_WARN("Failed to re est cost", K(ret));
     } else {
       double right_child_cost = right_child->get_cost();

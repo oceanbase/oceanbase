@@ -20,6 +20,7 @@
 #include "ob_opt_est_cost.h"
 #include "ob_log_exchange.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
@@ -222,7 +223,7 @@ int ObLogLimit::re_est_cost(const ObLogicalOperator* parent, double need_row_cou
                    offset_count,
                    is_null_value))) {
       LOG_WARN("Get limit offset num error", K(ret));
-    } else if (OB_FAIL(child->re_est_cost(this, static_cast<double>(offset_count) + need_row_count, re_est))) {
+    } else if (OB_FAIL(SMART_CALL(child->re_est_cost(this, static_cast<double>(offset_count) + need_row_count, re_est)))) {
       LOG_WARN("Failed to re_est child cost", K(ret));
     } else {
       re_est = true;

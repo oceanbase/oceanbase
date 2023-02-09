@@ -259,7 +259,7 @@ public:
   {
     has_global_index_ |= has_global_index;
   }
-  virtual bool check_table_be_modified(uint64_t ref_table_id) const override;
+  virtual int check_table_be_modified(uint64_t ref_table_id, bool &is_modified) const;
   void set_dml_source_from_join(bool from_join)
   {
     dml_source_from_join_ = from_join;
