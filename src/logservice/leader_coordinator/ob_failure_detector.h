@@ -97,7 +97,7 @@ private:
   bool check_is_running_() const { return is_running_; }
   int insert_event_to_table_(const FailureEvent &event, const ObFunction<bool()> &recover_operation, ObString info);
   void detect_palf_hang_failure_();
-  void detect_slog_writter_hang_failure_();
+  void detect_slog_writer_hang_failure_();
   void detect_sstable_io_failure_();
   void detect_palf_disk_full_();
 private:
@@ -108,9 +108,6 @@ private:
     ObFunction<bool()> recover_detect_operation_;
     TO_STRING_KV(K_(event));
   };
-  // default time threshold for clog disk io hang detection is 5s
-  // TODO: this value should be a configuration
-  static const int64_t IO_HANG_TIME_THRESHOLD_US = 5 * 1000 * 1000;
   bool is_running_;
   common::ObArray<FailureEventWithRecoverOp> events_with_ops_;
   common::ObArray<common::ObAddr> tenant_server_list_;

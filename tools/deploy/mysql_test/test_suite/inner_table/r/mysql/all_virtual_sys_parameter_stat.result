@@ -119,6 +119,7 @@ log_disk_size
 log_disk_utilization_limit_threshold
 log_disk_utilization_threshold
 log_restore_concurrency
+log_storage_warning_tolerance_time
 log_transport_compress_all
 log_transport_compress_func
 ls_meta_table_check_interval

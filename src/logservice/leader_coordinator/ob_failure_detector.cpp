@@ -159,8 +159,8 @@ void ObFailureDetector::detect_failure()
   LC_TIME_GUARD(1_s);
   // clog disk hang check
   detect_palf_hang_failure_();
-  // slog writter hang check
-  detect_slog_writter_hang_failure_();
+  // slog writer hang check
+  detect_slog_writer_hang_failure_();
   // sstable hang check
   detect_sstable_io_failure_();
   // clog disk full check
@@ -332,7 +332,7 @@ void ObFailureDetector::detect_palf_hang_failure_()
   } else if (OB_FAIL(log_service->get_io_start_time(clog_disk_last_working_time))) {
     COORDINATOR_LOG(WARN, "get_io_start_time failed", K(ret));
   } else if (FALSE_IT(is_clog_disk_hang = (OB_INVALID_TIMESTAMP != clog_disk_last_working_time
-                      && now - clog_disk_last_working_time > IO_HANG_TIME_THRESHOLD_US))) {
+                      && now - clog_disk_last_working_time > GCONF.log_storage_warning_tolerance_time))) {
   } else if (false == ATOMIC_LOAD(&has_add_clog_hang_event_)) {
     if (!is_clog_disk_hang) {
       // log disk does not hang, skip.
@@ -340,8 +340,8 @@ void ObFailureDetector::detect_palf_hang_failure_()
       COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(clog_disk_hang_event));
     } else {
       ATOMIC_SET(&has_add_clog_hang_event_, true);
-      COORDINATOR_LOG(WARN, "clog disk may be hang, add failure event", K(ret), K(clog_disk_hang_event),
-                        K(clog_disk_last_working_time), "hang time", now - clog_disk_last_working_time);
+      LOG_DBA_ERROR(OB_DISK_CORRUPTED, "msg", "clog disk may be hung, add failure event", K(clog_disk_hang_event),
+                    K(clog_disk_last_working_time), "hung time", now - clog_disk_last_working_time);
     }
   } else {
     if (is_clog_disk_hang) {
@@ -355,38 +355,38 @@ void ObFailureDetector::detect_palf_hang_failure_()
   }
 }
 
-void ObFailureDetector::detect_slog_writter_hang_failure_()
+void ObFailureDetector::detect_slog_writer_hang_failure_()
 {
   LC_TIME_GUARD(1_s);
   int ret = OB_SUCCESS;
-  bool is_slog_writter_hang = false;
-  int64_t slog_writter_last_working_time = OB_INVALID_TIMESTAMP;
+  bool is_slog_writer_hang = false;
+  int64_t slog_writer_last_working_time = OB_INVALID_TIMESTAMP;
   const int64_t now = ObTimeUtility::current_time();
   ObStorageLogger *storage_logger = MTL(ObStorageLogger*);
-  FailureEvent slog_writter_hang_event(FailureType::PROCESS_HANG, FailureModule::STORAGE, FailureLevel::FATAL);
-  if (OB_FAIL(slog_writter_hang_event.set_info("slog writter hang event"))) {
-    COORDINATOR_LOG(ERROR, "slog_writter_hang_event set_info failed", K(ret));
-  } else if (FALSE_IT(slog_writter_last_working_time = storage_logger->get_pwrite_ts())) {
-  } else if (FALSE_IT(is_slog_writter_hang = (0 != slog_writter_last_working_time
-                      && now - slog_writter_last_working_time > GCONF.data_storage_warning_tolerance_time))) {
+  FailureEvent slog_writer_hang_event(FailureType::PROCESS_HANG, FailureModule::STORAGE, FailureLevel::FATAL);
+  if (OB_FAIL(slog_writer_hang_event.set_info("slog writer hang event"))) {
+    COORDINATOR_LOG(ERROR, "slog_writer_hang_event set_info failed", K(ret));
+  } else if (FALSE_IT(slog_writer_last_working_time = storage_logger->get_pwrite_ts())) {
+  } else if (FALSE_IT(is_slog_writer_hang = (0 != slog_writer_last_working_time
+                      && now - slog_writer_last_working_time > GCONF.data_storage_warning_tolerance_time))) {
   } else if (false == ATOMIC_LOAD(&has_add_slog_hang_event_)) {
-    if (!is_slog_writter_hang) {
-      // slog writter is normal, skip.
-    } else if (OB_FAIL(add_failure_event(slog_writter_hang_event))) {
-      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(slog_writter_hang_event));
+    if (!is_slog_writer_hang) {
+      // slog writer is normal, skip.
+    } else if (OB_FAIL(add_failure_event(slog_writer_hang_event))) {
+      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(slog_writer_hang_event));
     } else {
       ATOMIC_SET(&has_add_slog_hang_event_, true);
-      COORDINATOR_LOG(WARN, "slog writter may be hang, add failure event", K(ret), K(slog_writter_hang_event),
-                        K(slog_writter_last_working_time), "hang time", now - slog_writter_last_working_time);
+      LOG_DBA_ERROR(OB_DISK_CORRUPTED, "msg", "slog writer may be hung, add failure event", K(slog_writer_hang_event),
+                    K(slog_writer_last_working_time), "hung time", now - slog_writer_last_working_time);
     }
   } else {
-    if (is_slog_writter_hang) {
-      // slog writter still hangs, cannot remove failure_event.
-    } else if (OB_FAIL(remove_failure_event(slog_writter_hang_event))) {
-      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(slog_writter_hang_event));
+    if (is_slog_writer_hang) {
+      // slog writer still hangs, cannot remove failure_event.
+    } else if (OB_FAIL(remove_failure_event(slog_writer_hang_event))) {
+      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(slog_writer_hang_event));
     } else {
       ATOMIC_SET(&has_add_slog_hang_event_, false);
-      COORDINATOR_LOG(INFO, "slog writter has recoverd, remove failure event", K(ret), K(slog_writter_hang_event));
+      COORDINATOR_LOG(INFO, "slog writer has recoverd, remove failure event", K(ret), K(slog_writer_hang_event));
     }
   }
 }
@@ -412,8 +412,8 @@ void ObFailureDetector::detect_sstable_io_failure_()
       COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(sstable_io_hang_event));
     } else {
       ATOMIC_SET(&has_add_sstable_hang_event_, true);
-      COORDINATOR_LOG(WARN, "data disk may be hang, add failure event", K(ret), K(sstable_io_hang_event),
-                        K(data_disk_error_start_ts));
+      LOG_DBA_ERROR(OB_DISK_CORRUPTED, "msg", "data disk may be hung, add failure event", K(sstable_io_hang_event),
+                    K(data_disk_error_start_ts));
     }
   } else {
     if (ObDeviceHealthStatus::DEVICE_HEALTH_NORMAL != data_disk_status) {
@@ -446,8 +446,8 @@ void ObFailureDetector::detect_palf_disk_full_()
       COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(clog_disk_full_event));
     } else {
       ATOMIC_SET(&has_add_clog_full_event_, true);
-      COORDINATOR_LOG(WARN, "clog disk is full, add failure event", K(ret), K(clog_disk_full_event),
-                        K(now));
+      LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "clog disk is almost full, add failure event",
+                    K(clog_disk_full_event), K(now));
     }
   } else {
     if (!is_disk_enough) {
