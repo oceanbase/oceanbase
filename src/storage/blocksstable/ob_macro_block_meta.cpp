@@ -48,13 +48,48 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     snapshot_version_(0),
     logic_id_(),
     macro_id_(),
-    column_checksums_(),
+    column_checksums_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("MacroMetaChksum", MTL_ID())),
     has_string_out_row_(false),
     all_lob_in_row_(false)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
 
+ObDataBlockMetaVal::ObDataBlockMetaVal(ObIAllocator &allocator)
+    : version_(DATA_BLOCK_META_VAL_VERSION),
+    length_(0),
+    data_checksum_(0),
+    rowkey_count_(0),
+    column_count_(0),
+    micro_block_count_(0),
+    occupy_size_(0),
+    data_size_(0),
+    data_zsize_(0),
+    original_size_(0),
+    progressive_merge_round_(0),
+    block_offset_(0),
+    block_size_(0),
+    row_count_(0),
+    row_count_delta_(0),
+    max_merged_trans_version_(0),
+    is_encrypted_(false),
+    is_deleted_(false),
+    contain_uncommitted_row_(false),
+    is_last_row_last_flag_(false),
+    compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
+    master_key_id_(0),
+    encrypt_id_(0),
+    row_store_type_(ObRowStoreType::MAX_ROW_STORE),
+    schema_version_(0),
+    snapshot_version_(0),
+    logic_id_(),
+    macro_id_(),
+    column_checksums_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "MacroMetaChksum")),
+    has_string_out_row_(false),
+    all_lob_in_row_(false)
+{
+  MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+}
 ObDataBlockMetaVal::~ObDataBlockMetaVal()
 {
   reset();
@@ -361,6 +396,14 @@ ObDataMacroBlockMeta::ObDataMacroBlockMeta()
 {
 }
 
+ObDataMacroBlockMeta::ObDataMacroBlockMeta(ObIAllocator &allocator)
+  : val_(allocator),
+    end_key_(),
+    nested_offset_(0),
+    nested_size_(0)
+{
+}
+
 ObDataMacroBlockMeta::~ObDataMacroBlockMeta()
 {
   reset();
@@ -395,7 +438,7 @@ int ObDataMacroBlockMeta::deep_copy(ObDataMacroBlockMeta *&dst, ObIAllocator &al
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(buf_len));
   } else {
-    ObDataMacroBlockMeta *meta = new (buf) ObDataMacroBlockMeta();
+    ObDataMacroBlockMeta *meta = new (buf) ObDataMacroBlockMeta(allocator);
     ObStorageDatum *endkey = new (buf + sizeof(ObDataMacroBlockMeta)) ObStorageDatum[rowkey_count];
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_count; ++i) {
       if (OB_FAIL(endkey[i].deep_copy(end_key_.datums_[i], allocator))) {

@@ -38,6 +38,7 @@ private:
   static const int32_t DATA_BLOCK_META_VAL_VERSION = 1;
 public:
   ObDataBlockMetaVal();
+  explicit ObDataBlockMetaVal(ObIAllocator &allocator);
   ~ObDataBlockMetaVal();
   void reset();
   bool is_valid() const;
@@ -97,6 +98,7 @@ class ObDataMacroBlockMeta final
 {
 public:
   ObDataMacroBlockMeta();
+  explicit ObDataMacroBlockMeta(ObIAllocator &allocator);
   ~ObDataMacroBlockMeta();
   int assign(const ObDataMacroBlockMeta &meta);
   int deep_copy(ObDataMacroBlockMeta *&dst, ObIAllocator &allocator) const;
