@@ -67,7 +67,7 @@ int ObExprUnhex::eval_unhex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_dat
                 expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), str))) {
       LOG_WARN("failed to get real string data", K(ret));
     } else {
-      ret = OB_FAIL(ObDatumHexUtils::unhex(expr, str, ctx, res_datum, has_set_res));
+      ret = ObDatumHexUtils::unhex(expr, str, ctx, res_datum, has_set_res);
     }
   }
   if (OB_FAIL(ret)) {

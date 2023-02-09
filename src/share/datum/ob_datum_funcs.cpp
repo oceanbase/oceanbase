@@ -1139,6 +1139,37 @@ REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_STR_CMP,
                    NULLSAFE_STR_CMP_FUNCS,
                    sizeof(NULLSAFE_STR_CMP_FUNCS) / sizeof(void*));
 
+static_assert(CS_TYPE_MAX * 2 * 2 == sizeof(NULLSAFE_TEXT_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_TEXT_CMP,
+                   NULLSAFE_TEXT_CMP_FUNCS,
+                   sizeof(NULLSAFE_TEXT_CMP_FUNCS) / sizeof(void*));
+
+static_assert(CS_TYPE_MAX * 2 * 2 == sizeof(NULLSAFE_TEXT_STR_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_TEXT_STR_CMP,
+                   NULLSAFE_TEXT_STR_CMP_FUNCS,
+                   sizeof(NULLSAFE_TEXT_STR_CMP_FUNCS) / sizeof(void*));
+
+static_assert(CS_TYPE_MAX * 2 * 2 == sizeof(NULLSAFE_STR_TEXT_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_STR_TEXT_CMP,
+                   NULLSAFE_STR_TEXT_CMP_FUNCS,
+                   sizeof(NULLSAFE_STR_TEXT_CMP_FUNCS) / sizeof(void*));
+
+static_assert(2 * 2 == sizeof(NULLSAFE_JSON_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_JSON_CMP,
+                   NULLSAFE_JSON_CMP_FUNCS,
+                   sizeof(NULLSAFE_JSON_CMP_FUNCS) / sizeof(void*));
+
+static_assert(2 * 2 == sizeof(NULLSAFE_GEO_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_GEO_CMP,
+                   NULLSAFE_GEO_CMP_FUNCS,
+                   sizeof(NULLSAFE_GEO_CMP_FUNCS) / sizeof(void*));
+
+
 static_assert(OB_NOT_FIXED_SCALE * 2 == sizeof(FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_NULLSAFE_CMP,
