@@ -346,8 +346,11 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
         req.set_group_id(share::OBCG_ID_SQL_REQ_LEVEL3);
         break;
       default:
+        req.set_group_id(conn->group_id_);
         break;
       }
+    } else {
+      req.set_group_id(conn->group_id_);
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
