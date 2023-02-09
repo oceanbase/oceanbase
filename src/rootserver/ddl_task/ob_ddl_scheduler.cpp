@@ -624,7 +624,7 @@ void ObDDLScheduler::run1()
           ObCurTraceId::set(task->get_trace_id());
           int task_ret = task->process();
           task->calc_next_schedule_ts(task_ret, task_queue_.get_task_cnt() + thread_cnt);
-          if (task->need_retry() && !has_set_stop()) {
+          if (task->need_retry() && !has_set_stop() && !ObIDDLTask::is_ddl_force_no_more_process(task_ret)) {
             if (OB_FAIL(task_queue_.add_task_to_last(task))) {
               STORAGE_LOG(ERROR, "fail to add task to last, which should not happen", K(ret), K(*task));
             }
@@ -1511,6 +1511,7 @@ int ObDDLScheduler::recover_task()
       if (OB_SUCCESS != tmp_ret) {
         ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
       }
+      ret = OB_SUCCESS; // ignore ret
     }
   }
   return ret;
