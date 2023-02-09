@@ -90,6 +90,7 @@ private:
 
 
   void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
+  void record_execute_time(const sql::ObPhysicalPlan *plan, const int64_t end_time) const;
   void update_audit_info(const ObWaitEventStat &total_wait_desc,
                          ObAuditRecordData &record);
   int fill_feedback_session_info(ObMySQLResultSet &result,

@@ -495,6 +495,8 @@ public:
                                                   common::ObCollationType connection_collation,
                                                   const share::schema::ObViewSchema &view_schema,
                                                   common::ObString &view_definition);
+  static void record_execute_time(const ObPhyPlanType type,
+                                  const int64_t time_cost);
   static int handle_audit_record(bool need_retry,
                                  const ObExecuteMode exec_mode,
                                  ObSQLSessionInfo &session,

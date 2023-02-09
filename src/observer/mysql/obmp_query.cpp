@@ -862,6 +862,11 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         // even though sql audit disabled
         update_audit_info(total_wait_desc, audit_record);
       }
+      if (enable_perf_event && !THIS_THWORKER.need_retry()
+        && OB_NOT_NULL(result.get_physical_plan())) {
+        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+        ObSQLUtils::record_execute_time(result.get_physical_plan()->get_plan_type(), time_cost);
+      }
       // 重试需要满足一下条件：
       // 1. rs.open 执行失败
       // 2. 没有给客户端返回结果，本次执行没有副作用

@@ -3966,6 +3966,23 @@ int64_t ObSqlFatalErrExtraInfoGuard::to_string(char *buf, const int64_t buf_len)
   return pos;
 }
 
+void ObSQLUtils::record_execute_time(const ObPhyPlanType type,
+                                     const int64_t time_cost)
+{
+  #define ADD_EXECUTE_TIME(type)                  \
+    case OB_PHY_PLAN_##type:                      \
+      EVENT_ADD(SQL_##type##_TIME, time_cost);    \
+      break
+  switch(type)
+  {
+    ADD_EXECUTE_TIME(LOCAL);
+    ADD_EXECUTE_TIME(REMOTE);
+    ADD_EXECUTE_TIME(DISTRIBUTED);
+    default: {}
+  }
+  #undef ADD_EXECUTE_TIME
+}
+
 int ObSQLUtils::handle_audit_record(bool need_retry,
                                     const ObExecuteMode exec_mode,
                                     ObSQLSessionInfo &session,

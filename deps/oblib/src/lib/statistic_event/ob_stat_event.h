@@ -147,11 +147,8 @@ STAT_EVENT_ADD_DEF(SQL_OPEN_CURSORS_CURRENT, "opened cursors current", ObStatCla
 STAT_EVENT_ADD_DEF(SQL_OPEN_CURSORS_CUMULATIVE, "opened cursors cumulative", ObStatClassIds::SQL, "opened cursors cumulative", 40031, true, true)
 
 STAT_EVENT_ADD_DEF(SQL_LOCAL_COUNT, "sql local count", ObStatClassIds::SQL, "sql local count", 40010, true, true)
-//STAT_EVENT_ADD_DEF(SQL_LOCAL_TIME, "SQL_LOCAL_TIME", SQL, "SQL_LOCAL_TIME")
 STAT_EVENT_ADD_DEF(SQL_REMOTE_COUNT, "sql remote count", ObStatClassIds::SQL, "sql remote count", 40011, true, true)
-//STAT_EVENT_ADD_DEF(SQL_REMOTE_TIME, "SQL_REMOTE_TIME", SQL, "SQL_REMOTE_TIME")
 STAT_EVENT_ADD_DEF(SQL_DISTRIBUTED_COUNT, "sql distributed count", ObStatClassIds::SQL, "sql distributed count", 40012, true, true)
-//STAT_EVENT_ADD_DEF(SQL_DISTRIBUTED_TIME, "SQL_DISTRIBUTED_TIME", SQL, "SQL_DISTRIBUTED_TIME")
 STAT_EVENT_ADD_DEF(ACTIVE_SESSIONS, "active sessions", ObStatClassIds::SQL, "active sessions", 40013, false, true)
 STAT_EVENT_ADD_DEF(SQL_SINGLE_QUERY_COUNT, "single query count", ObStatClassIds::SQL, "single query count", 40014, true, true)
 STAT_EVENT_ADD_DEF(SQL_MULTI_QUERY_COUNT, "multiple query count", ObStatClassIds::SQL, "multiple query count", 40015, true, true)
@@ -173,6 +170,10 @@ STAT_EVENT_ADD_DEF(SQL_USER_LOGONS_CUMULATIVE, "user logons cumulative", ObStatC
 STAT_EVENT_ADD_DEF(SQL_USER_LOGOUTS_CUMULATIVE, "user logouts cumulative", ObStatClassIds::SQL, "user logouts cumulative", 40113, true, true)
 STAT_EVENT_ADD_DEF(SQL_USER_LOGONS_FAILED_CUMULATIVE, "user logons failed cumulative", ObStatClassIds::SQL, "user logons failed cumulative", 40114, true, true)
 STAT_EVENT_ADD_DEF(SQL_USER_LOGONS_COST_TIME_CUMULATIVE, "user logons time cumulative", ObStatClassIds::SQL, "user logons time cumulative", 40115, true, true)
+STAT_EVENT_ADD_DEF(SQL_LOCAL_TIME, "sql local execute time", ObStatClassIds::SQL, "sql local execute time", 40116, true, true)
+STAT_EVENT_ADD_DEF(SQL_REMOTE_TIME, "sql remote execute time", ObStatClassIds::SQL, "sql remote execute time", 40117, true, true)
+STAT_EVENT_ADD_DEF(SQL_DISTRIBUTED_TIME, "sql distributed execute time", ObStatClassIds::SQL, "sql distributed execute time", 40118, true, true)
+
 // CACHE
 STAT_EVENT_ADD_DEF(ROW_CACHE_HIT, "row cache hit", ObStatClassIds::CACHE, "row cache hit", 50000, true, true)
 STAT_EVENT_ADD_DEF(ROW_CACHE_MISS, "row cache miss", ObStatClassIds::CACHE, "row cache miss", 50001, true, true)

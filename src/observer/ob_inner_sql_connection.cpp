@@ -584,6 +584,10 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
     }
 
     record_stat(session, result_set.get_stmt_type(), is_from_pl);
+    if (lib::is_diagnose_info_enabled() && OB_NOT_NULL(result_set.get_physical_plan())) {
+      const int64_t time_cost = ObTimeUtility::current_time() - session.get_query_start_time();
+      ObSQLUtils::record_execute_time(result_set.get_physical_plan()->get_plan_type(), time_cost);
+    }
     ObSQLUtils::handle_audit_record(false, sql::PSCursor == exec_timestamp.exec_type_
                                                   ? EXECUTE_PS_EXECUTE :
                                                   (is_from_pl ? EXECUTE_PL_EXECUTE : EXECUTE_INNER),
