@@ -320,6 +320,13 @@ int ObMajorMergeProgressChecker::check_tablet(
     } else {
       // no need check not ready index
       need_check = !(table_schema->is_index_table() && !table_schema->can_read_index());
+      if (!need_check) {
+        // not ready index, no need to check tablet compaction_scn and validate index column checksum
+        ObTabletLSPair pair(tablet_info.get_tablet_id(), tablet_info.get_ls_id());
+        if (OB_FAIL(tablet_compaction_map_.set_refactored(pair, ObTabletCompactionStatus::CAN_SKIP_VERIFYING, true))) {
+          LOG_WARN("fail to set refactored", KR(ret), K(tablet_info));
+        }
+      }
     }
 
     if (OB_UNLIKELY(tablet_id.is_special_merge_tablet())) {

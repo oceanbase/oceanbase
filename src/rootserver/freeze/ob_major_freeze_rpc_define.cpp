@@ -82,7 +82,7 @@ int ObTenantMajorFreezeP::process()
     }
   } else {
     ret = OB_MAJOR_FREEZE_NOT_ALLOW;
-    RS_LOG(ERROR, "fail to launch_major_freeze, forbidden in restore_major_freeze_service",
+    RS_LOG(WARN, "fail to launch_major_freeze, forbidden in restore_major_freeze_service",
            KR(ret), K(req), K(is_primary_service));
   }
   return ret;

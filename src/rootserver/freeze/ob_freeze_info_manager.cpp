@@ -478,12 +478,9 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
 
   SCN cur_snapshot_gc_scn;
   SCN new_snapshot_gc_scn;
-  SCN cur_gts_scn;
   int64_t affected_rows = 0;
   ObMySQLTransaction trans;
   ObRecursiveMutexGuard guard(lock_);
-  int64_t max_stale_time_ns = transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(
-            tenant_id_, transaction::ObWeakReadUtil::IGNORE_TENANT_EXIST_WARN) * 1000;
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner error", KR(ret));
@@ -492,10 +489,11 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
   } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(trans, tenant_id_,
       cur_snapshot_gc_scn))) {
     LOG_WARN("fail to select snapshot_gc_scn for update", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(get_gts(cur_gts_scn))) {
+  }
+  // no need to minus max_stale_time_for_weak_consistency since 4.1, because the collection of
+  // multi-version data no longer depends on snapshot_gc_scn since 4.1
+  else if (OB_FAIL(get_gts(new_snapshot_gc_scn))) {
     LOG_WARN("fail to get_gts", KR(ret));
-  } else if (FALSE_IT(new_snapshot_gc_scn = SCN::minus(cur_gts_scn, max_stale_time_ns))) {
-    LOG_WARN("fail to calc new snapshot_gc_scn", KR(ret), K(cur_gts_scn));
   } else if ((new_snapshot_gc_scn <= freeze_info_.latest_snapshot_gc_scn_)
              || (cur_snapshot_gc_scn >= new_snapshot_gc_scn)) {
     ret = OB_ERR_UNEXPECTED;
