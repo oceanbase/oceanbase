@@ -3276,11 +3276,11 @@ int ObOptSelectivity::get_bucket_bound_idx(const ObHistogram &hist,
   int64_t right = hist.get_bucket_size() - 1;
   idx = -1;
   is_equal = false;
-  if (OB_LIKELY(hist.get_bucket_size() > 0)) {
+  if (OB_LIKELY(hist.get_bucket_size() > 0 && hist.get_buckets() != NULL)) {
     while (OB_SUCC(ret) && left <= right) {
       int64_t mid = (right + left) / 2;
       int eq_cmp = 0;
-      if (OB_FAIL(hist.get(mid).endpoint_value_.compare(value, eq_cmp))) {
+      if (OB_FAIL(hist.get_buckets()[mid].endpoint_value_.compare(value, eq_cmp))) {
         LOG_WARN("failed to compare object", K(ret));
       } else if (eq_cmp > 0) {
         // value < bucket[mid].ev
@@ -3328,7 +3328,7 @@ int ObOptSelectivity::get_equal_pred_sel(const ObHistogram &histogram,
   } else if (idx < 0 || idx >= histogram.get_bucket_size() || !is_equal) {
     density = histogram.get_density();
   } else {
-    density = static_cast<double>(histogram.get(idx).endpoint_repeat_count_)
+    density = static_cast<double>(histogram.get_buckets()[idx].endpoint_repeat_count_)
         / histogram.get_sample_size();
   }
   if (OB_SUCC(ret) && sample_size_scale > 0) {
@@ -3430,8 +3430,8 @@ int ObOptSelectivity::get_less_pred_sel(const ObHistogram &histogram,
   } else if (idx >= histogram.get_bucket_size()) {
     density = 1.0;
   } else if (is_equal) {
-    double frequency = histogram.get(idx).endpoint_num_ -
-        (inclusive ? 0 : histogram.get(idx).endpoint_repeat_count_);
+    double frequency = histogram.get_buckets()[idx].endpoint_num_ -
+        (inclusive ? 0 : histogram.get_buckets()[idx].endpoint_repeat_count_);
     density = frequency / histogram.get_sample_size();
   } else {
     double last_bucket_count = 0;
@@ -3439,22 +3439,22 @@ int ObOptSelectivity::get_less_pred_sel(const ObHistogram &histogram,
       // b[i].ev < maxv < b[i+1].ev
       // estimate how many elements (smaller than maxv) in bucket[i+1] there are
       ObObj minscalar, maxscalar, startscalar, endscalar;
-      ObObj minobj(histogram.get(idx).endpoint_value_);
-      ObObj maxobj(histogram.get(idx+1).endpoint_value_);
+      ObObj minobj(histogram.get_buckets()[idx].endpoint_value_);
+      ObObj maxobj(histogram.get_buckets()[idx+1].endpoint_value_);
       ObObj startobj(minobj), endobj(maxv);
       if (OB_FAIL(ObOptEstObjToScalar::convert_objs_to_scalars(
                     &minobj, &maxobj, &startobj, &endobj,
                     &minscalar, &maxscalar, &startscalar, &endscalar))) {
         LOG_WARN("failed to convert objs to scalars", K(ret));
       } else if (maxscalar.get_double() - minscalar.get_double() > OB_DOUBLE_EPSINON) {
-        last_bucket_count = histogram.get(idx+1).endpoint_num_ -
-                            histogram.get(idx+1).endpoint_repeat_count_ -
-                            histogram.get(idx).endpoint_num_;
+        last_bucket_count = histogram.get_buckets()[idx+1].endpoint_num_ -
+                            histogram.get_buckets()[idx+1].endpoint_repeat_count_ -
+                            histogram.get_buckets()[idx].endpoint_num_;
         last_bucket_count *= (endscalar.get_double() - startscalar.get_double()) /
                              (maxscalar.get_double() - minscalar.get_double());
       }
     }
-    density = static_cast<double>(histogram.get(idx).endpoint_num_ + last_bucket_count)
+    density = static_cast<double>(histogram.get_buckets()[idx].endpoint_num_ + last_bucket_count)
         / histogram.get_sample_size();
   }
   LOG_TRACE("link bug", K(density), K(maxv), K(inclusive), K(idx), K(is_equal));
@@ -4076,15 +4076,15 @@ int ObOptSelectivity::get_join_pred_rows(const ObHistogram &left_hist,
   int64_t ridx = 0;
   while (OB_SUCC(ret) && lidx < left_hist.get_bucket_size() && ridx < right_hist.get_bucket_size()) {
     int eq_cmp = 0;
-    if (OB_FAIL(left_hist.get(lidx).endpoint_value_.compare(right_hist.get(ridx).endpoint_value_,
+    if (OB_FAIL(left_hist.get_buckets()[lidx].endpoint_value_.compare(right_hist.get_buckets()[ridx].endpoint_value_,
                                                             eq_cmp))) {
       LOG_WARN("failed to compare histogram endpoint value", K(ret),
-              K(left_hist.get(lidx).endpoint_value_), K(right_hist.get(ridx).endpoint_value_));
+              K(left_hist.get_buckets()[lidx].endpoint_value_), K(right_hist.get_buckets()[ridx].endpoint_value_));
     } else if (0 == eq_cmp) {
       if (is_semi) {
-        rows += left_hist.get(lidx).endpoint_repeat_count_;
+        rows += left_hist.get_buckets()[lidx].endpoint_repeat_count_;
       } else {
-        rows += left_hist.get(lidx).endpoint_repeat_count_ * right_hist.get(ridx).endpoint_repeat_count_;
+        rows += left_hist.get_buckets()[lidx].endpoint_repeat_count_ * right_hist.get_buckets()[ridx].endpoint_repeat_count_;
       }
       ++lidx;
       ++ridx;

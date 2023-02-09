@@ -417,32 +417,31 @@ int ObStatTopKHist::try_build_topk_histogram(const ObIArray<ObHistBucket> &bkts,
     // all vals are null, there is no need to build a histogram
     histogram.set_type(ObHistType::INVALID_TYPE);
     histogram.set_sample_size(0);
-    histogram.set_bucket_cnt(0);
     histogram.set_density(0);
   } else if (num > 0 && bkts.at(num - 1).endpoint_num_ == not_null_count) {
     histogram.set_type(ObHistType::FREQUENCY);
     histogram.set_sample_size(not_null_count);
-    histogram.set_bucket_cnt(bkts.count());
     histogram.calc_density(ObHistType::FREQUENCY,
                            not_null_count,
                            not_null_count,
                            num_distinct,
                            bkts.count());
-    for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
-      ret = histogram.get_buckets().push_back(bkts.at(i));
-    }
+    ret = histogram.add_buckets(bkts);
   } else if (num > 0 && bkts.at(num - 1).endpoint_num_ >=
              (not_null_count * (1 - 1.0 / max_bucket_num))) {
     histogram.set_type(ObHistType::TOP_FREQUENCY);
     histogram.set_sample_size(not_null_count);
-    histogram.set_bucket_cnt(num);
     histogram.calc_density(ObHistType::TOP_FREQUENCY,
                            not_null_count,
                            bkts.at(num - 1).endpoint_num_,
                            num_distinct,
                            num);
-    for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
-      ret = histogram.get_buckets().push_back(bkts.at(i));
+    if (OB_FAIL(histogram.prepare_allocate_buckets(num))) {
+      LOG_WARN("failed to prepare allocate buckets", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
+        ret = histogram.add_bucket(bkts.at(i));
+      }
     }
   } else {
     histogram.set_type(ObHistType::HYBIRD);
@@ -451,8 +450,7 @@ int ObStatTopKHist::try_build_topk_histogram(const ObIArray<ObHistBucket> &bkts,
       // if the topk histogram contains all records of the table
       // then we can build hybrid histogram directly from the topk result.
       histogram.set_sample_size(not_null_count);
-      histogram.set_bucket_cnt(bkts.count());
-      OZ (histogram.get_buckets().assign(bkts));
+      ret = histogram.add_buckets(bkts);
     }
   }
   return ret;
@@ -705,13 +703,12 @@ int ObStatHybridHist::decode(ObObj &obj)
   } else if (OB_FAIL(hybrid_hist.read_result(obj))) {
     LOG_WARN("failed to read result from obj", K(ret));
   } else {
-    col_stat_->get_histogram().get_buckets().reset();
-    if (OB_FAIL(append(col_stat_->get_histogram().get_buckets(), hybrid_hist.get_buckets()))) {
+    col_stat_->get_histogram().reset();
+    if (OB_FAIL(col_stat_->get_histogram().add_buckets(hybrid_hist.get_buckets()))) {
       LOG_WARN("failed to append hist bucket", K(ret));
     } else {
       col_stat_->get_histogram().set_type(ObHistType::HYBIRD);
       col_stat_->get_histogram().set_sample_size(hybrid_hist.get_total_count());
-      col_stat_->get_histogram().set_bucket_cnt(col_stat_->get_histogram().get_buckets().count());
       col_stat_->get_histogram().set_pop_frequency(hybrid_hist.get_pop_freq());
       col_stat_->get_histogram().set_pop_count(hybrid_hist.get_pop_count());
       LOG_TRACE("succeed to build hybrid hist", K(hybrid_hist), K(col_stat_->get_histogram()));

@@ -607,7 +607,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         ObGlobalNotNullEval not_null_eval;
         ObGlobalNdvEval ndv_eval;
         ObGlobalAvglenEval avglen_eval;
-        ObSEArray<ObHistogram, 4> all_part_histograms;
+        ObSEArray<ObHistogram *, 4> all_part_histograms;
         int64_t total_avg_len = 0;
         int64_t max_bucket_num = param.column_params_.at(i).bucket_num_;
         for (int64_t j = 0; OB_SUCC(ret) && j < part_cnt; ++j) {
@@ -631,7 +631,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           } else if (opt_col_stat->get_num_distinct() == 0 && opt_col_stat->get_num_null() == 0) {
             /*do nothing*/
           } else if (need_drive_hist && opt_col_stat->get_histogram().is_valid() &&
-                     OB_FAIL(all_part_histograms.push_back(opt_col_stat->get_histogram()))) {
+                     OB_FAIL(all_part_histograms.push_back(&opt_col_stat->get_histogram()))) {
             LOG_WARN("failed to push back histogram", K(ret));
           } else {
             need_drive_hist &= opt_col_stat->get_histogram().is_valid();
@@ -706,7 +706,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
   return ret;
 }
 
-int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &all_part_histograms,
+int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram*> &all_part_histograms,
                                                         common::ObIAllocator &allocator,
                                                         int64_t max_bucket_num,
                                                         int64_t total_row_count,
@@ -727,26 +727,31 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
     top_k_fre_hist->set_window_size(1000);
     top_k_fre_hist->set_item_size(256);
     for (int64_t i = 0; OB_SUCC(ret) && i < all_part_histograms.count(); ++i) {
-      if (all_part_histograms.at(i).is_valid()) {
-        if (all_part_histograms.at(i).get_type() == ObHistType::FREQUENCY ||
-            all_part_histograms.at(i).get_type() == ObHistType::TOP_FREQUENCY ||
-            all_part_histograms.at(i).get_type() == ObHistType::HYBIRD) {
-          const ObIArray<ObHistBucket> &part_bkts = all_part_histograms.at(i).get_buckets();
-          for (int64_t j = 0; OB_SUCC(ret) && j < part_bkts.count(); ++j) {
-            for (int64_t k = 0; OB_SUCC(ret) && k < part_bkts.at(j).endpoint_repeat_count_; ++k) {
-              if (OB_FAIL(top_k_fre_hist->add_top_k_frequency_item(
-                                                                part_bkts.at(j).endpoint_value_))) {
-                LOG_WARN("failed to add topk frequency item", K(ret));
-              } else {/*do nothing*/}
+      if (all_part_histograms.at(i) != NULL && all_part_histograms.at(i)->is_valid()) {
+        if (all_part_histograms.at(i)->get_type() == ObHistType::FREQUENCY ||
+            all_part_histograms.at(i)->get_type() == ObHistType::TOP_FREQUENCY ||
+            all_part_histograms.at(i)->get_type() == ObHistType::HYBIRD) {
+          const ObHistBucket *part_bkts = all_part_histograms.at(i)->get_buckets();
+          const int64_t part_bkt_size = all_part_histograms.at(i)->get_bucket_size();
+          if (OB_ISNULL(part_bkts) || OB_UNLIKELY(part_bkt_size == 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error", K(ret), K(part_bkts), K(part_bkt_size));
+          } else {
+            for (int64_t j = 0; OB_SUCC(ret) && j < part_bkt_size; ++j) {
+              for (int64_t k = 0; OB_SUCC(ret) && k < part_bkts[j].endpoint_repeat_count_; ++k) {
+                if (OB_FAIL(top_k_fre_hist->add_top_k_frequency_item(part_bkts[j].endpoint_value_))) {
+                  LOG_WARN("failed to add topk frequency item", K(ret));
+                } else {/*do nothing*/}
+              }
             }
           }
         } else {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected hist type", K(ret), K(all_part_histograms.at(i).get_type()));
+          LOG_WARN("get unexpected hist type", K(ret), K(all_part_histograms.at(i)->get_type()));
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(all_part_histograms.at(i)));
+        LOG_WARN("get unexpected error", KPC(all_part_histograms.at(i)));
       }
     }
     if (OB_SUCC(ret)) {

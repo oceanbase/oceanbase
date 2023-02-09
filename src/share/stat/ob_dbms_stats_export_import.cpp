@@ -1063,11 +1063,9 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
                                                            result_objs.at(i),
                                                            hist_bucket.endpoint_value_))) {
               LOG_WARN("failed to convert bin hex text to obj", K(ret));
-            } else if (OB_FAIL(col_stat->get_histogram().get_buckets().push_back(hist_bucket))) {
-              LOG_WARN("failed to push back", K(ret));
-            } else {
-              col_stat->get_histogram().set_bucket_cnt(col_stat->get_histogram().get_bucket_size());
-            }
+            } else if (OB_FAIL(col_stat->get_histogram().add_bucket(hist_bucket))) {
+              LOG_WARN("failed to add bucket", K(ret));
+            } else {/*do nothing*/}
             break;
           }
           case StatTableColumnName::CH1:

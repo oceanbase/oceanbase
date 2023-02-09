@@ -431,20 +431,5 @@ int ObAnalyzeStmtResolver::resolve_sample_clause_info(const ParseNode *sample_cl
   return ret;
 }
 
-int ObAnalyzeStmtResolver::get_bucket_size(const ParseNode *node,
-                                           int64_t &bucket_num)
-{
-  int ret = OB_SUCCESS;
-  if (NULL == node) {
-    // do nothing
-  } else if (T_INT != node->type_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected node type", K(ret));
-  } else {
-    bucket_num = node->value_;
-  }
-  return ret;
-}
-
 } /* namespace sql */
 } /* namespace oceanbase */

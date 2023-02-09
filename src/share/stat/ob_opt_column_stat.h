@@ -72,7 +72,6 @@ class ObHistogram
 public:
   friend class ObOptColumnStat;
 
-  typedef ObArray<ObHistBucket> Buckets;
   enum class BoundType {
     LOWER,
     UPPER,
@@ -83,17 +82,35 @@ public:
     type_(ObHistType::INVALID_TYPE),
     sample_size_(-1),
     density_(0),
-    bucket_cnt_(0),
-    buckets_(),
+    bucket_size_(0),
+    max_bucket_size_(0),
+    buckets_(NULL),
     pop_freq_(0),
-    pop_count_(0)
-    {}
+    pop_count_(0),
+    allocator_(NULL),
+    inner_allocator_("ObHistogram")
+  {}
+
+  ObHistogram(ObIAllocator &allocator) :
+    type_(ObHistType::INVALID_TYPE),
+    sample_size_(-1),
+    density_(0),
+    bucket_size_(0),
+    max_bucket_size_(0),
+    buckets_(NULL),
+    pop_freq_(0),
+    pop_count_(0),
+    allocator_(&allocator),
+    inner_allocator_("ObHistogram")
+  {}
 
   ~ObHistogram() { reset(); }
 
   void reset();
 
   int deep_copy(const ObHistogram &src, char *buf, const int64_t buf_len, int64_t &pos);
+
+  int assign_buckets(const ObHistBucket *buckets, const int64_t bucket_size);
   int64_t deep_copy_size() const;
 
   bool is_valid() const
@@ -111,17 +128,19 @@ public:
   void set_sample_size(int64_t sample_size) { sample_size_ = sample_size; }
 
   double get_density() const { return density_; }
+
   void set_density(double density) { density_ = density; }
 
-  int64_t get_bucket_cnt() const { return bucket_cnt_; }
-  void set_bucket_cnt(int64_t bucket_cnt) { bucket_cnt_ = bucket_cnt; }
+  int64_t get_bucket_size() const { return bucket_size_; }
 
-  int64_t get_bucket_size() const { return buckets_.count(); }
+  int add_buckets(const ObIArray<ObHistBucket> &buckets);
 
-  ObHistBucket &get(int64_t i) { return buckets_.at(i); }
-  const ObHistBucket &get(int64_t i) const { return buckets_.at(i); }
-  Buckets &get_buckets() { return buckets_; }
-  const Buckets &get_buckets() const { return buckets_; }
+  int add_bucket(const ObHistBucket &bucket);
+
+  int prepare_allocate_buckets(const int64_t buckets_num);
+
+  ObHistBucket *get_buckets() { return buckets_; }
+  const ObHistBucket *get_buckets() const { return buckets_; }
   int64_t get_pop_frequency() const { return pop_freq_; }
   void set_pop_frequency(int64_t pop_freq) { pop_freq_ = pop_freq; }
   int64_t get_pop_count() const { return pop_count_; }
@@ -132,19 +151,20 @@ public:
                     const int64_t pop_row_count,
                     const int64_t ndv,
                     const int64_t pop_ndv);
-  TO_STRING_KV("Type", get_type_name(),
-               K_(sample_size),
-               K_(density),
-               K_(bucket_cnt),
-               K_(buckets));
+  ObIAllocator &get_allocator() { return allocator_ != NULL ? *allocator_ : inner_allocator_; }
+  int64_t to_string(char* buf, const int64_t buf_len) const;
+
 protected:
   ObHistType type_;
   int64_t sample_size_;
   double density_;
-  int64_t bucket_cnt_;
-  Buckets buckets_;
+  int64_t bucket_size_;
+  int64_t max_bucket_size_;
+  ObHistBucket *buckets_;
   int64_t pop_freq_;  // only used during gather table stats
   int64_t pop_count_; // only used during gather table stats
+  ObIAllocator *allocator_;
+  ObArenaAllocator inner_allocator_;
 };
 
 class ObOptColumnStat : public common::ObIKVCacheValue
@@ -259,9 +279,6 @@ public:
 
   const ObHistogram &get_histogram() const { return histogram_; }
   ObHistogram &get_histogram() { return histogram_; }
-
-  int add_bucket(int64_t repeat_count, const ObObj &value, int64_t num_elements);
-  int64_t get_bucket_num() const { return histogram_.get_bucket_cnt(); }
 
   virtual int64_t size() const override;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;

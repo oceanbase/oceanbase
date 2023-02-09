@@ -496,6 +496,7 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
   } else {
     col_stat = new (ptr) ObOptColumnStat();
     int64_t llc_bitmap_size = 0;
+    int64_t bucket_cnt = 0;
     ObHistType histogram_type = ObHistType::INVALID_TYPE;
     ObObjMeta obj_type;
     ObHistogram &hist = col_stat->get_histogram();
@@ -523,11 +524,14 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
         EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, avg_len, *col_stat, int64_t);
       }
     }
-    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, bucket_cnt, hist, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "bucket_cnt", bucket_cnt, int64_t);
     EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, density, hist, double);
     EXTRACT_INT_FIELD_MYSQL(result, "distinct_cnt_synopsis_size", llc_bitmap_size, int64_t);
     if (OB_SUCC(ret)) {
       hist.set_type(histogram_type);
+      if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(bucket_cnt))) {
+        LOG_WARN("failed to prepare allocate buckets", K(ret));
+      }
     }
     ObString hex_str;
     common::ObObj obj;
@@ -655,7 +659,7 @@ int ObDbmsStatsHistoryManager::fill_bucket_stat_histroy(ObIAllocator &allocator,
     if (OB_FAIL(ObOptStatSqlService::hex_str_to_obj(str.ptr(), str.length(),
                                                     allocator, bkt.endpoint_value_))) {
       LOG_WARN("deserialize object value failed.", K(stat), K(ret));
-    } else if (OB_FAIL(stat.get_histogram().get_buckets().push_back(bkt))) {
+    } else if (OB_FAIL(stat.get_histogram().add_bucket(bkt))) {
       LOG_WARN("failed to push back buckets", K(ret));
     } else {/*do nothing*/}
   }

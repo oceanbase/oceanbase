@@ -418,13 +418,14 @@ void TestOptimizerUtils::init_histogram(
   hist.set_sample_size(sample_size);
   hist.set_density(density);
   int64_t bucket_cnt = 0;
+  ObSEArray<ObHistBucket, 4> tmp_buckets;
   for (int64_t i = 0; i < repeat_count.count(); i++) {
     ObHistBucket bucket(repeat_count.at(i), num_elements.at(i));
-    hist.get_buckets().push_back(bucket);
-    hist.get_buckets().at(hist.get_buckets().count() - 1).endpoint_value_.set_int(value.at(i));
+    tmp_buckets.push_back(bucket);
+    tmp_buckets.at(tmp_buckets.count() - 1).endpoint_value_.set_int(value.at(i));
     bucket_cnt += num_elements.at(i);
   }
-  hist.set_bucket_cnt(bucket_cnt);
+  hist.add_buckets(tmp_buckets);
 }
 
 void TestOptimizerUtils::run_fail_test(const char *test_file)

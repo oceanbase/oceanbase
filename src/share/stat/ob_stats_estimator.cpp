@@ -510,11 +510,10 @@ int ObStatsEstimator::copy_col_stats(const int64_t cur_row_cnt,
           ObHistogram &src_hist = src_col_stats.at(i)->get_histogram();
           dst_col_stats.at(i)->get_histogram().set_type(src_hist.get_type());
           dst_col_stats.at(i)->get_histogram().set_sample_size(src_col_stats.at(i)->get_num_not_null());
-          dst_col_stats.at(i)->get_histogram().set_bucket_cnt(src_hist.get_bucket_cnt());
           dst_col_stats.at(i)->get_histogram().set_density(src_hist.get_density());
-          if (OB_FAIL(append(dst_col_stats.at(i)->get_histogram().get_buckets(),
-                             src_hist.get_buckets()))) {
-            LOG_WARN("failed to append", K(ret));
+          if (OB_FAIL(dst_col_stats.at(i)->get_histogram().assign_buckets(src_hist.get_buckets(),
+                                                                     src_hist.get_bucket_size()))) {
+            LOG_WARN("failed to assign buckets", K(ret));
           } else {
             LOG_TRACE("Succeed to copy col stat", K(*dst_col_stats.at(i)), K(*src_col_stats.at(i)));
           }
@@ -564,15 +563,14 @@ int ObStatsEstimator::copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
             ObHistogram &src_hist = src_col_stat->get_histogram();
             dst_col_stat->get_histogram().set_type(src_hist.get_type());
             dst_col_stat->get_histogram().set_sample_size(src_hist.get_sample_size());
-            dst_col_stat->get_histogram().set_bucket_cnt(src_hist.get_bucket_cnt());
             dst_col_stat->get_histogram().calc_density(ObHistType::HYBIRD,
                                                        src_hist.get_sample_size(),
                                                        src_hist.get_pop_frequency(),
                                                        dst_col_stat->get_num_distinct(),
                                                        src_hist.get_pop_count());
-            if (OB_FAIL(append(dst_col_stat->get_histogram().get_buckets(),
-                               src_hist.get_buckets()))) {
-              LOG_WARN("failed to append", K(ret));
+            if (OB_FAIL(dst_col_stat->get_histogram().assign_buckets(src_hist.get_buckets(),
+                                                                     src_hist.get_bucket_size()))) {
+              LOG_WARN("failed to assign buckets", K(ret));
             } else {
               LOG_TRACE("Succeed to copy histogram", K(*dst_col_stat), K(i), K(j));
             }

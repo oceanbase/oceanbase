@@ -42,8 +42,18 @@ void ObHistogram::reset()
   type_ = ObHistType::INVALID_TYPE;
   sample_size_ = -1;
   density_ = -1;
-  bucket_cnt_ = 0;
-  buckets_.reset();
+  if (NULL != buckets_) {
+    for (int64_t i = 0; i < bucket_size_; ++i) {
+      buckets_[i].~ObHistBucket();
+    }
+    get_allocator().free(buckets_);
+    inner_allocator_.reset();
+    buckets_ = NULL;
+    bucket_size_ = 0;
+    max_bucket_size_ = 0;
+  }
+  pop_freq_ = 0;
+  pop_count_ = 0;
 }
 
 const char *ObHistogram::get_type_name() const
@@ -64,8 +74,8 @@ const char *ObHistogram::get_type_name() const
 int64_t ObHistogram::deep_copy_size() const
 {
   int64_t size = sizeof(*this);
-  for (int64_t i = 0; i < buckets_.count(); ++i) {
-    size += sizeof(ObHistBucket) + buckets_.at(i).deep_copy_size();
+  for (int64_t i = 0; i < bucket_size_; ++i) {
+    size += sizeof(ObHistBucket) + buckets_[i].deep_copy_size();
   }
   return size;
 }
@@ -76,20 +86,146 @@ int ObHistogram::deep_copy(const ObHistogram &src, char *buf, const int64_t buf_
   type_ = src.type_;
   sample_size_ = src.sample_size_;
   density_ = src.density_;
-  bucket_cnt_ = src.bucket_cnt_;
   int64_t copy_size = src.deep_copy_size();
   if (OB_UNLIKELY(copy_size  + pos > buf_len)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buffer size is not enough", K(ret), K(copy_size), K(pos), K(buf_len));
-  } else if (OB_FAIL(buckets_.prepare_allocate(src.get_bucket_size()))) {
-    LOG_WARN("failed to prepare allocate buckets", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < buckets_.count(); ++i) {
-    if (OB_FAIL(buckets_.at(i).deep_copy(src.buckets_.at(i), buf, buf_len, pos))) {
-      LOG_WARN("deep copy bucket failed", K(ret), K(buf_len), K(pos));
+  } else if (src.bucket_size_ > 0 && src.buckets_ != NULL) {
+    buckets_ = new (buf + pos) ObHistBucket[src.bucket_size_];
+    bucket_size_ = src.bucket_size_;
+    max_bucket_size_ = src.bucket_size_;
+    pos += sizeof(ObHistBucket) * bucket_size_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < bucket_size_; ++i) {
+      if (OB_FAIL(buckets_[i].deep_copy(src.buckets_[i], buf, buf_len, pos))) {
+        LOG_WARN("deep copy bucket failed", K(ret), K(buf_len), K(pos));
+      }
     }
   }
   return ret;
+}
+
+int ObHistogram::assign_buckets(const ObHistBucket *buckets, const int64_t bucket_size)
+{
+  int ret = OB_SUCCESS;
+  void *buf = NULL;
+  if (buckets == NULL || bucket_size == 0) {
+    //do nothing
+  } else if (buckets_ != NULL || OB_UNLIKELY(bucket_size_ > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(buckets_), K(bucket_size_));
+  } else if (OB_ISNULL(buf = get_allocator().alloc(sizeof(ObHistBucket) * bucket_size))) {
+    COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for buckets failed.");
+  } else {
+    buckets_ = new (buf) ObHistBucket[bucket_size];
+    bucket_size_ = bucket_size;
+    max_bucket_size_ = bucket_size;
+    for (int64_t i = 0; i < bucket_size_; ++i) {
+      buckets_[i].endpoint_repeat_count_ = buckets[i].endpoint_repeat_count_;
+      buckets_[i].endpoint_num_ = buckets[i].endpoint_num_;
+      buckets_[i].endpoint_value_ = buckets[i].endpoint_value_;
+    }
+  }
+  return ret;
+}
+
+//the endpoint value is shallow copy!!!!!!!!!
+int ObHistogram::add_buckets(const ObIArray<ObHistBucket> &buckets)
+{
+  int ret = OB_SUCCESS;
+  void *buf = NULL;
+  if (buckets.empty()) {
+    //do nothing
+  } else if (buckets_ != NULL || OB_UNLIKELY(bucket_size_ > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(buckets_), K(bucket_size_));
+  } else if (OB_ISNULL(buf = get_allocator().alloc(sizeof(ObHistBucket) * buckets.count()))) {
+    COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for buckets failed.");
+  } else {
+    buckets_ = new (buf) ObHistBucket[buckets.count()];
+    bucket_size_ = buckets.count();
+    max_bucket_size_ = buckets.count();
+    for (int64_t i = 0; i < bucket_size_; ++i) {
+      buckets_[i].endpoint_repeat_count_ = buckets.at(i).endpoint_repeat_count_;
+      buckets_[i].endpoint_num_ = buckets.at(i).endpoint_num_;
+      buckets_[i].endpoint_value_ = buckets.at(i).endpoint_value_;
+    }
+  }
+  return ret;
+}
+
+//the endpoint value is shallow copy!!!!!!!!!
+int ObHistogram::add_bucket(const ObHistBucket &bucket)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buckets_) && bucket_size_ != 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(buckets_), K(bucket_size_), K(max_bucket_size_));
+  } else if (bucket_size_ < max_bucket_size_) {
+    if (OB_ISNULL(buckets_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(buckets_), K(bucket_size_), K(max_bucket_size_));
+    } else {
+      buckets_[bucket_size_].endpoint_repeat_count_ = bucket.endpoint_repeat_count_;
+      buckets_[bucket_size_].endpoint_num_ = bucket.endpoint_num_;
+      buckets_[bucket_size_].endpoint_value_ = bucket.endpoint_value_;
+      ++ bucket_size_;
+    }
+  } else {
+    void *buf = NULL;
+    max_bucket_size_ = bucket_size_ == 0 ? 1 : 2 * bucket_size_;
+    if (OB_ISNULL(buf = get_allocator().alloc(sizeof(ObHistBucket) * max_bucket_size_))) {
+      COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for buckets failed.");
+    } else {
+      ObHistBucket *new_buckets = new (buf) ObHistBucket[max_bucket_size_];
+      for (int64_t i = 0; i < bucket_size_; ++i) {
+        new_buckets[i].endpoint_repeat_count_ = buckets_[i].endpoint_repeat_count_;
+        new_buckets[i].endpoint_num_ = buckets_[i].endpoint_num_;
+        new_buckets[i].endpoint_value_ = buckets_[i].endpoint_value_;
+      }
+      new_buckets[bucket_size_].endpoint_repeat_count_ = bucket.endpoint_repeat_count_;
+      new_buckets[bucket_size_].endpoint_num_ = bucket.endpoint_num_;
+      new_buckets[bucket_size_].endpoint_value_ = bucket.endpoint_value_;
+      ++ bucket_size_;
+      get_allocator().free(buckets_);
+      buckets_ = new_buckets;
+    }
+  }
+  return ret;
+}
+
+int ObHistogram::prepare_allocate_buckets(const int64_t buckets_num)
+{
+  int ret = OB_SUCCESS;
+  void *buf = NULL;
+  if (buckets_ != NULL || OB_UNLIKELY(bucket_size_ > 0 || buckets_num <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(buckets_), K(bucket_size_), K(buckets_num));
+  } else if (OB_ISNULL(buf = get_allocator().alloc(sizeof(ObHistBucket) * buckets_num))) {
+    COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for buckets failed.");
+  } else {
+    buckets_ = new (buf) ObHistBucket[buckets_num];
+    max_bucket_size_ = buckets_num;
+  }
+  return ret;
+}
+
+int64_t ObHistogram::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("Type", get_type_name(),
+        K_(sample_size),
+        K_(density),
+        K_(bucket_size),
+        K_(max_bucket_size),
+        K_(buckets));
+  if (buckets_ != NULL && bucket_size_ > 0 && max_bucket_size_ > 0) {
+    for (int64_t i = 0; i < bucket_size_; ++i) {
+      J_KV(K(buckets_[i]));
+    }
+  }
+  J_OBJ_END();
+  return pos;
 }
 
 ObOptColumnStat::ObOptColumnStat()
@@ -130,7 +266,7 @@ ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
       max_value_(),
       llc_bitmap_size_(0),
       llc_bitmap_(NULL),
-      histogram_(),
+      histogram_(allocator),
       last_analyzed_(0),
       cs_type_(CS_TYPE_INVALID),
       inner_max_allocator_("OptColStatMax"),
@@ -274,18 +410,6 @@ void ObHistogram::calc_density(ObHistType hist_type,
   } else {
     density_ = (1.0 * (row_count - pop_row_count)) / ((ndv - pop_ndv) * row_count);
   }
-}
-
-int ObOptColumnStat::add_bucket(int64_t repeat_count,
-                                const ObObj &value,
-                                int64_t num_elements)
-{
-  int ret = OB_SUCCESS;
-  ObHistBucket bkt(value, repeat_count, num_elements);
-  if (OB_FAIL(histogram_.buckets_.push_back(bkt))) {
-    LOG_WARN("failed to push back bucket", K(ret));
-  }
-  return ret;
 }
 
 OB_DEF_SERIALIZE(ObOptColumnStat) {

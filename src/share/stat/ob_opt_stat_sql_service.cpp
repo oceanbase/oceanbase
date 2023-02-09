@@ -617,7 +617,7 @@ int ObOptStatSqlService::construct_histogram_insert_sql(share::schema::ObSchemaG
           } else if (OB_FAIL(get_histogram_stat_history_sql(tenant_id,
                                                             *column_stats.at(i),
                                                             allocator,
-                                                            hist.get(j),
+                                                            hist.get_buckets()[j],
                                                             current_time,
                                                             endpoint_meta,
                                                             tmp))) {
@@ -630,7 +630,7 @@ int ObOptStatSqlService::construct_histogram_insert_sql(share::schema::ObSchemaG
         } else if (!need_histogram && OB_FAIL(insert_histogram_sql.append(INSERT_HISTOGRAM_STAT_SQL))) {
           LOG_WARN("failed to append sql", K(ret));
         } else if (OB_FAIL(get_histogram_stat_sql(tenant_id, *column_stats.at(i),
-                                                  allocator, hist.get(j), endpoint_meta, tmp))) {
+                                                  allocator, hist.get_buckets()[j], endpoint_meta, tmp))) {
           LOG_WARN("failed to get histogram sql", K(ret));
         } else if (OB_FAIL(insert_histogram_sql.append_fmt("%s (%s)", (!need_histogram ? "" : ","), tmp.ptr()))) {
           LOG_WARN("failed to append sql", K(ret));
@@ -935,7 +935,7 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
         OB_FAIL(dml_splicer.add_column("distinct_cnt_synopsis_size", llc_comp_size * 2)) ||
         OB_FAIL(dml_splicer.add_column("sample_size", stat.get_histogram().get_sample_size())) ||
         OB_FAIL(dml_splicer.add_column("density", stat.get_histogram().get_density())) ||
-        OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_cnt())) ||
+        OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_size())) ||
         OB_FAIL(dml_splicer.add_column("histogram_type", stat.get_histogram().get_type())) ||
         OB_FAIL(dml_splicer.add_column("global_stats", 0)) ||
         OB_FAIL(dml_splicer.add_column("user_stats", 0))) {
@@ -1010,7 +1010,7 @@ int ObOptStatSqlService::get_column_stat_history_sql(const uint64_t tenant_id,
         OB_FAIL(dml_splicer.add_column("distinct_cnt_synopsis_size", llc_comp_size * 2)) ||
         OB_FAIL(dml_splicer.add_column("sample_size", stat.get_histogram().get_sample_size())) ||
         OB_FAIL(dml_splicer.add_column("density", stat.get_histogram().get_density())) ||
-        OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_cnt())) ||
+        OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_size())) ||
         OB_FAIL(dml_splicer.add_column("histogram_type", stat.get_histogram().get_type()))) {
       LOG_WARN("failed to add dml splicer column", K(ret));
     } else if (OB_FAIL(dml_splicer.splice_values(sql_string))) {
@@ -1321,6 +1321,7 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
       } else {
         ObOptKeyColumnStat &dst_key_col_stat = key_col_stats.at(dst_idx);
         int64_t llc_bitmap_size = 0;
+        int64_t bucket_cnt = 0;
         ObHistType histogram_type = ObHistType::INVALID_TYPE;
         ObObjMeta obj_type;
         ObOptColumnStat *stat = dst_key_col_stat.stat_;
@@ -1350,11 +1351,14 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
             EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, avg_len, *stat, int64_t);
           }
         }
-        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, bucket_cnt, hist, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(result, "bucket_cnt", bucket_cnt, int64_t);
         EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, density, hist, double);
         EXTRACT_INT_FIELD_MYSQL(result, "distinct_cnt_synopsis_size", llc_bitmap_size, int64_t);
         if (OB_SUCC(ret)) {
           hist.set_type(histogram_type);
+          if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(bucket_cnt))) {
+            LOG_WARN("failed to prepare allocate buckets", K(ret));
+          }
         }
         ObString hex_str;
         common::ObObj obj;
@@ -1504,8 +1508,8 @@ int ObOptStatSqlService::fill_bucket_stat(ObIAllocator &allocator,
         if (OB_SUCC(ret)) {
           if (OB_FAIL(hex_str_to_obj(str.ptr(), str.length(), allocator, bkt.endpoint_value_))) {
             LOG_WARN("deserialize object value failed.", K(stat), K(ret));
-          } else if (OB_FAIL(dst_key_col_stat.stat_->get_histogram().get_buckets().push_back(bkt))) {
-            LOG_WARN("failed to push back buckets", K(ret));
+          } else if (OB_FAIL(dst_key_col_stat.stat_->get_histogram().add_bucket(bkt))) {
+            LOG_WARN("failed to add backet", K(ret));
           } else {/*do nothing*/}
         }
       }

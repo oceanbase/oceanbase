@@ -5832,7 +5832,7 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
     } else {
       stat_pref = tmp_pref;
     }
-  } else if (is_global_prefs && 0 == opt_name.case_compare("ESTIMATE_BLOCK")) {
+  } else if (0 == opt_name.case_compare("ESTIMATE_BLOCK")) {
     ObEstimateBlockPrefs *tmp_pref = NULL;
     if (OB_FAIL(new_stat_prefs(ctx.get_allocator(), ctx.get_my_session(), opt_value, tmp_pref))) {
       LOG_WARN("failed to new stat prefs", K(ret));
