@@ -19,10 +19,6 @@
 #include "ob_table_service.h"
 #include "ob_table_context.h"
 #include "ob_table_scan_executor.h"
-#include "ob_table_cache.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-
 
 namespace oceanbase
 {
@@ -40,18 +36,23 @@ namespace observer
 struct ObTableQuerySyncCtx
 {
   explicit ObTableQuerySyncCtx(common::ObIAllocator &allocator)
-      : tb_ctx_(allocator)
+      : tb_ctx_(allocator),
+        expr_frame_info_(allocator),
+        spec_(nullptr),
+        executor_(nullptr)
   {}
-  table::ObTableCtx tb_ctx_;
-  table::ObTableApiScanExecutor *executor_;
-  table::ObTableApiScanRowIterator row_iter_;
-public:
-  void destory()
+  virtual ~ObTableQuerySyncCtx()
   {
     row_iter_.close();
-    tb_ctx_.~ObTableCtx();
-    executor_->~ObTableApiScanExecutor();
+    if (OB_NOT_NULL(spec_) && OB_NOT_NULL(executor_)) {
+      spec_->destroy_executor(executor_);
+    }
   }
+  table::ObTableCtx tb_ctx_;
+  ObExprFrameInfo expr_frame_info_;
+  table::ObTableApiSpec *spec_;
+  table::ObTableApiScanExecutor *executor_;
+  table::ObTableApiScanRowIterator row_iter_;
 };
 
 /**
@@ -85,7 +86,6 @@ public:
   common::ObObjectID get_tenant_id() { return tenant_id_; }
   table::ObTableQuery &get_query() { return query_; }
   ObTableQuerySyncCtx &get_query_ctx() { return query_ctx_; }
-  void destory_query_ctx() { return query_ctx_.destory(); }
 public:
   sql::TransState* get_trans_state() {return &trans_state_;}
   transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
@@ -211,7 +211,7 @@ private:
 private:
   int check_query_type();
   int init_tb_ctx(table::ObTableCtx &ctx);
-  int execute_query(ObTableQuerySyncSession &query_session);
+  int execute_query();
   int deep_copy_result_property_names();
 
 private:
@@ -220,7 +220,6 @@ private:
   ObArenaAllocator allocator_;
   ObTableQuerySyncSession *query_session_;
   int64_t timeout_ts_;
-  table::ObTableApiCacheGuard cache_guard_;
 };
 
 } // end namespace observer

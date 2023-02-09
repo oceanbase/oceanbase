@@ -130,6 +130,7 @@ int ObTableOpWrapper::process_get(ObTableCtx &tb_ctx, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObTableApiSpec *spec = nullptr;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
   if (OB_FAIL(get_or_create_spec<TABLE_API_EXEC_SCAN>(tb_ctx, cache_guard, spec))) {
     LOG_WARN("fail to get or create scan spec", K(ret));

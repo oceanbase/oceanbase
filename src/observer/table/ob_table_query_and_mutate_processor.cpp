@@ -222,7 +222,7 @@ int ObTableQueryAndMutateP::init_tb_ctx(table::ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableQueryAndMutateP::init_scan_tb_ctx()
+int ObTableQueryAndMutateP::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard)
 {
   int ret = OB_SUCCESS;
   ObExprFrameInfo *expr_frame_info = nullptr;
@@ -239,9 +239,9 @@ int ObTableQueryAndMutateP::init_scan_tb_ctx()
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(tb_ctx_.init_scan(query, is_weak_read))) {
     LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_));
-  } else if (OB_FAIL(cache_guard_.init(&tb_ctx_))) {
+  } else if (OB_FAIL(cache_guard.init(&tb_ctx_))) {
     LOG_WARN("fail to init cache guard", K(ret));
-  } else if (OB_FAIL(cache_guard_.get_expr_info(&tb_ctx_, expr_frame_info))) {
+  } else if (OB_FAIL(cache_guard.get_expr_info(&tb_ctx_, expr_frame_info))) {
     LOG_WARN("fail to get expr frame info from cache", K(ret));
   } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(tb_ctx_, *expr_frame_info))) {
     LOG_WARN("fail to alloc expr memory", K(ret));
@@ -293,6 +293,7 @@ int ObTableQueryAndMutateP::execute_htable_delete()
   SMART_VAR(ObTableCtx, tb_ctx, allocator_) {
     ObTableApiSpec *spec = nullptr;
     ObTableApiExecutor *executor = nullptr;
+    observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
     ObTableApiCacheGuard cache_guard;
     ObTableBatchOperation &mutations = arg_.query_and_mutate_.get_mutations();
     const ObTableOperation &op = mutations.at(0);
@@ -438,16 +439,13 @@ int ObTableQueryAndMutateP::sort_qualifier(common::ObIArray<ColumnIdx> &columns,
   return ret;
 }
 
-int ObTableQueryAndMutateP::get_old_row(ObNewRow *&row)
+int ObTableQueryAndMutateP::get_old_row(ObTableApiSpec &scan_spec, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObTableApiSpec *spec = nullptr;
   ObTableApiExecutor *executor = nullptr;
   ObTableApiScanRowIterator row_iter;
 
-  if (OB_FAIL(cache_guard_.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, spec))) {
-    LOG_WARN("fail to get spec from cache", K(ret));
-  } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
+  if (OB_FAIL(scan_spec.create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
     LOG_WARN("fail to open scan row iterator", K(ret));
@@ -465,8 +463,8 @@ int ObTableQueryAndMutateP::get_old_row(ObNewRow *&row)
     ret = COVER_SUCC(tmp_ret);
   }
 
-  if (OB_NOT_NULL(spec)) {
-    spec->destroy_executor(executor);
+  if (OB_NOT_NULL(executor)) {
+    scan_spec.destroy_executor(executor);
   }
 
   return ret;
@@ -637,7 +635,7 @@ int ObTableQueryAndMutateP::generate_new_value(const ObNewRow *old_row,
 
 // 1. 执行query获取到最新版本旧行的V
 // 2. 基于旧V执行mutate
-int ObTableQueryAndMutateP::execute_htable_increment()
+int ObTableQueryAndMutateP::execute_htable_increment(ObTableApiSpec &scan_spe)
 {
   int ret = OB_SUCCESS;
   ObTableBatchOperation &mutations = arg_.query_and_mutate_.get_mutations();
@@ -656,7 +654,7 @@ int ObTableQueryAndMutateP::execute_htable_increment()
     const ObObj &q_obj = rowkey.get_obj_ptr()[ObHTableConstants::COL_IDX_Q];  // column Q
     if (OB_FAIL(refresh_query_range(q_obj))) {
       LOG_WARN("fail to refresh query range", K(ret), K(q_obj));
-    } else if (OB_FAIL(get_old_row(old_row))) { // 获取旧行，存在/不存在
+    } else if (OB_FAIL(get_old_row(scan_spe, old_row))) { // 获取旧行，存在/不存在
       LOG_WARN("fail to get old row", K(ret));
     } else if (OB_FAIL(generate_new_value(old_row, op.entity(), is_increment, new_entity))) {
       LOG_WARN("fail to generate new value", K(ret), K(op.entity()), KP(old_row));
@@ -699,8 +697,11 @@ int ObTableQueryAndMutateP::try_process()
   ObTableBatchOperation &mutations = arg_.query_and_mutate_.get_mutations();
   const ObTableOperation &mutation = mutations.at(0);
   int affected_rows = 0;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  ObTableApiCacheGuard cache_guard;
+  ObTableApiSpec *scan_spec = nullptr;
 
-  if (OB_FAIL(init_scan_tb_ctx())) {
+  if (OB_FAIL(init_scan_tb_ctx(cache_guard))) {
     LOG_WARN("fail to init scan table ctx", K(ret));
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_UPDATE,
@@ -711,28 +712,27 @@ int ObTableQueryAndMutateP::try_process()
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
+  } else if (OB_FAIL(cache_guard.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, scan_spec))) {
+    LOG_WARN("fail to get scan spec from cache", K(ret));
   } else if (ObTableOperationType::INCREMENT == mutation.type()) {
     stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_INCREMENT;
-    if (OB_FAIL(execute_htable_increment())) {
+    if (OB_FAIL(execute_htable_increment(*scan_spec))) {
       LOG_WARN("fail to execute hatable increment", K(ret));
     } else {
       affected_rows = 1;
     }
   } else if (ObTableOperationType::APPEND == mutation.type()) {
     stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_APPEND;
-    if (OB_FAIL(execute_htable_increment())) {
+    if (OB_FAIL(execute_htable_increment(*scan_spec))) {
       LOG_WARN("fail to execute hatable increment", K(ret));
     } else {
       affected_rows = 1;
     }
   } else {
-    ObTableApiSpec *spec = nullptr;
     ObTableApiExecutor *executor = nullptr;
     ObTableQueryResultIterator *result_iterator = nullptr;
     ObTableApiScanRowIterator row_iter;
-    if (OB_FAIL(cache_guard_.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, spec))) {
-      LOG_WARN("fail to get spec from cache", K(ret));
-    } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
+    if (OB_FAIL(scan_spec->create_executor(tb_ctx_, executor))) {
       LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
     } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
       LOG_WARN("fail to open scan row iterator", K(ret));
@@ -788,8 +788,8 @@ int ObTableQueryAndMutateP::try_process()
       }
     }
 
-    if (OB_NOT_NULL(spec)) {
-      spec->destroy_executor(executor);
+    if (OB_NOT_NULL(executor)) {
+      scan_spec->destroy_executor(executor);
       tb_ctx_.set_expr_info(nullptr);
     }
   }

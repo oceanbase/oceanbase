@@ -120,7 +120,7 @@ int ObTableQueryP::get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &table
   return ret;
 }
 
-int ObTableQueryP::init_tb_ctx()
+int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
 {
   int ret = OB_SUCCESS;
   ObExprFrameInfo *expr_frame_info = nullptr;
@@ -136,9 +136,9 @@ int ObTableQueryP::init_tb_ctx()
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(tb_ctx_.init_scan(arg_.query_, is_weak_read))) {
     LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_));
-  } else if (OB_FAIL(cache_guard_.init(&tb_ctx_))) {
+  } else if (OB_FAIL(cache_guard.init(&tb_ctx_))) {
     LOG_WARN("fail to init cache guard", K(ret));
-  } else if (OB_FAIL(cache_guard_.get_expr_info(&tb_ctx_, expr_frame_info))) {
+  } else if (OB_FAIL(cache_guard.get_expr_info(&tb_ctx_, expr_frame_info))) {
     LOG_WARN("fail to get expr frame info from cache", K(ret));
   } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(tb_ctx_, *expr_frame_info))) {
     LOG_WARN("fail to alloc expr memory", K(ret));
@@ -293,10 +293,12 @@ int ObTableQueryP::try_process()
   int ret = OB_SUCCESS;
   ObTableApiSpec *spec = nullptr;
   ObTableApiExecutor *executor = nullptr;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  ObTableApiCacheGuard cache_guard;
 
-  if (OB_FAIL(init_tb_ctx())) {
+  if (OB_FAIL(init_tb_ctx(cache_guard))) {
     LOG_WARN("fail to init table ctx", K(ret));
-  } else if (OB_FAIL(cache_guard_.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, spec))) {
+  } else if (OB_FAIL(cache_guard.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, spec))) {
     LOG_WARN("fail to get spec from cache", K(ret));
   } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));

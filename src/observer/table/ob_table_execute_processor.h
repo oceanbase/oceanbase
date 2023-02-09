@@ -89,7 +89,6 @@ private:
   table::ObTableEntity result_entity_;
   common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
-  table::ObTableApiCacheGuard cache_guard_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
   bool need_rollback_trans_;
   int64_t query_timeout_ts_;

@@ -93,9 +93,9 @@ public:
 
   virtual ~ObTableApiCacheObj()
   {
-      if (OB_NOT_NULL(spec_)) {
-          spec_->~ObTableApiSpec();
-      }
+    if (OB_NOT_NULL(spec_)) {
+      spec_->~ObTableApiSpec();
+    }
   }
   OB_INLINE ObTableApiSpec* get_spec() { return spec_; }
   OB_INLINE void set_spec(ObTableApiSpec* spec) { spec_ = spec; }
@@ -152,8 +152,6 @@ private:
 
 private:
   bool is_use_cache_;
-  // 使用lib cache资源都需要用到
-  observer::ObReqTimeGuard req_timeinfo_guard;
   sql::ObPlanCache *lib_cache_;
   ObTableApiCacheKey cache_key_;
   ObCacheObjGuard cache_guard_;
