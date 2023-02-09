@@ -96,7 +96,7 @@ const char *ObLoadDataDirectImpl::Logger::log_file_column_names =
 const char *ObLoadDataDirectImpl::Logger::log_file_row_fmt = "%.*s\t%ld\t%d\t%s\t\n";
 
 ObLoadDataDirectImpl::Logger::Logger()
-  : is_oracle_mode_(false), buf_(nullptr), is_inited_(false)
+  : is_oracle_mode_(false), buf_(nullptr), is_create_log_succ_(false), is_inited_(false)
 {
 }
 
@@ -117,25 +117,35 @@ int ObLoadDataDirectImpl::Logger::init(const ObString &load_info)
   } else if (OB_UNLIKELY(load_info.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(load_info));
+  } else if (OB_ISNULL(
+        buf_ = static_cast<char *>(ob_malloc(DEFAULT_BUF_LENGTH, ObModIds::OB_SQL_LOAD_DATA)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", KR(ret));
   } else {
-    ObString file_name;
-    if (OB_ISNULL(
-          buf_ = static_cast<char *>(ob_malloc(DEFAULT_BUF_LENGTH, ObModIds::OB_SQL_LOAD_DATA)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory", KR(ret));
-    } else if (OB_FAIL(generate_log_file_name(buf_, DEFAULT_BUF_LENGTH, file_name))) {
-      LOG_WARN("fail to generate log file name", KR(ret));
-    } else if (OB_FAIL(file_appender_.open(file_name, false, true))) {
-      LOG_WARN("fail to open file", KR(ret), K(file_name));
-    } else if (OB_FAIL(file_appender_.append(load_info.ptr(), load_info.length(), true))) {
-      LOG_WARN("fail to append log", KR(ret));
-    } else if (OB_FAIL(file_appender_.append(log_file_column_names, strlen(log_file_column_names),
-                                             true))) {
-      LOG_WARN("fail to append log", KR(ret));
+    if (OB_SUCCESS != create_log_file(load_info)) {
+      is_create_log_succ_ = false;
     } else {
-      is_oracle_mode_ = lib::is_oracle_mode();
-      is_inited_ = true;
+      is_create_log_succ_ = true;
     }
+    is_oracle_mode_ = lib::is_oracle_mode();
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObLoadDataDirectImpl::Logger::create_log_file(const ObString &load_info)
+{
+  int ret = OB_SUCCESS;
+  ObString file_name;
+  if (OB_FAIL(generate_log_file_name(buf_, DEFAULT_BUF_LENGTH, file_name))) {
+    LOG_WARN("fail to generate log file name", KR(ret));
+  } else if (OB_FAIL(file_appender_.open(file_name, false, true))) {
+    LOG_WARN("fail to open file", KR(ret), K(file_name));
+  } else if (OB_FAIL(file_appender_.append(load_info.ptr(), load_info.length(), true))) {
+    LOG_WARN("fail to append log", KR(ret));
+  } else if (OB_FAIL(file_appender_.append(log_file_column_names, strlen(log_file_column_names),
+                                            true))) {
+    LOG_WARN("fail to append log", KR(ret));
   }
   return ret;
 }
@@ -176,7 +186,7 @@ int ObLoadDataDirectImpl::Logger::log_error_line(const ObString &file_name, int6
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLoadDataDirectImpl::Logger not init", KR(ret), KP(this));
-  } else {
+  } else if (is_create_log_succ_) {
     const char *err_msg = ob_errpkt_strerror(err_code, is_oracle_mode_);
     const int err_no = ob_errpkt_errno(err_code, is_oracle_mode_);
     int64_t pos = 0;
