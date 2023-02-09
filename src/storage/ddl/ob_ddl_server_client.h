@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_DDL_SERVER_CLIENT_H
 
 #include "share/ob_rpc_struct.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -25,8 +26,10 @@ public:
   static int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res, sql::ObSQLSessionInfo &session);
   static int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res, sql::ObSQLSessionInfo &session);
   static int copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg);
-  static int finish_redef_table(const obrpc::ObFinishRedefTableArg &arg);
-  static int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg);
+  static int finish_redef_table(const obrpc::ObFinishRedefTableArg &finish_redef_arg,
+                                const obrpc::ObDDLBuildSingleReplicaResponseArg &build_single_arg,
+                                sql::ObSQLSessionInfo &session);
+  static int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg, sql::ObSQLSessionInfo &session);
   static int build_ddl_single_replica_response(const obrpc::ObDDLBuildSingleReplicaResponseArg &arg);
 private:
   static int wait_table_lock(const uint64_t tenant_id, const int64_t task_id, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session);

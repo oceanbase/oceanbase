@@ -133,13 +133,8 @@ int ObTableLoadRedefTable::finish()
       build_single_replica_response_arg.snapshot_version_ = 1;
       build_single_replica_response_arg.schema_version_ = schema_version_;
       build_single_replica_response_arg.execution_id_ = 1;
-      if (OB_FAIL(ObDDLServerClient::finish_redef_table(finish_redef_table_arg))) {
+      if (OB_FAIL(ObDDLServerClient::finish_redef_table(finish_redef_table_arg, build_single_replica_response_arg, *session_info_))) {
         LOG_WARN("failed to finish redef table", KR(ret), K(finish_redef_table_arg));
-      } else if (OB_FAIL(ObDDLServerClient::build_ddl_single_replica_response(build_single_replica_response_arg))) {
-        LOG_WARN("failed to build ddl single replica reponse", KR(ret));
-      } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ctx_->param_.tenant_id_, ddl_task_id_,
-          *session_info_, common_rpc_proxy))) {
-        LOG_WARN("failed to wait ddl finish", KR(ret));
       } else {
         is_finish_or_abort_called_ = true;
         LOG_INFO("succeed to finish redef table", KR(ret), K(finish_redef_table_arg));
@@ -163,17 +158,9 @@ int ObTableLoadRedefTable::abort()
     obrpc::ObAbortRedefTableArg abort_redef_table_arg;
     abort_redef_table_arg.task_id_ = ddl_task_id_;
     abort_redef_table_arg.tenant_id_ = ctx_->param_.tenant_id_;
-    if (OB_FAIL(ObDDLServerClient::abort_redef_table(abort_redef_table_arg))) {
+    if (OB_FAIL(ObDDLServerClient::abort_redef_table(abort_redef_table_arg, *session_info_))) {
       LOG_WARN("failed to abort redef table", KR(ret), K(abort_redef_table_arg));
-    } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ctx_->param_.tenant_id_, ddl_task_id_,
-      *session_info_, common_rpc_proxy))) {
-      if (OB_CANCELED == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to wait ddl finish", KR(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
+    } else {
       LOG_INFO("abort_redef_table success", KR(ret));
     }
     THIS_WORKER.set_timeout_ts(origin_timeout_ts);
