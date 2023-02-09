@@ -950,8 +950,31 @@ int ObLS::save_base_schema_version()
 int ObLS::get_replica_status(ObReplicaStatus &replica_status)
 {
   int ret = OB_SUCCESS;
-  // Todo: need to get migration status
-  replica_status = REPLICA_STATUS_NORMAL;
+  ObMigrationStatus migration_status;
+  ObLSRestoreStatus restore_status;
+  int64_t read_lock = LSLOCKLOGMETA;
+  int64_t write_lock = 0;
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_FAIL(get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), KPC(this));
+  } else if (OB_FAIL(get_restore_status(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), KPC(this));
+  } else if (migration_status < OB_MIGRATION_STATUS_NONE
+      || migration_status > OB_MIGRATION_STATUS_MAX) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("migration status is not valid", K(ret), K(migration_status));
+  } else if (!restore_status.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("restore status is not valid", K(ret), K(restore_status));
+  } else if (OB_MIGRATION_STATUS_NONE == migration_status
+      && restore_status.is_restore_none()) {
+    replica_status = REPLICA_STATUS_NORMAL;
+  } else {
+    replica_status = REPLICA_STATUS_OFFLINE;
+  }
   return ret;
 }
 

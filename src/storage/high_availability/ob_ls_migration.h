@@ -234,6 +234,7 @@ private:
   int deal_with_local_ls_();
   int update_ls_();
   int generate_tablets_migration_dag_();
+  int report_ls_meta_table_();
   int choose_src_();
   int fetch_ls_info_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObAddr &member_addr, obrpc::ObCopyLSInfo &ls_info);
