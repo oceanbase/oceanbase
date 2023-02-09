@@ -1631,17 +1631,13 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
     if (OB_TABLET_NOT_EXIST == ret) {
       LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
       ret = OB_SUCCESS;
-      bool is_deleted = false;
-      if (OB_FAIL(check_tablet_deleted_(param_.tenant_id_, tablet_id, is_deleted))) {
-        LOG_WARN("failed to check tablet deleted", K(ret), K(tablet_id));
+      ObBackupSkippedType skipped_type(ObBackupSkippedType::MAX_TYPE);
+      if (OB_FAIL(get_tablet_skipped_type_(param_.tenant_id_, ls_id, tablet_id, skipped_type))) {
+        LOG_WARN("failed to get tablet skipped type", K(ret), K(param_), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(report_tablet_skipped_(tablet_id, skipped_type))) {
+        LOG_WARN("failed to report tablet skipped", K(ret), K(tablet_id), K_(param), K(skipped_type));
       } else {
-        ObBackupSkippedType skipped_type = is_deleted ? ObBackupSkippedType(ObBackupSkippedType::DELETED)
-                                                      : ObBackupSkippedType(ObBackupSkippedType::TRANSFER);
-        if (OB_FAIL(report_tablet_skipped_(tablet_id, skipped_type))) {
-          LOG_WARN("failed to report tablet skipped", K(ret), K(tablet_id), K_(param), K(skipped_type));
-        } else {
-          LOG_INFO("report tablet skipped", K(ret), K(tablet_id), K_(param), K(skipped_type));
-        }
+        LOG_INFO("report tablet skipped", K(ret), K(tablet_id), K_(param), K(skipped_type));
       }
     } else {
       LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
@@ -1710,7 +1706,6 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
       ObLS *ls = NULL;
       ObLSHandle ls_handle;
       ObLSService *ls_svr = NULL;
-      ObTabletTxMultiSourceDataUnit tx_data;
       const int64_t timeout_us = ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
       if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
         ret = OB_ERR_UNEXPECTED;
@@ -1724,12 +1719,6 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
         LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, timeout_us))) {
         LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
-        LOG_WARN("failed to get_tx_data", K(ret), K(ls_id), K(tablet_id));
-      } else if (ObTabletStatus::DELETED == tx_data.tablet_status_.get_status()
-          || ObTabletStatus::DELETING == tx_data.tablet_status_.get_status()) {
-        ret = OB_TABLET_NOT_EXIST;
-        LOG_INFO("tablet has been deleted", K(ret), K(ls_id), K(tablet_id), K(tx_data));
       } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
         LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       }
@@ -1738,17 +1727,19 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
   return ret;
 }
 
-int ObBackupTabletProvider::check_tablet_deleted_(
-    const uint64_t tenant_id, const common::ObTabletID &tablet_id, bool &is_deleted)
+int ObBackupTabletProvider::get_tablet_skipped_type_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id, ObBackupSkippedType &skipped_type)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t tablet_count = 0;
+  int64_t tmp_ls_id = 0;
   HEAP_VAR(ObMySQLProxy::ReadResult, res)
   {
     common::sqlclient::ObMySQLResult *result = NULL;
     if (OB_FAIL(sql.assign_fmt(
-            "select count(*) as count from %s where tablet_id = %ld", OB_ALL_TABLET_TO_LS_TNAME, tablet_id.id()))) {
+            "select count(*) as count, ls_id from %s where tablet_id = %ld",
+            OB_ALL_TABLET_TO_LS_TNAME, tablet_id.id()))) {
       LOG_WARN("failed to assign sql", K(ret), K(tablet_id));
     } else if (OB_ISNULL(sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1762,10 +1753,24 @@ int ObBackupTabletProvider::check_tablet_deleted_(
       LOG_WARN("failed to get next result", KR(ret), K(sql));
     } else {
       EXTRACT_INT_FIELD_MYSQL(*result, "count", tablet_count, int64_t);
+      EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "ls_id", tmp_ls_id, int64_t);
     }
   }
   if (OB_SUCC(ret)) {
-    is_deleted = 0 == tablet_count;
+    if (0 == tablet_count) {
+      skipped_type = ObBackupSkippedType(ObBackupSkippedType::DELETED);
+    } else if (1 == tablet_count) {
+      if (tmp_ls_id == ls_id.id()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_INFO("tablet not exist, but __all_tablet_to_ls still exist", K(tmp_ls_id));
+      } else {
+        skipped_type = ObBackupSkippedType(ObBackupSkippedType::TRANSFER);
+        LOG_INFO("tablet transfered, need change turn", K(ls_id));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet count should not greater than 1", K(ret), K(tablet_count));
+    }
   }
   return ret;
 }

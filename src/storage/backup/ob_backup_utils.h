@@ -270,7 +270,8 @@ private:
       const share::ObBackupDataType &backup_data_type, int64_t &count);
   int get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle);
-  int check_tablet_deleted_(const uint64_t tenant_id, const common::ObTabletID &tablet_id, bool &is_deleted);
+  int get_tablet_skipped_type_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id, share::ObBackupSkippedType &skipped_type);
   int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type);
   int hold_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
   int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle,
