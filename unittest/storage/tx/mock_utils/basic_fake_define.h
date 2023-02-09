@@ -389,6 +389,7 @@ public:
   const static int64_t TASK_QUEUE_CNT = 128;
   ObSpScLinkQueue apply_task_queue_arr[TASK_QUEUE_CNT];
   ObSpScLinkQueue replay_task_queue_arr[TASK_QUEUE_CNT];
+  share::SCN max_submit_scn_ =  share::SCN::invalid_scn();
 
   void run1() {
     while(true) {
@@ -466,6 +467,7 @@ public:
         ApplyCbTask *apply_task = new ApplyCbTask();
         apply_task->replay_hint_ = replay_hint;
         apply_task->cb_ = cb;
+        max_submit_scn_ = share::SCN::max(max_submit_scn_, scn);
 
         apply_task_queue_arr[queue_idx].push(apply_task);
         ATOMIC_INC(&inflight_cnt_);
@@ -499,9 +501,49 @@ public:
     return OB_SUCCESS;
   }
 
-  int get_max_decided_scn(share::SCN &scn)
-  {
-    UNUSED(scn);
+  int get_max_decided_scn(share::SCN &scn) {
+    int ret = OB_SUCCESS;
+    share::SCN min_unreplayed_scn;
+    share::SCN min_unapplyed_scn;
+    min_unreplayed_scn.invalid_scn();
+    min_unapplyed_scn.invalid_scn();
+
+    for (int64_t i = 0; i < TASK_QUEUE_CNT; ++i) {
+      if (!replay_task_queue_arr[i].empty()) {
+        share::SCN tmp_scn;
+        tmp_scn.convert_for_gts(
+            static_cast<ReplayCbTask *>(replay_task_queue_arr[i].top())->log_ts_);
+        if (min_unreplayed_scn.is_valid() && tmp_scn.is_valid()) {
+          min_unreplayed_scn = share::SCN::min(tmp_scn, min_unreplayed_scn);
+        } else if (tmp_scn.is_valid()) {
+          min_unreplayed_scn = tmp_scn;
+        }
+      }
+    }
+
+    for (int64_t i = 0; i < TASK_QUEUE_CNT; ++i) {
+      if (!apply_task_queue_arr[i].empty()) {
+        share::SCN tmp_scn;
+        tmp_scn = (static_cast<ObTxBaseLogCb *>(
+                       (static_cast<ApplyCbTask *>(apply_task_queue_arr[i].top()))
+                           ->cb_))
+                      ->get_log_ts();
+        if (min_unapplyed_scn.is_valid() && tmp_scn.is_valid()) {
+          min_unapplyed_scn = share::SCN::min(tmp_scn, min_unapplyed_scn);
+        } else if (tmp_scn.is_valid()) {
+          min_unapplyed_scn = tmp_scn;
+        }
+      }
+    }
+
+    if (min_unapplyed_scn.is_valid() && min_unapplyed_scn.is_valid()) {
+      scn = share::SCN::max(min_unapplyed_scn, min_unapplyed_scn);
+    } else {
+      scn = max_submit_scn_;
+    }
+    if (scn.is_valid()) {
+      share::SCN::minus(scn, 1);
+    }
     return OB_SUCCESS;
   }
 

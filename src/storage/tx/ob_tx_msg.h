@@ -358,13 +358,13 @@ namespace transaction
     struct Ob2pcCommitRespMsg : public ObTxMsg
     {
     public:
-      Ob2pcCommitRespMsg() :
-          ObTxMsg(TX_2PC_COMMIT_RESP)
-      {}
+      Ob2pcCommitRespMsg() : ObTxMsg(TX_2PC_COMMIT_RESP) {}
+
     public:
       bool is_valid() const;
       share::SCN commit_version_;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version));
+      share::SCN commit_log_scn_;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version), K_(commit_log_scn));
       OB_UNIS_VERSION(1);
     };
 
@@ -401,6 +401,8 @@ namespace transaction
       {}
     public:
       bool is_valid() const;
+      share::SCN max_commit_log_scn_;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(max_commit_log_scn));
       OB_UNIS_VERSION(1);
     };
 

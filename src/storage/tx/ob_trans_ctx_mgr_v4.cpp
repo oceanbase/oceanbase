@@ -1028,6 +1028,25 @@ int ObLSTxCtxMgr::check_scheduler_status(SCN &min_start_scn, MinStartScnStatus &
   return ret;
 }
 
+int ObLSTxCtxMgr::get_max_decided_scn(share::SCN &scn)
+{
+  RLockGuard guard(rwlock_);
+
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
+    ret = OB_NOT_INIT;
+    // There is no need to check whether it is master
+    // this interface is called by leader or follower
+  } else if (is_stopped_()) {
+    ret = OB_STATE_NOT_MATCH;
+    TRANS_LOG(WARN, "this ls has beend stopped", KPC(this));
+  } else if (OB_FAIL(tx_log_adapter_->get_max_decided_scn(scn))) {
+    TRANS_LOG(WARN, "get max decided scn failed", K(ret));
+  }
+  return ret;
+}
+
 int ObLSTxCtxMgr::check_modify_schema_elapsed(const ObTabletID &tablet_id,
                                               const int64_t schema_version,
                                               ObTransID &block_tx_id)

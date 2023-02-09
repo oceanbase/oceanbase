@@ -608,6 +608,7 @@ private:
                               const ObTxMsg &recv_msg,
                               const common::ObAddr &self_addr,
                               ObITransRpc* rpc);
+  static int get_max_decided_scn_(const share::ObLSID &ls_id, share::SCN &scn);
   int get_2pc_participants_copy(share::ObLSArray &copy_participants);
   // for xa
   int post_tx_sub_prepare_resp_(const int status);
@@ -800,6 +801,7 @@ private:
 
   ObTxState upstream_state_;
   const ObTxMsg * msg_2pc_cache_;
+  share::SCN max_2pc_commit_scn_;
   ObLSLogInfoArray coord_prepare_info_arr_;
   TransModulePageAllocator reserve_allocator_;
   // tmp scheduler addr is used to post response for the second phase of xa commit/rollback
