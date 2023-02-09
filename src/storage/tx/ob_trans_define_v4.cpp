@@ -710,6 +710,11 @@ inline bool ObTxDesc::acq_commit_cb_lock_if_need_()
 bool ObTxDesc::execute_commit_cb()
 {
   bool executed = false;
+  /*
+   * load_acquire state_ and commit_out_
+   * pair with ObTransService::handle_tx_commit_result_
+   */
+  ATOMIC_LOAD_ACQ((int*)&state_);
   if (is_tx_end() || is_xa_terminate_state_()) {
     auto tx_id = tx_id_;
     auto cb = commit_cb_;
