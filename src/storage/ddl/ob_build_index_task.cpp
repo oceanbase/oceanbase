@@ -176,9 +176,9 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
           LOG_WARN("snapshot version has been discarded", K(ret));
         }
       } else if (OB_FAIL(local_scan.init(*param.col_ids_, *param.org_col_ids_, *param.output_projector_,
-              param.data_table_schema_, param.snapshot_version_, trans_service, param.index_schema_, true/*output org cols only*/))) {
+              *param.data_table_schema_, param.snapshot_version_, trans_service, *param.index_schema_, true/*output org cols only*/))) {
         LOG_WARN("init local scan failed", K(ret));
-      } else if (OB_FAIL(local_scan.table_scan(ls_id_, tablet_id_, iterator, query_flag, range, nullptr))) {
+      } else if (OB_FAIL(local_scan.table_scan(*param.data_table_schema_, ls_id_, tablet_id_, iterator, query_flag, range, nullptr))) {
         LOG_WARN("fail to table scan", K(ret));
       } else {
         const ObColDescIArray &out_cols = *param.org_col_ids_;
