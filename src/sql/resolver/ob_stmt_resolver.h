@@ -84,7 +84,7 @@ public:
    *
    */
   static int resolve_ref_factor(const ParseNode *node, ObSQLSessionInfo *session_info, common::ObString &table_name, common::ObString &db_name);
-  static int resolve_dblink_name(const ParseNode *table_node, ObString &dblink_name, bool &is_reverse_link);
+  static int resolve_dblink_name(const ParseNode *table_node, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node);
   int resolve_database_factor(const ParseNode *node,
                               uint64_t tenant_id,
                               uint64_t &database_id,

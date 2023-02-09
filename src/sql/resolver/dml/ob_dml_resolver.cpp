@@ -7150,10 +7150,11 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
   int ret = OB_SUCCESS;
+  bool has_dblink_node = false;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
-  } else if (OB_FAIL(resolve_dblink_name(node, dblink_name, is_reverse_link))) {
+  } else if (OB_FAIL(resolve_dblink_name(node, dblink_name, is_reverse_link, has_dblink_node))) {
     LOG_WARN("resolve dblink name failed", K(ret));
   } else {
     LOG_DEBUG("resolve dblink name", K(dblink_name), K(is_reverse_link));

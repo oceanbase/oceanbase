@@ -170,13 +170,14 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
   return ret;
 }
 
-int ObStmtResolver::resolve_dblink_name(const ParseNode *table_node, ObString &dblink_name, bool &is_reverse_link)
+int ObStmtResolver::resolve_dblink_name(const ParseNode *table_node, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node)
 {
   int ret = OB_SUCCESS;
   dblink_name.reset();
   if (!OB_ISNULL(table_node) && table_node->num_child_ > 2 &&
       !OB_ISNULL(table_node->children_) && !OB_ISNULL(table_node->children_[2])) {
     const ParseNode *dblink_node = table_node->children_[2];
+    has_dblink_node = true;
     if (2 == dblink_node->num_child_ && !OB_ISNULL(dblink_node->children_) &&
         !OB_ISNULL(dblink_node->children_[0]) && !OB_ISNULL(dblink_node->children_[1])) {
       int32_t dblink_name_len = static_cast<int32_t>(dblink_node->children_[0]->str_len_);
