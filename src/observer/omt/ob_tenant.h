@@ -308,6 +308,7 @@ public:
   share::ObCgroupCtrl *get_cgroup_ctrl() { return cgroup_ctrl_; }
 
   int init();
+  void update_queue_size();
   int acquire_more_worker(int64_t num, int64_t &succ_num);
   void calibrate_token_count();
   void check_worker_count();
@@ -487,6 +488,7 @@ public:
   int recv_large_request(rpc::ObRequest &req);
   int push_retry_queue(rpc::ObRequest &req, const uint64_t idx);
   void handle_retry_req();
+  void update_queue_size();
 
   void calibrate_token_count();
   void calibrate_group_token_count();

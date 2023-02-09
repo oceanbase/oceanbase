@@ -26,7 +26,7 @@ namespace omt
 
 class ObMultiLevelQueue {
 public:
-  int init(const int64_t limit);
+  void set_limit(const int64_t limit);
   int push(rpc::ObRequest &req, const int32_t level, const int32_t prio);
   int pop(common::ObLink *&task, const int32_t level, const int64_t timeout_us);
   int pop_timeup(common::ObLink *&task, const int32_t level, const int64_t timeout_us);

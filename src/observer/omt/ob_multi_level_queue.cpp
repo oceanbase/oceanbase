@@ -23,13 +23,11 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::obrpc;
 
 
-int ObMultiLevelQueue::init(int64_t limit)
+void ObMultiLevelQueue::set_limit(int64_t limit)
 {
-  int ret = OB_SUCCESS;
   for (int32_t level = 0; level < MULTI_LEVEL_QUEUE_SIZE; level++) {
     queue_[level].set_limit(limit);
   }
-  return ret;
 }
 
 int ObMultiLevelQueue::push(ObRequest &req, const int32_t level, const int32_t prio)

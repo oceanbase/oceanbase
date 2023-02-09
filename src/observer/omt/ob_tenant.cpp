@@ -317,6 +317,11 @@ int ObResourceGroup::init()
   return ret;
 }
 
+void ObResourceGroup::update_queue_size()
+{
+  req_queue_.set_limit(common::ObServerConfig::get_instance().tenant_task_queue_size);
+}
+
 int ObResourceGroup::acquire_more_worker(int64_t num, int64_t &succ_num)
 {
   int ret = OB_SUCCESS;
@@ -686,9 +691,7 @@ int ObTenant::init(const ObTenantMeta &meta)
   } else if (OB_ISNULL(multi_level_queue_ = OB_NEW(ObMultiLevelQueue, ObModIds::OMT_TENANT))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc ObMultiLevelQueue failed", K(ret), K(*this));
-  } else if (OB_FAIL(multi_level_queue_->init(
-          common::ObServerConfig::get_instance().tenant_task_queue_size))) {
-    LOG_WARN("ObMultiLevelQueue init failed", K(ret), K_(id), K(*this));
+  } else if (FALSE_IT(multi_level_queue_->set_limit(common::ObServerConfig::get_instance().tenant_task_queue_size))) {
   } else if (OB_ISNULL(rpc_stat_info_ = OB_NEW(RpcStatInfo, ObModIds::OMT_TENANT, id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc RpcStatInfo failed", K(ret), K(*this));
@@ -1367,6 +1370,7 @@ int ObTenant::timeup()
   calibrate_worker_count();
   handle_retry_req();
   calibrate_token_count();
+  update_queue_size();
   return ret;
 }
 
@@ -1381,6 +1385,20 @@ void ObTenant::handle_retry_req()
       LOG_ERROR("tenant patrol push req fail", "tenant", id_);
       break;
     }
+  }
+}
+
+void ObTenant::update_queue_size()
+{
+  ObResourceGroupNode* iter = NULL;
+  ObResourceGroup* group = nullptr;
+  while (NULL != (iter = group_map_.quick_next(iter))) {
+    group = static_cast<ObResourceGroup*>(iter);
+    group->update_queue_size();
+  }
+  req_queue_.set_limit(common::ObServerConfig::get_instance().tenant_task_queue_size);
+  if (nullptr != multi_level_queue_) {
+    multi_level_queue_->set_limit(common::ObServerConfig::get_instance().tenant_task_queue_size);
   }
 }
 
