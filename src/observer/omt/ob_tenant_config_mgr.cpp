@@ -266,7 +266,6 @@ int ObTenantConfigMgr::add_tenant_config(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObTenantConfig *const *config = nullptr;
-  DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
   DRWLock::WRLockGuard guard(rwlock_);
   if (is_virtual_tenant_id(tenant_id)
       || OB_NOT_NULL(config = config_map_.get(ObTenantID(tenant_id)))) {
@@ -278,6 +277,7 @@ int ObTenantConfigMgr::add_tenant_config(uint64_t tenant_id)
     ObTenantConfig *new_config = nullptr;
     new_config = OB_NEW(ObTenantConfig, ObModIds::OMT, tenant_id);
     if (OB_NOT_NULL(new_config)) {
+      DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
       if(OB_FAIL(new_config->init(this))) {
         LOG_WARN("new tenant config init failed", K(ret));
       } else if (OB_FAIL(config_map_.set_refactored(ObTenantID(tenant_id),
@@ -300,7 +300,6 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObTenantConfig *config = nullptr;
-  DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
   DRWLock::WRLockGuard guard(rwlock_);
   ObTenant *tenant = NULL;
   bool has_dropped = false;
@@ -321,6 +320,7 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
       ob_usleep(TIME_SLICE_PERIOD);
     } // for
     if (OB_SUCC(ret)) {
+      DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
       config->set_deleting();
       if (OB_FAIL(wait(config->get_update_task()))) {
         LOG_WARN("wait tenant config update task failed", K(ret), K(tenant_id));
