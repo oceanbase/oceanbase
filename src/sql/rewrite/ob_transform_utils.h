@@ -1744,6 +1744,8 @@ private:
                                 ObIArray<ObRawExpr *> &old_column_exprs,
                                 ObIArray<ObRawExpr *> &new_column_exprs);
 
+  static int is_scalar_expr(ObRawExpr* expr, bool &is_scalar);
+
 };
 
 

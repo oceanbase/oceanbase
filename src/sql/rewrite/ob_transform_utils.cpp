@@ -11317,16 +11317,19 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
 {
   int ret = OB_SUCCESS;
   bool is_correlated = false;
+  bool is_scalar = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
   } else if (expr->is_static_const_expr()) {
     //do nothing
+  } else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
+    LOG_WARN("failed to check is scalar expr", K(ret));
   } else if (OB_FAIL(is_correlated_expr(query_ref.get_exec_params(),
                                         expr,
                                         is_correlated))) {
     LOG_WARN("failed to check is correlated expr", K(ret));
-  } else if (!is_correlated) {
+  } else if (is_scalar && !is_correlated) {
     if (expr->is_exec_param_expr()) {
       //do nothing
     } else if (pos >= new_column_list.count()) {
@@ -11336,12 +11339,6 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
       expr = new_column_list.at(pos);
       ++pos;
     }
-  } else if (T_OP_EXISTS == expr->get_expr_type() ||
-             T_OP_NOT_EXISTS == expr->get_expr_type() ||
-             IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type()) ||
-             T_FUN_SYS_CAST == expr->get_expr_type()) {
-    //exists(subquery)、cast(expr as type)、c1 > any(subquery)
-    //do nothing
   } else {
     int64_t N = expr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
@@ -11378,27 +11375,24 @@ int ObTransformUtils::pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
 {
   int ret = OB_SUCCESS;
   is_correlated = false;
+  bool is_scalar = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
   } else if (expr->is_static_const_expr()) {
     //do nothing
+  } else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
+    LOG_WARN("failed to check is scalar expr", K(ret));
   } else if (OB_FAIL(is_correlated_expr(query_ref.get_exec_params(),
                                         expr,
                                         is_correlated))) {
     LOG_WARN("failed to check is correlated expr", K(ret));
-  } else if (!is_correlated) {
+  } else if (is_scalar && !is_correlated) {
     if (expr->is_exec_param_expr()) {
       //do nothing
     } else if (OB_FAIL(new_select_list.push_back(expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     }
-  } else if (T_OP_EXISTS == expr->get_expr_type() ||
-             T_OP_NOT_EXISTS == expr->get_expr_type() ||
-             IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type()) ||
-             T_FUN_SYS_CAST == expr->get_expr_type()) {
-    //exists(subquery)、cast(expr as type)、c1 > any(subquery)
-    //do nothing
   } else {
     int64_t N = expr->get_param_count();
     bool param_correlated = false;
@@ -12401,7 +12395,8 @@ int ObTransformUtils::extract_copier_exprs(ObRawExprCopier &copier,
 int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
                                                         ObRawExpr *aggr,
                                                         ObTransformerCtx *ctx,
-                                                        ObRawExpr *&out_expr) {
+                                                        ObRawExpr *&out_expr)
+{
   int ret = OB_SUCCESS;
   ObConstRawExpr *const_uint64_max = NULL;
   ObConstRawExpr *const_zero = NULL;
@@ -12430,6 +12425,22 @@ int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
                                                             out_expr,
                                                             ctx))) {
     LOG_WARN("failed to build case when expr", KR(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::is_scalar_expr(ObRawExpr* expr, bool &is_scalar)
+{
+  int ret = OB_SUCCESS;
+  is_scalar = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (T_OP_ROW == expr->get_expr_type()) {
+    is_scalar = false;
+  } else if (expr->is_query_ref_expr()) {
+    ObQueryRefRawExpr *query_ref = static_cast<ObQueryRefRawExpr*>(expr);
+    is_scalar = (!query_ref->is_set()) && (query_ref->get_output_column() == 1);
   }
   return ret;
 }
