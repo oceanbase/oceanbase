@@ -241,6 +241,46 @@ int ObDMLService::create_rowkey_check_hashset(int64_t estimate_row,
   return ret;
 }
 
+int ObDMLService::check_lob_column_changed(ObEvalCtx &eval_ctx,
+            const ObExpr& old_expr, ObDatum& old_datum,
+            const ObExpr& new_expr, ObDatum& new_datum,
+            int64_t& result) {
+  INIT_SUCC(ret);
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  int64_t timeout = 0;
+  int64_t query_st = eval_ctx.exec_ctx_.get_my_session()->get_query_start_time();
+  if (OB_ISNULL(lob_mngr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get lob manager handle null.", K(ret));
+  } else if (OB_FAIL(eval_ctx.exec_ctx_.get_my_session()->get_query_timeout(timeout))) {
+    LOG_WARN("failed to get session query timeout", K(ret));
+  } else {
+    timeout += query_st;
+    ObString old_str = old_datum.get_string();
+    ObString new_str = new_datum.get_string();
+    bool old_set_has_lob_header = old_expr.obj_meta_.has_lob_header() && old_str.length() > 0;
+    bool new_set_has_lob_header = new_expr.obj_meta_.has_lob_header() && new_str.length() > 0;
+    ObLobLocatorV2 old_lob(old_str, old_set_has_lob_header);
+    ObLobLocatorV2 new_lob(new_str, new_set_has_lob_header);
+    ObLobCompareParams cmp_params;
+    // binary compare ignore charset
+    cmp_params.collation_left_ = CS_TYPE_BINARY;
+    cmp_params.collation_right_ = CS_TYPE_BINARY;
+    cmp_params.offset_left_ = 0;
+    cmp_params.offset_right_ = 0;
+    cmp_params.compare_len_ = UINT64_MAX;
+    cmp_params.timeout_ = timeout;
+    if(old_set_has_lob_header && new_set_has_lob_header) {
+      if(OB_FAIL(lob_mngr->compare(old_lob, new_lob, cmp_params, result))) {
+        LOG_WARN("fail to compare lob", K(ret), K(old_lob), K(new_lob));
+      }
+    } else {
+      result = ObDatum::binary_equal(old_datum, new_datum) ? 0 : 1;
+    }
+  }
+  return ret;
+}
+
 int ObDMLService::check_row_whether_changed(const ObUpdCtDef &upd_ctdef,
                                             ObUpdRtDef &upd_rtdef,
                                             ObEvalCtx &eval_ctx)
@@ -276,7 +316,18 @@ int ObDMLService::check_row_whether_changed(const ObUpdCtDef &upd_ctdef,
             || OB_FAIL(new_row.at(idx)->eval(eval_ctx, new_datum))) {
           LOG_WARN("evaluate value failed", K(ret));
         } else {
-          upd_rtdef.is_row_changed_ = !ObDatum::binary_equal(*old_datum, *new_datum);
+          if(is_lob_storage(old_row.at(idx)->datum_meta_.type_)
+              && is_lob_storage(new_row.at(idx)->datum_meta_.type_))
+          {
+            int64_t cmp_res = 0;
+            if(OB_FAIL(check_lob_column_changed(eval_ctx, *old_row.at(idx), *old_datum, *new_row.at(idx), *new_datum, cmp_res))) {
+              LOG_WARN("compare lob datum failed", K(ret));
+            } else {
+              upd_rtdef.is_row_changed_ = (cmp_res != 0);
+            }
+          } else {
+            upd_rtdef.is_row_changed_ = !ObDatum::binary_equal(*old_datum, *new_datum);
+          }
         }
       }
     } else {
@@ -297,7 +348,18 @@ int ObDMLService::check_row_whether_changed(const ObUpdCtDef &upd_ctdef,
             || OB_FAIL(new_row.at(idx)->eval(eval_ctx, new_datum))) {
           LOG_WARN("evaluate value failed", K(ret));
         } else {
-          upd_rtdef.is_row_changed_ = !ObDatum::binary_equal(*old_datum, *new_datum);
+          if(is_lob_storage(old_row.at(idx)->datum_meta_.type_)
+              && is_lob_storage(new_row.at(idx)->datum_meta_.type_))
+          {
+            int64_t cmp_res = 0;
+            if(OB_FAIL(check_lob_column_changed(eval_ctx, *old_row.at(idx), *old_datum, *new_row.at(idx), *new_datum, cmp_res))) {
+              LOG_WARN("compare lob datum failed", K(ret));
+            } else {
+              upd_rtdef.is_row_changed_ = (cmp_res != 0);
+            }
+          } else {
+            upd_rtdef.is_row_changed_ = !ObDatum::binary_equal(*old_datum, *new_datum);
+          }
         }
       }
     }

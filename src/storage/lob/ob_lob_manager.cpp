@@ -18,6 +18,7 @@
 #include "lib/objectpool/ob_server_object_pool.h"
 #include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -685,6 +686,166 @@ int ObLobManager::query(
         common::sop_return(ObLobQueryIter, iter);
       }
     }
+  }
+  return ret;
+}
+
+int ObLobManager::compare(ObLobLocatorV2& lob_left,
+                          ObLobLocatorV2& lob_right,
+                          ObLobCompareParams& cmp_params,
+                          int64_t& result) {
+  INIT_SUCC(ret);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  if (OB_ISNULL(lob_mngr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get lob manager handle null.", K(ret));
+  } else if(!lob_left.has_lob_header() || !lob_right.has_lob_header()) {
+    ret = OB_ERR_ARG_INVALID;
+    LOG_WARN("invalid lob. should have lob locator", K(ret));
+  } else {
+    // get lob access param
+    ObLobAccessParam param_left;
+    ObLobAccessParam param_right;
+
+    if (OB_FAIL(build_lob_param(param_left, tmp_allocator, cmp_params.collation_left_,
+                cmp_params.offset_left_, cmp_params.compare_len_, cmp_params.timeout_, lob_left))) {
+      LOG_WARN("fail to build read param left", K(ret), K(lob_left), K(cmp_params));
+    } else if(OB_FAIL(build_lob_param(param_right, tmp_allocator, cmp_params.collation_right_,
+                cmp_params.offset_right_, cmp_params.compare_len_, cmp_params.timeout_, lob_right))) {
+      LOG_WARN("fail to build read param new", K(ret), K(lob_right));
+    } else if(OB_FAIL(compare(param_left, param_right, result))) {
+      LOG_WARN("fail to compare lob", K(ret), K(lob_left), K(lob_right), K(cmp_params));
+    }
+  }
+  return ret;
+}
+
+int ObLobManager::compare(ObLobAccessParam& param_left,
+                          ObLobAccessParam& param_right,
+                          int64_t& result) {
+  INIT_SUCC(ret);
+  common::ObCollationType collation_left = param_left.coll_type_;
+  common::ObCollationType collation_right = param_right.coll_type_;
+  common::ObCollationType cmp_collation = collation_left;
+  ObIAllocator* tmp_allocator = param_left.allocator_;
+  ObLobQueryIter *iter_left = nullptr;
+  ObLobQueryIter *iter_right = nullptr;
+  if(OB_ISNULL(tmp_allocator)) {
+    ret = OB_ERR_ARG_INVALID;
+    LOG_WARN("invalid alloctor param", K(ret), K(param_left));
+  } else if((collation_left == CS_TYPE_BINARY && collation_right != CS_TYPE_BINARY)
+            || (collation_left != CS_TYPE_BINARY && collation_right == CS_TYPE_BINARY)) {
+    ret = OB_ERR_ARG_INVALID;
+    LOG_WARN("invalid collation param", K(ret), K(param_left), K(param_right));
+  } else if (OB_FAIL(query(param_left, iter_left))) {
+    LOG_WARN("query param left by iter failed.", K(ret), K(param_left));
+  } else if (OB_FAIL(query(param_right, iter_right))) {
+    LOG_WARN("query param right by iter failed.", K(ret), K(param_right));
+  } else {
+    uint64_t read_buff_size = ObLobManager::LOB_READ_BUFFER_LEN;
+    char *read_buff = nullptr;
+    char *charset_convert_buff_ptr = nullptr;
+    uint64_t charset_convert_buff_size = read_buff_size * ObCharset::CharConvertFactorNum;
+
+    if (OB_ISNULL((read_buff = static_cast<char*>(tmp_allocator->alloc(read_buff_size * 2))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc read buffer failed.", K(ret), K(read_buff_size));
+    } else if (OB_ISNULL((charset_convert_buff_ptr = static_cast<char*>(tmp_allocator->alloc(charset_convert_buff_size))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc charset convert buffer failed.", K(ret), K(charset_convert_buff_size));
+    } else {
+      ObDataBuffer charset_convert_buff(charset_convert_buff_ptr, charset_convert_buff_size);
+      ObString read_buffer_left;
+      ObString read_buffer_right;
+      read_buffer_left.assign_buffer(read_buff, read_buff_size);
+      read_buffer_right.assign_buffer(read_buff + read_buff_size, read_buff_size);
+
+      // compare right after charset convert
+      ObString convert_buffer_right;
+      convert_buffer_right.assign_ptr(nullptr, 0);
+
+      while (OB_SUCC(ret) && result == 0) {
+        if (read_buffer_left.length() == 0) {
+          // reset buffer and read next block
+          read_buffer_left.assign_buffer(read_buff, read_buff_size);
+          if (OB_FAIL(iter_left->get_next_row(read_buffer_left))) {
+            if (ret != OB_ITER_END) {
+              LOG_WARN("failed to get next buffer for left lob.", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          }
+        }
+
+        if (OB_SUCC(ret) && convert_buffer_right.length() == 0) {
+          read_buffer_right.assign_buffer(read_buff + read_buff_size, read_buff_size);
+          charset_convert_buff.set_data(charset_convert_buff_ptr, charset_convert_buff_size);
+          convert_buffer_right.assign_ptr(nullptr, 0);
+
+          if (OB_FAIL(iter_right->get_next_row(read_buffer_right))) {
+            if (ret != OB_ITER_END) {
+              LOG_WARN("failed to get next buffer for right lob", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          } else {
+            // convert right lob to left charset if necessary
+            if(OB_FAIL(ObExprUtil::convert_string_collation(
+                                  read_buffer_right, collation_right,
+                                  convert_buffer_right, cmp_collation,
+                                  charset_convert_buff))) {
+                LOG_WARN("fail to convert string collation", K(ret),
+                          K(read_buffer_right), K(collation_right),
+                          K(convert_buffer_right), K(cmp_collation));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (read_buffer_left.length() == 0 && convert_buffer_right.length() == 0) {
+            result = 0;
+            ret = OB_ITER_END;
+          } else if (read_buffer_left.length() == 0 && convert_buffer_right.length() > 0) {
+            result = -1;
+          } else if (read_buffer_left.length() > 0 && convert_buffer_right.length() == 0) {
+            result = 1;
+          } else {
+            uint64_t cmp_len = read_buffer_left.length() > convert_buffer_right.length() ?
+                                    convert_buffer_right.length() : read_buffer_left.length();
+            ObString substr_lob_left;
+            ObString substr_lob_right;
+            substr_lob_left.assign_ptr(read_buffer_left.ptr(), cmp_len);
+            substr_lob_right.assign_ptr(convert_buffer_right.ptr(), cmp_len);
+            result = common::ObCharset::strcmp(cmp_collation, substr_lob_left, substr_lob_right);
+            if (result > 0) {
+              result = 1;
+            } else if (result < 0) {
+              result = -1;
+            }
+
+            read_buffer_left.assign_ptr(read_buffer_left.ptr() + cmp_len, read_buffer_left.length() - cmp_len);
+            convert_buffer_right.assign_ptr(convert_buffer_right.ptr() + cmp_len, convert_buffer_right.length() - cmp_len);
+          }
+        }
+      }
+      if (ret == OB_ITER_END) {
+        ret = OB_SUCCESS;
+      }
+    }
+    if (OB_NOT_NULL(read_buff)) {
+      tmp_allocator->free(read_buff);
+    }
+    if (OB_NOT_NULL(charset_convert_buff_ptr)) {
+      tmp_allocator->free(charset_convert_buff_ptr);
+    }
+  }
+  if (OB_NOT_NULL(iter_left)) {
+    iter_left->reset();
+    common::sop_return(ObLobQueryIter, iter_left);
+  }
+  if (OB_NOT_NULL(iter_right)) {
+    iter_right->reset();
+    common::sop_return(ObLobQueryIter, iter_right);
   }
   return ret;
 }
