@@ -432,10 +432,22 @@ int ObMultiVersionGarbageCollector::study_min_unallocated_WRS(
 {
   int ret = OB_SUCCESS;
 
+  const int64_t current_time = ObTimeUtility::current_time();
+  const int64_t max_read_stale_time =
+    transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID());
+
   if (OB_FAIL(MTL(transaction::ObTransService*)->get_weak_read_snapshot_version(
-                transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID()),
+                max_read_stale_time,
                 min_unallocated_WRS))) {
     MVCC_LOG(WARN, "fail to get weak read snapshot", K(ret));
+    if (OB_REPLICA_NOT_READABLE == ret) {
+      // The global weak read service cannot provide services in some cases(for
+      // example backup cluster's weak read service may hung during recovery).
+      // So instead of report the error, we decide to use the max allowed stale
+      // time for garbage collector.
+      min_unallocated_WRS.convert_from_ts(current_time - max_read_stale_time);
+      ret = OB_SUCCESS;
+    }
   }
 
   return ret;
