@@ -620,7 +620,14 @@ int ObPxMSReceiveOp::inner_get_next_row()
     const ObChunkDatumStore::StoredRow *store_row = nullptr;
     // (1) 向 heap 中添加一个或多个元素，直至 heap 满
     while (OB_SUCC(ret) && row_heap_.capacity() > row_heap_.count()) {
-      clear_evaluated_flag();
+      // Note:
+      //   inner_get_next_row is invoked in two pathes (batch vs
+      //   non-batch). The eval flag should be cleared with seperated flags
+      //   under each invoke path (batch vs non-batch). Therefore call the
+      //   overriding API do_clear_datum_eval_flag() to replace
+      //   clear_evaluated_flag
+      // TODO qubin.qb: Implement seperated inner_get_next_batch to isolate them
+      do_clear_datum_eval_flag();
       clear_dynamic_const_parent_flag();
       if (OB_FAIL(get_one_row_from_channels(phy_plan_ctx,
                                             row_heap_.writable_channel_idx(),

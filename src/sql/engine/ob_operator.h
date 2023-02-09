@@ -519,7 +519,7 @@ protected:
   // try open operator
   int try_open() { return opened_ ? common::OB_SUCCESS : open(); }
 
-  void do_clear_datum_eval_flag();
+  virtual void do_clear_datum_eval_flag();
   void clear_batch_end_flag() { brs_.end_ = false; }
   inline void reset_batchrows()
   {
