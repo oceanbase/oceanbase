@@ -176,6 +176,7 @@ enum ObBackupProviderItemType {
 };
 
 class ObBackupProviderItem {
+  friend class ObBackupTabletStat;
 public:
   ObBackupProviderItem();
   virtual ~ObBackupProviderItem();
@@ -201,9 +202,9 @@ public:
   NEED_SERIALIZE_AND_DESERIALIZE;
 private:
   // for parallel external sort serialization restriction
-  ObITable::TableKey get_fake_table_key_() const;
-  blocksstable::ObLogicMacroBlockId get_fake_logic_id_() const;
-  blocksstable::MacroBlockId get_fake_macro_id_() const;
+  static ObITable::TableKey get_fake_table_key_();
+  static blocksstable::ObLogicMacroBlockId get_fake_logic_id_();
+  static blocksstable::MacroBlockId get_fake_macro_id_();
 
 private:
   ObBackupProviderItemType item_type_;
