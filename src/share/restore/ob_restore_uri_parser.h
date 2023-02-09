@@ -45,6 +45,7 @@ public:
     static int set_locality(ObPhysicalRestoreJob &job, const char *val);
     static int set_primary_zone(ObPhysicalRestoreJob &job, const char *val);
     static int set_kms_encrypt(ObPhysicalRestoreJob &job, const char *val);
+    static int set_concurrency(ObPhysicalRestoreJob &job, const char *val);
   private:
     ObPhysicalRestoreJob &job_;
     struct Action {
@@ -52,7 +53,7 @@ public:
       Setter setter;
       bool required;
     };
-    const static int ACTION_CNT = 4;
+    const static int ACTION_CNT = 5;
     static Action actions_[ACTION_CNT];
     bool is_set_[ACTION_CNT];
   };

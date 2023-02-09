@@ -311,6 +311,8 @@ int ObRestoreService::restore_tenant(const ObPhysicalRestoreJob &job_info)
     } else if (OB_FAIL(restore_op.update_restore_option(
             job_id, "tenant_id", new_tenant_id))) {
       LOG_WARN("update restore option", K(ret), K(new_tenant_id), K(job_id), K(tenant_id_));
+    } else if (OB_FAIL(may_update_restore_concurrency_(new_tenant_id, job_info))) {
+      LOG_WARN("failed to update restore concurrency", K(ret), K(new_tenant_id), K(job_info));
     } else {
       idle_time_us_ = 1;// wakeup immediately
     }
@@ -660,6 +662,8 @@ int ObRestoreService::tenant_restore_finish(const ObPhysicalRestoreJob &job_info
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
+  } else if (OB_FAIL(reset_restore_concurrency_(job_info.get_tenant_id(), job_info))) {
+    LOG_WARN("failed to reset restore concurrency", K(ret), K(job_info));
   } else if (OB_FAIL(try_get_tenant_restore_history_(job_info, history_info))) {
     LOG_WARN("failed to get user tenant restory info", KR(ret), K(job_info));
   } else if (share::PHYSICAL_RESTORE_SUCCESS == job_info.get_status()) {
@@ -1389,6 +1393,62 @@ int ObRestoreService::reset_schema_status_(const uint64_t tenant_id)
     } else if (OB_FAIL(proxy.set_tenant_schema_status(schema_status))) {
       LOG_WARN("failed to update schema status", KR(ret), K(schema_status));
     }
+  }
+  return ret;
+}
+
+int ObRestoreService::may_update_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  const int64_t concurrency = job_info.get_concurrency();
+  const ObString &tenant_name = job_info.get_tenant_name();
+  int64_t ha_high_thread_score = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(new_tenant_id));
+  if (tenant_config.is_valid()) {
+    ha_high_thread_score = tenant_config->ha_high_thread_score;
+  }
+  if (!job_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(job_info));
+  } else if (0 == concurrency || 0 != ha_high_thread_score) {
+    LOG_INFO("do nothing", K(concurrency), K(ha_high_thread_score));
+  } else if (OB_FAIL(update_restore_concurrency_(tenant_name, new_tenant_id, concurrency))) {
+    LOG_WARN("failed to update restore concurrency", K(ret), K(job_info));
+  }
+  return ret;
+}
+
+int ObRestoreService::reset_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  const int64_t concurrency = 0;
+  const ObString &tenant_name = job_info.get_tenant_name();
+  if (!job_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(job_info));
+  } else if (OB_FAIL(update_restore_concurrency_(tenant_name, new_tenant_id, concurrency))) {
+    LOG_WARN("failed to update restore concurrency", K(ret), K(job_info));
+  }
+  return ret;
+}
+
+int ObRestoreService::update_restore_concurrency_(const common::ObString &tenant_name,
+    const uint64_t tenant_id, const int64_t concurrency)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(
+      "ALTER SYSTEM SET ha_high_thread_score = %ld TENANT = '%.*s'",
+      concurrency, tenant_name.length(), tenant_name.ptr()))) {
+    LOG_WARN("failed to append fmt", K(ret), K(tenant_name));
+  } else if (OB_FAIL(sql_proxy_->write(sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write sql", K(ret), K(sql));
+  } else {
+    LOG_INFO("update restore concurrency", K(tenant_name), K(concurrency), K(sql));
   }
   return ret;
 }
