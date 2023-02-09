@@ -56,6 +56,7 @@ public:
   virtual void destroy();
   virtual void reset_status();
   virtual int get_access_mode(AccessMode &access_mode) const;
+  virtual int get_mode_version(int64_t &mode_version) const;
   virtual int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const;
   virtual int get_ref_scn(int64_t &mode_version, share::SCN &ref_scn) const;
   bool can_append() const;

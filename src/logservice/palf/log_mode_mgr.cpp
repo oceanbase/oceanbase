@@ -119,6 +119,18 @@ int LogModeMgr::get_access_mode(AccessMode &access_mode) const
   return ret;
 }
 
+int LogModeMgr::get_mode_version(int64_t &mode_version) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogModeMgr has inited", K(ret));
+  } else {
+    mode_version = ATOMIC_LOAD(reinterpret_cast<const int64_t *>(&applied_mode_meta_.mode_version_));
+  }
+  return ret;
+}
+
 int LogModeMgr::get_access_mode(int64_t &mode_version, AccessMode &access_mode) const
 {
   int ret = OB_SUCCESS;

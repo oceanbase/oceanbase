@@ -683,6 +683,7 @@ public:
                          const share::SCN &ref_scn) override final;
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const override final;
   int get_access_mode(AccessMode &access_mode) const override final;
+  int get_access_mode_version(int64_t &mode_version) const;
   // =========================== Iterator start ============================
   int alloc_palf_buffer_iterator(const LSN &offset, PalfBufferIterator &iterator) override final;
   int alloc_palf_group_buffer_iterator(const LSN &offset, PalfGroupBufferIterator &iterator) override final;

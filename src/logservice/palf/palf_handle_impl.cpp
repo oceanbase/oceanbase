@@ -1684,6 +1684,18 @@ int PalfHandleImpl::get_access_mode(AccessMode &access_mode) const
   return ret;
 }
 
+int PalfHandleImpl::get_access_mode_version(int64_t &mode_version) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_mode_version(mode_version))) {
+    PALF_LOG(WARN, "get_mode_version failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 int PalfHandleImpl::get_access_mode(int64_t &mode_version, AccessMode &access_mode) const
 {
   int ret = OB_SUCCESS;
@@ -1710,10 +1722,9 @@ int PalfHandleImpl::alloc_palf_buffer_iterator(const LSN &offset,
   };
   auto get_mode_version = [this]() -> int64_t {
     int64_t mode_version = INVALID_PROPOSAL_ID;
-    AccessMode curr_access_mode;
     int ret = OB_SUCCESS;
-    if (OB_FAIL(this->get_access_mode(mode_version, curr_access_mode))) {
-      PALF_LOG(WARN, "get_access_mode failed", K(ret), KPC(this));
+    if (OB_FAIL(this->get_access_mode_version(mode_version))) {
+      PALF_LOG(WARN, "get_access_mode_version failed", K(ret), KPC(this));
       mode_version = INVALID_PROPOSAL_ID;
     }
     return mode_version;
@@ -1738,10 +1749,9 @@ int PalfHandleImpl::alloc_palf_group_buffer_iterator(const LSN &offset,
   };
   auto get_mode_version = [this]() -> int64_t {
     int64_t mode_version = INVALID_PROPOSAL_ID;
-    AccessMode curr_access_mode;
     int ret = OB_SUCCESS;
-    if (OB_FAIL(this->get_access_mode(mode_version, curr_access_mode))) {
-      PALF_LOG(WARN, "get_access_mode failed", K(ret), KPC(this));
+    if (OB_FAIL(this->get_access_mode_version(mode_version))) {
+      PALF_LOG(WARN, "get_access_mode_version failed", K(ret), KPC(this));
       mode_version = INVALID_PROPOSAL_ID;
     }
     return mode_version;
