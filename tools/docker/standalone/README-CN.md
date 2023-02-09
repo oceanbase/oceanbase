@@ -1,6 +1,6 @@
 # 如何使用Docker部署OceanBase
 
-OceanBase 提供了一个独立部署的测试镜像[oceanbase-ce](https://hub.docker.com/r/oceanbase/oceanbase-ce)。默认情况下，这个镜像会在当前容器环境中部署一个占用最大资源的数据库实例。不过可以使用环境变量MINI_MODE来部署一个mini模式的数据库实例。
+OceanBase 提供了一个独立部署的测试镜像[oceanbase-ce](https://hub.docker.com/r/oceanbase/oceanbase-ce)。默认情况下，这个镜像会部署一个MINI_MODE OceanBase 实例。
 
 **注意**
 
@@ -18,7 +18,7 @@ OceanBase 提供了一个独立部署的测试镜像[oceanbase-ce](https://hub.d
 
 在部署 oceanbase-ce 镜像之前，您需要确认以下信息：
 
-- 确保您的机器至少提供 2 核 10GB 以上的资源。
+- 确保您的机器至少提供 2 核 8GB 以上的资源。
 - 您的机器已经安装以下程序：
 
     应用程序 | 推荐版本 | 参考文档
@@ -31,11 +31,11 @@ OceanBase 提供了一个独立部署的测试镜像[oceanbase-ce](https://hub.d
 运行以下命令，启动 OceanBase 的实例：
 
 ```bash
-# 根据当前容器情况部署最大规格的实例
+# 部署最小规格实例
 docker run -p 2881:2881 --name oceanbase-ce -d oceanbase/oceanbase-ce
 
-# 部署最小规格实例
-docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+# 根据当前容器情况部署最大规格的实例
+docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=0 -d oceanbase/oceanbase-ce
 ```
 
 启动预计需要 2-5 分钟。执行以下命令，如果返回 `boot success!`，则启动成功。
@@ -44,6 +44,8 @@ docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=1 -d oceanbase/oceanbas
 $ docker logs oceanbase-ce | tail -1
 boot success!
 ```
+
+启动成功后，容器中会启动一个oceanbase进程实例，可以使用root用户进行连接，不需要使用密码。
 
 **注意：** 如果observer进程出现异常退出，容器不会自动退出。
 

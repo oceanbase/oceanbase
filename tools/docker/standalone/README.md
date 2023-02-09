@@ -45,6 +45,8 @@ $ docker logs oceanbase-ce | tail -1
 boot success!
 ```
 
+After started, there is an oceanbase instance. You can connect to the oceanbase by root user without password.
+
 ## Connect to an OceanBase instance
 
 oceanbase-ce image contains obclient (OceanBase Database client) and the default connection script `ob-mysql`.

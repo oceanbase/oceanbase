@@ -1,43 +1,24 @@
 oceanbase-ce:
   servers:
+    # Please don't use hostname, only IP can be supported
     - 127.0.0.1
   global:
-    home_path: @OB_HOME_PATH@ # default: /root/ob
+    #  The working directory for OceanBase Database. OceanBase Database is started under this directory. This is a required field.
+    home_path: @OB_HOME_PATH@
     devname: lo
-    mysql_port: @OB_MYSQL_PORT@ # default: 2881
-    rpc_port: @OB_RPC_PORT@ # default: 2882
+    mysql_port: @OB_MYSQL_PORT@
+    rpc_port: @OB_RPC_PORT@
     zone: zone1
     cluster_id: 1
-    memory_limit: 6G
-    system_memory: 3G
-    stack_size: 512K
+    # please set memory limit to a suitable value which is matching resource.
+    memory_limit: 6G # The maximum running memory for an observer
+    system_memory: 1G # The reserved system memory. system_memory is reserved for general tenants. The default value is 30G.
+    datafile_size: 5G # Size of the data file.
+    log_disk_size: 5G # The size of disk space used by the clog files.
     cpu_count: 16
-    cache_wash_threshold: 1G
-    __min_full_resource_pool_memory: 268435456
-    workers_per_cpu_quota: 10
-    schema_history_expire_time: 1d
-    net_thread_count: 4
-    sys_bkgd_migration_retry_num: 3
-    minor_freeze_times: 100
-    enable_separate_sys_clog: 0
-    enable_auto_leader_switch: FALSE
-    enable_one_phase_commit: FALSE
-    weak_read_version_refresh_interval: 5s
-    trace_log_slow_query_watermark: 1s
-    large_query_threshold: 1s
-    clog_sync_time_warn_threshold: 1s
-    syslog_io_bandwidth_limit: 10M
-    enable_sql_audit: FALSE
-    enable_perf_event: FALSE
-    clog_max_unconfirmed_log_count: 5000
-    autoinc_cache_refresh_interval: 86400s
-    cpu_quota_concurrency: 2
-    datafile_size: 5G
-    syslog_level: WARN
-    enable_syslog_recycle: TRUE
-    max_syslog_file_count: 2
-    enable_early_lock_release: false tenant=all
-    default_compress_func: lz4_1.0
-    root_password: @OB_ROOT_PASSWORD@
-    clog_disk_utilization_threshold: 95
-    clog_disk_usage_limit_percentage: 98
+    production_mode: true
+    syslog_level: INFO # System log level. The default value is INFO.
+    enable_syslog_wf: false # Print system logs whose levels are higher than WARNING to a separate log file. The default value is true.
+    enable_syslog_recycle: true # Enable auto system log recycling or not. The default value is false.
+    max_syslog_file_count: 4 # The maximum number of reserved log files before enabling auto recycling. The default value is 0.
+    appname: @OB_CLUSTER_NAME@
