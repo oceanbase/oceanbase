@@ -682,12 +682,9 @@ int ObTransformGroupByPullup::get_trans_view(ObDMLStmt *stmt, ObSelectStmt *&vie
 int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelper &helper)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 4> view_columns;
-  ObSEArray<ObRawExpr *, 4> stmt_columns;
   ObSEArray<ObRawExpr *, 4> unique_exprs;
   ObSEArray<ObRawExpr *, 4> aggr_column;
   ObSEArray<ObRawExpr *, 4> aggr_select;
-  ObSEArray<ObRawExpr *, 4> pullup_exprs;
   TableItem *table_item = NULL;
   ObSelectStmt *subquery = NULL;
   ObSqlBitSet<> ignore_tables;
@@ -742,47 +739,8 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
   }
 
   if (OB_SUCC(ret)) {
-    //提取select item、group by expr、having condition的column expr，在视图内创建select item
-    //在stmt内创建对应的column expr
     if (OB_FAIL(wrap_case_when_if_necessary(*subquery, helper, aggr_select))) {
       LOG_WARN("failed to wrap case when", K(ret));
-    } else if (OB_FAIL(append(pullup_exprs, aggr_select))) {
-      LOG_WARN("failed to append pullup exprs", K(ret));
-    } else if (OB_FAIL(append(pullup_exprs, subquery->get_group_exprs()))) {
-      LOG_WARN("failed to append pullup exprs", K(ret));
-    } else if (OB_FAIL(append(pullup_exprs, subquery->get_aggr_items()))) {
-      LOG_WARN("failed to append pullup exprs", K(ret));
-    } else if (OB_FAIL(append(pullup_exprs, subquery->get_having_exprs()))) {
-      LOG_WARN("failed to append pullup exprs", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(pullup_exprs, view_columns))) {
-      LOG_WARN("failed to extract column exprs", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
-                                                                *table_item,
-                                                                stmt,
-                                                                view_columns,
-                                                                stmt_columns))) {
-      LOG_WARN("failed to create view columns", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    ObRawExprCopier copier(*ctx_->expr_factory_);
-    //拉出select aggr items, group by exprs、aggr items、having exprs
-    if (OB_FAIL(copier.add_replaced_expr(view_columns, stmt_columns))) {
-      LOG_WARN("failed to add replaced expr", K(ret));
-    } else if (OB_FAIL(copier.add_skipped_expr(subquery->get_subquery_exprs(), false))) {
-      LOG_WARN("failed to add direct replace exprs", K(ret));
-    } else if (OB_FAIL(copier.copy_on_replace(subquery->get_group_exprs(),
-                                              subquery->get_group_exprs()))) {
-      LOG_WARN("failed to copy on replace group exprs", K(ret));
-    } else if (OB_FAIL(copier.copy_on_replace(subquery->get_aggr_items(),
-                                              subquery->get_aggr_items()))) {
-      LOG_WARN("failed to copy on replace aggr items", K(ret));
-    } else if (OB_FAIL(copier.copy_on_replace(subquery->get_having_exprs(),
-                                              subquery->get_having_exprs()))) {
-      LOG_WARN("failed to copy on replace having exprs", K(ret));
-    } else if (OB_FAIL(copier.copy_on_replace(aggr_select, 
-                                              aggr_select))) {
-      LOG_WARN("failed to copy on replace aggr select", K(ret));
     } else if (OB_FAIL(stmt->replace_relation_exprs(aggr_column, aggr_select))) {
       LOG_WARN("failed to replace inner stmt expr", K(ret));
     } else if (OB_FAIL(append(stmt->get_group_exprs(), subquery->get_group_exprs()))) {
@@ -803,12 +761,10 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
       subquery->get_having_exprs().reset();
       if (OB_FAIL(subquery->adjust_subquery_list())) {
         LOG_WARN("failed to adjust subquery list", K(ret));
-      } else if (OB_FAIL(stmt->adjust_subquery_list())) {
-        LOG_WARN("failed to adjust subquery list", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::generate_select_list(ctx_, stmt, table_item))) {
+        LOG_WARN("failed to generate select list", K(ret));
       } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
-      } else {
-        //do nothing
       }
     }
   }
