@@ -1332,7 +1332,10 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
   req.set_enqueue_timestamp(ObTimeUtility::current_time());
-  if (0 != req.get_group_id()) {
+  if (ATOMIC_LOAD(&stopped_)) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("receive large request but tenant has already stopped", K(ret), K(id_));
+  } else if (0 != req.get_group_id()) {
     req.set_large_retry_flag(true);
     if (OB_FAIL(recv_request(req))) {
       LOG_WARN("tenant receive large retry request fail", K(ret));
