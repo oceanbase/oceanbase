@@ -266,6 +266,17 @@ void ObMemtable::destroy()
   snapshot_version_.set_max();
 }
 
+int ObMemtable::safe_to_destroy(bool &is_safe)
+{
+  int ret = OB_SUCCESS;
+
+  is_safe = (0 == get_ref() &&
+             0 == get_write_ref() &&
+             0 == get_unsubmitted_cnt() &&
+             0 == get_unsynced_cnt());
+
+  return ret;
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Public Functions: set/lock
 
@@ -1775,7 +1786,10 @@ bool ObMemtable::ready_for_flush_()
       migration_clog_checkpoint_scn >= get_end_scn() &&
       0 != unsynced_cnt &&
       multi_source_data_.get_all_unsync_cnt_for_multi_data() == unsynced_cnt) {
+    ATOMIC_STORE(&unsubmitted_cnt_, 0);
+    ATOMIC_STORE(&unsynced_cnt_, 0);
     bool_ret = true;
+    TRANS_LOG(INFO, "skip ready for flush for migration", KPC(this));
   }
   if (bool_ret) {
     if (OB_FAIL(resolve_snapshot_version_())) {

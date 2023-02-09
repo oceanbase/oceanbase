@@ -5653,22 +5653,27 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
                                         const bool is_force_kill)
 {
   int ret = OB_SUCCESS;
-  ObMulSourceDataNotifyArg arg;
-  arg.tx_id_ = trans_id_;
-  arg.scn_ = log_ts;
-  arg.trans_version_ = ctx_tx_data_.get_commit_version();
-  arg.for_replay_ = for_replay;
-  arg.notify_type_ = notify_type;
-  arg.is_force_kill_ = is_force_kill;
+  if (is_exiting_ && !is_follower_()) {
+    // do nothing
+  } else {
+    ObMulSourceDataNotifyArg arg;
+    arg.tx_id_ = trans_id_;
+    arg.scn_ = log_ts;
+    arg.trans_version_ = ctx_tx_data_.get_commit_version();
+    arg.for_replay_ = for_replay;
+    arg.notify_type_ = notify_type;
+    arg.is_force_kill_ = is_force_kill;
 
-  int64_t total_time = 0;
+    int64_t total_time = 0;
 
-  if (OB_FAIL(ObMulSourceTxDataNotifier::notify(notify_array, notify_type, arg, this, total_time))) {
-    TRANS_LOG(WARN, "notify data source failed", K(ret), K(arg));
-  }
-  if (notify_array.count() > 0) {
-    TRANS_LOG(INFO, "notify MDS", K(ret), K(trans_id_), K(ls_id_), K(notify_type), K(log_ts),
-              K(notify_array), K(total_time));
+    if (OB_FAIL(
+            ObMulSourceTxDataNotifier::notify(notify_array, notify_type, arg, this, total_time))) {
+      TRANS_LOG(WARN, "notify data source failed", K(ret), K(arg));
+    }
+    if (notify_array.count() > 0) {
+      TRANS_LOG(INFO, "notify MDS", K(ret), K(trans_id_), K(ls_id_), K(notify_type), K(log_ts),
+                K(notify_array), K(total_time));
+    }
   }
   return ret;
 }
@@ -5693,6 +5698,9 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
   } else if (is_follower_()) {
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "can not register mds on a follower", K(ret), K(data_source_type), K(len), KPC(this));
+  } else if (is_committing_()) {
+    ret = OB_TRANS_HAS_DECIDED;
+    TRANS_LOG(WARN, "can not register mds in committing part_ctx", K(ret), KPC(this));
   } else if (OB_ISNULL(ptr = mtl_malloc(len, "MultiTxData"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "allocate memory failed", KR(ret), K(data_source_type), K(len));
@@ -6440,10 +6448,10 @@ int ObPartTransCtx::do_force_kill_tx_()
 
   if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
     TRANS_LOG(WARN, "gen total mds array failed", KR(ret), K(*this));
-  // } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT,
-  //                                        ctx_tx_data_.get_end_log_ts() /*invalid_scn*/, false,
-  //                                        tmp_array, true /*is_force_kill*/))) {
-  //   TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
+  } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT,
+                                         ctx_tx_data_.get_end_log_ts() /*invalid_scn*/, false,
+                                         tmp_array, true /*is_force_kill*/))) {
+    TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
   } else {
     trans_kill_();
     // Force kill cannot guarantee the consistency, so we just set end_log_ts
