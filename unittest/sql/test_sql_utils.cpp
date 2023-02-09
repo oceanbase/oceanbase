@@ -293,9 +293,11 @@ void TestSqlUtils::destroy()
     delete schema_service_;
   }
   if (NULL != ps) {
+    ps->destroy();
     delete ps;
   }
   if (NULL != pc) {
+    pc->destroy();
     delete pc;
   }
   ObKVGlobalCache::get_instance().destroy();
