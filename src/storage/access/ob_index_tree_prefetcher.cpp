@@ -29,6 +29,7 @@ void ObIndexTreePrefetcher::reset()
 {
   is_inited_ = false;
   is_rescan_ = false;
+  rescan_cnt_ = 0;
   data_version_ = 0;
   sstable_ = nullptr;
   data_block_cache_ = nullptr;
@@ -107,6 +108,14 @@ int ObIndexTreePrefetcher::switch_context(
       micro_block_handle_mgr_.reset();
       if (OB_FAIL(micro_block_handle_mgr_.init(true, false, *access_ctx.stmt_allocator_))) {
         LOG_WARN("failed to init block handle mgr", K(ret));
+      }
+    } else {
+      rescan_cnt_++;
+      if (rescan_cnt_ >= MAX_RESCAN_HOLD_LIMIT) {
+        rescan_cnt_ = 0;
+        if (OB_FAIL(micro_block_handle_mgr_.reset_handle_cache())) {
+          STORAGE_LOG(WARN, "failed to reset handle cache", K(ret));
+        }
       }
     }
   }
@@ -482,6 +491,14 @@ int ObIndexTreeMultiPrefetcher::switch_context(
       micro_block_handle_mgr_.reset();
       if (OB_FAIL(micro_block_handle_mgr_.init(true, false, *access_ctx.stmt_allocator_))) {
         LOG_WARN("failed to init block handle mgr", K(ret));
+      }
+    } else {
+      rescan_cnt_++;
+      if (rescan_cnt_ >= MAX_RESCAN_HOLD_LIMIT) {
+        rescan_cnt_ = 0;
+        if (OB_FAIL(micro_block_handle_mgr_.reset_handle_cache())) {
+          STORAGE_LOG(WARN, "failed to reset handle cache", K(ret));
+        }
       }
     }
     if (OB_SUCC(ret)) {

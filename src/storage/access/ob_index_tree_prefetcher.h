@@ -115,6 +115,7 @@ public:
   ObIndexTreePrefetcher() :
       is_inited_(false),
       is_rescan_(false),
+      rescan_cnt_(0),
       data_version_(0),
       sstable_(nullptr),
       data_block_cache_(nullptr),
@@ -172,8 +173,10 @@ private:
   }
 
 protected:
+  static const int64_t MAX_RESCAN_HOLD_LIMIT = 64;
   bool is_inited_;
   bool is_rescan_;
+  int64_t rescan_cnt_;
   int64_t data_version_;
   ObSSTable *sstable_;
   ObDataMicroBlockCache *data_block_cache_;

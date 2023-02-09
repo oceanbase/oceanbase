@@ -87,6 +87,7 @@ public:
       const blocksstable::MacroBlockId &macro_id,
       const blocksstable::ObIndexBlockRowHeader &idx_header,
       ObMicroBlockDataHandle &micro_block_handle);
+  int reset_handle_cache();
 private:
   // allocator for index micro block prefetch failed and async io
   common::ObFIFOAllocator allocator_;
