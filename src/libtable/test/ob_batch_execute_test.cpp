@@ -247,302 +247,302 @@ TEST_F(TestBatchExecute, serialize_batch_result)
 
 
 
-// TEST_F(TestBatchExecute, all_single_operation)
-// {
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("all_single_operation_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   OB_LOG(INFO, "begin all_single_operation");
-//   // insert C2
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObITableEntity *entity = NULL;
-//   entity = entity_factory.alloc();
-//   ASSERT_TRUE(NULL != entity);
-//   int64_t key_key = 139107;
-//   ObObj key;
-//   key.set_int(key_key);
-//   int64_t value_value = 33521;
-//   ObObj value;
-//   value.set_int(value_value);
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   ObString c3_value = ObString::make_string("hello world");
-//   ObTableOperation table_operation = ObTableOperation::insert(*entity);
-//   ObTableOperationResult r;
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   const ObITableEntity *result_entity = NULL;
-//   ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//   ASSERT_EQ(1, r.get_affected_rows());
-//   ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-//   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//   ASSERT_TRUE(NULL != result_entity);
-//   ASSERT_TRUE(result_entity->is_empty());
-//   // insert again: fail
-//   {
-//     ObTableOperation table_operation = ObTableOperation::insert(*entity);
-//     ObTableOperationResult r;
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//     ASSERT_EQ(value_value, value.get_int());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ASSERT_TRUE(value.is_null());
-//   }
-//   // update C3
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//     ObTableOperation table_operation = ObTableOperation::update(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//     ASSERT_EQ(value_value, value.get_int());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ObString str;
-//     ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//     ASSERT_TRUE(str == c3_value);
-//   }
-//   // update C3 not exist key
-//   {
-//     entity->reset();
-//     ObObj not_exist_key;
-//     not_exist_key.set_int(key_key+1);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(not_exist_key));
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//     ObTableOperation table_operation = ObTableOperation::update(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // update rowkey column
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C1, value));
-//     ObTableOperation table_operation = ObTableOperation::update(*entity);
-//     ASSERT_EQ(OB_NOT_SUPPORTED, table_->execute(table_operation, r));
-//   }
-//   // replace C3
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//     ObTableOperation table_operation = ObTableOperation::replace(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(2, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//     ASSERT_TRUE(value.is_null());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ObString str;
-//     ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//     ASSERT_TRUE(str == c3_value);
-//   }
-//   // insert_or_update C2: update
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     value.set_int(value_value);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//     ASSERT_EQ(value_value, value.get_int());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ObString str;
-//     ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//     ASSERT_TRUE(str == c3_value);
-//   }
-//   // delete not exist row
-//   {
-//     entity->reset();
-//     ObObj not_exist_key;
-//     not_exist_key.set_int(key_key+1);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(not_exist_key));
-//     ObTableOperation table_operation = ObTableOperation::del(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::DEL, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // delete
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ObTableOperation table_operation = ObTableOperation::del(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::DEL, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // get again
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // insert_or_update C2: insert
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     value.set_int(value_value);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//     ASSERT_EQ(value_value, value.get_int());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ASSERT_TRUE(value.is_null());
-//   }
-//   // delete & cleanup
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ObTableOperation table_operation = ObTableOperation::del(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::DEL, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-// }
+TEST_F(TestBatchExecute, all_single_operation)
+{
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("all_single_operation_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  OB_LOG(INFO, "begin all_single_operation");
+  // insert C2
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObITableEntity *entity = NULL;
+  entity = entity_factory.alloc();
+  ASSERT_TRUE(NULL != entity);
+  int64_t key_key = 139107;
+  ObObj key;
+  key.set_int(key_key);
+  int64_t value_value = 33521;
+  ObObj value;
+  value.set_int(value_value);
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  ObString c3_value = ObString::make_string("hello world");
+  ObTableOperation table_operation = ObTableOperation::insert(*entity);
+  ObTableOperationResult r;
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  const ObITableEntity *result_entity = NULL;
+  ASSERT_EQ(OB_SUCCESS, r.get_errno());
+  ASSERT_EQ(1, r.get_affected_rows());
+  ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+  ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+  ASSERT_TRUE(NULL != result_entity);
+  ASSERT_TRUE(result_entity->is_empty());
+  // insert again: fail
+  {
+    ObTableOperation table_operation = ObTableOperation::insert(*entity);
+    ObTableOperationResult r;
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+    ASSERT_EQ(value_value, value.get_int());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ASSERT_TRUE(value.is_null());
+  }
+  // update C3
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ObTableOperation table_operation = ObTableOperation::update(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+    ASSERT_EQ(value_value, value.get_int());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ASSERT_TRUE(str == c3_value);
+  }
+  // update C3 not exist key
+  {
+    entity->reset();
+    ObObj not_exist_key;
+    not_exist_key.set_int(key_key+1);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(not_exist_key));
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ObTableOperation table_operation = ObTableOperation::update(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // update rowkey column
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C1, value));
+    ObTableOperation table_operation = ObTableOperation::update(*entity);
+    ASSERT_EQ(OB_NOT_SUPPORTED, table_->execute(table_operation, r));
+  }
+  // replace C3
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ObTableOperation table_operation = ObTableOperation::replace(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(2, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+    ASSERT_TRUE(value.is_null());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ASSERT_TRUE(str == c3_value);
+  }
+  // insert_or_update C2: update
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_int(value_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+    ASSERT_EQ(value_value, value.get_int());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ASSERT_TRUE(str == c3_value);
+  }
+  // delete not exist row
+  {
+    entity->reset();
+    ObObj not_exist_key;
+    not_exist_key.set_int(key_key+1);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(not_exist_key));
+    ObTableOperation table_operation = ObTableOperation::del(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::DEL, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // delete
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ObTableOperation table_operation = ObTableOperation::del(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::DEL, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // get again
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // insert_or_update C2: insert
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_int(value_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+    ASSERT_EQ(value_value, value.get_int());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ASSERT_TRUE(value.is_null());
+  }
+  // delete & cleanup
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ObTableOperation table_operation = ObTableOperation::del(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::DEL, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+}
 
 TEST_F(TestBatchExecute, multi_insert_or_update_AND_multi_get)
 {
@@ -1119,118 +1119,118 @@ TEST_F(TestBatchExecute, serialize_query_result)
 
 
 // create table if not exists partial_update_test (C1 bigint primary key, C2 bigint, C3 varchar(100) not null);
-// TEST_F(TestBatchExecute, partial_update)
-// {
-//   // setup
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("partial_update_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObTableOperationResult r;
-//   ObITableEntity *entity = NULL;
-//   const ObITableEntity *result_entity = NULL;
-//   ObTableOperation table_operation;
+TEST_F(TestBatchExecute, partial_update)
+{
+  // setup
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("partial_update_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableOperationResult r;
+  ObITableEntity *entity = NULL;
+  const ObITableEntity *result_entity = NULL;
+  ObTableOperation table_operation;
 
-//   entity = entity_factory.alloc();
-//   ASSERT_TRUE(NULL != entity);
-//   int64_t key_key = 139107;
-//   ObObj key;
-//   key.set_int(key_key);
-//   int64_t value_value = 33521;
-//   ObObj value;
-//   value.set_int(value_value);
+  entity = entity_factory.alloc();
+  ASSERT_TRUE(NULL != entity);
+  int64_t key_key = 139107;
+  ObObj key;
+  key.set_int(key_key);
+  int64_t value_value = 33521;
+  ObObj value;
+  value.set_int(value_value);
 
-//   //prepare data
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   ObString c3_value = ObString::make_string("hello world");
-//   value.set_varchar(c3_value);
-//   value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//   table_operation = ObTableOperation::insert(*entity);
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   ASSERT_EQ(1, r.get_affected_rows());
-//   ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-//   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+  //prepare data
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  ObString c3_value = ObString::make_string("hello world");
+  value.set_varchar(c3_value);
+  value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+  table_operation = ObTableOperation::insert(*entity);
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  ASSERT_EQ(1, r.get_affected_rows());
+  ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+  ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
 
-//   entity->reset();
-//   key.set_int(key_key + 1);
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   value.set_int(1235);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   value.set_varchar(c3_value);
-//   value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//   table_operation = ObTableOperation::insert(*entity);
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   ASSERT_EQ(1, r.get_affected_rows());
-//   ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-//   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-
-
-//   //single update
-//   entity->reset();
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   value.set_int(1245);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   table_operation = ObTableOperation::update(*entity);
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//   ASSERT_EQ(1, r.get_affected_rows());
-//   ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
-//   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-
-//   //insert or update
-//   entity->reset();
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   value.set_int(5432);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   value.set_varchar(c3_value);
-//   value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//   table_operation = ObTableOperation::insert_or_update(*entity);
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//   ASSERT_EQ(1, r.get_affected_rows());
-//   ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-
-//   //batch update
-//   const int64_t batch_size = 2;
-//   ObTableBatchOperation batch_operation;
-//   for (int64_t i = 0; i < batch_size; ++i) {
-//     entity = entity_factory.alloc();
-//     ASSERT_TRUE(NULL != entity);
-//     key.set_int(key_key + i);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     value.set_int(i);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ASSERT_EQ(OB_SUCCESS, batch_operation.update(*entity));
-//   }
-
-//   ObTableBatchOperationResult result;
-//   ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//   OB_LOG(INFO, "batch execute result", K(result));
-//   ASSERT_EQ(batch_size, result.count());
-//   for (int64_t i = 0; i < batch_size; ++i)
-//   {
-//     const ObTableOperationResult &r = result.at(i);
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//   } // end for
+  entity->reset();
+  key.set_int(key_key + 1);
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  value.set_int(1235);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  value.set_varchar(c3_value);
+  value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+  table_operation = ObTableOperation::insert(*entity);
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  ASSERT_EQ(1, r.get_affected_rows());
+  ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+  ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
 
 
-//   // teardown
-//   service_client_->free_table(the_table);
-//   the_table = NULL;
-// }
+  //single update
+  entity->reset();
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  value.set_int(1245);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  table_operation = ObTableOperation::update(*entity);
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  ASSERT_EQ(OB_SUCCESS, r.get_errno());
+  ASSERT_EQ(1, r.get_affected_rows());
+  ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
+  ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+
+  //insert or update
+  entity->reset();
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  value.set_int(5432);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  value.set_varchar(c3_value);
+  value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+  table_operation = ObTableOperation::insert_or_update(*entity);
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  ASSERT_EQ(OB_SUCCESS, r.get_errno());
+  ASSERT_EQ(1, r.get_affected_rows());
+  ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+  ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+
+  //batch update
+  const int64_t batch_size = 2;
+  ObTableBatchOperation batch_operation;
+  for (int64_t i = 0; i < batch_size; ++i) {
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    key.set_int(key_key + i);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_int(i);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ASSERT_EQ(OB_SUCCESS, batch_operation.update(*entity));
+  }
+
+  ObTableBatchOperationResult result;
+  ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+  OB_LOG(INFO, "batch execute result", K(result));
+  ASSERT_EQ(batch_size, result.count());
+  for (int64_t i = 0; i < batch_size; ++i)
+  {
+    const ObTableOperationResult &r = result.at(i);
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+  } // end for
+
+
+  // teardown
+  service_client_->free_table(the_table);
+  the_table = NULL;
+}
 
 
 // create table if not exists append_lob_test (C1 bigint primary key, C2 bigint, C3 mediumtext not null);
-/*TEST_F(TestBatchExecute, append_lob)
+TEST_F(TestBatchExecute, append_lob)
 {
   // setup
   ObTable *the_table = NULL;
@@ -1352,7 +1352,7 @@ TEST_F(TestBatchExecute, serialize_query_result)
   service_client_->free_table(the_table);
   the_table = NULL;
 }
-*/
+
 // for lob column
 // drop table if exists all_lob_test; create table if not exists all_lob_test (C1 bigint primary key, C2 bigint, C3 mediumtext, index i1(c2) local)
 // TEST_F(TestBatchExecute, lob_column_test)
@@ -1569,7 +1569,7 @@ TEST_F(TestBatchExecute, serialize_query_result)
 // create table if not exists virtual_generate_col_test
 // (C1 bigint primary key, C2 bigint, C3 varchar(100),
 // C3_PREFIX varchar(10) GENERATED ALWAYS AS (substr(C3,1,2)));
-/*TEST_F(TestBatchExecute, virtual_generate_col_test)
+TEST_F(TestBatchExecute, virtual_generate_col_test)
 {
   // setup
   ObTable *the_table = NULL;
@@ -1676,6 +1676,7 @@ TEST_F(TestBatchExecute, serialize_query_result)
   service_client_->free_table(the_table);
   the_table = NULL;
 }
+
 // create table if not exists store_generate_col_test
 // (c1 bigint primary key, c2 varchar(10), c3 varchar(10),
 // gen varchar(30) generated always as (concat(c2,c3)) stored)
@@ -1860,7 +1861,7 @@ TEST_F(TestBatchExecute, stored_generate_col_test)
   service_client_->free_table(the_table);
   the_table = NULL;
 }
-*/
+
 // create table if not exists large_scan_test (C1 bigint primary key, C2 bigint, C3 varchar(100));
 // TEST_F(TestBatchExecute, large_scan)
 // {
@@ -1978,114 +1979,114 @@ TEST_F(TestBatchExecute, stored_generate_col_test)
 
 
 // create table if not exists uniq_replace_test (C1 bigint primary key, C2 bigint, C3 varchar(100), unique key C2_UNIQ(C2));
-// TEST_F(TestBatchExecute, uniq_replace)
-// {
-//   // setup
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("uniq_replace_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObTableOperationResult r;
-//   ObITableEntity *entity = NULL;
-//   const ObITableEntity *result_entity = NULL;
-//   ObTableOperation table_operation;
+TEST_F(TestBatchExecute, uniq_replace)
+{
+  // setup
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("uniq_replace_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableOperationResult r;
+  ObITableEntity *entity = NULL;
+  const ObITableEntity *result_entity = NULL;
+  ObTableOperation table_operation;
 
-//   entity = entity_factory.alloc();
-//   ASSERT_TRUE(NULL != entity);
-//   int64_t key_key = 139107;
-//   ObObj key;
-//   key.set_int(key_key);
-//   int64_t value_value = 33521;
-//   ObObj value;
-//   value.set_int(value_value);
+  entity = entity_factory.alloc();
+  ASSERT_TRUE(NULL != entity);
+  int64_t key_key = 139107;
+  ObObj key;
+  key.set_int(key_key);
+  int64_t value_value = 33521;
+  ObObj value;
+  value.set_int(value_value);
 
-//   //prepare data
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   ObString c3_value = ObString::make_string("hello world");
-//   value.set_varchar(c3_value);
-//   value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//   table_operation = ObTableOperation::insert(*entity);
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   ASSERT_EQ(1, r.get_affected_rows());
-//   ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-//   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+  //prepare data
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  ObString c3_value = ObString::make_string("hello world");
+  value.set_varchar(c3_value);
+  value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+  table_operation = ObTableOperation::insert(*entity);
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  ASSERT_EQ(1, r.get_affected_rows());
+  ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+  ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
 
-//   entity->reset();
-//   key.set_int(key_key + 1);
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   value.set_int(1235);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   value.set_varchar(c3_value);
-//   value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//   table_operation = ObTableOperation::insert(*entity);
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   ASSERT_EQ(1, r.get_affected_rows());
-//   ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-//   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+  entity->reset();
+  key.set_int(key_key + 1);
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  value.set_int(1235);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  value.set_varchar(c3_value);
+  value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+  table_operation = ObTableOperation::insert(*entity);
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  ASSERT_EQ(1, r.get_affected_rows());
+  ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+  ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
 
 
-//   //replace
-//   entity->reset();
-//   key.set_int(key_key + 2);
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   value.set_int(1236);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   c3_value = ObString::make_string("hello china");
-//   value.set_varchar(c3_value);
-//   value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//   table_operation = ObTableOperation::replace(*entity);
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//   ASSERT_EQ(1, r.get_affected_rows());
-//   ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+  //replace
+  entity->reset();
+  key.set_int(key_key + 2);
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  value.set_int(1236);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  c3_value = ObString::make_string("hello china");
+  value.set_varchar(c3_value);
+  value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+  table_operation = ObTableOperation::replace(*entity);
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  ASSERT_EQ(OB_SUCCESS, r.get_errno());
+  ASSERT_EQ(1, r.get_affected_rows());
+  ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+  ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
 
-//   //replace uniq
-//   entity->reset();
-//   key.set_int(key_key + 3);
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   value.set_int(1236);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   c3_value = ObString::make_string("hello everyone");
-//   value.set_varchar(c3_value);
-//   value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//   table_operation = ObTableOperation::replace(*entity);
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//   //@TODO: table_api::replace need to return affected_rows=2 here,
-//   //but table api not maintain local index here, so affected_rows is 1
-//   //need to fix me
-//   ASSERT_EQ(2, r.get_affected_rows());
-//   // ASSERT_EQ(1, r.get_affected_rows());
-//   ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+  //replace uniq
+  entity->reset();
+  key.set_int(key_key + 3);
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  value.set_int(1236);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  c3_value = ObString::make_string("hello everyone");
+  value.set_varchar(c3_value);
+  value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+  table_operation = ObTableOperation::replace(*entity);
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  ASSERT_EQ(OB_SUCCESS, r.get_errno());
+  //@TODO: table_api::replace need to return affected_rows=2 here,
+  //but table api not maintain local index here, so affected_rows is 1
+  //need to fix me
+  ASSERT_EQ(2, r.get_affected_rows());
+  // ASSERT_EQ(1, r.get_affected_rows());
+  ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+  ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
 
-//   //insert or update, uniq key conflict, not support now
-//   /*
-//   entity->reset();
-//   key.set_int(key_key + 4);
-//   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//   value.set_int(1236);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//   c3_value = ObString::make_string("hello everyone");
-//   value.set_varchar(c3_value);
-//   value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//   ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//   table_operation = ObTableOperation::insert_or_update(*entity);
-//   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//   ASSERT_NE(OB_SUCCESS, r.get_errno());
-//   ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//   */
+  //insert or update, uniq key conflict, not support now
+  /*
+  entity->reset();
+  key.set_int(key_key + 4);
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  value.set_int(1236);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+  c3_value = ObString::make_string("hello everyone");
+  value.set_varchar(c3_value);
+  value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+  table_operation = ObTableOperation::insert_or_update(*entity);
+  ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+  ASSERT_NE(OB_SUCCESS, r.get_errno());
+  ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+  */
 
-//   // teardown
-//   service_client_->free_table(the_table);
-//   the_table = NULL;
-// }
+  // teardown
+  service_client_->free_table(the_table);
+  the_table = NULL;
+}
 
 
 
@@ -3440,98 +3441,98 @@ TEST(TestQueryResult, alloc_memory_if_need)
   ASSERT_LE(query_result.allocator_.total(), ObTableQueryResult::MAX_BUF_BLOCK_SIZE * 3);
 }
 
-// TEST_F(TestBatchExecute, update_table_with_index_by_lowercase_rowkey)
-// {
+TEST_F(TestBatchExecute, update_table_with_index_by_lowercase_rowkey)
+{
 
-//   OB_LOG(INFO, "begin update_table_with_index_by_lowercase_rowkey");
-//   // setup
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("varchar_rowkey_update_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   // case for insert operation
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObITableEntity *insert_entity = NULL;
-//   ObITableEntity *update_entity = NULL;
-//   ObTableOperationResult r;
-//   {
-//     // case: insert with rowkey
-//     insert_entity = entity_factory.alloc();
-//     ASSERT_TRUE(NULL != insert_entity);
+  OB_LOG(INFO, "begin update_table_with_index_by_lowercase_rowkey");
+  // setup
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("varchar_rowkey_update_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  // case for insert operation
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObITableEntity *insert_entity = NULL;
+  ObITableEntity *update_entity = NULL;
+  ObTableOperationResult r;
+  {
+    // case: insert with rowkey
+    insert_entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != insert_entity);
 
-//     const char * rk_value = "TEST";
-//     int64_t v_value = 139107;
-//     ObObj rk_obj;
-//     rk_obj.set_varchar(rk_value);
-//     rk_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ObObj v_obj;
-//     v_obj.set_int(v_value);
-//     ASSERT_EQ(OB_SUCCESS, insert_entity->add_rowkey_value(rk_obj));
-//     ASSERT_EQ(OB_SUCCESS, insert_entity->set_property(T, v_obj));
-//     ObTableOperation table_operation = ObTableOperation::insert(*insert_entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//   }
+    const char * rk_value = "TEST";
+    int64_t v_value = 139107;
+    ObObj rk_obj;
+    rk_obj.set_varchar(rk_value);
+    rk_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ObObj v_obj;
+    v_obj.set_int(v_value);
+    ASSERT_EQ(OB_SUCCESS, insert_entity->add_rowkey_value(rk_obj));
+    ASSERT_EQ(OB_SUCCESS, insert_entity->set_property(T, v_obj));
+    ObTableOperation table_operation = ObTableOperation::insert(*insert_entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+  }
 
-//   {
-//     // case: update with lowercase rowkey
-//     update_entity = entity_factory.alloc();
-//     ASSERT_TRUE(NULL != update_entity);
+  {
+    // case: update with lowercase rowkey
+    update_entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != update_entity);
 
-//     const char * rk_value = "test";
-//     int64_t v_value = 1;
-//     ObObj rk_obj;
-//     rk_obj.set_varchar(rk_value);
-//     rk_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ObObj v_obj;
-//     v_obj.set_int(v_value);
-//     ASSERT_EQ(OB_SUCCESS, update_entity->add_rowkey_value(rk_obj));
-//     ASSERT_EQ(OB_SUCCESS, update_entity->set_property(T, v_obj));
-//     ObTableOperation table_operation = ObTableOperation::insert_or_update(*update_entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//   }
-//   {
-//     // query with index
-//     ObTableQuery query;
-//     ASSERT_EQ(OB_SUCCESS, query.add_select_column(K));
-//     ObNewRange range;
-//     range.set_whole_range();
-//     ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
-//     query.set_scan_index(ObString::make_string("idx_T"));
-//     ObTableEntityIterator *iter = nullptr;
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
-//     const ObITableEntity *result_entity = NULL;
-//     ObObj obj1, obj2, obj3;
-//     ObString str;
-//     for (int64_t i = 0; i < 1; ++i)
-//     {
-//       ASSERT_EQ(OB_SUCCESS, iter->get_next_entity(result_entity));
-//       ASSERT_EQ(1, result_entity->get_properties_count());
-//       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(K, obj1));
-//       ASSERT_EQ(OB_SUCCESS, obj1.get_varchar(str));
-//       ASSERT_TRUE(str == ObString::make_string("test"));
-//     }
-//     ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
-//   }
+    const char * rk_value = "test";
+    int64_t v_value = 1;
+    ObObj rk_obj;
+    rk_obj.set_varchar(rk_value);
+    rk_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ObObj v_obj;
+    v_obj.set_int(v_value);
+    ASSERT_EQ(OB_SUCCESS, update_entity->add_rowkey_value(rk_obj));
+    ASSERT_EQ(OB_SUCCESS, update_entity->set_property(T, v_obj));
+    ObTableOperation table_operation = ObTableOperation::insert_or_update(*update_entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+  }
+  {
+    // query with index
+    ObTableQuery query;
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(K));
+    ObNewRange range;
+    range.set_whole_range();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    query.set_scan_index(ObString::make_string("idx_T"));
+    ObTableEntityIterator *iter = nullptr;
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    const ObITableEntity *result_entity = NULL;
+    ObObj obj1, obj2, obj3;
+    ObString str;
+    for (int64_t i = 0; i < 1; ++i)
+    {
+      ASSERT_EQ(OB_SUCCESS, iter->get_next_entity(result_entity));
+      ASSERT_EQ(1, result_entity->get_properties_count());
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(K, obj1));
+      ASSERT_EQ(OB_SUCCESS, obj1.get_varchar(str));
+      ASSERT_TRUE(str == ObString::make_string("test"));
+    }
+    ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
+  }
 
-//   // todo@wenqu: mysqlproxy使用时报-1044，后面再调通。
-// //  ObISQLClient::ReadResult res;
-// //  uint64_t tenant_id = service_client_->get_tenant_id();
-// //  ObString col_val;
-// //  ret = service_client_->get_user_sql_client().read(res, tenant_id,
-// //      "select /*+ index(varchar_rowkey_update_test idx_T)*/ K from test.varchar_rowkey_update_test");
-// //  ASSERT_EQ(OB_SUCCESS, ret) << "tenant_id: " << tenant_id << "\n";
-// //  sqlclient::ObMySQLResult *mysql_result = res.get_result();
-// //  ASSERT_TRUE(NULL != mysql_result);
-// //  ASSERT_EQ(OB_SUCCESS, mysql_result->next());
-// //  ASSERT_EQ(OB_SUCCESS, mysql_result->get_varchar("K", col_val));
-// //  ASSERT_TRUE(col_val == ObString::make_string("TEST"));
+  // todo@wenqu: mysqlproxy使用时报-1044，后面再调通。
+//  ObISQLClient::ReadResult res;
+//  uint64_t tenant_id = service_client_->get_tenant_id();
+//  ObString col_val;
+//  ret = service_client_->get_user_sql_client().read(res, tenant_id,
+//      "select /*+ index(varchar_rowkey_update_test idx_T)*/ K from test.varchar_rowkey_update_test");
+//  ASSERT_EQ(OB_SUCCESS, ret) << "tenant_id: " << tenant_id << "\n";
+//  sqlclient::ObMySQLResult *mysql_result = res.get_result();
+//  ASSERT_TRUE(NULL != mysql_result);
+//  ASSERT_EQ(OB_SUCCESS, mysql_result->next());
+//  ASSERT_EQ(OB_SUCCESS, mysql_result->get_varchar("K", col_val));
+//  ASSERT_TRUE(col_val == ObString::make_string("TEST"));
 
-//   ////////////////////////////////////////////////////////////////
-//   // teardown
-//   service_client_->free_table(the_table);
-//   the_table = NULL;
-// }
+  ////////////////////////////////////////////////////////////////
+  // teardown
+  service_client_->free_table(the_table);
+  the_table = NULL;
+}
 
 TEST_F(TestBatchExecute, single_get)
 {
@@ -4286,321 +4287,321 @@ TEST_F(TestBatchExecute, single_delete)
 
 // create table if not exists single_replace_test
 // (C1 bigint primary key, C2 double, C3 varchar(100) default 'hello world') PARTITION BY KEY(C1) PARTITIONS 16
-// TEST_F(TestBatchExecute, single_replace)
-// {
-//   OB_LOG(INFO, "begin single_replace");
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("single_replace_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   ObTableOperationResult r;
-//   ObITableEntity *result_entity = NULL;
+TEST_F(TestBatchExecute, single_replace)
+{
+  OB_LOG(INFO, "begin single_replace");
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("single_replace_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableOperationResult r;
+  ObITableEntity *result_entity = NULL;
 
-//   // insert (C1, C2, C3): (1, 1.1, "table api is delicious")
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObITableEntity *entity = NULL;
-//   entity = entity_factory.alloc();
-//   ASSERT_TRUE(NULL != entity);
-//   ObObj key;
-//   ObObj value;
-//   int key_key = 1;
-//   key.set_int(key_key);
-//   {
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     double c2_value = 1.1;
-//     value.set_double(c2_value);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ObString c3_value = ObString::make_string("table api is delicious");
-//     const ObString default_c3_value = ObString::make_string("hello world");
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//     ObTableOperation table_operation = ObTableOperation::insert(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(NULL != result_entity);
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
+  // insert (C1, C2, C3): (1, 1.1, "table api is delicious")
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObITableEntity *entity = NULL;
+  entity = entity_factory.alloc();
+  ASSERT_TRUE(NULL != entity);
+  ObObj key;
+  ObObj value;
+  int key_key = 1;
+  key.set_int(key_key);
+  {
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    double c2_value = 1.1;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObString c3_value = ObString::make_string("table api is delicious");
+    const ObString default_c3_value = ObString::make_string("hello world");
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ObTableOperation table_operation = ObTableOperation::insert(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(NULL != result_entity);
+    ASSERT_TRUE(result_entity->is_empty());
+  }
 
-//   // replace C3 (Duplicate rowkey)
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     double c2_value = 2.2;
-//     value.set_double(c2_value);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ObString c3_value = ObString::make_string("obkv is delicious");
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//     ObTableOperation table_operation = ObTableOperation::replace(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(2, r.get_affected_rows()); // delete + insert
-//     ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
+  // replace C3 (Duplicate rowkey)
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    double c2_value = 2.2;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObString c3_value = ObString::make_string("obkv is delicious");
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ObTableOperation table_operation = ObTableOperation::replace(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(2, r.get_affected_rows()); // delete + insert
+    ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
 
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ObString str;
-//     ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//     ObString c3_value = ObString::make_string("obkv is delicious");
-//     ASSERT_TRUE(str == c3_value);
-//   }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ObString c3_value = ObString::make_string("obkv is delicious");
+    ASSERT_TRUE(str == c3_value);
+  }
 
-//   // replace C3 (new rowkey)
-//   {
-//     entity->reset();
-//     ObObj new_key;
-//     new_key.set_int(key_key+1);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(new_key));
-//     double c2_value = 3.3;
-//     value.set_double(c2_value);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ObString c3_value = ObString::make_string("obkv and tableapi are delicious");
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//     ObTableOperation table_operation = ObTableOperation::replace(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows()); // insert
-//     ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
+  // replace C3 (new rowkey)
+  {
+    entity->reset();
+    ObObj new_key;
+    new_key.set_int(key_key+1);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(new_key));
+    double c2_value = 3.3;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObString c3_value = ObString::make_string("obkv and tableapi are delicious");
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ObTableOperation table_operation = ObTableOperation::replace(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows()); // insert
+    ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
 
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ObObj new_key;
-//     new_key.set_int(key_key+1);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(new_key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ObString str;
-//     ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//     ObString c3_value = ObString::make_string("obkv and tableapi are delicious");
-//     ASSERT_TRUE(str == c3_value);
-//   }
-// }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ObObj new_key;
+    new_key.set_int(key_key+1);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(new_key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ObString c3_value = ObString::make_string("obkv and tableapi are delicious");
+    ASSERT_TRUE(str == c3_value);
+  }
+}
 
 // create table if not exists replace_unique_key_test
 // (C1 bigint primary key, C2 double, C3 varchar(100) default 'hello world',
 // unique index i1(c2) local) PARTITION BY KEY(C1) PARTITIONS 16
-// TEST_F(TestBatchExecute, replace_unique_key)
-// {
-//   OB_LOG(INFO, "begin replace_unique_key_test");
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("replace_unique_key_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   ObTableOperationResult r;
-//   ObITableEntity *result_entity = NULL;
+TEST_F(TestBatchExecute, replace_unique_key)
+{
+  OB_LOG(INFO, "begin replace_unique_key_test");
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("replace_unique_key_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableOperationResult r;
+  ObITableEntity *result_entity = NULL;
 
-//   // insert (C1, C2, C3): (1, 1.1, "table api is delicious")
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObITableEntity *entity = NULL;
-//   entity = entity_factory.alloc();
-//   ASSERT_TRUE(NULL != entity);
-//   ObObj key;
-//   ObObj value;
-//   int key_key = 1;
-//   key.set_int(key_key);
-//   {
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     double c2_value = 1.1;
-//     value.set_double(c2_value);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ObString c3_value = ObString::make_string("table api is delicious");
-//     const ObString default_c3_value = ObString::make_string("hello world");
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//     ObTableOperation table_operation = ObTableOperation::insert(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(NULL != result_entity);
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
+  // insert (C1, C2, C3): (1, 1.1, "table api is delicious")
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObITableEntity *entity = NULL;
+  entity = entity_factory.alloc();
+  ASSERT_TRUE(NULL != entity);
+  ObObj key;
+  ObObj value;
+  int key_key = 1;
+  key.set_int(key_key);
+  {
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    double c2_value = 1.1;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObString c3_value = ObString::make_string("table api is delicious");
+    const ObString default_c3_value = ObString::make_string("hello world");
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ObTableOperation table_operation = ObTableOperation::insert(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(NULL != result_entity);
+    ASSERT_TRUE(result_entity->is_empty());
+  }
 
-//   // replace C3 (Duplicate unique key)
-//   {
-//     entity->reset();
-//     ObObj new_key;
-//     new_key.set_int(key_key+1);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(new_key));
-//     double c2_value = 1.1;
-//     value.set_double(c2_value);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ObString c3_value = ObString::make_string("ob is delicious");
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//     ObTableOperation table_operation = ObTableOperation::replace(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(2, r.get_affected_rows()); // delete + insert
-//     ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
+  // replace C3 (Duplicate unique key)
+  {
+    entity->reset();
+    ObObj new_key;
+    new_key.set_int(key_key+1);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(new_key));
+    double c2_value = 1.1;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObString c3_value = ObString::make_string("ob is delicious");
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ObTableOperation table_operation = ObTableOperation::replace(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(2, r.get_affected_rows()); // delete + insert
+    ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
 
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ObObj new_key;
-//     new_key.set_int(key_key+1);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(new_key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ObString str;
-//     ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//     ObString c3_value = ObString::make_string("ob is delicious");
-//     ASSERT_TRUE(str == c3_value);
-//   }
-// }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ObObj new_key;
+    new_key.set_int(key_key+1);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(new_key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ObString c3_value = ObString::make_string("ob is delicious");
+    ASSERT_TRUE(str == c3_value);
+  }
+}
 
 // create table if not exists single_insert_up_test
 // (C1 bigint primary key, C2 double, C3 varchar(100) default 'hello world') PARTITION BY KEY(C1) PARTITIONS 16
-// TEST_F(TestBatchExecute, single_insert_up)
-// {
-//   OB_LOG(INFO, "begin single_insert_up");
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("single_insert_up_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   ObTableOperationResult r;
-//   ObITableEntity *result_entity = NULL;
+TEST_F(TestBatchExecute, single_insert_up)
+{
+  OB_LOG(INFO, "begin single_insert_up");
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("single_insert_up_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableOperationResult r;
+  ObITableEntity *result_entity = NULL;
 
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObITableEntity *entity = NULL;
-//   entity = entity_factory.alloc();
-//   ASSERT_TRUE(NULL != entity);
-//   ObObj key;
-//   ObObj value;
-//   int key_key = 1;
-//   key.set_int(key_key);
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObITableEntity *entity = NULL;
+  entity = entity_factory.alloc();
+  ASSERT_TRUE(NULL != entity);
+  ObObj key;
+  ObObj value;
+  int key_key = 1;
+  key.set_int(key_key);
 
-//   // insert_or_update C2: insert
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     double c2_value = 1.1;
-//     value.set_double(c2_value);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
+  // insert_or_update C2: insert
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    double c2_value = 1.1;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
 
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//     ASSERT_EQ(1.1, value.get_double());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ObString str;
-//     ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//     ObString c3_value = ObString::make_string("hello world");
-//     ASSERT_TRUE(str == c3_value);
-//   }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+    ASSERT_EQ(1.1, value.get_double());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ObString c3_value = ObString::make_string("hello world");
+    ASSERT_TRUE(str == c3_value);
+  }
 
-//   // insert_or_update C2: update
-//   {
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     double c2_value = 2.2;
-//     value.set_double(c2_value);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
+  // insert_or_update C2: update
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    double c2_value = 2.2;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
 
-//   // get
-//   {
-//     ObObj null_obj;
-//     entity->reset();
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
-//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(0, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::GET, r.type());
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_EQ(0, result_entity->get_rowkey_size());
-//     ASSERT_EQ(2, result_entity->get_properties_count());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//     ASSERT_EQ(2.2, value.get_double());
-//     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//     ObString str;
-//     ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//     ObString c3_value = ObString::make_string("hello world");
-//     ASSERT_TRUE(str == c3_value);
-//   }
-// }
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+    ASSERT_EQ(2.2, value.get_double());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ObString c3_value = ObString::make_string("hello world");
+    ASSERT_TRUE(str == c3_value);
+  }
+}
 
 // CREATE TABLE IF NOT EXISTS `kv_query_test` (
 //  C1 bigint,
@@ -6064,7 +6065,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   delete [] rows;
 }
 
-/*TEST_F(TestBatchExecute, single_increment_append)
+TEST_F(TestBatchExecute, single_increment_append)
 {
   OB_LOG(INFO, "begin single_increment");
   ObTable *the_table = NULL;
@@ -6391,7 +6392,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   }
   service_client_->free_table(the_table);
 }
-*/
+
 // create table if not exists multi_update_test
 // (C1 bigint primary key, C2 double, C3 varchar(100) default 'hello world')
 // PARTITION BY KEY(C1) PARTITIONS 16
@@ -6616,354 +6617,354 @@ TEST_F(TestBatchExecute, multi_update)
   }
 }
 
-// TEST_F(TestBatchExecute, multi_insert_or_update)
-// {
-//   OB_LOG(INFO, "begin multi_insert_or_update");
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("multi_insert_or_update_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObTableBatchOperation batch_operation;
-//   ObITableEntity *entity = NULL;
-//   // multi insert
-//   for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//     entity = entity_factory.alloc();
-//     ASSERT_TRUE(NULL != entity);
-//     ObObj key;
-//     key.set_int(i);
-//     ObObj value;
-//     value.set_int(i);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ASSERT_EQ(OB_SUCCESS, batch_operation.insert_or_update(*entity));
-//   }
-//   ASSERT_TRUE(!batch_operation.is_readonly());
-//   ASSERT_TRUE(batch_operation.is_same_type());
-//   ASSERT_TRUE(batch_operation.is_same_properties_names());
-//   ObTableBatchOperationResult result;
-//   ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//   OB_LOG(INFO, "batch execute result", K(result));
-//   ASSERT_EQ(BATCH_SIZE, result.count());
-//   for (int64_t i = 0; i < BATCH_SIZE; ++i)
-//   {
-//     const ObTableOperationResult &r = result.at(i);
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   } // end for
+TEST_F(TestBatchExecute, multi_insert_or_update)
+{
+  OB_LOG(INFO, "begin multi_insert_or_update");
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("multi_insert_or_update_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableBatchOperation batch_operation;
+  ObITableEntity *entity = NULL;
+  // multi insert
+  for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    ObObj key;
+    key.set_int(i);
+    ObObj value;
+    value.set_int(i);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ASSERT_EQ(OB_SUCCESS, batch_operation.insert_or_update(*entity));
+  }
+  ASSERT_TRUE(!batch_operation.is_readonly());
+  ASSERT_TRUE(batch_operation.is_same_type());
+  ASSERT_TRUE(batch_operation.is_same_properties_names());
+  ObTableBatchOperationResult result;
+  ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+  OB_LOG(INFO, "batch execute result", K(result));
+  ASSERT_EQ(BATCH_SIZE, result.count());
+  for (int64_t i = 0; i < BATCH_SIZE; ++i)
+  {
+    const ObTableOperationResult &r = result.at(i);
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  } // end for
 
-//   // get and verify
-//   const ObITableEntity *result_entity = NULL;
-//   {
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     ObObj null_obj;
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(i);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//     }
-//     ASSERT_TRUE(batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     ASSERT_EQ(BATCH_SIZE, result.count());
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(ObTableOperationType::GET, r.type());
-//       ASSERT_EQ(0, r.get_affected_rows());
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_EQ(0, result_entity->get_rowkey_size());
-//       ObObj value;
-//       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//       ASSERT_EQ(i, value.get_int());
-//     }
-//   }
+  // get and verify
+  const ObITableEntity *result_entity = NULL;
+  {
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    ObObj null_obj;
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+    }
+    ASSERT_TRUE(batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    ASSERT_EQ(BATCH_SIZE, result.count());
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+      ObObj value;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+      ASSERT_EQ(i, value.get_int());
+    }
+  }
 
-//   // multi update
-//   ObString c3_value = "c3_value";
-//   {
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(i);
-//       ObObj value1;
-//       value1.set_int(i+1);
-//       ObObj value2;
-//       value2.set_varchar(c3_value);
-//       value2.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value1));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value2));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.insert_or_update(*entity));
-//     }
-//     ASSERT_TRUE(!batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     ASSERT_EQ(BATCH_SIZE, result.count());
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i)
-//     {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(1, r.get_affected_rows());
-//       ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//       const ObITableEntity *result_entity = NULL;
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_TRUE(result_entity->is_empty());
-//     }
-//   }
-//   // get and verify
-//   {
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     ObObj null_obj;
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(i);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//     }
-//     ASSERT_TRUE(batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     ASSERT_EQ(BATCH_SIZE, result.count());
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(ObTableOperationType::GET, r.type());
-//       ASSERT_EQ(0, r.get_affected_rows());
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_EQ(0, result_entity->get_rowkey_size());
-//       ObObj value;
-//       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//       ASSERT_EQ(i+1, value.get_int());
-//       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//       ObString str;
-//       ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//       ASSERT_TRUE(str == c3_value);
-//     }
-//   }
-// }
+  // multi update
+  ObString c3_value = "c3_value";
+  {
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ObObj value1;
+      value1.set_int(i+1);
+      ObObj value2;
+      value2.set_varchar(c3_value);
+      value2.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value1));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value2));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.insert_or_update(*entity));
+    }
+    ASSERT_TRUE(!batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    ASSERT_EQ(BATCH_SIZE, result.count());
+    for (int64_t i = 0; i < BATCH_SIZE; ++i)
+    {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(1, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+      const ObITableEntity *result_entity = NULL;
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_TRUE(result_entity->is_empty());
+    }
+  }
+  // get and verify
+  {
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    ObObj null_obj;
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+    }
+    ASSERT_TRUE(batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    ASSERT_EQ(BATCH_SIZE, result.count());
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+      ObObj value;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+      ASSERT_EQ(i+1, value.get_int());
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+      ObString str;
+      ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+      ASSERT_TRUE(str == c3_value);
+    }
+  }
+}
 
 // create table if not exists multi_replace_test
 // (C1 bigint primary key, C2 bigint, C3 varchar(100) default 'hello world')
 // PARTITION BY KEY(C1) PARTITIONS 16
-// TEST_F(TestBatchExecute, multi_replace)
-// {
-//   OB_LOG(INFO, "begin multi_replace_test");
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("multi_replace_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObTableBatchOperation batch_operation;
-//   ObITableEntity *entity = NULL;
-//   const int64_t SIZE = 10;
-//   for (int64_t i = 0; i < SIZE; ++i) {
-//     entity = entity_factory.alloc();
-//     ASSERT_TRUE(NULL != entity);
-//     ObObj key;
-//     key.set_int(i);
-//     ObObj value;
-//     value.set_int(i);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
-//   }
-//   ASSERT_TRUE(!batch_operation.is_readonly());
-//   ASSERT_TRUE(batch_operation.is_same_type());
-//   ASSERT_TRUE(batch_operation.is_same_properties_names());
-//   ObTableBatchOperationResult result;
-//   ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//   OB_LOG(INFO, "batch execute result", K(result));
-//   ASSERT_EQ(SIZE, result.count());
-//   for (int64_t i = 0; i < SIZE; ++i) {
-//     const ObTableOperationResult &r = result.at(i);
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
-//   // get and verify
-//   {
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     ObObj null_obj;
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(i);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//     }
-//     ASSERT_TRUE(batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(SIZE, result.count());
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(0, r.get_affected_rows());
-//       ASSERT_EQ(ObTableOperationType::GET, r.type());
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_EQ(0, result_entity->get_rowkey_size());
-//       ObObj value;
-//       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//       ASSERT_EQ(i, value.get_int());
-//     }
-//   }
-//   // replace again
-//   {
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(i);
-//       ObObj value;
-//       value.set_int(200+i);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
-//     }
-//     ASSERT_TRUE(!batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     ASSERT_EQ(SIZE, result.count());
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(2, r.get_affected_rows()); // delete + insert
-//       ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//       const ObITableEntity *result_entity = NULL;
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_TRUE(result_entity->is_empty());
-//     }
-//   }
-//   // get and verify
-//   {
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     ObObj null_obj;
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(i);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//     }
-//     ASSERT_TRUE(batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(SIZE, result.count());
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(0, r.get_affected_rows());
-//       ASSERT_EQ(ObTableOperationType::GET, r.type());
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_EQ(0, result_entity->get_rowkey_size());
-//       ObObj value;
-//       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//       ASSERT_EQ(200+i, value.get_int());
-//     }
-//   }
-//     // replace again (unique key C2 dup)
-//   {
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(100+i);
-//       ObObj value;
-//       value.set_int(200+i);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
-//     }
-//     ASSERT_TRUE(!batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     ASSERT_EQ(SIZE, result.count());
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(2, r.get_affected_rows()); // delete + insert
-//       ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//       const ObITableEntity *result_entity = NULL;
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_TRUE(result_entity->is_empty());
-//     }
-//   }
-//   // get and verify
-//   {
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     ObObj null_obj;
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(100+i);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//     }
-//     ASSERT_TRUE(batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(SIZE, result.count());
-//     for (int64_t i = 0; i < SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(0, r.get_affected_rows());
-//       ASSERT_EQ(ObTableOperationType::GET, r.type());
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_EQ(0, result_entity->get_rowkey_size());
-//       ObObj value;
-//       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//       ASSERT_EQ(200+i, value.get_int());
-//     }
-//   }
-// }
+TEST_F(TestBatchExecute, multi_replace)
+{
+  OB_LOG(INFO, "begin multi_replace_test");
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("multi_replace_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableBatchOperation batch_operation;
+  ObITableEntity *entity = NULL;
+  const int64_t SIZE = 10;
+  for (int64_t i = 0; i < SIZE; ++i) {
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    ObObj key;
+    key.set_int(i);
+    ObObj value;
+    value.set_int(i);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
+  }
+  ASSERT_TRUE(!batch_operation.is_readonly());
+  ASSERT_TRUE(batch_operation.is_same_type());
+  ASSERT_TRUE(batch_operation.is_same_properties_names());
+  ObTableBatchOperationResult result;
+  ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+  OB_LOG(INFO, "batch execute result", K(result));
+  ASSERT_EQ(SIZE, result.count());
+  for (int64_t i = 0; i < SIZE; ++i) {
+    const ObTableOperationResult &r = result.at(i);
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+  // get and verify
+  {
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    ObObj null_obj;
+    for (int64_t i = 0; i < SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+    }
+    ASSERT_TRUE(batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(SIZE, result.count());
+    for (int64_t i = 0; i < SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+      ObObj value;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+      ASSERT_EQ(i, value.get_int());
+    }
+  }
+  // replace again
+  {
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    for (int64_t i = 0; i < SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ObObj value;
+      value.set_int(200+i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
+    }
+    ASSERT_TRUE(!batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    ASSERT_EQ(SIZE, result.count());
+    for (int64_t i = 0; i < SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(2, r.get_affected_rows()); // delete + insert
+      ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+      const ObITableEntity *result_entity = NULL;
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_TRUE(result_entity->is_empty());
+    }
+  }
+  // get and verify
+  {
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    ObObj null_obj;
+    for (int64_t i = 0; i < SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+    }
+    ASSERT_TRUE(batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(SIZE, result.count());
+    for (int64_t i = 0; i < SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+      ObObj value;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+      ASSERT_EQ(200+i, value.get_int());
+    }
+  }
+    // replace again (unique key C2 dup)
+  {
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    for (int64_t i = 0; i < SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(100+i);
+      ObObj value;
+      value.set_int(200+i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
+    }
+    ASSERT_TRUE(!batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    ASSERT_EQ(SIZE, result.count());
+    for (int64_t i = 0; i < SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(2, r.get_affected_rows()); // delete + insert
+      ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+      const ObITableEntity *result_entity = NULL;
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_TRUE(result_entity->is_empty());
+    }
+  }
+  // get and verify
+  {
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    ObObj null_obj;
+    for (int64_t i = 0; i < SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(100+i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+    }
+    ASSERT_TRUE(batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(SIZE, result.count());
+    for (int64_t i = 0; i < SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+      ObObj value;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+      ASSERT_EQ(200+i, value.get_int());
+    }
+  }
+}
 
 TEST_F(TestBatchExecute, htable_delete)
 {
@@ -7385,228 +7386,228 @@ TEST_F(TestBatchExecute, htable_delete)
   delete [] rows;
 }
 
-// TEST_F(TestBatchExecute, complex_batch_execute)
-// {
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("complex_batch_execute_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   OB_LOG(INFO, "begin complex_batch_execute");
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObTableBatchOperation batch_operation;
-//   // prepare data
-//   ObITableEntity *entity = NULL;
-//   ObString c3_value = "c3_value";
-//   for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//     entity = entity_factory.alloc();
-//     ASSERT_TRUE(NULL != entity);
-//     ObObj key;
-//     key.set_int(i);
-//     ObObj value;
-//     value.set_int(100+i);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     value.set_varchar(c3_value);
-//     value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-//     ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
-//   }
-//   ASSERT_TRUE(!batch_operation.is_readonly());
-//   ASSERT_TRUE(batch_operation.is_same_type());
-//   ASSERT_TRUE(batch_operation.is_same_properties_names());
-//   ObTableBatchOperationResult result;
-//   ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//   OB_LOG(INFO, "batch execute result", K(result));
-//   ASSERT_EQ(BATCH_SIZE, result.count());
-//   for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//     const ObTableOperationResult &r = result.at(i);
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   }
+TEST_F(TestBatchExecute, complex_batch_execute)
+{
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("complex_batch_execute_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  OB_LOG(INFO, "begin complex_batch_execute");
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableBatchOperation batch_operation;
+  // prepare data
+  ObITableEntity *entity = NULL;
+  ObString c3_value = "c3_value";
+  for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    ObObj key;
+    key.set_int(i);
+    ObObj value;
+    value.set_int(100+i);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
+  }
+  ASSERT_TRUE(!batch_operation.is_readonly());
+  ASSERT_TRUE(batch_operation.is_same_type());
+  ASSERT_TRUE(batch_operation.is_same_properties_names());
+  ObTableBatchOperationResult result;
+  ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+  OB_LOG(INFO, "batch execute result", K(result));
+  ASSERT_EQ(BATCH_SIZE, result.count());
+  for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+    const ObTableOperationResult &r = result.at(i);
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
 
-//   {
-//     // complex batch execute with hybrid operations types
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     ObObj null_obj;
-//     ObObj value;
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(i);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       switch (i % 6) {
-//         case 0:  // get
-//           ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//           ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
-//           ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//           break;
-//         case 1:  // insert
-//           value.set_int(200+i);
-//           ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//           ASSERT_EQ(OB_SUCCESS, batch_operation.insert(*entity));
-//           break;
-//         case 2:  // delete
-//           ASSERT_EQ(OB_SUCCESS, batch_operation.del(*entity));
-//           break;
-//         case 3:  // update
-//           value.set_int(300+i);
-//           ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//           ASSERT_EQ(OB_SUCCESS, batch_operation.update(*entity));
-//           break;
-//         case 4:  // insert_or_update
-//           value.set_int(400+i);
-//           ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//           ASSERT_EQ(OB_SUCCESS, batch_operation.insert_or_update(*entity));
-//           break;
-//         case 5:  // replace
-//           value.set_int(500+i);
-//           ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//           ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
-//           break;
-//         default:
-//           ASSERT_TRUE(0);
-//           break;
-//       }
-//     }
-//     ASSERT_TRUE(!batch_operation.is_readonly());
-//     ASSERT_TRUE(!batch_operation.is_same_type());
-//     ASSERT_TRUE(!batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     ASSERT_EQ(BATCH_SIZE, result.count());
-//     const ObITableEntity *result_entity = NULL;
-//     ObString str;
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       switch (i % 6) {
-//         case 0:  // get
-//           ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//           ASSERT_EQ(0, r.get_affected_rows());
-//           ASSERT_EQ(ObTableOperationType::GET, r.type());
-//           ASSERT_EQ(0, result_entity->get_rowkey_size());
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//           ASSERT_EQ(100+i, value.get_int());
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//           ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//           ASSERT_TRUE(str == c3_value);
-//           break;
-//         case 1:  // insert
-//           ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, r.get_errno());
-//           ASSERT_EQ(0, r.get_affected_rows());
-//           ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-//           ASSERT_TRUE(result_entity->is_empty());
-//           break;
-//         case 2:  // delete
-//           ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//           ASSERT_EQ(1, r.get_affected_rows());
-//           ASSERT_EQ(ObTableOperationType::DEL, r.type());
-//           ASSERT_TRUE(result_entity->is_empty());
-//           break;
-//         case 3:  // update
-//           ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//           ASSERT_EQ(1, r.get_affected_rows());
-//           ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
-//           ASSERT_TRUE(result_entity->is_empty());
-//           break;
-//         case 4:  // insert_or_update
-//           ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//           ASSERT_EQ(1, r.get_affected_rows());
-//           ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//           ASSERT_TRUE(result_entity->is_empty());
-//           break;
-//         case 5:  // replace
-//           ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//           ASSERT_EQ(2, r.get_affected_rows());
-//           ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
-//           ASSERT_TRUE(result_entity->is_empty());
-//           break;
-//         default:
-//           ASSERT_TRUE(0);
-//           break;
-//       }
-//     }
-//   }
-//   {
-//     // get and verify
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(i);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->add_retrieve_property(C2));
-//       ASSERT_EQ(OB_SUCCESS, entity->add_retrieve_property(C3));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//     }
-//     ASSERT_TRUE(batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(BATCH_SIZE, result.count());
-//     ObObj value;
-//     ObString str;
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(ObTableOperationType::GET, r.type());
-//       ASSERT_EQ(0, r.get_affected_rows());
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_EQ(0, result_entity->get_rowkey_size());
-//       //fprintf(stderr, "result %ld\n", i);
-//       switch (i % 6) {
-//         case 0:  // get
-//         case 1:  // insert
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//           ASSERT_EQ(100+i, value.get_int());
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//           ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//           ASSERT_TRUE(str == c3_value);
-//           break;
-//         case 2:  // delete
-//           // entry not exist
-//           ASSERT_TRUE(result_entity->is_empty());
-//           break;
-//         case 3:  // update
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//           ASSERT_EQ(300+i, value.get_int());
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//           ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//           ASSERT_TRUE(str == c3_value);
-//           break;
-//         case 4:  // insert_or_update
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//           ASSERT_EQ(400+i, value.get_int());
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//           // verify the semantic of PUT
-//           // https://aone.alibaba-inc.com/project/81079/issue/14554345
-//           ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-//           ASSERT_TRUE(str == c3_value);
-//           break;
-//         case 5:  // replace
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//           ASSERT_EQ(500+i, value.get_int());
-//           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-//           ASSERT_TRUE(value.is_null());
-//           break;
-//         default:
-//           ASSERT_TRUE(0);
-//           break;
-//       }
-//     }
-//   }
-//   service_client_->free_table(the_table);
-// }
-/*
+  {
+    // complex batch execute with hybrid operations types
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    ObObj null_obj;
+    ObObj value;
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      switch (i % 6) {
+        case 0:  // get
+          ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+          ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+          ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+          break;
+        case 1:  // insert
+          value.set_int(200+i);
+          ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+          ASSERT_EQ(OB_SUCCESS, batch_operation.insert(*entity));
+          break;
+        case 2:  // delete
+          ASSERT_EQ(OB_SUCCESS, batch_operation.del(*entity));
+          break;
+        case 3:  // update
+          value.set_int(300+i);
+          ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+          ASSERT_EQ(OB_SUCCESS, batch_operation.update(*entity));
+          break;
+        case 4:  // insert_or_update
+          value.set_int(400+i);
+          ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+          ASSERT_EQ(OB_SUCCESS, batch_operation.insert_or_update(*entity));
+          break;
+        case 5:  // replace
+          value.set_int(500+i);
+          ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+          ASSERT_EQ(OB_SUCCESS, batch_operation.replace(*entity));
+          break;
+        default:
+          ASSERT_TRUE(0);
+          break;
+      }
+    }
+    ASSERT_TRUE(!batch_operation.is_readonly());
+    ASSERT_TRUE(!batch_operation.is_same_type());
+    ASSERT_TRUE(!batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    ASSERT_EQ(BATCH_SIZE, result.count());
+    const ObITableEntity *result_entity = NULL;
+    ObString str;
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      switch (i % 6) {
+        case 0:  // get
+          ASSERT_EQ(OB_SUCCESS, r.get_errno());
+          ASSERT_EQ(0, r.get_affected_rows());
+          ASSERT_EQ(ObTableOperationType::GET, r.type());
+          ASSERT_EQ(0, result_entity->get_rowkey_size());
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+          ASSERT_EQ(100+i, value.get_int());
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+          ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+          ASSERT_TRUE(str == c3_value);
+          break;
+        case 1:  // insert
+          ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, r.get_errno());
+          ASSERT_EQ(0, r.get_affected_rows());
+          ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+          ASSERT_TRUE(result_entity->is_empty());
+          break;
+        case 2:  // delete
+          ASSERT_EQ(OB_SUCCESS, r.get_errno());
+          ASSERT_EQ(1, r.get_affected_rows());
+          ASSERT_EQ(ObTableOperationType::DEL, r.type());
+          ASSERT_TRUE(result_entity->is_empty());
+          break;
+        case 3:  // update
+          ASSERT_EQ(OB_SUCCESS, r.get_errno());
+          ASSERT_EQ(1, r.get_affected_rows());
+          ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
+          ASSERT_TRUE(result_entity->is_empty());
+          break;
+        case 4:  // insert_or_update
+          ASSERT_EQ(OB_SUCCESS, r.get_errno());
+          ASSERT_EQ(1, r.get_affected_rows());
+          ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+          ASSERT_TRUE(result_entity->is_empty());
+          break;
+        case 5:  // replace
+          ASSERT_EQ(OB_SUCCESS, r.get_errno());
+          ASSERT_EQ(2, r.get_affected_rows());
+          ASSERT_EQ(ObTableOperationType::REPLACE, r.type());
+          ASSERT_TRUE(result_entity->is_empty());
+          break;
+        default:
+          ASSERT_TRUE(0);
+          break;
+      }
+    }
+  }
+  {
+    // get and verify
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->add_retrieve_property(C2));
+      ASSERT_EQ(OB_SUCCESS, entity->add_retrieve_property(C3));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+    }
+    ASSERT_TRUE(batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(BATCH_SIZE, result.count());
+    ObObj value;
+    ObString str;
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+      //fprintf(stderr, "result %ld\n", i);
+      switch (i % 6) {
+        case 0:  // get
+        case 1:  // insert
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+          ASSERT_EQ(100+i, value.get_int());
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+          ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+          ASSERT_TRUE(str == c3_value);
+          break;
+        case 2:  // delete
+          // entry not exist
+          ASSERT_TRUE(result_entity->is_empty());
+          break;
+        case 3:  // update
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+          ASSERT_EQ(300+i, value.get_int());
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+          ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+          ASSERT_TRUE(str == c3_value);
+          break;
+        case 4:  // insert_or_update
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+          ASSERT_EQ(400+i, value.get_int());
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+          // verify the semantic of PUT
+          // https://aone.alibaba-inc.com/project/81079/issue/14554345
+          ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+          ASSERT_TRUE(str == c3_value);
+          break;
+        case 5:  // replace
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+          ASSERT_EQ(500+i, value.get_int());
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+          ASSERT_TRUE(value.is_null());
+          break;
+        default:
+          ASSERT_TRUE(0);
+          break;
+      }
+    }
+  }
+  service_client_->free_table(the_table);
+}
+
 TEST_F(TestBatchExecute, increment_and_append_batch)
 {
   ObTable *the_table = NULL;
@@ -7748,7 +7749,7 @@ TEST_F(TestBatchExecute, increment_and_append_batch)
     }
   }
 }
-*/
+
 TEST_F(TestBatchExecute, htable_put)
 {
   // setup
@@ -9372,172 +9373,172 @@ TEST_F(TestBatchExecute, query_sync_multi_task)
 
 // the table should be single partition for this case:
 // create table if not exists batch_operation_with_same_keys_test (C1 bigint primary key, C2 bigint, C3 varchar(100))
-// TEST_F(TestBatchExecute, batch_operation_with_same_keys)
-// {
-//   OB_LOG(INFO, "begin batch_operation_with_duplicated_keys");
-//   // setup
-//   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("batch_operation_with_same_keys_test"), the_table);
-//   ASSERT_EQ(OB_SUCCESS, ret);
-//   // start case
-//   ObTableEntityFactory<ObTableEntity> entity_factory;
-//   ObTableBatchOperation batch_operation;
-//   ObITableEntity *entity = NULL;
-//   for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//     entity = entity_factory.alloc();
-//     ASSERT_TRUE(NULL != entity);
-//     ObObj key;
-//     key.set_int(i*2 % 10);
-//     ObObj value;
-//     value.set_int(100+i);
-//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-//     //fprintf(stderr, "put key=%ld value=%ld i=%ld\n", (i*2%10), value.get_int(), i);
-//     ASSERT_EQ(OB_SUCCESS, batch_operation.insert_or_update(*entity));
-//   }
-//   ASSERT_TRUE(!batch_operation.is_readonly());
-//   ASSERT_TRUE(batch_operation.is_same_type());
-//   ASSERT_TRUE(batch_operation.is_same_properties_names());
-//   ObTableBatchOperationResult result;
-//   ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//   OB_LOG(INFO, "batch execute result", K(result));
-//   ASSERT_EQ(BATCH_SIZE, result.count());
-//   for (int64_t i = 0; i < BATCH_SIZE; ++i)
-//   {
-//     const ObTableOperationResult &r = result.at(i);
-//     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//     ASSERT_EQ(1, r.get_affected_rows());
-//     ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
-//     const ObITableEntity *result_entity = NULL;
-//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//     ASSERT_TRUE(result_entity->is_empty());
-//   } // end for
+TEST_F(TestBatchExecute, batch_operation_with_same_keys)
+{
+  OB_LOG(INFO, "begin batch_operation_with_duplicated_keys");
+  // setup
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("batch_operation_with_same_keys_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  // start case
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableBatchOperation batch_operation;
+  ObITableEntity *entity = NULL;
+  for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    ObObj key;
+    key.set_int(i*2 % 10);
+    ObObj value;
+    value.set_int(100+i);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    //fprintf(stderr, "put key=%ld value=%ld i=%ld\n", (i*2%10), value.get_int(), i);
+    ASSERT_EQ(OB_SUCCESS, batch_operation.insert_or_update(*entity));
+  }
+  ASSERT_TRUE(!batch_operation.is_readonly());
+  ASSERT_TRUE(batch_operation.is_same_type());
+  ASSERT_TRUE(batch_operation.is_same_properties_names());
+  ObTableBatchOperationResult result;
+  ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+  OB_LOG(INFO, "batch execute result", K(result));
+  ASSERT_EQ(BATCH_SIZE, result.count());
+  for (int64_t i = 0; i < BATCH_SIZE; ++i)
+  {
+    const ObTableOperationResult &r = result.at(i);
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+    const ObITableEntity *result_entity = NULL;
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  } // end for
 
-//   // get and verify
-//   const ObITableEntity *result_entity = NULL;
-//   {
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     ObObj null_obj;
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(i*2%10);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//     }
-//     ASSERT_TRUE(batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     ASSERT_EQ(BATCH_SIZE, result.count());
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(ObTableOperationType::GET, r.type());
-//       ASSERT_EQ(0, r.get_affected_rows());
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_EQ(0, result_entity->get_rowkey_size());
-//       ObObj value;
-//       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//       //fprintf(stderr, "get C2 value=%ld i=%ld key=%ld\n", value.get_int(), i, i*2%10);
-//       ASSERT_EQ(195+i%5, value.get_int());
-//     }
-//   }
-//   {
-//     // all the same key
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     ObObj null_obj;
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       key.set_int(0);
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//     }
-//     ASSERT_TRUE(batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     ASSERT_EQ(BATCH_SIZE, result.count());
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(ObTableOperationType::GET, r.type());
-//       ASSERT_EQ(0, r.get_affected_rows());
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_EQ(0, result_entity->get_rowkey_size());
-//       ObObj value;
-//       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//       //fprintf(stderr, "get C2 value=%ld i=%ld\n", value.get_int(), i);
-//       ASSERT_EQ(195, value.get_int());
-//     }
-//   }
-//   {
-//     // pattern: empty empty exist exist empty empty exist exist ...
-//     batch_operation.reset();
-//     entity_factory.free_and_reuse();
-//     ObObj null_obj;
-//     int64_t key1_not_exist = 1;
-//     int64_t key2_not_exist = 3;
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       entity = entity_factory.alloc();
-//       ASSERT_TRUE(NULL != entity);
-//       ObObj key;
-//       if (i < BATCH_SIZE/4) {
-//         key.set_int(key1_not_exist);
-//       } else if (i < BATCH_SIZE/4*2) {
-//         key.set_int(0);
-//       } else if (i < BATCH_SIZE/4*3) {
-//         key.set_int(key2_not_exist);
-//       } else {
-//         key.set_int(2);
-//       }
-//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-//       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
-//     }
-//     ASSERT_TRUE(batch_operation.is_readonly());
-//     ASSERT_TRUE(batch_operation.is_same_type());
-//     ASSERT_TRUE(batch_operation.is_same_properties_names());
-//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-//     OB_LOG(INFO, "batch execute result", K(result));
-//     ASSERT_EQ(BATCH_SIZE, result.count());
-//     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
-//       const ObTableOperationResult &r = result.at(i);
-//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
-//       ASSERT_EQ(ObTableOperationType::GET, r.type());
-//       ASSERT_EQ(0, r.get_affected_rows());
-//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-//       ASSERT_EQ(0, result_entity->get_rowkey_size());
-//       if (i < BATCH_SIZE/4) {
-//         ASSERT_TRUE(result_entity->is_empty());
-//       } else if (i < BATCH_SIZE/4*2) {
-//         ObObj value;
-//         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//         //fprintf(stderr, "get C2 value=%ld i=%ld\n", value.get_int(), i);
-//         ASSERT_EQ(195, value.get_int());
-//       } else if (i < BATCH_SIZE/4*3) {
-//         ASSERT_TRUE(result_entity->is_empty());
-//       } else {
-//         ObObj value;
-//         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-//         //fprintf(stderr, "get C2 value=%ld i=%ld\n", value.get_int(), i);
-//         ASSERT_EQ(196, value.get_int());
-//       }
-//     }  // end for
-//   }
-//   // teardown
-//   service_client_->free_table(the_table);
-//   the_table = NULL;
-// }
+  // get and verify
+  const ObITableEntity *result_entity = NULL;
+  {
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    ObObj null_obj;
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i*2%10);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+    }
+    ASSERT_TRUE(batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    ASSERT_EQ(BATCH_SIZE, result.count());
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+      ObObj value;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+      //fprintf(stderr, "get C2 value=%ld i=%ld key=%ld\n", value.get_int(), i, i*2%10);
+      ASSERT_EQ(195+i%5, value.get_int());
+    }
+  }
+  {
+    // all the same key
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    ObObj null_obj;
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(0);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+    }
+    ASSERT_TRUE(batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    ASSERT_EQ(BATCH_SIZE, result.count());
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+      ObObj value;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+      //fprintf(stderr, "get C2 value=%ld i=%ld\n", value.get_int(), i);
+      ASSERT_EQ(195, value.get_int());
+    }
+  }
+  {
+    // pattern: empty empty exist exist empty empty exist exist ...
+    batch_operation.reset();
+    entity_factory.free_and_reuse();
+    ObObj null_obj;
+    int64_t key1_not_exist = 1;
+    int64_t key2_not_exist = 3;
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      if (i < BATCH_SIZE/4) {
+        key.set_int(key1_not_exist);
+      } else if (i < BATCH_SIZE/4*2) {
+        key.set_int(0);
+      } else if (i < BATCH_SIZE/4*3) {
+        key.set_int(key2_not_exist);
+      } else {
+        key.set_int(2);
+      }
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
+    }
+    ASSERT_TRUE(batch_operation.is_readonly());
+    ASSERT_TRUE(batch_operation.is_same_type());
+    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+    OB_LOG(INFO, "batch execute result", K(result));
+    ASSERT_EQ(BATCH_SIZE, result.count());
+    for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+      if (i < BATCH_SIZE/4) {
+        ASSERT_TRUE(result_entity->is_empty());
+      } else if (i < BATCH_SIZE/4*2) {
+        ObObj value;
+        ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+        //fprintf(stderr, "get C2 value=%ld i=%ld\n", value.get_int(), i);
+        ASSERT_EQ(195, value.get_int());
+      } else if (i < BATCH_SIZE/4*3) {
+        ASSERT_TRUE(result_entity->is_empty());
+      } else {
+        ObObj value;
+        ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+        //fprintf(stderr, "get C2 value=%ld i=%ld\n", value.get_int(), i);
+        ASSERT_EQ(196, value.get_int());
+      }
+    }  // end for
+  }
+  // teardown
+  service_client_->free_table(the_table);
+  the_table = NULL;
+}
 
 int main(int argc, char **argv)
 {

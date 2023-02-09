@@ -230,6 +230,8 @@ private:
   static int generate_constraint_ctdefs(ObTableCtx &ctx,
                                         ObIAllocator &allocator,
                                         sql::ObRowkeyCstCtdefArray &cst_ctdefs);
+  static int replace_exprs_with_dependant(const common::ObIArray<sql::ObRawExpr *> &src_exprs,
+                                          common::ObIArray<sql::ObRawExpr *> &dst_exprs);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDmlCgService);
 };
@@ -348,6 +350,10 @@ private:
   static int generate_das_tsc_ctdef(const ObTableCtx &ctx,
                                     ObIAllocator &allocator,
                                     sql::ObDASScanCtDef &das_tsc_ctdef);
+  static int replace_gen_col_exprs(const ObTableCtx &ctx,
+                                  common::ObIArray<sql::ObRawExpr*> &access_exprs);
+  static int generate_output_exprs(const ObTableCtx &ctx,
+                                   common::ObIArray<sql::ObExpr *> &output_exprs);
   static int generate_access_ctdef(const ObTableCtx &ctx,
                                    ObIAllocator &allocator,
                                    sql::ObDASScanCtDef &das_tsc_ctdef);

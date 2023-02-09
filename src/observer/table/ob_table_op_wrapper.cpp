@@ -84,7 +84,7 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
     const ObIArray<ObExpr *> &ins_exprs = ins_up_spec.get_ctdef().ins_ctdef_.new_row_;
     const ObTableCtx::ObAssignIds &assign_ids = tb_ctx.get_assign_ids();
     const int64_t N = assign_ids.count();
-    ObObj* obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * N));
+    ObObj *obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * N));
     if (OB_ISNULL(obj_array)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("faild to alloc memory for objs", K(ret));
