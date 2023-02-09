@@ -34,8 +34,6 @@ See [Quick start](https://open.oceanbase.com/quickStart) to try out OceanBase Da
 
 ![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873613-44957682-76fe-42c2-b4c7-9356ed5b35f0.png)
 
-Link: [4.0.0 function list](https://github.com/oceanbase/oceanbase/milestone/3)
-
 ## Case study
 For our success stories, see [Success stories](https://www.oceanbase.com/en/customer/home).
 
@@ -47,7 +45,7 @@ OceanBase Database is under [MulanPubL - 2.0](http://license.coscl.org.cn/MulanP
 
 ## Community
 
-- [oceanbase.slack](https://oceanbase.slack.com/)
+- [oceanbase.slack](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
 - [Forum (Simplified Chinese)](https://ask.oceanbase.com/)
 - [DingTalk 33254054 (Simplified Chinese)](https://h5.dingtalk.com/circle/healthCheckin.html?corpId=ding12cfbe0afb058f3cde5ce625ff4abdf6&53108=bb418&cbdbhh=qwertyuiop&origin=1)
 - [WeChat (Simplified Chinese)](https://gw.alipayobjects.com/zos/oceanbase/0a69627f-8005-4c46-be1f-aac7a2b85c13/image/2022-03-01/85d42796-4e22-463a-9658-57402d7b9bc3.png)
