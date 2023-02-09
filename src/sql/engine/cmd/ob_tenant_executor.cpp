@@ -645,8 +645,10 @@ int ObModifyTenantExecutor::execute(ObExecContext &ctx, ObModifyTenantStmt &stmt
       LOG_WARN("fail to modify progressive merge num for tenant", K(ret), "tenant_id", tenant_schema->get_tenant_id());
     }
   } else if (OB_ISNULL(tenant_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, tenant schema must not be NULL", KR(ret));
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("tenant not exists", KR(ret), K(modify_tenant_arg));
+    LOG_USER_ERROR(OB_TENANT_NOT_EXIST, modify_tenant_arg.tenant_schema_.get_tenant_name_str().length(),
+                   modify_tenant_arg.tenant_schema_.get_tenant_name_str().ptr());
   } else if (stmt.get_modify_tenant_arg().alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::ENABLE_EXTENDED_ROWID)) {
     if (OB_FAIL(enable_extended_rowid_for_tenant_tables(ctx, tenant_schema->get_tenant_id()))) {
       LOG_WARN("fail to enable extended rowid for tenant tables", K(ret), "tenant_id", tenant_schema->get_tenant_id());
