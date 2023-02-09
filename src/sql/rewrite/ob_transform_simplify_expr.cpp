@@ -224,7 +224,7 @@ int ObTransformSimplifyExpr::replace_is_null_condition(ObDMLStmt *stmt, bool &tr
         trans_happened |= is_happened;
       }
     }
-    if (OB_SUCC(ret) && stmt->is_select_stmt()) {
+    if (OB_SUCC(ret) && stmt->is_select_stmt() && !static_cast<ObSelectStmt *>(stmt)->is_scala_group_by()) {
       not_null_ctx.reset();
       if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))){
         LOG_WARN("failed to generate not null context", K(ret));
@@ -392,7 +392,7 @@ int ObTransformSimplifyExpr::replace_op_null_condition(ObDMLStmt *stmt, bool &tr
       trans_happened |= is_happened;
     }
   }
-  if (OB_SUCC(ret) && stmt->is_select_stmt()) {
+  if (OB_SUCC(ret) && stmt->is_select_stmt() && !static_cast<ObSelectStmt *>(stmt)->is_scala_group_by()) {
     ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
     for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
       if (OB_FAIL(replace_cmp_null_condition(sel_stmt->get_having_exprs().at(i),
@@ -877,7 +877,7 @@ int ObTransformSimplifyExpr::remove_dummy_exprs(ObDMLStmt *stmt, bool &trans_hap
     LOG_WARN("failed to remove dummy nvl", K(ret));
   } else if (OB_FAIL(remove_dummy_filter_exprs(stmt->get_condition_exprs(), constraints))) {
     LOG_WARN("failed to post process filter exprs", K(ret));
-  } else if (stmt->is_select_stmt() &&
+  } else if (stmt->is_select_stmt() && !static_cast<ObSelectStmt*>(stmt)->is_scala_group_by() &&
              OB_FAIL(remove_dummy_filter_exprs(static_cast<ObSelectStmt*>(stmt)->get_having_exprs(),
                                                constraints))) {
     LOG_WARN("failed to post process filter exprs", K(ret));
@@ -1170,9 +1170,18 @@ int ObTransformSimplifyExpr::remove_dummy_case_when(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
-  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
   } else {
+    ObStmtExprGetter visitor;
+    visitor.set_relation_scope();
+    if (stmt->is_select_stmt() && static_cast<ObSelectStmt*>(stmt)->is_scala_group_by()) {
+      visitor.remove_scope(SCOPE_SELECT);
+      visitor.remove_scope(SCOPE_HAVING);
+    }
+    if (OB_FAIL(stmt->get_relation_exprs(relation_exprs, visitor))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
       ObRawExpr *expr = relation_exprs.at(i);
       if (OB_FAIL(remove_dummy_case_when(stmt->get_query_ctx(),
@@ -1313,7 +1322,7 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
     if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))){
       LOG_WARN("failed to generate not null context", K(ret));
     }
-    if (OB_SUCC(ret) && stmt->is_select_stmt()) {
+    if (OB_SUCC(ret) && stmt->is_select_stmt() && !static_cast<ObSelectStmt *>(stmt)->is_scala_group_by()) {
       ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
       for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
         if (OB_FAIL(not_null_ctx.remove_having_filter(sel_stmt->get_having_exprs().at(i)))){
