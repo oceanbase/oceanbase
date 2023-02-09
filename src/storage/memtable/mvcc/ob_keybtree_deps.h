@@ -447,7 +447,6 @@ public:
       BtreeKey*& last_key, int64_t &gap_size);
   int pop_level_node(const int64_t level);
   int find_path(BtreeNode *root, BtreeKey key, int64_t version);
-  bool maybe_big_gap(bool is_backward);
   int scan_forward(const int64_t level);
   int scan_backward(const int64_t level);
   int scan_forward(bool skip_inactive=false, int64_t* skip_cnt=NULL);

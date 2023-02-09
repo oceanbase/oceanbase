@@ -158,6 +158,12 @@ void ObBlockMetaTree::destroy()
   macro_blocks_.reset();
   block_tree_.destroy();
   data_desc_.reset();
+  for (int64_t i = 0; i < sorted_rowkeys_.count(); ++i) {
+    const ObDataMacroBlockMeta *cur_meta = sorted_rowkeys_.at(i).block_meta_;
+    if (OB_NOT_NULL(cur_meta)) {
+      cur_meta->~ObDataMacroBlockMeta();
+    }
+  }
   sorted_rowkeys_.reset();
   tree_allocator_.reset();
   arena_.reset();
@@ -216,6 +222,9 @@ int ObBlockMetaTree::build_sorted_rowkeys()
       } else if (OB_ISNULL(block_meta)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("block_meta is null", K(ret), KP(block_meta));
+      } else if (((uint64_t)(block_meta) & 7ULL) != 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid btree value", K(ret), KP(block_meta));
       } else {
         IndexItem cur_item(rowkey_wrapper.rowkey_, block_meta);
         cur_item.header_.version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V1;
