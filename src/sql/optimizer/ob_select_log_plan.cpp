@@ -2596,9 +2596,10 @@ int ObSelectLogPlan::candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*
       // generate merge set plans use hint
       LOG_WARN("failed to generate merge set plans", K(ret));
     } else if (!hash_set_plans.empty() || !merge_set_plans.empty()) {
-      OPT_TRACE("succeed to generate set plans using hint,");
-      LOG_TRACE("succeed to generate set plans using hint", K(set_algo), K(hash_set_plans.count()),
-                                                            K(merge_set_plans.count()));
+      OPT_TRACE("succeed to generate set plans using hint");
+      OPT_TRACE("   hash set plan count:", hash_set_plans.count());
+      OPT_TRACE("   merge set plan count:", merge_set_plans.count());
+      LOG_TRACE("succeed to generate set plans using hint", K(set_algo), K(hash_set_plans.count()), K(merge_set_plans.count()));
     } else if (OB_FAIL(get_log_plan_hint().check_status())) {
       LOG_WARN("failed to generate plans with hint", K(ret));
     } else if (OB_FAIL(generate_hash_set_plans(equal_sets,
@@ -2624,10 +2625,10 @@ int ObSelectLogPlan::candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*
       LOG_WARN("failed to generate merge set plans", K(ret));
     } else {
       OPT_TRACE("succeed to generate set plans ignore hint");
-      OPT_TRACE("hash set plan count:", hash_set_plans.count());
-      OPT_TRACE("merge set plan count:", merge_set_plans.count());
-      LOG_TRACE("succeed to generate set plans ignore hint", K(hash_set_plans.count()),
-                                                              K(merge_set_plans.count()));
+      OPT_TRACE("   hash set plan count:", hash_set_plans.count());
+      OPT_TRACE("   merge set plan count:", merge_set_plans.count());
+      LOG_TRACE("succeed to generate set plans ignore hint", K(set_algo), K(hash_set_plans.count()),
+                                                             K(merge_set_plans.count()));
     }
 
     if (OB_FAIL(ret)) {
@@ -2753,10 +2754,10 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
       LOG_WARN("failed to check basic sharding info", K(ret));
     } else if (is_basic) {
       set_dist_methods = DistAlgo::DIST_BASIC_METHOD;
-      OPT_TRACE("plan will not use basic method");
+      OPT_TRACE("plan will use basic method");
     } else {
       set_dist_methods &= ~DistAlgo::DIST_BASIC_METHOD;
-      OPT_TRACE("plan will use basic method");
+      OPT_TRACE("plan will not use basic method");
     }
   }
 
@@ -3002,7 +3003,8 @@ int ObSelectLogPlan::generate_merge_set_plans(const EqualSets &equal_sets,
   ObSEArray<ObSEArray<MergeKeyInfo*, 8>, 8> left_merge_keys;
   ObSEArray<ObSEArray<MergeKeyInfo*, 8>, 8> right_merge_keys;
   bool force_merge = MERGE_SET == get_log_plan_hint().get_valid_set_algo();
-  bool can_ignore_merge_plan = !(no_hash_plans || (!ignore_hint && force_merge));
+  //if can_ignore_merge_plan = true, need to check sort_order for merge plan
+  bool can_ignore_merge_plan = ((ignore_hint && !no_hash_plans) || (!ignore_hint && !force_merge));
   OPT_TRACE("start generate merge set plans");
   bool no_swap = false;
   bool swap = false;
@@ -3043,6 +3045,7 @@ int ObSelectLogPlan::generate_merge_set_plans(const EqualSets &equal_sets,
                                                             left_candidate_list.at(i),
                                                             right_candidate_list.at(j),
                                                             ignore_hint,
+                                                            can_ignore_merge_plan,
                                                             no_hash_plans,
                                                             merge_set_plans))) {
         LOG_WARN("failed to generate merge set plans", K(ret));
@@ -3054,6 +3057,7 @@ int ObSelectLogPlan::generate_merge_set_plans(const EqualSets &equal_sets,
                                                                 right_candidate_list.at(j),
                                                                 left_candidate_list.at(i),
                                                                 ignore_hint,
+                                                                can_ignore_merge_plan,
                                                                 no_hash_plans,
                                                                 merge_set_plans))) {
         LOG_WARN("failed to inner generate merge set plans", K(ret));
@@ -3071,6 +3075,7 @@ int ObSelectLogPlan::inner_generate_merge_set_plans(const EqualSets &equal_sets,
                                                     ObIArray<CandidatePlan> &left_candidates,
                                                     ObIArray<CandidatePlan> &right_candidates,
                                                     const bool ignore_hint,
+                                                    const bool can_ignore_merge_plan,
                                                     const bool no_hash_plans,
                                                     ObIArray<CandidatePlan> &merge_set_plans)
 {
@@ -3108,7 +3113,12 @@ int ObSelectLogPlan::inner_generate_merge_set_plans(const EqualSets &equal_sets,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(left_child), K(merge_key), K(ret));
       } else if (merge_key->need_sort_ && !merge_key->order_needed_) {
+        // when merge_plan can not be ignore, need to check merge_key->need_sort_&merge_key->order_needed_s
         // if no further order needed, not generate merge style plan
+        OPT_TRACE("no further order needed, merge set plans is not generated");
+        OPT_TRACE("   can_ignore merge plan", can_ignore_merge_plan);
+        OPT_TRACE("   merge_key need sort", merge_key->need_sort_);
+        OPT_TRACE("   merge_key order is needed", merge_key->order_needed_);
       } else {
         for (int64_t j = DistAlgo::DIST_BASIC_METHOD;
              OB_SUCC(ret) && j <= DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
@@ -3131,7 +3141,8 @@ int ObSelectLogPlan::inner_generate_merge_set_plans(const EqualSets &equal_sets,
                                                          best_order_items,
                                                          right_child,
                                                          best_need_sort,
-                                                         best_prefix_pos))) {
+                                                         best_prefix_pos,
+                                                         can_ignore_merge_plan))) {
               LOG_WARN("failed to get minimal cost set path", K(ret));
             } else if (NULL == right_child) {
               /*do nothing*/
@@ -3172,7 +3183,8 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
                                                ObIArray<OrderItem> &best_order_items,
                                                ObLogicalOperator *&best_plan,
                                                bool &best_need_sort,
-                                               int64_t &best_prefix_pos)
+                                               int64_t &best_prefix_pos,
+                                               const bool can_ignore_merge_plan)
 {
   int ret = OB_SUCCESS;
   double best_cost = 0.0;
@@ -3231,8 +3243,9 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
       LOG_WARN("failed to check need sort", K(ret));
     } else if ((DistAlgo::DIST_PARTITION_WISE == set_dist_algo ||
                 DistAlgo::DIST_BASIC_METHOD == set_dist_algo) &&
-                left_merge_key.need_sort_ && right_need_sort) {
-      // do nothing
+                can_ignore_merge_plan && left_merge_key.need_sort_ && right_need_sort) {
+      // when bosh side need sort and merge key order is not needed, do not generer merge set
+      OPT_TRACE("bosh side need sort but merge key order is not needed, merge set plans is not generated");
     } else {
       bool is_fully_partition_wise = DistAlgo::DIST_PARTITION_WISE == set_dist_algo &&
                                      !left_child.is_exchange_allocated() && !right_child->is_exchange_allocated();
