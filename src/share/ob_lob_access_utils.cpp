@@ -990,8 +990,9 @@ int ObTextStringIter::convert_outrow_lob_to_inrow_templob(const ObObj &in_obj,
 
 // ----- implementations of ObTextStringResult -----
 
-void ObTextStringResult::calc_buffer_len(int64_t res_len)
+int ObTextStringResult::calc_buffer_len(int64_t res_len)
 {
+  int ret = OB_SUCCESS;
   if (!(is_lob_storage(type_))) { // tinytext no has lob header
     buff_len_ = res_len;
   } else {
@@ -1004,10 +1005,12 @@ void ObTextStringResult::calc_buffer_len(int64_t res_len)
       res_len += sizeof(ObLobCommon);
       buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), false);
     } else {
-      LOG_WARN_RET(OB_NOT_IMPLEMENT, "Lob: out row temp lob not implemented",
-        K(OB_NOT_IMPLEMENT), K(this), K(pos_), K(buff_len_));
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("Lob: out row temp lob not implemented, not support length bigger than 512M",
+        K(ret), K(this), K(pos_), K(buff_len_), K(res_len));
     }
   }
+  return ret;
 }
 
 int ObTextStringResult::fill_temp_lob_header(const int64_t res_len)
@@ -1053,7 +1056,8 @@ int ObTextStringResult::init(int64_t res_len, ObIAllocator *allocator)
   } else if (!(ob_is_string_or_lob_type(type_) || ob_is_json(type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Lob: unexpected expr result type for textstring result", K(ret), K(type_));
-  } else if (FALSE_IT(calc_buffer_len(res_len))) {
+  } else if (OB_FAIL(calc_buffer_len(res_len))) {
+    LOG_WARN("fail to calc buffer len", K(ret), K(res_len));
   } else if (buff_len_ == 0) {
     OB_ASSERT(has_lob_header_ == false); // empty result without header
   } else {

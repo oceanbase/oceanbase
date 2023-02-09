@@ -35,8 +35,8 @@ int ObTextStringDatumResult::init(int64_t res_len, ObIAllocator *allocator)
   } else if((OB_ISNULL(res_datum_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Lob: invalid arguments", K(ret), K(type_), KPC(res_datum_));
-  } else if (FALSE_IT(ObTextStringResult::calc_buffer_len(res_len))) {
-    LOG_WARN("Lob: init failed", K(ret), K(type_), K(res_len));
+  } else if (OB_FAIL(ObTextStringResult::calc_buffer_len(res_len))) {
+    LOG_WARN("Lob: calc buffer len failed", K(ret), K(type_), K(res_len));
   } else if (buff_len_ == 0) {
     OB_ASSERT(has_lob_header_ == false); // empty result without header
   } else {
@@ -61,8 +61,8 @@ int ObTextStringDatumResult::init_with_batch_idx(int64_t res_len, int64_t batch_
   if((OB_ISNULL(expr_) || OB_ISNULL(ctx_) || OB_ISNULL(res_datum_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Lob: invalid arguments", K(ret), K(type_), KP(expr_), KP(ctx_), KP(res_datum_));
-  } else if (FALSE_IT(ObTextStringResult::calc_buffer_len(res_len))) {
-    LOG_WARN("Lob: init failed", K(ret), K(type_), KP(expr_), KP(ctx_), KP(res_datum_));
+  } else if (OB_FAIL(ObTextStringResult::calc_buffer_len(res_len))) {
+    LOG_WARN("Lob: calc buffer len failed", K(ret), K(type_), KP(expr_), KP(ctx_), KP(res_datum_));
   } else {
     buffer_ = expr_->get_str_res_mem(*ctx_, buff_len_, batch_idx);
     if (OB_FAIL(fill_temp_lob_header(res_len))) {
@@ -89,8 +89,8 @@ int ObTextStringObObjResult::init(int64_t res_len, ObIAllocator *allocator)
   } else if (OB_ISNULL(res_obj_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Lob: invalid arguments", K(ret), K(type_), KP(res_obj_));
-  } else if (FALSE_IT(ObTextStringResult::calc_buffer_len(res_len))) {
-    LOG_WARN("Lob: init failed", K(ret), K(type_), KP(res_len));
+  } else if (OB_FAIL(ObTextStringResult::calc_buffer_len(res_len))) {
+    LOG_WARN("Lob: calc buffer len failed", K(ret), K(type_), KP(res_len));
   } else if (buff_len_ == 0) {
     OB_ASSERT(has_lob_header_ == false); // empty result without header
   } else {

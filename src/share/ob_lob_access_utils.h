@@ -267,7 +267,7 @@ public:
                                            ObIAllocator &allocator);
 
 protected:
-  void calc_buffer_len(const int64_t res_len);
+  int calc_buffer_len(const int64_t res_len);
   int fill_temp_lob_header(const int64_t res_len);
 
 protected:
