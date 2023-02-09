@@ -1122,13 +1122,6 @@ int ObIndexBuildTask::enable_index()
       LOG_WARN("create global index in slave cluster is not allowed", K(ret), K(index_table_id_));
     } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get schema guard", K(ret), K(tenant_id_));
-    } else if (OB_FAIL(schema_service.get_schema_version_in_inner_table(
-            root_service_->get_sql_proxy(), schema_status, version_in_inner_table))) {
-      LOG_WARN("fail to get version in inner table", K(ret));
-    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, local_schema_version))) {
-      LOG_WARN("fail to get schema version from guard", K(ret), K(tenant_id_));
-    } else if (version_in_inner_table > local_schema_version) {
-      // by pass, this server may not get the newest schema
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, index_table_id_, index_table_exist))) {
       LOG_WARN("fail to check table exist", K(ret), K_(tenant_id), K(index_table_id_));
     } else if (!index_table_exist) {
