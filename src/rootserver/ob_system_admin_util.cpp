@@ -956,8 +956,8 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
             tenant_id = (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id ? OB_SYS_TENANT_ID : tenant_id);
             uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
             dml.reset();
-            if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
-              LOG_WARN("failed to get tenant ids", KR(ret), K(tenant_id));
+            if (OB_FAIL(schema_guard.get_tenant_info(exec_tenant_id, tenant_schema))) {
+              LOG_WARN("failed to get tenant ids", KR(ret), K(exec_tenant_id));
             } else if (OB_ISNULL(tenant_schema)) {
               ret = OB_TENANT_NOT_EXIST;
               LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
