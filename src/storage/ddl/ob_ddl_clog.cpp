@@ -66,22 +66,83 @@ void ObDDLClogCb::try_release()
   }
 }
 
+ObDDLStartClogCb::ObDDLStartClogCb()
+  : is_inited_(false), status_(), lock_tid_(0), ddl_kv_mgr_handle_()
+{
+}
+
+int ObDDLStartClogCb::init(const uint32_t lock_tid, ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (OB_UNLIKELY(0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    lock_tid_ = lock_tid;
+    ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDDLStartClogCb::on_success()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  }
+  status_.set_ret_code(ret);
+  status_.set_state(STATE_SUCCESS);
+  try_release();
+  return OB_SUCCESS; // force return success
+}
+
+int ObDDLStartClogCb::on_failure()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  }
+  status_.set_state(STATE_FAILED);
+  try_release();
+  return OB_SUCCESS;
+}
+
+void ObDDLStartClogCb::try_release()
+{
+  if (status_.try_set_release_flag()) {
+  } else {
+    op_free(this);
+  }
+}
+
 ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
   : is_inited_(false), status_(), ls_id_(), redo_info_(), macro_block_id_(),
-    arena_("ddl_clog_cb", OB_MALLOC_BIG_BLOCK_SIZE), data_buffer_lock_(), is_data_buffer_freed_(false)
+    arena_("ddl_clog_cb", OB_MALLOC_BIG_BLOCK_SIZE), data_buffer_lock_(), is_data_buffer_freed_(false), lock_tid_(0), ddl_kv_mgr_handle_()
 {
 
 }
 
 int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
                                 const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
-                                const blocksstable::MacroBlockId &macro_block_id)
+                                const blocksstable::MacroBlockId &macro_block_id,
+                                const uint32_t lock_tid,
+                                ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid())) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid() || 0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
   } else {
@@ -97,6 +158,8 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
       redo_info_.start_scn_ = redo_info.start_scn_;
       ls_id_ = ls_id;
       macro_block_id_ = macro_block_id;
+      lock_tid_ = lock_tid;
+      ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
     }
   }
   return ret;
@@ -120,6 +183,7 @@ int ObDDLMacroBlockClogCb::on_success()
   ObDDLMacroBlock macro_block;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
+  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_); // unlock first, because set_macro_block need to acquire this lock
   {
     ObSpinLockGuard data_buffer_guard(data_buffer_lock_);
     if (is_data_buffer_freed_) {
@@ -150,32 +214,38 @@ int ObDDLMacroBlockClogCb::on_success()
 
 int ObDDLMacroBlockClogCb::on_failure()
 {
+  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
   status_.set_state(STATE_FAILED);
   try_release();
   return OB_SUCCESS;
 }
 
 ObDDLCommitClogCb::ObDDLCommitClogCb()
-  : is_inited_(false), status_(), ls_id_(), tablet_id_(), start_scn_(SCN::min_scn())
+  : is_inited_(false), status_(), ls_id_(), tablet_id_(), start_scn_(SCN::min_scn()), lock_tid_(0), ddl_kv_mgr_handle_()
 {
 
 }
 
 int ObDDLCommitClogCb::init(const share::ObLSID &ls_id,
                             const common::ObTabletID &tablet_id,
-                            const share::SCN &start_scn)
+                            const share::SCN &start_scn,
+                            const uint32_t lock_tid,
+                            ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !start_scn.is_valid_and_not_min())) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !start_scn.is_valid_and_not_min()
+      || 0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(start_scn));
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(start_scn), K(lock_tid));
   } else {
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     start_scn_ = start_scn;
+    lock_tid_ = lock_tid;
+    ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
     is_inited_ = true;
   }
   return ret;
@@ -184,6 +254,8 @@ int ObDDLCommitClogCb::init(const share::ObLSID &ls_id,
 int ObDDLCommitClogCb::on_success()
 {
   int ret = OB_SUCCESS;
+  ddl_kv_mgr_handle_.get_obj()->set_commit_scn_nolock(__get_scn());
+  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);
   try_release();
@@ -192,6 +264,8 @@ int ObDDLCommitClogCb::on_success()
 
 int ObDDLCommitClogCb::on_failure()
 {
+  int ret = OB_SUCCESS;
+  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
   status_.set_state(STATE_FAILED);
   try_release();
   return OB_SUCCESS;

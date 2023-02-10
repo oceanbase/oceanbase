@@ -763,7 +763,7 @@ int ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(ObTabletHandle &tab
     } else {
       ret = OB_SUCCESS;
     }
-  } else if (kv_mgr_handle.is_valid() && kv_mgr_handle.get_obj()->can_schedule_major_compaction()) {
+  } else if (kv_mgr_handle.is_valid() && kv_mgr_handle.get_obj()->can_schedule_major_compaction(tablet_handle.get_obj()->get_tablet_meta())) {
     ObDDLTableMergeDagParam param;
     if (OB_FAIL(kv_mgr_handle.get_obj()->get_ddl_major_merge_param(param))) {
       LOG_WARN("get ddl major merge param failed", K(ret));

@@ -88,7 +88,7 @@ ObTablet::ObTablet()
     is_inited_(false)
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTablet) <= 2496, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTablet) <= 2560, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -2178,6 +2178,7 @@ int ObTablet::build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_pa
     mig_tablet_param.max_serialized_medium_scn_ = tablet_meta_.max_serialized_medium_scn_;
     mig_tablet_param.ddl_execution_id_ = tablet_meta_.ddl_execution_id_;
     mig_tablet_param.ddl_cluster_version_ = tablet_meta_.ddl_cluster_version_;
+    mig_tablet_param.ddl_commit_scn_ = tablet_meta_.ddl_commit_scn_;
     mig_tablet_param.report_status_.reset();
 
     if (OB_FAIL(mig_tablet_param.storage_schema_.init(mig_tablet_param.allocator_, storage_schema_))) {
@@ -2655,7 +2656,8 @@ int ObTablet::start_ddl_if_need()
     table_key.version_range_.base_version_ = 0;
     table_key.version_range_.snapshot_version_ = tablet_meta_.ddl_snapshot_version_;
     const SCN &start_scn = tablet_meta_.ddl_start_scn_;
-    if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(table_key,
+    if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*this,
+                                                       table_key,
                                                        start_scn,
                                                        tablet_meta_.ddl_cluster_version_,
                                                        tablet_meta_.ddl_execution_id_,

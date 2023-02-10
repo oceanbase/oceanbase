@@ -211,6 +211,7 @@ int ObGetMergeTablesResult::assign(const ObGetMergeTablesResult &src)
 ObDDLTableStoreParam::ObDDLTableStoreParam()
   : keep_old_ddl_sstable_(true),
     ddl_start_scn_(SCN::min_scn()),
+    ddl_commit_scn_(SCN::min_scn()),
     ddl_checkpoint_scn_(SCN::min_scn()),
     ddl_snapshot_version_(0),
     ddl_execution_id_(-1),
@@ -222,6 +223,7 @@ ObDDLTableStoreParam::ObDDLTableStoreParam()
 bool ObDDLTableStoreParam::is_valid() const
 {
   return ddl_start_scn_.is_valid()
+    && ddl_commit_scn_.is_valid()
     && ddl_checkpoint_scn_.is_valid()
     && ddl_snapshot_version_ >= 0
     && ddl_execution_id_ >= 0

@@ -76,7 +76,8 @@ int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const SCN &scn)
     LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(tablet_handle));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
     LOG_WARN("create ddl kv mgr failed", K(ret), K(table_key), K(log), K(scn));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(table_key,
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*tablet_handle.get_obj(),
+                                                            table_key,
                                                             scn,
                                                             log.get_cluster_version(),
                                                             log.get_execution_id(),
@@ -183,6 +184,8 @@ int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const SCN &sc
     LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(tablet_handle), K(log), K(scn));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv mgr failed", K(ret), K(log), K(scn));
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->set_commit_scn(scn))) {
+    LOG_WARN("failed to start prepare", K(ret), K(log), K(scn));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(log.get_start_scn(), scn))) {
     if (OB_TABLET_NOT_EXIST == ret || OB_TASK_EXPIRED == ret) {
       ret = OB_SUCCESS; // exit when tablet not exist or task expired

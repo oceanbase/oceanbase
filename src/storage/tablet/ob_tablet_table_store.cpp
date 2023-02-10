@@ -1111,7 +1111,7 @@ int ObTabletTableStore::pull_ddl_memtables(common::ObIAllocator &allocator)
       LOG_TRACE("there is no ddl kv mgr in this tablet", K(ret));
       ret = OB_SUCCESS;
     }
-  } else if (OB_FAIL(kv_mgr_handle.get_obj()->get_ddl_kvs_for_query(ddl_kvs_handle))) {
+  } else if (OB_FAIL(kv_mgr_handle.get_obj()->get_ddl_kvs_for_query(*tablet_ptr_, ddl_kvs_handle))) {
     LOG_WARN("failed to get all ddl freeze kvs", K(ret));
   } else {
     SCN ddl_checkpoint_scn = tablet_ptr_->get_tablet_meta().ddl_checkpoint_scn_;

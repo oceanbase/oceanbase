@@ -480,7 +480,7 @@ int ObTabletDDLUtil::check_data_integrity(const ObTablesHandleArray &ddl_sstable
 }
 
 ObTabletDDLParam::ObTabletDDLParam()
-  : tenant_id_(0), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), snapshot_version_(0), cluster_version_(0)
+  : tenant_id_(0), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), commit_scn_(SCN::min_scn()), snapshot_version_(0), cluster_version_(0)
 {
 
 }
@@ -496,6 +496,7 @@ bool ObTabletDDLParam::is_valid() const
     && ls_id_.is_valid()
     && table_key_.is_valid()
     && start_scn_.is_valid_and_not_min()
+    && commit_scn_.is_valid() && commit_scn_ != SCN::max_scn()
     && snapshot_version_ > 0
     && cluster_version_ >= 0;
 }
@@ -743,6 +744,7 @@ int ObTabletDDLUtil::update_ddl_table_store(ObSSTableIndexBuilder *sstable_index
                                                 ddl_param.table_key_.is_major_sstable()); // need report checksum
       table_store_param.ddl_info_.keep_old_ddl_sstable_ = !ddl_param.table_key_.is_major_sstable();
       table_store_param.ddl_info_.ddl_cluster_version_ = ddl_param.cluster_version_;
+      table_store_param.ddl_info_.ddl_commit_scn_ = ddl_param.commit_scn_;
       if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {
         LOG_WARN("failed to update tablet table store", K(ret), K(ddl_param.table_key_), K(table_store_param));
       } else {

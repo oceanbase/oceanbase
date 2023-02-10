@@ -233,7 +233,8 @@ ObSSTableInsertSliceWriter::~ObSSTableInsertSliceWriter()
 }
 
 int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_param,
-                                     const ObTableSchema *table_schema)
+                                     const ObTableSchema *table_schema,
+                                     ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -249,7 +250,7 @@ int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_para
                K(slice_param.tablet_id_));
     } else if (FALSE_IT(sstable_redo_writer_.set_start_scn(slice_param.start_scn_))) {
     } else if (OB_FAIL(redo_log_writer_callback_.init(DDL_MB_DATA_TYPE, slice_param.table_key_,
-                                                      &sstable_redo_writer_))) {
+                                                      &sstable_redo_writer_, ddl_kv_mgr_handle))) {
       LOG_WARN("fail to init redo log writer callback", KR(ret));
     } else if (OB_FAIL(data_desc_.init(*table_schema,
                                        slice_param.ls_id_,
@@ -513,6 +514,7 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
   const ObTableSchema *table_schema = nullptr;
   ObArenaAllocator allocator(lib::ObLabel("PartInsSstTmp"));
   ObSSTableInsertSliceWriter *sstable_slice_writer = nullptr;
+  bool ddl_committed = false;
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
       tenant_id, schema_guard, build_param.schema_version_))) {
     LOG_WARN("get tenant schema failed", K(ret), K(build_param));
@@ -548,7 +550,7 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
       } else if (tablet_id != row_tablet_id) {
         ret = OB_SUCCESS;
         break;
-      } else if (OB_FAIL(sstable_slice_writer->append_row(*row_val))) {
+      } else if (!ddl_committed && OB_FAIL(sstable_slice_writer->append_row(*row_val))) {
         int tmp_ret = OB_SUCCESS;
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && table_schema->is_unique_index()) {
           LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE,
@@ -566,17 +568,26 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
             task_id, row_tablet_id.id(), GCTX.self_addr(), *GCTX.sql_proxy_, index_key_buffer))) {
             LOG_WARN("generate index ddl error message", K(tmp_ret), K(ret));
           }
+        } else if (OB_TRANS_COMMITED == ret) {
+          ret = OB_SUCCESS;
+          ddl_committed = true;
         } else {
           LOG_WARN("macro block writer append row failed", K(ret));
         }
-      } else {
+      }
+      if (OB_SUCC(ret)) {
         LOG_DEBUG("sstable insert op append row", KPC(row_val));
         ++affected_rows;
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(sstable_slice_writer->close())) {
-        LOG_WARN("close writer failed", K(ret));
+      if (!ddl_committed && OB_FAIL(sstable_slice_writer->close())) {
+        if (OB_TRANS_COMMITED == ret) {
+          ret = OB_SUCCESS;
+          ddl_committed = true;
+        } else {
+          LOG_WARN("close writer failed", K(ret));
+        }
       }
     }
   }
@@ -656,7 +667,7 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
     if (OB_ISNULL(sstable_slice_writer = OB_NEWx(ObSSTableInsertSliceWriter, (&allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObSSTableInsertSliceWriter", KR(ret));
-    } else if (OB_FAIL(sstable_slice_writer->init(slice_param, table_schema))) {
+    } else if (OB_FAIL(sstable_slice_writer->init(slice_param, table_schema, ddl_kv_mgr_handle_))) {
       LOG_WARN("fail to init sstable slice writer", KR(ret), K(slice_param));
     }
     if (OB_FAIL(ret)) {
@@ -807,6 +818,7 @@ public:
   ~GetManageTabletIDs() = default;
   int operator()(common::hash::HashMapPair<ObTabletID, ObSSTableInsertTabletContext *> &entry)
   {
+    int ret = ret_code_; // for LOG_WARN
     if (OB_LIKELY(OB_SUCCESS == ret_code_) && OB_SUCCESS != (ret_code_ = tablet_ids_.push_back(entry.first))) {
       LOG_WARN("push back tablet id failed", K(ret_code_), K(entry.first));
     }
@@ -829,15 +841,8 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
   share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
   const share::schema::ObTableSchema *table_schema = nullptr;
   const uint64_t tenant_id = MTL_ID();
-  SCN commit_scn;
   ObSchemaGetterGuard schema_guard;
-  if (OB_UNLIKELY(!table_key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key));
-  } else if (OB_ISNULL(ls_handle_.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is null", K(ret));
-  } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
+  if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("schema service is null", K(ret), KP(schema_service));
   } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -847,51 +852,11 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_key), KP(table_schema));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(data_sstable_redo_writer_.write_commit_log(table_key,
-                                                                table_schema->get_table_id(),
-                                                                build_param_.execution_id_,
-                                                                build_param_.ddl_task_id_,
-                                                                commit_scn))) {
-    if (OB_TASK_EXPIRED == ret) {
-      LOG_INFO("ddl task expired", K(ret), K(table_key), K(build_param_));
-    } else {
-      LOG_WARN("fail write ddl commit log", K(ret), K(table_key));
-    }
   } else {
     DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
-    ObTabletHandle tablet_handle;
-    ObDDLKvMgrHandle ddl_kv_mgr_handle;
-    ObLS *ls = ls_handle_.get_ls();
-    const ObLSID &ls_id = ls->get_ls_id();
-    const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    const SCN &ddl_start_scn = data_sstable_redo_writer_.get_start_scn();
-    const uint64_t table_id = table_schema->get_table_id();
-    const int64_t ddl_task_id = build_param_.ddl_task_id_;
-    if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, tablet_id, tablet_handle))) {
-      LOG_WARN("get tablet failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(ddl_start_scn,
-                                                                commit_scn,
-                                                                table_id,
-                                                                ddl_task_id))) {
-      if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id),
-            K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
-      } else {
-        LOG_WARN("failed to do ddl kv commit", K(ret), K(ddl_start_scn), K(commit_scn), K(build_param_));
-      }
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_merge_success(ddl_start_scn, commit_scn))) {
-      if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
-            K(ddl_start_scn), "new_ddl_start_scn",
-            ddl_kv_mgr_handle.get_obj()->get_start_scn(), K(build_param_));
-      } else {
-        LOG_WARN("failed to wait ddl merge", K(ret), K(ddl_start_scn), K(build_param_));
-      }
+    if (OB_FAIL(data_sstable_redo_writer_.end_ddl_redo_and_create_ddl_sstable(
+        ls_handle_, table_key, table_id, build_param_.execution_id_, build_param_.ddl_task_id_))) {
+      LOG_WARN("fail create ddl sstable", K(ret), K(table_key));
     }
   }
   return ret;

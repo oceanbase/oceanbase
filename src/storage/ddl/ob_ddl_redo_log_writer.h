@@ -188,19 +188,24 @@ class ObDDLRedoLogWriter final
 public:
   static ObDDLRedoLogWriter &get_instance();
   int init();
-  int write(const ObDDLRedoLog &log,
+  int write(ObTabletHandle &tablet_handle,
+            ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+            const ObDDLRedoLog &log,
             const uint64_t tenant_id,
             const share::ObLSID &ls_id,
             logservice::ObLogHandler *log_handler,
             const blocksstable::MacroBlockId &macro_block_id,
             char *buffer,
             ObDDLRedoLogHandle &handle);
-  int write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+  int write_ddl_start_log(ObTabletHandle &tablet_handle,
+                          ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                           const ObDDLStartLog &log,
                           logservice::ObLogHandler *log_handler,
                           share::SCN &start_scn);
   template <typename T>
-  int write_ddl_finish_log(const T &log,
+  int write_ddl_commit_log(ObTabletHandle &tablet_handle,
+                           ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                           const T &log,
                            const ObDDLClogType clog_type,
                            const share::ObLSID &ls_id,
                            logservice::ObLogHandler *log_handler,
@@ -225,7 +230,9 @@ private:
 class ObDDLMacroBlockRedoWriter final
 {
 public:
-  static int write_macro_redo(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+  static int write_macro_redo(ObTabletHandle &tablet_handle,
+                              ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                              const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                               const share::ObLSID &ls_id,
                               logservice::ObLogHandler *log_handler,
                               const blocksstable::MacroBlockId &macro_block_id,
@@ -250,12 +257,21 @@ public:
                      const int64_t execution_id,
                      const int64_t ddl_cluster_version,
                      ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int end_ddl_redo_and_create_ddl_sstable(ObLSHandle &ls_handle,
+                                          const ObITable::TableKey &table_key,
+                                          const uint64_t table_id,
+                                          const int64_t execution_id,
+                                          const int64_t ddl_task_id);
   int write_redo_log(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                      const blocksstable::MacroBlockId &macro_block_id,
-                     const bool allow_remote_write);
+                     const bool allow_remote_write,
+                     ObTabletHandle &tablet_handle,
+                     ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int wait_redo_log_finish(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                            const blocksstable::MacroBlockId &macro_block_id);
-  int write_commit_log(const ObITable::TableKey &table_key,
+  int write_commit_log(ObTabletHandle &tablet_handle,
+                       ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                       const ObITable::TableKey &table_key,
                        const int64_t table_id,
                        const int64_t execution_id,
                        const int64_t ddl_task_id,
@@ -282,7 +298,7 @@ class ObDDLRedoLogWriterCallback : public blocksstable::ObIMacroBlockFlushCallba
 public:
   ObDDLRedoLogWriterCallback();
   virtual ~ObDDLRedoLogWriterCallback();
-  int init(const blocksstable::ObDDLMacroBlockType block_type, const ObITable::TableKey &table_key, ObDDLSSTableRedoWriter *ddl_writer);
+  int init(const blocksstable::ObDDLMacroBlockType block_type, const ObITable::TableKey &table_key, ObDDLSSTableRedoWriter *ddl_writer, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int write(
       const ObMacroBlockHandle &macro_handle,
       const blocksstable::ObLogicMacroBlockId &logic_id,
@@ -298,6 +314,8 @@ private:
   blocksstable::MacroBlockId macro_block_id_;
   ObDDLSSTableRedoWriter *ddl_writer_;
   char *block_buffer_;
+  ObTabletHandle tablet_handle_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };
 
 }  // end namespace storage

@@ -70,13 +70,14 @@ class ObDDLKVPendingGuard final
 public:
   static int set_macro_block(ObTablet *tablet, const ObDDLMacroBlock &macro_block);
 public:
-  ObDDLKVPendingGuard(ObTablet *tablet, const share::SCN &scn);
+  ObDDLKVPendingGuard(ObTablet *tablet, const share::SCN &start_scn, const share::SCN &scn);
   ~ObDDLKVPendingGuard();
   int get_ret() const { return ret_; }
   int get_ddl_kv(ObDDLKV *&kv);
   TO_STRING_KV(KP(tablet_), K(scn_), K(kv_handle_), K(ret_));
 private:
   ObTablet *tablet_;
+  share::SCN start_scn_;
   share::SCN scn_;
   ObTableHandleV2 kv_handle_;
   int ret_;

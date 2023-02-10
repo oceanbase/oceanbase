@@ -135,7 +135,8 @@ public:
   ObSSTableInsertSliceWriter();
   ~ObSSTableInsertSliceWriter();
   int init(const ObSSTableInsertSliceParam &slice_param,
-           const share::schema::ObTableSchema *table_schema);
+           const share::schema::ObTableSchema *table_schema,
+           ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int append_row(blocksstable::ObDatumRow &datum_row);
   int append_row(const common::ObNewRow &row_val);
   int close();

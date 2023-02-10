@@ -29,7 +29,7 @@ class ObLSDDLLogHandler : public logservice::ObIReplaySubHandler,
                           public logservice::ObICheckpointSubHandler
 {
 public:
-  ObLSDDLLogHandler() : is_inited_(false), is_online_(false), ls_(nullptr) {}
+  ObLSDDLLogHandler() : is_inited_(false), is_online_(false), ls_(nullptr), last_rec_scn_() {}
   ~ObLSDDLLogHandler() { reset(); }
 
 public:
@@ -66,6 +66,7 @@ private:
   ObLS *ls_;
   common::TCRWLock online_lock_;
   ObDDLRedoLogReplayer ddl_log_replayer_;
+  share::SCN last_rec_scn_;
 };
 
 } // storage

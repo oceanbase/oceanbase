@@ -131,12 +131,13 @@ public:
   ObTabletDDLParam();
   ~ObTabletDDLParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(snapshot_version), K_(cluster_version));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(commit_scn), K_(snapshot_version), K_(cluster_version));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   ObITable::TableKey table_key_;
   share::SCN start_scn_;
+  share::SCN commit_scn_;
   int64_t snapshot_version_;
   int64_t cluster_version_;
 };
