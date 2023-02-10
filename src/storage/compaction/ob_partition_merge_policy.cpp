@@ -547,6 +547,13 @@ int ObPartitionMergePolicy::get_major_merge_tables(
     } else if (multi_version_start < result.version_range_.snapshot_version_) {
       result.version_range_.multi_version_start_ = multi_version_start;
       LOG_TRACE("succ reserve multi_version_start", K(result.version_range_));
+    }
+    if (OB_UNLIKELY(tablet.get_snapshot_version() < param.merge_version_)) {
+      ret = OB_NO_NEED_MERGE;
+      LOG_INFO("tablet is not ready to schedule major merge", K(ret), K(tablet), K(param));
+    } else if (OB_UNLIKELY(tablet.get_multi_version_start() > param.merge_version_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet haven't kept major snapshot", K(ret), K(tablet), K(param));
     } else {
       result.version_range_.multi_version_start_ = result.version_range_.snapshot_version_;
       LOG_TRACE("no need keep multi version", K(result.version_range_));
