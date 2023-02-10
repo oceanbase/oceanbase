@@ -156,6 +156,8 @@ union ObProxyCapabilityFlags
                                                         && is_ob_protocol_v2_support(); }
   bool is_new_extra_info_support() const { return 1 == cap_flags_.OB_CAP_PROXY_NEW_EXTRA_INFO
                                                         && is_ob_protocol_v2_support(); }
+  bool is_session_var_sync_support() const { return 1 == cap_flags_.OB_CAP_PROXY_SESSION_VAR_SYNC
+                                                        && is_ob_protocol_v2_support(); }
 
   uint64_t capability_;
   struct CapabilityFlags
@@ -184,7 +186,8 @@ union ObProxyCapabilityFlags
     // for full trace_route
     uint64_t OB_CAP_PROXY_FULL_LINK_TRACING:           1;
     uint64_t OB_CAP_PROXY_NEW_EXTRA_INFO:              1;
-    uint64_t OB_CAP_RESERVED_NOT_USE:                 48;
+    uint64_t OB_CAP_PROXY_SESSION_VAR_SYNC:            1;
+    uint64_t OB_CAP_RESERVED_NOT_USE:                 47;
   } cap_flags_;
 };
 

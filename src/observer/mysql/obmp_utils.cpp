@@ -46,11 +46,13 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
     LOG_DEBUG("sys var changed", K(session.get_tenant_name()), K(sys_var.count()));
     // if sys_var change, set SESSION_SYNC_SYS_VAR type's encoder->is_changed_ = true
     // for turn on serialize sys delta vars.
-    ObSessInfoEncoder* encoder = NULL;
-    if (OB_FAIL(session.get_sess_encoder(SESSION_SYNC_SYS_VAR, encoder))) {
-      LOG_WARN("failed to get session encoder", K(ret));
-    } else {
-      encoder->is_changed_ = true;
+    if (session.is_session_var_sync()) {
+      ObSessInfoEncoder* encoder = NULL;
+      if (OB_FAIL(session.get_sess_encoder(SESSION_SYNC_SYS_VAR, encoder))) {
+        LOG_WARN("failed to get session encoder", K(ret));
+      } else {
+        encoder->is_changed_ = true;
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < sys_var.count(); ++i) {
       sql::ObBasicSessionInfo::ChangedVar change_var = sys_var.at(i);

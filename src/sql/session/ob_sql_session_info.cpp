@@ -150,6 +150,7 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       pl_query_sender_(NULL),
       pl_ps_protocol_(false),
       is_ob20_protocol_(false),
+      is_session_var_sync_(false),
       last_plan_id_(0),
       pl_sync_pkg_vars_(NULL),
       inner_conn_(NULL),
@@ -340,6 +341,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     auto_flush_trace_ = false;
     coninfo_set_by_sess_ = false;
     is_ob20_protocol_ = false;
+    is_session_var_sync_ = false;
     int temp_ret = OB_SUCCESS;
     dblink_context_.reset();
     sql_req_level_ = 0;

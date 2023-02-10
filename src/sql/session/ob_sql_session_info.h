@@ -701,6 +701,10 @@ public:
   inline void set_ob20_protocol(bool is_20protocol) { is_ob20_protocol_ = is_20protocol; }
   inline bool is_ob20_protocol() { return is_ob20_protocol_; }
 
+  inline void set_session_var_sync(bool is_session_var_sync)
+              { is_session_var_sync_ = is_session_var_sync; }
+  inline bool is_session_var_sync() { return is_session_var_sync_; }
+
   int replace_user_variable(const common::ObString &name, const ObSessionVariable &value);
   int replace_user_variable(
     ObExecContext &ctx, const common::ObString &name, const ObSessionVariable &value);
@@ -1103,6 +1107,8 @@ private:
   observer::ObQueryDriver *pl_query_sender_; // send query result in mysql pl
   bool pl_ps_protocol_; // send query result use this protocol
   bool is_ob20_protocol_; // mark as whether use oceanbase 2.0 protocol
+
+  bool is_session_var_sync_; //session var sync support flag.
 
   int64_t last_plan_id_; // 记录上一个计划的 plan_id，用于 show trace 中显示 sql 物理计划
 
