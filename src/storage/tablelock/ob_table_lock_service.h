@@ -163,7 +163,6 @@ public:
                     const int64_t timeout_us = 0);
 
 private:
-  int refresh_schema_if_needed_(ObTableLockCtx &ctx);
   bool need_retry_single_task_(const ObTableLockCtx &ctx,
                                const int64_t ret) const;
   int rewrite_return_code_(const int ret) const;

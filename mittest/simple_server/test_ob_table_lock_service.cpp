@@ -132,7 +132,7 @@ TEST_F(ObTableLockServiceTest, test_ctx)
   ASSERT_FALSE(ctx_no_try_lock.is_deadlock_avoid_enabled());
 
   // 3. TIMEOUT && DEAD LOCK AVOID
-  timeout_us = 60;
+  timeout_us = 60 * 1000 * 1000;
   retry_timeout_us = 15;
   ObTableLockService::ObTableLockCtx ctx_deadlock_avoid(table_id, timeout_us, retry_timeout_us);
   ASSERT_FALSE(ctx_deadlock_avoid.is_try_lock());

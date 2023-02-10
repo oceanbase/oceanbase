@@ -382,19 +382,28 @@ int ObTableLockService::process_lock_task_(ObTableLockCtx &ctx,
   int tmp_ret = OB_SUCCESS;
 
   const uint64_t tenant_id = MTL_ID();
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = NULL;
+  ObTableSchema *table_schema = NULL;
+  ObRefreshSchemaStatus schema_status;
   ObMultiVersionSchemaService *schema_service = MTL(ObTenantSchemaService*)->get_schema_service();
-
   bool is_allowed = false;
+  ObArenaAllocator allocator("TableSchema");
 
-  if (OB_FAIL(refresh_schema_if_needed_(ctx))) {
-    LOG_WARN("failed to refresh schema", K(ret), K(ctx));
-  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id,
-                                                             schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, ctx.table_id_, table_schema))) {
-    LOG_WARN("failed to get table schema", K(ret));
+  schema_status.tenant_id_ = tenant_id;
+  ctx.schema_version_ = 0;
+
+  if (!ctx.is_in_trans_ && OB_FAIL(start_tx_(ctx))) {
+    LOG_WARN("failed to start trans", K(ret));
+  } else if (ctx.is_in_trans_ && OB_FAIL(start_stmt_(ctx))) {
+    LOG_WARN("start stmt failed", K(ret), K(ctx));
+  } else if (OB_FAIL(process_table_lock_(ctx, task_type, lock_mode, lock_owner))) {
+    LOG_WARN("lock table failed", K(ret), K(ctx), K(task_type), K(lock_mode), K(lock_owner));
+  } else if (OB_FAIL(schema_service->get_schema_service()->get_table_schema(schema_status,
+                                                                            ctx.table_id_,
+                                                                            INT64_MAX - 1/* refresh the newest schema */,
+                                                                            *sql_proxy_,
+                                                                            allocator,
+                                                                            table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(ctx));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_INFO("table not exist, check whether it meets expectations", K(ret), K(ctx));
@@ -404,12 +413,6 @@ int ObTableLockService::process_lock_task_(ObTableLockCtx &ctx,
   } else if (!is_allowed) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("lock table not allowed now", K(ret), K(ctx));
-  } else if (!ctx.is_in_trans_ && OB_FAIL(start_tx_(ctx))) {
-    LOG_WARN("failed to start trans", K(ret));
-  } else if (ctx.is_in_trans_ && OB_FAIL(start_stmt_(ctx))) {
-    LOG_WARN("start stmt failed", K(ret), K(ctx));
-  } else if (OB_FAIL(process_table_lock_(ctx, task_type, lock_mode, lock_owner))) {
-    LOG_WARN("lock table failed", K(ret), K(ctx), K(task_type), K(lock_mode), K(lock_owner));
   } else if (OB_FAIL(get_process_tablets_(task_type, table_schema, ctx))) {
     LOG_WARN("failed to get parts", K(ret), K(ctx));
   } else if (OB_FAIL(pre_check_lock_(ctx,
@@ -1022,32 +1025,6 @@ int ObTableLockService::get_process_tablets_(const ObTableLockTaskType task_type
     }
   }
   LOG_DEBUG("ObTableLockService::get_process_tablets_", K(ret), K(task_type), K(ctx));
-
-  return ret;
-}
-
-int ObTableLockService::refresh_schema_if_needed_(ObTableLockCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-
-  int64_t latest_schema_version = OB_INVALID_VERSION;
-  ObRefreshSchemaStatus schema_status;
-  ObMultiVersionSchemaService *schema_service = MTL(ObTenantSchemaService*)->get_schema_service();
-  schema_status.tenant_id_ = ctx.get_tenant_id();
-
-  int64_t tmp_timout_ts = THIS_WORKER.get_timeout_ts();
-  THIS_WORKER.set_timeout_ts(ctx.abs_timeout_ts_);
-
-  if (OB_FAIL(schema_service->get_schema_version_in_inner_table(*sql_proxy_,
-                                                                schema_status,
-                                                                latest_schema_version))) {
-    LOG_WARN("failed to get latest schema version", K(ret), K(ctx));
-  } else if (OB_FAIL(schema_service->async_refresh_schema(ctx.get_tenant_id(),
-                                                          latest_schema_version))) {
-    LOG_WARN("failed to refresh schema", K(ret), K(latest_schema_version), K(ctx));
-  }
-
-  THIS_WORKER.set_timeout_ts(tmp_timout_ts);
 
   return ret;
 }
