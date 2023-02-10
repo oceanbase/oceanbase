@@ -46,7 +46,7 @@ TestRestoreURIParser::TestRestoreURIParser()
   }
   VIPSrv_Result* result = NULL;
   VIPSrv_Config config;
-  config.jmenv_dom = "jmenv.tbsite.net";
+  config.jmenv_dom = "xxx";
   config.cache_dir = getenv("HOME");
   if (NULL == (result = vipsrv_global_init(&config))) {
     ret = OB_OSS_ERROR;
@@ -77,8 +77,7 @@ TEST_F(TestRestoreURIParser, test_basic)
 {
   ObRestoreArgs arg;
   const char* uri_001 = "oss://071092/ob2.XX/"
-                        "1001?timestamp=1495444477922616&host=oss-cn-hangzhou-zmf.aliyuncs.com&access_id="
-                        "krtRx5e2pc0EvbwN&access_key=OjbK7VjBvOciHKcW5dPX8Rc4usUc0P&restore_user=a&restore_pass=b";
+                        "1001?timestamp=1495444477922616&host=xxx.com&access_id=111&access_key=222&restore_user=a&restore_pass=b";
   ASSERT_EQ(OB_SUCCESS, ObRestoreURIParser::parse(ObString(uri_001), arg));
 }
 
@@ -86,8 +85,7 @@ TEST_F(TestRestoreURIParser, test_long_bucket)
 {
   ObRestoreArgs arg;
   const char* uri_001 = "oss://071092/test_ob1/1.323/ob2.XX/"
-                        "1001?timestamp=1495444477922616&host=oss-cn-hangzhou-zmf.aliyuncs.com&access_id="
-                        "krtRx5e2pc0EvbwN&access_key=OjbK7VjBvOciHKcW5dPX8Rc4usUc0P&restore_user=a&restore_pass=b";
+                        "1001?timestamp=1495444477922616&host=xxx.com&access_id=111&access_key=222&restore_user=a&restore_pass=b";
   ASSERT_EQ(OB_SUCCESS, ObRestoreURIParser::parse(ObString(uri_001), arg));
   LOG_INFO("long bucket", K(arg));
 }
@@ -96,13 +94,12 @@ TEST_F(TestRestoreURIParser, test_more)
 {
   ObRestoreArgs arg;
   const char* uri_001 = "file:///071092/ob2.XX/"
-                        "1001?timestamp=1495444477922616&host=oss-cn-hangzhou-zmf.aliyuncs.com&access_id="
-                        "krtRx5e2pc0EvbwN&access_key=OjbK7VjBvOciHKcW5dPX8Rc4usUc0P&restore_user=a&restore_pass=b";
+                        "1001?timestamp=1495444477922616&host=xxx.com&access_id=111&access_key=222&restore_user=a&restore_pass=b";
   ASSERT_EQ(OB_SUCCESS, ObRestoreURIParser::parse(ObString(uri_001), arg));
   LOG_INFO("tset more", K(arg));
-  ASSERT_TRUE(0 == strcmp(arg.storage_info_,
-                       "timestamp=1495444477922616&host=oss-cn-hangzhou-zmf.aliyuncs.com&access_id=krtRx5e2pc0EvbwN&"
-                       "access_key=OjbK7VjBvOciHKcW5dPX8Rc4usUc0P&restore_user=a&restore_pass=b"));
+  ASSERT_TRUE(
+      0 == strcmp(arg.storage_info_,
+               "timestamp=1495444477922616&host=xxx.com&access_id=111&access_key=222&restore_user=a&restore_pass=b"));
   ASSERT_TRUE(1001 == arg.tenant_id_);
   ASSERT_TRUE(0 == strcmp(arg.uri_, "file:///071092/ob2.XX"));
   ASSERT_TRUE(1495444477922616 == arg.restore_timeu_);
