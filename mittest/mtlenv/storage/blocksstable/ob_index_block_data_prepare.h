@@ -489,6 +489,7 @@ void TestIndexBlockDataPrepare::prepare_data()
   param.max_merged_trans_version_ = res.max_merged_trans_version_;
   param.row_count_ = res.row_count_;
   param.root_row_store_type_ = root_row_store_type;
+  param.latest_row_store_type_ = table_schema_.get_row_store_type();
   param.data_index_tree_height_ = root_desc.height_;
   param.index_blocks_cnt_ = res.index_blocks_cnt_;
   param.data_blocks_cnt_ = res.data_blocks_cnt_;

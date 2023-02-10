@@ -46,7 +46,8 @@ public:
     sstable.key_.tablet_id_ = 1;
     sstable.key_.scn_range_.start_scn_.convert_for_gts(start_log_ts);
     sstable.key_.scn_range_.end_scn_.convert_for_gts(end_log_ts);
-    sstable.meta_.basic_meta_.row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    sstable.meta_.basic_meta_.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    sstable.meta_.basic_meta_.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
     sstable.valid_for_reading_ = true;
     sstable.meta_.basic_meta_.status_ = SSTABLE_WRITE_BUILDING;
     sstable.meta_.data_root_info_.addr_.set_none_addr();

@@ -1036,6 +1036,7 @@ int ObStorageHATabletsBuilder::build_remote_logical_sstable_param_(
     param.root_block_addr_.set_none_addr();
     param.data_block_macro_meta_addr_.set_none_addr();
     param.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    param.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
     param.data_index_tree_height_ = 0;
     param.index_blocks_cnt_ = 0;
     param.data_blocks_cnt_ = 0;

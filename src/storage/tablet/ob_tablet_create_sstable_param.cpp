@@ -40,6 +40,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     root_block_addr_(),
     root_block_data_(),
     root_row_store_type_(common::ObRowStoreType::MAX_ROW_STORE),
+    latest_row_store_type_(common::ObRowStoreType::MAX_ROW_STORE),
     data_index_tree_height_(0),
     data_block_macro_meta_addr_(),
     data_block_macro_meta_(),
@@ -84,6 +85,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && create_snapshot_version_ >= 0
                && index_type_ < share::schema::ObIndexType::INDEX_TYPE_MAX
                && root_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
+               && latest_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
                && data_index_tree_height_ >= 0
                && index_blocks_cnt_ >= 0
                && data_blocks_cnt_ >= 0
@@ -99,7 +101,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && recycle_version_ >= 0)) {
     ret = false;
     LOG_WARN("invalid basic params", K(schema_version_), K(create_snapshot_version_), K(index_type_),
-             K(root_row_store_type_), K(data_index_tree_height_), K(index_blocks_cnt_),
+             K(root_row_store_type_), K_(latest_row_store_type), K(data_index_tree_height_), K(index_blocks_cnt_),
              K(data_blocks_cnt_), K(micro_block_cnt_), K(use_old_macro_block_count_),
              K(row_count_), K(rowkey_column_cnt_), K(column_cnt_), K(occupy_size_),
              K(original_size_), K(ddl_scn_), K(filled_tx_scn_), K_(recycle_version));

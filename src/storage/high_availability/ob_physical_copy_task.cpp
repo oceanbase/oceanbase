@@ -943,6 +943,7 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
     param.create_snapshot_version_ = sstable_param_->basic_meta_.create_snapshot_version_;
     param.progressive_merge_round_ = sstable_param_->basic_meta_.progressive_merge_round_;
     param.progressive_merge_step_ = sstable_param_->basic_meta_.progressive_merge_step_;
+    param.latest_row_store_type_ = sstable_param_->basic_meta_.latest_row_store_type_;
 
     ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
         param.root_block_addr_, param.root_block_data_);
@@ -1004,7 +1005,8 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
     param.progressive_merge_round_ = sstable_param_->basic_meta_.progressive_merge_round_;
     param.progressive_merge_step_ = sstable_param_->basic_meta_.progressive_merge_step_;
     param.is_ready_for_read_ = true;
-    param.root_row_store_type_ = sstable_param_->basic_meta_.row_store_type_;
+    param.root_row_store_type_ = sstable_param_->basic_meta_.root_row_store_type_;
+    param.latest_row_store_type_ = sstable_param_->basic_meta_.latest_row_store_type_;
     param.index_blocks_cnt_ = sstable_param_->basic_meta_.index_macro_block_count_;
     param.data_blocks_cnt_ = sstable_param_->basic_meta_.data_macro_block_count_;
     param.micro_block_cnt_ = sstable_param_->basic_meta_.data_micro_block_count_;

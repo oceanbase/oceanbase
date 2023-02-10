@@ -610,6 +610,7 @@ int ObSharedMacroBlockMgr::create_new_sstable(
   param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
   param.rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
   param.recycle_version_ = basic_meta.recycle_version_;
+  param.latest_row_store_type_ = basic_meta.latest_row_store_type_;
   param.is_ready_for_read_ = true;
 
   ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
@@ -675,11 +676,11 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
   } else {
     // overwrite the encryption related memberships, otherwise these memberships of new sstable may differ
     // from that of old sstable, since the encryption method of one tablet may change before defragmentation
-    data_desc.row_store_type_ = basic_meta.row_store_type_;
+    data_desc.row_store_type_ = basic_meta.root_row_store_type_;
     data_desc.compressor_type_ = basic_meta.compressor_type_;
     data_desc.master_key_id_ = basic_meta.master_key_id_;
     data_desc.encrypt_id_ = basic_meta.encrypt_id_;
-    data_desc.encoder_opt_.set_store_type(basic_meta.row_store_type_);
+    data_desc.encoder_opt_.set_store_type(basic_meta.root_row_store_type_);
     MEMCPY(data_desc.encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     data_desc.row_column_count_ = data_desc.rowkey_column_count_ + 1;
     data_desc.col_desc_array_.reset();

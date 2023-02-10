@@ -303,7 +303,7 @@ int ObIndexBlockTreeCursor::init(
     tenant_id_ = MTL_ID();
     const ObSSTableMeta &sstable_meta = sstable.get_meta();
     ObRowStoreType root_row_store_type
-        = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().row_store_type_);
+        = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().root_row_store_type_);
     curr_path_item_->row_store_type_ = root_row_store_type;
     read_info_ = read_info;
     rowkey_column_cnt_ = read_info_->get_rowkey_count();
@@ -429,7 +429,7 @@ int ObIndexBlockTreeCursor::drill_down(
         } else {
           curr_path_item_->is_root_micro_block_ = true;
           curr_path_item_->row_store_type_
-              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().row_store_type_);
+              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().root_row_store_type_);
         }
 
         if (OB_FAIL(ret)) {
@@ -459,7 +459,7 @@ int ObIndexBlockTreeCursor::drill_down(
         } else {
           curr_path_item_->is_root_micro_block_ = true;
           curr_path_item_->row_store_type_
-              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().row_store_type_);
+              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().root_row_store_type_);
         }
 
         while (OB_SUCC(ret) && !reach_target_depth) {

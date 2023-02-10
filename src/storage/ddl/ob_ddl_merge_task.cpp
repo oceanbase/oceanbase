@@ -537,11 +537,11 @@ int ObTabletDDLUtil::prepare_index_data_desc(const share::ObLSID &ls_id,
     if (nullptr != first_ddl_sstable) {
       // use the param in first ddl sstable, which persist the param when ddl start
       const ObSSTableBasicMeta &basic_meta = first_ddl_sstable->get_meta().get_basic_meta();
-      data_desc.row_store_type_ = basic_meta.row_store_type_;
+      data_desc.row_store_type_ = basic_meta.root_row_store_type_;
       data_desc.compressor_type_ = basic_meta.compressor_type_;
       data_desc.master_key_id_ = basic_meta.master_key_id_;
       data_desc.encrypt_id_ = basic_meta.encrypt_id_;
-      data_desc.encoder_opt_.set_store_type(basic_meta.row_store_type_);
+      data_desc.encoder_opt_.set_store_type(basic_meta.root_row_store_type_);
       MEMCPY(data_desc.encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
       data_desc.need_prebuild_bloomfilter_ = false;
     }
@@ -666,6 +666,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
         param.index_type_ = storage_schema.get_index_type();
         param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
         param.schema_version_ = storage_schema.get_schema_version();
+        param.latest_row_store_type_ = storage_schema.get_row_store_type();
         param.create_snapshot_version_ = ddl_param.snapshot_version_;
         param.ddl_scn_ = ddl_param.start_scn_;
         ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,

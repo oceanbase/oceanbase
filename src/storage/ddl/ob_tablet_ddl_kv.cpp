@@ -112,6 +112,7 @@ int ObDDLKV::init_sstable_param(const share::ObLSID &ls_id,
       sstable_param.index_type_ = storage_schema.get_index_type();
       sstable_param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
       sstable_param.schema_version_ = storage_schema.get_schema_version();
+      sstable_param.latest_row_store_type_ = storage_schema.get_row_store_type();
       sstable_param.create_snapshot_version_ = table_key.get_snapshot_version();
       sstable_param.ddl_scn_ = ddl_start_scn;
       sstable_param.root_row_store_type_ = data_desc.row_store_type_;

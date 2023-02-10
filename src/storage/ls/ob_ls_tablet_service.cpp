@@ -2184,7 +2184,8 @@ int ObLSTabletService::build_create_sstable_param_for_migration(
     param.table_mode_                    = mig_param.basic_meta_.table_mode_;
     param.index_type_                    = static_cast<share::schema::ObIndexType>(mig_param.basic_meta_.index_type_);
     param.rowkey_column_cnt_             = mig_param.basic_meta_.rowkey_column_count_;
-    param.root_row_store_type_           = mig_param.basic_meta_.row_store_type_;
+    param.root_row_store_type_           = mig_param.basic_meta_.root_row_store_type_;
+    param.latest_row_store_type_         = mig_param.basic_meta_.latest_row_store_type_;
     param.index_blocks_cnt_              = mig_param.basic_meta_.index_macro_block_count_;
     param.data_blocks_cnt_               = mig_param.basic_meta_.data_macro_block_count_;
     param.micro_block_cnt_               = mig_param.basic_meta_.data_micro_block_count_;
