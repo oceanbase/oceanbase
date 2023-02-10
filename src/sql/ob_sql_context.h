@@ -410,6 +410,7 @@ struct ObSpmCacheCtx
   ObSpmCacheCtx()
     : bl_key_()
   {}
+  inline void reset() { bl_key_.reset(); }
   ObBaselineKey bl_key_;
 };
 
