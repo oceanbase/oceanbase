@@ -173,7 +173,7 @@ int ObTableRedefinitionTask::send_build_replica_request()
       break;
     }
     default: {
-      if (send_build_replica_request_by_sql()) {
+      if (OB_FAIL(send_build_replica_request_by_sql())) {
         LOG_WARN("failed to send build replica request", K(ret));
       }
       break;
