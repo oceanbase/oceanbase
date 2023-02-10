@@ -128,4 +128,5 @@ TG_DEF(CDCService, CDCSrv, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(LogUpdater, LogUpdater, "", TG_STATIC, TIMER)
 TG_DEF(HeartBeatCheckTask, HeartBeatCheckTask, "", TG_STATIC, TIMER)
 TG_DEF(RedefHeartBeatTask, RedefHeartBeatTask, "", TG_STATIC, TIMER)
+TG_DEF(MemDumpTimer, MemDumpTimer, "", TG_STATIC, TIMER)
 #endif

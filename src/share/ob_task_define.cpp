@@ -27,6 +27,13 @@ using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
 namespace oceanbase {
+namespace common {
+void allow_next_syslog(int64_t count)
+{
+  share::ObTaskController::get().allow_next_syslog(count);
+}
+} // common
+
 namespace share {
 
 class ObSyslogPerErrLimiter : public common::ObISyslogRateLimiter

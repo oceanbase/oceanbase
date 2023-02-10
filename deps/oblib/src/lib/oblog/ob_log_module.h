@@ -309,6 +309,20 @@ LOG_MOD_END(PL)
 #define CANCLE_OB_LOG_TRACE_MODE()  OB_LOGGER.set_trace_mode(false)
 #define PRINT_OB_LOG_TRACE_BUF(mod_name, level)                                                            \
   (OB_LOG_NEED_TO_PRINT(level) ? OB_LOGGER.print_trace_buffer("["#mod_name"] ", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(level)) : (void) 0)
+#define PRINT_WITH_TRACE_MODE(mod_name, level, body)      \
+{                                                         \
+  bool need_cancle_trace_mode = false;                    \
+  if (!IS_OB_LOG_TRACE_MODE()) {                          \
+    need_cancle_trace_mode = true;                        \
+  }                                                       \
+  SET_OB_LOG_TRACE_MODE();                                \
+  PRINT_OB_LOG_TRACE_BUF(COMMON, INFO);                   \
+  body;                                                   \
+  PRINT_OB_LOG_TRACE_BUF(mod_name, level);                \
+  if (need_cancle_trace_mode) {                           \
+    CANCLE_OB_LOG_TRACE_MODE();                           \
+  }                                                       \
+}
 
 //for tests/ob_log_test or others
 #define OB_LOG_MOD_NEED_TO_PRINT(parMod, level)                                                  \

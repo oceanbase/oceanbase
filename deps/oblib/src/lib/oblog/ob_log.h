@@ -61,6 +61,8 @@ class ObVSliceAlloc;
 class ObBlockAllocMgr;
 class ObFIFOAllocator;
 class ObPLogItem;
+
+extern void allow_next_syslog(int64_t count = 1);
 extern int logdata_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, va_list args);
 extern ObPLogFDType get_fd_type(const char *mod_name);
 

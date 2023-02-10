@@ -502,6 +502,10 @@ void ObServer::destroy()
     TG_DESTROY(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer destroyed");
 
+    FLOG_INFO("begin to destroy memory dump timer");
+    TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
+    FLOG_INFO("memory dump timer destroyed");
+
     FLOG_INFO("begin to destroy redef heart beat task");
     TG_DESTROY(lib::TGDefIDs::RedefHeartBeatTask);
     FLOG_INFO("redef heart beat task destroyed");
@@ -1039,6 +1043,10 @@ int ObServer::stop()
     TG_STOP(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer stopped");
 
+    FLOG_INFO("begin to stop memory dump timer");
+    TG_STOP(lib::TGDefIDs::MemDumpTimer);
+    FLOG_INFO("memory dump timer stopped");
+
     FLOG_INFO("begin to stop ctas clean up timer");
     TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
     FLOG_INFO("ctas clean up timer stopped");
@@ -1238,6 +1246,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait ctas clean up timer");
     TG_WAIT(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("wait ctas clean up timer success");
+
+    FLOG_INFO("begin to wait memory dump timer");
+    TG_WAIT(lib::TGDefIDs::MemDumpTimer);
+    FLOG_INFO("wait memory dump timer success");
 
     FLOG_INFO("begin to wait root service");
     root_service_.wait();
@@ -1527,6 +1539,8 @@ int ObServer::init_config()
         LOG_ERROR("fail to init server trace timer", KR(ret));
       } else if (OB_FAIL(TG_START(lib::TGDefIDs::CTASCleanUpTimer))) {
         LOG_ERROR("fail to init ctas clean up timer", KR(ret));
+      } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
+        LOG_ERROR("fail to init memory dump timer", KR(ret));
       } else if (OB_FAIL(config_mgr_.base_init())) {
         LOG_ERROR("config_mgr_ base_init failed", KR(ret));
       } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {

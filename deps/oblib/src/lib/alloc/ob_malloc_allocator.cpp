@@ -509,7 +509,7 @@ void ObMallocAllocator::print_tenant_memory_usage(uint64_t tenant_id) const
           ObPageManagerCenter::get_instance().print_tenant_stat(tenant_id, buf, BUFLEN, ctx_pos);
         }
         buf[std::min(ctx_pos, BUFLEN - 1)] = '\0';
-
+        allow_next_syslog();
         _LOG_INFO("[MEMORY] tenant: %lu, limit: %'lu hold: %'lu rpc_hold: %'lu cache_hold: %'lu "
                   "cache_used: %'lu cache_item_count: %'lu \n%s",
             tenant_id,

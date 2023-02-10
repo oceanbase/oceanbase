@@ -614,6 +614,8 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(ERROR, "failed to init bandwidth_throttle_", K(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
     STORAGE_LOG(ERROR, "init timer fail", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
+    STORAGE_LOG(ERROR, "init memory dump timer fail", KR(ret));
   } else if (OB_FAIL(ObOptStatMonitorManager::get_instance().init(&sql_proxy_))) {
     STORAGE_LOG(ERROR, "failed to init opt stat monitor manager", KR(ret));
   } else {
@@ -760,6 +762,11 @@ void MockTenantModuleEnv::destroy()
   TG_STOP(lib::TGDefIDs::ServerGTimer);
   TG_WAIT(lib::TGDefIDs::ServerGTimer);
   TG_DESTROY(lib::TGDefIDs::ServerGTimer);
+
+  TG_STOP(lib::TGDefIDs::MemDumpTimer);
+  TG_WAIT(lib::TGDefIDs::MemDumpTimer);
+  TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
+
 
   destroyed_ = true;
 

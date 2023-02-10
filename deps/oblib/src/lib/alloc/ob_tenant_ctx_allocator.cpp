@@ -23,7 +23,6 @@
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
-
 void *ObTenantCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
@@ -214,6 +213,7 @@ void ObTenantCtxAllocator::print_usage() const
     }
 
     if (ctx_hold_bytes > 0 || sum_item.used_ > 0) {
+      allow_next_syslog();
       _LOG_INFO("\n[MEMORY] tenant_id=%5ld ctx_id=%25s hold=% '15ld used=% '15ld limit=% '15ld"
                 "\n[MEMORY] idle_size=% '10ld free_size=% '10ld"
                 "\n[MEMORY] wash_related_chunks=% '10ld washed_blocks=% '10ld washed_size=% '10ld\n%s",

@@ -39,6 +39,11 @@ namespace oceanbase
 namespace common
 {
 
+void __attribute__((weak)) allow_next_syslog(int64_t)
+{
+  // do nothing
+}
+
 const char* __attribute__((weak)) ob_strerror(const int oberr)
 {
   const char* ret = "ob_strerror";
