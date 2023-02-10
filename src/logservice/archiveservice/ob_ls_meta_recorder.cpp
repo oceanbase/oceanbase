@@ -12,6 +12,7 @@
 
 #include "ob_ls_meta_recorder.h"
 #include "lib/checksum/ob_crc64.h"
+#include "lib/ob_errno.h"
 #include "lib/time/ob_time_utility.h"             // ObTimeUtility
 #include "lib/utility/ob_macro_utils.h"
 #include "ob_archive_service.h"                   // ObArchiveService
@@ -60,6 +61,10 @@
         ARCHIVE_LOG(WARN, "get data failed", K(ret));      \
       } else if (OB_UNLIKELY(! scn.is_valid())) {      \
         ARCHIVE_LOG(WARN, "scn is invalid", K(ret), K(task_type), K(scn));                  \
+      } else if (record_context.last_record_file_ == scn.get_val_for_logservice()) {      \
+        if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {    \
+          ARCHIVE_LOG(INFO, "ls meta not refresh, no need record", K(type), K(record_context), K(scn));      \
+        }                                                 \
       } else if (check_need_delay_(id, key, scn)) {    \
         ARCHIVE_LOG(INFO, "check_need_delay_ return true, just wait", K(id), K(task_type), K(scn)); \
       } else if (OB_FAIL(make_dir_(id, key, scn, task_type))) {   \
@@ -287,6 +292,10 @@ bool ObLSMetaRecorder::check_need_delay_(const share::ObLSID &id,
   } else if (OB_FAIL(round_mgr_->get_piece_info(key,
           piece_switch_interval, genesis_scn, base_piece_id))) {
     ARCHIVE_LOG(WARN, "get piece info failed", K(ret), K(key), K(id));
+  } else if (OB_UNLIKELY(!archive_scn.is_valid() || !scn.is_valid())) {
+    ret = OB_EAGAIN;
+    ARCHIVE_LOG(WARN, "scn not valid", K(archive_scn), K(scn));
+    bret = false;
   } else {
     share::ObArchivePiece archive_piece(archive_scn, piece_switch_interval, genesis_scn, base_piece_id);
     share::ObArchivePiece task_piece(scn, piece_switch_interval, genesis_scn, base_piece_id);
