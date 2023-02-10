@@ -468,7 +468,7 @@ int ObBackupDataLSTask::set_optional_servers_(const ObIArray<common::ObAddr> &bl
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() 
+      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
           && !check_replica_in_black_server_(replica, black_servers)) { 
         ObBackupServer server;
         server.set(replica.get_server(), 0/*high priority*/);
@@ -479,7 +479,7 @@ int ObBackupDataLSTask::set_optional_servers_(const ObIArray<common::ObAddr> &bl
     }
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid()
+      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
           && (replica_array.count() == 1 || !check_replica_in_black_server_(replica, black_servers))) {
         // if only has one replica. no use black server.
         ObBackupServer server;
@@ -824,7 +824,7 @@ int ObBackupBuildIndexTask::set_optional_servers_(const ObIArray<common::ObAddr>
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() 
+      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
           && !check_replica_in_black_server_(replica, black_servers)) { 
         ObBackupServer server;
         server.set(replica.get_server(), 0/*high priority*/);
@@ -835,7 +835,7 @@ int ObBackupBuildIndexTask::set_optional_servers_(const ObIArray<common::ObAddr>
     }
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid()
+      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
           && (replica_array.count() == 1 || !check_replica_in_black_server_(replica, black_servers))) {
         // if only has one replica. no use black server.
         ObBackupServer server;

@@ -401,7 +401,7 @@ int ObBackupTaskSchedulerQueue::get_all_servers_(
         }
       }
     }
-    LOG_INFO("get all alternative servers", K(backup_zone), K(backup_region), K(servers));
+    LOG_DEBUG("get all alternative servers", K(backup_zone), K(backup_region), K(servers));
   }
   return ret;
 }
