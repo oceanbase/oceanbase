@@ -31,6 +31,7 @@
 namespace oceanbase
 {
 using namespace share;
+using namespace obrpc;
 namespace common
 {
 
@@ -84,6 +85,62 @@ bool ObConfigEvenIntChecker::check(const ObConfigItem &t) const
     is_valid = value % 2 == 0;
   }
   return is_valid;
+}
+
+bool ObConfigFreezeTriggerIntChecker::check(const uint64_t tenant_id,
+                                            const ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
+  int64_t write_throttle_trigger = get_write_throttle_trigger_percentage_(tenant_id);
+  if (is_valid) {
+    is_valid = value > 0 && value < 100;
+  }
+  if (is_valid) {
+    is_valid = write_throttle_trigger != 0;
+  }
+  if (is_valid) {
+    is_valid = value < write_throttle_trigger;
+  }
+  return is_valid;
+}
+
+int64_t ObConfigFreezeTriggerIntChecker::get_write_throttle_trigger_percentage_(const uint64_t tenant_id)
+{
+  int64_t percent = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    percent = tenant_config->writing_throttling_trigger_percentage;
+  }
+  return percent;
+}
+
+bool ObConfigWriteThrottleTriggerIntChecker::check(const uint64_t tenant_id,
+                                                   const ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
+  int64_t freeze_trigger = get_freeze_trigger_percentage_(tenant_id);
+  if (is_valid) {
+    is_valid = value > 0 && value <= 100;
+  }
+  if (is_valid) {
+    is_valid = freeze_trigger != 0;
+  }
+  if (is_valid) {
+    is_valid = value > freeze_trigger;
+  }
+  return is_valid;
+}
+
+int64_t ObConfigWriteThrottleTriggerIntChecker::get_freeze_trigger_percentage_(const uint64_t tenant_id)
+{
+  int64_t percent = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    percent = tenant_config->freeze_trigger_percentage;
+  }
+  return percent;
 }
 
 bool ObConfigTabletSizeChecker::check(const ObConfigItem &t) const

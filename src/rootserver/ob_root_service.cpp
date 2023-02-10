@@ -39,6 +39,7 @@
 #include "share/schema/ob_schema_mgr.h"
 #include "share/ob_lease_struct.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "share/config/ob_config_helper.h"
 #include "share/config/ob_config_manager.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_part_mgr_util.h"
@@ -8658,10 +8659,28 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
     LOG_WARN("invalid argument", K(ret), K(arg));
   }
   FOREACH_X(item, arg.items_, OB_SUCCESS == ret) {
-    bool valid;
+    bool valid = true;
     if (item->name_.is_empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("empty config name", "item", *item, K(ret));
+    } else if (0 == STRCMP(item->name_.ptr(), FREEZE_TRIGGER_PERCENTAGE)) {
+      // check write throttle percentage
+      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
+        valid = valid && ObConfigFreezeTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
+        if (!valid) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
+        }
+      }
+    } else if (0 == STRCMP(item->name_.ptr(), WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE)) {
+      // check freeze trigger
+      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
+        valid = valid && ObConfigWriteThrottleTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
+        if (!valid) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
+        }
+      }
     }
   }
   return ret;
