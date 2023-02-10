@@ -41,7 +41,7 @@ struct ObRemoteFetchContext
   void reset();
   int reset_sorted_tasks();
   TO_STRING_KV(K_(issue_task_num), K_(last_fetch_ts), K_(max_submit_lsn), K_(max_fetch_lsn),
-      K_(max_fetch_scn), K_(error_context), K_(submit_array));
+      K_(max_fetch_scn), K_(error_context), "task_count", submit_array_.count());
 };
 } // namespace logservice
 } // namespace oceanbase
