@@ -87,6 +87,7 @@ int ObServerReloadConfig::operator()()
 {
   int ret = OB_SUCCESS;
   int real_ret = ret;
+
   if (!gctx_.is_inited()) {
     real_ret = ret = OB_INNER_STAT_ERROR;
     LOG_WARN("gctx not init", "gctx inited", gctx_.is_inited(), K(ret));
@@ -123,6 +124,10 @@ int ObServerReloadConfig::operator()()
     if (OB_FAIL(OBSERVER.get_rl_mgr().reload_config())) {
       real_ret = ret;
       LOG_WARN("reload config for ratelimit manager fail", K(ret));
+    }
+    if (OB_FAIL(ObTdeEncryptEngineLoader::get_instance().reload_config())) {
+      real_ret = ret;
+      LOG_WARN("reload config for tde encrypt engine fail", K(ret));
     }
   }
   {

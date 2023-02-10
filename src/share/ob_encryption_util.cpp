@@ -18,8 +18,10 @@
 #include "ob_encryption_struct.h"
 #include "lib/alloc/alloc_assist.h"
 #include "share/ob_errno.h"
+#include "lib/atomic/atomic128.h"
 #include "lib/string/ob_string.h"
 #include "lib/random/ob_random.h"
+#include "lib/utility/ob_macro_utils.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
@@ -149,6 +151,8 @@ int ObAesEncryption::aes_encrypt(const char *key, const int64_t &key_len, const 
   int ret = OB_SUCCESS;
   int64_t expect_buf_len = (data_len / OB_AES_BLOCK_SIZE + 1) * OB_AES_BLOCK_SIZE;
   bool need_iv = false;
+  ENGINE *engine = NULL;
+  common::ObString err_reason;
   if (OB_ISNULL(buf) || buf_len < expect_buf_len || key_len < 0 ||
       ObAesOpMode::ob_invalid_mode == mode ||
       (iv_len != 0 && iv_len != OB_AES_IV_SIZE) ||
@@ -162,6 +166,12 @@ int ObAesEncryption::aes_encrypt(const char *key, const int64_t &key_len, const 
     int u_len=0, f_len=0;
     unsigned char rkey[OB_MAX_AES_KEY_LENGTH / 8];
     unsigned char *iv_encrypt = need_iv ? (unsigned char *)iv : NULL;
+    engine = ObTdeEncryptEngineLoader::get_instance().get_tde_engine(mode);
+    if (NULL != engine) {
+      if (EXECUTE_COUNT_PER_SEC(1)) {
+        LOG_INFO("tde use engine to encrypt data", K(mode));
+      }
+    }
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (OB_ISNULL(ctx)) {
       ret = OB_INVALID_ARGUMENT;
@@ -169,7 +179,7 @@ int ObAesEncryption::aes_encrypt(const char *key, const int64_t &key_len, const 
     } else if (FALSE_IT(EVP_CIPHER_CTX_init(ctx))) {
     } else if (FALSE_IT(aes_create_key((const unsigned char *)key, (int)key_len,
         (char *)rkey, mode))) {
-    } else if (!EVP_EncryptInit(ctx, aes_evp_type(mode), rkey, iv_encrypt)) {
+    } else if (!EVP_EncryptInit_ex(ctx, aes_evp_type(mode), engine, rkey, iv_encrypt)) {
       ret = OB_ERR_AES_ENCRYPT;
       LOG_WARN("fail to init evp ctx in aes_encrypt", K(ret));
     } else if (!EVP_CIPHER_CTX_set_padding(ctx, true)) {
@@ -184,6 +194,10 @@ int ObAesEncryption::aes_encrypt(const char *key, const int64_t &key_len, const 
     } else {
       out_len = u_len + f_len;
     }
+    if (OB_FAIL(ret)) {
+      err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
+      LOG_WARN("tde encrypt failed", K(err_reason));
+    }
     if (OB_NOT_NULL(ctx)) {
       EVP_CIPHER_CTX_free(ctx);
     }
@@ -197,6 +211,8 @@ int ObAesEncryption::aes_decrypt(const char *key, const int64_t &key_len, const 
 {
   int ret = OB_SUCCESS;
   bool need_iv = false;
+  ENGINE *engine = NULL;
+  common::ObString err_reason;
   if (OB_ISNULL(buf) || key_len < 0 || buf_len < data_len ||
       ObAesOpMode::ob_invalid_mode == mode ||
       (iv_len != 0 && iv_len != OB_AES_IV_SIZE) ||
@@ -210,6 +226,12 @@ int ObAesEncryption::aes_decrypt(const char *key, const int64_t &key_len, const 
     int u_len=0, f_len=0;
     unsigned char rkey[OB_MAX_AES_KEY_LENGTH / 8];
     unsigned char *iv_encrypt = need_iv ? (unsigned char *)iv : NULL;
+    engine = ObTdeEncryptEngineLoader::get_instance().get_tde_engine(mode);
+    if (NULL != engine) {
+      if (EXECUTE_COUNT_PER_SEC(1)) {
+        LOG_INFO("tde use engine to decrypt data", K(mode));
+      }
+    }
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (OB_ISNULL(ctx)) {
       ret = OB_INVALID_ARGUMENT;
@@ -217,7 +239,7 @@ int ObAesEncryption::aes_decrypt(const char *key, const int64_t &key_len, const 
     } else if (FALSE_IT(EVP_CIPHER_CTX_init(ctx))) {
     } else if (FALSE_IT(aes_create_key((const unsigned char *)key, (int)key_len,
         (char *)rkey, mode))) {
-    } else if (!EVP_DecryptInit(ctx, aes_evp_type(mode), rkey, iv_encrypt)) {
+    } else if (!EVP_DecryptInit_ex(ctx, aes_evp_type(mode), engine, rkey, iv_encrypt)) {
       ret = OB_ERR_AES_DECRYPT;
       LOG_WARN("fail to init evp ctx in aes_decrypt", K(ret));
     } else if (!EVP_CIPHER_CTX_set_padding(ctx, true)) {
@@ -231,6 +253,10 @@ int ObAesEncryption::aes_decrypt(const char *key, const int64_t &key_len, const 
       LOG_WARN("fail to decrypt final frame data in aes_decrypt", K(ret), K(u_len), K(f_len));
     } else {
       out_len = u_len + f_len;
+    }
+    if (OB_FAIL(ret)) {
+      err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
+      LOG_WARN("tde decrypt failed", K(err_reason));
     }
     if (OB_NOT_NULL(ctx)) {
       EVP_CIPHER_CTX_free(ctx);
@@ -483,6 +509,119 @@ const EVP_MD* ObHashUtil::get_hash_evp_md(const ObHashAlgorithm algo)
     case OB_HASH_SH512: return EVP_sha512();
     default: return NULL;
   }
+}
+
+void ObTdeEncryptEngineLoader::ssl_init()
+{
+    OpenSSL_add_all_digests();
+    OpenSSL_add_all_ciphers();
+    OPENSSL_load_builtin_modules();
+    ENGINE_load_builtin_engines();
+    ERR_load_ERR_strings();
+}
+
+int ObTdeEncryptEngineLoader::load(const common::ObString& engine)
+{
+  int ret = OB_SUCCESS;
+  common::ObString err_reason;
+  ObEncryptEngineType type = get_engine_type(engine);
+  if (OB_NONE_ENGINE == type) {
+  } else if (OB_INVALID_ENGINE == type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unsupport engine", K(engine));
+  } else {
+    if (NULL == tde_engine_[type]) {
+      tde_engine_[type] = ENGINE_by_id(engine.ptr());
+      if (NULL == tde_engine_[type]) {
+        ret = OB_INIT_FAIL;
+        err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
+        LOG_WARN("load engine failed", K(engine), K(err_reason));
+      } else if (!ENGINE_init(tde_engine_[type])) {
+        ret = OB_INIT_FAIL;
+        err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
+        LOG_WARN("Failed initialisation engine!", K(engine), K(err_reason));
+        ENGINE_free(tde_engine_[type]);
+        tde_engine_[type] = NULL;
+      } else {
+        LOG_INFO("tde install engine success", K(engine));
+      }
+    }
+  }
+  return ret;
+}
+
+void ObTdeEncryptEngineLoader::destroy()
+{
+  for (int i = 0; i < OB_MAX_ENGINE; i++) {
+    if (NULL != tde_engine_[i]) {
+      ENGINE_finish(tde_engine_[i]);
+      ENGINE_free(tde_engine_[i]);
+    }
+  }
+}
+
+ENGINE* ObTdeEncryptEngineLoader::get_tde_engine(ObAesOpMode &mode) const
+{
+  ObEncryptEngineType type = OB_INVALID_ENGINE;
+  switch(mode) {
+    case ob_sm4_mode:
+    case ob_sm4_cbc_mode:
+      type = OB_SM4_ENGINE;
+      break;
+    case ob_aes_128_ecb:
+    case ob_aes_128_cbc:
+    case ob_aes_128_cfb1:
+    case ob_aes_128_cfb8:
+    case ob_aes_128_cfb128:
+    case ob_aes_128_ofb:
+    case ob_aes_192_ecb:
+    case ob_aes_192_cbc:
+    case ob_aes_192_cfb1:
+    case ob_aes_192_cfb8:
+    case ob_aes_192_cfb128:
+    case ob_aes_192_ofb:
+    case ob_aes_256_ecb:
+    case ob_aes_256_cbc:
+    case ob_aes_256_cfb1:
+    case ob_aes_256_cfb8:
+    case ob_aes_256_cfb128:
+    case ob_aes_256_ofb:
+      type = OB_AES_ENGINE;
+      break;
+    case ob_invalid_mode:
+    case ob_max_mode:
+      type = OB_INVALID_ENGINE;
+      break;
+  }
+  return tde_engine_[type];
+}
+
+ObTdeEncryptEngineLoader &ObTdeEncryptEngineLoader::get_instance()
+{
+  static ObTdeEncryptEngineLoader instance;
+  return instance;
+}
+
+ObTdeEncryptEngineLoader::ObEncryptEngineType ObTdeEncryptEngineLoader::get_engine_type(const common::ObString& engine)
+{
+  ObEncryptEngineType type = OB_INVALID_ENGINE;
+  if (OB_NOT_NULL(strcasestr(engine.ptr(), "sm4"))) {
+    type = OB_SM4_ENGINE;
+  } else if (OB_NOT_NULL(strcasestr(engine.ptr(), "hy"))) {
+    type = OB_SM4_ENGINE;
+  } else if (OB_NOT_NULL(strcasestr(engine.ptr(), "aes"))) {
+    type = OB_AES_ENGINE;
+  } else if (0 == engine.case_compare("none")) {
+    type = OB_NONE_ENGINE;
+  }
+  return type;
+}
+
+int ObTdeEncryptEngineLoader::reload_config()
+{
+  int ret = OB_SUCCESS;
+  common::ObString engine = GCONF._load_tde_encrypt_engine.get_value_string();
+  return load(engine);
 }
 
 }//end share

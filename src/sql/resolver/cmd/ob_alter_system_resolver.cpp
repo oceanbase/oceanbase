@@ -2086,6 +2086,10 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
         LOG_WARN("ERRSIM, fail to set ssl invite node", K(ret));
       }
       #endif
+    } else if (0 == name.case_compare("_load_tde_encrypt_engine")) {
+      if (OB_FAIL(share::ObTdeEncryptEngineLoader::get_instance().load(value))) {
+        LOG_WARN("load antsm-engine failed", K(ret));
+      }
     }
   }
   return ret;

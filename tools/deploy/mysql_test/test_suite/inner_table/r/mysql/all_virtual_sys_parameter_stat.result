@@ -270,6 +270,7 @@ _ignore_system_memory_over_limit_error
 _io_callback_thread_count
 _large_query_io_percentage
 _lcl_op_interval
+_load_tde_encrypt_engine
 _max_elr_dependent_trx_count
 _max_schema_slot_num
 _migrate_block_verify_level
