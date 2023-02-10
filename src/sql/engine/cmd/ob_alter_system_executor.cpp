@@ -1772,6 +1772,9 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
         SQL_PC_LOG(WARN, "fail to set plan cache memory conf", K(ret));
       } else if (OB_FAIL(ps->set_mem_conf(pc_mem_conf))) {
         SQL_PC_LOG(WARN, "fail to set plan cache memory conf", K(ret));
+      } else if (!ps->is_inited() &&
+                  OB_FAIL(ps->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, effective_tenant_id))) {
+        LOG_WARN("failed to init ps cache");
       } else {
         session_info->set_database_id(OB_SYS_DATABASE_ID);
         session_info->set_plan_cache(pc);
