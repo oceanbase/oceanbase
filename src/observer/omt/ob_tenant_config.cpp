@@ -124,12 +124,12 @@ int ObTenantConfig::read_config()
   ObSystemConfigKey key;
   ObAddr server;
   char local_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
-  DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
   DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
   server = GCTX.self_addr();
   if (OB_UNLIKELY(true != server.ip_to_string(local_ip, sizeof(local_ip)))) {
     ret = OB_CONVERT_ERROR;
   } else {
+    DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
     key.set_varchar(ObString::make_string("svr_type"), print_server_role(get_server_type()));
     key.set_int(ObString::make_string("svr_port"), GCONF.rpc_port);
     key.set_varchar(ObString::make_string("svr_ip"), local_ip);
@@ -364,7 +364,6 @@ int ObTenantConfig::add_extra_config(char *config_str,
   const int64_t MAX_OPTS_LENGTH = sysconf(_SC_ARG_MAX);
   char *saveptr = NULL;
   char *token = NULL;
-  DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
   DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
   token = STRTOK_R(config_str, ",\n", &saveptr);
   while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {
@@ -387,6 +386,7 @@ int ObTenantConfig::add_extra_config(char *config_str,
       const int external_info_val_len = value_len / 2 + 1 + 1;
       char *external_info_val = (char*)ob_malloc(external_info_val_len, "temp");
       DEFER(if (external_info_val != nullptr) ob_free(external_info_val););
+      DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
       if (OB_ISNULL(external_info_val)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc", K(ret));
