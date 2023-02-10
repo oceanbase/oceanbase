@@ -841,14 +841,19 @@ int ObXAService::gc_invalid_xa_record(const uint64_t tenant_id)
 }
 
 #define XA_INNER_TABLE_GC_SQL "delete from %s where tenant_id = %lu and gtrid = x'%.*s'"
-#define XA_INNER_TABLE_CHECK_SELF_SQL "select HEX(gtrid) as gtrid, trans_id \
-  from %s where tenant_id = %lu and coordinator is null and \
-  scheduler_ip = '%s' and scheduler_port = %d and \
+#define XA_INNER_TABLE_CHECK_SELF_SQL "select HEX(gtrid) as gtrid, trans_id\
+  from %s where tenant_id = %lu and \
+  coordinator is null and \
+  format_id <> -2 and \
+  scheduler_ip = '%s' and \
+  scheduler_port = %d and \
   unix_timestamp(now()) - %ld > unix_timestamp(gmt_modified) limit 20"
 #define XA_INNER_TABLE_CHECK_NOT_SELF_SQL "select HEX(gtrid) as gtrid, scheduler_ip, scheduler_port \
-  from %s where tenant_id = %lu and coordinator is null \
-  and (scheduler_ip != '%s' or scheduler_port != %d) \
-  and unix_timestamp(now()) - %ld > unix_timestamp(gmt_modified) limit 20"
+  from %s where tenant_id = %lu and \
+  coordinator is null and \
+  format_id <> -2 and \
+  (scheduler_ip != '%s' or scheduler_port != %d) and \
+  unix_timestamp(now()) - %ld > unix_timestamp(gmt_modified) limit 20"
 
 int ObXAService::gc_invalid_xa_record_(const uint64_t tenant_id,
                                        const bool check_self,

@@ -38,6 +38,9 @@ public:
 private:
   bool is_inited_;
   ObXAService *xa_service_;
+  int64_t max_gc_cost_time_; //default is GC_INTERVAL
+private:
+  const static int64_t GC_INTERVAL = 10 * 1000 * 1000; // 10s
 };
 
 }//transaction
