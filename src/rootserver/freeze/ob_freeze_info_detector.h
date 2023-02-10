@@ -47,7 +47,7 @@ public:
 private:
   int check_need_broadcast(bool &need_broadcast);
   int try_broadcast_freeze_info(const int64_t expected_epoch);
-  int try_renew_snapshot_gc_ts();
+  int try_renew_snapshot_gc_ts(const bool renew_on_start);
   int try_minor_freeze();
   int try_update_zone_info(const int64_t expected_epoch);
 

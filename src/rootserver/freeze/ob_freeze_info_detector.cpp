@@ -83,6 +83,9 @@ void ObFreezeInfoDetector::run3()
     LOG_WARN("not init", KR(ret), K_(tenant_id));
   } else {
     LOG_INFO("start freeze_info_detector", K_(tenant_id));
+    // a flag for renew_snapshot_gc_ts when freeze_info_detector starts
+    // mainly designed for the case that backup-restore tenants switchover to primary tenants
+    bool renew_on_start = true;
     ObThreadCondGuard guard(get_cond());
     while (!stop_) {
       update_last_run_timestamp();
@@ -100,9 +103,10 @@ void ObFreezeInfoDetector::run3()
       } else if (can_work) {
         // In freeze_info_mgr, we use 'select snapshot_gc_ts for update' to execute sequentially, 
         // avoiding multi-writing when switch-role.
-        if (OB_FAIL(try_renew_snapshot_gc_ts())) {
+        if (OB_FAIL(try_renew_snapshot_gc_ts(renew_on_start))) {
           LOG_WARN("fail to renew gc snapshot", KR(ret), K_(tenant_id));
         }
+        renew_on_start = false;
         // TODO oushen, consider STANDBY_TENANT later
 
         bool need_broadcast = false;
@@ -169,14 +173,14 @@ int ObFreezeInfoDetector::try_broadcast_freeze_info(const int64_t expected_epoch
   return ret;
 }
 
-int ObFreezeInfoDetector::try_renew_snapshot_gc_ts()
+int ObFreezeInfoDetector::try_renew_snapshot_gc_ts(const bool renew_on_start)
 {
   int ret = OB_SUCCESS;
   int64_t now = ObTimeUtility::current_time();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else if ((now - last_gc_timestamp_) < MODIFY_GC_SNAPSHOT_INTERVAL) {
+  } else if (((now - last_gc_timestamp_) < MODIFY_GC_SNAPSHOT_INTERVAL) && !renew_on_start) {
     // nothing
   } else if (OB_FAIL(freeze_info_mgr_->renew_snapshot_gc_ts())) {
     LOG_WARN("fail to renew snapshot gc ts", KR(ret), K_(tenant_id));

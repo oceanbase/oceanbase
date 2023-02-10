@@ -472,8 +472,8 @@ int ObFreezeInfoManager::renew_snapshot_gc_ts()
   int64_t affected_rows = 0;
   ObMySQLTransaction trans;
   ObRecursiveMutexGuard guard(lock_);
-  int64_t max_stale_time_ns = transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(
-            tenant_id_, transaction::ObWeakReadUtil::IGNORE_TENANT_EXIST_WARN) * 1000;
+  // keep consistent with 3.x
+  int64_t max_stale_time_ns = transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency() * 1000;
   
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner error", KR(ret));
