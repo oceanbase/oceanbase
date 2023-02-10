@@ -57,12 +57,12 @@ int ObTenantMajorFreezeP::process()
       if ((OB_MAJOR_FREEZE_NOT_FINISHED != ret) && (OB_FROZEN_INFO_ALREADY_EXIST != ret)) {
         RS_LOG(WARN, "fail to launch_major_freeze", KR(ret), K(req));
       }
-      res.err_code_ = ret;
     } else {
-      res.err_code_ = OB_SUCCESS;
-      RS_LOG(INFO, "launch_major_freeze succ", K(req), K(res));
+      RS_LOG(INFO, "launch_major_freeze succ", K(req));
     }
   }
+  res.err_code_ = ret;
+  ret = OB_SUCCESS;
   return ret;
 }
 
@@ -111,11 +111,12 @@ int ObTenantAdminMergeP::process()
           break;
       }
       if (OB_SUCC(ret)) {
-        res.err_code_ = OB_SUCCESS;
-        RS_LOG(INFO, "succ to execute tenant admin merge", K(req), K(res));
+        RS_LOG(INFO, "succ to execute tenant admin merge", K(req));
       }
     }
   }
+  res.err_code_ = ret;
+  ret = OB_SUCCESS;
   return ret;
 }
 

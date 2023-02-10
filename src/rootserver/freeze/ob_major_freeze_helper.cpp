@@ -226,6 +226,9 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
                                 .by(tenant_id)
                                 .dst_cluster_id(GCONF.cluster_id)
                                 .major_freeze(req, resp))) {
+          LOG_WARN("tenant_major_freeze rpc failed", KR(ret), K(tenant_id), K(leader), K(freeze_info));
+        } else if (FALSE_IT(ret = resp.err_code_)) {
+        } else if (OB_FAIL(ret)) {
           if (OB_LEADER_NOT_EXIST == ret) {
             const int64_t idle_time = 200 * 1000 * (i + 1);
             LOG_WARN("leader may switch, will retry", K(tenant_id), K(freeze_info), "ori_leader", leader, K(idle_time));
@@ -351,6 +354,9 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
                                 .by(tenant_id)
                                 .dst_cluster_id(GCONF.cluster_id)
                                 .tenant_admin_merge(req, resp))) {
+          LOG_WARN("tenant_admin_merge rpc failed", KR(ret), K(tenant_id), K(leader), K(admin_type));
+        } else if (FALSE_IT(ret = resp.err_code_)) {
+        } else if (OB_FAIL(ret)) {
           if (OB_LEADER_NOT_EXIST == ret) {
             const int64_t idle_time = 200 * 1000 * (i + 1);
             LOG_WARN("leader may switch, will retry", K(tenant_id), K(admin_type), "ori_leader", leader, K(idle_time));
@@ -362,6 +368,11 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
         } else {
           admin_merge_done = true;
         }
+      }
+
+      if (OB_SUCC(ret) && !admin_merge_done) {
+        ret = OB_LEADER_NOT_EXIST;
+        LOG_WARN("fail to retry admin merge cuz switching role", KR(ret), K(MAX_RETRY_COUNT));
       }
     }
 
