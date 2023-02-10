@@ -4617,7 +4617,7 @@ bool ObBackupBackupsetBatchArg::is_valid() const
 }
 
 OB_SERIALIZE_MEMBER(ObBackupBackupsetReplicaRes, key_, dst_, arg_, result_);
-ObBackupBackupsetReplicaRes::ObBackupBackupsetReplicaRes()
+ObBackupBackupsetReplicaRes::ObBackupBackupsetReplicaRes() : key_(), dst_(), arg_(), result_(0)
 {}
 
 int ObBackupBackupsetReplicaRes::assign(const ObBackupBackupsetReplicaRes& res)
@@ -4757,7 +4757,7 @@ bool ObUpdateTableSchemaVersionArg::is_allow_when_upgrade() const
 
 bool ObUpdateTableSchemaVersionArg::is_valid() const
 {
-  return (tenant_id_ > OB_INVALID_TENANT_ID && table_id_ >= 0 && schema_version_ >= OB_INVALID_SCHEMA_VERSION) ||
+  return (tenant_id_ > OB_INVALID_TENANT_ID && schema_version_ >= OB_INVALID_SCHEMA_VERSION) ||
          UPDATE_SYS_TABLE_IN_TENANT_SPACE == action_;
 }
 
