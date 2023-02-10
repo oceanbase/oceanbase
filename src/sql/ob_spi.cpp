@@ -2770,7 +2770,7 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
           open c1 for select 6 from dual;
           c2 := c1;
           c3 := c1;
-          c4 := c1;  -- c1, c2, c3, c4的ref cournt是4
+          c4 := c1;  -- c1, c2, c3, c4的ref count是4
           fetch c1 into a;
           dbms_output.put_line(a);
           a := 0;
