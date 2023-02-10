@@ -2042,7 +2042,11 @@ int ObDDLTaskRecordOperator::select_for_update(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get sql result", K(ret), KP(result));
       } else if (OB_FAIL(result->next())) {
-        LOG_WARN("fail to get next row", K(ret));
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          LOG_WARN("fail to get next row", K(ret));
+        }
       } else {
         EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "execution_id", execution_id, int64_t);
