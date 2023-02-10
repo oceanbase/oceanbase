@@ -5032,7 +5032,7 @@ bool ObKeystoreDDLArg::is_valid() const
           ALTER_KEYSTORE_PASSWORD == type_ ||
           ALTER_KEYSTORE_SET_KEY == type_ ||
           ALTER_KEYSTORE_CLOSE == type_ ||
-          ALTER_KEYSTORE_OPEN);
+          ALTER_KEYSTORE_OPEN == type_ );
 }
 
 bool ObKeystoreDDLArg::is_allow_when_disable_ddl() const
