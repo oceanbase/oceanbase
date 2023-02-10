@@ -2601,7 +2601,9 @@ int ObSysVarEncoder::serialize(ObSQLSessionInfo &sess, char *buf,
     LOG_WARN("failed to serialize sys var delta", K(ret), K(sys_var_delta_ids.count()),
                                       KPHEX(buf+pos, length-pos), K(length-pos), K(pos));
   } else {
-    LOG_DEBUG("success serialize sys var delta", K(ret), K(sys_var_delta_ids.count()), K(pos));
+    LOG_TRACE("success serialize sys var delta", K(ret), K(sys_var_delta_ids),
+              "inc sys var ids", sess.sys_var_inc_info_.get_all_sys_var_ids(),
+              K(sess.get_sessid()), K(sess.get_proxy_sessid()));
   }
   return ret;
 }
