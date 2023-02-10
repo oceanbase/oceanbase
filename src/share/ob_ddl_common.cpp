@@ -249,6 +249,31 @@ int ObDDLUtil::get_tablets(
   return ret;
 }
 
+int ObDDLUtil::get_tablet_count(const uint64_t tenant_id,
+                              const int64_t table_id,
+                              int64_t &tablet_count)
+{
+  int ret = OB_SUCCESS;
+  tablet_count = 0;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+      tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("get table schema failed", K(ret), K(table_id));
+  } else {
+    tablet_count = table_schema->get_all_part_num();
+  }
+  return ret;
+}
+
 int ObDDLUtil::refresh_alter_table_arg(
     const uint64_t tenant_id,
     const int64_t orig_table_id,
@@ -956,10 +981,59 @@ int ObDDLUtil::check_table_exist(
   return ret;
 }
 
-int64_t ObDDLUtil::get_ddl_rpc_timeout()
+int ObDDLUtil::get_ddl_rpc_timeout(const int64_t tablet_count, int64_t &ddl_rpc_timeout_us)
 {
-  return max(GCONF.rpc_timeout, 9 * 1000 * 1000L);
+  int ret = OB_SUCCESS;
+  const int64_t rpc_timeout_upper = 20L * 60L * 1000L * 1000L; // upper 20 minutes
+  const int64_t cost_per_tablet = 20L * 60L * 100L; // 10000 tablets use 20 minutes, so 1 tablet use 20 * 60 * 100 us
+  ddl_rpc_timeout_us = tablet_count * cost_per_tablet;
+  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, 9 * 1000 * 1000L);
+  ddl_rpc_timeout_us = min(ddl_rpc_timeout_us, rpc_timeout_upper);
+  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, GCONF.rpc_timeout);
+  return ret;
 }
+
+int ObDDLUtil::get_ddl_rpc_timeout(const int64_t tenant_id, const int64_t table_id, int64_t &ddl_rpc_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  int64_t tablet_count = 0;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(get_tablet_count(tenant_id, table_id, tablet_count))) {
+    LOG_WARN("get tablet count failed", K(ret));
+  } else if (OB_FAIL(get_ddl_rpc_timeout(tablet_count, ddl_rpc_timeout_us))) {
+    LOG_WARN("get ddl rpc timeout failed", K(ret));
+  }
+  return ret;
+}
+int ObDDLUtil::get_ddl_tx_timeout(const int64_t tablet_count, int64_t &ddl_tx_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ddl_rpc_timeout(tablet_count, ddl_tx_timeout_us))) {
+    LOG_WARN("get ddl rpc timeout faild", K(ret));
+  }
+  return ret;
+}
+int ObDDLUtil::get_ddl_tx_timeout(const int64_t tenant_id, const int64_t table_id, int64_t &ddl_tx_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ddl_rpc_timeout(tenant_id, table_id, ddl_tx_timeout_us))) {
+    LOG_WARN("get ddl rpc timeout faild", K(ret));
+  }
+  return ret;
+}
+
+int64_t ObDDLUtil::get_default_ddl_rpc_timeout()
+{
+  return min(20L * 60L * 1000L * 1000L, max(GCONF.rpc_timeout, 9 * 1000 * 1000L));
+}
+
+int64_t ObDDLUtil::get_default_ddl_tx_timeout()
+{
+  return get_default_ddl_rpc_timeout();
+}
+
 
 int ObDDLUtil::get_ddl_cluster_version(
     const uint64_t tenant_id,

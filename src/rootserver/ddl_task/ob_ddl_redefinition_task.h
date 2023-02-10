@@ -193,6 +193,7 @@ protected:
   int check_need_check_table_empty(bool &need_check_table_empty);
   int get_child_task_ids(char *buf, int64_t len);
   int get_estimated_timeout(const share::schema::ObTableSchema *dst_table_schema, int64_t &estimated_timeout);
+  int get_orig_all_index_tablet_count(ObSchemaGetterGuard &schema_guard, int64_t &all_tablet_count);
 protected:
   struct DependTaskStatus final
   {

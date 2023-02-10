@@ -404,9 +404,15 @@ int ObTableRedefinitionTask::copy_table_indexes()
           LOG_INFO("indexes schema are already built", K(index_ids));
         } else {
           // if there is no indexes in new tables, we need to rebuild indexes in new table
-          if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+          int64_t ddl_rpc_timeout = 0;
+          int64_t all_tablet_count = 0;
+          if (OB_FAIL(get_orig_all_index_tablet_count(schema_guard, all_tablet_count))) {
+            LOG_WARN("get all tablet count failed", K(ret));
+          } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(all_tablet_count, ddl_rpc_timeout))) {
+            LOG_WARN("get ddl rpc timeout failed", K(ret));
+          } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
                 execute_ddl_task(alter_table_arg_, index_ids))) {
-            LOG_WARN("rebuild hidden table index failed", K(ret));
+            LOG_WARN("rebuild hidden table index failed", K(ret), K(ddl_rpc_timeout));
           }
         }
       }
@@ -515,9 +521,12 @@ int ObTableRedefinitionTask::copy_table_constraints()
         alter_table_arg_.ddl_task_type_ = share::REBUILD_CONSTRAINT_TASK;
         alter_table_arg_.table_id_ = object_id_;
         alter_table_arg_.hidden_table_id_ = target_object_id_;
-        if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+        int64_t ddl_rpc_timeout = 0;
+        if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
+          LOG_WARN("get ddl rpc timeout fail", K(ret));
+        } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
               execute_ddl_task(alter_table_arg_, constraint_ids))) {
-          LOG_WARN("rebuild hidden table constraint failed", K(ret));
+          LOG_WARN("rebuild hidden table constraint failed", K(ret), K(ddl_rpc_timeout));
         }
       } else {
         LOG_INFO("constraint has already been built");
@@ -583,9 +592,12 @@ int ObTableRedefinitionTask::copy_table_foreign_keys()
           alter_table_arg_.ddl_task_type_ = share::REBUILD_FOREIGN_KEY_TASK;
           alter_table_arg_.table_id_ = object_id_;
           alter_table_arg_.hidden_table_id_ = target_object_id_;
-          if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+          int64_t ddl_rpc_timeout = 0;
+          if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
+            LOG_WARN("get ddl rpc timeout fail", K(ret));
+          } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
                 execute_ddl_task(alter_table_arg_, fk_ids))) {
-            LOG_WARN("rebuild hidden table constraint failed", K(ret));
+            LOG_WARN("rebuild hidden table constraint failed", K(ret), K(ddl_rpc_timeout));
           }
         }
         DEBUG_SYNC(TABLE_REDEFINITION_COPY_TABLE_FOREIGN_KEYS);
@@ -694,6 +706,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
   DEBUG_SYNC(BEFORE_TABLE_REDEFINITION_TASK_EFFECT);
 #endif
   ObSArray<uint64_t> objs;
+  int64_t ddl_rpc_timeout = 0;
   alter_table_arg_.ddl_task_type_ = share::MAKE_DDL_TAKE_EFFECT_TASK;
   alter_table_arg_.table_id_ = object_id_;
   alter_table_arg_.hidden_table_id_ = target_object_id_;
@@ -737,7 +750,9 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     }
   } else if (OB_FAIL(sync_stats_info())) {
     LOG_WARN("fail to sync stats info", K(ret), K(object_id_), K(target_object_id_));
-  } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
+            LOG_WARN("get ddl rpc timeout fail", K(ret));
+  } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
       execute_ddl_task(alter_table_arg_, objs))) {
     LOG_WARN("fail to swap original and hidden table state", K(ret));
     if (OB_TIMEOUT == ret) {

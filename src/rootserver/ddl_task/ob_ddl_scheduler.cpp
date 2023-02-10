@@ -454,6 +454,7 @@ int ObPrepareAlterTableArgParam::set_nls_formats(const common::ObString *nls_for
   int ret = OB_SUCCESS;
   if (OB_ISNULL(nls_formats)) {
     ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("nls_formats is nullptr", K(ret));
   } else {
     char *tmp_ptr[ObNLSFormatEnum::NLS_MAX] = {};
     for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; ++i) {
