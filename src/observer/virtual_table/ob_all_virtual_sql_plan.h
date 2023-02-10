@@ -14,7 +14,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObSqlPlanMgr;
+class ObPlanItemMgr;
 class ObSqlPlanItemRecord;
 }
 namespace common
@@ -102,7 +102,7 @@ private:
   const static int64_t ROWKEY_COUNT      = 4;
 
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSqlPlan);
-  sql::ObSqlPlanMgr *sql_plan_mgr_;
+  sql::ObPlanItemMgr *sql_plan_mgr_;
   int64_t start_id_;
   int64_t end_id_;
   int64_t cur_id_;

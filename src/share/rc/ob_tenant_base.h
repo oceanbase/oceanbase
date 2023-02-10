@@ -44,7 +44,6 @@ namespace sql {
   class ObDASIDService;
   class ObFLTSpanMgr;
   class ObSqlPlanMgr;
-  class ObPlanRealInfoMgr;
   class ObUDRMgr;
   class ObPlanCache;
   class ObPsCache;
@@ -238,7 +237,6 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       sql::ObUDRMgr*,                        \
       sql::ObFLTSpanMgr*,                            \
       sql::ObSqlPlanMgr*,                            \
-      sql::ObPlanRealInfoMgr*,                       \
       ObTestModule*,                                 \
       oceanbase::common::sqlclient::ObTenantOciEnvs* \
   )

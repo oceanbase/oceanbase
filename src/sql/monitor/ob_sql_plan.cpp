@@ -121,9 +121,18 @@ int ObSqlPlan::store_sql_plan_for_explain(ObLogPlan* plan,
     LOG_WARN("failed to get sql plan infos", K(ret));
   } else if (OB_FAIL(set_plan_id_for_explain(sql_plan_infos))) {
     LOG_WARN("failed to set plan id", K(ret));
-  }/* else if (OB_FAIL(inner_store_sql_plan(sql_plan_infos, true))) {
-    LOG_WARN("failed to store sql plan", K(ret));
-  }*/ else if (OB_FAIL(format_sql_plan(sql_plan_infos,
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(inner_store_sql_plan(sql_plan_infos, true))) {
+      LOG_WARN("failed to store sql plan", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to store sql plan", K(ret));
+      ret = OB_SUCCESS;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(format_sql_plan(sql_plan_infos,
                                      type,
                                      option,
                                      dummy_plan_infos,
@@ -132,10 +141,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObLogPlan* plan,
   } else if (OB_FAIL(plan_text_to_strings(out_plan_text, plan_strs))) {
     LOG_WARN("failed to convert plan text to strings", K(ret));
   }
-  if (OB_FAIL(ret)) {
-    LOG_WARN("failed to store sql plan", K(ret));
-    ret = OB_SUCCESS;
-  }
+
   destroy_buffer(plan_text);
   return ret;
 }
@@ -187,7 +193,7 @@ int ObSqlPlan::get_sql_plan(const ObString &sql_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session info", K(ret));
   } else {
-    ObSqlPlanMgr *mgr = session_info_->get_sql_plan_manager();
+    ObPlanItemMgr *mgr = session_info_->get_sql_plan_manager();
     if (OB_ISNULL(mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null plan manager", K(ret));
@@ -219,7 +225,7 @@ int ObSqlPlan::get_sql_plan_by_hash(const ObString &sql_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session info", K(ret));
   } else {
-    ObSqlPlanMgr *mgr = session_info_->get_sql_plan_manager();
+    ObPlanItemMgr *mgr = session_info_->get_sql_plan_manager();
     if (OB_ISNULL(mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null plan manager", K(ret));
@@ -249,11 +255,10 @@ int ObSqlPlan::get_last_explain_plan(ExplainType type,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session info", K(ret));
   } else {
-    ObSqlPlanMgr *mgr = session_info_->get_plan_table_manager();
+    ObPlanItemMgr *mgr = session_info_->get_plan_table_manager();
     int64_t plan_id = 0;
     if (OB_ISNULL(mgr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null plan manager", K(ret));
+      //do nothing
     } else if (OB_FAIL(mgr->get_plan(mgr->get_last_plan_id(),
                                      sql_plan_infos))) {
       LOG_WARN("failed to get sql plan", K(ret));
@@ -313,12 +318,11 @@ int ObSqlPlan::set_plan_id_for_explain(ObIArray<ObSqlPlanItem*> &sql_plan_infos)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session info", K(ret));
   } else {
-    ObSqlPlanMgr *mgr = session_info_->get_plan_table_manager();
+    ObPlanItemMgr *mgr = session_info_->get_plan_table_manager();
     int64_t timestamp = common::ObTimeUtility::current_time();
     int64_t plan_id = 0;
     if (OB_ISNULL(mgr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null plan manager", K(ret));
+      //do nothing
     } else {
       plan_id = mgr->get_next_plan_id();
     }
@@ -347,7 +351,7 @@ int ObSqlPlan::set_plan_id_for_excute(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session info", K(ret));
   } else {
-    ObSqlPlanMgr *mgr = session_info_->get_sql_plan_manager();
+    ObPlanItemMgr *mgr = session_info_->get_sql_plan_manager();
     int64_t timestamp = common::ObTimeUtility::current_time();
     if (OB_ISNULL(mgr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -849,23 +853,26 @@ int ObSqlPlan::inner_store_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos, bo
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null session info", K(ret));
   } else {
-    ObSqlPlanMgr *mgr = NULL;
+    ObPlanItemMgr *mgr = NULL;
     if (for_explain) {
       mgr = session_info_->get_plan_table_manager();
     } else {
       mgr = session_info_->get_sql_plan_manager();
     }
-    if (OB_ISNULL(mgr)) {
+    if (OB_ISNULL(mgr) && !for_explain) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null plan manager", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < sql_plan_infos.count(); ++i) {
-      ObSqlPlanItem *plan_item = sql_plan_infos.at(i);
-      if (OB_ISNULL(plan_item)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null plan item", K(ret));
-      } else if (OB_FAIL(mgr->handle_plan_item(*plan_item))) {
-        LOG_WARN("failed to handle plan item", K(ret));
+    } else if (OB_ISNULL(mgr) && for_explain) {
+      //do nothing
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < sql_plan_infos.count(); ++i) {
+        ObSqlPlanItem *plan_item = sql_plan_infos.at(i);
+        if (OB_ISNULL(plan_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null plan item", K(ret));
+        } else if (OB_FAIL(mgr->handle_plan_item(*plan_item))) {
+          LOG_WARN("failed to handle plan item", K(ret));
+        }
       }
     }
   }

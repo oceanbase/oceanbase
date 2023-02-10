@@ -32,17 +32,14 @@ int ObAllVirtualPlanTable::inner_reset()
 {
   int ret = OB_SUCCESS;
   if (nullptr == plan_table_mgr_) {
-     ret = OB_NOT_INIT;
-    SERVER_LOG(DEBUG, "plan table manager doest not exist", K(ret));
+     //do nothing
   } else {
     start_id_ = INT64_MIN;
     end_id_ = INT64_MAX;
-    ObRaQueue::Ref ref;
     int64_t start_idx = plan_table_mgr_->get_start_idx();
     int64_t end_idx = plan_table_mgr_->get_end_idx();
     start_id_ = MAX(start_id_, start_idx);
     end_id_ = MIN(end_id_, end_idx);
-    plan_table_mgr_->revert(&ref);
     if (start_id_ >= end_id_) {
       SERVER_LOG(DEBUG, "sql_plan_mgr_ iter end", K(start_id_), K(end_id_));
     } else if (is_reverse_scan()) {
@@ -70,18 +67,18 @@ int ObAllVirtualPlanTable::inner_open()
 int ObAllVirtualPlanTable::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  ObRaQueue::Ref ref;
   void *rec = NULL;
-  if (NULL == allocator_ ||
-      OB_ISNULL(plan_table_mgr_)) {
+  if (NULL == allocator_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "invalid argument", KP(allocator_), K(ret));
-  } else if (cur_id_ < start_id_ ||
+  } else if (nullptr == plan_table_mgr_ ||
+             cur_id_ < start_id_ ||
              cur_id_ >= end_id_) {
     ret = OB_ITER_END;
   }
   //fetch next record
   if (OB_SUCC(ret)) {
-    ObRaQueue::Ref ref;
     do {
       ref.reset();
       ret = plan_table_mgr_->get(cur_id_, rec, &ref);
@@ -109,6 +106,7 @@ int ObAllVirtualPlanTable::inner_get_next_row(common::ObNewRow *&row)
     } else {
       //finish fetch one row
       row = &cur_row_;
+      plan_table_mgr_->revert(&ref);
       SERVER_LOG(DEBUG, "get next row succ", K(cur_id_));
     }
   }

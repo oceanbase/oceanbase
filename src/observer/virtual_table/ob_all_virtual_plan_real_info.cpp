@@ -4,6 +4,7 @@
 // this file defines implementation of __all_virtual_plan_real_info
 
 #include "sql/monitor/ob_plan_real_info_manager.h"
+#include "sql/monitor/ob_sql_plan_manager.h"
 #include "ob_all_virtual_plan_real_info.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_struct.h"
@@ -202,6 +203,7 @@ int ObAllVirtualPlanRealInfo::inner_get_next_row(common::ObNewRow *&row)
           SERVER_LOG(WARN, "failed to allocate memory", K(ret));
         } else {
           with_tenant_ctx_ = new(buff) ObTenantSpaceFetcher(t_id);
+          ObSqlPlanMgr *sql_plan_mgr = NULL;
           if (OB_FAIL(with_tenant_ctx_->get_ret())) {
             // 如果指定tenant id查询, 且当前机器没有该租户资源时, 获取
             // tenant space会报OB_TENANT_NOT_IN_SERVER, 此时需要忽略该报
@@ -210,8 +212,11 @@ int ObAllVirtualPlanRealInfo::inner_get_next_row(common::ObNewRow *&row)
               ret = OB_SUCCESS;
               continue;
             }
+          } else if (OB_ISNULL(sql_plan_mgr=with_tenant_ctx_->entity().get_tenant()->get<ObSqlPlanMgr*>())) {
+            plan_real_info_mgr_ = nullptr;
+            SERVER_LOG(DEBUG, "unexpect null sql plan manager", K(ret));
           } else {
-            plan_real_info_mgr_ = with_tenant_ctx_->entity().get_tenant()->get<ObPlanRealInfoMgr *>();
+            plan_real_info_mgr_ = sql_plan_mgr->get_plan_real_info_mgr();
           }
         }
 

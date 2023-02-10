@@ -235,8 +235,14 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
 
 void ObSQLSessionInfo::destroy_session_plan_mgr()
 {
+  int ret = OB_SUCCESS;
   if (NULL != plan_table_manager_) {
-    ObSqlPlanMgr::mtl_destroy(plan_table_manager_);
+    MTL_SWITCH(get_priv_tenant_id()) {
+      ObSqlPlanMgr *sql_plan_mgr = MTL(ObSqlPlanMgr*);
+      if (sql_plan_mgr != NULL) {
+        sql_plan_mgr->destroy_plan_table_manager(plan_table_manager_);
+      }
+    }
   }
 }
 
@@ -772,24 +778,30 @@ sql::ObFLTSpanMgr* ObSQLSessionInfo::get_flt_span_manager()
   return flt_span_mgr_;
 }
 
-ObSqlPlanMgr* ObSQLSessionInfo::get_sql_plan_manager()
+ObPlanItemMgr* ObSQLSessionInfo::get_sql_plan_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == sql_plan_manager_) {
     MTL_SWITCH(get_priv_tenant_id()) {
-      sql_plan_manager_ = MTL(ObSqlPlanMgr*);
+      ObSqlPlanMgr* sql_plan_mgr = MTL(ObSqlPlanMgr*);
+      if (sql_plan_mgr != NULL) {
+        sql_plan_manager_ = sql_plan_mgr->get_plan_item_mgr();
+      }
     }
   }
   return sql_plan_manager_;
 }
 
-ObSqlPlanMgr* ObSQLSessionInfo::get_plan_table_manager()
+ObPlanItemMgr* ObSQLSessionInfo::get_plan_table_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == plan_table_manager_) {
-    if (OB_FAIL(ObSqlPlanMgr::init_plan_manager(get_effective_tenant_id(),
-                                                plan_table_manager_))) {
-      LOG_WARN("failed to init plan manager", K(ret));
+    MTL_SWITCH(get_priv_tenant_id()) {
+      ObSqlPlanMgr* sql_plan_mgr = MTL(ObSqlPlanMgr*);
+      if (NULL != sql_plan_mgr &&
+          OB_FAIL(sql_plan_mgr->init_plan_table_manager(plan_table_manager_))) {
+        LOG_WARN("failed to init plan table manager", K(ret));
+      }
     }
   }
   return plan_table_manager_;

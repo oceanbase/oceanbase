@@ -92,7 +92,6 @@
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
 #include "lib/mysqlclient/ob_tenant_oci_envs.h"
 #include "sql/monitor/ob_sql_plan_manager.h"
-#include "sql/monitor/ob_plan_real_info_manager.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/tx_storage/ob_tablet_gc_service.h"
@@ -362,7 +361,6 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObSharedMacroBlockMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND(ObFLTSpanMgr::mtl_init, ObFLTSpanMgr::mtl_destroy);
     MTL_BIND(ObSqlPlanMgr::mtl_init, ObSqlPlanMgr::mtl_destroy);
-    MTL_BIND(ObPlanRealInfoMgr::mtl_init, ObPlanRealInfoMgr::mtl_destroy);
     MTL_BIND(common::sqlclient::ObTenantOciEnvs::mtl_init, common::sqlclient::ObTenantOciEnvs::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObPlanCache::mtl_init, nullptr, ObPlanCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObPsCache::mtl_init, nullptr, ObPsCache::mtl_stop, nullptr, mtl_destroy_default);

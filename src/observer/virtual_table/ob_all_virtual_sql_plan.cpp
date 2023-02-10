@@ -152,7 +152,7 @@ int ObAllVirtualSqlPlan::check_ip_and_port(bool &is_valid)
 int ObAllVirtualSqlPlan::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObSqlPlanMgr *prev_mgr = sql_plan_mgr_;
+  ObPlanItemMgr *prev_mgr = sql_plan_mgr_;
   if (NULL == allocator_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "invalid argument", KP(allocator_), K(ret));
@@ -202,6 +202,7 @@ int ObAllVirtualSqlPlan::inner_get_next_row(common::ObNewRow *&row)
           SERVER_LOG(WARN, "failed to allocate memory", K(ret));
         } else {
           with_tenant_ctx_ = new(buff) ObTenantSpaceFetcher(t_id);
+          ObSqlPlanMgr *sql_plan_mgr = NULL;
           if (OB_FAIL(with_tenant_ctx_->get_ret())) {
             // 如果指定tenant id查询, 且当前机器没有该租户资源时, 获取
             // tenant space会报OB_TENANT_NOT_IN_SERVER, 此时需要忽略该报
@@ -210,8 +211,11 @@ int ObAllVirtualSqlPlan::inner_get_next_row(common::ObNewRow *&row)
               ret = OB_SUCCESS;
               continue;
             }
+          } else if (OB_ISNULL(sql_plan_mgr=with_tenant_ctx_->entity().get_tenant()->get<ObSqlPlanMgr *>())) {
+            sql_plan_mgr_ = nullptr;
+            SERVER_LOG(DEBUG, "unexpect null plan manager", K(ret));
           } else {
-            sql_plan_mgr_ = with_tenant_ctx_->entity().get_tenant()->get<ObSqlPlanMgr *>();
+            sql_plan_mgr_ = sql_plan_mgr->get_plan_item_mgr();
           }
         }
 

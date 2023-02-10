@@ -14,7 +14,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObSqlPlanMgr;
+class ObPlanItemMgr;
 class ObSqlPlanItemRecord;
 }
 namespace common
@@ -37,7 +37,7 @@ public:
 
   int inner_reset();
   int inner_open();
-  void set_plan_table_mgr(sql::ObSqlPlanMgr *plan_table_mgr)
+  void set_plan_table_mgr(sql::ObPlanItemMgr *plan_table_mgr)
   { plan_table_mgr_ = plan_table_mgr; }
   virtual void reset();
   virtual int inner_get_next_row(common::ObNewRow *&row);
@@ -90,7 +90,7 @@ private:
   };
 
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualPlanTable);
-  sql::ObSqlPlanMgr *plan_table_mgr_;
+  sql::ObPlanItemMgr *plan_table_mgr_;
   int64_t start_id_;
   int64_t end_id_;
   int64_t cur_id_;
