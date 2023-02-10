@@ -344,6 +344,7 @@ void ObTxDesc::reset()
   state_ = State::INVL;
 
   flags_.v_ = 0;
+  flags_.SHADOW_ = true;
   state_change_flags_.reset();
 
   alloc_ts_ = -1;
@@ -1284,6 +1285,7 @@ int ObTxDescMgr::add(ObTxDesc &tx_desc)
   if (OB_FAIL(ret) && tx_id.is_valid()) {
     tx_desc.reset_tx_id();
   }
+  OX(tx_desc.flags_.SHADOW_ = false);
   TRANS_LOG(TRACE, "txDescMgr.register trans", K(ret), K(tx_id), K(tx_desc));
   return ret;
 }
@@ -1313,6 +1315,7 @@ int ObTxDescMgr::add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc)
     }
     // if fail revert tx_desc.tx_id_ member
     if (OB_FAIL(ret) && !desc_tx_id.is_valid()) { tx_desc.reset_tx_id(); }
+    if (OB_SUCC(ret) && tx_desc.flags_.SHADOW_) { tx_desc.flags_.SHADOW_ = false; }
   }
   TRANS_LOG(INFO, "txDescMgr.register trans with txid", K(ret), K(tx_id),
       K(map_.alloc_cnt()));
@@ -1349,6 +1352,7 @@ int ObTxDescMgr::remove(ObTxDesc &tx)
   TRANS_LOG(TRACE, "txDescMgr.unregister trans:", K(tx_id));
   OV(inited_, OB_NOT_INIT);
   OX(map_.del(tx_id, &tx));
+  OX(tx.flags_.SHADOW_ = true);
   return ret;
 }
 

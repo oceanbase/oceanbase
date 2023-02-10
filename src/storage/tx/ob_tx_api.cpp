@@ -837,7 +837,7 @@ int ObTransService::create_implicit_savepoint(ObTxDesc &tx,
   } else if (tx.state_ >= ObTxDesc::State::IN_TERMINATE) {
     ret = OB_TRANS_INVALID_STATE;
     TRANS_LOG(WARN, "create implicit savepoint but tx terminated", K(ret), K(tx));
-  } else if (tx.flags_.SHADOW_) {
+  } else if (tx.flags_.SHADOW_ && tx.get_tx_id().is_valid()) {
     ret = create_local_implicit_savepoint_(tx, savepoint);
   } else {
     ret = create_global_implicit_savepoint_(tx, tx_param, savepoint, release);

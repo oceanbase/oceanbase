@@ -371,7 +371,7 @@ protected:
     struct
     {
       bool EXPLICIT_:1;               // txn is explicted start
-      bool SHADOW_:1;                // this tx desc is a shadow copy
+      bool SHADOW_:1;                // this tx desc is a shadow copy, is not registered with tx_desc_mgr
       bool REPLICA_:1;               // a replica of primary/original, its state is transient, without whole lifecyle
       bool TRACING_:1;               // tracing the Tx
       bool INTERRUPTED_: 1;          // a single for blocking operation
