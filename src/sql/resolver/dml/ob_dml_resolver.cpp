@@ -5138,15 +5138,15 @@ int ObDMLResolver::deduce_generated_exprs(ObIArray<ObRawExpr*> &exprs)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
         } else if (T_OP_LIKE == expr->get_expr_type()) {
-          /*
-          https://work.aone.alibaba-inc.com/issue/33030027
-          err1: should add const expr for expr2
-          err2: if expr2 is 'a%d' deduce is error
-                c1 like 'a%d' DOESN'T MEAN:
-                substr(c1, 1, n) like substr('a%d', 1, n)
-                because after %, there is normal char.
-          */
-          column_expr = NULL;
+          if (param_expr1->is_column_ref_expr()
+            && param_expr1->get_result_type().is_string_type()
+            && param_expr2->get_result_type().is_string_type()
+            && param_expr1->get_result_type().get_collation_type()
+               == param_expr2->get_result_type().get_collation_type()) {
+            column_expr = static_cast<ObColumnRefRawExpr*>(param_expr1);
+            value_expr = param_expr2;
+            escape_expr = expr->get_param_expr(2);
+          }
         } else if (T_OP_IN == expr->get_expr_type()) {
           if (T_OP_ROW == param_expr2->get_expr_type()
               && !param_expr2->has_generalized_column()
@@ -5166,23 +5166,21 @@ int ObDMLResolver::deduce_generated_exprs(ObIArray<ObRawExpr*> &exprs)
               value_expr = expr->get_param_expr(1);
             }
           }
-        } else if (param_expr1->is_column_ref_expr() && param_expr2->is_const_raw_expr()) {
+        } else if (param_expr1->is_column_ref_expr() && param_expr2->is_static_scalar_const_expr()) {
           if (param_expr1->get_result_type().is_string_type() //only for string and same collation
-              && param_expr2->get_result_type().is_string_type()
-              && param_expr1->get_collation_type() == param_expr2->get_collation_type()) {
+              && param_expr2->get_result_type().is_string_type()) {
             column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
             value_expr = expr->get_param_expr(1);
           }
-        } else if (param_expr1->is_const_raw_expr() && param_expr2->is_column_ref_expr()) {
+        } else if (param_expr1->is_static_scalar_const_expr() && param_expr2->is_column_ref_expr()) {
           if (param_expr1->get_result_type().is_string_type()
-              && param_expr2->get_result_type().is_string_type()
-              && param_expr1->get_collation_type() == param_expr2->get_collation_type()) {
+              && param_expr2->get_result_type().is_string_type()) {
             type = get_opposite_compare_type(expr->get_expr_type());
             column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
             value_expr = expr->get_param_expr(0);
           }
         }
-
+        LOG_TRACE("show generated column expr candi", K(type), K(column_expr), K(value_expr));
         //only column op const
         if (OB_SUCC(ret) && NULL != column_expr && column_expr->has_generated_column_deps()) {
           for (int64_t j = 0; OB_SUCC(ret) && j < gen_col_exprs_.count(); ++j) {
@@ -5213,7 +5211,7 @@ int ObDMLResolver::deduce_generated_exprs(ObIArray<ObRawExpr*> &exprs)
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("column item is invalid", K(col_item), K(left_expr));
               } else if (OB_FAIL(build_prefix_index_compare_expr(*left_expr,
-                                                                 const_cast<ObRawExpr*>(substr_expr),
+                                                                 const_cast<ObRawExpr*>(substr_expr), //generated expr's substr
                                                                  gen_type,
                                                                  *value_expr,
                                                                  escape_expr,
@@ -6255,32 +6253,216 @@ int ObDMLResolver::build_prefix_index_compare_expr(ObRawExpr &column_expr,
                                                    ObRawExpr *prefix_expr,
                                                    ObItemType type,
                                                    ObRawExpr &value_expr,
-                                                   ObRawExpr *escape_expr,
+                                                   ObRawExpr *escape_exprs,
                                                    ObRawExpr *&new_op_expr)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *substr_expr = NULL;
+  bool got_result = false;
   if (T_OP_LIKE == type) {
     //build value substr expr
     ObOpRawExpr *like_expr = NULL;
-    if (OB_FAIL(ObRawExprUtils::create_substr_expr(*params_.expr_factory_,
+    ObRawExpr *wildcard_over_length = NULL;
+    ObRawExpr *has_no_wildcard = NULL;
+    ObRawExpr *has_no_escape = NULL;
+    ObOpRawExpr *and_expr = NULL;
+    ObOpRawExpr *or_expr = NULL;
+    ObConstRawExpr *zero_expr = NULL;
+    ObConstRawExpr *wild_expr = NULL;
+    ObSysFunRawExpr *instr_wild_expr = NULL;
+    ObSysFunRawExpr *instr_escape_expr = NULL;
+    ObSysFunRawExpr *substr_value = NULL;
+    ObObj res;
+    bool is_true = false;
+    ObConstRawExpr *escape_expr = static_cast<ObConstRawExpr *>(escape_exprs);
+
+    ObTransformerCtx ctx; //For getting constraints only
+    ctx.exec_ctx_ = NULL;
+    if (OB_ISNULL(params_.session_info_) || OB_ISNULL(ctx.exec_ctx_ = params_.session_info_->get_cur_exec_ctx())
+        || OB_ISNULL(params_.expr_factory_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
+    } else if (!lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_int_expr(
+                  *params_.expr_factory_, ObIntType, 0L, zero_expr))) {
+      LOG_WARN("build const failed", K(ret));
+    } else if (lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_number_expr(*params_.expr_factory_,
+                                                              ObNumberType,
+                                                              number::ObNumber::get_zero(),
+                                                              zero_expr))) {
+    } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
+                                                      ObVarcharType,
+                                                      ObString::make_string("%"),
+                                                      value_expr.get_result_type().get_collation_type(),
+                                                      wild_expr))) {
+      LOG_WARN("build const failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::create_substr_expr(*params_.expr_factory_,
+                                            params_.session_info_,
+                                            &value_expr,
+                                            prefix_expr->get_param_expr(1),
+                                            prefix_expr->get_param_expr(2),
+                                            substr_value))) { //value's substr
+      LOG_WARN("create substr expr failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::create_instr_expr(*params_.expr_factory_,
+                                                          params_.session_info_,
+                                                          substr_value,
+                                                          escape_expr,
+                                                          lib::is_oracle_mode() ?
+                                                                  prefix_expr->get_param_expr(1) : NULL,
+                                                          lib::is_oracle_mode() ?
+                                                                  prefix_expr->get_param_expr(1) : NULL,
+                                                          instr_escape_expr))) {//the escape's position
+      LOG_WARN("create instr expr failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*params_.expr_factory_,
+                                                              params_.session_info_,
+                                                              T_OP_EQ,
+                                                              has_no_escape,
+                                                              instr_escape_expr,
+                                                              zero_expr))) {
+      LOG_WARN("create op expr failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::create_instr_expr(*params_.expr_factory_,
+                                                          params_.session_info_,
+                                                          substr_value,
+                                                          wild_expr,
+                                                          lib::is_oracle_mode() ?
+                                                                  prefix_expr->get_param_expr(1) : NULL,
+                                                          lib::is_oracle_mode() ?
+                                                                  prefix_expr->get_param_expr(1) : NULL,
+                                                          instr_wild_expr))) { // the wild position
+      LOG_WARN("create instr expr failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*params_.expr_factory_,
+                                                              params_.session_info_,
+                                                              T_OP_EQ,
+                                                              has_no_wildcard,
+                                                              instr_wild_expr,
+                                                              zero_expr))) { //wild position is 0, then it does not exist
+      LOG_WARN("create op expr failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*params_.expr_factory_,
+                                                              params_.session_info_,
+                                                              T_OP_GT,
+                                                              wildcard_over_length,
+                                                              instr_wild_expr,
+                                                              prefix_expr->get_param_expr(2)))) {// if wild wild position exists then it should larger than substr_length
+      LOG_WARN("create op expr failed", K(ret));
+    } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_OP_OR, or_expr))) {
+      LOG_WARN("failed to create a new expr", K(ret));
+    } else if (OB_FAIL(or_expr->add_param_expr(has_no_wildcard)) ||     // (wildcard not existed or occurs after length) and has no escape
+                OB_FAIL(or_expr->add_param_expr(wildcard_over_length))) {
+      LOG_WARN("set param expr failed", K(ret));
+    } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_OP_AND, and_expr))) {
+      LOG_WARN("failed to create a new expr", K(ret));
+    } else if (OB_FAIL(and_expr->add_param_expr(or_expr)) ||
+                OB_FAIL(and_expr->add_param_expr(has_no_escape))) {
+      LOG_WARN("set param expr failed", K(ret));
+    } else if (OB_FAIL(or_expr->formalize(params_.session_info_)) ||
+                OB_FAIL(and_expr->formalize(params_.session_info_))) {
+      LOG_WARN("formalize failed", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(
+                      params_.session_info_->get_cur_exec_ctx(), and_expr, res, got_result, *params_.allocator_))) {
+      LOG_WARN("calc const failed", K(ret));
+    } else if (OB_FAIL(ObObjEvaluator::is_true(res, is_true))) {
+      LOG_WARN("Failed to get bool value", K(ret));
+    } else if (is_true) {// wildcard and escapes matched,
+      LOG_TRACE("have wildcard or escape ", K(is_true));
+      if (OB_FAIL(ObRawExprUtils::create_substr_expr(*params_.expr_factory_,
                                                    params_.session_info_,
                                                    &value_expr,
                                                    prefix_expr->get_param_expr(1),
                                                    prefix_expr->get_param_expr(2),
                                                    substr_expr))) {
-      LOG_WARN("create substr expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_like_expr(*params_.expr_factory_,
-                                                       params_.session_info_,
-                                                       &column_expr,
-                                                       substr_expr,
-                                                       escape_expr,
-                                                       like_expr))) {
-      LOG_WARN("build like expr failed", K(ret));
-    } else {
-      new_op_expr = like_expr;
+        LOG_WARN("create substr expr failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_like_expr(*params_.expr_factory_,
+                                                        params_.session_info_,
+                                                        &column_expr,
+                                                        substr_expr,
+                                                        escape_expr,
+                                                        like_expr))) {
+        LOG_WARN("build like expr failed", K(ret));
+      } else {
+        new_op_expr = like_expr;
+        if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(&ctx, and_expr, is_true))) {
+          LOG_WARN("add constraint failed", K(ret));
+        } else {
+          ret = append(params_.query_ctx_->all_expr_constraints_, ctx.expr_constraints_);
+        }
+      }
+    } else {// if has wildcard and escpae, make is specail and add some constraints.
+      LOG_TRACE("have wildcard or escape ", K(is_true));
+      int64_t str_len;
+      ObNumber str_len_nm;
+      ObConstRawExpr *str_len_expr = NULL;
+      ObOpRawExpr *new_pattern = NULL;
+      if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(
+                            params_.session_info_->get_cur_exec_ctx(), prefix_expr->get_param_expr(2),
+                            res, got_result, *params_.allocator_))) {
+        LOG_WARN("calc const failed", K(ret));   //calc the substr length
+      } else if (lib::is_oracle_mode()) {
+        res.get_number().extract_valid_int64_with_trunc(str_len);
+      } else {
+        str_len = res.get_int();
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr( params_.session_info_->get_cur_exec_ctx(),
+                            instr_escape_expr, res, got_result, *params_.allocator_))) {
+        LOG_WARN("calc const failed", K(ret));  //calc the escape position
+      } else {
+        int64_t instr_len = 0;
+        if (lib::is_oracle_mode()) {
+          ret = res.get_number().extract_valid_int64_with_trunc(instr_len);
+        } else {
+          instr_len = res.get_int();
+        }
+        str_len = instr_len != 0 ? std::min(str_len, instr_len + 1 <= str_len ?
+                                                                      instr_len + 1
+                                                                      : instr_len - 1) : str_len ;
+      }// if substr length  < escape pos then do nothing else make strlen=espace length
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(params_.session_info_->get_cur_exec_ctx(),
+                            instr_wild_expr, res, got_result, *params_.allocator_))) {
+        LOG_WARN("calc const failed", K(ret)); // calc the wildcard position
+      } else {
+        int64_t instr_len = 0;
+        if (lib::is_oracle_mode()) {
+          ret = res.get_number().extract_valid_int64_with_trunc(instr_len);
+        } else {
+          instr_len = res.get_int();
+        }
+        str_len = instr_len != 0 ? std::min(str_len, instr_len) : str_len;
+        //get the min value between(str len and wildcard position)
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
+                  *params_.expr_factory_, ObIntType, str_len, str_len_expr))) {
+        LOG_WARN("build const failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::create_substr_expr(*params_.expr_factory_,
+                                                   params_.session_info_,
+                                                   &value_expr,
+                                                   prefix_expr->get_param_expr(1),
+                                                   str_len_expr, //use the calculated length be the str len, should >=1
+                                                   substr_expr))) {
+        LOG_WARN("create substr expr failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::create_concat_expr(*params_.expr_factory_,
+                                                   params_.session_info_,
+                                                   substr_expr,
+                                                   wild_expr, //add a % at the substr end
+                                                   new_pattern))) {
+        LOG_WARN("create concat expr failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_like_expr(*params_.expr_factory_,
+                                                        params_.session_info_,
+                                                        &column_expr,
+                                                        new_pattern, //build like expr
+                                                        escape_expr,
+                                                        like_expr))) {
+        LOG_WARN("build like expr failed", K(ret));
+      } else {
+        new_op_expr = like_expr;
+        if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(&ctx, and_expr, is_true))) {
+          LOG_WARN("add constraint failed", K(ret));
+        } else {
+          ret = append(params_.query_ctx_->all_expr_constraints_, ctx.expr_constraints_);
+        }
+      }
     }
-  } else {
+  } else { // if it is not like expr
     ObRawExpr *right_expr = NULL;
     if (T_OP_IN == type) {
       ObOpRawExpr *row_expr = NULL;
@@ -6316,7 +6498,7 @@ int ObDMLResolver::build_prefix_index_compare_expr(ObRawExpr &column_expr,
         right_expr = substr_expr;
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && type != T_OP_LIKE) {
       if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*params_.expr_factory_,
                                                         params_.session_info_,
                                                         type,

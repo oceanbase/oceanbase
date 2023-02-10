@@ -1362,7 +1362,7 @@ public:
 
   static bool check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2);
   static int add_neg_or_pos_constraint(ObTransformerCtx *trans_ctx,
-                                     ObConstRawExpr *expr,
+                                     ObRawExpr *expr,
                                      bool is_negative = false);
   static bool check_objparam_negative(const ObObjParam &obj1);
   static int add_param_bool_constraint(ObTransformerCtx *ctx,

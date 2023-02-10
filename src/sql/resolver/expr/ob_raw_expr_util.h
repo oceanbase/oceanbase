@@ -428,6 +428,18 @@ public:
                                 ObRawExpr *second_expr,
                                 ObRawExpr *third_expr,
                                 ObSysFunRawExpr *&out_expr);
+  static int create_instr_expr(ObRawExprFactory &expr_factory,
+                                       ObSQLSessionInfo *session_info,
+                                       ObRawExpr *first_expr,
+                                       ObRawExpr *second_expr,
+                                       ObRawExpr *third_expr,
+                                       ObRawExpr *fourth_expr,
+                                       ObSysFunRawExpr *&out_expr);
+  static int create_concat_expr(ObRawExprFactory &expr_factory,
+                                       ObSQLSessionInfo *session_info,
+                                       ObRawExpr *first_expr,
+                                       ObRawExpr *second_expr,
+                                       ObOpRawExpr *&out_expr);
   static int create_type_to_str_expr(ObRawExprFactory &expr_factory,
                                      ObRawExpr *src_expr,
                                      ObSysFunRawExpr *&out_expr,

@@ -9477,7 +9477,7 @@ bool ObTransformUtils::check_objparam_negative(const ObObjParam &obj1) {
 }
 
 int ObTransformUtils::add_neg_or_pos_constraint(ObTransformerCtx *trans_ctx,
-                                              ObConstRawExpr *expr,
+                                              ObRawExpr *expr,
                                               bool is_negative )
 {
   int ret = OB_SUCCESS;
