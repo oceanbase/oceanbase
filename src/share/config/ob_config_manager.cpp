@@ -208,7 +208,6 @@ int ObConfigManager::dump2file(const char* path) const
     char *tmp_path = nullptr;
     char *hist_path = nullptr;
     int64_t pos = 0;
-    DRWLock::WRLockGuard lguard(ObConfigManager::get_serialize_lock());
     if (OB_ISNULL(buf = pa.alloc(OB_MAX_PACKET_LENGTH))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("ob tc malloc memory for buf failed", K(ret));
