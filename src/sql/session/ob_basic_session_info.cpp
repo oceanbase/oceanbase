@@ -1783,7 +1783,7 @@ int ObBasicSessionInfo::defragment_sys_variable_to(common::ObStringBuf &allocato
 {
   int ret = OB_SUCCESS;
   const SysVarIds &all_sys_var_ids = sys_var_inc_info_.get_all_sys_var_ids();
-  for (int i = 0; i < all_sys_var_ids.count(); i++) {
+  for (int i = 0; OB_SUCC(ret) && i < all_sys_var_ids.count(); i++) {
     int64_t store_idx = -1;
     ObSysVarClassType sys_var_id = all_sys_var_ids.at(i);
     OZ (ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx));
