@@ -233,7 +233,7 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
       system_memory = int64_t(15 + 3 * (sqrt(memory_limit_g) - 8)) << 30;
     }
   }
-  if (memory_limit > system_memory) {
+  if (memory_limit < get_phy_mem_size() && memory_limit > system_memory) {
     memory_limit_ = memory_limit;
     system_memory_ = system_memory;
     LOG_INFO("update memory_limit or system_memory success", 
