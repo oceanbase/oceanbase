@@ -84,13 +84,14 @@ private:
     ~ObQueryRangeCtx()
     {
     }
-    void clear()
-    {
-      key_part_map_.reset();
-      need_final_extact_ = false;
-    }
+    // void clear()
+    // {
+    //   key_part_map_.reset();
+    //   key_part_pos_array_.reset();
+    //   need_final_extact_ = false;
+    // }
     //131的原因是最大的rowkey个数是128，距离128最近的素数是131
-    common::hash::ObPlacementHashMap<ObKeyPartId, ObKeyPartPos, 131> key_part_map_;
+    common::hash::ObPlacementHashMap<ObKeyPartId, ObKeyPartPos*, 131> key_part_map_;
     bool need_final_extact_;
     bool cur_expr_is_precise_; //当前正在被抽取的表达式是精确的范围，没有被放大
     bool phy_rowid_for_table_loc_;
@@ -100,6 +101,7 @@ private:
     ExprConstrantArray *expr_constraints_;
     const ParamsIArray *params_;
     hash::ObHashMap<uint64_t, int64_t> final_expr_map_;
+    ObSEArray<ObKeyPartPos*, 8> key_part_pos_array_;
   };
 public:
   enum ObQueryRangeState
@@ -543,7 +545,7 @@ private:
                             const common::ObDataTypeCastParams &dtc_params);
   int pre_extract_const_op(const ObRawExpr *node,
                            ObKeyPart *&out_key_part);
-  int is_key_part(const ObKeyPartId &id, ObKeyPartPos &pos, bool &is_key_part);
+  int is_key_part(const ObKeyPartId &id, ObKeyPartPos *&pos, bool &is_key_part);
   int split_general_or(ObKeyPart *graph, ObKeyPartList &or_storage);
   int split_or(ObKeyPart *graph, ObKeyPartList &or_list);
   int deal_not_align_keypart(ObKeyPart *l_key_part,

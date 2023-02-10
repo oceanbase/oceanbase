@@ -155,26 +155,30 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
     } else {
       ObKeyPartId key_part_id(col.table_id_, col.column_id_);
       const ObExprResType *expr_res_type = col.get_column_type();
+      void *ptr = NULL;
       if (OB_ISNULL(expr_res_type)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr result type is null", K(ret));
+      } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObKeyPartPos)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memeory for ObKeyPartPos", K(ret));
       } else {
         ObExprResType tmp_expr_type = *expr_res_type;
         if (tmp_expr_type.is_lob_locator()) {
           tmp_expr_type.set_type(ObLongTextType);
         }
-        ObKeyPartPos key_part_pos(i, tmp_expr_type);
+        ObKeyPartPos *key_part_pos = new(ptr) ObKeyPartPos(i, tmp_expr_type);
         table_id = (i > 0 ? table_id : col.table_id_);
-
-
 
         if (OB_UNLIKELY(table_id != col.table_id_)) { // 所有 range column 的 table_id 需要相同
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("range columns must have the same table id", K(table_id), K_(col.table_id));
-        } else if (OB_FAIL(key_part_pos.set_enum_set_values(allocator_, col.expr_->get_enum_set_values()))) {
+        } else if (OB_FAIL(key_part_pos->set_enum_set_values(allocator_, col.expr_->get_enum_set_values()))) {
           LOG_WARN("fail to set values", K(key_part_pos), K(ret));
         } else if (OB_FAIL(query_range_ctx_->key_part_map_.set_refactored(key_part_id, key_part_pos))) {
           LOG_WARN("set key part map failed", K(ret), K(key_part_id));
+        } else if (OB_FAIL(query_range_ctx_->key_part_pos_array_.push_back(key_part_pos))) {
+          LOG_WARN("failed to push back key part pos", K(ret));
         }
       }
     }
@@ -211,6 +215,12 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
 void ObQueryRange::destroy_query_range_ctx(ObIAllocator &ctx_allocator)
 {
   if (NULL != query_range_ctx_) {
+    for (int64_t i = 0; i < query_range_ctx_->key_part_pos_array_.count(); ++i) {
+      if (NULL != query_range_ctx_->key_part_pos_array_.at(i)) {
+        query_range_ctx_->key_part_pos_array_.at(i)->~ObKeyPartPos();
+        ctx_allocator.free(query_range_ctx_->key_part_pos_array_.at(i));
+      }
+    }
     query_range_ctx_->~ObQueryRangeCtx();
     ctx_allocator.free(query_range_ctx_);
     query_range_ctx_ = NULL;
@@ -1015,7 +1025,7 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
       for (int64_t i = 0; OB_SUCC(ret) && i < pk_column_items.count(); ++i) {
         const ObColumnRefRawExpr *column_item = pk_column_items.at(i);
         ObKeyPartId key_part_id(column_item->get_table_id(), column_item->get_column_id());
-        ObKeyPartPos key_part_pos(allocator_);
+        ObKeyPartPos *key_part_pos = nullptr;
         bool b_is_key_part = false;
         bool always_true = true;
         tmp_key_part = NULL;
@@ -1036,6 +1046,9 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
           }
         }
         if (OB_FAIL(ret) || !b_is_key_part) {
+        } else if (OB_ISNULL(key_part_pos)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null key part pos", K(ret));
         } else if (OB_ISNULL((tmp_key_part = create_new_key_part()))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("alloc memory failed", K(ret));
@@ -1043,7 +1056,7 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
           ObObj tmp_val = val;
           tmp_key_part->rowid_column_idx_ = i;
           tmp_key_part->id_ = key_part_id;
-          tmp_key_part->pos_ = key_part_pos;
+          tmp_key_part->pos_ = *key_part_pos;
           tmp_key_part->null_safe_ = false;
           tmp_key_part->is_phy_rowid_key_part_ = is_physical_rowid;
           //if current expr can be extracted to range, just store the expr
@@ -1121,7 +1134,7 @@ int ObQueryRange::get_extract_rowid_range_infos(const ObRawExpr *calc_urowid_exp
               LOG_WARN("get unexpected null", K(ret), K(col_expr));
             } else {
               ObKeyPartId id(col_expr->get_table_id(), col_expr->get_column_id());
-              ObKeyPartPos pos(allocator_);
+              ObKeyPartPos *pos = nullptr;
               int map_ret = query_range_ctx_->key_part_map_.get_refactored(id, pos);
               if (OB_SUCCESS == map_ret) {
                 find_it = true;
@@ -1175,7 +1188,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
       query_range_ctx_->need_final_extact_ = true;
     }
     ObKeyPartId key_part_id(column_item->get_table_id(), column_item->get_column_id());
-    ObKeyPartPos key_part_pos(allocator_);
+    ObKeyPartPos *key_part_pos = nullptr;
     bool b_is_key_part = false;
     bool always_true = true;
     if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
@@ -1184,7 +1197,10 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else if (OB_UNLIKELY(!const_expr->is_const_expr())) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-    } else if (!can_be_extract_range(cmp_type, key_part_pos.column_type_, calc_type,
+    } else if (OB_ISNULL(key_part_pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null key part pos", K(ret));
+    } else if (!can_be_extract_range(cmp_type, key_part_pos->column_type_, calc_type,
                                      const_expr->get_result_type().get_type(), always_true)) {
       GET_ALWAYS_TRUE_OR_FALSE(always_true, out_key_part);
     } else if (OB_FAIL(get_calculable_expr_val(const_expr, const_val, is_valid))) {
@@ -1197,7 +1213,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
     } else {
       ObObj val;
       out_key_part->id_ = key_part_id;
-      out_key_part->pos_ = key_part_pos;
+      out_key_part->pos_ = *key_part_pos;
       out_key_part->null_safe_ = (T_OP_NSEQ == c_type);
       if (!const_expr->cnt_param_expr()
           || (!const_expr->has_flag(CNT_DYNAMIC_PARAM)
@@ -1266,7 +1282,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
           }
           if (OB_SUCC(ret) && is_oracle_mode()) {
             // NChar like Nchar, Char like Char is not precise due to padding blank characters
-            ObObjType column_type = key_part_pos.column_type_.get_type();
+            ObObjType column_type = key_part_pos->column_type_.get_type();
             ObObjType const_type = const_expr->get_result_type().get_type();
             if ((ObCharType == column_type && ObCharType == const_type) ||
                 (ObNCharType == column_type && ObNCharType == const_type)) {
@@ -1281,8 +1297,8 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
             // do nothing
           }
         }
-        if (OB_SUCC(ret) && key_part_pos.column_type_.is_string_type() && calc_type.is_string_type()) {
-          if (CS_TYPE_UTF8MB4_GENERAL_CI == key_part_pos.column_type_.get_collation_type()
+        if (OB_SUCC(ret) && key_part_pos->column_type_.is_string_type() && calc_type.is_string_type()) {
+          if (CS_TYPE_UTF8MB4_GENERAL_CI == key_part_pos->column_type_.get_collation_type()
               && CS_TYPE_UTF8MB4_GENERAL_CI != calc_type.get_collation_type()) {
             //这种情况下，要把字符集统一成目标列的字符集，使用general ci比较，由于calc type的字符集是general bin
             //由于general bin转换成general ci，存在多对一，所以得到的range可能会放大，不是一个精确的range
@@ -1294,7 +1310,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
           // oracle模式下'abc  ' != 'abc', 但是 c1 = cast('abc' as varchar2(5))
           // 会抽出(abc ; abc)这个range, 因为存储层存储字符串是不存padding的空格的, 所以这个range会导致'abc  '
           // 被select出来, 因此这个range不是一个精确的range
-          ObObjType column_type = key_part_pos.column_type_.get_type();
+          ObObjType column_type = key_part_pos->column_type_.get_type();
           ObObjType const_type = const_expr->get_result_type().get_type();
           if ((ObCharType == column_type && ObVarcharType == const_type) ||
               (ObNCharType == column_type && ObNVarchar2Type == const_type)) {
@@ -2425,7 +2441,7 @@ int ObQueryRange::get_in_expr_res_type(const ObRawExpr *in_expr, int64_t val_idx
   return ret;
 }
 
-int ObQueryRange::is_key_part(const ObKeyPartId &id, ObKeyPartPos &pos, bool &is_key_part)
+int ObQueryRange::is_key_part(const ObKeyPartId &id, ObKeyPartPos *&pos, bool &is_key_part)
 {
   int ret = OB_SUCCESS;
   if (NULL == query_range_ctx_) {
