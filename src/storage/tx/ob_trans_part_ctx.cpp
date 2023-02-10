@@ -5653,7 +5653,7 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
                                         const bool is_force_kill)
 {
   int ret = OB_SUCCESS;
-  if (is_exiting_ && !is_follower_()) {
+  if (is_exiting_ && sub_state_.is_force_abort()) {
     // do nothing
   } else {
     ObMulSourceDataNotifyArg arg;
@@ -6433,6 +6433,7 @@ int ObPartTransCtx::do_local_abort_tx_()
     // if (part_trans_action_ < ObPartTransAction::COMMIT) {
     //   part_trans_action_ = ObPartTransAction::ABORT;
     // }
+    sub_state_.set_force_abort();
     if (OB_FAIL(on_local_abort_tx_())) {
       TRANS_LOG(WARN, "local tx abort failed", KR(ret), K(*this));
     }
@@ -6446,13 +6447,17 @@ int ObPartTransCtx::do_force_kill_tx_()
 
   ObTxBufferNodeArray tmp_array;
 
-  if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
+  if (get_downstream_state() >= ObTxState::COMMIT) {
+    // do nothing
+  } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
     TRANS_LOG(WARN, "gen total mds array failed", KR(ret), K(*this));
   } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT,
                                          ctx_tx_data_.get_end_log_ts() /*invalid_scn*/, false,
                                          tmp_array, true /*is_force_kill*/))) {
     TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
-  } else {
+  }
+
+  if (OB_SUCC(ret)) {
     trans_kill_();
     // Force kill cannot guarantee the consistency, so we just set end_log_ts
     // to zero
@@ -6461,6 +6466,7 @@ int ObPartTransCtx::do_force_kill_tx_()
     if (OB_FAIL(unregister_timeout_task_())) {
       TRANS_LOG(WARN, "unregister timer task error", KR(ret), "context", *this);
     }
+    sub_state_.set_force_abort();
     // Ignore ret
     set_exiting_();
     TRANS_LOG(INFO, "transaction killed success", "context", *this);
