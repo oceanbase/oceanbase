@@ -560,8 +560,13 @@ int ObLobLocatorV2::get_disk_locator(ObString &disc_loc_buff) const
     COMMON_LOG(WARN, "Lob: get disk locator failed", K(ret));
   } else {
     int64_t handle_size = reinterpret_cast<intptr_t>(disk_loc) - reinterpret_cast<intptr_t>(ptr_);
-    handle_size = size_ - handle_size;
-    disc_loc_buff.assign_ptr(reinterpret_cast<const char *>(disk_loc), handle_size);
+    if (handle_size > size_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid handle size", K(ret), K(size_), K(disk_loc), K(ptr_));
+    } else {
+      handle_size = size_ - handle_size;
+      disc_loc_buff.assign_ptr(reinterpret_cast<const char *>(disk_loc), handle_size);
+    }
   }
   return ret;
 }
@@ -624,8 +629,8 @@ bool ObLobLocatorV2::is_empty_lob() const
   bool bret = false;
   ObString disk_loc_buff;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
-  if (!has_lob_header_) {
-    bret = (ptr_ == NULL && size_ == 0);
+  if (!has_lob_header_ || size_ == 0) {
+    bret = (size_ == 0);
   } else if (!is_lob_disk_locator() && loc->is_simple()) {
     bret = (size_ - MEM_LOB_COMMON_HEADER_LEN == 0);
   } else if (OB_FAIL(get_disk_locator(disk_loc_buff))) {

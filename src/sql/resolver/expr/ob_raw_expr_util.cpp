@@ -5714,7 +5714,7 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObCo
                                            column_schema.get_column_name_str().length());
   column_expr.set_column_flags(column_schema.get_column_flags());
   column_expr.set_hidden_column(column_schema.is_hidden());
-  column_expr.set_lob_column(ob_is_text_tc(column_schema.get_data_type()));
+  column_expr.set_lob_column(is_lob_storage(column_schema.get_data_type()));
   column_expr.set_is_rowkey_column(column_schema.is_rowkey_column());
   column_expr.set_srs_id(column_schema.get_srs_id());
   if (ob_is_string_type(column_schema.get_data_type())

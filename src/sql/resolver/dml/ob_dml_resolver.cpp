@@ -5877,6 +5877,10 @@ int ObDMLResolver::do_resolve_subquery_info(const ObSubQueryInfo &subquery_info,
         const ObExprResType &column_type = target_expr->get_result_type();
         if (OB_FAIL(subquery_info.ref_expr_->add_column_type(column_type))) {
           LOG_WARN("add column type to subquery ref expr failed", K(ret));
+        } else if (column_type.is_lob_storage() && !IS_CLUSTER_VERSION_BEFORE_4_1_0_0) {
+          ObExprResType &last_item = subquery_info.ref_expr_->get_column_types().
+                                     at(subquery_info.ref_expr_->get_column_types().count() - 1);
+          last_item.set_has_lob_header();
         }
       }
     }
