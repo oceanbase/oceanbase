@@ -15,6 +15,7 @@
 #include "share/ob_define.h"
 #include "share/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
@@ -400,6 +401,11 @@ int ObOBJLock::update_lock_status(
         LOG_WARN("compact tablelock failed", K(tmp_ret), K(lock_op));
       }
     }
+    if (OB_SUCC(ret) &&
+        lock_op.op_type_ == OUT_TRANS_UNLOCK &&
+        status == LOCK_OP_COMPLETE) {
+      wakeup_waiters_(lock_op);
+    }
   }
   LOG_DEBUG("update lock status", K(ret), K(lock_op), K(commit_version), K(status));
   return ret;
@@ -553,8 +559,7 @@ int ObOBJLock::lock(
           // something else.
           need_retry = false;
           ret = OB_TRANS_KILLED;
-        } else if (ENABLE_USE_LOCK_WAIT_MGR &&
-                   lock_op.is_dml_lock_op() /* only dml lock will wait at lock wait mgr */) {
+        } else if (lock_op.is_dml_lock_op() /* only dml lock will wait at lock wait mgr */) {
           // wait at lock wait mgr but not retry at here.
           need_retry = false;
         } else {
@@ -673,8 +678,22 @@ void ObOBJLock::remove_lock_op(
     drop_op_list_if_empty_(lock_op.lock_mode_,
                            op_list,
                            allocator);
+    wakeup_waiters_(lock_op);
   }
   LOG_DEBUG("ObOBJLock::remove_lock_op finish.");
+}
+
+void ObOBJLock::wakeup_waiters_(const ObTableLockOp &lock_op)
+{
+  // dml in trans lock does not need do this.
+  if (OB_LIKELY(!lock_op.need_wakeup_waiter())) {
+    // do nothing
+  } else if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
+    LOG_WARN("MTL(ObLockWaitMgr*) is null");
+  } else {
+    MTL(ObLockWaitMgr*)->wakeup(lock_op.lock_id_);
+    LOG_DEBUG("ObOBJLock::wakeup_waiters_ ", K(lock_op));
+  }
 }
 
 int64_t ObOBJLock::get_min_ddl_lock_committed_log_ts(const int64_t flushed_log_ts) const

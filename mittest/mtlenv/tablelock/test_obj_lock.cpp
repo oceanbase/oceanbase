@@ -348,8 +348,7 @@ TEST_F(TestObjLock, lock_conflict_in_in)
                        lock_mode_in_same_trans,
                        allocator_,
                        conflict_tx_set);
-  if (ENABLE_USE_LOCK_WAIT_MGR &&
-      DEFAULT_CONFLICT_OUT_TRANS_LOCK_OP.is_dml_lock_op()) {
+  if (DEFAULT_CONFLICT_OUT_TRANS_LOCK_OP.is_dml_lock_op()) {
     ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
   } else {
     // deadlock detect will kill the trans

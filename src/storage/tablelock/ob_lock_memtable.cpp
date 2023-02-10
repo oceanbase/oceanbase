@@ -170,8 +170,7 @@ int ObLockMemtable::lock_(
   if (ret == OB_OBJ_LOCK_EXIST) {
     ret = OB_SUCCESS;
   }
-  if (ENABLE_USE_LOCK_WAIT_MGR &&
-      OB_TRY_LOCK_ROW_CONFLICT == ret &&
+  if (OB_TRY_LOCK_ROW_CONFLICT == ret &&
       lock_op.is_dml_lock_op() &&   // only in trans dml lock will wait at lock wait mgr.
       conflict_tx_set.count() != 0) {
     // TODO: yanyuan.cxf only wait at the first conflict trans now, but we need
@@ -350,19 +349,6 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
   return ret;
 }
 
-void ObLockMemtable::wakeup_waiters_(const ObTableLockOp &lock_op)
-{
-  // dml in trans lock does not need do this.
-  if (OB_LIKELY(!lock_op.need_wakeup_waiter())) {
-    // do nothing
-  } else if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
-    LOG_WARN("MTL(ObLockWaitMgr*) is null");
-  } else {
-    MTL(ObLockWaitMgr*)->wakeup(lock_op.lock_id_);
-    LOG_DEBUG("ObLockMemtable::wakeup_waiters_ ", K(lock_op));
-  }
-}
-
 int ObLockMemtable::check_lock_conflict(
     const ObMemtableCtx *mem_ctx,
     const ObTableLockOp &lock_op,
@@ -488,9 +474,6 @@ void ObLockMemtable::remove_lock_record(const ObTableLockOp &lock_op)
     LOG_WARN("invalid argument", K(ret), K(lock_op));
   } else {
     obj_lock_map_.remove_lock_record(lock_op);
-    if (ENABLE_USE_LOCK_WAIT_MGR) {
-      wakeup_waiters_(lock_op);
-    }
   }
   LOG_DEBUG("ObLockMemtable::remove_lock_record", K(lock_op));
 }

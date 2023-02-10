@@ -156,6 +156,7 @@ private:
       const int64_t commit_log_ts,
       const ObTableLockOpStatus status,
       ObTableLockOpList *op_list);
+  void wakeup_waiters_(const ObTableLockOp &lock_op);
   int recover_(
       const ObTableLockOp &lock_op,
       ObMalloc &allocator);

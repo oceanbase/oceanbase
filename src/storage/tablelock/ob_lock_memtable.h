@@ -207,7 +207,6 @@ private:
                               const ObLockID &lock_id,
                               const ObTransID &conflict_tx_id,
                               ObFunction<int(bool &need_wait)> &recheck_f);
-  void wakeup_waiters_(const ObTableLockOp &lock_op);
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;

@@ -290,6 +290,7 @@ int ObTableLockService::unlock_table(const uint64_t table_id,
   LOG_INFO("ObTableLockService::unlock_table",
             K(table_id), K(lock_mode), K(lock_owner), K(timeout_us));
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_LOCK_SERVICE_UNLOCK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("lock service is not inited", K(ret), K(table_id), K(lock_mode),
@@ -353,6 +354,7 @@ int ObTableLockService::unlock_tablet(const uint64_t table_id,
                                       const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_LOCK_SERVICE_UNLOCK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("lock service is not inited", K(ret), K(table_id), K(tablet_id),
