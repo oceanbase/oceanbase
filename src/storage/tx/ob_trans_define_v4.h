@@ -336,7 +336,7 @@ protected:
 
   uint64_t op_sn_;                     // Tx level operation sequence No
 
-  enum class State                     // State of Tx
+  enum class State : int               // State of Tx
   {
     INVL,
     IDLE,               // created

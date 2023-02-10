@@ -402,6 +402,7 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
 {
   int ret = OB_SUCCESS;
   bool commit_fin = true;
+  ObTxDesc::State state = ObTxDesc::State::INVL;
   int commit_out = OB_SUCCESS;
   switch (result) {
   case OB_EAGAIN:
@@ -438,23 +439,23 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
     break;
   case OB_TRANS_COMMITED:
   case OB_SUCCESS:
-    tx.state_ = ObTxDesc::State::COMMITTED;
+    state = ObTxDesc::State::COMMITTED;
     tx.commit_version_ = commit_version;
     commit_out = OB_SUCCESS;
     break;
   case OB_TRANS_KILLED:
   case OB_TRANS_ROLLBACKED:
-    tx.state_ = ObTxDesc::State::ROLLED_BACK;
+    state = ObTxDesc::State::ROLLED_BACK;
     commit_out = result;
     break;
   case OB_TRANS_TIMEOUT:
     TX_STAT_TIMEOUT_INC
   case OB_TRANS_STMT_TIMEOUT:
-    tx.state_ = ObTxDesc::State::COMMIT_TIMEOUT;
+    state = ObTxDesc::State::COMMIT_TIMEOUT;
     commit_out = result;
     break;
   case OB_TRANS_UNKNOWN:
-    tx.state_ = ObTxDesc::State::COMMIT_UNKNOWN;
+    state = ObTxDesc::State::COMMIT_UNKNOWN;
     commit_out = result;
     break;
   default:
@@ -467,7 +468,12 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
     if (tx.finish_ts_ <= 0) { // maybe aborted early
       tx.finish_ts_ = ObClockGenerator::getClock();
     }
+    /*
+     * store_release ObTxDesc::{commit_out_, state_}
+     * pair with ObTxDesc::execute_commit_cb
+     */
     tx.commit_out_ = commit_out;
+    ATOMIC_STORE_REL((int*)&tx.state_, (int)state);
     if (tx.commit_task_.is_registered()) {
       if (OB_FAIL(unregister_commit_retry_task_(tx))) {
         TRANS_LOG(ERROR, "deregister timeout task fail", K(tx));
