@@ -490,6 +490,11 @@ function tpcds {
   obd test tpcds $deploy_name $OBCLIENT_BIN_ARGS $extra_args
 }
 
+function graph {
+  get_deploy_name
+  obd tool graph $deploy_name $extra_args
+}
+
 
 function help_info {
   echo """
@@ -523,6 +528,7 @@ sql [-n DEPLOY_NAME]                     Connect to target server by root@sys, u
 sys [-n DEPLOY_NAME]                     Connect to target server by root@sys, use '--help' for more details.
 mysql [-n DEPLOY_NAME]                   Connect to target server by root@mysql, use '--help' for more details.
 oracle [-n DEPLOY_NAME]                  Connect to target server by SYS@oracle, use '--help' for more details.
+graph [-n DEPLOY_NAME]
 
 Options:
 -V, --version                            Show version of obd.
@@ -671,6 +677,9 @@ function main() {
     ;;
     tpcds)
     tpcds
+    ;;
+    graph)
+    graph
     ;;
     *)
     help_info
