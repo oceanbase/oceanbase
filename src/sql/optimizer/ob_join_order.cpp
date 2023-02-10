@@ -9474,15 +9474,15 @@ public:
         } else if (OB_ISNULL(ref_expr = expr->get_ref_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null expr", K(ret));
-        } else if (OB_UNLIKELY(!ref_expr->is_column_ref_expr())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected expr type", KPC(ref_expr), K(ret));
         } else if (ref_expr->get_relation_ids().is_subset(*left_table_set_)) {
           if (OB_FAIL(nl_params_.push_back(expr))) {
             LOG_WARN("failed to push back nl param", K(ret));
           } else {
             new_query_ref->set_has_nl_param(true);
           }
+        } else if (OB_UNLIKELY(ref_expr->get_relation_ids().overlap(*left_table_set_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected expr", K(ret), K(*ref_expr));
         } else if (OB_FAIL(new_query_ref->get_exec_params().push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
