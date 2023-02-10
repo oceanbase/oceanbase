@@ -845,7 +845,9 @@ int ObSortkeyConditioner::process_key_conditioning(
     // do nothing
   } else if (OB_FAIL(share::ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
                data, to + to_len, max_buf_len, to_len, param))) {
-    LOG_WARN("failed  to encode sortkey", K(ret));
+    if (ret != OB_BUF_NOT_ENOUGH) {
+      LOG_WARN("failed  to encode sortkey", K(ret));
+    }
   } else if (!param.is_asc_) {
     process_decrease(to + 1, to_len);
   }
