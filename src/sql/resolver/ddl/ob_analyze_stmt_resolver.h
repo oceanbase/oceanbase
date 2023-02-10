@@ -50,6 +50,9 @@ private:
                                  ObAnalyzeStmt &analyze_stmt);
   int resolve_sample_clause_info(const ParseNode *sample_clause_node,
                                  ObAnalyzeStmt &analyze_stmt);
+
+  int get_bucket_size(const ParseNode *node, int64_t &bucket_num);
+
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAnalyzeStmtResolver);
 };

@@ -155,6 +155,8 @@ private:
   static int gen_import_column_list(const ObIArray<ObColumnStatParam> &column_param,
                                     ObSqlString &column_list);
 
+  static int check_col_stat_validity(ObIArray<ObOptColumnStat *> &all_cstats);
+
 };
 
 } // end of sql

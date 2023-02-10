@@ -529,7 +529,7 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
     EXTRACT_INT_FIELD_MYSQL(result, "distinct_cnt_synopsis_size", llc_bitmap_size, int64_t);
     if (OB_SUCC(ret)) {
       hist.set_type(histogram_type);
-      if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(bucket_cnt))) {
+      if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(allocator, bucket_cnt))) {
         LOG_WARN("failed to prepare allocate buckets", K(ret));
       }
     }

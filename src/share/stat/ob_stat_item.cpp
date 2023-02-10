@@ -323,7 +323,7 @@ public:
   ObBucketCompare &compare_;
 };
 
-int ObStatTopKHist::decode(ObObj &obj)
+int ObStatTopKHist::decode(ObObj &obj, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   ObTopKFrequencyHistograms topk_hist;
@@ -334,7 +334,8 @@ int ObStatTopKHist::decode(ObObj &obj)
     LOG_WARN("param is null", K(ret), K(bucket_num), K(col_param_));
   } else if (OB_FAIL(topk_hist.read_result(obj))) {
     LOG_WARN("failed to read result from obj", K(ret));
-  } else if (OB_FAIL(build_histogram_from_topk_items(topk_hist.get_buckets(),
+  } else if (OB_FAIL(build_histogram_from_topk_items(allocator,
+                                                     topk_hist.get_buckets(),
                                                      col_param_->bucket_num_,
                                                      tab_stat_->get_row_count(),
                                                      col_stat_->get_num_not_null(),
@@ -345,7 +346,8 @@ int ObStatTopKHist::decode(ObObj &obj)
   return ret;
 }
 
-int ObStatTopKHist::build_histogram_from_topk_items(const ObIArray<ObTopkItem> &buckets,
+int ObStatTopKHist::build_histogram_from_topk_items(ObIAllocator &allocator,
+                                                    const ObIArray<ObTopkItem> &buckets,
                                                     int64_t max_bucket_num,
                                                     int64_t total_row_count,
                                                     int64_t not_null_count,
@@ -377,7 +379,8 @@ int ObStatTopKHist::build_histogram_from_topk_items(const ObIArray<ObTopkItem> &
     tmp.at(i).endpoint_num_ += tmp.at(i - 1).endpoint_num_;
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(try_build_topk_histogram(tmp,
+    if (OB_FAIL(try_build_topk_histogram(allocator,
+                                         tmp,
                                          max_bucket_num,
                                          total_row_count,
                                          not_null_count,
@@ -400,7 +403,8 @@ int ObStatTopKHist::build_histogram_from_topk_items(const ObIArray<ObTopkItem> &
  * @param histogram, the result histogram built from bkts
  * @return
  */
-int ObStatTopKHist::try_build_topk_histogram(const ObIArray<ObHistBucket> &bkts,
+int ObStatTopKHist::try_build_topk_histogram(ObIAllocator &allocator,
+                                             const ObIArray<ObHistBucket> &bkts,
                                              const int64_t max_bucket_num,
                                              const int64_t total_row_count,
                                              const int64_t not_null_count,
@@ -417,16 +421,22 @@ int ObStatTopKHist::try_build_topk_histogram(const ObIArray<ObHistBucket> &bkts,
     // all vals are null, there is no need to build a histogram
     histogram.set_type(ObHistType::INVALID_TYPE);
     histogram.set_sample_size(0);
+    histogram.set_bucket_cnt(0);
     histogram.set_density(0);
   } else if (num > 0 && bkts.at(num - 1).endpoint_num_ == not_null_count) {
     histogram.set_type(ObHistType::FREQUENCY);
     histogram.set_sample_size(not_null_count);
+    histogram.set_bucket_cnt(bkts.count());
     histogram.calc_density(ObHistType::FREQUENCY,
                            not_null_count,
                            not_null_count,
                            num_distinct,
                            bkts.count());
-    ret = histogram.add_buckets(bkts);
+    if (OB_FAIL(histogram.prepare_allocate_buckets(allocator, bkts.count()))) {
+      LOG_WARN("failed to prepare allocate buckets", K(ret));
+    } else if (OB_FAIL(histogram.assign_buckets(bkts))) {
+      LOG_WARN("failed to assign buckets", K(ret));
+    } else {/*do nothing*/}
   } else if (num > 0 && bkts.at(num - 1).endpoint_num_ >=
              (not_null_count * (1 - 1.0 / max_bucket_num))) {
     histogram.set_type(ObHistType::TOP_FREQUENCY);
@@ -436,7 +446,7 @@ int ObStatTopKHist::try_build_topk_histogram(const ObIArray<ObHistBucket> &bkts,
                            bkts.at(num - 1).endpoint_num_,
                            num_distinct,
                            num);
-    if (OB_FAIL(histogram.prepare_allocate_buckets(num))) {
+    if (OB_FAIL(histogram.prepare_allocate_buckets(allocator, num))) {
       LOG_WARN("failed to prepare allocate buckets", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
@@ -450,7 +460,12 @@ int ObStatTopKHist::try_build_topk_histogram(const ObIArray<ObHistBucket> &bkts,
       // if the topk histogram contains all records of the table
       // then we can build hybrid histogram directly from the topk result.
       histogram.set_sample_size(not_null_count);
-      ret = histogram.add_buckets(bkts);
+      histogram.set_bucket_cnt(bkts.count());
+      if (OB_FAIL(histogram.prepare_allocate_buckets(allocator, bkts.count()))) {
+        LOG_WARN("failed to prepare allocate buckets", K(ret));
+      } else if (OB_FAIL(histogram.assign_buckets(bkts))) {
+        LOG_WARN("failed to assign buckets", K(ret));
+      } else {/*do nothing*/}
     }
   }
   return ret;
@@ -688,7 +703,7 @@ int ObStatHybridHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   return ret;
 }
 
-int ObStatHybridHist::decode(ObObj &obj)
+int ObStatHybridHist::decode(ObObj &obj, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   ObHybridHistograms hybrid_hist;
@@ -703,9 +718,12 @@ int ObStatHybridHist::decode(ObObj &obj)
   } else if (OB_FAIL(hybrid_hist.read_result(obj))) {
     LOG_WARN("failed to read result from obj", K(ret));
   } else {
-    col_stat_->get_histogram().reset();
-    if (OB_FAIL(col_stat_->get_histogram().add_buckets(hybrid_hist.get_buckets()))) {
-      LOG_WARN("failed to append hist bucket", K(ret));
+    col_stat_->get_histogram().get_buckets().reset();
+    col_stat_->get_histogram().set_bucket_cnt(hybrid_hist.get_buckets().count());
+    if (OB_FAIL(col_stat_->get_histogram().prepare_allocate_buckets(allocator, hybrid_hist.get_buckets().count()))) {
+      LOG_WARN("failed to prepare allocate buckets", K(ret));
+    } else if (OB_FAIL(col_stat_->get_histogram().assign_buckets(hybrid_hist.get_buckets()))) {
+      LOG_WARN("failed to assign buckets", K(ret));
     } else {
       col_stat_->get_histogram().set_type(ObHistType::HYBIRD);
       col_stat_->get_histogram().set_sample_size(hybrid_hist.get_total_count());

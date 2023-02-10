@@ -540,42 +540,27 @@ int ObOptStatSqlService::construct_delete_column_histogram_sql(const uint64_t te
                                                                ObSqlString &delete_histogram_sql)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObOptKeyColumnStat, 4> key_column_stats;
-  ObArenaAllocator allocator(ObModIds::OB_BUFFER);
+  ObSqlString where_str;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   for (int64_t i = 0; OB_SUCC(ret) && i < column_stats.count(); ++i) {
     if (OB_ISNULL(column_stats.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(column_stats.at(i)));
-    } else {
-      ObOptColumnStat::Key check_key(tenant_id,
-                                     column_stats.at(i)->get_table_id(),
+    } else if (where_str.append_fmt(" %s (%lu, %ld, %ld, %lu) %s",
+                                     i != 0 ? "," : "(TENANT_ID, TABLE_ID, PARTITION_ID, COLUMN_ID) IN (",
+                                     ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                                     ObSchemaUtils::get_extract_schema_id(exec_tenant_id, column_stats.at(i)->get_table_id()),
                                      column_stats.at(i)->get_partition_id(),
-                                     column_stats.at(i)->get_column_id());
-      void *ptr = NULL;
-      if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObOptColumnStat::Key)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("memory is not enough", K(ret), K(ptr));
-      } else {
-        ObOptKeyColumnStat tmp_key_col_stat;
-        tmp_key_col_stat.key_ = new (ptr) ObOptColumnStat::Key(tenant_id,
-                                                               column_stats.at(i)->get_table_id(),
-                                                               column_stats.at(i)->get_partition_id(),
-                                                               column_stats.at(i)->get_column_id());
-        tmp_key_col_stat.stat_ = const_cast<ObOptColumnStat*>(column_stats.at(i));
-        if (OB_FAIL(key_column_stats.push_back(tmp_key_col_stat))) {
-          LOG_WARN("failed to push back", K(ret));
-        } else {/*do nothing*/}
-      }
+                                     column_stats.at(i)->get_column_id(),
+                                     i == column_stats.count() - 1 ? ")" : "")) {
+      LOG_WARN("failed to append fmt", K(ret));
     }
   }
-  if (OB_SUCC(ret) && !key_column_stats.empty()) {
-    ObSqlString keys_list_str;
-    if (OB_FAIL(generate_specified_keys_list_str(tenant_id, key_column_stats, keys_list_str))) {
-      LOG_WARN("failed to generate specified keys list str", K(ret), K(key_column_stats));
-    } else if (OB_FAIL(delete_histogram_sql.append_fmt(" %s %.*s;", DELETE_HISTOGRAM_STAT_SQL,
-                                                                   keys_list_str.string().length(),
-                                                                   keys_list_str.string().ptr()))) {
-        LOG_WARN("fail to append SQL where string.", K(ret));
+  if (OB_SUCC(ret) && !where_str.empty()) {
+    if (OB_FAIL(delete_histogram_sql.append_fmt(" %s %.*s;", DELETE_HISTOGRAM_STAT_SQL,
+                                                             where_str.string().length(),
+                                                             where_str.string().ptr()))) {
+      LOG_WARN("fail to append SQL where string.", K(ret));
     } else {
       LOG_TRACE("Succeed to construct delete column histogram sql", K(delete_histogram_sql));
     }
@@ -617,7 +602,7 @@ int ObOptStatSqlService::construct_histogram_insert_sql(share::schema::ObSchemaG
           } else if (OB_FAIL(get_histogram_stat_history_sql(tenant_id,
                                                             *column_stats.at(i),
                                                             allocator,
-                                                            hist.get_buckets()[j],
+                                                            hist.get(j),
                                                             current_time,
                                                             endpoint_meta,
                                                             tmp))) {
@@ -630,7 +615,7 @@ int ObOptStatSqlService::construct_histogram_insert_sql(share::schema::ObSchemaG
         } else if (!need_histogram && OB_FAIL(insert_histogram_sql.append(INSERT_HISTOGRAM_STAT_SQL))) {
           LOG_WARN("failed to append sql", K(ret));
         } else if (OB_FAIL(get_histogram_stat_sql(tenant_id, *column_stats.at(i),
-                                                  allocator, hist.get_buckets()[j], endpoint_meta, tmp))) {
+                                                  allocator, hist.get(j), endpoint_meta, tmp))) {
           LOG_WARN("failed to get histogram sql", K(ret));
         } else if (OB_FAIL(insert_histogram_sql.append_fmt("%s (%s)", (!need_histogram ? "" : ","), tmp.ptr()))) {
           LOG_WARN("failed to append sql", K(ret));
@@ -935,7 +920,7 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
         OB_FAIL(dml_splicer.add_column("distinct_cnt_synopsis_size", llc_comp_size * 2)) ||
         OB_FAIL(dml_splicer.add_column("sample_size", stat.get_histogram().get_sample_size())) ||
         OB_FAIL(dml_splicer.add_column("density", stat.get_histogram().get_density())) ||
-        OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_size())) ||
+        OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_cnt())) ||
         OB_FAIL(dml_splicer.add_column("histogram_type", stat.get_histogram().get_type())) ||
         OB_FAIL(dml_splicer.add_column("global_stats", 0)) ||
         OB_FAIL(dml_splicer.add_column("user_stats", 0))) {
@@ -1010,7 +995,7 @@ int ObOptStatSqlService::get_column_stat_history_sql(const uint64_t tenant_id,
         OB_FAIL(dml_splicer.add_column("distinct_cnt_synopsis_size", llc_comp_size * 2)) ||
         OB_FAIL(dml_splicer.add_column("sample_size", stat.get_histogram().get_sample_size())) ||
         OB_FAIL(dml_splicer.add_column("density", stat.get_histogram().get_density())) ||
-        OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_size())) ||
+        OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_cnt())) ||
         OB_FAIL(dml_splicer.add_column("histogram_type", stat.get_histogram().get_type()))) {
       LOG_WARN("failed to add dml splicer column", K(ret));
     } else if (OB_FAIL(dml_splicer.splice_values(sql_string))) {
@@ -1356,7 +1341,7 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
         EXTRACT_INT_FIELD_MYSQL(result, "distinct_cnt_synopsis_size", llc_bitmap_size, int64_t);
         if (OB_SUCC(ret)) {
           hist.set_type(histogram_type);
-          if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(bucket_cnt))) {
+          if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(allocator, bucket_cnt))) {
             LOG_WARN("failed to prepare allocate buckets", K(ret));
           }
         }
@@ -1509,7 +1494,7 @@ int ObOptStatSqlService::fill_bucket_stat(ObIAllocator &allocator,
           if (OB_FAIL(hex_str_to_obj(str.ptr(), str.length(), allocator, bkt.endpoint_value_))) {
             LOG_WARN("deserialize object value failed.", K(stat), K(ret));
           } else if (OB_FAIL(dst_key_col_stat.stat_->get_histogram().add_bucket(bkt))) {
-            LOG_WARN("failed to add backet", K(ret));
+            LOG_WARN("failed to push back buckets", K(ret));
           } else {/*do nothing*/}
         }
       }

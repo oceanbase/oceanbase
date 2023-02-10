@@ -172,19 +172,17 @@ int ObDbmsStatsExecutor::check_all_cols_range_skew(const ObTableStatParam &param
             ObHistogram &hist = col_stats.at(j)->get_histogram();
             if ((hist.get_type() == ObHistType::FREQUENCY && col_param.is_size_skewonly()) ||
                 hist.get_type() == ObHistType::HYBIRD) {
-              if (OB_ISNULL(hist.get_buckets()) ||
-                  OB_UNLIKELY(hist.get_bucket_size() < 1 || col_param.bucket_num_ < 1)) {
+              if (OB_UNLIKELY(hist.get_bucket_size() < 1 || col_param.bucket_num_ < 1)) {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("get unexpected error", K(ret), K(hist.get_buckets()), K(hist.get_bucket_size()),
+                LOG_WARN("get unexpected error", K(ret), K(hist.get_bucket_size()),
                                                  K(col_param.bucket_num_), K(*col_stats.at(j)));
               } else {
                 bool is_even_dist = false;
                 int64_t standard_cnt = hist.get_type() == ObHistType::FREQUENCY ?
-                                         hist.get_buckets()[0].endpoint_num_ :
+                                         hist.get_buckets().at(0).endpoint_num_ :
                                          hist.get_sample_size() / col_param.bucket_num_;
                 if (OB_FAIL(ObDbmsStatsUtils::check_range_skew(hist.get_type(),
                                                                hist.get_buckets(),
-                                                               hist.get_bucket_size(),
                                                                standard_cnt,
                                                                is_even_dist))) {
                   LOG_WARN("failed to check range skew", K(ret));

@@ -89,29 +89,26 @@ int ObDbmsStatsUtils::init_col_stats(ObIAllocator &allocator,
  *  then it's even distributed, Otherwise, it's skewed.
  */
 int ObDbmsStatsUtils::check_range_skew(ObHistType hist_type,
-                                       const ObHistBucket *bkts,
-                                       const int64_t bkt_size,
+                                       const ObHistogram::Buckets &bkts,
                                        int64_t standard_cnt,
                                        bool &is_even_distributed)
 {
   int ret = OB_SUCCESS;
   is_even_distributed = false;
-  if (OB_ISNULL(bkts) || OB_UNLIKELY(bkt_size == 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(bkts), K(bkt_size));
-  } else if (hist_type == ObHistType::FREQUENCY) {
+  if (hist_type == ObHistType::FREQUENCY) {
     is_even_distributed = true;
-    for (int64_t i = 0; is_even_distributed && i < bkt_size; ++i) {
+    for (int64_t i = 0; is_even_distributed && i < bkts.count(); ++i) {
       if (i == 0) {
-        is_even_distributed = standard_cnt == bkts[i].endpoint_num_;
+        is_even_distributed = standard_cnt == bkts.at(i).endpoint_num_;
       } else {
-        is_even_distributed = standard_cnt == bkts[i].endpoint_num_ - bkts[i - 1].endpoint_num_;
+        is_even_distributed = standard_cnt == bkts.at(i).endpoint_num_ -
+                                                                       bkts.at(i - 1).endpoint_num_;
       }
     }
   } else if (hist_type == ObHistType::HYBIRD) {
     is_even_distributed = true;
-    for (int64_t i = 0; is_even_distributed && i < bkt_size; ++i) {
-      is_even_distributed = bkts[i].endpoint_repeat_count_ <= standard_cnt;
+    for (int64_t i = 0; is_even_distributed && i < bkts.count(); ++i) {
+      is_even_distributed = bkts.at(i).endpoint_repeat_count_ <= standard_cnt;
     }
   } else {/*do nothing*/}
   return ret;

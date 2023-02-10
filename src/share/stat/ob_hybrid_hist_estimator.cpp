@@ -420,7 +420,7 @@ int ObHybridHistEstimator::try_build_hybrid_hist(const ObColumnStatParam &param,
     ObSEArray<BucketNode, 4> pairs;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < col_stat.get_histogram().get_bucket_size(); ++i) {
-      const ObHistBucket &hist_bucket = col_stat.get_histogram().get_buckets()[i];
+      const ObHistBucket &hist_bucket = col_stat.get_histogram().get(i);
       if (OB_FAIL(pairs.push_back(BucketNode(hist_bucket.endpoint_value_,
                                              hist_bucket.endpoint_repeat_count_)))) {
         LOG_WARN("failed to push back new entry", K(ret));
@@ -434,9 +434,12 @@ int ObHybridHistEstimator::try_build_hybrid_hist(const ObColumnStatParam &param,
                                                 num_distinct))) {
         LOG_WARN("failed to do build hybrid hist", K(ret));
       } else {
-        col_stat.get_histogram().reset();
-        if (OB_FAIL(col_stat.get_histogram().add_buckets(hybrid_hist.get_buckets()))) {
-          LOG_WARN("failed to append hist bucket", K(ret));
+        col_stat.get_histogram().get_buckets().reset();
+        if (OB_FAIL(col_stat.get_histogram().prepare_allocate_buckets(ctx_.get_allocator(),
+                                                                      hybrid_hist.get_buckets().count()))) {
+          LOG_WARN("failed to prepare allocate buckets", K(ret));
+        } else if (OB_FAIL(col_stat.get_histogram().assign_buckets(hybrid_hist.get_buckets()))) {
+          LOG_WARN("failed to assign buckets", K(ret));
         } else {
           col_stat.get_histogram().set_type(ObHistType::HYBIRD);
           col_stat.get_histogram().set_sample_size(total_count);

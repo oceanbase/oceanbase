@@ -43,7 +43,7 @@ protected:
 
   int64_t get_item_size() const { return stat_items_.count(); }
 
-  int decode();
+  int decode(ObIAllocator &allocator);
 
   int add_result(ObObj &obj)  { return results_.push_back(obj); }
 

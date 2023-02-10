@@ -4894,18 +4894,17 @@ int ObLogPlan::get_popular_values_hash(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   if (OB_ISNULL(handle.stat_)
       || 0 >= handle.stat_->get_last_analyzed()
-      || OB_ISNULL(handle.stat_->get_histogram().get_buckets())
       || handle.stat_->get_histogram().get_bucket_size() <= 0) {
     // no histogram info, don't use hybrid hash
     LOG_DEBUG("table not analyzed. disable hybrid hash DM", K(ret));
   } else {
     const ObHistogram &histogram = handle.stat_->get_histogram();
     // get total value count via last bucket by it's cumulative endpoint num
-    const ObHistBucket &last_bucket = histogram.get_buckets()[histogram.get_bucket_size() - 1];
+    const ObHistBucket &last_bucket = histogram.get(histogram.get_bucket_size() - 1);
     int64_t total_cnt = std::max(1L, last_bucket.endpoint_num_); // avoid zero div
     int64_t min_freq = optimizer_context_.get_session_info()->get_px_join_skew_minfreq();
     for (int64_t i = 0; OB_SUCC(ret) && i < histogram.get_bucket_size(); ++i) {
-      const ObHistBucket &bucket = histogram.get_buckets()[i];
+      const ObHistBucket &bucket = histogram.get(i);
       int64_t freq = bucket.endpoint_repeat_count_ * 100 / total_cnt;
       if (freq >= min_freq) {
         ObObj value;

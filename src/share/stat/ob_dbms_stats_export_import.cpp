@@ -40,7 +40,7 @@ namespace common {
 
 #define CREATE_MYSQL_STAT_TABLE "(STATID VARCHAR(128), TYPE CHAR(1), VERSION DECIMAL,FLAGS DECIMAL,\
                                   C1 VARCHAR(128),C2 VARCHAR(128), C3 VARCHAR(128),C4 VARCHAR(128),\
-                                  C5 VARCHAR(128), C6 VARCHAR(128), N1 DECIMAL, N2 DECIMAL,\
+                                  C5 VARCHAR(128), C6 VARCHAR(128), N1 DECIMAL, N2 DOUBLE,\
                                   N3 DECIMAL, N4 DECIMAL, N5 DECIMAL, N6 DECIMAL, N7 DECIMAL,\
                                   N8 DECIMAL, N9 DECIMAL, N10 DECIMAL, N11 DECIMAL, N12	DECIMAL,\
                                   N13 DECIMAL, D1 TIMESTAMP(6), T1 TIMESTAMP, R1 TEXT(1000), \
@@ -73,7 +73,7 @@ namespace common {
                            stat.distinct_cnt n1, stat.density n2, null n3, stat.sample_size n4, \
                            stat.null_cnt n5, NULL n6, NULL n7, stat.avg_len n8, 1 n9, \
                            hist.endpoint_num n10, hist.endpoint_normalized_value n11, \
-                           hist.endpoint_repeat_cnt n12, null n13, last_analyzed d1, null t1, \
+                           hist.endpoint_repeat_cnt n12, stat.bucket_cnt n13, last_analyzed d1, null t1, \
                            stat.b_min_value r1, stat.b_max_value r2, hist.b_endpoint_value r3, \
                            null ch1, null cl1, null bl1, stat.distinct_cnt_synopsis_size ob_spec1,\
                            null ob_spec2, stat.distinct_cnt_synopsis ob_spec3 from\
@@ -600,8 +600,9 @@ int ObDbmsStatsExportImport::do_import_stats(ObExecContext &ctx,
         }
         if (OB_ITER_END != ret) {
           LOG_WARN("failed to get result", K(ret));
+        } else if (OB_FAIL(check_col_stat_validity(all_cstats))) {
+          LOG_WARN("failed to check col stat validity", K(ret));
         } else {
-          ret = OB_SUCCESS;
           ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
           ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
           //before import, we need record history stats.
@@ -656,7 +657,7 @@ int ObDbmsStatsExportImport::do_import_stats(ObExecContext &ctx,
  *   19.N10 NUMBER             <==>         Endpoint number('C')
  *   20.N11 NUMBER             <==>         Endpoint value('C')
  *   21.N12 NUMBER             <==>         ENDPOINT_REPEAT_COUNT('C')
- *   22.N13 NUMBER             <==>         NULL
+ *   22.N13 NUMBER             <==>         bucket_cnt('C')
  *   23.D1 DATE                <==>         Last analyzed
  *   24.T1 TIMESTAMP(6) WITH TIME ZONE <==> NULL
  *   25.R1 RAW(32)             <==>         Lower raw value('C')
@@ -830,14 +831,16 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
             number::ObNumber num_val;
             int64_t int_val = 0;
             double double_val = 0.0;
-            if (!result_objs.at(i).is_null() && OB_FAIL(result_objs.at(i).get_number(num_val))) {
-              LOG_WARN("failed to get number", K(ret));
+            if (result_objs.at(i).is_number() &&
+                (OB_FAIL(result_objs.at(i).get_number(num_val)) ||
+                 OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(num_val, double_val)))) {
+              LOG_WARN("failed to get double", K(ret));
+            } else if (result_objs.at(i).is_double() && OB_FAIL(result_objs.at(i).get_double(double_val))) {
+              LOG_WARN("failed to get double", K(ret));
             } else if (stat_type == TABLE_STAT || stat_type == INDEX_STAT) {
               /*do nothing*/
             } else if (stat_type == COLUMN_STAT) {
-              if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(num_val, double_val))) {
-                LOG_WARN("failed to cast number to double" , K(ret));
-              } else if (double_val > 0.0) {
+              if (double_val > 0.0) {
                 /*do nothing*/
                 if (OB_UNLIKELY(hist_type == INVALID_TYPE)) {
                   ret = OB_ERR_DBMS_STATS_PL;
@@ -972,7 +975,31 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
             }
             break;
           }
-          case StatTableColumnName::N13: {//not used
+          case StatTableColumnName::N13: {//bucket_cnt('C')
+            number::ObNumber num_val;
+            int64_t int_val = 0;
+            if (stat_type != COLUMN_STAT) {
+              if (OB_UNLIKELY(!result_objs.at(i).is_null())) {
+                ret = OB_ERR_DBMS_STATS_PL;
+                LOG_WARN("Invalid or inconsistent input values", K(ret), K(result_objs.at(i)));
+                LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid or inconsistent input values");
+              }
+            } else if (!result_objs.at(i).is_null() &&
+                       OB_FAIL(result_objs.at(i).get_number(num_val))) {
+              LOG_WARN("failed to get number", K(ret));
+            } else if (OB_FAIL(num_val.extract_valid_int64_with_trunc(int_val))) {
+              LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_val));
+            } else if (int_val > 0) {
+              if (OB_UNLIKELY(col_stat->get_histogram().get_density() <= 0.0)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected error", K(result_objs), K(ret), KPC(col_stat));
+              } else if (col_stat->get_histogram().get_buckets().empty()) {
+                if (OB_FAIL(col_stat->get_histogram().prepare_allocate_buckets(ctx.get_allocator(),
+                                                                               int_val))) {
+                  LOG_WARN("failed to prepare allocate buckets", K(ret));
+                } else {/*do nothing*/}
+              }
+            }
             break;
           }
           case StatTableColumnName::D1: {//Last analyzed
@@ -1063,8 +1090,13 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
                                                            result_objs.at(i),
                                                            hist_bucket.endpoint_value_))) {
               LOG_WARN("failed to convert bin hex text to obj", K(ret));
+            } else if (OB_UNLIKELY(col_stat->get_histogram().get_bucket_cnt() >=
+                                                 col_stat->get_histogram().get_bucket_size())) {
+              ret = OB_ERR_DBMS_STATS_PL;
+              LOG_WARN("Invalid or inconsistent input values", K(ret), K(result_objs.at(i)));
+              LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid or inconsistent input values");
             } else if (OB_FAIL(col_stat->get_histogram().add_bucket(hist_bucket))) {
-              LOG_WARN("failed to add bucket", K(ret));
+              LOG_WARN("failed to push back", K(ret));
             } else {/*do nothing*/}
             break;
           }
@@ -1528,6 +1560,23 @@ int ObDbmsStatsExportImport::gen_import_column_list(const ObIArray<ObColumnStatP
                                             suffix))) {
         LOG_WARN("failed to append sql", K(ret), K(column_list));
       } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsExportImport::check_col_stat_validity(ObIArray<ObOptColumnStat *> &all_cstats)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_cstats.count(); ++i) {
+    if (OB_ISNULL(all_cstats.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(all_cstats.at(i)), K(ret));
+    } else if (OB_UNLIKELY(all_cstats.at(i)->get_histogram().get_bucket_cnt() !=
+                                  all_cstats.at(i)->get_histogram().get_bucket_size())) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("Invalid or inconsistent input values", K(ret), KPC(all_cstats.at(i)));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid or inconsistent input values");
     }
   }
   return ret;
