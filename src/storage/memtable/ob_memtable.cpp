@@ -2572,7 +2572,13 @@ int ObMemtable::mvcc_write_(storage::ObStoreCtx &ctx,
       TRANS_LOG(ERROR, "double lock detected", K(*key), K(*value), K(ctx), K(res));
     }
     if (!res.has_insert()) {
-      TRANS_LOG(ERROR, "sstable conflict will occurred when already inserted", K(ctx), KPC(this));
+      if (blocksstable::ObDmlFlag::DF_LOCK != arg.data_->dml_flag_) {
+        TRANS_LOG(ERROR, "sstable conflict will occurred when already inserted",
+                  K(ctx), KPC(this), K(arg));
+      } else {
+        TRANS_LOG(WARN, "sstable conflict will occurred when lock operation",
+                  K(ctx), KPC(this), K(arg));
+      }
     } else {
       // Tip1: mvcc_write guarantee the tnode will not be inserted if error is reported
       (void)mvcc_engine_.mvcc_undo(value);
