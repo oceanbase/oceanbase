@@ -1667,6 +1667,9 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           }
         }
       } else if (lib::is_oracle_mode()) {
+       // In oracle mode, entity tables and temporary tables do not have
+       // the same name. Therefore, there is no need to check the temporary
+       // table here, just get it directly.
         if (pcv_schema->is_explicit_db_name_) {
           // oracle模式下，如果指定了database的name，直接用table id查schema
           if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
@@ -1689,6 +1692,8 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
         } else {
           // do nothing
         }
+      // In mysql mode, there is already logic in the interface
+      // to directly obtain temporary tables
       } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
                                                               pcv_schema->database_id_,
                                                               pcv_schema->table_name_,
@@ -1830,14 +1835,31 @@ int ObPlanCacheValue::need_check_schema_version(ObPlanCacheCtx &pc_ctx,
     LOG_WARN("failed to get tenant schema version", K(ret));
   } else {
     int64_t cached_tenant_schema_version = ATOMIC_LOAD(&tenant_schema_version_);
+    /*
+      session1 :
+           create temporary table t1(c1 int, c2 int);
+      session2 :
+           create table t1(c1 int);
+           insert into t1 values(1);
+           select * from t1;
+      session1 :
+           select * from t1;   ->The plan match is wrong, the entity table t1 is queried, and one row is returned
+
+        First create a temporary table and then create a normal table,
+        and then add the plan of the normal table to the plan cache. In
+        this case, it is impossible to predict whether there is a
+        temporary table with the same name in the current session.
+        Therefore, if there is a temporary table, you need to recheck the schema .
+     */
     need_check = ((new_schema_version != cached_tenant_schema_version)
                   || is_contain_tmp_tbl()
                   || is_contain_sys_pl_object()
-                  || contain_sys_name_table_);
+                  || contain_sys_name_table_
+                  || pc_ctx.sql_ctx_.session_info_->get_has_temp_table_flag());
     if (need_check && REACH_TIME_INTERVAL(10000000)) { //10s间隔打印
       LOG_INFO("need check schema", K(new_schema_version), K(cached_tenant_schema_version),
                K(contain_sys_name_table_), K(is_contain_tmp_tbl()), K(is_contain_sys_pl_object()),
-               K(need_check), K(constructed_sql_));
+               K(pc_ctx.sql_ctx_.session_info_->get_has_temp_table_flag()), K(need_check), K(constructed_sql_));
     }
   }
   return ret;
