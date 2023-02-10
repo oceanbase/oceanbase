@@ -1041,7 +1041,11 @@ int ObTmpTenantFileStore::free_macro_block(ObTmpMacroBlock *&t_mblk)
         STORAGE_LOG(WARN, "fail to wait write io finish", K(ret), K(t_mblk));
       }
       ObTaskController::get().allow_next_syslog();
-      STORAGE_LOG(INFO, "finish to free a block", K(ret), K(*t_mblk));
+      STORAGE_LOG(INFO, "finish to free a block", K(ret),
+                  "block_id", t_mblk->get_block_id(),
+                  "macro_id", t_mblk->get_macro_block_id(),
+                  "dir_id", t_mblk->get_dir_id(),
+                  "free_page_nums", t_mblk->get_free_page_nums());
       t_mblk->~ObTmpMacroBlock();
       allocator_.free(t_mblk);
     }
