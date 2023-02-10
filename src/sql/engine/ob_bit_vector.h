@@ -112,7 +112,7 @@ public:
   const T *reinterpret_data() const { return reinterpret_cast<const T *>(data_); }
 
   /**
-   * access all valid fliped bit, flip a bit meaning change its value from 0 to 1 or from 1 to 0
+   * access all valid flipped bit, flip a bit meaning change its value from 0 to 1 or from 1 to 0
    * and it access all 0 bit
    */
   template <typename OP>

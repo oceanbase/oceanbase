@@ -194,7 +194,7 @@ void ObTenantSqlMemoryManager::ObSqlWorkAreaCalcInfo::destroy(ObIAllocator &allo
 }
 
 // delta计算逻辑，前一个interval和后一个interval计算相差公式为
-// suppose calculate the idx interaval, and pre-interval is (idx + 1)
+// suppose calculate the idx interval, and pre-interval is (idx + 1)
 // delta = intervals_[idx+1].total_hash_sise
 //       - intervals_[idx].interval_cache_size
 //       * intervals_[idx+1].total_hash_cnt + no_cache_cnt * interval_size
@@ -901,7 +901,7 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
     // 1 - x^3函数，表示随着hold内存越多，可用内存越少，同时alloc越多，可用内存越少
     // 反之，hold越少，可用内存越多，alloc越少，可用内存又会越多
     // 这里采用平方主要是为了内存增长和减少都比较平滑
-    // so: fomula
+    // so: formula
     //    hold_ratio = hold / max_size;
     //    tmp_max_wa = (1 - hold_ratio * hold_ratio * hold_ratio) * (max - hold) + alloc
     //    alloc_ratio = alloc / tmp_max_wa
@@ -917,7 +917,7 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
     //   max_wa_memory_size = (tmp_max_wa_memory_size >> 1);
     // } else
     {
-      // only use fomula (1 - ratio ^ 3)
+      // only use formula (1 - ratio ^ 3)
       max_wa_memory_size = tmp_max_wa_memory_size * (1 - alloc_ratio * alloc_ratio * alloc_ratio);
     }
     max_workarea_size_ = tenant_work_area_max_size;
@@ -1172,7 +1172,7 @@ int ObTenantSqlMemoryManager::calculate_global_bound_size_by_interval_info(
         global_bound_size_ = calc_info.get_global_bound_size();
         mem_target_ = calc_info.get_mem_target();
         pre_enable_auto_memory_mgr_ = true;
-        // last set enable auto memory manager, so others read the vairable to avoiding dirty read
+        // last set enable auto memory manager, so others read the variable to avoiding dirty read
         enable_auto_memory_mgr_ = true;
       }
       if (auto_calc) {
@@ -1233,7 +1233,7 @@ int ObTenantSqlMemoryManager::calculate_global_bound_size(ObIAllocator *allocato
       global_bound_size_ = min_bound_size_;
       drift_size_ = 0;
       pre_enable_auto_memory_mgr_ = true;
-      // last set enable auto memory manager, so others read the vairable to avoiding dirty read
+      // last set enable auto memory manager, so others read the variable to avoiding dirty read
       enable_auto_memory_mgr_ = true;
       if (auto_calc) {
         LOG_INFO("work area memory zero", K(tenant_id_), K(global_bound_size_));

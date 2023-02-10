@@ -1172,7 +1172,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       if (OB_FAIL(ob_write_string(get_allocator(),
                                   trunc_stmt.string(),
                                   stat_.stmt_))) {
-        SQL_PC_LOG(WARN, "fail to set turncate string", K(ret));
+        SQL_PC_LOG(WARN, "fail to set truncate string", K(ret));
       }
       stat_.ps_stmt_id_ = pc_ctx.fp_result_.pc_key_.key_id_;
     } else {
@@ -1180,7 +1180,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       if (OB_FAIL(ob_write_string(get_allocator(),
                                   trunc_stmt.string(),
                                   stat_.stmt_))) {
-        SQL_PC_LOG(WARN, "fail to set turncate string", K(ret));
+        SQL_PC_LOG(WARN, "fail to set truncate string", K(ret));
       }
     }
     stat_.large_querys_= 0;

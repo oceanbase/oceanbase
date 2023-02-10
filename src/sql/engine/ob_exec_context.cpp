@@ -682,7 +682,7 @@ int ObExecContext::add_temp_table_interm_result_ids(uint64_t temp_table_id,
       ObTempTableResultInfo info;
       info.addr_ = sqc_addr;
       if (OB_FAIL(info.interm_result_ids_.assign(ids))) {
-        LOG_WARN("failed to assign to interm resuld ids.", K(ret));
+        LOG_WARN("failed to assign to interm result ids.", K(ret));
       } else if (OB_FAIL(ctx.interm_result_infos_.push_back(info))) {
         LOG_WARN("failed to push back result info", K(ret));
       } else {
@@ -697,7 +697,7 @@ int ObExecContext::add_temp_table_interm_result_ids(uint64_t temp_table_id,
     ObTempTableResultInfo info;
     info.addr_ = sqc_addr;
     if (OB_FAIL(info.interm_result_ids_.assign(ids))) {
-      LOG_WARN("failed to assign to interm resuld ids.", K(ret));
+      LOG_WARN("failed to assign to interm result ids.", K(ret));
     } else if (OB_FAIL(ctx.interm_result_infos_.push_back(info))) {
       LOG_WARN("failed to push back result info", K(ret));
     } else if (OB_FAIL(temp_ctx.push_back(ctx))) {
