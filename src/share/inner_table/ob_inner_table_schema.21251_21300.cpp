@@ -2360,7 +2360,7 @@ int ObInnerTableSchema::cdb_ob_deadlock_event_history_schema(ObTableSchema &tabl
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT EVENT_ID,          SVR_IP,          SVR_PORT,          DETECTOR_ID,          REPORT_TIME,          CYCLE_IDX,          CYCLE_SIZE,          ROLE,          PRIORITY_LEVEL,          PRIORITY,          CREATE_TIME,          START_DELAY AS START_DELAY_US,          MODULE,          VISITOR,          OBJECT,          EXTRA_NAME1,          EXTRA_VALUE1,          EXTRA_NAME2,          EXTRA_VALUE2,          EXTRA_NAME3,          EXTRA_VALUE3   FROM OCEANBASE.__ALL_VIRTUAL_DEADLOCK_EVENT_HISTORY   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,          EVENT_ID,          SVR_IP,          SVR_PORT,          DETECTOR_ID,          REPORT_TIME,          CYCLE_IDX,          CYCLE_SIZE,          ROLE,          PRIORITY_LEVEL,          PRIORITY,          CREATE_TIME,          START_DELAY AS START_DELAY_US,          MODULE,          VISITOR,          OBJECT,          EXTRA_NAME1,          EXTRA_VALUE1,          EXTRA_NAME2,          EXTRA_VALUE2,          EXTRA_NAME3,          EXTRA_VALUE3   FROM OCEANBASE.__ALL_VIRTUAL_DEADLOCK_EVENT_HISTORY   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
