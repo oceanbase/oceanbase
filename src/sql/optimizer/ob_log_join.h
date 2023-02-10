@@ -124,6 +124,7 @@ namespace sql
 
     virtual int collect_link_sql_context_pre(GenLinkStmtPostContext &link_ctx) override;
     virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
+    int find_right_child_is_join(bool &is_join);
 
     inline bool is_nlj_with_param_down() const { return (NESTED_LOOP_JOIN == join_algo_) &&
                                                         !nl_params_.empty(); }

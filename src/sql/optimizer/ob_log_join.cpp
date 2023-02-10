@@ -1069,17 +1069,48 @@ int ObLogJoin::collect_link_sql_context_pre(GenLinkStmtPostContext &link_ctx)
   return ret;
 }
 
+int ObLogJoin::find_right_child_is_join(bool &is_join)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *right_child = get_child(second_child);
+  is_join = false;
+  if (OB_ISNULL(right_child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null", K(ret));
+  } else if (LOG_JOIN == right_child->get_type()) {
+    is_join = true;
+  } else if (1 == right_child->get_num_of_child()) {
+    int64_t num_of_child = 1;
+    ObLogicalOperator *child_op = right_child;
+    while (OB_SUCC(ret) && !is_join && 1 == num_of_child) {
+      child_op = child_op->get_child(first_child);
+      if (OB_ISNULL(child_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child_op is NULL", K(ret));
+      } else if (LOG_JOIN == child_op->get_type()) {
+        is_join = true;
+      } else {
+        num_of_child = child_op->get_num_of_child();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogJoin::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *right_child = get_child(second_child);
+  bool right_child_is_join = false;
   if (0 == dblink_id_) {
     // do nothing
   } else if (OB_ISNULL(right_child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("right child is NULL", K(ret));
+  } else if (OB_FAIL(find_right_child_is_join(right_child_is_join))) {
+    LOG_WARN("failed to find right child is join type", K(ret), K(right_child_is_join));
   } else if (OB_FAIL(link_ctx.spell_join(join_type_, 
-                                         LOG_JOIN == right_child->get_type(),
+                                         right_child_is_join,
                                          filter_exprs_, 
                                          startup_exprs_,
                                          join_conditions_,
