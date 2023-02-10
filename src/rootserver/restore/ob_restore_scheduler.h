@@ -134,6 +134,11 @@ private:
                                        share::ObHisRestoreJobPersistInfo &history_info);
   int check_tenant_can_restore_(const uint64_t tenant_id);
   int reset_schema_status_(const uint64_t tenant_id);
+  int may_update_restore_concurrency_(const uint64_t new_tenant_id,
+      const share::ObPhysicalRestoreJob &job_info);
+  int reset_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info);
+  int update_restore_concurrency_(const common::ObString &tenant_name, const uint64_t tenant_id,
+      const int64_t restore_concurrency);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
