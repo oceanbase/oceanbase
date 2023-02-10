@@ -1888,6 +1888,7 @@ int ObDMLStmt::remove_const_exec_param(ObDMLStmt *stmt, ObSQLSessionInfo *sessio
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExprPointer, 4> exprs;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
   is_happened = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1916,6 +1917,26 @@ int ObDMLStmt::remove_const_exec_param(ObDMLStmt *stmt, ObSQLSessionInfo *sessio
       LOG_TRACE("succeed to remove const exec param", K(ret), K(tmp_happened), K(*expr));
     }
   }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      bool tmp_happened = false;
+      ObSelectStmt* child_stmt = NULL;
+      if (OB_ISNULL(child_stmt = child_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("stmt is null", K(ret), K(child_stmt));
+      } else if (OB_FAIL(SMART_CALL(remove_const_exec_param(child_stmt,
+                                                            session_info,
+                                                            tmp_happened)))) {
+        LOG_WARN("failed to remove const exec param", K(ret));
+      } else {
+        is_happened |= tmp_happened;
+      }
+    }
+  }
+
   return ret;
 }
 
