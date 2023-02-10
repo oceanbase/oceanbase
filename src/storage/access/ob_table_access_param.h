@@ -156,6 +156,7 @@ public:
   bool is_same_schema_column_;
   bool vectorized_enabled_;
   bool has_virtual_columns_;
+  bool limit_prefetch_;
   union {
     struct {
       int32_t pd_blockscan_:1;

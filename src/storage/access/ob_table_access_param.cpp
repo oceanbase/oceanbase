@@ -39,6 +39,7 @@ ObTableIterParam::ObTableIterParam()
       is_same_schema_column_(false),
       vectorized_enabled_(false),
       has_virtual_columns_(false),
+      limit_prefetch_(false),
       pd_storage_flag_(0)
 {
 }
@@ -64,6 +65,7 @@ void ObTableIterParam::reset()
   pushdown_filter_ = nullptr;
   vectorized_enabled_ = false;
   has_virtual_columns_ = false;
+  limit_prefetch_ = false;
 }
 
 bool ObTableIterParam::is_valid() const
@@ -133,7 +135,8 @@ DEF_TO_STRING(ObTableIterParam)
        K_(is_same_schema_column),
        K_(pd_storage_flag),
        K_(vectorized_enabled),
-       K_(has_virtual_columns));
+       K_(has_virtual_columns),
+       K_(limit_prefetch));
   J_OBJ_END();
   return pos;
 }
@@ -218,6 +221,7 @@ int ObTableAccessParam::init(
     iter_param_.has_virtual_columns_ = table_param.has_virtual_column();
     // vectorize requires blockscan is enabled(_pushdown_storage_level > 0)
     iter_param_.vectorized_enabled_ = nullptr != op_ && op_->is_vectorized();
+    iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
 
     if (OB_FAIL(iter_param_.check_read_info_valid())) {
       STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));

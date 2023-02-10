@@ -393,6 +393,7 @@ void ObIndexTreeMultiPassPrefetcher::reset()
   can_blockscan_ = false;
   is_prefetch_end_ = false;
   is_row_lock_checked_ = false;
+  need_check_prefetch_depth_ = false;
   cur_range_fetch_idx_ = 0;
   cur_range_prefetch_idx_ = 0;
   max_range_prefetching_cnt_ = 0;
@@ -418,6 +419,7 @@ void ObIndexTreeMultiPassPrefetcher::reuse()
   clean_blockscan_check_info();
   is_prefetch_end_ = false;
   is_row_lock_checked_ = false;
+  need_check_prefetch_depth_ = false;
   cur_range_fetch_idx_ = 0;
   cur_range_prefetch_idx_ = 0;
   cur_micro_data_fetch_idx_ = -1;
@@ -534,6 +536,12 @@ int ObIndexTreeMultiPassPrefetcher::init_basic_info(
   cur_level_ = 0;
   iter_type_ = iter_type;
   index_tree_height_ = sstable_->get_meta().get_index_tree_height();
+  need_check_prefetch_depth_ =
+      (ObStoreRowIterator::IteratorScan == iter_type || ObStoreRowIterator::IteratorMultiScan == iter_type) &&
+      iter_param_->limit_prefetch_ &&
+      nullptr != access_ctx_->limit_param_ &&
+      access_ctx_->limit_param_->limit_ >= 0 &&
+      access_ctx_->limit_param_->limit_ < 4096;
   switch (iter_type) {
     case ObStoreRowIterator::IteratorMultiGet: {
       rowkeys_ = static_cast<const common::ObIArray<blocksstable::ObDatumRowkey> *> (query_range);
@@ -700,6 +708,7 @@ int ObIndexTreeMultiPassPrefetcher::try_add_query_range(ObIndexTreeLevelHandle &
   return ret;
 }
 
+static int32_t OB_SSTABLE_MICRO_AVG_COUNT = 100;
 int ObIndexTreeMultiPassPrefetcher::prefetch_micro_data()
 {
   int ret = OB_SUCCESS;
@@ -713,9 +722,15 @@ int ObIndexTreeMultiPassPrefetcher::prefetch_micro_data()
   } else {
     int64_t prefetched_cnt = 0;
     int64_t prefetch_micro_idx = 0;
-    prefetch_depth_ = min(max_micro_handle_cnt_, 2 * prefetch_depth_);
+    prefetch_depth_ = MIN(max_micro_handle_cnt_, 2 * prefetch_depth_);
+    if (need_check_prefetch_depth_) {
+      int64_t prefetch_micro_cnt = MAX(1,
+          (access_ctx_->limit_param_->offset_ + access_ctx_->limit_param_->limit_ - access_ctx_->out_cnt_ + \
+          OB_SSTABLE_MICRO_AVG_COUNT - 1) / OB_SSTABLE_MICRO_AVG_COUNT);
+      prefetch_depth_ = MIN(prefetch_depth_, prefetch_micro_cnt);
+    }
     int64_t prefetch_depth = min(static_cast<int64_t>(prefetch_depth_),
-                                   max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_));
+                                 max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_));
     while (OB_SUCC(ret) && prefetched_cnt < prefetch_depth) {
       if (OB_FAIL(drill_down())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
