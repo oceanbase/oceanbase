@@ -314,7 +314,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     inner_conn_ = NULL;
     session_stat_.reset();
     pl_sync_pkg_vars_ = NULL;
-    ObBasicSessionInfo::reset(skip_sys_var);
     //encrypt_info_.reset();
     cached_schema_guard_info_.reset();
     encrypt_info_.reset();
@@ -349,9 +348,11 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     sql_plan_manager_ = NULL;
     destroy_session_plan_mgr();
     txn_free_route_ctx_.reset();
+    expect_group_id_ = OB_INVALID_ID;
+    group_id_not_expected_ = false;
+    //call at last time
+    ObBasicSessionInfo::reset(skip_sys_var);
   }
-  expect_group_id_ = OB_INVALID_ID;
-  group_id_not_expected_ = false;
 }
 
 void ObSQLSessionInfo::clean_status()
