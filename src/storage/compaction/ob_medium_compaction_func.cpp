@@ -830,6 +830,7 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
 
     LOG_DEBUG("schedule_tablet_medium_merge", K(schedule_scn), K(major_frozen_snapshot), K(schedule_with_memtable), K(ls_id), K(tablet_id));
     if (0 == schedule_scn
+      && 0 == tablet.get_medium_compaction_info_list().size() // serialized medium list is empty
       && schedule_with_memtable
       && OB_FAIL(get_schedule_medium_from_memtable(tablet, major_frozen_snapshot, schedule_scn, compaction_type))) {
       LOG_WARN("failed to get schedule medium scn from memtables", K(ret));

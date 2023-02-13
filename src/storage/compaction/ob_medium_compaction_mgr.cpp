@@ -467,17 +467,16 @@ int ObMediumCompactionInfoList::get_specified_scn_info(
   } else if (OB_UNLIKELY(snapshot <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(snapshot));
-  } else if (snapshot <= get_max_medium_snapshot()) {
-    const ObMediumCompactionInfo *cur_info = nullptr;
-    DLIST_FOREACH_X(info, medium_info_list_, OB_SUCC(ret)) {
-      cur_info = static_cast<const ObMediumCompactionInfo *>(info);
-      if (OB_UNLIKELY(!info->is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("invalid medium info", K(ret), KPC(info));
-      } else if (snapshot == cur_info->medium_snapshot_) {
-        ret_info = cur_info;
-        break;
-      }
+  } else if (snapshot <= get_max_medium_snapshot() && medium_info_list_.get_size() > 0) {
+    const ObMediumCompactionInfo *first_info = static_cast<const ObMediumCompactionInfo *>(medium_info_list_.get_first());
+    if (OB_UNLIKELY(!first_info->is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid medium info", K(ret), KPC(first_info));
+    } else if (OB_UNLIKELY(first_info->medium_snapshot_ < snapshot)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("exist medium info which may not scheduled", K(ret), KPC(first_info), K(snapshot));
+    } else if (first_info->medium_snapshot_ == snapshot) {
+      ret_info = first_info;
     }
   }
   if (OB_SUCC(ret) && nullptr == ret_info) {
