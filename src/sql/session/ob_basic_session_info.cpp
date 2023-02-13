@@ -4345,6 +4345,8 @@ int ObBasicSessionInfo::trans_save_session(TransSavedValue& saved_value)
   OX(trans_result_.reset());
   OX(saved_value.nested_count_ = nested_count_);
   OX(nested_count_ = -1);
+  OX(saved_value.trans_consistency_type_ = trans_consistency_type_);
+  OX(trans_consistency_type_ = transaction::ObTransConsistencyType::UNKNOWN);
   return ret;
 }
 
@@ -4356,6 +4358,7 @@ int ObBasicSessionInfo::trans_restore_session(TransSavedValue& saved_value)
   OX(trans_flags_ = saved_value.trans_flags_);
   OZ(trans_desc_.trans_deep_copy(saved_value.trans_desc_));
   OZ(base_restore_session(saved_value));
+  OX(trans_consistency_type_ = saved_value.trans_consistency_type_);
   return ret;
 }
 

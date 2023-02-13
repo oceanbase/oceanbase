@@ -378,6 +378,7 @@ public:
       trans_flags_.reset();
       trans_result_.reset();
       nested_count_ = -1;
+      trans_consistency_type_ = transaction::ObTransConsistencyType::UNKNOWN;
     }
 
   public:
@@ -385,6 +386,7 @@ public:
     TransFlags trans_flags_;
     TransResult trans_result_;
     int64_t nested_count_;
+    int32_t trans_consistency_type_;
   };
 
 public:

@@ -727,6 +727,11 @@ int ObTransService::handle_sp_end_trans_(const bool is_rollback, ObTransDesc& tr
     need_rollback = true;
     save_ret = OB_TRANS_ROLLBACKED;
     callback = &null_cb;
+  } else if (is_bounded_staleness_read && OB_NOT_NULL(trans_desc.get_part_ctx())) {
+    TRANS_LOG(ERROR, "transaction is_bounded_staleness_read but part_ctx is not null", K(is_rollback), K(trans_desc));
+    need_rollback = true;
+    save_ret = OB_ERR_UNEXPECTED;
+    callback = &null_cb;
   }
 
   TRANS_STAT_COMMIT_ABORT_TRANS_INC(need_rollback, tenant_id);
@@ -748,18 +753,10 @@ int ObTransService::handle_sp_end_trans_(const bool is_rollback, ObTransDesc& tr
                  need_convert_to_dist_trans))) {
     TRANS_LOG(WARN, "sp commit failed", K(ret), K(stmt_expired_time), K(trans_desc));
     if (!need_convert_to_dist_trans) {
-      if (is_bounded_staleness_read) {
-        (void)slave_part_trans_ctx_mgr_.revert_trans_ctx(part_ctx);
-      } else {
-        (void)part_trans_ctx_mgr_.revert_trans_ctx(part_ctx);
-      }
-    }
-  } else {
-    if (is_bounded_staleness_read) {
-      (void)slave_part_trans_ctx_mgr_.revert_trans_ctx(part_ctx);
-    } else {
       (void)part_trans_ctx_mgr_.revert_trans_ctx(part_ctx);
     }
+  } else {
+    (void)part_trans_ctx_mgr_.revert_trans_ctx(part_ctx);
   }
 
   if (OB_SUCC(ret)) {
