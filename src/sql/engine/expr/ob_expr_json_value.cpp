@@ -67,6 +67,7 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid param number", K(ret), K(param_num));
   } else {
+    bool is_oracle_mode = lib::is_oracle_mode();
     //type.set_json();
     // json doc : 0
     ObObjType doc_type = types_stack[json_value_param_json_doc].get_type();
@@ -81,7 +82,7 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
         LOG_WARN("Invalid type for json doc", K(doc_type), K(ret));
       }
     } else if (ob_is_string_type(doc_type)) {
-      if (lib::is_oracle_mode()) {
+      if (is_oracle_mode) {
         if (types_stack[json_value_param_json_doc].get_collation_type() == CS_TYPE_BINARY) {
           types_stack[json_value_param_json_doc].set_calc_collation_type(CS_TYPE_BINARY);
         } else if (types_stack[json_value_param_json_doc].get_charset_type() != CHARSET_UTF8MB4) {
@@ -133,30 +134,9 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
     }
 
     // ascii 3
-    int64_t asc_type = 0;
-    if (OB_SUCC(ret)) {
-      ObExprResType temp_type;
-      if (types_stack[json_value_param_opt_ascii].get_type() == ObNullType) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("<empty type> param type is unexpected", K(types_stack[json_value_param_opt_ascii].get_type()));
-      } else if (types_stack[json_value_param_opt_ascii].get_type() != ObIntType) {
-        types_stack[json_value_param_opt_ascii].set_calc_type(ObIntType);
-      }
-      if (OB_SUCC(ret) && lib::is_oracle_mode() && OB_FAIL(ObJsonExprHelper::get_ascii_type(types_stack[json_value_param_opt_ascii], asc_type))) {
-        LOG_WARN("get ascii type fail", K(ret));
-      } else if (asc_type == 1 && ob_is_string_type(doc_type) && ((type.is_character_type()
-                  && (type.get_length_semantics() == LS_CHAR || type.get_length_semantics() == LS_BYTE)) || type.is_lob())) {
-        types_stack[0].set_calc_length_semantics(type.get_length_semantics());
-        ObLength length = 0;
-        ObExprResType temp_type;
-        temp_type.set_meta(types_stack[0].get_calc_meta());
-        temp_type.set_length_semantics(type.get_length_semantics());
-        OZ (ObExprResultTypeUtil::deduce_max_string_length_oracle(type_ctx.get_session()->get_dtc_params(),
-                                                                  types_stack[0],
-                                                                  temp_type,
-                                                                  length));
-        types_stack[0].set_calc_length(length);
-        type.set_length(length * 10);
+    if (OB_SUCC(ret) && is_oracle_mode) {
+      if (OB_FAIL(ObJsonExprHelper::parse_asc_option(types_stack[3], types_stack[0], type, type_ctx))) {
+        LOG_WARN("fail to parse asc option.", K(ret));
       }
     }
 

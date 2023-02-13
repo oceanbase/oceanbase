@@ -121,7 +121,8 @@ public:
   virtual int open();
   virtual int get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value);
 
-  void set_in(ObIJsonBase* input) { in_ = input; }
+
+  void proc_query_on_error(int& err_code, bool& is_null);
 
 
   // fixed member

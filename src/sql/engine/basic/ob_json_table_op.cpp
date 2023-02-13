@@ -1340,6 +1340,25 @@ int JtColNode::check_col_res_type(JtScanCtx* ctx)
   return ret;
 }
 
+void JtColNode::proc_query_on_error(int& ret, bool& is_null)
+{
+  ret = OB_SUCCESS;
+  if (col_info_.on_error_ == JSN_QUERY_ERROR) {
+    is_null = true;
+    iter_ = curr_ = NULL;
+    LOG_WARN("result can't be returned without array wrapper", K(ret));
+  } else if (col_info_.on_error_ == JSN_QUERY_EMPTY || col_info_.on_error_ == JSN_QUERY_EMPTY_ARRAY) {
+    iter_ = curr_ = ObJsonTableOp::get_js_array();
+    is_null = false;
+  } else if (col_info_.on_error_ == JSN_QUERY_EMPTY_OBJECT) {
+    iter_ = curr_ = ObJsonTableOp::get_js_object();
+    is_null = false;
+  } else if (col_info_.on_error_ == JSN_QUERY_NULL || col_info_.on_error_ == JSN_QUERY_IMPLICIT) {
+    iter_ = curr_ = NULL;
+    is_null = true;
+  }
+}
+
 int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
 {
   INIT_SUCC(ret);
@@ -1360,17 +1379,12 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
         iter_ = curr_ = nullptr;
         is_null_result_ = true;
         ret = OB_SUCCESS;
-        if (col_info_.on_empty_ ==  JSN_QUERY_IMPLICIT
-            && col_info_.on_error_ == JSN_QUERY_ERROR) {
-          ret = OB_ERR_JSON_VALUE_NO_VALUE;
-        } else if (col_info_.on_empty_ ==  JSN_QUERY_IMPLICIT
-                   && (col_info_.on_error_ == JSN_QUERY_EMPTY || col_info_.on_error_ == JSN_QUERY_EMPTY_ARRAY)) {
-          iter_ = curr_ = ObJsonTableOp::get_js_array();
-          is_null_result_ = false;
-        } else if (col_info_.on_empty_ ==  JSN_QUERY_IMPLICIT
-                   && (col_info_.on_error_ == JSN_QUERY_EMPTY || col_info_.on_error_ == JSN_QUERY_EMPTY_OBJECT)) {
-          iter_ = curr_ = ObJsonTableOp::get_js_object();
-          is_null_result_ = false;
+
+        if (col_info_.on_empty_ ==  JSN_QUERY_IMPLICIT) {
+          proc_query_on_error(ret, is_null_result_);
+          if (col_info_.on_error_ == JSN_QUERY_ERROR) {
+            ret = OB_ERR_JSON_VALUE_NO_VALUE;
+          }
         }
         break;
       }
@@ -1505,7 +1519,7 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
       case JSN_EXIST_ERROR:
       case JSN_EXIST_DEFAULT: {
         if (ob_is_string_type(col_info_.data_type_.get_obj_type())) {
-          ObString value = col_info_.on_empty_ == JSN_EXIST_TRUE ? "true" : "false";
+          ObString value = "false";
           void* buf = ctx->row_alloc_.alloc(sizeof(ObJsonString));
           if (OB_ISNULL(buf)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1544,6 +1558,9 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
   if (col_type == COL_TYPE_ORDINALITY) {
     col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_int(ctx->ord_val_);
     col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
+    if (ctx->is_need_end_) {
+      ret = OB_ITER_END;
+    }
   } else if (OB_FAIL(check_col_res_type(ctx))) {
     LOG_WARN("check column res type failed", K(ret), K(col_info_.data_type_), K(col_info_.col_type_));
   } else if (OB_FAIL(init_js_path(ctx))) {
@@ -1581,8 +1598,7 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
             || col_info_.wrapper_ == JSN_QUERY_WITHOUT_ARRAY_WRAPPER
             || col_info_.wrapper_ == JSN_QUERY_WRAPPER_IMPLICIT) {
           if (hit.size() > 1) {
-            curr_ = nullptr;
-            is_null_result_ = true;
+            proc_query_on_error(ret, is_null_result_);
             if (col_info_.on_error_ == JSN_QUERY_ERROR) {
               ret = OB_ERR_WITHOUT_ARR_WRAPPER;
               LOG_WARN("result can't be returned without array wrapper", K(ret));
@@ -2720,8 +2736,8 @@ int ObJsonTableOp::inner_get_next_row()
           in_= nullptr;
           ret = OB_ERR_JSON_SYNTAX_ERROR;
           SET_COVER_ERROR(&jt_ctx_, ret);
+          jt_ctx_.is_need_end_ = 1;
           if (jt_root_->col_info_.on_error_ != JSN_TABLE_ERROR) {
-            jt_ctx_.is_need_end_ = 1;
             ret = OB_SUCCESS;
           }
         } else {

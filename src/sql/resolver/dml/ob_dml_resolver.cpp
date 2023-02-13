@@ -7772,6 +7772,7 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
       data_type.set_obj_type(obj_type);
       ObCollationType coll_type = static_cast<ObCollationType>(parse_tree.int16_values_[OB_NODE_CAST_COLL_IDX]);
       if (CS_TYPE_INVALID != coll_type) {
+        data_type.set_collation_type(coll_type);
       } else if (OB_ISNULL(session_info_)) { // use connection_collation. for cast('a' as char)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected collation type", K(ret));

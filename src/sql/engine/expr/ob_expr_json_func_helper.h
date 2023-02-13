@@ -219,7 +219,7 @@ public:
   static int check_item_func_with_return(ObJsonPathNodeType path_type, ObObjType dst_type, common::ObCollationType dst_coll_type, int8_t JSON_EXPR_FLAG);
   static int set_dest_type(ObExprResType &type1, ObExprResType &type,
                            ObExprResType &dst_type, ObExprTypeCtx &type_ctx);
-  static int get_ascii_type(const ObExprResType param_type2, int64_t &dst_type);
+  static int get_expr_option_value(const ObExprResType param_type2, int64_t &dst_type);
   static int calc_asciistr_in_expr(const ObString &src,
                                   const ObCollationType src_cs_type,
                                   const ObCollationType dst_cs_type,
@@ -238,7 +238,17 @@ public:
                             ObExprResType& json_res_type,
                             ObExprResType& result_type,
                             ObExprTypeCtx& type_ctx);
+  static int parse_asc_option(ObExprResType& asc,
+                              ObExprResType& type1,
+                              ObExprResType& res_type,
+                              ObExprTypeCtx& type_ctx);
   static int pre_default_value_check(ObObjType dst_type, ObString time_str, ObObjType val_type);
+
+  static int character2_ascii_string(common::ObIAllocator *allocator,
+                                     const ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     ObString& result,
+                                     int32_t reserve_len = 0);
 private:
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);

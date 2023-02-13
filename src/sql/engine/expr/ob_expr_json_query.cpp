@@ -133,23 +133,12 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
         types_stack[i].set_calc_type(ObIntType);
       }
     }
-    int64_t asc_type = 0;
-    if (OB_SUCC(ret) && lib::is_oracle_mode() && OB_FAIL(ObJsonExprHelper::get_ascii_type(types_stack[4], asc_type))) {
-      LOG_WARN("get ascii type fail", K(ret));
-    } else if (asc_type > 0 && ob_is_string_type(doc_type) && ((type.is_character_type()
-                  && (type.get_length_semantics() == LS_CHAR || type.get_length_semantics() == LS_BYTE)) || type.is_lob())) {
-      types_stack[0].set_calc_length_semantics(type.get_length_semantics());
-      type.set_calc_collation_type(type.is_string_type() ? type.get_collation_type() : CS_TYPE_UTF8MB4_BIN);
-      ObLength length = 0;
-      ObExprResType temp_type;
-      temp_type.set_meta(types_stack[0].get_calc_meta());
-      temp_type.set_length_semantics(type.get_length_semantics());
-      OZ (ObExprResultTypeUtil::deduce_max_string_length_oracle(type_ctx.get_session()->get_dtc_params(),
-                                                                types_stack[0],
-                                                                temp_type,
-                                                                length));
-      types_stack[0].set_calc_length(length);
-      type.set_length(length * 10);
+
+    // ASCII clause
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObJsonExprHelper::parse_asc_option(types_stack[4], types_stack[0], type, type_ctx))) {
+        LOG_WARN("fail to parse asc option.", K(ret));
+      }
     }
   }
   return ret;
