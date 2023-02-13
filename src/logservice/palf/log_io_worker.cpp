@@ -104,9 +104,9 @@ int LogIOWorker::submit_io_task(LogIOTask *io_task)
   } else if (OB_ISNULL(io_task)) {
     ret = OB_INVALID_ARGUMENT;
 	} else if (OB_FAIL(queue_.push(io_task))) {
-    PALF_LOG(WARN, "fail to push io task into queue", K(ret), KPC(io_task));
+    PALF_LOG(WARN, "fail to push io task into queue", K(ret), KP(io_task));
   } else {
-    PALF_LOG(TRACE, "submit_io_task success", KPC(io_task));
+    PALF_LOG(TRACE, "submit_io_task success", KP(io_task));
   }
   return ret;
 }
@@ -268,7 +268,7 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::init(int64_t batch_width,
         PALF_LOG(ERROR, "batch_io_task_array_ push_back failed", K(ret), KP(io_task));
       } else {
         PALF_LOG(INFO, "BatchLogIOFlushLogTask init success", K(ret), K(i),
-                 KPC(io_task));
+                 KP(io_task));
       }
     }
     batch_width_ = usable_count_ = batch_width;
@@ -301,7 +301,7 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::insert(LogIOFlushLogTask *io_task)
     PALF_LOG(WARN, "find_usable_batch_io_task_ failed", K(ret), K(palf_id));
   } else if (OB_FAIL(batch_io_task->push_back(io_task))) {
     PALF_LOG(ERROR, "batch_io_task must have enouch space to hold io_task, unexpected error!!!",
-             K(ret), KPC(batch_io_task));
+             K(ret), KP(batch_io_task));
   } else {
   }
   return ret;
@@ -322,10 +322,10 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::handle(const int64_t tg_id, IPalfEnv
                "BatchLogIOFlushLogTask in batch_io_task_array_ is nullptr, unexpected error!!!",
                K(ret), KP(io_task), K(i));
     } else if (OB_FAIL(io_task->do_task(tg_id, palf_env_impl))) {
-      PALF_LOG(WARN, "do_task failed", K(ret), KPC(io_task));
+      PALF_LOG(WARN, "do_task failed", K(ret), KP(io_task));
     } else {
       PALF_LOG(TRACE, "BatchLogIOFlushLogTaskMgr::handle success", K(ret), K(has_batched_size_),
-          KPC(io_task));
+          KP(io_task));
     }
     if (OB_NOT_NULL(io_task)) {
       // 'handle_count_' and 'has_batched_size_' are used for statistics
@@ -375,7 +375,7 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::find_usable_batch_io_task_(
       usable_count_--;
     }
   }
-  PALF_LOG(TRACE, "find_usable_batch_io_task_ finished", K(ret), K(usable_count_), K(count), KPC(this));
+  PALF_LOG(TRACE, "find_usable_batch_io_task_ finished", K(ret), K(usable_count_), K(count), KP(this));
   if (OB_SUCC(ret)) {
     ret = true == found ? OB_SUCCESS : OB_SIZE_OVERFLOW;
   }
