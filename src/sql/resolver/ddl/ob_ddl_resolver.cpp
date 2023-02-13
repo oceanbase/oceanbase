@@ -1278,7 +1278,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             }
           }
         }
-        if (OB_SUCCESS == ret && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+        if (OB_SUCCESS == ret && stmt::T_ALTER_TABLE == stmt_->get_stmt_type() && !is_index_option) {
           if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::COMMENT))) {
             SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
           }

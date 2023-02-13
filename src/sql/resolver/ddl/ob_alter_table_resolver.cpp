@@ -1250,7 +1250,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
             if (OB_SUCCESS == ret) {
               if (NULL != table_option_node) {
                 has_index_using_type_ = false;
-                if (OB_FAIL(resolve_table_options(table_option_node, false))) {
+                if (OB_FAIL(resolve_table_options(table_option_node, true))) {
                   SQL_RESV_LOG(WARN, "failed to resolve table options!", K(ret));
                 } else if (has_index_using_type_) {
                   create_index_arg->index_using_type_ = index_using_type_;
