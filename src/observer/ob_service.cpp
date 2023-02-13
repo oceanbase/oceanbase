@@ -46,7 +46,7 @@
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "rootserver/ob_bootstrap.h"
-#include "rootserver/ob_tenant_recovery_reportor.h" // ObTenantRecoveryReportor
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "observer/ob_server.h"
 #include "observer/ob_dump_task_generator.h"
 #include "observer/ob_server_schema_updater.h"
@@ -2599,13 +2599,13 @@ int ObService::refresh_tenant_info(
   }
 
   if (OB_SUCC(ret)) {
-    rootserver::ObTenantRecoveryReportor *tenant_reportor = MTL(rootserver::ObTenantRecoveryReportor*);
+    rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
 
-    if (OB_ISNULL(tenant_reportor)) {
+    if (OB_ISNULL(tenant_info_loader)) {
       ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "tenant_reportor should not be null", KR(ret));
-    } else if (OB_FAIL(tenant_reportor->load_tenant_info())) {
-      COMMON_LOG(WARN, "load_tenant_info failed", KR(ret), K(arg));
+      COMMON_LOG(ERROR, "tenant_info_loader should not be null", KR(ret));
+    } else if (OB_FAIL(tenant_info_loader->refresh_tenant_info())) {
+      COMMON_LOG(WARN, "refresh_tenant_info failed", KR(ret), K(arg));
     } else if (OB_FAIL(result.init(arg.get_tenant_id()))) {
       LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()));
     } else {

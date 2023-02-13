@@ -84,6 +84,7 @@
 #include "observer/report/ob_tenant_meta_checker.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "rootserver/ob_tenant_recovery_reportor.h"//ObTenantRecoveryReportor
+#include "rootserver/ob_tenant_info_loader.h"//ObTenantInfoLoader
 #include "rootserver/ob_primary_ls_service.h"//ObLSService
 #include "rootserver/ob_recovery_ls_service.h"//ObRecoveryLSService
 #include "rootserver/restore/ob_restore_scheduler.h" //ObRestoreService
@@ -322,6 +323,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, rootserver::ObRestoreMajorFreezeService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantMetaChecker::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObTenantRecoveryReportor::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, rootserver::ObTenantInfoLoader::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObPrimaryLSService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObRecoveryLSService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObRestoreService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);

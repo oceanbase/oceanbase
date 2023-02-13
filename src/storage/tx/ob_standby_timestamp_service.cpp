@@ -20,7 +20,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/ob_srv_network_frame.h"
 #include "storage/tx/ob_trans_service.h"
-#include "rootserver/ob_tenant_recovery_reportor.h"
+#include "rootserver/ob_tenant_info_loader.h"
 
 namespace oceanbase
 {
@@ -110,7 +110,7 @@ int ObStandbyTimestampService::query_and_update_last_id()
 {
   int ret = OB_SUCCESS;
   share::ObAllTenantInfo tenant_info;
-  if (OB_FAIL(MTL(rootserver::ObTenantRecoveryReportor *)->get_tenant_info(tenant_info))) {
+  if (OB_FAIL(MTL(rootserver::ObTenantInfoLoader *)->get_tenant_info(tenant_info))) {
     if (REACH_TIME_INTERVAL(3 * 1000 * 1000)) {
       TRANS_LOG(WARN, "failed to get tenant info", K(ret), K(tenant_info));
     }

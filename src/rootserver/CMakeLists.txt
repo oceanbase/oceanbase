@@ -67,6 +67,7 @@ ob_set_subtarget(ob_rootserver common
   ob_zone_manager.cpp
   ob_zone_unit_provider.cpp
   ob_tenant_recovery_reportor.cpp
+  ob_tenant_info_loader.cpp
   ob_primary_ls_service.cpp
   ob_recovery_ls_service.cpp
   ob_tenant_role_transition_service.cpp

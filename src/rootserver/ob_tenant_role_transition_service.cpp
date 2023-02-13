@@ -436,24 +436,20 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_append(
 }
 
 int ObTenantRoleTransitionService::do_switch_access_mode_to_raw_rw(
-    const share::ObAllTenantInfo &tenant_info,
-    const share::ObTenantRole &target_tenant_role)
+    const share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
-  palf::AccessMode access_mode = logservice::ObLogService::get_palf_access_mode(target_tenant_role);
+  palf::AccessMode access_mode = logservice::ObLogService::get_palf_access_mode(STANDBY_TENANT_ROLE);
   ObLSStatusOperator status_op;
 
-  if (OB_UNLIKELY(!target_tenant_role.is_standby())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid target_tenant_role", KR(ret), K(target_tenant_role));
-  } else if (OB_FAIL(check_inner_stat())) {
+  if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else if (OB_UNLIKELY(!tenant_info.is_switching_to_standby_status()
-        || target_tenant_role == tenant_info.get_tenant_role()
+        || !tenant_info.is_standby()
         || switchover_epoch_ != tenant_info.get_switchover_epoch())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant switchover status not valid", KR(ret), K(tenant_info),
-        K(target_tenant_role), K(switchover_epoch_));
+        K(switchover_epoch_));
   } else if (OB_FAIL(status_op.create_abort_ls_in_switch_tenant(
                      tenant_id_, tenant_info.get_switchover_status(),
                      tenant_info.get_switchover_epoch(), *sql_proxy_))) {

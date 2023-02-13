@@ -6473,9 +6473,8 @@ int ObCreateLSArg::assign(const ObCreateLSArg &arg)
 {
   int ret = OB_SUCCESS;
   if (this == &arg) {
-  } else if (OB_FAIL(tenant_info_.assign(arg.tenant_info_))) {
-    LOG_WARN("failed to assign tenant info", KR(ret), K(arg));
   } else {
+    (void)tenant_info_.assign(arg.tenant_info_);
     tenant_id_ = arg.tenant_id_;
     id_ = arg.id_;
     replica_type_ = arg.replica_type_;
@@ -6505,9 +6504,8 @@ int ObCreateLSArg::init(const int64_t tenant_id,
                   || !tenant_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id), K(replica_type), K(tenant_info));
-  } else if (OB_FAIL(tenant_info_.assign(tenant_info))) {
-    LOG_WARN("failed to assign tenant info", KR(ret), K(tenant_info));
   } else {
+    (void)tenant_info_.assign(tenant_info);
     tenant_id_ = tenant_id;
     id_ = id;
     replica_type_ = replica_type;

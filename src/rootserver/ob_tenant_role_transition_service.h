@@ -100,8 +100,7 @@ public:
   int check_inner_stat();
   int do_switch_access_mode_to_append(const share::ObAllTenantInfo &tenant_info,
                              const share::ObTenantRole &target_tenant_role);
-  int do_switch_access_mode_to_raw_rw(const share::ObAllTenantInfo &tenant_info,
-                             const share::ObTenantRole &target_tenant_role);
+  int do_switch_access_mode_to_raw_rw(const share::ObAllTenantInfo &tenant_info);
   void set_switchover_epoch(const int64_t switchover_epoch)
   {
     switchover_epoch_ = switchover_epoch;
