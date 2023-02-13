@@ -78,15 +78,64 @@ int ObHistogram::deep_copy(const ObHistogram &src, char *buf, const int64_t buf_
   if (OB_UNLIKELY(copy_size  + pos > buf_len)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buffer size is not enough", K(ret), K(copy_size), K(pos), K(buf_len));
-  } else if (OB_FAIL(buckets_.prepare_allocate(src.get_bucket_size()))) {
-    LOG_WARN("failed to prepare allocate buckets", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < buckets_.count(); ++i) {
-    if (OB_FAIL(buckets_.at(i).deep_copy(src.buckets_.at(i), buf, buf_len, pos))) {
-      LOG_WARN("deep copy bucket failed", K(ret), K(buf_len), K(pos));
+  } else if (!src.buckets_.empty()) {
+    ObHistBucket *new_buckets = new (buf + pos) ObHistBucket[src.buckets_.count()];
+    buckets_ = ObArrayWrap<ObHistBucket>(new_buckets, src.buckets_.count());
+    pos += sizeof(ObHistBucket) * src.buckets_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < buckets_.count(); ++i) {
+      if (OB_FAIL(buckets_.at(i).deep_copy(src.buckets_.at(i), buf, buf_len, pos))) {
+        LOG_WARN("deep copy bucket failed", K(ret), K(buf_len), K(pos));
+      }
     }
   }
   return ret;
+}
+
+int ObHistogram::prepare_allocate_buckets(ObIAllocator &allocator, const int64_t bucket_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(buckets_.allocate_array(allocator, bucket_size))) {
+    LOG_WARN("failed to prepare allocate buckets", K(ret));
+  }
+  return ret;
+}
+
+int ObHistogram::add_bucket(const ObHistBucket &bucket)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(bucket_cnt_ >= buckets_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(bucket_cnt_), K(buckets_));
+  } else {
+    buckets_.at(bucket_cnt_++) = bucket;
+  }
+  return ret;
+}
+
+int ObHistogram::assign_buckets(const ObIArray<ObHistBucket> &buckets)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(buckets_.count() != buckets.count() || bucket_cnt_ != buckets.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(buckets_), K(buckets), K(bucket_cnt_));
+  } else {
+    for (int64_t i = 0; i < buckets.count(); ++i) {
+      buckets_.at(i) = buckets.at(i);
+    }
+  }
+  return ret;
+}
+
+int ObHistogram::assign(const ObHistogram &other)
+{
+  int ret = OB_SUCCESS;
+  type_ = other.type_;
+  sample_size_ = other.sample_size_;
+  density_ = other.density_;
+  bucket_cnt_ = other.bucket_cnt_;
+  pop_freq_ = other.pop_freq_;
+  pop_count_ = other.pop_count_;
+  return buckets_.assign(other.buckets_);
 }
 
 ObOptColumnStat::ObOptColumnStat()
@@ -230,17 +279,6 @@ void ObHistogram::calc_density(ObHistType hist_type,
   }
 }
 
-int ObOptColumnStat::add_bucket(int64_t repeat_count,
-                                const ObObj &value,
-                                int64_t num_elements)
-{
-  int ret = OB_SUCCESS;
-  ObHistBucket bkt(value, repeat_count, num_elements);
-  if (OB_FAIL(histogram_.buckets_.push_back(bkt))) {
-    LOG_WARN("failed to push back bucket", K(ret));
-  }
-  return ret;
-}
 
 }
 }

@@ -4805,6 +4805,7 @@ void ObLogPlan::compute_null_distribution_info(const ObJoinType &join_type,
   }
 }
 
+
 int ObLogPlan::compute_hash_distribution_info(const ObIArray<ObRawExpr*> &join_exprs,
                                               const ObRelIds &left_table_set,
                                               ObExchangeInfo &left_exch_info,

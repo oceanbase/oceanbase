@@ -88,7 +88,7 @@ int ObDbmsStatsUtils::init_col_stats(ObIAllocator &allocator,
  *  then it's even distributed, Otherwise, it's skewed.
  */
 int ObDbmsStatsUtils::check_range_skew(ObHistType hist_type,
-                                       const ObIArray<ObHistBucket> &bkts,
+                                       const ObHistogram::Buckets &bkts,
                                        int64_t standard_cnt,
                                        bool &is_even_distributed)
 {

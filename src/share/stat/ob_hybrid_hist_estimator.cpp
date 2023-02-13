@@ -435,12 +435,14 @@ int ObHybridHistEstimator::try_build_hybrid_hist(const ObColumnStatParam &param,
         LOG_WARN("failed to do build hybrid hist", K(ret));
       } else {
         col_stat.get_histogram().get_buckets().reset();
-        if (OB_FAIL(append(col_stat.get_histogram().get_buckets(), hybrid_hist.get_buckets()))) {
-          LOG_WARN("failed to append hist bucket", K(ret));
+        if (OB_FAIL(col_stat.get_histogram().prepare_allocate_buckets(ctx_.get_allocator(),
+                                                                      hybrid_hist.get_buckets().count()))) {
+          LOG_WARN("failed to prepare allocate buckets", K(ret));
+        } else if (OB_FAIL(col_stat.get_histogram().assign_buckets(hybrid_hist.get_buckets()))) {
+          LOG_WARN("failed to assign buckets", K(ret));
         } else {
           col_stat.get_histogram().set_type(ObHistType::HYBIRD);
           col_stat.get_histogram().set_sample_size(total_count);
-          col_stat.get_histogram().set_bucket_cnt(col_stat.get_histogram().get_buckets().count());
           col_stat.get_histogram().calc_density(ObHistType::HYBIRD,
                                                 total_count,
                                                 hybrid_hist.get_pop_freq(),

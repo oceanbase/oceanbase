@@ -582,7 +582,7 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
         if (all_part_histograms.at(i).get_type() == ObHistType::FREQUENCY ||
             all_part_histograms.at(i).get_type() == ObHistType::TOP_FREQUENCY ||
             all_part_histograms.at(i).get_type() == ObHistType::HYBIRD) {
-          const ObIArray<ObHistBucket> &part_bkts = all_part_histograms.at(i).get_buckets();
+          const ObHistogram::Buckets &part_bkts = all_part_histograms.at(i).get_buckets();
           for (int64_t j = 0; OB_SUCC(ret) && j < part_bkts.count(); ++j) {
             for (int64_t k = 0; OB_SUCC(ret) && k < part_bkts.at(j).endpoint_repeat_count_; ++k) {
               if (OB_FAIL(top_k_fre_hist->add_top_k_frequency_item(
@@ -606,6 +606,7 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
       } else if (top_k_fre_hist->get_buckets().count() == 0) {
         /*do nothing*/
       } else if (OB_FAIL(ObStatTopKHist::build_histogram_from_topk_items(
+                                                                      allocator,
                                                                       top_k_fre_hist->get_buckets(),
                                                                       max_bucket_num,
                                                                       total_row_count,

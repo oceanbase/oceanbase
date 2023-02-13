@@ -34,7 +34,7 @@ public:
                             ObIArray<ObOptColumnStat *> &col_stats);
 
   static int check_range_skew(ObHistType hist_type,
-                              const ObIArray<ObHistBucket> &bkts,
+                              const ObHistogram::Buckets &bkts,
                               int64_t standard_cnt,
                               bool &is_even_distributed);
 

@@ -375,7 +375,7 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(decode())) {
+            if (OB_FAIL(decode(ctx_.get_allocator()))) {
               LOG_WARN("failed to decode results", K(ret));
             } else if (copy_type == COPY_ALL_STAT &&
                        OB_FAIL(copy_opt_stat(src_opt_stat, dst_opt_stats))) {
@@ -411,7 +411,7 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
   return ret;
 }
 
-int ObStatsEstimator::decode()
+int ObStatsEstimator::decode(ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(stat_items_.count() != results_.count())) {
@@ -419,7 +419,7 @@ int ObStatsEstimator::decode()
     LOG_WARN("size does not match", K(ret), K(stat_items_.count()), K(results_.count()));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < stat_items_.count(); ++i) {
-    if (OB_FAIL(stat_items_.at(i)->decode(results_.at(i)))) {
+    if (OB_FAIL(stat_items_.at(i)->decode(results_.at(i), allocator))) {
       LOG_WARN("failed to decode statistic result", K(ret));
     }
   }
@@ -510,11 +510,10 @@ int ObStatsEstimator::copy_col_stats(const int64_t cur_row_cnt,
           ObHistogram &src_hist = src_col_stats.at(i)->get_histogram();
           dst_col_stats.at(i)->get_histogram().set_type(src_hist.get_type());
           dst_col_stats.at(i)->get_histogram().set_sample_size(src_col_stats.at(i)->get_num_not_null());
-          dst_col_stats.at(i)->get_histogram().set_bucket_cnt(src_hist.get_bucket_cnt());
           dst_col_stats.at(i)->get_histogram().set_density(src_hist.get_density());
-          if (OB_FAIL(append(dst_col_stats.at(i)->get_histogram().get_buckets(),
-                             src_hist.get_buckets()))) {
-            LOG_WARN("failed to append", K(ret));
+          dst_col_stats.at(i)->get_histogram().set_bucket_cnt(src_hist.get_bucket_cnt());
+          if (OB_FAIL(dst_col_stats.at(i)->get_histogram().get_buckets().assign(src_hist.get_buckets()))) {
+            LOG_WARN("failed to assign buckets", K(ret));
           } else {
             LOG_TRACE("Succeed to copy col stat", K(*dst_col_stats.at(i)), K(*src_col_stats.at(i)));
           }
@@ -570,9 +569,8 @@ int ObStatsEstimator::copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
                                                        src_hist.get_pop_frequency(),
                                                        dst_col_stat->get_num_distinct(),
                                                        src_hist.get_pop_count());
-            if (OB_FAIL(append(dst_col_stat->get_histogram().get_buckets(),
-                               src_hist.get_buckets()))) {
-              LOG_WARN("failed to append", K(ret));
+            if (OB_FAIL(dst_col_stat->get_histogram().get_buckets().assign(src_hist.get_buckets()))) {
+              LOG_WARN("failed to assign buckets", K(ret));
             } else {
               LOG_TRACE("Succeed to copy histogram", K(*dst_col_stat), K(i), K(j));
             }

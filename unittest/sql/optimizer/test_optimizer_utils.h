@@ -89,6 +89,7 @@ class TestOptimizerUtils : public TestSqlUtils, public ::testing::Test {
   void formalize_tmp_file(const char *tmp_file);
 
   void init_histogram(
+    common::ObIAllocator &allocator,
     const ObHistType type,
     const double sample_size,
     const double density,

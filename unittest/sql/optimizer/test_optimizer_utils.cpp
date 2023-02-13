@@ -403,6 +403,7 @@ void TestOptimizerUtils::run_test(const char* test_file,
 }
 
 void TestOptimizerUtils::init_histogram(
+    common::ObIAllocator &allocator,
     const ObHistType type,
     const double sample_size,
     const double density,
@@ -418,13 +419,13 @@ void TestOptimizerUtils::init_histogram(
   hist.set_sample_size(sample_size);
   hist.set_density(density);
   int64_t bucket_cnt = 0;
+  hist.prepare_allocate_buckets(allocator, repeat_count.count());
   for (int64_t i = 0; i < repeat_count.count(); i++) {
-    ObHistBucket bucket(repeat_count.at(i), num_elements.at(i));
-    hist.get_buckets().push_back(bucket);
-    hist.get_buckets().at(hist.get_buckets().count() - 1).endpoint_value_.set_int(value.at(i));
-    bucket_cnt += num_elements.at(i);
+    hist.get(i).endpoint_num_ = repeat_count.at(i);
+    hist.get(i).endpoint_repeat_count_ = num_elements.at(i);
+    hist.get(i).endpoint_value_.set_int(value.at(i));
   }
-  hist.set_bucket_cnt(bucket_cnt);
+  hist.set_bucket_cnt(repeat_count.count());
 }
 
 void TestOptimizerUtils::run_fail_test(const char *test_file)
