@@ -310,6 +310,8 @@ void ObPGMgr::destroy()
     ObIPartitionGroup* partition = nullptr;
     ObIPartitionGroup* next_part = nullptr;
     for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
+      // remove partition from map
+      TCWLockGuard guard(buckets_lock_[i]);
       partition = partition_buckets_[i];
       while (OB_NOT_NULL(partition)) {
         next_part = (ObIPartitionGroup*)partition->next_;
