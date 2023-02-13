@@ -2195,16 +2195,31 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
               } else {
                 param.set_collation_type(cs_type);
               }
-              if (is_lob_v1) {
+              ObLobLocatorV2 lobv2(str);
+              if (lobv2.is_lob_locator_v1()) {
                 const ObLobLocator &lob = *(reinterpret_cast<const ObLobLocator *>(dst.ptr()));
-                param.set_lob_locator(lob);
-                param.set_has_lob_header();
-                LOG_TRACE("get lob locator", K(lob), K(cs_type), K(type));
+                if (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && lob.get_payload_length() == 0) {
+                  // do convert empty lob v1 to v2
+                  ObString payload;
+                  if (OB_FAIL(lob.get_payload(payload))) {
+                    LOG_WARN("fail to get payload", K(ret), K(lob));
+                  } else {
+                    param.set_lob_value(ObLongTextType, payload.ptr(), payload.length());
+                    if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(param, allocator))) {
+                      LOG_WARN("Fail to convert plain lob data to templob",K(ret), K(payload));
+                    } else {
+                      LOG_TRACE("convert empty lob v1 to v2", K(lob), K(cs_type), K(type));
+                    }
+                  }
+                } else {
+                  param.set_lob_locator(lob);
+                  param.set_has_lob_header();
+                  LOG_TRACE("get lob locator", K(lob), K(cs_type), K(type));
+                }
               } else {
-                ObLobLocatorV2 lob(str);
                 param.set_lob_value(ObLongTextType, dst.ptr(), dst.length());
                 param.set_has_lob_header();
-                LOG_TRACE("get lob locator v2", K(lob), K(cs_type), K(type));
+                LOG_TRACE("get lob locator v2", K(lobv2), K(cs_type), K(type));
               }
             } else if (MYSQL_TYPE_TINY_BLOB == type
                       || MYSQL_TYPE_MEDIUM_BLOB == type
