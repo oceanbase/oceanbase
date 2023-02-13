@@ -58,7 +58,7 @@ namespace datadict
 const int64_t ObDataDictStorage::DEFAULT_PALF_BUF_SIZE = 2 * _M_;
 const int64_t ObDataDictStorage::DEFAULT_DICT_BUF_SIZE = 4 * _M_;
 const char *ObDataDictStorage::DEFAULT_DDL_MDS_MSG = "ddl_trans commit";
-const int64_t ObDataDictStorage::DEFAULT_DDL_MDS_MSG_LEN = strlen(DEFAULT_DDL_MDS_MSG) + 1; // with '\0'
+const int64_t ObDataDictStorage::DEFAULT_DDL_MDS_MSG_LEN = strlen(DEFAULT_DDL_MDS_MSG);
 
 ObDataDictStorage::ObDataDictStorage(ObIAllocator &allocator)
   : tenant_id_(OB_INVALID_TENANT_ID),
@@ -239,16 +239,16 @@ int ObDataDictStorage::gen_and_serialize_dict_metas(
       && (0 >= database_schemas.count())
       && (0 >= table_schemas.count()))) {
     DDLOG(INFO, "all schema_array is empty, use default msg", KCSTRING(DEFAULT_DDL_MDS_MSG));
-    buf = static_cast<char*>(allocator.alloc(DEFAULT_DDL_MDS_MSG_LEN));
+    buf = static_cast<char*>(allocator.alloc(DEFAULT_DDL_MDS_MSG_LEN + 1)); // with '\0'
 
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       DDLOG(WARN, "expect valid buf", KR(ret), KP(buf), K(DEFAULT_DDL_MDS_MSG_LEN));
     } else {
-      buf_len = DEFAULT_DDL_MDS_MSG_LEN;
-      pos = DEFAULT_DDL_MDS_MSG_LEN;
-      MEMCPY(buf, DEFAULT_DDL_MDS_MSG, DEFAULT_DDL_MDS_MSG_LEN - 1);
-      buf[DEFAULT_DDL_MDS_MSG_LEN - 1] = '\0';
+      buf_len = DEFAULT_DDL_MDS_MSG_LEN + 1;
+      pos = DEFAULT_DDL_MDS_MSG_LEN + 1;
+      MEMCPY(buf, DEFAULT_DDL_MDS_MSG, DEFAULT_DDL_MDS_MSG_LEN);
+      buf[DEFAULT_DDL_MDS_MSG_LEN] = '\0';
     }
   } else {
     const static int64_t block_size = 2 * _M_;
@@ -304,7 +304,7 @@ int ObDataDictStorage::parse_dict_metas(
     DDLOG(WARN, "invalid args", KR(ret), KP(buf), K(pos), K(buf_len));
   } else if (OB_FAIL(iterator.init(OB_SERVER_TENANT_ID))) {
     DDLOG(WARN, "iterator init failed", KR(ret), KP(buf), K(pos), K(buf_len));
-  } else if (0 == strcmp(buf, DEFAULT_DDL_MDS_MSG)) {
+  } else if (0 == strncmp(buf, DEFAULT_DDL_MDS_MSG, DEFAULT_DDL_MDS_MSG_LEN)) {
     // found DEFAULT_DDL_MDS_MSG, means ddl has no schema change.
     // buf == DEFAULT_DDL_MDS_MSG if in OB4.0.0.0 or DDL doesn't change schema.
     DDLOG(INFO, "detect default_ddl_msg", KR(ret), K(buf_len), KCSTRING(buf));

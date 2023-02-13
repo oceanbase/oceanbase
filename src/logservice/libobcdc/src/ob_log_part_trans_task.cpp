@@ -2533,8 +2533,8 @@ int PartTransTask::parse_multi_data_source_data_for_ddl(
       const common::ObString &mds_data = tx_buf_node.get_data_buf();
       int64_t pos = 0;
 
-      if (datadict::ObDataDictStorage::parse_dict_metas(allocator_, mds_data.ptr(), mds_data.length(), pos,
-            tenant_metas, database_metas, table_metas)) {
+      if (OB_FAIL(datadict::ObDataDictStorage::parse_dict_metas(allocator_, mds_data.ptr(), mds_data.length(), pos,
+            tenant_metas, database_metas, table_metas))) {
         LOG_ERROR("ObDataDictStorage parse_dict_metas failed", KR(ret), K(caller), K(idx), KPC(this));
       } else {
         //TODO DEBUG
