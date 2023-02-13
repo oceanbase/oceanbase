@@ -1369,7 +1369,7 @@ int ObDDLRedefinitionTask::get_estimated_timeout(const ObTableSchema *dst_table_
   } else if (OB_FAIL(dst_table_schema->get_all_tablet_and_object_ids(tablet_ids, partition_ids))) {
     LOG_WARN("get all tablet and object ids failed", K(ret));
   } else {
-    estimated_timeout = tablet_ids.count() * dst_table_schema->get_column_count() * 1000L; // 1ms for each column
+    estimated_timeout = tablet_ids.count() * dst_table_schema->get_column_count() * 120L * 1000L; // 120ms for each column
     estimated_timeout = max(estimated_timeout, 9 * 1000 * 1000L);
     estimated_timeout = min(estimated_timeout, 3600 * 1000 * 1000L);
     estimated_timeout = max(estimated_timeout, GCONF.rpc_timeout);
