@@ -323,10 +323,8 @@ int ObPhyTableLocation::try_build_location_idx_map()
       ARRAY_FOREACH(partition_location_list_, idx) {
         // ObPartitionReplicaLocation
         auto &item = partition_location_list_.at(idx);
-        if (item.get_replica_location().server_ == GCTX.self_addr()) {
-          if (OB_FAIL(location_idx_map_.set_refactored(item.get_partition_id(), idx))) {
-            LOG_WARN("fail set value to map", K(ret), K(item));
-          }
+        if (OB_FAIL(location_idx_map_.set_refactored(item.get_partition_id(), idx))) {
+          LOG_WARN("fail set value to map", K(ret), K(item));
         }
       }
     }
