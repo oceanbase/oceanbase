@@ -649,8 +649,11 @@ int ObDmlCgService::convert_data_table_rowkey_info(ObLogDelUpd &op,
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
     ObRawExpr *expr = rowkey_exprs.at(i);
     if (!expr->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr type is not column_ref expr", K(ret), KPC(expr));
+      // do nothing.
+      // For a 4.x partition table without a primary key, there is no redundant partition key in the primary key,
+      // so its unique_key is a hidden auto-increment column + partition key. For replace and insert_up scenarios,
+      // here will be no primary key conflicts when writing the primary table , so the main table does not need to bring back unique_key
+      // (self-increment column + partition construction)
     } else {
       ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(expr);
       uint64_t base_cid = OB_INVALID_ID;
