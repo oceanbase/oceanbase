@@ -35,7 +35,7 @@ int ObStorageHAUtils::check_tablet_replica_validity(const uint64_t tenant_id, co
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(src_addr), K(tablet_id));
   } else if (OB_FAIL(check_merge_error_(tenant_id, sql_client))) {
-    LOG_WARN("failed to check merge error", K(ret), K(tenant_id));
+    LOG_WARN("failed to check merge error", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(fetch_src_tablet_meta_info_(tenant_id, tablet_id, ls_id, src_addr, sql_client, compaction_scn))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -44,7 +44,7 @@ int ObStorageHAUtils::check_tablet_replica_validity(const uint64_t tenant_id, co
       LOG_WARN("failed to fetch src tablet meta info", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
     }
   } else if (OB_FAIL(check_tablet_replica_checksum_(tenant_id, tablet_id, ls_id, compaction_scn, sql_client))) {
-    LOG_WARN("failed to check tablet replica checksum", K(ret), K(compaction_scn));
+    LOG_WARN("failed to check tablet replica checksum", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(compaction_scn));
   }
   return ret;
 }
@@ -90,7 +90,7 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
   } else if (OB_FAIL(pairs.push_back(pair))) {
     LOG_WARN("failed to push back", K(ret), K(pair));
   } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn, sql_client, items))) {
-    LOG_WARN("failed to batch get replica checksum item", K(ret));
+    LOG_WARN("failed to batch get replica checksum item", K(ret), K(tenant_id), K(pairs), K(compaction_scn));
   } else {
     ObArray<share::ObTabletReplicaChecksumItem> filter_items;
     for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); ++i) {
@@ -105,7 +105,8 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
       const ObTabletReplicaChecksumItem &first_item = filter_items.at(0);
       const ObTabletReplicaChecksumItem &item = filter_items.at(i);
       if (OB_FAIL(first_item.verify_checksum(item))) {
-        LOG_ERROR("failed to verify checksum", K(ret), K(item));
+        LOG_ERROR("failed to verify checksum", K(ret), K(tenant_id), K(tablet_id),
+            K(ls_id), K(compaction_scn), K(first_item), K(item), K(filter_items));
       }
     }
   }
