@@ -25,6 +25,7 @@ class ObPieceMsgCtx
 public:
   ObPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts)
       : op_id_(op_id), task_cnt_(task_cnt), timeout_ts_(timeout_ts) {}
+  virtual ~ObPieceMsgCtx() {}
   VIRTUAL_TO_STRING_KV(K_(op_id), K_(task_cnt));
   virtual void destroy() {}
   uint64_t op_id_;    // 哪个算子使用 datahub 服务
@@ -42,6 +43,7 @@ public:
     for (int i = 0; i < ctxs_.count(); ++i) {
       if (OB_NOT_NULL(ctxs_[i])) {
         ctxs_[i]->destroy();
+        ctxs_[i]->~ObPieceMsgCtx();
       }
     }
     ctxs_.reset();
