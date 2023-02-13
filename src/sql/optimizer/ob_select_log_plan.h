@@ -324,6 +324,7 @@ private:
                                      ObIArray<CandidatePlan> &left_candidates,
                                      ObIArray<CandidatePlan> &right_candidates,
                                      const bool ignore_hint,
+                                     const bool can_ignore_merge_plan,
                                      const bool no_hash_plans,
                                      ObIArray<CandidatePlan> &merge_set_plans);
 
@@ -336,7 +337,8 @@ private:
                                 ObIArray<OrderItem> &best_order_items,
                                 ObLogicalOperator *&best_plan,
                                 bool &best_need_sort,
-                                int64_t &best_prefix_pos);
+                                int64_t &best_prefix_pos,
+                                const bool can_ignore_merge_plan);
   /**
    * @brief create_merge_set
    * create merge-based set operation
