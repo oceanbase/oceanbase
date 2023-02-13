@@ -998,7 +998,7 @@ int ObXAService::xa_start(const ObXATransID &xid,
     }
   } else if (ObXAFlag::is_tmjoin(flags) || ObXAFlag::is_tmresume(flags)) {
   // } else if (ObXAFlag::contain_tmjoin(flags) || ObXAFlag::contain_tmresume(flags)) {
-    if (OB_FAIL(xa_start_join_(xid, flags, timeout_seconds, tx_desc))) {
+    if (OB_FAIL(xa_start_join_(xid, flags, timeout_seconds, session_id, tx_desc))) {
       TRANS_LOG(WARN, "xa start join failed", K(ret), K(flags), K(xid), K(tx_desc));
     }
   } else {
@@ -1223,6 +1223,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
           }
         }
       }
+      // xa_start on new session, adjust tx_desc.sess_id_
+      if (OB_SUCC(ret)) {
+        tx_desc->set_sessid(session_id);
+      }
     }
   }
 
@@ -1232,6 +1236,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
 int ObXAService::xa_start_join_(const ObXATransID &xid,
                                 const int64_t flags,
                                 const int64_t timeout_seconds,
+                                const uint32_t session_id,
                                 ObTxDesc *&tx_desc)
 {
   int ret = OB_SUCCESS;
@@ -1323,7 +1328,10 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
       }
     }
   }
-
+  // xa_join/resume on new session, adjust tx_desc.sess_id_
+  if (OB_SUCC(ret)) {
+    tx_desc->set_sessid(session_id);
+  }
   return ret;
 }
 
@@ -1762,7 +1770,7 @@ int ObXAService::one_phase_xa_rollback_(const ObXATransID &xid,
     if (OB_FAIL(xa_ctx->one_phase_end_trans(xid, true/*is_rollback*/, timeout_us, request_id))) {
       TRANS_LOG(WARN, "one phase xa rollback failed", K(ret), K(tx_id));
     } else if (OB_FAIL(xa_ctx->wait_one_phase_end_trans(true/*is_rollback*/, timeout_us))) {
-      TRANS_LOG(WARN, "fail to wait one phase xa end trans", K(ret), K(xid), K(trans_id));
+      TRANS_LOG(WARN, "fail to wait one phase xa end trans", K(ret), K(xid), K(tx_id));
     }
     xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
   }

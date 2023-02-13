@@ -406,7 +406,7 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
       ObTxFreeRouteCheckAliveMsg msg;
       OZ(msg.deserialize(buf, size, pos));
       TRANS_LOG(TRACE, "handle_msg", K(msg), KPC(this));
-      OZ(txs_.tx_free_route_handle_check_alive(msg));
+      OZ(txs_.tx_free_route_handle_check_alive(msg, OB_TRANS_CTX_NOT_EXIST));
       break;
     }
   case TX_FREE_ROUTE_CHECK_ALIVE_RESP:

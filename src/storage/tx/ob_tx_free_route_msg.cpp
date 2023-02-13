@@ -1,8 +1,8 @@
 #include "ob_tx_free_route_msg.h"
 namespace oceanbase {
 namespace transaction {
-OB_SERIALIZE_MEMBER(ObTxFreeRouteCheckAliveMsg, request_id_, session_id_, tx_id_, sender_, receiver_);
-OB_SERIALIZE_MEMBER(ObTxFreeRouteCheckAliveRespMsg, request_id_, session_id_, tx_id_, sender_, receiver_, ret_);
+OB_SERIALIZE_MEMBER(ObTxFreeRouteCheckAliveMsg, request_id_, req_sess_id_, tx_sess_id_, tx_id_, sender_, receiver_);
+OB_SERIALIZE_MEMBER(ObTxFreeRouteCheckAliveRespMsg, request_id_, req_sess_id_, tx_id_, sender_, receiver_, ret_);
 
 OB_DEF_SERIALIZE_SIZE(ObTxFreeRoutePushState)
 {

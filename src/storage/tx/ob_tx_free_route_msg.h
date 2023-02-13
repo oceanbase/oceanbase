@@ -62,15 +62,20 @@ struct ObTxFreeRouteCheckAliveMsg : ObTxFreeRouteMsg
 {
  ObTxFreeRouteCheckAliveMsg() : ObTxFreeRouteMsg(TX_FREE_ROUTE_CHECK_ALIVE) {}
   int64_t request_id_;
-  uint32_t session_id_;
+  uint32_t req_sess_id_;
+  uint32_t tx_sess_id_;
   ObTransID tx_id_;
   ObAddr sender_;
   ObAddr receiver_;
   bool is_valid() const {
-      return request_id_ > 0 && session_id_ > 0 && tx_id_.is_valid()
-          && sender_.is_valid() && receiver_.is_valid();
+      return request_id_ > 0
+        && req_sess_id_ > 0
+        && tx_sess_id_ > 0
+        && tx_id_.is_valid()
+        && sender_.is_valid()
+        && receiver_.is_valid();
   }
-  TO_STRING_KV(K_(type), K_(request_id), K_(session_id), K_(tx_id), K_(sender), K_(receiver));
+  TO_STRING_KV(K_(type), K_(request_id), K_(req_sess_id), K_(tx_sess_id), K_(tx_id), K_(sender), K_(receiver));
   OB_UNIS_VERSION(1);
 };
 
@@ -78,16 +83,19 @@ struct ObTxFreeRouteCheckAliveRespMsg : ObTxFreeRouteMsg
 {
   ObTxFreeRouteCheckAliveRespMsg() : ObTxFreeRouteMsg(TX_FREE_ROUTE_CHECK_ALIVE_RESP) {}
   int64_t request_id_;
-  uint32_t session_id_;
+  uint32_t req_sess_id_;
   ObTransID tx_id_;
   ObAddr sender_;
   ObAddr receiver_;
   int ret_;
   bool is_valid() const {
-    return request_id_ > 0 && session_id_ > 0 && tx_id_.is_valid()
-        && sender_.is_valid() && receiver_.is_valid();
+    return request_id_ > 0
+      && req_sess_id_ > 0
+      && tx_id_.is_valid()
+      && sender_.is_valid()
+      && receiver_.is_valid();
   }
-  TO_STRING_KV(K_(type), K_(request_id), K_(session_id), K_(tx_id), K_(ret), K_(sender), K_(receiver));
+  TO_STRING_KV(K_(type), K_(request_id), K_(req_sess_id), K_(tx_id), K_(ret), K_(sender), K_(receiver));
   OB_UNIS_VERSION(1);
 };
 

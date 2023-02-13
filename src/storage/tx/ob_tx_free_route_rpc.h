@@ -18,6 +18,8 @@ public:
 protected:
   int process();
 private:
+  int kill_session_();
+  int release_session_tx_();
   DISALLOW_COPY_AND_ASSIGN(ObTxFreeRouteCheckAliveRespP);
 };
 
