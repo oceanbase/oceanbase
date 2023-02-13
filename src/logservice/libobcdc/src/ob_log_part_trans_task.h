@@ -1064,6 +1064,11 @@ public:
   SortedLogEntryInfo &get_sorted_log_entry_info() { return sorted_log_entry_info_; }
   int is_all_redo_log_entry_fetched(bool &is_all_redo_fetched)
   { return sorted_log_entry_info_.is_all_log_entry_fetched(is_all_redo_fetched); };
+  // is dispatched redo all sorted:
+  OB_INLINE bool is_dispatched_redo_be_sorted() const
+  {
+    return ! sorted_redo_list_.has_dispatched_but_unsorted_redo();
+  }
   int push_multi_data_source_data(
       const palf::LSN &lsn,
       const transaction::ObTxBufferNodeArray &mds_data_arr,

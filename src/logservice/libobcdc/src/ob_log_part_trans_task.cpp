@@ -3490,7 +3490,10 @@ int PartTransTask::next_dml_stmt(DmlStmtTask *&dml_stmt_task)
   } else if (OB_ISNULL(dml_stmt_task = static_cast<DmlStmtTask*>(dml_task))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("dml_task get from SortedRedoList should not be null", KR(ret), K(dml_task));
-  } else { /* succ */ }
+  } else {
+    sorted_redo_list_.set_sorted_row_seq_no(dml_stmt_task->get_row_seq_no());
+    /* succ */
+  }
 
   return ret;
 }
