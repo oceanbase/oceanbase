@@ -191,9 +191,10 @@ private:
   int flush_bf_to_cache(ObMacroBloomFilterCacheWriter &bf_cache_writer, const int32_t row_count);
   void dump_micro_block(ObIMicroBlockWriter &micro_writer);
   void dump_macro_block(ObMacroBlock &macro_block);
+public:
+  static const int64_t DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD = 30;
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_COUNT = 128;
-  static const int64_t DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD = 30;
   typedef common::ObSEArray<MacroBlockId, DEFAULT_MACRO_BLOCK_COUNT> MacroBlockList;
 
 protected:
