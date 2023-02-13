@@ -6842,6 +6842,7 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem& table_it
           } else {
             if (select_expr->is_column_ref_expr()) {
               ObColumnRefRawExpr* col_ref = static_cast<ObColumnRefRawExpr*>(select_expr);
+              col_expr->set_lob_column(col_ref->is_lob_column());
               ColumnItem* item = ref_stmt->get_column_item_by_id(col_ref->get_table_id(), col_ref->get_column_id());
               if (OB_ISNULL(item)) {
                 ret = OB_ERR_UNEXPECTED;
