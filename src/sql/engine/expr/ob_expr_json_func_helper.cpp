@@ -1562,9 +1562,6 @@ int ObJsonExprHelper::check_item_func_with_return(ObJsonPathNodeType path_type, 
       }
       break;
     }
-    case JPN_CEILING :{
-      break;
-    }
     case JPN_DATE :{
       if (dst_type == ObDateTimeType) {
       } else {
@@ -1581,14 +1578,13 @@ int ObJsonExprHelper::check_item_func_with_return(ObJsonPathNodeType path_type, 
       }
       break;
     }
-    case JPN_FLOOR :{
-      break;
-    }
+    case JPN_FLOOR :
+    case JPN_CEILING :
     case JPN_LENGTH :
     case JPN_NUMBER :
     case JPN_NUM_ONLY :
     case JPN_SIZE :{
-      if (JSON_EXPR_FLAG == 1 || (JSON_EXPR_FLAG ==0 && dst_type == ObNumberType)) {
+      if (JSON_EXPR_FLAG == 1 || (JSON_EXPR_FLAG == 0 && dst_type == ObNumberType)) {
       } else {
         ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
         LOG_WARN("item func is lower/upper, but return type is ", K(dst_type), K(ret));

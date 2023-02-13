@@ -651,7 +651,8 @@ int ObExprJsonValue::doc_do_seek(ObJsonBaseVector &hits, bool &is_null_result, O
       } else if (j_path->is_last_func()) {
         if (j_path->get_last_node_type() == ObJsonPathNodeType::JPN_BOOLEAN
             && hits[0]->json_type() != ObJsonNodeType::J_BOOLEAN) {
-          if (hits[0]->json_type() == ObJsonNodeType::J_INT
+          if ((hits[0]->json_type() == ObJsonNodeType::J_INT
+              && (hits[0]->get_int() == 1 || hits[0]->get_int() == 0) )
               || (hits[0]->json_type() == ObJsonNodeType::J_DOUBLE
               && (hits[0]->get_double() == 1.0 || hits[0]->get_double() == 0.0))) {
             bool is_true = hits[0]->json_type() == ObJsonNodeType::J_INT ? (hits[0]->get_int() == 1) : (hits[0]->get_double() == 1.0);

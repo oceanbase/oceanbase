@@ -292,10 +292,11 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
           LOG_WARN("error occur in wrapper type");
         } else if (use_wrapper == 0 && hits[0]->json_type() == ObJsonNodeType::J_NULL && !hits[0]->is_real_json_null(hits[0])) {
           is_null_result = true;
-        } else if (use_wrapper == 0 && j_path->get_last_node_type() == JPN_BOOLEAN && (hits[0]->is_json_number(hits[0]->json_type()) || hits[0]->json_type() == ObJsonNodeType::J_NULL)) {
-          is_null_result = true;
         } else if (use_wrapper == 0 && j_path->is_last_func() && j_path->path_node_cnt() == 1) {
                       // do nothing
+        } else if (use_wrapper == 0 && j_path->get_last_node_type() == JPN_BOOLEAN
+                  && (hits[0]->is_json_number(hits[0]->json_type()) || hits[0]->json_type() == ObJsonNodeType::J_NULL)) {
+          is_null_result = true;
         } else if (use_wrapper == 0 && (j_path->get_last_node_type() == JPN_DATE || j_path->get_last_node_type() == JPN_TIMESTAMP)
                     && !hits[0]->is_json_date(hits[0]->json_type())) {
           is_null_result = true;
@@ -307,6 +308,16 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
           is_null_result = true;
         } else if (use_wrapper == 0 && (j_path->get_last_node_type() == JPN_UPPER || j_path->get_last_node_type() == JPN_LOWER)
                     && (hits[0]->json_type() == ObJsonNodeType::J_OBJECT || hits[0]->json_type() == ObJsonNodeType::J_ARRAY)) {
+          is_null_result = true;
+        } else if (use_wrapper == 0 && (j_path->get_last_node_type() == JPN_NUMBER || j_path->get_last_node_type() == JPN_NUM_ONLY
+                  || j_path->get_last_node_type() == JPN_DOUBLE)
+                  && (!hits[0]->is_json_number(hits[0]->json_type()) && hits[0]->json_type() != ObJsonNodeType::J_NULL)) {
+          is_null_result = true;
+        } else if (use_wrapper == 0 && j_path->get_last_node_type() == JPN_LENGTH && !(hits[0]->json_type() == ObJsonNodeType::J_UINT
+                  && ((ObJsonUint *)hits[0])->get_is_string_length())) {
+          is_null_result = true;
+        } else if (use_wrapper == 0 && (j_path->get_last_node_type() == JPN_DATE || j_path->get_last_node_type() == JPN_TIMESTAMP)
+                  && !hits[0]->is_json_date(hits[0]->json_type())) {
           is_null_result = true;
         }
       }

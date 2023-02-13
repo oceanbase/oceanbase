@@ -309,6 +309,7 @@ protected:
                              ObSelectStmt *select_stmt);
   int resolve_sys_vars(common::ObArray<ObVarInfo> &sys_vars);
   int check_expr_param(const ObRawExpr &expr);
+  int check_col_param_on_expr(ObRawExpr *expr);
   int resolve_columns_field_list_first(ObRawExpr *&expr, ObArray<ObQualifiedName> &columns, ObSelectStmt* sel_stmt);
   int resolve_columns(ObRawExpr *&expr, common::ObArray<ObQualifiedName> &columns);
   int resolve_qualified_identifier(ObQualifiedName &q_name,

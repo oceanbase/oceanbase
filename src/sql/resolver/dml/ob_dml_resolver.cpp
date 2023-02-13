@@ -2166,6 +2166,8 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
       LOG_WARN("push back failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr))) {
       LOG_WARN("replace column ref expr failed", K(ret));
+    } else if (expr->is_sys_func_expr() && OB_FAIL(check_col_param_on_expr(expr))) {
+      LOG_WARN("illegal param on func_expr", K(ret));
     } else { /*do nothing*/ }
   }
   return ret;
@@ -5898,6 +5900,30 @@ int ObDMLResolver::do_resolve_subquery_info(const ObSubQueryInfo &subquery_info,
   return ret;
 }
 
+int ObDMLResolver::check_col_param_on_expr(ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_NULL_CHECK_ERROR;
+    LOG_WARN("should not be nullptr", K(ret));
+  } else if (expr->is_sys_func_expr()) {
+    int param_num = expr->get_param_count();
+    ObSysFunRawExpr* f_expr = static_cast<ObSysFunRawExpr *>(expr);
+    // check param of json_exists passing clause
+    if (0 == f_expr->get_func_name().case_compare("json_exists") && param_num >= 6) {
+      for (int i = 2; i < param_num - 2 && OB_SUCC(ret); i += 2) {
+        if (expr->get_param_expr(i)->get_expr_type() == T_REF_COLUMN) {
+          ret = OB_ERR_INVALID_VARIABLE_IN_JSON_PATH;
+          LOG_USER_ERROR(OB_ERR_INVALID_VARIABLE_IN_JSON_PATH);
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should be function expr", K(ret));
+  }
+  return ret;
+}
 int ObDMLResolver::check_expr_param(const ObRawExpr &expr)
 {
   int ret = OB_SUCCESS;

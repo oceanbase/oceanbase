@@ -818,7 +818,9 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
           case JPN_LENGTH :
           case JPN_SIZE :
           case JPN_NUM_ONLY :
-          case JPN_NUMBER : {
+          case JPN_NUMBER :
+          case JPN_FLOOR :
+          case JPN_CEILING : {
             ret_node.value_ = 0;
             if (ret_node.type_ == T_NULL) {
               ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;

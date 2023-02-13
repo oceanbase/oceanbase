@@ -5360,8 +5360,7 @@ int ObRawExprResolverImpl::process_json_exists_node(const ParseNode *node, ObRaw
           ObRawExpr *para_expr = NULL;
           CK(OB_NOT_NULL(node->children_[i]->children_[name_idx]));
           OZ(SMART_CALL(recursive_resolve(node->children_[i]->children_[name_idx], para_expr)));
-          CK(OB_NOT_NULL(para_expr));
-          if (name_idx % 2 == 0 && para_expr->get_expr_type() == T_REF_COLUMN) {
+          if (name_idx % 2 == 0 && para_expr->get_expr_type() == T_REF_QUERY) {
             ret = OB_ERR_INVALID_VARIABLE_IN_JSON_PATH;
             LOG_USER_ERROR(OB_ERR_INVALID_VARIABLE_IN_JSON_PATH);
           } else {
