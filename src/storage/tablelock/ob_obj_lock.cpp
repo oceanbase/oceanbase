@@ -891,11 +891,11 @@ int ObOBJLock::check_allow_unlock_(
     const ObTableLockOp &unlock_op)
 {
   int ret = OB_SUCCESS;
-  // 1. only for OUT_TRANS unlock:
-  // 1) if the lock status is LOCK_OP_DOING, return OB_TRY_LOCK_ROW_CONFLICT
-  // 2) if the lock status is LOCK_OP_COMPLETE, return OB_SUCCESS if
-  // there is no unlock op, else if the unlock op is LOCK_OP_DOING return
-  // OB_TRY_LOCK_ROW_CONFLICT
+  // only for OUT_TRANS unlock:
+  // 1) if the lock status is LOCK_OP_DOING, return OB_OBJ_LOCK_NOT_COMPLETED
+  // for lock op, and return OB_OBJ_UNLOCK_CONFLICT for unlock op
+  // 2) if the lock status is LOCK_OP_COMPLETE, return OB_SUCCESS for locl op,
+  // but return OB_OBJ_LOCK_NOT_EXIST for unlock op to avoid unlocking repeatedly
   // 3) if there is no lock, return OB_OBJ_LOCK_NOT_EXIST
   int map_index = 0;
   ObTableLockOpList *op_list = NULL;
@@ -1268,18 +1268,31 @@ int ObOBJLock::check_op_allow_unlock_from_list_(
     DLIST_FOREACH(curr, *op_list) {
       if (curr->lock_op_.owner_id_ == lock_op.owner_id_) {
         lock_exist = true;
-        if (curr->lock_op_.op_type_ == OUT_TRANS_LOCK) {
-          if (curr->lock_op_.lock_op_status_ == LOCK_OP_DOING) {
+        if (curr->lock_op_.lock_op_status_ == LOCK_OP_DOING) {
+          if (curr->lock_op_.op_type_ == OUT_TRANS_LOCK) {
             ret = OB_OBJ_LOCK_NOT_COMPLETED;
-          } else if (curr->lock_op_.lock_op_status_ == LOCK_OP_COMPLETE) {
-            // continue to check for unlock op
+          } else if (curr->lock_op_.op_type_ == OUT_TRANS_UNLOCK) {
+            ret = OB_OBJ_UNLOCK_CONFLICT;
           } else {
             ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("unexpected lock op type", K(ret), K(curr->lock_op_));
           }
-        } else if (curr->lock_op_.op_type_ == OUT_TRANS_UNLOCK) {
-          ret = OB_OBJ_UNLOCK_CONFLICT;
+        } else if (curr->lock_op_.lock_op_status_ == LOCK_OP_COMPLETE) {
+          // This status will occur in transaction disorder replaying,
+          // i.e. there's an unlcok op replay and commit before the
+          // lock op. So we return this error code to avoid continuing
+          // the unlocking operation.
+          if (curr->lock_op_.op_type_ == OUT_TRANS_UNLOCK) {
+            ret = OB_OBJ_LOCK_NOT_EXIST;
+          } else if (curr->lock_op_.op_type_ == OUT_TRANS_LOCK) {
+            // do nothing
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("unexpected lock op type", K(ret), K(curr->lock_op_));
+          }
         } else {
           ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpected lock op status", K(ret), K(curr->lock_op_));
         }
       }
     } // DLIST_FOREACH
