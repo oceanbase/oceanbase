@@ -148,7 +148,7 @@ int ObTransService::release_tx(ObTxDesc &tx)
         tx.print_trace();
       }
 #endif
-      tx_desc_mgr_.free(&tx);
+      tx_desc_mgr_.revert(tx);
     } else {
       finalize_tx_(tx);
       tx_desc_mgr_.revert(tx);
