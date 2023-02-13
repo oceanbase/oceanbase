@@ -7404,6 +7404,11 @@ int ObPartTransCtx::handle_2pc_prepare_request_raw_(int status)
         // it is logging now. just discard message
         TRANS_LOG(DEBUG, "participant is logging now, discard message", K_(self), K_(trans_id), K(state));
       } else {
+        if (OB_UNLIKELY(!stmt_info_.is_task_match())) {
+          set_status_(OB_TRANS_ROLLBACKED);
+          int tmp_ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "sql task is not match", K(tmp_ret), "context", *this, K_(stmt_info));
+        }
         bool unused = false;
         if (is_xa_local_trans() && is_redo_prepared_) {
           if (OB_SUCCESS != get_status_() || (OB_SUCCESS != status && OB_TRANS_ROLLBACKED != status)) {
