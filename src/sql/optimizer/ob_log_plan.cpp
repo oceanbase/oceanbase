@@ -5598,12 +5598,26 @@ int ObLogPlan::candi_allocate_sequence()
   ObExchangeInfo exch_info;
   CandidatePlan candidate_plan;
   ObSEArray<CandidatePlan, 4> sequence_plans;
+  ObDMLStmt *root_stmt = NULL;
+  bool will_use_parallel_sequence = false;
+  if (OB_ISNULL(root_stmt = get_optimizer_context().get_root_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(root_stmt), K(ret));
+  } else if (root_stmt->is_explain_stmt() &&
+             OB_ISNULL(root_stmt=static_cast<ObExplainStmt*>(root_stmt)->get_explain_query_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(root_stmt), K(ret));
+  } else {
+    will_use_parallel_sequence = get_optimizer_context().is_online_ddl() ||
+                                 (root_stmt->is_insert_stmt() && get_optimizer_context().use_pdml());
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
     candidate_plan = candidates_.candidate_plans_.at(i);
     if (OB_ISNULL(candidate_plan.plan_tree_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (!get_optimizer_context().is_online_ddl() && candidate_plan.plan_tree_->is_sharding() &&
+    } else if (!will_use_parallel_sequence &&
+               candidate_plan.plan_tree_->is_sharding() &&
                allocate_exchange_as_top(candidate_plan.plan_tree_, exch_info)) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
     } else if (OB_FAIL(allocate_sequence_as_top(candidate_plan.plan_tree_))) {
