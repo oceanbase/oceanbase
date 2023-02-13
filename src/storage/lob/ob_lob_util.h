@@ -44,6 +44,11 @@ struct ObLobAccessParam {
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_fill_zero_(false), from_rpc_(false),
       inrow_read_nocopy_(false)
   {}
+  ~ObLobAccessParam() {
+    if (OB_NOT_NULL(dml_base_param_)) {
+      dml_base_param_->~ObDMLBaseParam();
+    }
+  }
 public:
   int set_lob_locator(common::ObLobLocatorV2 *lob_locator);
   TO_STRING_KV(K_(ls_id), K_(tablet_id), KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size),
