@@ -87,7 +87,6 @@ private:
   int check_table_schema_(const uint64_t tenant_id,
                           const share::schema::ObTableSchema &hard_code_table);
   int upgrade_mysql_system_package_job_();
-  int upgrade_oracle_system_package_job_();
   int run_upgrade_all_post_action_(const uint64_t tenant_id);
   int run_upgrade_end_action_(const uint64_t tenant_id);
 

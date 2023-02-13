@@ -772,8 +772,6 @@ int ObUpgradeExecutor::run_upgrade_system_package_job_()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(upgrade_mysql_system_package_job_())) {
     LOG_WARN("fail to upgrade mysql system package", KR(ret));
-  } else if (OB_FAIL(upgrade_oracle_system_package_job_())) {
-    LOG_WARN("fail to upgrade mysql system package", KR(ret));
   }
   return ret;
 }
@@ -835,66 +833,6 @@ int ObUpgradeExecutor::upgrade_mysql_system_package_job_()
   return ret;
 }
 
-int ObUpgradeExecutor::upgrade_oracle_system_package_job_()
-{
-  int ret = OB_SUCCESS;
-  int64_t start_ts = ObTimeUtility::current_time();
-  FLOG_INFO("[UPGRADE] start to run upgrade oracle system package job");
-  ObCompatibilityMode mode = ObCompatibilityMode::ORACLE_MODE;
-  int64_t timeout = GCONF._ob_ddl_timeout;
-  const char *create_package_sql =
-        "CREATE OR REPLACE PACKAGE \"__DBMS_UPGRADE\" IS \
-           PROCEDURE UPGRADE(package_name VARCHAR2); \
-           PROCEDURE UPGRADE_ALL; \
-         END;";
-  const char *create_package_body_sql =
-        "CREATE OR REPLACE PACKAGE BODY \"__DBMS_UPGRADE\" IS \
-           PROCEDURE UPGRADE(package_name VARCHAR2); \
-             PRAGMA INTERFACE(c, UPGRADE_SINGLE); \
-           PROCEDURE UPGRADE_ALL; \
-             PRAGMA INTERFACE(c, UPGRADE_ALL); \
-         END;";
-  const char *upgrade_sql = "CALL \"__DBMS_UPGRADE\".UPGRADE_ALL();";
-  ObTimeoutCtx ctx;
-  int64_t affected_rows = 0;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(ctx.set_timeout(timeout))) {
-    LOG_WARN("fail to set timeout", KR(ret));
-  } else if (OB_FAIL(sql_proxy_->write(
-             OB_SYS_TENANT_ID, create_package_sql,
-             affected_rows, static_cast<int64_t>(mode)))) {
-    LOG_WARN("fail to execute sql", KR(ret), "sql", create_package_sql);
-  } else if (0 != affected_rows) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("affected_rows expected to be zero", KR(ret), K(affected_rows));
-  } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("executor is stop", KR(ret));
-  } else if (OB_FAIL(ctx.set_timeout(timeout))) {
-    LOG_WARN("fail to set timeout", KR(ret));
-  } else if (OB_FAIL(sql_proxy_->write(
-             OB_SYS_TENANT_ID, create_package_body_sql,
-             affected_rows, static_cast<int64_t>(mode)))) {
-    LOG_WARN("fail to execute sql", KR(ret), "sql", create_package_body_sql);
-  } else if (0 != affected_rows) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("affected_rows expected to be zero", KR(ret), K(affected_rows));
-  } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("executor is stop", KR(ret));
-  } else if (OB_FAIL(ctx.set_timeout(timeout))) {
-    LOG_WARN("fail to set timeout", KR(ret));
-  } else if (OB_FAIL(sql_proxy_->write(
-             OB_SYS_TENANT_ID, upgrade_sql,
-             affected_rows, static_cast<int64_t>(mode)))) {
-    LOG_WARN("fail to execute sql", KR(ret), "sql", upgrade_sql);
-  } else if (0 != affected_rows) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("affected_rows expected to be zero", KR(ret), K(affected_rows));
-  }
-  FLOG_INFO("[UPGRADE] finish run upgrade oracle system package job",
-            KR(ret), "cost", ObTimeUtility::current_time() - start_ts);
-  return ret;
-}
 
 int ObUpgradeExecutor::run_upgrade_all_post_action_(
     const common::ObIArray<uint64_t> &tenant_ids)
