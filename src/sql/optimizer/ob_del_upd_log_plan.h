@@ -228,8 +228,6 @@ protected:
   virtual int generate_dblink_raw_plan() override;
 
 private:
-  int is_direct_insert_into_select(bool &result);
-private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
 protected:

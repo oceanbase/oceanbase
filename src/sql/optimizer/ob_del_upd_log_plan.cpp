@@ -21,6 +21,7 @@
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/dblink/ob_dblink_utils.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -1532,8 +1533,10 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_guard = optimizer_context_.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard is nullptr", K(ret), K(stmt), K(schema_guard));
-  } else if (OB_FAIL(is_direct_insert_into_select(is_direct_insert))) {
-    LOG_WARN("failed to check is direct insert into select", KR(ret));
+  } else if (OB_FAIL(ObTableDirectInsertService::check_direct_insert(optimizer_context_,
+                                                                     *stmt,
+                                                                     is_direct_insert))) {
+    LOG_WARN("failed to check direct insert", KR(ret));
   } else if (is_direct_insert) {
     // no need building index
     index_tid_array_size = 0;
@@ -1653,8 +1656,14 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
     uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
     int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
     bool is_direct_insert = false;
-    if (OB_FAIL(is_direct_insert_into_select(is_direct_insert))) {
-      LOG_WARN("failed to check is direct insert into select", KR(ret));
+    const ObDelUpdStmt *stmt = get_stmt();
+    if (OB_ISNULL(stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", KR(ret), KP(stmt));
+    } else if (OB_FAIL(ObTableDirectInsertService::check_direct_insert(optimizer_context_,
+                                                                      *stmt,
+                                                                      is_direct_insert))) {
+      LOG_WARN("failed to check direct insert", KR(ret));
     } else if (is_direct_insert) {
       // no need building index
       index_cnt = 0;
@@ -2060,31 +2069,6 @@ int ObDelUpdLogPlan::allocate_link_dml_as_top(ObLogicalOperator *&old_top)
     LOG_WARN("failed to compute property", K(ret));
   } else {
     old_top = link_dml;
-  }
-  return ret;
-}
-
-int ObDelUpdLogPlan::is_direct_insert_into_select(bool &result)
-{
-  int ret = OB_SUCCESS;
-  const ObDelUpdStmt *stmt = get_stmt();
-  ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
-  if (OB_ISNULL(stmt) || OB_ISNULL(session_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", KR(ret), KP(stmt), KP(session_info));
-  } else if (stmt::T_INSERT == stmt->stmt_type_
-      && static_cast<const ObInsertStmt*>(stmt)->value_from_select()
-      && GCONF._ob_enable_direct_load
-      && get_optimizer_context().get_global_hint().has_append()
-      && get_optimizer_context().use_pdml()) { // Currently direct-insert only supports pdml
-    // In direct-insert mode, index will be built by direct loader
-    bool auto_commit = false;
-    if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
-      LOG_WARN("failed to get auto commit", KR(ret));
-    } else if (auto_commit && !session_info->is_in_transaction()) {
-      LOG_TRACE("insert into select clause in direct-insert mode, no need building index");
-      result = true;
-    }
   }
   return ret;
 }

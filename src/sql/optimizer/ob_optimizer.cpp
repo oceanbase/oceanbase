@@ -22,6 +22,7 @@
 #include "sql/optimizer/ob_logical_operator.h"
 #include "common/ob_smart_call.h"
 #include "sql/ob_optimizer_trace_impl.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -674,6 +675,12 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
       ctx_.set_parallel_rule(PXParallelRule::PL_UDF_DAS_FORCE_SERIALIZE);
       ctx_.set_parallel(1);
       ctx_.add_plan_note(PARALLEL_DISABLED_BY_PL_UDF_DAS, 1);
+    }
+    bool is_direct_insert = false;
+    if (OB_FAIL(ObTableDirectInsertService::check_direct_insert(ctx_, stmt, is_direct_insert))) {
+      LOG_WARN("failed to check direct insert", KR(ret));
+    } else if (is_direct_insert) {
+      ctx_.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT);
     }
   }
 
