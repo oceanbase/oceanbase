@@ -7220,12 +7220,8 @@ int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
     LOG_WARN("failed to create columns for view", K(ret));
   } else if (shared_exprs.empty()) {
     ret = create_dummy_select_item(*view_stmt, ctx);
-  } else if (OB_FAIL(stmt->remove_table_item(table))) {
-    LOG_WARN("failed to remove table item", K(ret));
-  } else if (OB_FAIL(stmt->replace_inner_stmt_expr(shared_exprs, column_exprs))) {
+  } else if (OB_FAIL(stmt->replace_relation_exprs(shared_exprs, column_exprs))) {
     LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else if (OB_FAIL(stmt->get_table_items().push_back(table))) {
-    LOG_WARN("failed to push back table", K(ret));
   }
 
   if (OB_SUCC(ret)) {
