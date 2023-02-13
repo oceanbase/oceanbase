@@ -195,7 +195,8 @@ int ObSSTableInsertRowIterator::get_sql_mode(ObSQLMode &sql_mode) const
 ObSSTableInsertSliceParam::ObSSTableInsertSliceParam()
   : snapshot_version_(0),
     write_major_(false),
-    sstable_index_builder_(nullptr)
+    sstable_index_builder_(nullptr),
+    task_id_(0)
 {
 }
 
@@ -207,7 +208,7 @@ bool ObSSTableInsertSliceParam::is_valid() const
 {
   return tablet_id_.is_valid() && ls_id_.is_valid() && table_key_.is_valid() &&
          start_seq_.is_valid() && start_scn_.is_valid() && frozen_scn_.is_valid() &&
-         nullptr != sstable_index_builder_;
+         nullptr != sstable_index_builder_ && 0 != task_id_;
 }
 
 ObSSTableInsertSliceWriter::ObSSTableInsertSliceWriter()
@@ -250,7 +251,7 @@ int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_para
                K(slice_param.tablet_id_));
     } else if (FALSE_IT(sstable_redo_writer_.set_start_scn(slice_param.start_scn_))) {
     } else if (OB_FAIL(redo_log_writer_callback_.init(DDL_MB_DATA_TYPE, slice_param.table_key_,
-                                                      &sstable_redo_writer_, ddl_kv_mgr_handle))) {
+                                                      slice_param.task_id_, &sstable_redo_writer_, ddl_kv_mgr_handle))) {
       LOG_WARN("fail to init redo log writer callback", KR(ret));
     } else if (OB_FAIL(data_desc_.init(*table_schema,
                                        slice_param.ls_id_,
@@ -664,6 +665,7 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
     slice_param.frozen_scn_ = frozen_status.frozen_scn_;
     slice_param.write_major_ = build_param.write_major_;
     slice_param.sstable_index_builder_ = index_builder_;
+    slice_param.task_id_ = build_param_.ddl_task_id_;
     if (OB_ISNULL(sstable_slice_writer = OB_NEWx(ObSSTableInsertSliceWriter, (&allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObSSTableInsertSliceWriter", KR(ret));

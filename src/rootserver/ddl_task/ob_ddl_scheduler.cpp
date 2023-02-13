@@ -1529,6 +1529,7 @@ int ObDDLScheduler::remove_inactive_ddl_task()
     if (OB_FAIL(manager_reg_heart_beat_task_.get_inactive_ddl_task_ids(remove_task_ids))){
       LOG_WARN("failed to check register time", K(ret));
     } else {
+      LOG_INFO("need remove task", K(remove_task_ids));
       for (int64_t i = 0; OB_SUCC(ret) && i < remove_task_ids.size(); i++) {
         int64_t remove_task_id = 0;
         if (OB_FAIL(remove_task_ids.at(i, remove_task_id))) {

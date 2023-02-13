@@ -55,7 +55,9 @@ public:
   void reset_need_stop_write() { need_stop_write_ = false; }
   int init(const share::ObLSID &ls_id);
   int refresh();
-  int limit_and_sleep(const int64_t bytes, int64_t &real_sleep_us);
+  int limit_and_sleep(const int64_t bytes,
+                      const int64_t task_id,
+                      int64_t &real_sleep_us);
 
   // for ref_cnt_
   void inc_ref() { ATOMIC_INC(&ref_cnt_); }
@@ -66,7 +68,9 @@ public:
     K_(write_speed), K_(disk_used_stop_write_threshold), K_(need_stop_write), K_(ref_cnt));
 private:
   int cal_limit(const int64_t bytes, int64_t &next_available_ts);
-  int do_sleep(const int64_t next_available_ts, int64_t &real_sleep_us);
+  int do_sleep(const int64_t next_available_ts,
+               const int64_t task_id,
+               int64_t &real_sleep_us);
 private:
   static const int64_t MIN_WRITE_SPEED = 50L;
   static const int64_t SLEEP_INTERVAL = 1 * 1000; // 1ms
@@ -85,7 +89,11 @@ class ObDDLCtrlSpeedHandle final
 public:
   int init();
   static ObDDLCtrlSpeedHandle &get_instance();
-  int limit_and_sleep(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t bytes, int64_t &real_sleep_us);
+  int limit_and_sleep(const uint64_t tenant_id,
+                      const share::ObLSID &ls_id,
+                      const int64_t bytes,
+                      const int64_t task_id,
+                      int64_t &real_sleep_us);
 
 private:
   struct SpeedHandleKey {
@@ -192,6 +200,7 @@ public:
             ObDDLKvMgrHandle &ddl_kv_mgr_handle,
             const ObDDLRedoLog &log,
             const uint64_t tenant_id,
+            const int64_t task_id,
             const share::ObLSID &ls_id,
             logservice::ObLogHandler *log_handler,
             const blocksstable::MacroBlockId &macro_block_id,
@@ -234,11 +243,13 @@ public:
                               ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                               const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                               const share::ObLSID &ls_id,
+                              const int64_t task_id,
                               logservice::ObLogHandler *log_handler,
                               const blocksstable::MacroBlockId &macro_block_id,
                               char *buffer,
                               ObDDLRedoLogHandle &handle);
-  static int remote_write_macro_redo(const ObAddr &leader_addr,
+  static int remote_write_macro_redo(const int64_t task_id,
+                                     const ObAddr &leader_addr,
                                      const share::ObLSID &leader_ls_id,
                                      const blocksstable::ObDDLMacroBlockRedoInfo &redo_info);
 private:
@@ -265,6 +276,7 @@ public:
   int write_redo_log(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                      const blocksstable::MacroBlockId &macro_block_id,
                      const bool allow_remote_write,
+                     const int64_t task_id,
                      ObTabletHandle &tablet_handle,
                      ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int wait_redo_log_finish(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
@@ -298,7 +310,11 @@ class ObDDLRedoLogWriterCallback : public blocksstable::ObIMacroBlockFlushCallba
 public:
   ObDDLRedoLogWriterCallback();
   virtual ~ObDDLRedoLogWriterCallback();
-  int init(const blocksstable::ObDDLMacroBlockType block_type, const ObITable::TableKey &table_key, ObDDLSSTableRedoWriter *ddl_writer, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int init(const blocksstable::ObDDLMacroBlockType block_type,
+           const ObITable::TableKey &table_key,
+           const int64_t task_id,
+           ObDDLSSTableRedoWriter *ddl_writer,
+           ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int write(
       const ObMacroBlockHandle &macro_handle,
       const blocksstable::ObLogicMacroBlockId &logic_id,
@@ -314,6 +330,7 @@ private:
   blocksstable::MacroBlockId macro_block_id_;
   ObDDLSSTableRedoWriter *ddl_writer_;
   char *block_buffer_;
+  int64_t task_id_;
   ObTabletHandle tablet_handle_;
   ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };

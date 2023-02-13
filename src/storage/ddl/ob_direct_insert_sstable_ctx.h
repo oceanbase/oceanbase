@@ -116,7 +116,7 @@ public:
   ~ObSSTableInsertSliceParam();
   bool is_valid() const;
   TO_STRING_KV(K_(tablet_id), K_(ls_id), K_(table_key), K_(start_seq), K_(start_scn),
-               K_(snapshot_version), K_(frozen_scn), K_(write_major), KP_(sstable_index_builder));
+               K_(snapshot_version), K_(task_id), K_(frozen_scn), K_(write_major), KP_(sstable_index_builder), K_(task_id));
 public:
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
@@ -127,6 +127,7 @@ public:
   share::SCN frozen_scn_;
   bool write_major_;
   blocksstable::ObSSTableIndexBuilder *sstable_index_builder_;
+  int64_t task_id_;
 };
 
 class ObSSTableInsertSliceWriter final

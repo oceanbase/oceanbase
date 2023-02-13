@@ -8074,13 +8074,15 @@ public:
   ~ObRpcRemoteWriteDDLRedoLogArg() = default;
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
-           const blocksstable::ObDDLMacroBlockRedoInfo &redo_info);
-  bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && redo_info_.is_valid(); }
-  TO_STRING_KV(K_(tenant_id), K(ls_id_), K_(redo_info));
+           const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+           const int64_t task_id);
+  bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && redo_info_.is_valid() && task_id_ != 0; }
+  TO_STRING_KV(K_(tenant_id), K(ls_id_), K_(redo_info), K(task_id_));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
+  int64_t task_id_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLRedoLogArg);

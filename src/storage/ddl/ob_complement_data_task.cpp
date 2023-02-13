@@ -1021,7 +1021,7 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
         LOG_WARN("the dag of this task is null", K(ret));
       } else if (FALSE_IT(sstable_redo_writer.set_start_scn(
           static_cast<ObComplementDataDag *>(get_dag())->get_context().data_sstable_redo_writer_.get_start_scn()))) {
-      } else if (OB_FAIL(callback.init(DDL_MB_DATA_TYPE, hidden_table_key, &sstable_redo_writer, context_->ddl_kv_mgr_handle_))) {
+      } else if (OB_FAIL(callback.init(DDL_MB_DATA_TYPE, hidden_table_key, param_->task_id_, &sstable_redo_writer, context_->ddl_kv_mgr_handle_))) {
         LOG_WARN("fail to init data callback", K(ret), K(hidden_table_key));
       } else if (OB_FAIL(writer.open(data_desc, macro_start_seq, &callback))) {
         LOG_WARN("fail to open macro block writer", K(ret), K(data_desc));

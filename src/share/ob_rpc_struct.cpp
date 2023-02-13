@@ -7345,26 +7345,28 @@ int ObBatchBroadcastSchemaResult::get_ret() const
 OB_SERIALIZE_MEMBER(ObBatchBroadcastSchemaResult, ret_);
 
 ObRpcRemoteWriteDDLRedoLogArg::ObRpcRemoteWriteDDLRedoLogArg()
-  : tenant_id_(OB_INVALID_ID), ls_id_(), redo_info_()
+  : tenant_id_(OB_INVALID_ID), ls_id_(), redo_info_(), task_id_(0)
 {}
 
 int ObRpcRemoteWriteDDLRedoLogArg::init(const uint64_t tenant_id,
                                         const share::ObLSID &ls_id,
-                                        const blocksstable::ObDDLMacroBlockRedoInfo &redo_info)
+                                        const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+                                        const int64_t task_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !redo_info.is_valid())) {
+  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || task_id == 0 || !ls_id.is_valid() || !redo_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("args are not valid", K(ret), K(tenant_id), K(ls_id), K(redo_info));
+    LOG_WARN("args are not valid", K(ret), K(tenant_id), K(task_id), K(ls_id), K(redo_info));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     redo_info_ = redo_info;
+    task_id_ = task_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLRedoLogArg, tenant_id_, ls_id_, redo_info_);
+OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLRedoLogArg, tenant_id_, ls_id_, redo_info_, task_id_);
 
 ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(SCN::min_scn()),
