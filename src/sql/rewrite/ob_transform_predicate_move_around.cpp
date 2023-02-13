@@ -486,6 +486,7 @@ int ObTransformPredicateMoveAround::update_subquery_pullup_preds(ObIArray<ObQuer
   ObSEArray<ObRawExpr *, 4> renamed_preds;
   for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
     ObQueryRefRawExpr *subquery = subquery_exprs.at(i);
+    renamed_preds.reuse();
     if (OB_ISNULL(subquery)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sub query is null", K(ret));
