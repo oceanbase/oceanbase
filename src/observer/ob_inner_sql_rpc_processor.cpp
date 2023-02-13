@@ -369,11 +369,16 @@ int ObInnerSqlRpcP::process()
     }
     if (OB_NOT_NULL(conn)) {
       bool need_reuse_conn = true;
-      const bool in_trans = OB_INVALID_ID != transmit_arg.get_conn_id() || ObInnerSQLTransmitArg::OPERATION_TYPE_START_TRANSACTION == transmit_arg.get_operation_type();
-      if (!in_trans // need to release conn if not in a trans
+      const bool is_start_trans = ObInnerSQLTransmitArg::OPERATION_TYPE_START_TRANSACTION
+                                    == transmit_arg.get_operation_type();
+      const bool in_trans = is_start_trans || OB_INVALID_ID != transmit_arg.get_conn_id();
+      if (!in_trans
+          // need to release conn if not in a trans
           || ObInnerSQLTransmitArg::OPERATION_TYPE_ROLLBACK == transmit_arg.get_operation_type()
           || ObInnerSQLTransmitArg::OPERATION_TYPE_COMMIT == transmit_arg.get_operation_type()
           // need to release conn after commit or rollback
+          || (OB_FAIL(ret) && is_start_trans)
+          // need to release conn if start_trans was failed
           ) {
         need_reuse_conn = false;
       }
