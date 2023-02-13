@@ -61,7 +61,6 @@ int ObTenantMajorFreezeP::process()
 
   if (FAILEDx(rootserver::ObMajorFreezeUtil::get_major_freeze_service(primary_major_freeze_service_,
         restore_major_freeze_service_, major_freeze_service, is_primary_service))) {
-    ret = OB_ERR_UNEXPECTED;
     RS_LOG(WARN, "fail to get major freeze service", KR(ret), K(req));
   } else if (OB_ISNULL(major_freeze_service)) {
     ret = OB_ERR_UNEXPECTED;
@@ -75,16 +74,16 @@ int ObTenantMajorFreezeP::process()
       if (OB_MAJOR_FREEZE_NOT_FINISHED != ret && (OB_FROZEN_INFO_ALREADY_EXIST != ret)) {
         RS_LOG(WARN, "fail to launch_major_freeze", KR(ret), K(req), K(is_primary_service));
       }
-      res.err_code_ = ret;
     } else {
-      res.err_code_ = OB_SUCCESS;
-      RS_LOG(INFO, "launch_major_freeze succ", K(req), K(res), K(is_primary_service));
+      RS_LOG(INFO, "launch_major_freeze succ", K(req), K(is_primary_service));
     }
   } else {
     ret = OB_MAJOR_FREEZE_NOT_ALLOW;
     RS_LOG(WARN, "fail to launch_major_freeze, forbidden in restore_major_freeze_service",
            KR(ret), K(req), K(is_primary_service));
   }
+  res.err_code_ = ret;
+  ret = OB_SUCCESS;
   return ret;
 }
 
@@ -119,7 +118,6 @@ int ObTenantAdminMergeP::process()
   
   if (FAILEDx(rootserver::ObMajorFreezeUtil::get_major_freeze_service(primary_major_freeze_service_,
         restore_major_freeze_service_, major_freeze_service, is_primary_service))) {
-    ret = OB_ERR_UNEXPECTED;
     RS_LOG(WARN, "fail to get major freeze service", KR(ret), K(req));
   } else if (OB_ISNULL(major_freeze_service)) {
     ret = OB_ERR_UNEXPECTED;
@@ -149,10 +147,11 @@ int ObTenantAdminMergeP::process()
         break;
     }
     if (OB_SUCC(ret)) {
-      res.err_code_ = OB_SUCCESS;
-      RS_LOG(INFO, "succ to execute tenant admin merge", K(req), K(res), K(is_primary_service));
+      RS_LOG(INFO, "succ to execute tenant admin merge", K(req), K(is_primary_service));
     }
   }
+  res.err_code_ = ret;
+  ret = OB_SUCCESS;
   return ret;
 }
 
