@@ -517,6 +517,8 @@ public:
   OB_INLINE int eval_batch_param_value(ObEvalCtx &ctx, const ObBitVector &skip,
                                        const int64_t size, TS &...args) const;
 
+  OB_INLINE int deep_copy_self_datum(ObEvalCtx &ctx) const;
+
   // deep copy %datum to reserve buffer or new allocated buffer if reserved buffer is not enough.
   OB_INLINE int deep_copy_datum(ObEvalCtx &ctx, const common::ObDatum &datum) const;
 
@@ -1057,6 +1059,17 @@ OB_INLINE int ObExpr::eval_batch(ObEvalCtx &ctx,
   } else if (size > 0) {
     ret = do_eval_batch(ctx, skip, size);
   }
+  return ret;
+}
+
+OB_INLINE int ObExpr::deep_copy_self_datum(ObEvalCtx &ctx) const
+{
+  int ret = OB_SUCCESS;
+  const ObDatum &datum = locate_expr_datum(ctx);
+  if (OB_FAIL(deep_copy_datum(ctx, datum))) {
+    SQL_LOG(WARN, "fail to deep copy datum", K(ret), K(ctx), K(datum));
+  }
+
   return ret;
 }
 

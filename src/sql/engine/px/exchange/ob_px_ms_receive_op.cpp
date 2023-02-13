@@ -367,8 +367,8 @@ int ObPxMSReceiveOp::GlobalOrderInput::get_one_row_from_channels(
       while (OB_SUCC(ret) && ms_receive_op->row_reader_.has_more()) {
         ms_receive_op->clear_evaluated_flag();
         ms_receive_op->clear_dynamic_const_parent_flag();
-        if (OB_FAIL(ms_receive_op->row_reader_.get_next_row(
-                    ms_receive_op->my_spec().child_exprs_, eval_ctx))) {
+        if (OB_FAIL(ms_receive_op->row_reader_.get_next_row(ms_receive_op->my_spec().child_exprs_,
+                                      ms_receive_op->my_spec().dynamic_const_exprs_, eval_ctx))) {
           LOG_WARN("get row failed", K(ret));
         } else {
           processed_cnt_++;
@@ -658,7 +658,10 @@ int ObPxMSReceiveOp::inner_get_next_row()
       } else if (row_heap_.capacity() == row_heap_.count()) {
         if (OB_FAIL(row_heap_.pop(store_row))) {
           LOG_WARN("fail pop row from heap", K(ret));
-        } else if (OB_FAIL(ObReceiveRowReader::to_expr(store_row, MY_SPEC.all_exprs_, eval_ctx_))) {
+        } else if (OB_FAIL(ObReceiveRowReader::to_expr(store_row,
+                                                       MY_SPEC.dynamic_const_exprs_,
+                                                       MY_SPEC.all_exprs_,
+                                                       eval_ctx_))) {
           LOG_WARN("failed to convert store row", K(ret));
         } else {
           LOG_TRACE("trace output row", K(ret), K(ObToStringExprRow(eval_ctx_, MY_SPEC.all_exprs_)));
@@ -773,7 +776,9 @@ int ObPxMSReceiveOp::get_all_rows_from_channels(
           clear_evaluated_flag();
           clear_dynamic_const_parent_flag();
           // Get row to %child_exprs_ instead of %all_exprs_ which contain sort expressions
-          if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_, eval_ctx_))) {
+          if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_,
+                                               MY_SPEC.dynamic_const_exprs_,
+                                               eval_ctx_))) {
             LOG_WARN("get row from reader failed", K(ret));
           } else {
             ++processed_cnt_;

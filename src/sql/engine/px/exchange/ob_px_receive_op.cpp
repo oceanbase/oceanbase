@@ -896,7 +896,9 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
       clear_evaluated_flag();
       clear_dynamic_const_parent_flag();
       if (!is_vectorized()) {
-        if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_, eval_ctx_))) {
+        if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_,
+                                             MY_SPEC.dynamic_const_exprs_,
+                                             eval_ctx_))) {
           LOG_WARN("get next row from row reader failed", K(ret));
         } else {
           got_row = true;
@@ -904,8 +906,12 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
         }
       } else {
         int64_t read_rows = 0;
-        if (OB_FAIL(row_reader_.get_next_batch(MY_SPEC.child_exprs_, eval_ctx_,
-                                               row_cnt, read_rows, stored_rows_))) {
+        if (OB_FAIL(row_reader_.get_next_batch(MY_SPEC.child_exprs_,
+                                               MY_SPEC.dynamic_const_exprs_,
+                                               eval_ctx_,
+                                               row_cnt,
+                                               read_rows,
+                                               stored_rows_))) {
           LOG_WARN("get next batch failed", K(ret));
         } else {
           got_row = true;
