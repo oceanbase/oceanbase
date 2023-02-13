@@ -1191,6 +1191,7 @@ public:
   bool can_txn_free_route() const;
   virtual bool is_txn_free_route_temp() const { return tx_desc_ != NULL && txn_free_route_ctx_.is_temp(*tx_desc_); }
   transaction::ObTxnFreeRouteCtx &get_txn_free_route_ctx() { return txn_free_route_ctx_; }
+  uint64_t get_txn_free_route_flag() const { return txn_free_route_ctx_.get_audit_record(); }
   void check_txn_free_route_alive();
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;

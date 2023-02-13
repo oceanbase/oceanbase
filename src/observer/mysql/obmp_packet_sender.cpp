@@ -464,6 +464,7 @@ int ObMPPacketSender::send_error_packet(int err,
           if (OB_FAIL(send_ok_packet(*session, ok_param, &epacket))) {
             LOG_WARN("failed to send ok packet", K(ok_param), K(ret));
           }
+          LOG_INFO("dump txn free route audit_record", "value", session->get_txn_free_route_flag());
         }
       } else {  // just a basic ok packet contain nothing
         OMPKOK okp;

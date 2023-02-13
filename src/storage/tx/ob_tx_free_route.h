@@ -94,7 +94,7 @@ struct ObTxnFreeRouteCtx {
   bool has_calculated() const { return calculated_; }
   void set_calculated() { calculated_ = true; }
   void reset_audit_record() { audit_record_.reset(); }
-  uint64_t get_audit_record() { return audit_record_.v_; }
+  uint64_t get_audit_record() const { return audit_record_.v_; }
 private:
   void reset_changed_() {
     static_changed_ = false;

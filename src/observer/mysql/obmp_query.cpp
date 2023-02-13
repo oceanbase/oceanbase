@@ -305,7 +305,14 @@ int ObMPQuery::process()
           */
           bool optimization_done = false;
           const char *p_normal_start = nullptr;
-          if (queries.count() > 1
+          if (queries.count() > 1 && session.is_txn_free_route_temp()) {
+            need_disconnect = false;
+            need_response_error = true;
+            ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+            LOG_WARN("multi stmt is not supported to be executed on txn temporary node", KR(ret),
+                     "tx_free_route_ctx", session.get_txn_free_route_ctx(),
+                     "trans_id", session.get_tx_id(), K(session));
+          } else if (queries.count() > 1
             && OB_FAIL(try_batched_multi_stmt_optimization(session,
                                                           queries,
                                                           parse_stat,
@@ -322,11 +329,6 @@ int ObMPQuery::process()
             need_disconnect = false;
             need_response_error = true;
             LOG_WARN("explain batch statement failed", K(ret));
-          } else if (!optimization_done && queries.count() > 1 && session.is_txn_free_route_temp()) {
-            need_disconnect = false;
-            need_response_error = true;
-            ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
-            LOG_WARN("multi stmt is not supported to be executed on txn temporary node", KR(ret), K(session));
           } else if (!optimization_done) {
             ARRAY_FOREACH(queries, i) {
               // in multistmt sql, audit_record will record multistmt_start_ts_ when count over 1
