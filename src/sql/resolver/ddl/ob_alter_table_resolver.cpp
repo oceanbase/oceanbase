@@ -4123,7 +4123,7 @@ int ObAlterTableResolver::process_timestamp_column(ObColumnResolveStat &stat,
     SQL_RESV_LOG(WARN, "fail to set orig default value for alter table", K(ret), K(cur_default_value));
   } else if (OB_FAIL(session_info_->get_explicit_defaults_for_timestamp(explicit_value))) {
     LOG_WARN("fail to get explicit_defaults_for_timestamp", K(ret));
-  } else if (true == explicit_value) {
+  } else if (true == explicit_value || alter_column_schema.is_generated_column()) {
     //nothing to do
   } else {
     alter_column_schema.check_timestamp_column_order_ = true;
@@ -5110,7 +5110,7 @@ int ObAlterTableResolver::fill_column_schema_according_stat(const ObColumnResolv
   } else if (ObTimestampType == alter_column_schema.get_data_type()) {
     if (OB_FAIL(session_info_->get_explicit_defaults_for_timestamp(explicit_value))) {
       LOG_WARN("fail to get explicit_defaults_for_timestamp", K(ret));
-    } else if (!explicit_value) {
+    } else if (!explicit_value && !alter_column_schema.is_generated_column()) {
       alter_column_schema.check_timestamp_column_order_ = true;
     }
   }

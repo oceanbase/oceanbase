@@ -2628,7 +2628,7 @@ int ObResolverUtils::resolve_timestamp_node(const bool is_set_null,
     LOG_WARN("session info is NULL", K(ret));
   } else if (OB_FAIL(session_info->get_explicit_defaults_for_timestamp(explicit_value))) {
     LOG_WARN("fail to get explicit_defaults_for_timestamp", K(ret));
-  } else if (!explicit_value) {
+  } else if (!explicit_value && !column.is_generated_column()) {
     //（1）每个表的第一个timestamp列，如果没有显式的指定NULL属性，也没有显示的指定default
     //系统会自动为该列添加Default current_timestamp、on update current_timestamp属性；
     if (is_first_timestamp_column && !is_set_null && !is_set_default && !column.is_on_update_current_timestamp()) {
