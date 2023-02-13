@@ -921,9 +921,11 @@ int ObNetEasy::rpc_shutdown()
 int ObNetEasy::high_prio_rpc_shutdown()
 {
   int ret = OB_SUCCESS;
-  if (!started_ || !is_inited_ || OB_ISNULL(high_prio_rpc_eio_)) {
+  if (!started_ || !is_inited_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("easy net hasn't started", K(ret));
+  } else if (OB_ISNULL(high_prio_rpc_eio_)) {
+    LOG_INFO("user does not start high priority net threads");
   } else {
     int eret = easy_eio_shutdown(high_prio_rpc_eio_);
     if (eret != EASY_OK) {
