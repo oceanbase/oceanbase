@@ -52,7 +52,7 @@ public:
     return addr;
   }
 
-  int init_sql_proxy2(const char *tenant_name = "tt1", const char *db_name="test");
+  int init_sql_proxy2(const char *tenant_name = "tt1", const char *db_name="test", const bool oracle_mode = false);
   int init_sql_proxy_with_short_wait();
 protected:
   int init_sql_proxy();

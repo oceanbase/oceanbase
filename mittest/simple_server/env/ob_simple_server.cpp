@@ -235,10 +235,11 @@ int ObSimpleServer::init_sql_proxy()
   return ret;
 }
 
-int ObSimpleServer::init_sql_proxy2(const char *tenant_name, const char *db_name)
+int ObSimpleServer::init_sql_proxy2(const char *tenant_name, const char *db_name, const bool oracle_mode)
 {
   int ret = OB_SUCCESS;
-  sql_conn_pool2_.set_db_param(("root@" + std::string(tenant_name)).c_str(), "", db_name);
+  std::string user = oracle_mode ? "sys@" : "root@";
+  sql_conn_pool2_.set_db_param((user + std::string(tenant_name)).c_str(), "", db_name);
   common::ObAddr db_addr;
   db_addr.set_ip_addr(local_ip_.c_str(), mysql_port_);
 
