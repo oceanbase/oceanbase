@@ -18,6 +18,7 @@
 #include "sql/code_generator/ob_column_index_provider.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -1065,7 +1066,11 @@ int ObStaticEngineExprCG::alloc_const_frame(const ObIArray<ObRawExpr *> &exprs,
         if (0 == datum->len_) {
           datum->ptr_ = NULL;
         } else {
-          OB_ASSERT(rt_expr->obj_meta_.has_lob_header() == tmp_obj.has_lob_header());
+          if (is_lob_storage(tmp_obj.get_type())) {
+            if (OB_FAIL(ob_adjust_lob_datum(tmp_obj, rt_expr->obj_meta_, allocator_, datum))) {
+              LOG_WARN("fail to adjust lob datum", K(ret), K(tmp_obj), K(rt_expr->obj_meta_), K(datum));
+            }
+          }
         }
       }
     }

@@ -156,6 +156,14 @@ int ob_adjust_lob_datum(const ObObj &origin_obj,
                         ObIAllocator &allocator,
                         ObDatum &out_datum)
 {
+  return ob_adjust_lob_datum(origin_obj, obj_meta, allocator, &out_datum);
+}
+
+int ob_adjust_lob_datum(const ObObj &origin_obj,
+                        const common::ObObjMeta &obj_meta,
+                        ObIAllocator &allocator,
+                        ObDatum *out_datum)
+{
   int ret = OB_SUCCESS;
   if (!is_lob_storage(origin_obj.get_type())) { // null & nop is not lob
   } else if (origin_obj.has_lob_header() != obj_meta.has_lob_header()) {
@@ -167,14 +175,14 @@ int ob_adjust_lob_datum(const ObObj &origin_obj,
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, origin_obj, full_data))) {
         LOG_WARN("Lob: failed to get full data", K(ret));
       } else {
-        out_datum.set_string(full_data);
+        out_datum->set_string(full_data);
       }
     } else { // origin obj does not have lob header, but meta has, build temp lob header
-      // OB_ASSERT(0); // should not come here?
+      // use by not strict default value add lob header
       ObObj out_obj(origin_obj);
       if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(out_obj, allocator))) {
         LOG_WARN("Lob: failed to convert plain lob data to temp lob", K(ret));
-      } else if (OB_FAIL(out_datum.from_obj(out_obj))) {
+      } else if (OB_FAIL(out_datum->from_obj(out_obj))) {
         LOG_WARN("convert lob obj to datum failed", K(ret), K(out_obj));
       }
     }

@@ -826,6 +826,16 @@ int ObPushdownFilterExecutor::init_filter_param(
           } else if (!def_cell.is_nop_value()) {
             if (OB_FAIL(default_datum.from_obj(def_cell))) {
               LOG_WARN("convert obj to datum failed", K(ret), K(col_params_.count()), K(def_cell));
+            } else {
+              // def value must have no lob header
+              // When do lob pushdown, should add lob header for default value
+              ObString data = default_datum.get_string();
+              ObString out;
+              if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
+                LOG_WARN("failed to fill lob header for column.", K(idx), K(def_cell), K(data));
+              } else {
+                default_datum.set_string(out);
+              }
             }
           }
           if (OB_FAIL(ret)) {
