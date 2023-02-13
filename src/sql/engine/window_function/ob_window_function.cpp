@@ -1521,19 +1521,29 @@ int ObWindowFunction::ObWindowFunctionCtx::parallel_winbuf_process()
                 break;
               }
               case T_FUN_MAX: {
-                if (ObObjCmpFuncs::compare_oper_nullsafe(new_row->cells_[index],
-                        row->cells_[index],
-                        new_row->cells_[index].get_collation_type(),
-                        CO_LT)) {
+                // should ignore null in max calc
+                if (row->cells_[index].is_null() && !new_row->cells_[index].is_null()) {
+                  /*do nothing*/
+                } else if (!row->cells_[index].is_null() && new_row->cells_[index].is_null()) {
+                  new_row->cells_[index] = row->cells_[index];
+                } else if (ObObjCmpFuncs::compare_oper_nullsafe(new_row->cells_[index],
+                               row->cells_[index],
+                               new_row->cells_[index].get_collation_type(),
+                               CO_LT)) {
                   new_row->cells_[index] = row->cells_[index];
                 }
                 break;
               }
               case T_FUN_MIN: {
-                if (ObObjCmpFuncs::compare_oper_nullsafe(new_row->cells_[index],
-                        row->cells_[index],
-                        new_row->cells_[index].get_collation_type(),
-                        CO_GT)) {
+                // should ignore null in min calc
+                if (row->cells_[index].is_null() && !new_row->cells_[index].is_null()) {
+                  /*do nothing*/
+                } else if (!row->cells_[index].is_null() && new_row->cells_[index].is_null()) {
+                  new_row->cells_[index] = row->cells_[index];
+                } else if (ObObjCmpFuncs::compare_oper_nullsafe(new_row->cells_[index],
+                               row->cells_[index],
+                               new_row->cells_[index].get_collation_type(),
+                               CO_GT)) {
                   new_row->cells_[index] = row->cells_[index];
                 }
                 break;
