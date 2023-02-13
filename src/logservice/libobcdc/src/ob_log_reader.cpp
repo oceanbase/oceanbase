@@ -179,6 +179,7 @@ int ObLogReader::handle(void *data, const int64_t thread_index, volatile bool &s
       LOG_ERROR("handle_task_ fail", KR(ret), KPC(task), K(thread_index));
     }
   } else {
+    LOG_DEBUG("ObLogEntryTask read succ", KP(task));
     ATOMIC_DEC(&log_entry_task_count_);
   }
 

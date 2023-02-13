@@ -816,7 +816,7 @@ int ObLogFormatter::finish_format_(PartTransTask &part_trans_task,
           LOG_ERROR("redo_log_entry_task link_row_list fail", KR(ret), K(redo_log_entry_task));
         }
       } else {
-        LOG_DEBUG("[FORMATT]", K(tenant_id), K(stmt_num), K(redo_log_entry_task), K(part_trans_task));
+        LOG_DEBUG("[FORMATT]", K(tenant_id), K(stmt_num), KP(&redo_log_entry_task), K(redo_log_entry_task), K(part_trans_task));
         IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
 
         if (0 == row_ref_cnt) {

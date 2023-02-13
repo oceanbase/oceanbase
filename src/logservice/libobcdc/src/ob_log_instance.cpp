@@ -404,12 +404,14 @@ int ObLogInstance::init_logger_()
     LOG_ERROR("FileDirectoryUtils create_full_path fail", KR(ret), K(log_dir));
   } else {
     const int64_t max_log_file_count = TCONF.max_log_file_count;
+    const bool enable_log_limit = (1 == TCONF.enable_log_limit);
     easy_log_level = EASY_LOG_INFO;
     OB_LOGGER.set_max_file_size(MAX_LOG_FILE_SIZE);
     OB_LOGGER.set_max_file_index(max_log_file_count);
     OB_LOGGER.set_file_name(log_file, disable_redirect_log_, false);
     OB_LOGGER.set_log_level("INFO");
     OB_LOGGER.disable_thread_log_level();
+    OB_LOGGER.set_enable_log_limit(enable_log_limit);
 
     if (! disable_redirect_log_) {
       // Open the stderr log file
@@ -2118,9 +2120,11 @@ void ObLogInstance::reload_config_()
     LOG_ERROR("load_from_file fail", KR(ret), K(default_config_fpath));
   } else {
     const int64_t max_log_file_count = config.max_log_file_count;
+    const bool enable_log_limit = (1 == config.enable_log_limit);
     LOG_INFO("reset log config", "log_level", config.log_level.str(), K(max_log_file_count));
     OB_LOGGER.set_mod_log_levels(config.log_level.str());
     OB_LOGGER.set_max_file_index(max_log_file_count);
+    OB_LOGGER.set_enable_log_limit(enable_log_limit);
 
     ATOMIC_STORE(&log_clean_cycle_time_us_, config.log_clean_cycle_time_in_hours * _HOUR_);
 
