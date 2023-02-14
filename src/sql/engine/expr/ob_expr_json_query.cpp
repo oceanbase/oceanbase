@@ -60,6 +60,7 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
 {
   UNUSED(type_ctx);
   INIT_SUCC(ret);
+  common::ObArenaAllocator allocator;
   if (OB_UNLIKELY(param_num != 10)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid param number", K(ret), K(param_num));
@@ -105,7 +106,15 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
     ObExprResType dst_type;
     if (OB_SUCC(ret)) {
       if (types_stack[2].get_type() == ObNullType) {
-        if (input_judge_json_type) {
+        ObString j_path_text(types_stack[1].get_param().get_string().length(), types_stack[1].get_param().get_string().ptr());
+        ObJsonPath j_path(j_path_text, &allocator);
+        if (j_path_text.length() == 0) {
+        } else if (OB_FAIL(j_path.parse_path())) {
+          ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
+          LOG_USER_ERROR(OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR, j_path_text.length(), j_path_text.ptr());
+        }
+        if (OB_FAIL(ret)) {
+        } else if (input_judge_json_type && !j_path.is_last_func()) {
           dst_type.set_type(ObObjType::ObJsonType);
           dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
         } else {
@@ -155,6 +164,7 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   bool is_null_json_obj = false;
   bool is_null_json_array = false;
   uint8_t is_type_cast = 0;
+  int8_t JSON_QUERY_EXPR = 1;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObIJsonBase *j_base = NULL;
@@ -182,21 +192,27 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObObjType val_type = json_arg_ret->datum_meta_.type_;
   int32_t dst_len = OB_MAX_TEXT_LENGTH;
   if (OB_SUCC(ret) && val_type == ObNullType) {
+    if (expr.args_[0]->datum_meta_.type_ != ObJsonType && j_path->is_last_func()
+        && OB_FAIL(ObJsonExprHelper::check_item_func_with_return(j_path->get_last_node_type(),
+                    ObVarcharType, expr.datum_meta_.cs_type_, JSON_QUERY_EXPR))) {
+      is_cover_by_error = false;
+      LOG_WARN("check item func with return type fail", K(ret));
+    }
   } else if (OB_SUCC(ret) && !is_null_result) {
     ret = get_dest_type(expr, dst_len, ctx, dst_type, is_cover_by_error);
   } else if (is_cover_by_error) { // when need error option, should do get accuracy
     get_dest_type(expr, dst_len, ctx, dst_type, is_cover_by_error);
   }
 
-  int8_t JSON_QUERY_EXPR = 1;
-  if (OB_SUCC(ret) && val_type != ObNullType && j_path->get_last_node_type() > JPN_BEGIN_FUNC_FLAG && j_path->get_last_node_type() < JPN_END_FUNC_FLAG
-      && OB_FAIL( ObJsonExprHelper::check_item_func_with_return(j_path->get_last_node_type(), dst_type, expr.datum_meta_.cs_type_, JSON_QUERY_EXPR))) {
+  if (OB_SUCC(ret) && val_type != ObNullType && j_path->is_last_func()
+      && OB_FAIL( ObJsonExprHelper::check_item_func_with_return(j_path->get_last_node_type(),
+                  dst_type, expr.datum_meta_.cs_type_, JSON_QUERY_EXPR))) {
     is_cover_by_error = false;
     LOG_WARN("check item func with return type fail", K(ret));
   }
 
   if (OB_SUCC(ret) && val_type == ObNullType) {
-    if (ob_is_string_type(type)) {
+    if (ob_is_string_type(type) || j_path->is_last_func()) {
       dst_type = ObVarcharType;
       accuracy.set_full_length(4000, 1, lib::is_oracle_mode());
     } else {
