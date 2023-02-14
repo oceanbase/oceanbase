@@ -711,6 +711,9 @@ int ObConstraintTask::validate_constraint_valid()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObConstraintTask has not been inited", K(ret));
+  } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected snapshot", K(ret), KPC(this));
   } else if (OB_FAIL(check_replica_end(is_check_replica_end))) {
     LOG_WARN("check build replica end", K(ret));
   } else {
