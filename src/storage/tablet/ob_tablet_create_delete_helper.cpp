@@ -913,6 +913,7 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
     // replaying procedure, clog ts is smaller than tx log ts, just skip
     LOG_INFO("skip abort create tablet", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
   } else if (OB_UNLIKELY(!trans_flags.for_replay_
+                         && trans_flags.scn_.is_valid()
                          && tx_data.tx_scn_ != SCN::max_scn()
                          && trans_flags.scn_ <= tx_data.tx_scn_)) {
     // If tx log ts equals SCN::max_scn(), it means redo callback has not been called.
@@ -926,9 +927,20 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not CREATING", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
   } else {
+    share::SCN tx_scn;
+    share::SCN memtable_scn;
+    if (trans_flags.scn_.is_valid()) {
+      tx_scn = trans_flags.scn_;
+      memtable_scn = trans_flags.scn_;
+    } else {
+      // trans flags scn is invalid, maybe tx is force killed
+      tx_scn = tx_data.tx_scn_;
+      memtable_scn = tx_data.tx_scn_;
+    }
+
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::DELETED,
-        trans_flags.scn_, trans_flags.scn_, trans_flags.for_replay_))) {
-      LOG_WARN("failed to set tablet status to DELETED", K(ret), K(tablet_handle), K(trans_flags));
+        tx_scn, memtable_scn, trans_flags.for_replay_))) {
+      LOG_WARN("failed to set tablet status to DELETED", K(ret), K(key), K(tablet_handle), K(trans_flags), K(tx_scn), K(memtable_scn));
     } else if (OB_FAIL(t3m->erase_pinned_tablet(key))) {
       LOG_ERROR("failed to erase tablet handle", K(ret), K(key));
       ob_usleep(1000 * 1000);
@@ -1286,7 +1298,7 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
       tx_scn = tx_data.tx_scn_;
     }
 
-    const SCN memtable_scn = (SCN::invalid_scn() == trans_flags.scn_) ? SCN::max_scn() : trans_flags.scn_;
+    const SCN &memtable_scn = (SCN::invalid_scn() == trans_flags.scn_) ? SCN::max_scn() : trans_flags.scn_;
 
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::NORMAL,
         tx_scn, memtable_scn, trans_flags.for_replay_, ref_op))) {

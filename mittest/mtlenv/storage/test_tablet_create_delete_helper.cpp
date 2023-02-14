@@ -2912,13 +2912,131 @@ TEST_F(TestTabletCreateDeleteHelper, tablet_not_exist_commit)
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 }
+
+TEST_F(TestTabletCreateDeleteHelper, force_kill_create_tablet_tx)
+{
+  int ret = OB_SUCCESS;
+
+  ObMulSourceDataNotifyArg trans_flags;
+  trans_flags.for_replay_ = false;
+  trans_flags.redo_submitted_ = false;
+  trans_flags.redo_synced_ = false;
+  trans_flags.is_force_kill_ = false;
+  trans_flags.tx_id_ = 1;
+  trans_flags.scn_ = share::SCN::invalid_scn();
+
+  ObSArray<ObTabletID> tablet_id_array;
+  tablet_id_array.push_back(ObTabletID(100));
+  ObBatchCreateTabletArg arg;
+  ret = TestTabletCreateDeleteHelper::build_create_pure_data_tablet_arg(
+      ls_id_, tablet_id_array, arg);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObLS *ls = ls_handle.get_ls();
+  ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
+
+  ret = ls_tablet_service.on_prepare_create_tablets(arg, trans_flags);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  trans_flags.redo_submitted_ = true;
+  trans_flags.redo_synced_ = true;
+  trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 100);
+  ret = ls_tablet_service.on_redo_create_tablets(arg, trans_flags);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // mock transaction force killed
+  trans_flags.is_force_kill_ = true;
+  trans_flags.scn_.set_invalid();
+  ret = ls_tablet_service.on_abort_create_tablets(arg, trans_flags);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(TestTabletCreateDeleteHelper, force_kill_remove_tablet_tx)
+{
+  int ret = OB_SUCCESS;
+
+  ObMulSourceDataNotifyArg trans_flags;
+  trans_flags.for_replay_ = false;
+  trans_flags.redo_submitted_ = false;
+  trans_flags.redo_synced_ = false;
+  trans_flags.is_force_kill_ = false;
+  trans_flags.tx_id_ = 1;
+  trans_flags.scn_ = share::SCN::invalid_scn();
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObLS *ls = ls_handle.get_ls();
+  ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
+
+  {
+    ObSArray<ObTabletID> tablet_id_array;
+    tablet_id_array.push_back(ObTabletID(100));
+    ObBatchCreateTabletArg arg;
+    ret = TestTabletCreateDeleteHelper::build_create_pure_data_tablet_arg(
+        ls_id_, tablet_id_array, arg);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ret = ls_tablet_service.on_prepare_create_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    trans_flags.redo_submitted_ = true;
+    trans_flags.redo_synced_ = true;
+    trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 100);
+    ret = ls_tablet_service.on_redo_create_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    trans_flags.scn_ = share::SCN::plus(trans_flags.scn_, 1);
+    ret = ls_tablet_service.on_tx_end_create_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = ls_tablet_service.on_commit_create_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+
+  // remove tablets
+  {
+    ObSArray<ObTabletID> tablet_id_array;
+    tablet_id_array.push_back(ObTabletID(100));
+
+    ObBatchRemoveTabletArg arg;
+    ret = TestTabletCreateDeleteHelper::build_remove_tablet_arg(
+        ls_id_, tablet_id_array, arg);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    trans_flags.for_replay_ = false;
+    trans_flags.redo_submitted_ = false;
+    trans_flags.redo_synced_ = false;
+    trans_flags.tx_id_ = 2;
+    trans_flags.scn_ = share::SCN::invalid_scn();
+
+    ret = ls_tablet_service.on_prepare_remove_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    trans_flags.redo_submitted_ = true;
+    trans_flags.redo_synced_ = true;
+    trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 90);
+    ret = ls_tablet_service.on_redo_remove_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // mock transaction force killed
+    trans_flags.is_force_kill_ = true;
+    trans_flags.scn_.set_invalid();
+    ret = ls_tablet_service.on_abort_remove_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+}
 } // namespace storage
 } // namespace oceanbase
 
 int main(int argc, char **argv)
 {
   system("rm -f test_tablet_create_delete_helper.log*");
-  OB_LOGGER.set_file_name("test_tablet_create_delete_helper.log");
+  OB_LOGGER.set_file_name("test_tablet_create_delete_helper.log", true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
