@@ -1678,7 +1678,7 @@ public:
   OB_INLINE bool is_blob_locator() const { return meta_.is_blob_locator(); }
   OB_INLINE bool is_clob_locator() const { return meta_.is_clob_locator(); }
   OB_INLINE bool is_lob_locator() const { return meta_.is_lob_locator(); }
-  OB_INLINE bool is_fixed_double() const { return meta_.is_double() &&
+  OB_INLINE bool is_fixed_double() const { return ob_is_double_type(meta_.get_type()) &&
     SCALE_UNKNOWN_YET < meta_.get_scale() && OB_MAX_DOUBLE_FLOAT_SCALE >= meta_.get_scale(); }
   OB_INLINE bool is_string_or_lob_locator_type() const {
     return meta_.is_string_or_lob_locator_type();
