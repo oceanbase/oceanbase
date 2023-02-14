@@ -123,6 +123,8 @@ public:
     arena_alloc_.reset();
     clean_dblink_conn();
     free_dblink_conn_pool();
+    session_info_ = NULL;
+    reverse_dblink_ = NULL;
   }
   int register_dblink_conn_pool(common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool);
   int free_dblink_conn_pool();

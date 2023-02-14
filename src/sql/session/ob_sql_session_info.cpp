@@ -342,7 +342,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     is_ob20_protocol_ = false;
     is_session_var_sync_ = false;
     int temp_ret = OB_SUCCESS;
-    dblink_context_.reset();
     sql_req_level_ = 0;
     optimizer_tracer_.reset();
     sql_plan_manager_ = NULL;
@@ -443,7 +442,6 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
 
     // 非分布式需要的话，分布式也需要，用于清理package的全局变量值
     reset_all_package_state();
-    dblink_context_.reset();
     reset(skip_sys_var);
     destroy_session_plan_mgr();
     is_inited_ = false;
