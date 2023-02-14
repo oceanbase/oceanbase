@@ -2319,6 +2319,8 @@ TEST_F(ObTestTx, interrupt_get_read_snapshot)
 
 int main(int argc, char **argv)
 {
+  int64_t tx_id = 21533427;
+  uint64_t h = murmurhash(&tx_id, sizeof(tx_id), 0);
   system("rm -rf test_tx.log*");
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_tx.log", true, false,
@@ -2327,5 +2329,6 @@ int main(int argc, char **argv)
                        "test_tx.log"); // audit
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
+  TRANS_LOG(INFO, "mmhash:", K(h));
   return RUN_ALL_TESTS();
 }

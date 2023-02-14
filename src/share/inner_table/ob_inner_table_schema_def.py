@@ -6685,9 +6685,10 @@ def_table_schema(
     ('params_value', 'longtext'),
     ('rule_name', 'varchar:256'),
     ('proxy_session_id', 'uint'),
-    ('tx_free_route_flag', 'uint'),
+    ('tx_internal_route_flag', 'uint'),
 
-    ('partition_hit', 'bool')
+    ('partition_hit', 'bool'),
+    ('tx_internal_route_version', 'uint')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -12975,7 +12976,10 @@ def_table_schema(
                          lock_for_read_time as LOCK_FOR_READ_TIME,
                          params_value as PARAMS_VALUE,
                          rule_name as RULE_NAME,
-                         partition_hit as PARTITION_HIT
+                         partition_hit as PARTITION_HIT,
+                         case when tx_internal_route_flag & 96 = 32 then 1 else 0 end
+                           as TX_INTERNAL_ROUTING,
+                         tx_internal_route_version as TX_STATE_VERSION
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -43236,7 +43240,10 @@ def_table_schema(
                          ob_trace_info as OB_TRACE_INFO,
                          plan_hash as PLAN_HASH,
                          params_value as PARAMS_VALUE,
-                         rule_name as RULE_NAME
+                         rule_name as RULE_NAME,
+                         case when bitand(tx_internal_route_flag, 96) = 32 then 1 else 0 end
+                           as TX_INTERNAL_ROUTING,
+                         tx_internal_route_version as TX_STATE_VERSION
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )

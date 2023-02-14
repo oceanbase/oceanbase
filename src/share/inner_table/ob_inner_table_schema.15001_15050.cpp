@@ -1470,7 +1470,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("TX_FREE_ROUTE_FLAG", //column_name
+    ADD_COLUMN_SCHEMA("TX_INTERNAL_ROUTE_FLAG", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -1486,6 +1486,21 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("PARTITION_HIT", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("TX_INTERNAL_ROUTE_VERSION", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -3163,7 +3178,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("TX_FREE_ROUTE_FLAG", //column_name
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("TX_INTERNAL_ROUTE_FLAG", //column_name
       column_id + 95, //column_id
       0, //rowkey_id
       0, //index_id
@@ -3196,7 +3211,24 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 96);
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("TX_INTERNAL_ROUTE_VERSION", //column_name
+      column_id + 97, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false,//is_nullable
+      false,//is_autoincrement
+      false,//is_hidden
+      true);//is_storing_column
+  }
+
+  table_schema.set_max_used_column_id(column_id + 97);
   return ret;
 }
 

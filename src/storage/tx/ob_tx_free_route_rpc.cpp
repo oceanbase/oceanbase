@@ -100,8 +100,8 @@ int ObTxFreeRouteCheckAliveRespP::release_session_tx_()
     sql::ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     auto &ctx = session->get_txn_free_route_ctx();
     auto &tx_desc = session->get_tx_desc();
-    if (ctx.version() != arg_.request_id_) {
-      TRANS_LOG(INFO, "skip handle checkAliveResp, staled", K(arg_), K(ctx.version()));
+    if (ctx.get_local_version() != arg_.request_id_) {
+      TRANS_LOG(INFO, "skip handle checkAliveResp, staled", K(arg_), K(ctx.get_local_version()));
     } else if (OB_NOT_NULL(tx_desc) && tx_desc->get_tx_id() == arg_.tx_id_) {
       // mark idle release, if an Query has release query_lock but not send txn state Packet yet,
       // it can sens the txn was released in plan (not a surprise)

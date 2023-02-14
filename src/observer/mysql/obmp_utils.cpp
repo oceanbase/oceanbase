@@ -19,7 +19,7 @@
 #include "observer/mysql/obmp_utils.h"
 #include "rpc/obmysql/ob_2_0_protocol_utils.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
-
+#include "lib/container/ob_bit_set.h"
 namespace oceanbase
 {
 namespace observer
@@ -125,10 +125,12 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
   const char *end = buf + len;
   int64_t pos = 0;
 
-  LOG_TRACE("sync sess_inf", K(sess.get_is_in_retry()), K(sess.get_sessid()), KP(data), K(len), KPHEX(data, len));
+  LOG_TRACE("sync sess_inf", K(sess.get_is_in_retry()),
+            K(sess.get_sessid()), KP(data), K(len), KPHEX(data, len));
 
   // decode sess_info
   if (NULL != sess_infos.ptr() && !sess.get_is_in_retry()) {
+    common::ObFixedBitSet<oceanbase::sql::SessionSyncInfoType::SESSION_SYNC_MAX_TYPE> succ_info_types;
     while (OB_SUCC(ret) && pos < len) {
       int16_t info_type = 0;
       int32_t info_len = 0;
@@ -149,10 +151,11 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
                                   (oceanbase::sql::SessionSyncInfoType)(info_type),
                                   buf, (int64_t)info_len + pos0, pos0))) {
         LOG_WARN("failed to update session sync info",
-                                K(ret), K(pos), K(info_len), K(info_len+pos));
+                 K(ret), K(info_type), K(succ_info_types), K(pos), K(info_len), K(info_len+pos));
       } else {
         pos += info_len;
       }
+      succ_info_types.add_member(info_type);
       LOG_DEBUG("sync-session-info", K(info_type), K(info_len));
     }
   }
@@ -214,7 +217,7 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
         } else if (encoder->is_changed_) {
           int16_t info_type = (int16_t)i;
           int32_t info_len = sess_size[i];
-          LOG_INFO("session-info-encode", K(info_type), K(info_len));
+          LOG_DEBUG("session-info-encode", K(sess.get_sessid()), K(info_type), K(info_len));
           if (info_len < 0) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid session info length", K(info_len), K(info_type), K(ret));

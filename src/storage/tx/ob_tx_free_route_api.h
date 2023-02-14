@@ -17,3 +17,4 @@ static int update_logic_clock_(const int64_t logic_clock);
 bool need_fallback_(ObTxDesc &tx, int64_t &state_size);
 int push_tx_state_to_remote_(ObTxDesc &tx, const ObAddr &txn_addr);
 int txn_free_route__sanity_check_fallback_(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx);
+int txn_state_update_verify_by_version_(const ObTxnFreeRouteCtx &ctx, const int64_t version);

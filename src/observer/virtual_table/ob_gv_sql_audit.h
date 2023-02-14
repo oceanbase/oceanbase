@@ -161,9 +161,10 @@ private:
     PARAMS_VALUE,
     RULE_NAME,
     PROXY_SESSION_ID,
-    TX_FREE_ROUTE_FLAG,
+    TX_INTERNAL_ROUTE_FLAG,
 
     PARTITION_HIT,
+    TX_INTERNAL_ROUTE_VERSION,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

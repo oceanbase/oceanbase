@@ -433,6 +433,7 @@ struct ObAuditRecordData {
     char const* source_;   // snapshot's acquire source
   } snapshot_; // stmt's tx snapshot
   uint64_t txn_free_route_flag_; // flag contains txn free route meta
+  uint64_t txn_free_route_version_; // the version of txn's state
   bool partition_hit_;// flag for need das partition route or not
 };
 

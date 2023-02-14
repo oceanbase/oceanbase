@@ -1660,6 +1660,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     }
   }
   audit_record_.txn_free_route_flag_ = txn_free_route_ctx_.get_audit_record();
+  audit_record_.txn_free_route_version_ = txn_free_route_ctx_.get_global_version();
   return audit_record_;
 }
 
@@ -2453,7 +2454,7 @@ void ObSQLSessionInfo::post_sync_session_info()
 void ObSQLSessionInfo::set_txn_free_route(bool txn_free_route)
 {
   txn_free_route_ctx_.reset_audit_record();
-  txn_free_route_ctx_.set_proxy_support(txn_free_route);
+  txn_free_route_ctx_.init_before_update_state(txn_free_route);
 }
 
 bool ObSQLSessionInfo::can_txn_free_route() const

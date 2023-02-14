@@ -39,6 +39,12 @@ bool ObTxnFreeRouteCtx::is_temp(const ObTxDesc &tx) const
 {
   return !TX_START_OR_RESUME_LOCAL(&tx);
 }
+void ObTxnFreeRouteCtx::init_before_update_state(bool proxy_support)
+{
+  is_proxy_support_ = proxy_support;
+  global_version_water_mark_ = global_version_;
+  is_txn_switch_ = false;
+}
 
 void ObTxnFreeRouteCtx::init_before_handle_request(ObTxDesc *tx)
 {
@@ -61,7 +67,7 @@ void ObTxnFreeRouteCtx::init_before_handle_request(ObTxDesc *tx)
     tx_id_.reset();
   }
   reset_changed_();
-  ++version_;
+  ++local_version_;
 #ifndef NDEBUG
   TRANS_LOG(INFO, "[tx free route] after sync state and before handle request", KPC(tx), KPC(this));
 #endif
@@ -119,26 +125,60 @@ int ObTransService::txn_free_route__sanity_check_fallback_(ObTxDesc *tx, ObTxnFr
   return ret;
 }
 
+inline int ObTransService::txn_state_update_verify_by_version_(const ObTxnFreeRouteCtx &ctx, const int64_t version)
+{
+  int ret = OB_SUCCESS;
+  // if ctx is switch to new txn in this request
+  // water_mark was established by static state
+  // the following state (dyn, parts, extra) should be >= water_mark
+  if (ctx.is_txn_switch_) {
+    if (ctx.global_version_water_mark_ > version) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "the state is stale", K(ret), K(version), K_(ctx.global_version_water_mark));
+    }
+  // otherwise, the new state's version should be > water_mark
+  } else if (ctx.global_version_water_mark_ == version) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "duplicated state sync", K(ret), K(version));
+  } else if (ctx.global_version_water_mark_ > version) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "the state is stale", K(ret), K(version), K_(ctx.global_version_water_mark));
+  }
+  return ret;
+}
+
 #define DECODE_HEADER()                                                 \
   ObTxnFreeRouteFlag flag;                                              \
   ObTransID tx_id;                                                      \
+  int64_t global_version;                                               \
   if (OB_FAIL(OB_E(EventTable::EN_TX_FREE_ROUTE_UPDATE_STATE_ERROR, session_id) OB_SUCCESS)) { \
     TRANS_LOG(ERROR, "inject failure", K(ret), KPC(tx), K(session_id)); \
   } else if (OB_FAIL(decode(buf, len, pos, tx_id))) {                   \
     TRANS_LOG(ERROR, "decode tx_id fail", K(ret));                      \
+  } else if (OB_FAIL(decode(buf, len, pos, global_version))) {          \
+    TRANS_LOG(ERROR, "decode global_version fail", K(ret));             \
   } else if (OB_FAIL(decode(buf, len, pos, flag.v_))) {                 \
     TRANS_LOG(ERROR, "decode flag fail", K(ret));                       \
+  } else if (OB_FAIL(txn_state_update_verify_by_version_(ctx, global_version))) { \
+  } else if (ctx.global_version_ < global_version) {                    \
+    ctx.global_version_ = global_version;                               \
   }
+
 #define ENCODE_HEADER()                                                 \
   if (OB_FAIL(OB_E(EventTable::EN_TX_FREE_ROUTE_ENCODE_STATE_ERROR, session_id) OB_SUCCESS)) { \
     TRANS_LOG(ERROR, "inject failure", K(ret), KPC(tx), K(session_id)); \
   } else if (OB_FAIL(encode(buf, len, pos, ctx.tx_id_))) {              \
     TRANS_LOG(WARN, "encode tx_id fail", K(ret));                       \
+  } else if (OB_FAIL(encode(buf, len, pos, ctx.global_version_))) {     \
+    TRANS_LOG(WARN, "encode global_version fail", K(ret));              \
   } else if (OB_FAIL(encode(buf, len, pos, ctx.flag_.v_))) {            \
     TRANS_LOG(WARN, "encode flag fail", K(ret));                        \
   }
 
-#define ENCODE_HEADER_LENGTH() int64_t l = encoded_length(ctx.tx_id_) + encoded_length(ctx.flag_.v_)
+#define ENCODE_HEADER_LENGTH()                                          \
+  int64_t l = encoded_length(ctx.tx_id_)                                \
+    + encoded_length(ctx.global_version_)                               \
+    + encoded_length(ctx.flag_.v_)
 
 int ObTransService::txn_free_route__update_static_state(const uint32_t session_id,
                                                         ObTxDesc *&tx,
@@ -153,6 +193,10 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
   audit_record.upd_static_ = true;
   auto before_tx_id = OB_NOT_NULL(tx) ? tx->tx_id_ : ObTransID();
   DECODE_HEADER();
+  if (OB_SUCC(ret)) {
+    ctx.is_txn_switch_ = true;
+    ctx.global_version_water_mark_ = global_version;
+  }
   if (OB_FAIL(ret)) {
   } else if (flag.is_tx_terminated_) {
     audit_record.upd_term_ = true;
@@ -752,8 +796,10 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
   if (!in_txn) {
     ctx.can_free_route_ = false;
   }
+  if (ctx.is_changed()) {
+    ctx.inc_global_version();
+  }
   ctx.set_calculated();
-
   // audit record
   audit_record.calculated_ = true;
   audit_record.free_route_ = ctx.can_free_route_;
@@ -930,7 +976,7 @@ int ObTransService::tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTx
   if (ctx.txn_addr_.is_valid() && ctx.txn_addr_ != self_ && tx.is_in_tx()) {
     common::ObCurTraceId::init(self_);
     ObTxFreeRouteCheckAliveMsg m;
-    m.request_id_ = ctx.version();
+    m.request_id_ = ctx.get_local_version();
     m.tx_id_ = tx.tx_id_;
     m.sender_ = self_;
     m.receiver_ = ctx.txn_addr_;

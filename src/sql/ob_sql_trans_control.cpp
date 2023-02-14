@@ -1100,13 +1100,14 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
   int64_t ObSqlTransControl::get_txn_##name##_state_serialize_size(ObSQLSessionInfo &session) \
   {                                                                     \
     int ret = OB_SUCCESS;                                               \
+    int64_t size = -1;                                                  \
     transaction::ObTransService *txs = NULL;                            \
     MTL_SWITCH(session.get_effective_tenant_id()) {                     \
       OZ (get_tx_service(&session, txs));                               \
-      OZ (txs->txn_free_route__get_##name##_state_serialize_size(session.get_tx_desc(), session.get_txn_free_route_ctx())); \
+      size = txs->txn_free_route__get_##name##_state_serialize_size(session.get_tx_desc(), session.get_txn_free_route_ctx()); \
     }                                                                   \
     LOG_DEBUG("get-serialize-size-txn-state", K(session));              \
-    return ret;                                                         \
+    return size;                                                        \
   }
 
 DELEGATE_TO_TXN(static);
