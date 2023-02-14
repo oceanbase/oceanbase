@@ -2935,10 +2935,10 @@
     "background_cn": "",
     "ref_url": "https://yuque.antfin.com/ob/product_functionality_review/ns7okery0azyvlnp"
   },
-  "online_opt_stat_gather": {
+  "_optimizer_gather_stats_on_load": {
     "id": 10138,
-    "name": "online_opt_stat_gather",
-    "value": "0",
+    "name": "_optimizer_gather_stats_on_load",
+    "value": "1",
     "data_type": "bool",
     "info": "control wether we need to gather optimizer stats on insert into select/create table as select",
     "flags": "GLOBAL | SESSION",

@@ -605,7 +605,8 @@ int ObInsertValueGenerator::init(ObSQLSessionInfo &session,
 int ObLoadDataSPImpl::gen_insert_columns_names_buff(ObExecContext &ctx,
                                                     const ObLoadArgument &load_args,
                                                     ObIArray<ObLoadTableColumnDesc> &insert_infos,
-                                                    ObString &data_buff)
+                                                    ObString &data_buff,
+                                                    bool need_online_osg)
 {
   int ret = OB_SUCCESS;
 
@@ -641,7 +642,8 @@ int ObLoadDataSPImpl::gen_insert_columns_names_buff(ObExecContext &ctx,
     if (OB_FAIL(ObLoadDataUtils::build_insert_sql_string_head(load_args.dupl_action_,
                                                               load_args.combined_name_,
                                                               insert_column_names,
-                                                              insert_stmt))) {
+                                                              insert_stmt,
+                                                              need_online_osg))) {
       LOG_WARN("gen insert sql column_names failed", K(ret));
     } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), insert_stmt.string(), data_buff))) {
       LOG_WARN("fail to write string", K(ret));
@@ -2419,14 +2421,17 @@ int ObLoadDataSPImpl::ToolBox::build_calc_partid_expr(ObExecContext &ctx,
   ObSqlString insert_sql;
   ObSEArray<ObString, 16> column_names;
   ObLoadArgument &load_args = load_stmt.get_load_arguments();
+  bool need_online_osg = false;
 
   for (int i = 0; OB_SUCC(ret) && i < insert_infos.count(); ++i) {
     OZ (column_names.push_back(insert_infos.at(i).column_name_));
   }
+  OZ (ObLoadDataUtils::check_need_opt_stat_gather(ctx, load_stmt, need_online_osg));
   OZ (ObLoadDataUtils::build_insert_sql_string_head(load_args.dupl_action_,
                                                     load_args.combined_name_,
                                                     column_names,
-                                                    insert_sql));
+                                                    insert_sql,
+                                                    need_online_osg));
   OZ (insert_sql.append(" VALUES("));
   for (int i = 0; OB_SUCC(ret) && i < insert_infos.count(); ++i) {
     if (i != 0) {
@@ -2583,6 +2588,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   ObIODOpt opt;
   ObIODOpts iod_opts;
   ObBackupIoAdapter util;
+  bool need_online_osg = false;
 
   iod_opts.opts_ = &opt;
   iod_opts.opt_cnt_ = 0;
@@ -2616,9 +2622,12 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     LOG_WARN("fail to init data_trimer", K(ret));
   } else if (OB_FAIL(gen_load_table_column_desc(ctx, load_stmt, insert_infos))) {
     LOG_WARN("fail to build load table column desc", K(ret));
+  } else if (OB_FAIL(ObLoadDataUtils::check_need_opt_stat_gather(ctx, load_stmt, need_online_osg))) {
+    LOG_WARN("fail to check need online stats gather", K(ret));
   } else if (OB_FAIL(gen_insert_columns_names_buff(ctx, load_args,
                                                    insert_infos,
-                                                   insert_stmt_head_buff))) {
+                                                   insert_stmt_head_buff,
+                                                   need_online_osg))) {
     LOG_WARN("fail to gen insert column names buff", K(ret));
   } else if (OB_FAIL(data_frag_mgr.init(ctx, load_args.table_id_))) {
     LOG_WARN("fail to init data frag mgr", K(ret));

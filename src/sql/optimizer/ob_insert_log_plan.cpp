@@ -164,12 +164,14 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
   if (OB_ISNULL(ins_table = insert_stmt->get_table_item_by_id(insert_stmt->get_insert_table_info().table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret), K(insert_stmt->get_insert_table_info()));
-  } else if (OB_UNLIKELY(ins_table->is_system_table_ || ins_table->is_index_table_)) {
+  } else if (OB_UNLIKELY(ins_table->is_system_table_ || ins_table->is_index_table_)
+             || insert_stmt->is_insert_up()
+             || !get_optimizer_context().get_session_info()->is_user_session()) {
     need_gathering = false;
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_optimizer_context().get_session_info()->get_sys_variable(share::SYS_VAR_ONLINE_OPT_STAT_GATHER,
+  } else if (OB_FAIL(get_optimizer_context().get_session_info()->get_sys_variable(share::SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD,
                                                                                   online_sys_var_obj))) {
     LOG_WARN("fail to get sys var", K(ret));
   } else {
@@ -177,11 +179,11 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
     // shouldn't gather stats if the stmt is insert update.
     // if the online_opt_stat_gather is enable, should gather opt_stats even there is no hint.
     // if the online_opt_stat_gather is disable, only gather opt_stats when there is hint.
-    need_osg = !insert_stmt->is_insert_up()
-               && need_gathering
+    need_osg = need_gathering
                && !get_optimizer_context().get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint()
-               && (online_sys_var
-                  || (get_optimizer_context().get_query_ctx()->get_global_hint().should_generate_osg_operator()));
+               && online_sys_var
+               && ((get_optimizer_context().get_query_ctx()->get_global_hint().should_generate_osg_operator())
+               || (get_optimizer_context().use_pdml()));
     LOG_TRACE("online insert stat", K(online_sys_var), K(need_osg));
   }
   return ret;

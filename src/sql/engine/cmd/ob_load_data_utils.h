@@ -16,6 +16,8 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/hash/ob_hashmap.h"
 #include "common/object/ob_object.h"
+#include "sql/resolver/cmd/ob_load_data_stmt.h"
+#include "sql/engine/ob_exec_context.h"
 
 #ifndef OCEANBASE_SQL_ENGINE_CMD_LOAD_DATA_UTILS_H_
 #define OCEANBASE_SQL_ENGINE_CMD_LOAD_DATA_UTILS_H_
@@ -148,7 +150,13 @@ public:
   static int build_insert_sql_string_head(ObLoadDupActionType insert_mode,
                                           const common::ObString &table_name,
                                           const common::ObIArray<common::ObString> &insert_keys,
-                                          common::ObSqlString &insertsql_keys);
+                                          common::ObSqlString &insertsql_keys,
+                                          bool need_gather_opt_stat = false);
+
+  static int check_need_opt_stat_gather(ObExecContext &ctx,
+                                        ObLoadDataStmt &load_stmt,
+                                        bool &need_opt_stat_gather);
+
   static int append_values_in_remote_process(int64_t table_column_count,
                                              int64_t append_values_count,
                                              const ObExprValueBitSet &expr_bitset,

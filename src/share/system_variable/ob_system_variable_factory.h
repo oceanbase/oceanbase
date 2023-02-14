@@ -1598,11 +1598,11 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_MAX_READ_STALE_TIME; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(220); }
 };
-class ObSysVarOnlineOptStatGather : public ObBoolSysVar
+class ObSysVarOptimizerGatherStatsOnLoad : public ObBoolSysVar
 {
 public:
-  ObSysVarOnlineOptStatGather() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
-  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_ONLINE_OPT_STAT_GATHER; }
+  ObSysVarOptimizerGatherStatsOnLoad() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(221); }
 };
 class ObSysVarSetReverseDblinkInfos : public ObVarcharSysVar

@@ -100,7 +100,6 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   bool is_set_subquery = false;
   bool is_oracle_mode = lib::is_oracle_mode();
   bool no_osg_hint = false;
-  bool osg_hint = false;
   bool online_sys_var = false;
   const ObString &db_name = stmt.get_database_name();
   const ObString &tab_name = stmt.get_table_name();
@@ -122,11 +121,10 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   } else {
     //get hint
     no_osg_hint = select_stmt->get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint();
-    osg_hint = select_stmt->get_query_ctx()->get_global_hint().has_gather_opt_stat_hint();
 
     //get system variable
     ObObj online_sys_var_obj;
-    if (OB_FAIL(OB_FAIL(my_session->get_sys_variable(SYS_VAR_ONLINE_OPT_STAT_GATHER, online_sys_var_obj)))) {
+    if (OB_FAIL(OB_FAIL(my_session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, online_sys_var_obj)))) {
       LOG_WARN("fail to get sys var", K(ret));
     } else {
       online_sys_var = online_sys_var_obj.get_bool();
@@ -136,7 +134,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
-                                      (!no_osg_hint && (online_sys_var || osg_hint))
+                                      (!no_osg_hint && online_sys_var)
                                       ? "insert /*+GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
                                       : "insert /*+NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
                                       sep_char,

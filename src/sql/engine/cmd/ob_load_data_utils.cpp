@@ -26,11 +26,13 @@ const char ObLoadDataUtils::NULL_VALUE_FLAG = '\xff';
 int ObLoadDataUtils::build_insert_sql_string_head(ObLoadDupActionType insert_mode,
                                                   const ObString &table_name,
                                                   const ObIArray<ObString> &insert_keys,
-                                                  ObSqlString &insertsql_keys)
+                                                  ObSqlString &insertsql_keys,
+                                                  bool need_gather_opt_stat)
 {
   int ret = OB_SUCCESS;
   static const char *replace_stmt = "replace into ";
   static const char *insert_stmt = "insert into ";
+  static const char *insert_stmt_gather_opt_stat = "insert /*+GATHER_OPTIMIZER_STATISTICS*/ into ";
   static const char *insert_ignore_stmt = "insert ignore into ";
 
   const char *stmt_head = NULL;
@@ -41,9 +43,14 @@ int ObLoadDataUtils::build_insert_sql_string_head(ObLoadDupActionType insert_mod
   case ObLoadDupActionType::LOAD_IGNORE:
     stmt_head = insert_ignore_stmt;
     break;
-  case ObLoadDupActionType::LOAD_STOP_ON_DUP:
-    stmt_head = insert_stmt;
+  case ObLoadDupActionType::LOAD_STOP_ON_DUP: {
+    if (need_gather_opt_stat) {
+      stmt_head = insert_stmt_gather_opt_stat;
+    } else {
+      stmt_head = insert_stmt;
+    }
     break;
+  }
   default:
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not suppport insert mode", K(insert_mode));
@@ -361,6 +368,32 @@ int ObLoadDataUtils::check_session_status(ObSQLSessionInfo &session, int64_t res
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("LOAD DATA timeout", K(ret), K(session.get_sessid()), K(query_timeout), K(query_start_time), K(current_time));
+  }
+  return ret;
+}
+
+int ObLoadDataUtils::check_need_opt_stat_gather(ObExecContext &ctx,
+                                                ObLoadDataStmt &load_stmt,
+                                                bool &need_opt_stat_gather)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = nullptr;
+  const ObLoadDataHint &hint = load_stmt.get_hints();
+  ObObj obj;
+  int64_t append = 0;
+  int64_t gather_optimizer_statistics = 0;
+  need_opt_stat_gather = false;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", KR(ret));
+  } else if (OB_FAIL(session->get_sys_variable(share::SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, obj))) {
+    LOG_WARN("fail to get sys variable", K(ret));
+  } else if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
+    LOG_WARN("fail to get value of APPEND", K(ret));
+  } else if (OB_FAIL(hint.get_value(ObLoadDataHint::GATHER_OPTIMIZER_STATISTICS, gather_optimizer_statistics))) {
+    LOG_WARN("fail to get value of APPEND", K(ret));
+  } else if (((append != 0) || (gather_optimizer_statistics != 0)) && obj.get_bool()) {
+    need_opt_stat_gather = true;
   }
   return ret;
 }

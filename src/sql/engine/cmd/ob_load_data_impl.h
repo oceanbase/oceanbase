@@ -795,7 +795,8 @@ private:
   static int gen_insert_columns_names_buff(ObExecContext &ctx,
                                            const ObLoadArgument &load_args,
                                            common::ObIArray<ObLoadTableColumnDesc> &insert_infos,
-                                           common::ObString &data_buff);
+                                           common::ObString &data_buff,
+                                           bool need_online_osg = false);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataSPImpl);
   // function members

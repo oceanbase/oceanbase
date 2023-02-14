@@ -1929,13 +1929,13 @@ int ObLoadDataDirectImpl::init_execute_param()
     if (OB_ISNULL(session = ctx_->get_my_session())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is null", KR(ret));
-    } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_ONLINE_OPT_STAT_GATHER, obj))) {
+    } else if (OB_FAIL(session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, obj))) {
       LOG_WARN("fail to get sys variable", K(ret));
     } else if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
       LOG_WARN("fail to get value of APPEND", K(ret));
     } else if (OB_FAIL(hint.get_value(ObLoadDataHint::GATHER_OPTIMIZER_STATISTICS, gather_optimizer_statistics))) {
       LOG_WARN("fail to get value of APPEND", K(ret));
-    } else if ((append != 0) || (gather_optimizer_statistics != 0) || obj.get_bool()) {
+    } else if (((append != 0) || (gather_optimizer_statistics != 0)) && obj.get_bool()) {
       execute_param_.online_opt_stat_gather_  = true;
     } else {
       execute_param_.online_opt_stat_gather_ = false;

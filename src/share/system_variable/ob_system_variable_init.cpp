@@ -2907,14 +2907,14 @@ static struct VarsInit{
 
     [&] (){
       ObSysVars[221].info_ = "control wether we need to gather optimizer stats on insert into select/create table as select" ;
-      ObSysVars[221].name_ = "online_opt_stat_gather" ;
+      ObSysVars[221].name_ = "_optimizer_gather_stats_on_load" ;
       ObSysVars[221].data_type_ = ObIntType ;
-      ObSysVars[221].value_ = "0" ;
+      ObSysVars[221].value_ = "1" ;
       ObSysVars[221].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[221].id_ = SYS_VAR_ONLINE_OPT_STAT_GATHER ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ONLINE_OPT_STAT_GATHER)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_ONLINE_OPT_STAT_GATHER] = 221 ;
-    ObSysVars[221].alias_ = "OB_SV_ONLINE_OPT_STAT_GATHER" ;
+      ObSysVars[221].id_ = SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD] = 221 ;
+    ObSysVars[221].alias_ = "OB_SV__OPTIMIZER_GATHER_STATS_ON_LOAD" ;
     }();
 
     [&] (){
