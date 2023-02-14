@@ -649,7 +649,7 @@ int ObStaticEngineExprCG::cg_dynamic_frame_layout(const ObIArray<ObRawExpr *> &e
                                                   int64_t &frame_index_pos,
                                                   ObIArray<ObFrameInfo>& frame_info_arr)
 {
-  const bool reserve_empty_string = true;
+  const bool reserve_empty_string = false;
   //需要保证continuous_datum = true， 因为在expr_frame_info中将所有datum预先置为null
   const bool continuous_datum = true;
   return cg_frame_layout(exprs,
