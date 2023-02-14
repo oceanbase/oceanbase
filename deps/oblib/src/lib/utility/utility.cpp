@@ -1940,5 +1940,54 @@ int is_dir_empty(const char *dirname, bool &is_empty)
   return ret;
 }
 
+static int64_t get_cpu_cache_size(int sysconf_name, const char *sysfs_path, int64_t default_value)
+{
+  int64_t cache_size = sysconf(sysconf_name);
+  if (OB_UNLIKELY(cache_size <= 0)) {
+    FILE *file = nullptr;
+    file = fopen(sysfs_path, "r");
+    if (file) {
+      fscanf(file, "%ld", &cache_size);
+      fclose(file);
+      cache_size *= 1024;
+    }
+    if (OB_UNLIKELY(nullptr == file || cache_size <= 0)) {
+      int ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "failed to read cpu cache size in file", KP(file), K(cache_size));
+      cache_size = default_value;
+    }
+  }
+  return cache_size;
+}
+
+int64_t get_level1_dcache_size()
+{
+  const char *path = "/sys/devices/system/cpu/cpu0/cache/index0/size";
+  static int64_t l1_dcache_size = get_cpu_cache_size(_SC_LEVEL1_DCACHE_SIZE, path, 32768/*default L1 dcache size : 32K*/);
+  return l1_dcache_size;
+}
+
+int64_t get_level1_icache_size()
+{
+  const char *path = "/sys/devices/system/cpu/cpu0/cache/index1/size";
+  static int64_t l1_icache_size = get_cpu_cache_size(_SC_LEVEL1_ICACHE_SIZE, path, 32768/*default L1 icache size : 32K*/);
+  return l1_icache_size;
+}
+
+int64_t get_level2_cache_size()
+{
+  const char *path = "/sys/devices/system/cpu/cpu0/cache/index2/size";
+  static int64_t l2_cache_size = get_cpu_cache_size(_SC_LEVEL2_CACHE_SIZE, path, 524288/*default L2 cache size : 512K*/);
+  return l2_cache_size;
+}
+
+int64_t get_level3_cache_size()
+{
+  const char *path = "/sys/devices/system/cpu/cpu0/cache/index3/size";
+  static int64_t l3_cache_size = get_cpu_cache_size(_SC_LEVEL3_CACHE_SIZE, path, 8388608/*default L3 cache size : 8192K*/);
+  return l3_cache_size;
+}
+
+
 } // end namespace common
 } // end namespace oceanbase

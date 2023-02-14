@@ -508,6 +508,14 @@ inline int64_t get_phy_mem_size()
   return page_size * phys_pages;
 }
 
+int64_t get_level1_dcache_size();
+
+int64_t get_level1_icache_size();
+
+int64_t get_level2_cache_size();
+
+int64_t get_level3_cache_size();
+
 inline bool is_cpu_support_sse42()
 {
  #if defined (__x86_64__)
