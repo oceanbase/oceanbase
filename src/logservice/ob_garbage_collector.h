@@ -63,7 +63,7 @@ enum LSGCState
   INVALID_LS_GC_STATE = 0,
   NORMAL = 1,
   LS_BLOCKED = 2,
-  WAIT_OFFLINE = 3,
+  WAIT_OFFLINE = 3, //deprecated after version 4.0.0
   LS_OFFLINE = 4,
   WAIT_GC = 5,
   MAX_LS_GC_STATE = 6,
@@ -82,6 +82,7 @@ int gc_state_to_string(const LSGCState gc_state,
   } else if (gc_state == LS_BLOCKED) {
     strncpy(str ,"LS_BLOCKED", str_len);
   } else if (gc_state == WAIT_OFFLINE) {
+    // only for version 4.0.0
     strncpy(str ,"WAIT_OFFLINE", str_len);
   } else if (gc_state == LS_OFFLINE) {
     strncpy(str ,"LS_OFFLINE", str_len);
@@ -176,6 +177,8 @@ public:
 public:
   static bool is_ls_dropping_ls_status(const LSStatus &status);
   static bool is_tenant_dropping_ls_status(const LSStatus &status);
+  int get_ls_status_from_table(const share::ObLSID &ls_id,
+                               share::ObLSStatus &ls_status);
 private:
   bool is_valid_ls_status_(const LSStatus &status);
   bool is_need_gc_ls_status_(const LSStatus &status);
@@ -222,7 +225,7 @@ public:
   int init(storage::ObLS *ls);
   void reset();
   void execute_pre_gc_process(ObGarbageCollector::LSStatus &ls_status);
-  int check_ls_can_offline();
+  int check_ls_can_offline(const share::ObLSStatus &ls_status);
   int gc_check_invalid_member_seq(const int64_t gc_seq, bool &need_gc);
   static bool is_valid_ls_gc_state(const LSGCState &state);
   int diagnose(GCDiagnoseInfo &diagnose_info) const;
@@ -286,10 +289,9 @@ private:
   bool is_ls_blocked_state_(const LSGCState &state);
   bool is_ls_offline_state_(const LSGCState &state);
   bool is_ls_wait_gc_state_(const LSGCState &state);
-  bool is_wait_offline_finished_(const LSGCState &state);
   bool is_ls_blocked_finished_(const LSGCState &state);
   bool is_ls_offline_finished_(const LSGCState &state);
-  void try_check_and_set_tablet_clear_(const ObGarbageCollector::LSStatus &ls_status);
+  bool is_tablet_clear_(const ObGarbageCollector::LSStatus &ls_status);
   void try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_status);
   int get_tenant_readable_scn_(share::SCN &readable_scn);
   int check_if_tenant_in_archive_(bool &in_archive);

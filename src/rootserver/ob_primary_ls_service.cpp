@@ -1411,7 +1411,7 @@ int ObTenantLSInfo::do_tenant_drop_ls_(const share::ObLSStatusInfo &status_info,
       LOG_WARN("failed to update ls status", KR(ret), K(status_info));
     }
   }
-  if (FAILEDx(check_ls_can_offline_by_rpc_(status_info, can_offline))) {
+  if (FAILEDx(check_ls_can_offline_by_rpc_(status_info, share::OB_LS_TENANT_DROPPING, can_offline))) {
     // send rpc to observer
     LOG_WARN("failed to check ls can offline", KR(ret), K(status_info));
   } else if (can_offline) {
@@ -1471,7 +1471,7 @@ int ObTenantLSInfo::do_drop_ls_(const share::ObLSStatusInfo &status_info,
   if (OB_SUCC(ret) && tablet_empty) {
     // send rpc to observer
     bool can_offline = false;
-    if (OB_FAIL(check_ls_can_offline_by_rpc_(status_info, can_offline))) {
+    if (OB_FAIL(check_ls_can_offline_by_rpc_(status_info, share::OB_LS_DROPPING, can_offline))) {
       LOG_WARN("failed to check ls can offline", KR(ret), K(status_info));
     } else if (can_offline) {
       ObLSLifeAgentManager ls_life_agent(*sql_proxy_);
@@ -1605,14 +1605,16 @@ int ObTenantLSInfo::check_ls_empty_(const share::ObLSStatusInfo &info, bool &emp
   return ret;
 }
 
-int ObTenantLSInfo::check_ls_can_offline_by_rpc_(const share::ObLSStatusInfo &info, bool &can_offline)
+int ObTenantLSInfo::check_ls_can_offline_by_rpc_(const share::ObLSStatusInfo &info,
+    const share::ObLSStatus &current_ls_status, bool &can_offline)
 {
   int ret = OB_SUCCESS;
   share::ObLSInfo ls_info;
   const share::ObLSReplica *replica = NULL;
-  if (OB_UNLIKELY(!info.is_valid())) {
+  if (OB_UNLIKELY(!info.is_valid()
+        || !ls_is_tenant_dropping_status(current_ls_status) && ! ls_is_dropping_status(current_ls_status))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("info not valid", KR(ret), K(info));
+    LOG_WARN("info not valid", KR(ret), K(info), K(current_ls_status));
   } else if (OB_ISNULL(lst_operator_) || OB_ISNULL(rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst operator or proxy is null", KR(ret), KP(lst_operator_),
@@ -1628,8 +1630,8 @@ int ObTenantLSInfo::check_ls_can_offline_by_rpc_(const share::ObLSStatusInfo &in
   } else {
     const int64_t timeout = GCONF.rpc_timeout;
     obrpc::ObCheckLSCanOfflineArg arg;
-    if (OB_FAIL(arg.init(info.tenant_id_, info.ls_id_))) {
-      LOG_WARN("failed to init arg", KR(ret), K(arg));
+    if (OB_FAIL(arg.init(info.tenant_id_, info.ls_id_, current_ls_status))) {
+      LOG_WARN("failed to init arg", KR(ret), K(info), K(current_ls_status));
     } else if (OB_FAIL(rpc_proxy_->to(replica->get_server())
                            .by(info.tenant_id_)
                            .timeout(timeout)

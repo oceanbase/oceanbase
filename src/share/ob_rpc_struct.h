@@ -52,6 +52,7 @@
 #include "storage/ob_i_table.h"
 #include "share/ob_ls_id.h"
 #include "share/ls/ob_ls_info.h"
+#include "share/ls/ob_ls_i_life_manager.h"//ObLSStatus
 #include "share/ob_tablet_autoincrement_param.h"
 #include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
 #include "share/ob_alive_server_tracer.h"//ServerAddr
@@ -8125,13 +8126,14 @@ struct ObCheckLSCanOfflineArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCheckLSCanOfflineArg() : tenant_id_(OB_INVALID_TENANT_ID), id_() {}
+  ObCheckLSCanOfflineArg() : tenant_id_(OB_INVALID_TENANT_ID), id_(), current_ls_status_(share::ObLSStatus::OB_LS_EMPTY) {}
   ~ObCheckLSCanOfflineArg() {}
   bool is_valid() const;
   void reset();
   int assign(const ObCheckLSCanOfflineArg &arg);
   int init(const uint64_t tenant_id,
-           const share::ObLSID &id);
+           const share::ObLSID &id,
+           const share::ObLSStatus &ls_status);
   DECLARE_TO_STRING;
 
   uint64_t get_tenant_id() const
@@ -8142,9 +8144,14 @@ public:
   {
     return id_;
   }
+  share::ObLSStatus get_ls_status() const
+  {
+    return current_ls_status_;
+  }
 private:
   uint64_t tenant_id_;
   share::ObLSID id_;
+  share::ObLSStatus current_ls_status_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckLSCanOfflineArg);
 };

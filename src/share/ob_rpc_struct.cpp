@@ -20,6 +20,7 @@
 #include "common/ob_store_format.h"
 #include "observer/ob_server_struct.h"
 #include "storage/tx/ob_trans_service.h"
+#include "share/ls/ob_ls_status_operator.h"
 
 namespace oceanbase
 {
@@ -6357,7 +6358,7 @@ OB_SERIALIZE_MEMBER(ObLogReqUnloadProxyResponse, err_);
 OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressRequest, agency_addr_seq_, principal_addr_seq_);
 OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressResponse, err_, progress_);
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_, 
+OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_,
   source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, execution_id_,
   parallelism_, tablet_task_id_, cluster_version_);
 
@@ -7404,13 +7405,17 @@ OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLCommitLogArg, tenant_id_, ls_id_, table_k
 bool ObCheckLSCanOfflineArg::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
-         && id_.is_valid();
+         && id_.is_valid()
+         && (ls_is_tenant_dropping_status(current_ls_status_)
+             || ls_is_dropping_status(current_ls_status_)
+             || ls_is_empty_status(current_ls_status_)); //rpc from old version
 }
 
 void ObCheckLSCanOfflineArg::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
   id_.reset();
+  current_ls_status_ = share::ObLSStatus::OB_LS_EMPTY;
 }
 
 int ObCheckLSCanOfflineArg::assign(const ObCheckLSCanOfflineArg &arg)
@@ -7421,16 +7426,19 @@ int ObCheckLSCanOfflineArg::assign(const ObCheckLSCanOfflineArg &arg)
   return ret;
 }
 int ObCheckLSCanOfflineArg::init(const uint64_t tenant_id,
-    const share::ObLSID &id)
+    const share::ObLSID &id,
+    const share::ObLSStatus &ls_status)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-                  || !id.is_valid())) {
+                  || !id.is_valid()
+                  || (!ls_is_tenant_dropping_status(ls_status) && ! ls_is_dropping_status(ls_status)))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id), K(ls_status));
   } else {
     tenant_id_ = tenant_id;
     id_ = id;
+    current_ls_status_ = ls_status;
   }
   return ret;
 }
@@ -7438,11 +7446,11 @@ int ObCheckLSCanOfflineArg::init(const uint64_t tenant_id,
 DEF_TO_STRING(ObCheckLSCanOfflineArg)
 {
   int64_t pos = 0;
-  J_KV(K_(tenant_id), K_(id));
+  J_KV(K_(tenant_id), K_(id), K_(current_ls_status));
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObCheckLSCanOfflineArg, tenant_id_, id_);
+OB_SERIALIZE_MEMBER(ObCheckLSCanOfflineArg, tenant_id_, id_, current_ls_status_);
 
 bool ObRegisterTxDataArg::is_valid() const
 {

@@ -429,6 +429,7 @@ int ObLSMeta::update_ls_meta(
     if (update_restore_status) {
       tmp.restore_status_ = ls_restore_status;
     }
+    tmp.gc_state_ = src_ls_meta.gc_state_;
     guard.click();
     tmp.all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
     if (tmp.clog_checkpoint_scn_ < clog_checkpoint_scn_) {
@@ -445,6 +446,7 @@ int ObLSMeta::update_ls_meta(
       tablet_change_checkpoint_scn_ = src_ls_meta.tablet_change_checkpoint_scn_;
       all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
       rebuild_seq_ = tmp.rebuild_seq_;
+      gc_state_ = tmp.gc_state_;
       if (update_restore_status) {
         restore_status_ = ls_restore_status;
       }

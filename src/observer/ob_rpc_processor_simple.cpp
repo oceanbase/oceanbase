@@ -1325,7 +1325,7 @@ int ObRpcCheckLSCanOfflineP::process()
     } else if (OB_ISNULL(gc_handler = ls->get_gc_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("gc_handler is null", K(ls_id));
-    } else if (OB_FAIL(gc_handler->check_ls_can_offline())) {
+    } else if (OB_FAIL(gc_handler->check_ls_can_offline(arg_.get_ls_status()))) {
       LOG_WARN("check_ls_can_offline failed", K(ls_id), K(ret));
     } else {
       LOG_INFO("check_ls_can_offline success", K(ls_id));

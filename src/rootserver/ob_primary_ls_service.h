@@ -235,6 +235,7 @@ private:
   int check_sys_ls_can_offline_(bool &can_offline);
   int check_ls_empty_(const share::ObLSStatusInfo &info, bool &empty);
   int check_ls_can_offline_by_rpc_(const share::ObLSStatusInfo &info,
+      const share::ObLSStatus &current_ls_status,
       bool &can_offline);
   int process_ls_status_after_created_(const share::ObLSStatusInfo &info,
                                        const share::ObTenantSwitchoverStatus &working_sw_status);

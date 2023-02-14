@@ -355,7 +355,7 @@ void ObGCHandler::execute_pre_gc_process(ObGarbageCollector::LSStatus &ls_status
   }
 }
 
-int ObGCHandler::check_ls_can_offline()
+int ObGCHandler::check_ls_can_offline(const share::ObLSStatus &ls_status)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -370,9 +370,35 @@ int ObGCHandler::check_ls_can_offline()
     } else if (!is_valid_ls_gc_state(gc_state)) {
       ret = OB_STATE_NOT_MATCH;
       CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
-    } else if (is_wait_offline_finished_(gc_state)) {
+    } else if (is_ls_offline_finished_(gc_state)) {
       CLOG_LOG(INFO, "ls check_ls_can_offline success", K(ls_id), K(gc_state));
+    } else if (is_ls_blocked_state_(gc_state)) {
+      share::ObLSStatus current_ls_status = ls_status;
+      ObGarbageCollector::LSStatus ls_gc_status = ObGarbageCollector::LSStatus::LS_INVALID_STATUS;
+      if (ls_is_empty_status(ls_status)) {
+        // rpc from old version, need get real ls status from table
+        ObGarbageCollector *gc_service = MTL(logservice::ObGarbageCollector *);
+        const ObLSID &id = ls_->get_ls_id();
+        if (NULL == gc_service) {
+          CLOG_LOG(WARN, "gc_service is null", K(ret));
+        } else if (OB_FAIL(gc_service->get_ls_status_from_table(id, current_ls_status))) {
+          CLOG_LOG(WARN, "failed to get ls status from table", K(ret), K(id));
+        }
+      }
+      if (ls_is_dropping_status(current_ls_status)) {
+        ls_gc_status = ObGarbageCollector::LSStatus::LS_DROPPING;
+      } else if (ls_is_tenant_dropping_status(current_ls_status)) {
+        ls_gc_status = ObGarbageCollector::LSStatus::LS_TENANT_DROPPING;
+      }
+      // invalid ls_gc_status will return false, ret will be rewritten as OB_EAGAIN
+      if (is_tablet_clear_(ls_gc_status)) {
+        CLOG_LOG(INFO, "ls check_ls_can_offline success", K(ls_id), K(gc_state));
+      } else {
+        ret = OB_EAGAIN;
+        CLOG_LOG(WARN, "ls check_ls_can_offline need retry", K(ls_id), K(gc_state));
+      }
     } else {
+      // block log not flushed
       ret = OB_EAGAIN;
       CLOG_LOG(WARN, "ls check_ls_can_offline need retry", K(ls_id), K(gc_state));
     }
@@ -495,11 +521,6 @@ bool ObGCHandler::is_ls_wait_gc_state_(const LSGCState &state)
   return LSGCState::WAIT_GC == state;
 }
 
-bool ObGCHandler::is_wait_offline_finished_(const LSGCState &state)
-{
-  return LSGCState::WAIT_OFFLINE <= state;
-}
-
 bool ObGCHandler::is_ls_blocked_finished_(const LSGCState &state)
 {
   return LSGCState::LS_BLOCKED <= state;
@@ -536,9 +557,10 @@ int ObGCHandler::get_gts_(const int64_t timeout_us, SCN &gts_scn)
   return ret;
 }
 
-void ObGCHandler::try_check_and_set_tablet_clear_(const ObGarbageCollector::LSStatus &ls_status)
+bool ObGCHandler::is_tablet_clear_(const ObGarbageCollector::LSStatus &ls_status)
 {
   int ret = OB_SUCCESS;
+  bool bool_ret = false;
   ObLSID ls_id = ls_->get_ls_id();
   if (ObGarbageCollector::is_ls_dropping_ls_status(ls_status)) {
     //TODO: transfer完成前先统一检查事务结束
@@ -551,12 +573,12 @@ void ObGCHandler::try_check_and_set_tablet_clear_(const ObGarbageCollector::LSSt
       } else {
         CLOG_LOG(WARN, "check_all_tx_clean_up failed", K(ls_id), K(ret));
       }
-    } else if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_OFFLINE))) {
-      CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(ret));
     } else {
-      CLOG_LOG(INFO, "try_check_and_set_tablet_clear_ success", K(ls_id), K(ls_status));
+      bool_ret = true;
+      CLOG_LOG(INFO, "tablet is clear", K(ls_id), K(ls_status), K(bool_ret));
     }
   } else if (ObGarbageCollector::is_tenant_dropping_ls_status(ls_status)) {
+    // tenant dropping only check transaction clean
     if (OB_FAIL(ls_->check_all_tx_clean_up())) {
       if (OB_EAGAIN == ret) {
         CLOG_LOG(INFO, "check_all_tx_clean_up need retry", K(ls_id), K(ret));
@@ -566,14 +588,14 @@ void ObGCHandler::try_check_and_set_tablet_clear_(const ObGarbageCollector::LSSt
       } else {
         CLOG_LOG(WARN, "check_all_tx_clean_up failed", K(ls_id), K(ret));
       }
-    } else if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_OFFLINE))) {
-      CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(ret));
     } else {
-      CLOG_LOG(INFO, "try_check_and_set_tablet_clear_ success", K(ls_id), K(ls_status));
+      bool_ret = true;
+      CLOG_LOG(INFO, "tablet is clear", K(ls_id), K(ls_status));
     }
   } else {
-    CLOG_LOG(INFO, "try_check_and_set_tablet_clear_ invalid ls status", K(ls_id), K(ls_status));
+    CLOG_LOG(WARN, "invalid ls status", K(ls_id), K(ls_status));
   }
+  return bool_ret;
 }
 
 void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_status)
@@ -800,15 +822,16 @@ void ObGCHandler::handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_
       CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(gc_state));
     } else if (!is_valid_ls_gc_state(gc_state)) {
       CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
-    } else if (is_wait_offline_finished_(gc_state)) {
+    } else if (is_ls_offline_finished_(gc_state)) {
       CLOG_LOG(INFO, "handle_gc_ls_dropping already finished", K(ls_id), K(gc_state));
     } else if (is_ls_blocked_state_(gc_state)) {
-      (void)try_check_and_set_tablet_clear_(ls_status);
+      // trigger kill all tx
+      (void)is_tablet_clear_(ls_status);
     } else {
       (void)submit_log_(ObGCLSLOGType::BLOCK_TABLET_TRANSFER_IN);
-      (void)try_check_and_set_tablet_clear_(ls_status);
+      (void)is_tablet_clear_(ls_status);
     }
-    CLOG_LOG(INFO, "ls handle_gc_ls_dropping_ finished", K(ls_id), K(role));
+    CLOG_LOG(INFO, "ls handle_gc_ls_dropping_ finished", K(ls_id), K(role), K(gc_state));
   }
 }
 
@@ -831,8 +854,8 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
     } else if (!is_valid_ls_gc_state(gc_state)) {
       ret = OB_STATE_NOT_MATCH;
       CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
-    } else if (!is_wait_offline_finished_(gc_state)) {
-      CLOG_LOG(INFO, "ls not ready for offline", K(ls_id), K(gc_state));
+    } else if (!is_ls_blocked_finished_(gc_state)) {
+      CLOG_LOG(WARN, "ls not ready for offline", K(ls_id), K(gc_state));
     } else if (is_ls_wait_gc_state_(gc_state)) {
       ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
       CLOG_LOG(INFO, "handle_gc_ls_offline need delete entry", K(ls_id), K(gc_state));
@@ -842,7 +865,7 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
       (void)submit_log_(ObGCLSLOGType::OFFLINE_LS);
       (void)try_check_and_set_wait_gc_(ls_status);
     }
-    CLOG_LOG(INFO, "ls handle_gc_ls_offline finished", K(ls_id), K(role));
+    CLOG_LOG(INFO, "ls handle_gc_ls_offline finished", K(ls_id), K(role), K(gc_state));
   }
 }
 
@@ -983,6 +1006,24 @@ void ObGarbageCollector::run1()
     ob_usleep(gc_interval);
     seq_++;
   }
+}
+
+int ObGarbageCollector::get_ls_status_from_table(const ObLSID &ls_id,
+                                                 share::ObLSStatus &ls_status)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tenant_id = MTL_ID();
+  ObLSStatusOperator ls_op;
+  ObLSStatusInfo status_info;
+  // sys tenant should always return LS_NORMAL
+  if (OB_SYS_TENANT_ID == tenant_id) {
+    ls_status = OB_LS_NORMAL;
+  } else if (OB_FAIL(ls_op.get_ls_status_info(tenant_id, ls_id, status_info, *sql_proxy_))) {
+    CLOG_LOG(INFO, "failed to get ls status info from table", K(ret), K(tenant_id), K(ls_id));
+  } else {
+    ls_status = status_info.status_;
+  }
+  return ret;
 }
 
 bool ObGarbageCollector::is_ls_dropping_ls_status(const LSStatus &status)
@@ -1180,15 +1221,12 @@ int ObGarbageCollector::gc_check_ls_status_(const ObLSID &id,
   ObString status_str;
   const int64_t tenant_id = MTL_ID();
   ObLSStatusOperator ls_op;
-  ObLSStatusInfo status_info;
+  share::ObLSStatus ls_status = OB_LS_NORMAL;
   GCCandidate candidate;
   candidate.ls_id_ = id;
   candidate.ls_status_ = LSStatus::LS_NORMAL;
   candidate.gc_reason_ = GCReason::INVALID_GC_REASON;
-  // sys tenant should always return LS_NORMAL
-  if (OB_SYS_TENANT_ID == tenant_id) {
-    // do nothing
-  } else if (OB_FAIL(ls_op.get_ls_status_info(tenant_id, id, status_info, *sql_proxy_))) {
+  if (OB_FAIL(get_ls_status_from_table(id, ls_status))) {
     // 对应行被删除则说明可以gc
     if (OB_ENTRY_NOT_EXIST == ret) {
       candidate.ls_status_ = LSStatus::LS_NEED_GC;
@@ -1209,7 +1247,7 @@ int ObGarbageCollector::gc_check_ls_status_(const ObLSID &id,
       }
     }
   } else {
-    candidate.set_ls_status(status_info.status_);
+    candidate.set_ls_status(ls_status);
     candidate.gc_reason_ = GCReason::INVALID_GC_REASON;
   }
   if (OB_SUCCESS == ret) {
