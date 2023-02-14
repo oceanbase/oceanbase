@@ -43,6 +43,7 @@
 #include "share/schema/ob_context_sql_service.h"
 #include "share/schema/ob_rls_sql_service.h"
 #include "sql/dblink/ob_dblink_utils.h"
+#include "lib/string/ob_string.h"
 
 namespace oceanbase
 {
@@ -85,6 +86,14 @@ public:
   const static int64_t MAX_IN_QUERY_PER_TIME = 100L; //FIXME@xiyu:change from 1000 to 100 for debugging
   const static int TENANT_MAP_BUCKET_NUM = 1024;
   const static int64_t MAX_BATCH_PART_NUM = 5000;
+
+  struct TableTrunc {
+    TableTrunc() : table_id_(OB_INVALID_ID), truncate_version_(OB_INVALID_VERSION) {}
+    TableTrunc(uint64_t table_id, int64_t truncate_version) : table_id_(table_id), truncate_version_(truncate_version) {}
+    uint64_t table_id_;
+    int64_t truncate_version_;
+    TO_STRING_KV(K_(table_id), K_(truncate_version));
+  };
 
   ObSchemaServiceSQLImpl();
   virtual ~ObSchemaServiceSQLImpl();
@@ -664,9 +673,9 @@ private:
       common::ObArray<T *> &table_schema_array,
       const uint64_t *table_ids /* = NULL */,
       const int64_t table_ids_size /*= 0 */,
-      common::ObIArray<uint64_t> &part_tables,
+      common::ObIArray<TableTrunc> &part_tables,
+      common::ObIArray<TableTrunc> &subpart_tables,
       common::ObIArray<uint64_t> &def_subpart_tables,
-      common::ObIArray<uint64_t> &subpart_tables,
       common::ObIArray<int64_t> &part_idxs,
       common::ObIArray<int64_t> &def_subpart_idxs,
       common::ObIArray<int64_t> &subpart_idxs);
@@ -699,9 +708,18 @@ private:
   // to filter is_deleted column
 
   int sql_append_pure_ids(const ObRefreshSchemaStatus &schema_status,
+                          const TableTrunc *ids,
+                          const int64_t ids_size,
+                          common::ObSqlString &sql);
+  int sql_append_pure_ids(const ObRefreshSchemaStatus &schema_status,
                           const uint64_t *ids,
                           const int64_t ids_size,
                           common::ObSqlString &sql);
+  int sql_append_ids_and_truncate_version(const ObRefreshSchemaStatus &schema_status,
+                                          const TableTrunc *ids,
+                                          const int64_t ids_size,
+                                          const int64_t schema_version,
+                                          common::ObSqlString &sql);
 
   //-------------------------- for new schema_cache ------------------------------
 
@@ -750,7 +768,7 @@ private:
                           const uint64_t tenant_id,
                           common::ObISQLClient &sql_client,
                           common::ObArray<T *> &range_part_tables,
-                          const uint64_t *table_ids /* = NULL */,
+                          const TableTrunc *table_ids /* = NULL */,
                           const int64_t table_ids_size /*= 0 */);
   template<typename T>
   int fetch_all_def_subpart_info(const ObRefreshSchemaStatus &schema_status,
@@ -767,7 +785,7 @@ private:
                              const uint64_t tenant_id,
                              common::ObISQLClient &sql_client,
                              common::ObArray<T *> &range_subpart_tables,
-                             const uint64_t *table_ids /* = NULL */,
+                             const TableTrunc *table_ids /* = NULL */,
                              const int64_t table_ids_size /*= 0 */);
 
   int fetch_partition_info(const ObRefreshSchemaStatus &schema_status,

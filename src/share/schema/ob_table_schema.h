@@ -572,6 +572,8 @@ public:
 
   inline void set_session_id(const uint64_t id)  { session_id_ = id; }
   inline uint64_t get_session_id() const { return session_id_; }
+  inline void set_truncate_version(const int64_t truncate_version ) { truncate_version_ = truncate_version; }
+  inline int64_t get_truncate_version() const {return truncate_version_; }
   virtual int get_zone_list(
       share::schema::ObSchemaGetterGuard &schema_guard,
       common::ObIArray<common::ObZone> &zone_list) const override;
@@ -812,6 +814,7 @@ protected:
   uint64_t tablespace_id_;
   common::ObString encrypt_key_;
   uint64_t master_key_id_;
+  int64_t truncate_version_;
 
 
   // dblink.

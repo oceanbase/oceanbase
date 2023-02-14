@@ -744,6 +744,7 @@ int ObAutoincrementService::get_table_node(const AutoincParam &param, TableNode 
           LOG_ERROR("failed to init table node", K(param), K(ret));
         } else {
           table_node->prefetch_node_.reset();
+          table_node->autoinc_version_ = param.autoinc_version_;
           lib::ObMutexGuard guard(map_mutex_);
           if (OB_FAIL(node_map_.insert_and_get(key, table_node))) {
             LOG_WARN("failed to create table node", K(param), K(ret));
@@ -756,6 +757,20 @@ int ObAutoincrementService::get_table_node(const AutoincParam &param, TableNode 
       }
       mutex.unlock();
     }
+  } else {
+    if (OB_FAIL(alloc_autoinc_try_lock(table_node->alloc_mutex_))) {
+      LOG_WARN("failed to get lock", K(ret));
+    } else if (OB_UNLIKELY(param.autoinc_version_ != table_node->autoinc_version_)) {
+      LOG_INFO("start reset table node", K(*table_node), K(param));
+      table_node->next_value_ = 0;
+      table_node->local_sync_ = 0;
+      table_node->curr_node_.reset();
+      table_node->prefetch_node_.reset();
+      table_node->prefetching_ = false;
+      table_node->curr_node_state_is_pending_ = true;
+      table_node->autoinc_version_ = param.autoinc_version_;
+    }
+    table_node->alloc_mutex_.unlock();
   }
   if (OB_SUCC(ret)) {
     LOG_DEBUG("succ to get table node", K(param), KPC(table_node), K(ret));

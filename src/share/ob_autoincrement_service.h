@@ -114,7 +114,8 @@ struct TableNode: public common::LinkHashValue<AutoincKey>
       local_sync_(0),
       last_refresh_ts_(common::ObTimeUtility::current_time()),
       prefetching_(false),
-      curr_node_state_is_pending_(false)
+      curr_node_state_is_pending_(false),
+      autoinc_version_(0)
   {}
   virtual ~TableNode()
   {
@@ -128,7 +129,8 @@ struct TableNode: public common::LinkHashValue<AutoincKey>
                K_(last_refresh_ts),
                K_(curr_node),
                K_(prefetch_node),
-               K_(prefetching));
+               K_(prefetching),
+               K_(autoinc_version));
 
   int alloc_handle(common::ObSmallAllocator &allocator,
                    const uint64_t offset,
@@ -167,6 +169,7 @@ struct TableNode: public common::LinkHashValue<AutoincKey>
   // and combine them together.
   // ref: https://yuque.antfin-inc.com/xiaochu.yh/doc/eqnlv0
   bool curr_node_state_is_pending_;
+  int64_t  autoinc_version_;
 };
 
 // atomic update if greater than origin value

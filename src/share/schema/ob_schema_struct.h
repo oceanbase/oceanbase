@@ -2585,7 +2585,7 @@ public:
   virtual bool is_hidden_schema() const override { return false; }
   virtual bool is_normal_schema() const override { return !is_hidden_schema(); }
   virtual int check_if_oracle_compat_mode(bool &is_oracle_mode) const;
-
+  inline int64_t get_truncate_version() { return 0; }
 
   DECLARE_VIRTUAL_TO_STRING;
 private:

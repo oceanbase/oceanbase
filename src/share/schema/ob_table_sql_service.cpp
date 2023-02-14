@@ -2542,6 +2542,10 @@ int ObTableSqlService::gen_table_dml(
                             || table.view_column_filled())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("option is not support before 4.1", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_1_0_0
+             && OB_UNLIKELY((OB_INVALID_VERSION != table.get_truncate_version()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("truncate version is not support before 4.1", K(ret), K(table));
   } else {
     const ObPartitionOption &part_option = table.get_part_option();
     const ObPartitionOption &sub_part_option = table.get_sub_part_option();
@@ -2649,6 +2653,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("object_status", static_cast<int64_t> (table.get_object_status()))))
         || (data_version >= DATA_VERSION_4_1_0_0
             && OB_FAIL(dml.add_column("table_flags", table.get_table_flags())))
+        || (data_version >= DATA_VERSION_4_1_0_0
+            && OB_FAIL(dml.add_column("truncate_version", table.get_truncate_version())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -2783,6 +2789,10 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
                             || new_table_schema.view_column_filled())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("option is not support before 4.1", K(ret), K(new_table_schema));
+  } else if (data_version < DATA_VERSION_4_1_0_0
+             && OB_UNLIKELY((OB_INVALID_VERSION != new_table_schema.get_truncate_version()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("truncate version is not support before 4.1", K(ret), K(new_table_schema));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, tenant_id)))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -2812,6 +2822,8 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
       || OB_FAIL(dml.add_column("data_table_id", new_table_schema.get_data_table_id()))
       || ((data_version >= DATA_VERSION_4_1_0_0 || update_object_status_ignore_version)
           && OB_FAIL(dml.add_column("object_status", static_cast<int64_t> (new_table_schema.get_object_status()))))
+      || (data_version >= DATA_VERSION_4_1_0_0
+          && OB_FAIL(dml.add_column("truncate_version", new_table_schema.get_truncate_version())))
       ) {
     LOG_WARN("add column failed", K(ret));
   } else {

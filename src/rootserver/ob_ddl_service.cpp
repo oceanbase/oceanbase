@@ -16087,6 +16087,12 @@ int ObDDLService::generate_table_schemas(const ObIArray<const ObTableSchema*> &o
   void *new_schema_ptr = NULL;
   ObTableSchema *new_table_schema = NULL;
   const ObTableSchema *tmp_table_schema = NULL;
+  int64_t truncate_version = OB_INVALID_VERSION;
+  //use first new schema version as truncate version instead of orig_table_schema schema version
+  //orig table schema version as refresh schema low boundary will load more useless info
+  if (OB_SUCC(ret) && 0 != gen_schema_version_array.count()) {
+    truncate_version = gen_schema_version_array.at(0);
+  }
   // construnct new table_schemas
   for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_count; ++i) {
     new_schema_ptr = allocator.alloc(sizeof(ObTableSchema));
@@ -16103,6 +16109,7 @@ int ObDDLService::generate_table_schemas(const ObIArray<const ObTableSchema*> &o
         LOG_WARN("fail to assign orig table schema to new table schema",
                 KR(ret), K(tenant_id), K(tmp_table_schema->get_table_id()));
       } else if (i == 0 && FALSE_IT(new_table_schema->set_auto_increment(1))) {
+      } else if (FALSE_IT(new_table_schema->set_truncate_version(truncate_version))) {
       } else if (OB_FAIL(new_table_schemas.push_back(new_table_schema))) {
         LOG_WARN("failed to push back table_schema",
                 KR(ret), K(tenant_id), K(new_table_schema->get_table_id()));
@@ -16206,7 +16213,6 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     // 2.clear auto_increment cache
     ObZone nullzone;
     ObArray<ObAddr> alive_server_list;
-
     if (FAILEDx(get_server_manager().get_alive_servers(nullzone, alive_server_list))) {
       LOG_WARN("fail to get alive server list", KR(ret));
     } else if (OB_FAIL(ddl_operator.reinit_autoinc_row(*orig_table_schemas.at(0), trans, &alive_server_list))) {

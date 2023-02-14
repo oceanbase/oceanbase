@@ -146,6 +146,7 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       in_offline_ddl_white_list_ = other.in_offline_ddl_white_list_;
       object_status_ = other.object_status_;
       is_force_view_ = other.is_force_view_;
+      truncate_version_ = other.truncate_version_;
       if (OB_FAIL(table_mode_.assign(other.table_mode_))) {
         LOG_WARN("Fail to assign table mode", K(ret), K(other.table_mode_));
       } else if (OB_FAIL(deep_copy_str(other.table_name_, table_name_))) {
@@ -206,7 +207,8 @@ bool ObSimpleTableSchemaV2::operator ==(const ObSimpleTableSchemaV2 &other) cons
      link_table_id_ == other.link_table_id_ &&
      link_schema_version_ == other.link_schema_version_ &&
      link_database_name_ == other.link_database_name_ &&
-     object_status_ == other.object_status_) {
+     object_status_ == other.object_status_ &&
+     truncate_version_ == other.truncate_version_) {
      ret = true;
      if (true == ret) {
        if (simple_foreign_key_info_array_.count() == other.simple_foreign_key_info_array_.count()) {
@@ -280,6 +282,7 @@ void ObSimpleTableSchemaV2::reset()
   tablespace_id_ = OB_INVALID_ID;
   encrypt_key_.reset();
   master_key_id_ = OB_INVALID_ID;
+  truncate_version_ = OB_INVALID_VERSION;
   ObPartitionSchema::reset();
 }
 
@@ -787,7 +790,8 @@ int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K(get_tablet_id()),
     K_(max_dependency_version),
     K_(object_status),
-    K_(is_force_view)
+    K_(is_force_view),
+    K_(truncate_version)
 );
   J_OBJ_END();
 
@@ -5653,7 +5657,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 rls_group_ids_,
                 rls_context_ids_);
   }
-  LST_DO_CODE(OB_UNIS_ENCODE, object_status_, is_force_view_);
+  LST_DO_CODE(OB_UNIS_ENCODE, object_status_, is_force_view_, truncate_version_);
   }();
   return ret;
 }
@@ -5990,7 +5994,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
                 rls_policy_ids_,
                 rls_group_ids_,
                 rls_context_ids_);
-    LST_DO_CODE(OB_UNIS_DECODE, object_status_, is_force_view_);
+    LST_DO_CODE(OB_UNIS_DECODE, object_status_, is_force_view_, truncate_version_);
   }
   }();
   return ret;
@@ -6124,6 +6128,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
               rls_context_ids_);
   OB_UNIS_ADD_LEN(object_status_);
   OB_UNIS_ADD_LEN(is_force_view_);
+  OB_UNIS_ADD_LEN(truncate_version_);
   return len;
 }
 

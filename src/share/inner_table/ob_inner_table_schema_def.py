@@ -266,7 +266,8 @@ all_table_def = dict(
       ('interval_range', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH', 'true'),
       ('b_interval_range', 'varchar:OB_MAX_B_HIGH_BOUND_VAL_LENGTH', 'true'),
       ('object_status', 'int', 'false', '1'),
-      ('table_flags', 'int', 'false', '0')
+      ('table_flags', 'int', 'false', '0'),
+      ('truncate_version', 'int', 'false', '-1')
     ],
 )
 
@@ -1774,19 +1775,19 @@ def_table_schema(
 
 # TODO: abandoned
 def_table_schema(
-	  owner = 'quanwei.wqw',		
-    table_name     = '__all_freeze_schema_version',		
-    table_id       = '219',		
-    table_type = 'SYSTEM_TABLE',		
-    gm_columns = ['gmt_create', 'gmt_modified'],		
-    rowkey_columns = [		
-        ('frozen_version', 'int', 'false'),		
-        ('tenant_id', 'int', 'false'),		
-    ],		
-    
-    normal_columns = [		
-      ('schema_version', 'int', 'false'),		
-  ],		
+	  owner = 'quanwei.wqw',
+    table_name     = '__all_freeze_schema_version',
+    table_id       = '219',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('frozen_version', 'int', 'false'),
+        ('tenant_id', 'int', 'false'),
+    ],
+
+    normal_columns = [
+      ('schema_version', 'int', 'false'),
+  ],
 )
 
 all_type_def = dict(
@@ -1919,7 +1920,7 @@ def_table_schema(
   ],
 )
 
-#abandoned on 4.0 table_id = 228 __all_cluster 
+#abandoned on 4.0 table_id = 228 __all_cluster
 
 # table_id = 229: __all_gts not used on 4.0
 
@@ -3661,7 +3662,7 @@ def_table_schema(
   meta_record_in_sys = False,
   normal_columns = [
     ('dest_id', 'int', 'true', '0'),
-    ('dest_type', 'varchar:OB_DEFAULT_OUTPUT_DEVICE_TYPE_LENTH', 'true', ''), 
+    ('dest_type', 'varchar:OB_DEFAULT_OUTPUT_DEVICE_TYPE_LENTH', 'true', ''),
     ('authorization', 'varchar:OB_MAX_BACKUP_AUTHORIZATION_LENGTH'),
     ('extension', 'varchar:OB_MAX_BACKUP_EXTENSION_LENGTH'),
     ('check_file_name', 'varchar:OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH', 'true', ''),
@@ -3735,7 +3736,7 @@ def_table_schema(
     ('end_ts', 'int'),
     ('status', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH'),
     ('result', 'int'),
-    ('retry_count', 'int', 'true', '0'), 
+    ('retry_count', 'int', 'true', '0'),
     ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('description', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('path', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
@@ -3770,7 +3771,7 @@ def_table_schema(
     ('end_ts', 'int'),
     ('status', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH'),
     ('result', 'int'),
-    ('retry_count', 'int', 'true', '0'), 
+    ('retry_count', 'int', 'true', '0'),
     ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('description', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('path', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
@@ -4051,8 +4052,8 @@ def_table_schema(
   ],
 )
 
-#abandoned on 4.0 table_id = 367 __all_cluster_info 
-#abandoned on 4.0 table_id = 368 __all_cluster_config 
+#abandoned on 4.0 table_id = 367 __all_cluster_info
+#abandoned on 4.0 table_id = 368 __all_cluster_config
 
 def_table_schema(
   owner = 'yanmu.ztl',
@@ -4486,8 +4487,8 @@ def_table_schema(
   normal_columns = [
     ('incarnation', 'int'),
     ('initiator_tenant_id', 'int'),
-    ('initiator_job_id', 'int'), 
-    ('executor_tenant_id', 'varchar:OB_MAX_EXECUTOR_TENANT_LENGTH'), 
+    ('initiator_job_id', 'int'),
+    ('executor_tenant_id', 'varchar:OB_MAX_EXECUTOR_TENANT_LENGTH'),
     ('type', 'varchar:OB_INNER_TABLE_BACKUP_CLEAN_TYPE_LENGTH'),
     ('parameter', 'varchar:OB_MAX_BACKUP_PATH_LENGTH'),
     ('job_level', 'varchar:OB_INNER_TABLE_BACKUP_LEVEL_LENGTH'),
@@ -4497,11 +4498,11 @@ def_table_schema(
     ('task_count', 'int', 'true', '0'),
     ('success_task_count', 'int', 'true', '0'),
     ('result', 'int'),
-    ('retry_count', 'int', 'true', '0'), 
+    ('retry_count', 'int', 'true', '0'),
     ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('data_backup_dest_id_list', 'varchar:OB_INNER_TABLE_BACKUP_DEFAULT_FIELD_LENGTH', 'true', ''),
-    ('log_archive_dest_id_list', 'varchar:OB_INNER_TABLE_BACKUP_DEFAULT_FIELD_LENGTH', 'true', ''), 
-    ('data_backup_path_list', 'varchar:OB_MAX_BACKUP_PTAH_LIST_LENGTH', 'true', ''), 
+    ('log_archive_dest_id_list', 'varchar:OB_INNER_TABLE_BACKUP_DEFAULT_FIELD_LENGTH', 'true', ''),
+    ('data_backup_path_list', 'varchar:OB_MAX_BACKUP_PTAH_LIST_LENGTH', 'true', ''),
     ('log_archive_path_list', 'varchar:OB_MAX_BACKUP_PTAH_LIST_LENGTH', 'true', ''),
     ('description', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ],
@@ -4523,8 +4524,8 @@ def_table_schema(
   normal_columns = [
     ('incarnation', 'int'),
     ('initiator_tenant_id', 'int'),
-    ('initiator_job_id', 'int'), 
-    ('executor_tenant_id', 'varchar:OB_MAX_EXECUTOR_TENANT_LENGTH'), 
+    ('initiator_job_id', 'int'),
+    ('executor_tenant_id', 'varchar:OB_MAX_EXECUTOR_TENANT_LENGTH'),
     ('type', 'varchar:OB_INNER_TABLE_BACKUP_CLEAN_TYPE_LENGTH'),
     ('parameter', 'varchar:OB_MAX_BACKUP_PATH_LENGTH'),
     ('job_level', 'varchar:OB_INNER_TABLE_BACKUP_LEVEL_LENGTH'),
@@ -4534,11 +4535,11 @@ def_table_schema(
     ('task_count', 'int', 'true', '0'),
     ('success_task_count', 'int', 'true', '0'),
     ('result', 'int'),
-    ('retry_count', 'int', 'true', '0'), 
+    ('retry_count', 'int', 'true', '0'),
     ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('data_backup_dest_id_list', 'varchar:OB_INNER_TABLE_BACKUP_DEFAULT_FIELD_LENGTH', 'true', ''),
-    ('log_archive_dest_id_list', 'varchar:OB_INNER_TABLE_BACKUP_DEFAULT_FIELD_LENGTH', 'true', ''), 
-    ('data_backup_path_list', 'varchar:OB_MAX_BACKUP_PTAH_LIST_LENGTH', 'true', ''), 
+    ('log_archive_dest_id_list', 'varchar:OB_INNER_TABLE_BACKUP_DEFAULT_FIELD_LENGTH', 'true', ''),
+    ('data_backup_path_list', 'varchar:OB_MAX_BACKUP_PTAH_LIST_LENGTH', 'true', ''),
     ('log_archive_path_list', 'varchar:OB_MAX_BACKUP_PTAH_LIST_LENGTH', 'true', ''),
     ('description', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ],
@@ -4643,7 +4644,7 @@ def_table_schema(
     ('delete_bytes', 'int', 'true', '0'),
     ('total_files_count', 'int', 'true', '0'),
     ('delete_files_count', 'int', 'true', '0'),
-    ('retry_id', 'int', 'true', '0'), 
+    ('retry_id', 'int', 'true', '0'),
     ('result', 'int', 'true', '0'),
     ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ],
@@ -4667,7 +4668,7 @@ def_table_schema(
     ('job_id', 'int'),
     ('task_type', 'varchar:OB_INNER_TABLE_BACKUP_CLEAN_TYPE_LENGTH'),
     ('id', 'int'),
-    ('round_id', 'int'), 
+    ('round_id', 'int'),
     ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
     ('start_ts', 'int'),
     ('end_ts', 'int'),
@@ -4678,7 +4679,7 @@ def_table_schema(
     ('delete_bytes', 'int', 'true', '0'),
     ('total_files_count', 'int', 'true', '0'),
     ('delete_files_count', 'int', 'true', '0'),
-    ('retry_id', 'int', 'true', '0'), 
+    ('retry_id', 'int', 'true', '0'),
     ('result', 'int', 'true', '0'),
     ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ],
@@ -4973,8 +4974,8 @@ def_table_schema(
   is_cluster_private = True,
   meta_record_in_sys = False,
   normal_columns = [
-    ('dest_id', 'int', 'true', '0'), 
-    ('dest_type', 'varchar:OB_DEFAULT_OUTPUT_DEVICE_TYPE_LENTH', 'true', ''), 
+    ('dest_id', 'int', 'true', '0'),
+    ('dest_type', 'varchar:OB_DEFAULT_OUTPUT_DEVICE_TYPE_LENTH', 'true', ''),
     ('authorization', 'varchar:OB_MAX_BACKUP_AUTHORIZATION_LENGTH'),
     ('extension', 'varchar:OB_MAX_BACKUP_EXTENSION_LENGTH'),
     ('check_file_name', 'varchar:OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH', 'true', ''),
@@ -8525,7 +8526,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-## abandoned on 4.0 table_id = 12042 __all_virtual_weak_read_stat 
+## abandoned on 4.0 table_id = 12042 __all_virtual_weak_read_stat
 
 ## abandoned on 4.0 table_id = 12054 __all_virtual_partition_audit
 
@@ -11021,7 +11022,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_column_checksum_error_info']))
 
 def_table_schema(
-  owner = 'zhaoruizhe.zrz', 
+  owner = 'zhaoruizhe.zrz',
   table_name = '__all_virtual_kvcache_handle_leak_info',
   table_type = 'VIRTUAL_TABLE',
   table_id='12331',
@@ -12356,7 +12357,7 @@ def_table_schema(
                     join oceanbase.__all_column c2
                       on f.tenant_id = c2.tenant_id and fc.parent_column_id = c2.column_id and t2.table_id = c2.table_id
                     where f.tenant_id = 0)
-                    
+
                     union all
                     (select 'def' as CONSTRAINT_CATALOG,
                     d.database_name as CONSTRAINT_SCHEMA,
@@ -14446,15 +14447,15 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   view_definition = """
-    SELECT 
-    P.TENANT_ID AS TENANT_ID, 
-    P.JOB_ID AS JOB_ID, 
-    RESTORE_TENANT_NAME, 
+    SELECT
+    P.TENANT_ID AS TENANT_ID,
+    P.JOB_ID AS JOB_ID,
+    RESTORE_TENANT_NAME,
     RESTORE_TENANT_ID,
-    BACKUP_TENANT_NAME, 
+    BACKUP_TENANT_NAME,
     BACKUP_TENANT_ID,
-    BACKUP_CLUSTER_NAME, 
-    BACKUP_DEST, 
+    BACKUP_CLUSTER_NAME,
+    BACKUP_DEST,
     RESTORE_OPTION,
     RESTORE_SCN,
     CASE
@@ -14462,7 +14463,7 @@ def_table_schema(
         THEN NULL
       WHEN RESTORE_SCN=0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(RESTORE_SCN)
       END AS RESTORE_SCN_DISPLAY,
     CASE
@@ -14483,12 +14484,12 @@ def_table_schema(
         THEN NULL
       WHEN START_TIMESTAMP='0'
         THEN NULL
-      ELSE 
+      ELSE
         USEC_TO_TIME(START_TIMESTAMP)
       END AS START_TIMESTAMP,
-    BACKUP_SET_LIST, 
+    BACKUP_SET_LIST,
     BACKUP_PIECE_LIST,
-    TOTAL_BYTES, 
+    TOTAL_BYTES,
     CASE
       WHEN TOTAL_BYTES >= 1024*1024*1024*1024*1024
         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024/1024,2), 'PB')
@@ -14510,19 +14511,19 @@ def_table_schema(
       ELSE
         CONCAT(ROUND(FINISH_BYTES/1024/1024,2), 'MB')
       END AS FINISH_BYTES_DISPLAY,
-    DESCRIPTION 
+    DESCRIPTION
     FROM
   (
-      SELECT 
-      TENANT_ID, 
-      JOB_ID, 
-      MAX(CASE NAME WHEN 'tenant_name' THEN VALUE ELSE '' END) AS RESTORE_TENANT_NAME, 
+      SELECT
+      TENANT_ID,
+      JOB_ID,
+      MAX(CASE NAME WHEN 'tenant_name' THEN VALUE ELSE '' END) AS RESTORE_TENANT_NAME,
       MAX(CASE NAME WHEN 'tenant_id' THEN VALUE ELSE '' END) AS RESTORE_TENANT_ID,
       MAX(CASE NAME WHEN 'backup_tenant_name' THEN VALUE ELSE '' END) AS BACKUP_TENANT_NAME,
-      MAX(CASE NAME WHEN 'backup_tenant_id' THEN VALUE ELSE '' END) AS BACKUP_TENANT_ID, 
+      MAX(CASE NAME WHEN 'backup_tenant_id' THEN VALUE ELSE '' END) AS BACKUP_TENANT_ID,
       MAX(CASE NAME WHEN 'backup_cluster_name' THEN VALUE ELSE '' END) AS BACKUP_CLUSTER_NAME,
-      MAX(CASE NAME WHEN 'target_tenant_role' THEN VALUE ELSE '' END) AS TENANT_ROLE, 
-      MAX(CASE NAME WHEN 'backup_dest' THEN VALUE ELSE '' END) AS BACKUP_DEST, 
+      MAX(CASE NAME WHEN 'target_tenant_role' THEN VALUE ELSE '' END) AS TENANT_ROLE,
+      MAX(CASE NAME WHEN 'backup_dest' THEN VALUE ELSE '' END) AS BACKUP_DEST,
       MAX(CASE NAME WHEN 'restore_option' THEN VALUE ELSE '' END) AS RESTORE_OPTION,
       MAX(CASE NAME WHEN 'status' THEN VALUE ELSE '' END) AS STATUS,
       MAX(CASE NAME WHEN 'restore_scn' THEN VALUE ELSE '' END) AS RESTORE_SCN,
@@ -14532,9 +14533,9 @@ def_table_schema(
       MAX(CASE NAME WHEN 'description' THEN VALUE ELSE '' END) AS DESCRIPTION
       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID
   ) P LEFT JOIN
-  (   
-      SELECT 
-      TENANT_ID, 
+  (
+      SELECT
+      TENANT_ID,
       JOB_ID,
       TOTAL_BYTES,
       FINISH_BYTES
@@ -14567,7 +14568,7 @@ def_table_schema(
     CASE
       WHEN RESTORE_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(RESTORE_SCN)
       END AS RESTORE_SCN_DISPLAY,
     RESTORE_OPTION,
@@ -14887,7 +14888,7 @@ def_table_schema(
            ELSE 'NORMAL' END AS STATUS,
       A.tenant_id as CON_ID
     FROM
-      (SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, T.tablet_id 
+      (SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, T.tablet_id
        FROM oceanbase.__all_table T where T.part_level = 0
        UNION ALL
        SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, P.tablet_id
@@ -14957,14 +14958,14 @@ def_table_schema(
     CASE
       WHEN START_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
     MAX_SCN,
@@ -15028,7 +15029,7 @@ def_table_schema(
       WHEN END_TS = 0
           THEN NULL
       ELSE
-          USEC_TO_TIME(END_TS) 
+          USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     FILE_STATUS,
@@ -15036,30 +15037,30 @@ def_table_schema(
       WHEN END_TS = 0
         THEN 0
       ELSE
-        ROUND((END_TS - START_TS)/1000/1000,0) 
+        ROUND((END_TS - START_TS)/1000/1000,0)
       END AS ELAPSED_SECONDES,
     PLUS_ARCHIVELOG,
     START_REPLAY_SCN,
-    CASE 
+    CASE
       WHEN START_REPLAY_SCN = 0
         THEN NULL
-      ELSE 
-        SCN_TO_TIMESTAMP(START_REPLAY_SCN) 
+      ELSE
+        SCN_TO_TIMESTAMP(START_REPLAY_SCN)
       END AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
-    CASE 
+    CASE
     WHEN MIN_RESTORE_SCN = 0
       THEN NULL
-    ELSE 
+    ELSE
       SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
     END AS MIN_RESTORE_SCN_DISPLAY,
     INPUT_BYTES,
     OUTPUT_BYTES,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN 0
       ELSE
-        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000) 
+        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)
       END AS OUTPUT_RATE_BYTES,
     EXTRA_BYTES AS EXTRA_META_BYTES,
     TABLET_COUNT,
@@ -15304,11 +15305,11 @@ def_table_schema(
     ENCRYPTION_MODE,
     PASSWD,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        USEC_TO_TIME(END_TS) 
+        USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     RESULT,
@@ -15342,11 +15343,11 @@ def_table_schema(
     ENCRYPTION_MODE,
     PASSWD,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        USEC_TO_TIME(END_TS) 
+        USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     RESULT,
@@ -15373,11 +15374,11 @@ def_table_schema(
     INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        USEC_TO_TIME(END_TS) 
+        USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     START_SCN,
@@ -15390,8 +15391,8 @@ def_table_schema(
     CASE
       WHEN END_TS = 0
         THEN 0
-      ELSE 
-        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000) 
+      ELSE
+        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)
       END AS OUTPUT_RATE_BYTES,
     EXTRA_BYTES AS EXTRA_META_BYTES,
     TABLET_COUNT,
@@ -15424,11 +15425,11 @@ def_table_schema(
     INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        USEC_TO_TIME(END_TS) 
+        USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     START_SCN,
@@ -15441,8 +15442,8 @@ def_table_schema(
     CASE
       WHEN END_TS = 0
         THEN 0
-      ELSE 
-        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000) 
+      ELSE
+        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)
       END AS OUTPUT_RATE_BYTES,
     EXTRA_BYTES AS EXTRA_META_BYTES,
     TABLET_COUNT,
@@ -20690,7 +20691,7 @@ def_table_schema(
       CASE
         WHEN END_TS = 0
           THEN NULL
-        ELSE 
+        ELSE
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
@@ -20725,7 +20726,7 @@ def_table_schema(
       CASE
         WHEN END_TS = 0
           THEN NULL
-        ELSE 
+        ELSE
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
@@ -20759,7 +20760,7 @@ def_table_schema(
       CASE
         WHEN END_TS = 0
           THEN NULL
-        ELSE 
+        ELSE
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
@@ -20794,7 +20795,7 @@ def_table_schema(
       CASE
         WHEN END_TS = 0
           THEN NULL
-        ELSE 
+        ELSE
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
@@ -21543,11 +21544,11 @@ def_table_schema(
     ENCRYPTION_MODE,
     PASSWD,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        USEC_TO_TIME(END_TS) 
+        USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     RESULT,
@@ -21583,11 +21584,11 @@ def_table_schema(
     ENCRYPTION_MODE,
     PASSWD,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        USEC_TO_TIME(END_TS) 
+        USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     RESULT,
@@ -21616,11 +21617,11 @@ def_table_schema(
     INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        USEC_TO_TIME(END_TS) 
+        USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     START_SCN,
@@ -21633,8 +21634,8 @@ def_table_schema(
     CASE
       WHEN END_TS = 0
         THEN 0
-      ELSE 
-        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000) 
+      ELSE
+        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)
       END AS OUTPUT_RATE_BYTES,
     EXTRA_BYTES AS EXTRA_META_BYTES,
     TABLET_COUNT,
@@ -21669,11 +21670,11 @@ def_table_schema(
     INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        USEC_TO_TIME(END_TS) 
+        USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     START_SCN,
@@ -21686,8 +21687,8 @@ def_table_schema(
     CASE
       WHEN END_TS = 0
         THEN 0
-      ELSE 
-        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000) 
+      ELSE
+        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)
       END AS OUTPUT_RATE_BYTES,
     EXTRA_BYTES AS EXTRA_META_BYTES,
     TABLET_COUNT,
@@ -21728,7 +21729,7 @@ def_table_schema(
       WHEN END_TS = 0
           THEN NULL
       ELSE
-          USEC_TO_TIME(END_TS) 
+          USEC_TO_TIME(END_TS)
       END AS END_TIMESTAMP,
     STATUS,
     FILE_STATUS,
@@ -21736,30 +21737,30 @@ def_table_schema(
       WHEN END_TS = 0
         THEN 0
       ELSE
-        ROUND((END_TS - START_TS)/1000/1000,0) 
+        ROUND((END_TS - START_TS)/1000/1000,0)
       END AS ELAPSED_SECONDES,
     PLUS_ARCHIVELOG,
     START_REPLAY_SCN,
-    CASE 
+    CASE
       WHEN START_REPLAY_SCN = 0
         THEN NULL
-      ELSE 
-        SCN_TO_TIMESTAMP(START_REPLAY_SCN) 
+      ELSE
+        SCN_TO_TIMESTAMP(START_REPLAY_SCN)
       END AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
-    CASE 
+    CASE
     WHEN MIN_RESTORE_SCN = 0
       THEN NULL
-    ELSE 
+    ELSE
       SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
     END AS MIN_RESTORE_SCN_DISPLAY,
     INPUT_BYTES,
     OUTPUT_BYTES,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN 0
       ELSE
-        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000) 
+        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)
       END AS OUTPUT_RATE_BYTES,
     EXTRA_BYTES AS EXTRA_META_BYTES,
     TABLET_COUNT,
@@ -22240,7 +22241,7 @@ def_table_schema(
       CASE
         WHEN END_TS = 0
           THEN NULL
-        ELSE 
+        ELSE
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
@@ -22277,7 +22278,7 @@ def_table_schema(
       CASE
         WHEN END_TS = 0
           THEN NULL
-        ELSE 
+        ELSE
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
@@ -22313,7 +22314,7 @@ def_table_schema(
       CASE
         WHEN END_TS = 0
           THEN NULL
-        ELSE 
+        ELSE
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
@@ -22350,7 +22351,7 @@ def_table_schema(
       CASE
         WHEN END_TS = 0
           THEN NULL
-        ELSE 
+        ELSE
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
       STATUS,
@@ -22437,14 +22438,14 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT 
-    P.JOB_ID AS JOB_ID, 
-    RESTORE_TENANT_NAME, 
+    SELECT
+    P.JOB_ID AS JOB_ID,
+    RESTORE_TENANT_NAME,
     RESTORE_TENANT_ID,
-    BACKUP_TENANT_NAME, 
+    BACKUP_TENANT_NAME,
     BACKUP_TENANT_ID,
-    BACKUP_CLUSTER_NAME, 
-    BACKUP_DEST, 
+    BACKUP_CLUSTER_NAME,
+    BACKUP_DEST,
     RESTORE_OPTION,
     RESTORE_SCN,
     CASE
@@ -22452,7 +22453,7 @@ def_table_schema(
         THEN NULL
       WHEN RESTORE_SCN=0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(RESTORE_SCN)
       END AS RESTORE_SCN_DISPLAY,
     CASE
@@ -22473,10 +22474,10 @@ def_table_schema(
         THEN NULL
       WHEN START_TIMESTAMP='0'
         THEN NULL
-      ELSE 
+      ELSE
         USEC_TO_TIME(START_TIMESTAMP)
       END AS START_TIMESTAMP,
-    BACKUP_SET_LIST, 
+    BACKUP_SET_LIST,
     BACKUP_PIECE_LIST,
     TOTAL_BYTES,
     CASE
@@ -22500,19 +22501,19 @@ def_table_schema(
       ELSE
         CONCAT(ROUND(FINISH_BYTES/1024/1024,2), 'MB')
       END AS FINISH_BYTES_DISPLAY,
-    DESCRIPTION 
+    DESCRIPTION
     FROM
   (
-      SELECT 
-      TENANT_ID, 
-      JOB_ID, 
-      MAX(CASE NAME WHEN 'tenant_name' THEN VALUE ELSE '' END) AS RESTORE_TENANT_NAME, 
+      SELECT
+      TENANT_ID,
+      JOB_ID,
+      MAX(CASE NAME WHEN 'tenant_name' THEN VALUE ELSE '' END) AS RESTORE_TENANT_NAME,
       MAX(CASE NAME WHEN 'tenant_id' THEN VALUE ELSE '' END) AS RESTORE_TENANT_ID,
       MAX(CASE NAME WHEN 'backup_tenant_name' THEN VALUE ELSE '' END) AS BACKUP_TENANT_NAME,
-      MAX(CASE NAME WHEN 'backup_tenant_id' THEN VALUE ELSE '' END) AS BACKUP_TENANT_ID, 
+      MAX(CASE NAME WHEN 'backup_tenant_id' THEN VALUE ELSE '' END) AS BACKUP_TENANT_ID,
       MAX(CASE NAME WHEN 'backup_cluster_name' THEN VALUE ELSE '' END) AS BACKUP_CLUSTER_NAME,
-      MAX(CASE NAME WHEN 'target_tenant_role' THEN VALUE ELSE '' END) AS TENANT_ROLE, 
-      MAX(CASE NAME WHEN 'backup_dest' THEN VALUE ELSE '' END) AS BACKUP_DEST, 
+      MAX(CASE NAME WHEN 'target_tenant_role' THEN VALUE ELSE '' END) AS TENANT_ROLE,
+      MAX(CASE NAME WHEN 'backup_dest' THEN VALUE ELSE '' END) AS BACKUP_DEST,
       MAX(CASE NAME WHEN 'restore_option' THEN VALUE ELSE '' END) AS RESTORE_OPTION,
       MAX(CASE NAME WHEN 'status' THEN VALUE ELSE '' END) AS STATUS,
       MAX(CASE NAME WHEN 'restore_scn' THEN VALUE ELSE '' END) AS RESTORE_SCN,
@@ -22522,9 +22523,9 @@ def_table_schema(
       MAX(CASE NAME WHEN 'description' THEN VALUE ELSE '' END) AS DESCRIPTION
       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID
   ) P LEFT JOIN
-  (   
-      SELECT 
-      TENANT_ID, 
+  (
+      SELECT
+      TENANT_ID,
       JOB_ID,
       TOTAL_BYTES,
       FINISH_BYTES
@@ -22558,7 +22559,7 @@ def_table_schema(
     CASE
       WHEN RESTORE_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(RESTORE_SCN)
       END AS RESTORE_SCN_DISPLAY,
     RESTORE_OPTION,
@@ -22644,14 +22645,14 @@ def_table_schema(
     CASE
       WHEN START_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
     COMPATIBLE,
@@ -22738,14 +22739,14 @@ def_table_schema(
     CASE
       WHEN START_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
     COMPATIBLE,
@@ -22806,7 +22807,7 @@ def_table_schema(
       END AS DELETED_OUTPUT_BYTES_DISPLAY,
     PATH,
     COMMENT
-    FROM 
+    FROM
 (
 SELECT DEST_ID,
        ROUND_ID,
@@ -22876,14 +22877,14 @@ def_table_schema(
     CASE
       WHEN START_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
     MAX_SCN,
@@ -22987,14 +22988,14 @@ def_table_schema(
     CASE
       WHEN START_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
     COMPATIBLE,
@@ -23080,14 +23081,14 @@ def_table_schema(
     CASE
       WHEN START_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
     COMPATIBLE,
@@ -23148,7 +23149,7 @@ def_table_schema(
       END AS DELETED_OUTPUT_BYTES_DISPLAY,
     PATH,
     COMMENT
-    FROM 
+    FROM
 (
 SELECT TENANT_ID,
        DEST_ID,
@@ -23658,7 +23659,7 @@ def_table_schema(
   """
   SELECT TENANT_ID,
          TABLET_ID
-  FROM 
+  FROM
     (
       SELECT A.TENANT_ID AS TENANT_ID,
              A.TABLET_ID AS TABLET_ID,
@@ -41078,7 +41079,7 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   in_tenant_space = True,
-  view_definition = 
+  view_definition =
   """
     SELECT
     JOB_ID,
@@ -41093,11 +41094,11 @@ def_table_schema(
     ENCRYPTION_MODE,
     PASSWD,
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
+        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
       END AS END_TIMESTAMP,
     STATUS,
     RESULT,
@@ -41135,11 +41136,11 @@ def_table_schema(
     ENCRYPTION_MODE,
     PASSWD,
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
+        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
       END AS END_TIMESTAMP,
     STATUS,
     RESULT,
@@ -41170,11 +41171,11 @@ def_table_schema(
     INCARNATION,
     BACKUP_SET_ID,
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
+        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
       END AS END_TIMESTAMP,
     STATUS,
     START_SCN,
@@ -41184,11 +41185,11 @@ def_table_schema(
     PASSWD,
     INPUT_BYTES,
     OUTPUT_BYTES,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN 0
       ELSE
-        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000) 
+        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)
       END AS OUTPUT_RATE_BYTES,
     EXTRA_BYTES AS EXTRA_META_BYTES,
     TABLET_COUNT,
@@ -41225,11 +41226,11 @@ def_table_schema(
     INCARNATION,
     BACKUP_SET_ID,
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
+        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
       END AS END_TIMESTAMP,
     STATUS,
     START_SCN,
@@ -41239,11 +41240,11 @@ def_table_schema(
     PASSWD,
     INPUT_BYTES,
     OUTPUT_BYTES,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN 0
       ELSE
-        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000) 
+        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)
       END AS OUTPUT_RATE_BYTES,
     EXTRA_BYTES AS EXTRA_META_BYTES,
     TABLET_COUNT,
@@ -41286,15 +41287,15 @@ def_table_schema(
       WHEN END_TS = 0
         THEN NULL
       ELSE
-        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
+        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
       END AS END_TIMESTAMP,
     STATUS,
     FILE_STATUS,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN 0
-      ELSE 
-        ROUND((END_TS - START_TS)/1000/1000,0) 
+      ELSE
+        ROUND((END_TS - START_TS)/1000/1000,0)
       END AS ELAPSED_SECONDES,
     PLUS_ARCHIVELOG,
     START_REPLAY_SCN,
@@ -41303,11 +41304,11 @@ def_table_schema(
     SCN_TO_TIMESTAMP(MIN_RESTORE_SCN) AS MIN_RESTORE_SCN_DISPLAY,
     INPUT_BYTES,
     OUTPUT_BYTES,
-    CASE 
+    CASE
       WHEN END_TS = 0
         THEN 0
       ELSE
-        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000) 
+        OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)
       END AS OUTPUT_RATE_BYTES,
     EXTRA_BYTES AS EXTRA_META_BYTES,
     TABLET_COUNT,
@@ -41618,7 +41619,7 @@ def_table_schema(
         WHEN END_TS = 0
           THEN NULL
         ELSE
-          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
+          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
         END AS END_TIMESTAMP,
       STATUS,
       TASK_COUNT,
@@ -41657,7 +41658,7 @@ def_table_schema(
         WHEN END_TS = 0
           THEN NULL
         ELSE
-          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
+          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
         END AS END_TIMESTAMP,
       STATUS,
       TASK_COUNT,
@@ -41695,7 +41696,7 @@ def_table_schema(
         WHEN END_TS = 0
           THEN NULL
         ELSE
-          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
+          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
         END AS END_TIMESTAMP,
       STATUS,
       TOTAL_LS_COUNT,
@@ -41734,7 +41735,7 @@ def_table_schema(
         WHEN END_TS = 0
           THEN NULL
         ELSE
-          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
+          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
         END AS END_TIMESTAMP,
       STATUS,
       TOTAL_LS_COUNT,
@@ -41761,20 +41762,20 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT 
-    P.JOB_ID AS JOB_ID, 
+    SELECT
+    P.JOB_ID AS JOB_ID,
     RESTORE_TENANT_NAME,
-    RESTORE_TENANT_ID, 
-    BACKUP_TENANT_NAME, 
+    RESTORE_TENANT_ID,
+    BACKUP_TENANT_NAME,
     BACKUP_TENANT_ID,
-    BACKUP_CLUSTER_NAME, 
-    BACKUP_DEST, 
+    BACKUP_CLUSTER_NAME,
+    BACKUP_DEST,
     RESTORE_OPTION,
     RESTORE_SCN,
     CASE
       WHEN RESTORE_SCN IS NULL
         THEN NULL
-      ELSE 
+      ELSE
         SCN_TO_TIMESTAMP(RESTORE_SCN)
       END AS RESTORE_SCN_DISPLAY,
     CASE
@@ -41795,12 +41796,12 @@ def_table_schema(
         THEN NULL
       WHEN START_TIMESTAMP='0'
         THEN NULL
-      ELSE 
+      ELSE
         TO_CHAR(TO_NUMBER(START_TIMESTAMP) / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
       END AS START_TIMESTAMP,
-    BACKUP_SET_LIST, 
+    BACKUP_SET_LIST,
     BACKUP_PIECE_LIST,
-    TOTAL_BYTES, 
+    TOTAL_BYTES,
     CASE
       WHEN TOTAL_BYTES >= 1024*1024*1024*1024*1024
         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024/1024,2), 'PB')
@@ -41822,19 +41823,19 @@ def_table_schema(
       ELSE
         CONCAT(ROUND(FINISH_BYTES/1024/1024,2), 'MB')
       END AS FINISH_BYTES_DISPLAY,
-    DESCRIPTION 
+    DESCRIPTION
     FROM
   (
-      SELECT 
-      TENANT_ID, 
-      JOB_ID, 
+      SELECT
+      TENANT_ID,
+      JOB_ID,
       MAX(CASE NAME WHEN 'tenant_name' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_TENANT_NAME,
       MAX(CASE NAME WHEN 'tenant_id' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_TENANT_ID,
       MAX(CASE NAME WHEN 'backup_tenant_name' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_TENANT_NAME,
-      MAX(CASE NAME WHEN 'backup_tenant_id' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_TENANT_ID, 
+      MAX(CASE NAME WHEN 'backup_tenant_id' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_TENANT_ID,
       MAX(CASE NAME WHEN 'backup_cluster_name' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_CLUSTER_NAME,
-      MAX(CASE NAME WHEN 'target_tenant_role' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS TENANT_ROLE, 
-      MAX(CASE NAME WHEN 'backup_dest' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_DEST, 
+      MAX(CASE NAME WHEN 'target_tenant_role' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS TENANT_ROLE,
+      MAX(CASE NAME WHEN 'backup_dest' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_DEST,
       MAX(CASE NAME WHEN 'restore_option' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_OPTION,
       MAX(CASE NAME WHEN 'status' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS STATUS,
       MAX(CASE NAME WHEN 'restore_scn' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_SCN,
@@ -41844,9 +41845,9 @@ def_table_schema(
       MAX(CASE NAME WHEN 'description' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS DESCRIPTION
       FROM SYS.ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID
   ) P LEFT JOIN
-  (   
-      SELECT 
-      TENANT_ID, 
+  (
+      SELECT
+      TENANT_ID,
       JOB_ID,
       TOTAL_BYTES,
       FINISH_BYTES
@@ -41934,7 +41935,7 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   in_tenant_space = True,
-  view_definition = 
+  view_definition =
   """
     SELECT
     DEST_NO,
@@ -42112,7 +42113,7 @@ def_table_schema(
       END AS DELETED_OUTPUT_BYTES_DISPLAY,
     PATH,
     "COMMENT"
-    FROM 
+    FROM
 (
 SELECT DEST_ID,
        ROUND_ID,
@@ -42236,7 +42237,7 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   in_tenant_space = True,
-  view_definition = 
+  view_definition =
   """
     SELECT
     NAME,

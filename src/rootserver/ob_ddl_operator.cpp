@@ -4310,7 +4310,7 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
 // When tables with auto-increment columns are frequently created or deleted, if the auto-increment column cache is not cleared, the memory will grow slowly.
 // so every time when you drop table, if you bring auto-increment columns, clean up the corresponding cache.
 int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema &table_schema,
-                                         const common::ObArray<ObAddr>* alive_server_list/*nullptr*/)
+                                         const common::ObArray<ObAddr> *alive_server_list/*nullptr*/)
 {
   int ret = OB_SUCCESS;
   ObAutoincrementService &autoinc_service = share::ObAutoincrementService::get_instance();

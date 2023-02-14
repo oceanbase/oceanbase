@@ -2577,7 +2577,7 @@ int ObDelUpdResolver::build_column_conv_function_with_value_desc(ObInsertTableIn
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", K(ret), K(table_item->ddl_table_id_));
       } else {
-        skip_convert = table_schema->is_index_table() || 
+        skip_convert = table_schema->is_index_table() ||
                        column_item->column_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
         LOG_TRACE("skip convert expr in ddl", K(table_item->ddl_table_id_), K(skip_convert));
       }
@@ -2758,6 +2758,7 @@ int ObDelUpdResolver::generate_autoinc_params(ObInsertTableInfo &table_info)
           param.autoinc_col_type_ = column_type;
           param.autoinc_desired_count_ = 0;
           param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
+          param.autoinc_version_ = table_schema->get_truncate_version();
           // hidden pk auto-increment variables' default value is 1
           // auto-increment variables for other columns are set in ob_sql.cpp
           // because physical plan may come from plan cache; it need be reset every time
@@ -4001,12 +4002,12 @@ int ObDelUpdResolver::add_relation_columns(ObIArray<ObTableAssignment> &table_as
         }
       }
     }
-    
+
   }
   return ret;
 }
 
-int ObDelUpdResolver::replace_column_ref(ObArray<ObRawExpr*> *value_row, 
+int ObDelUpdResolver::replace_column_ref(ObArray<ObRawExpr*> *value_row,
                                         ObRawExpr *&expr,
                                         bool in_generated_column)
 {
