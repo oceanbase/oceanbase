@@ -3795,8 +3795,6 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
     LOG_WARN("failed to fetch backup ls meta checkpoint ts", K(ret), K_(param));
   } else if (FALSE_IT(ls_backup_ctx_->rebuild_seq_ = rebuild_seq)) {
     // assign rebuild seq
-  } else if (backup_data_type_.is_major_backup()) {
-    LOG_INFO("no need advance checkpoint when backup major");
   } else {
     const uint64_t tenant_id = param_.tenant_id_;
     const share::ObLSID &ls_id = param_.ls_id_;
@@ -3813,6 +3811,17 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
         LOG_WARN("failed to get ls meta", K(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(cur_ls_meta.check_valid_for_backup())) {
         LOG_WARN("failed to check valid for backup", K(ret), K(cur_ls_meta));
+      } else if (backup_data_type_.is_major_backup()) {
+        if (backup_clog_checkpoint_scn > cur_ls_meta.get_clog_checkpoint_scn()) {
+          ret = OB_REPLICA_CANNOT_BACKUP;
+          LOG_WARN("clog checkpoint scn too small, can not use this replica", K(ret), K(tenant_id), K(ls_id));
+          SERVER_EVENT_ADD("backup", "clog_checkpoint_scn_too_small",
+                           "tenant_id", tenant_id,
+                           "ls_id", ls_id.id(),
+                           "backup_set_id", param_.backup_set_desc_.backup_set_id_,
+                           "backup_clog_checkpoint_scn", backup_clog_checkpoint_scn,
+                           "cur_clog_checkpoint_scn", cur_ls_meta.get_clog_checkpoint_scn());
+        }
       } else if (backup_clog_checkpoint_scn <= cur_ls_meta.get_clog_checkpoint_scn()) {
         LOG_INFO("no need advance checkpoint", K_(param));
       } else if (OB_FAIL(advance_checkpoint_by_flush(tenant_id, ls_id, backup_clog_checkpoint_scn, ls))) {

@@ -2915,6 +2915,12 @@ int ObDataTabletsMigrationTask::process()
   int tmp_ret = OB_SUCCESS;
   bool is_ls_online_success = false;
   LOG_INFO("start do data tablets migration task", K(ret), KPC(ctx_));
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("storage_ha", "before_data_tablets_migration_task",
+                        "tenant_id", ctx_->tenant_id_,
+                        "ls_id", ctx_->arg_.ls_id_.id());
+#endif
+  DEBUG_SYNC(BEFORE_DATA_TABLETS_MIGRATION_TASK);
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;

@@ -122,7 +122,9 @@ int ObBackupDataLSTaskMgr::gen_and_add_task_()
     case ObBackupDataTaskType::Type::BACKUP_DATA_MAJOR: {
       if (ObBackupDataTaskType::Type::BACKUP_DATA_MAJOR == ls_attr_->task_type_.type_) {
 #ifdef ERRSIM
-        ROOTSERVICE_EVENT_ADD("backup", "before_backup_major_sstable");
+        ROOTSERVICE_EVENT_ADD("backup", "before_backup_major_sstable",
+                              "tenant_id", ls_attr_->tenant_id_,
+                              "ls_id", ls_attr_->ls_id_.id());
         DEBUG_SYNC(BEFORE_BACKUP_MAJOR_SSTABLE);
 #endif
       }

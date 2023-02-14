@@ -1762,7 +1762,8 @@ int ObBackupTabletProvider::get_tablet_skipped_type_(const uint64_t tenant_id, c
     } else if (1 == tablet_count) {
       if (tmp_ls_id == ls_id.id()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_INFO("tablet not exist, but __all_tablet_to_ls still exist", K(tmp_ls_id));
+        LOG_WARN("tablet not exist, but __all_tablet_to_ls still exist",
+            K(ret), K(tenant_id), K(ls_id), K(tablet_id));
       } else {
         skipped_type = ObBackupSkippedType(ObBackupSkippedType::TRANSFER);
         LOG_INFO("tablet transfered, need change turn", K(ls_id));
