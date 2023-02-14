@@ -1951,6 +1951,11 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
                   || type_ == T_OP_IS_NOT)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
+  } else if (is_oracle_mode()
+             && (type1.is_json() || type2.is_json())
+             && (type_ >= T_OP_EQ && type_ <= T_OP_NE)) {
+    ret = OB_ERR_INVALID_CMP_OP;
+    LOG_WARN("incorrect cmp type with json arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
                                                             type1.get_type(),
                                                             type2.get_type()))) {
