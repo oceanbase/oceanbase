@@ -314,7 +314,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
         // no new zone to merge
         LOG_INFO("no more zone need to merge", K_(tenant_id));
       } else if (OB_FAIL(schedule_zones_to_merge(to_merge_zone, expected_epoch))) {
-        LOG_WARN("fail to get next merge zones", KR(ret), K(to_merge_zone), K(expected_epoch));
+        LOG_WARN("fail to schedule zones to merge", KR(ret), K(to_merge_zone), K(expected_epoch));
       }
       // Need to update_merge_status, even though to_merge_zone is empty.
       // E.g., in the 1st loop, already schedule all zones to merge, but not finish major merge.

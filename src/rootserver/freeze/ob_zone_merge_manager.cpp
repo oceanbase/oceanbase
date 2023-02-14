@@ -915,11 +915,12 @@ int ObZoneMergeManagerBase::adjust_global_merge_info()
   } else {
     // Adjust global_merge_info in memory with (max_frozen_status.frozen_scn_ - 1).
     // So as to launch one major freeze with max_frozen_status.frozen_scn_.
-    inner_adjust_global_merge_info(SCN::minus(max_frozen_status.frozen_scn_, 1));
-  }
-  if (OB_SUCC(ret)) {
-    LOG_INFO("succ to adjust global merge info", K_(tenant_id), "max_frozen_scn",
-      max_frozen_status.frozen_scn_);
+    // Note: only launch major freezes with frozen_scn > 1
+    if (max_frozen_status.frozen_scn_ > SCN::base_scn()) {
+      inner_adjust_global_merge_info(SCN::minus(max_frozen_status.frozen_scn_, 1));
+      LOG_INFO("succ to adjust global merge info", K_(tenant_id), "max_frozen_scn",
+               max_frozen_status.frozen_scn_, K_(global_merge_info));
+    }
   }
   return ret;
 }
