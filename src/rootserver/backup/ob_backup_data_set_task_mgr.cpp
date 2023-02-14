@@ -387,26 +387,8 @@ int ObBackupSetTaskMgr::backup_user_meta_()
   int ret = OB_SUCCESS;
   ObArray<ObBackupLSTaskAttr> ls_task;
   int64_t finish_cnt = 0;
-  uint64_t backup_meta_start_ts = trans_scn_to_timestamp(set_task_attr_.user_ls_start_scn_);
-  int64_t backup_user_meta_timeout = OB_MAX_BACKUP_META_TIMEOUT;
-
-#ifdef ERRSIM
-  backup_user_meta_timeout = GCONF.errsim_max_backup_meta_retry_time_interval;
-#endif
-
   DEBUG_SYNC(BEFORE_BACKUP_UESR_META);
-  if (backup_meta_start_ts + backup_user_meta_timeout < ObTimeUtility::current_time()) {
-    // backup meta overtime, need change meta turn.
-    // get new ls list, and do backup meta in new turn.
-    if (OB_FAIL(enable_transfer_())) {
-      LOG_WARN("fail to enable transfer", K(ret));
-    } else if (OB_FAIL(change_meta_turn_())) {
-      LOG_WARN("fail to change meta turn", K(ret), K(set_task_attr_));
-    } else {
-      ROOTSERVICE_EVENT_ADD("backup_data", "backup meta chang turn", "tenant_id", 
-          job_attr_->tenant_id_, "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
-    }
-  } else if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(*sql_proxy_, job_attr_->job_id_, job_attr_->tenant_id_, false/*update*/, ls_task))) {
+  if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(*sql_proxy_, job_attr_->job_id_, job_attr_->tenant_id_, false/*update*/, ls_task))) {
     LOG_WARN("[DATA_BACKUP]failed to get log stream tasks", K(ret), "job_id", job_attr_->job_id_, "tenant_id", job_attr_->tenant_id_);
   } else if (ls_task.empty()) {
     ret = OB_ERR_UNEXPECTED;
