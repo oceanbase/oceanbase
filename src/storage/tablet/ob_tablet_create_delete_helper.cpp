@@ -2338,8 +2338,9 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
             + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     param.root_block_addr_.set_none_addr();
     param.data_block_macro_meta_addr_.set_none_addr();
-    param.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-    param.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    param.root_row_store_type_ = (ObRowStoreType::ENCODING_ROW_STORE == table_schema.get_row_store_type()
+        ? ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE : table_schema.get_row_store_type());
+    param.latest_row_store_type_ = table_schema.get_row_store_type();
     param.data_index_tree_height_ = 0;
     param.index_blocks_cnt_ = 0;
     param.data_blocks_cnt_ = 0;

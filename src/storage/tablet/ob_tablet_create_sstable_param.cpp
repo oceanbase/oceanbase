@@ -85,7 +85,8 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && create_snapshot_version_ >= 0
                && index_type_ < share::schema::ObIndexType::INDEX_TYPE_MAX
                && root_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
-               && latest_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
+               && (latest_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
+                  || ObRowStoreType::DUMMY_ROW_STORE == latest_row_store_type_)
                && data_index_tree_height_ >= 0
                && index_blocks_cnt_ >= 0
                && data_blocks_cnt_ >= 0
