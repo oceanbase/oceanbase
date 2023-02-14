@@ -39,11 +39,10 @@ public:
                                   ObEvalCtx &eval_ctx,
                                   bool &is_null);
   static int check_rowkey_whether_distinct(const ObExprPtrIArray &row,
-                                           int64_t rowkey_cnt,
-                                           int64_t estimate_row,
                                            DistinctType distinct_algo,
                                            ObEvalCtx &eval_ctx,
                                            ObExecContext &root_ctx,
+                                           ObRowkey &table_rowkey,
                                            SeRowkeyDistCtx *rowkey_dist_ctx,
                                            bool &is_dist);
 
@@ -230,6 +229,7 @@ public:
                                       SeRowkeyDistCtx* &rowkey_dist_ctx);
   static int handle_after_row_processing(ObDMLModifyRowsList *dml_modify_rows);
   static int handle_after_row_processing_batch(ObDMLModifyRowsList *dml_modify_rows);
+  static int init_ob_rowkey( ObIAllocator &allocator, const int64_t rowkey_cnt, ObRowkey &table_rowkey);
 private:
   template <int N>
   static int write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,

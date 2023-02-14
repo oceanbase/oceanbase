@@ -171,6 +171,8 @@ int ObTableMergeOp::open_table_for_each()
     LOG_WARN("allocate merge rtdef failed", K(ret), K(MY_SPEC.merge_ctdefs_.count()));
   } else if (OB_FAIL(ObDMLService::create_rowkey_check_hashset(get_spec().rows_, &ctx_, merge_rtdefs_.at(0).rowkey_dist_ctx_))) {
     LOG_WARN("Failed to create hash set", K(ret));
+  } else if (OB_FAIL(ObDMLService::init_ob_rowkey(ctx_.get_allocator(), MY_SPEC.distinct_key_exprs_.count(), merge_rtdefs_.at(0).table_rowkey_))) {
+    LOG_WARN("fail to init ObRowkey used for distinct check", K(ret));
   }
   trigger_clear_exprs_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.merge_ctdefs_.count(); ++i) {
@@ -400,11 +402,10 @@ int ObTableMergeOp::check_is_distinct(bool &conflict)
   conflict = false;
   // check whether distinct  only use rowkey
   if (OB_FAIL(ObDMLService::check_rowkey_whether_distinct(MY_SPEC.distinct_key_exprs_,
-                                                          MY_SPEC.distinct_key_exprs_.count(),
-                                                          MY_SPEC.rows_,
                                                           DistinctType::T_HASH_DISTINCT,
                                                           get_eval_ctx(),
                                                           get_exec_ctx(),
+                                                          merge_rtdefs_.at(0).table_rowkey_,
                                                           merge_rtdefs_.at(0).rowkey_dist_ctx_,
                                                           // merge_rtdefs_ length must > 0
                                                           is_distinct))) {

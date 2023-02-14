@@ -153,11 +153,10 @@ int ObDMLService::check_rowkey_is_null(const ObExprPtrIArray &row,
 }
 
 int ObDMLService::check_rowkey_whether_distinct(const ObExprPtrIArray &row,
-                                                int64_t rowkey_cnt,
-                                                int64_t estimate_row,
                                                 DistinctType distinct_algo,
                                                 ObEvalCtx &eval_ctx,
                                                 ObExecContext &root_ctx,
+                                                ObRowkey &tmp_table_rowkey,
                                                 SeRowkeyDistCtx *rowkey_dist_ctx,
                                                 bool &is_dist)
 {
@@ -166,26 +165,49 @@ int ObDMLService::check_rowkey_whether_distinct(const ObExprPtrIArray &row,
   if (T_DISTINCT_NONE != distinct_algo) {
     if (T_HASH_DISTINCT == distinct_algo) {
       ObIAllocator &allocator = root_ctx.get_allocator();
+      const int64_t rowkey_cnt = tmp_table_rowkey.get_obj_cnt();
       if (OB_ISNULL(rowkey_dist_ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("distinct check hash set is null", K(ret));
       } else {
-        SeRowkeyItem rowkey_item;
-        if (OB_ISNULL(rowkey_dist_ctx)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("rowkey_dist_ctx cannot be NULL", K(ret));
-        } else if (OB_FAIL(rowkey_item.init(row, eval_ctx, allocator,
-                                            rowkey_cnt))) {
-          LOG_WARN("init rowkey item failed", K(ret));
-        } else {
-          ret = rowkey_dist_ctx->exist_refactored(rowkey_item);
+        //step1: Init ObObj of ObTableRowkey
+        ObObj *tmp_obj_ptr = tmp_table_rowkey.get_obj_ptr();
+        for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+          ObExpr *expr = row.at(i);
+          ObDatum &col_datum = expr->locate_expr_datum(eval_ctx);
+          if (OB_FAIL(col_datum.to_obj(tmp_obj_ptr[i], expr->obj_meta_, expr->obj_datum_map_))) {
+            LOG_WARN("convert datum to obj failed", K(ret));
+          }
+        }
+
+        //step2: Perform distinct check use ObRowkey
+        {
+          ret = rowkey_dist_ctx->exist_refactored(tmp_table_rowkey);
           if (OB_HASH_EXIST == ret) {
             ret = OB_SUCCESS;
             is_dist = false;
           } else if (OB_HASH_NOT_EXIST == ret) {
-            if (OB_FAIL(rowkey_item.copy_datum_data(allocator))) {
-              LOG_WARN("deep_copy rowkey item failed", K(ret));
-            } else if (OB_FAIL(rowkey_dist_ctx->set_refactored(rowkey_item))) {
+            //step3: if not exist, deep copy data and add ObRowkey to hash set
+            //step3.1: Init the buffer of ObObj Array
+            ret = OB_SUCCESS;
+            ObObj *obj_ptr = nullptr;
+            void *buf = nullptr;
+            if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * rowkey_cnt))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("allocate buffer failed", K(ret), K(rowkey_cnt));
+            } else {
+              obj_ptr = new(buf) ObObj[rowkey_cnt];
+            }
+
+            //step3.2: deep copy data to ObObj
+            for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+              if (OB_FAIL(ob_write_obj(allocator, tmp_obj_ptr[i], obj_ptr[i]))) {
+                LOG_WARN("deep copy rowkey value failed", K(ret), K(obj_ptr[i]));
+              }
+            }
+            ObRowkey table_rowkey(obj_ptr, rowkey_cnt);
+            //step3.3: add ObRowkey to hash set
+            if (OB_SUCC(ret) && OB_FAIL(rowkey_dist_ctx->set_refactored(table_rowkey))) {
               LOG_WARN("set rowkey item failed", K(ret));
             }
           } else {
@@ -659,17 +681,16 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
     if (OB_SUCC(ret) && !is_skipped && OB_NOT_NULL(del_rtdef.se_rowkey_dist_ctx_) && !has_instead_of_trg) {
       bool is_distinct = false;
       ObExecContext *root_ctx = nullptr;
-      if (OB_FAIL(dml_op.get_exec_ctx().get_root_ctx(root_ctx))) {
+      if (OB_FAIL(dml_op.get_exec_ctx().get_fk_root_ctx(root_ctx))) {
         LOG_WARN("get root ExecContext failed", K(ret));
       } else if (OB_ISNULL(root_ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the root ctx of foreign key nested session is null", K(ret));
       } else if (OB_FAIL(check_rowkey_whether_distinct(del_ctdef.distinct_key_,
-                                                      del_ctdef.distinct_key_.count(),
-                                                      dml_op.get_spec().rows_,
                                                       T_HASH_DISTINCT,
                                                       dml_op.get_eval_ctx(),
                                                       *root_ctx,
+                                                      del_rtdef.table_rowkey_,
                                                       del_rtdef.se_rowkey_dist_ctx_,
                                                       is_distinct))) {
         LOG_WARN("check rowkey whether distinct failed", K(ret),
@@ -735,11 +756,10 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
     if (OB_SUCC(ret) && !is_skipped && !has_instead_of_trg) {
       bool is_distinct = false;
       if (OB_FAIL(check_rowkey_whether_distinct(upd_ctdef.distinct_key_,
-                                                upd_ctdef.distinct_key_.count(),
-                                                dml_op.get_spec().rows_,
                                                 upd_ctdef.distinct_algo_,
                                                 dml_op.get_eval_ctx(),
                                                 dml_op.get_exec_ctx(),
+                                                upd_rtdef.table_rowkey_,
                                                 upd_rtdef.se_rowkey_dist_ctx_,
                                                 is_distinct))) {
         LOG_WARN("check rowkey whether distinct failed", K(ret),
@@ -1227,36 +1247,81 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
     del_rtdef.das_rtdef_.related_rtdefs_ = &del_rtdef.related_rtdefs_;
   }
 
-
   if (OB_SUCC(ret)) {
     ObTableModifyOp &dml_op = dml_rtctx.op_;
     const uint64_t del_table_id = del_ctdef.das_base_ctdef_.index_tid_;
     ObExecContext *root_ctx = nullptr;
-    if (OB_FAIL(dml_op.get_exec_ctx().get_root_ctx(root_ctx))) {
-      LOG_WARN("failed to get root exec ctx", K(ret));
-    } else if (OB_ISNULL(root_ctx)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the root exec ctx is nullptr", K(ret));
-    } else {
-      DASDelCtxList& del_ctx_list = root_ctx->get_das_ctx().get_das_del_ctx_list();
-      if (!ObDMLService::is_nested_dup_table(del_table_id, del_ctx_list) && T_DISTINCT_NONE != del_ctdef.distinct_algo_) {
+    if (T_DISTINCT_NONE != del_ctdef.distinct_algo_) {
+      if (dml_op.is_fk_nested_session()) {
+        // for delete distinct check that has foreign key, perform global distinct check between nested session,
+        // to avoid delete same row mutiple times between different nested sqls
+        if (OB_FAIL(dml_op.get_exec_ctx().get_fk_root_ctx(root_ctx))) {
+          LOG_WARN("failed to get root exec ctx", K(ret));
+        } else if (OB_ISNULL(root_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the root exec ctx is nullptr", K(ret));
+        } else {
+          DASDelCtxList& del_ctx_list = root_ctx->get_das_ctx().get_das_del_ctx_list();
+          if (ObDMLService::is_nested_dup_table(del_table_id, del_ctx_list)) {
+            // for table deleted at parent session too, no need to create a new hash set
+            if (OB_FAIL(ObDMLService::get_nested_dup_table_ctx(del_table_id, del_ctx_list, del_rtdef.se_rowkey_dist_ctx_))) {
+              LOG_WARN("failed to get nested duplicate delete table ctx for fk nested session", K(ret));
+            }
+          } else {
+            // for table not deleted at parent session, create a new hash set and add to the list at root ctx
+            DmlRowkeyDistCtx del_ctx;
+            del_ctx.table_id_ = del_table_id;
+            if (OB_FAIL(ObDMLService::create_rowkey_check_hashset(dml_op.get_spec().rows_, root_ctx, del_ctx.deleted_rows_))) {
+              LOG_WARN("failed to create hash set", K(ret));
+            } else if (OB_FAIL(del_ctx_list.push_back(del_ctx))) {
+              LOG_WARN("failed to push del ctx to list", K(ret));
+            } else {
+              del_rtdef.se_rowkey_dist_ctx_ = del_ctx.deleted_rows_;
+            }
+          }
+        }
+      } else {
+        // for delete distinct check without foreign key, perform distinct check at current sql
+        DASDelCtxList& del_ctx_list = dml_op.get_exec_ctx().get_das_ctx().get_das_del_ctx_list();
         DmlRowkeyDistCtx del_ctx;
         del_ctx.table_id_ = del_table_id;
-        if (OB_FAIL(ObDMLService::create_rowkey_check_hashset(dml_op.get_spec().rows_, root_ctx, del_ctx.deleted_rows_))) {
-          LOG_WARN("Failed to create hash set", K(ret));
+        if (OB_FAIL(dml_op.get_exec_ctx().get_fk_root_ctx(root_ctx))) {
+          LOG_WARN("failed to get root exec ctx", K(ret));
+        } else if (OB_ISNULL(root_ctx) || root_ctx != &dml_op.get_exec_ctx()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid root exec ctx for delete distinct check", K(ret));
+        } else if (OB_FAIL(ObDMLService::create_rowkey_check_hashset(dml_op.get_spec().rows_, root_ctx, del_ctx.deleted_rows_))) {
+          LOG_WARN("failed to create hash set", K(ret));
         } else if (OB_FAIL(del_ctx_list.push_back(del_ctx))) {
           LOG_WARN("failed to push del ctx to list", K(ret));
         } else {
           del_rtdef.se_rowkey_dist_ctx_ = del_ctx.deleted_rows_;
         }
-      } else if (T_DISTINCT_NONE != del_ctdef.distinct_algo_ &&
-                 OB_FAIL(ObDMLService::get_nested_dup_table_ctx(del_table_id, del_ctx_list, del_rtdef.se_rowkey_dist_ctx_))) {
-        LOG_WARN("failed to get nested duplicate delete table ctx for fk nested session", K(ret));
-      } else if (dml_op.is_fk_nested_session() && OB_FAIL(ObDMLService::get_nested_dup_table_ctx(del_table_id,
-                                                                del_ctx_list,
-                                                                del_rtdef.se_rowkey_dist_ctx_))) {
-        LOG_WARN("failed to get nested duplicate delete table ctx for fk nested session", K(ret));
       }
+    } else { //T_DISTINCT_NONE == del_ctdef.distinct_algo_, means optimizer think don't need to create a new hash set for distinct check
+      if (dml_op.is_fk_nested_session()) { //for delete triggered by delete cascade, need to check whether upper nested sqls will delete the same table
+        if (OB_FAIL(dml_op.get_exec_ctx().get_fk_root_ctx(root_ctx))) {
+          LOG_WARN("failed to get root exec ctx", K(ret));
+        } else if (OB_ISNULL(root_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the root exec ctx is nullptr", K(ret));
+        } else {
+          DASDelCtxList& del_ctx_list = root_ctx->get_das_ctx().get_das_del_ctx_list();
+          if (ObDMLService::is_nested_dup_table(del_table_id, del_ctx_list)) {
+            // A duplicate table was found
+            if (OB_FAIL(ObDMLService::get_nested_dup_table_ctx(del_table_id, del_ctx_list, del_rtdef.se_rowkey_dist_ctx_))) {
+              LOG_WARN("failed to get nested duplicate delete table ctx for fk nested session", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(del_rtdef.se_rowkey_dist_ctx_)) {
+    const int64_t rowkey_cnt = del_ctdef.distinct_key_.count();
+    ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
+    if (OB_FAIL(init_ob_rowkey(allocator, del_ctdef.distinct_key_.count(), del_rtdef.table_rowkey_))) {
+      LOG_WARN("fail to init ObRowkey used for distinct check", K(ret));
     }
   }
   return ret;
@@ -1329,6 +1394,29 @@ int ObDMLService::init_upd_rtdef(
       LOG_WARN("failed to create distinct check hash set", K(ret));
     }
   }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(upd_rtdef.se_rowkey_dist_ctx_)) {
+    const int64_t rowkey_cnt = upd_ctdef.distinct_key_.count();
+    ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
+    if (OB_FAIL(init_ob_rowkey(allocator, upd_ctdef.distinct_key_.count(), upd_rtdef.table_rowkey_))) {
+      LOG_WARN("fail to init ObRowkey used for distinct check", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::init_ob_rowkey( ObIAllocator &allocator, const int64_t rowkey_cnt, ObRowkey &table_rowkey)
+{
+  int ret = OB_SUCCESS;
+  ObObj *obj_ptr = nullptr;
+  void *buf = nullptr;
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * rowkey_cnt))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate buffer failed", K(ret), K(rowkey_cnt));
+  } else {
+    obj_ptr = new(buf) ObObj[rowkey_cnt];
+  }
+  table_rowkey.assign(obj_ptr, rowkey_cnt);
   return ret;
 }
 
