@@ -419,13 +419,14 @@ public:
   void set_case_mode(common:: ObNameCaseMode case_mode) { case_mode_ = case_mode; }
   int write_string_values(uint64_t tenant_id,
                           common::ObString table_name, common::ObString column_name,
-                          common::ObString literal_value, common::ObString user_name);
-  void reset_table_column_name();
-  void reset_user_name_literal();
-  void reset()
+                          common::ObString literal_value, common::ObString user_name,
+                          ObIAllocator &allocator);
+  void reset_table_column_name(ObIAllocator &allocator);
+  void reset_user_name_literal(ObIAllocator &allocator);
+  void reset(ObIAllocator &allocator)
   {
-    reset_table_column_name();
-    reset_user_name_literal();
+    reset_table_column_name(allocator);
+    reset_user_name_literal(allocator);
   }
   int assign(const ObResourceColumnMappingRule &other);
   TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_name), K_(column_name),

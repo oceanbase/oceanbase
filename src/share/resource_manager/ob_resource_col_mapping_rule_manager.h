@@ -30,7 +30,11 @@ class ObPlanCache;
 }
 namespace share
 {
-class ObResourceColMappingRuleManager
+typedef common::ObIntWarp ObResTenantId;
+typedef common::LinkHashNode<ObResTenantId> ObResColMapInfoNode;
+typedef common::LinkHashValue<ObResTenantId> ObResColMapInfoValue;
+class ObResourceManagerProxy;
+class ObTenantResColMappingInfo : public ObResColMapInfoValue
 {
 private:
   struct TableNameHashWrapper
@@ -96,49 +100,45 @@ private:
 
   struct ColumnNameKey
   {
-    ColumnNameKey() : tenant_id_(0), database_id_(0), table_name_(), column_name_() {}
+    ColumnNameKey() : database_id_(0), table_name_(), column_name_() {}
     ColumnNameKey(uint64_t tenant_id, uint64_t database_id,
                   common::ObString table_name, common::ObString column_name,
                   common::ObNameCaseMode name_case_mode) :
-      tenant_id_(tenant_id), database_id_(database_id),
-      table_name_(tenant_id_, database_id_, name_case_mode, table_name),
+      database_id_(database_id),
+      table_name_(tenant_id, database_id, name_case_mode, table_name),
       column_name_(column_name)
     { }
-    uint64_t tenant_id_;
     uint64_t database_id_;
     TableNameHashWrapper table_name_;
     ColumnNameHashWrapper column_name_;
     inline uint64_t hash() const
     {
-      uint64_t hash_val = (tenant_id_ << 32) | database_id_;
+      uint64_t hash_val = database_id_;
       hash_val = table_name_.hash(hash_val);
       hash_val = column_name_.hash(hash_val);
       return hash_val;
     }
     inline bool operator==(const ColumnNameKey& key) const
     {
-      return tenant_id_ == key.tenant_id_
-              && database_id_ == key.database_id_
+      return database_id_ == key.database_id_
               && table_name_ == key.table_name_
               && column_name_ == key.column_name_;
     }
-    TO_STRING_KV(K(tenant_id_), K(database_id_), K(table_name_), K(column_name_));
+    TO_STRING_KV(K(database_id_), K(table_name_), K(column_name_));
   };
   struct RuleValueKey
   {
-    RuleValueKey() : tenant_id_(common::OB_INVALID_ID), rule_id_(common::OB_INVALID_ID),
-      user_name_(), literal_value_() {}
-    RuleValueKey(uint64_t tenant_id, uint64_t rule_id, common::ObString user_name, common::ObString literal_value) :
-      tenant_id_(tenant_id), rule_id_(rule_id), user_name_(user_name), literal_value_(literal_value)
+    RuleValueKey() : rule_id_(common::OB_INVALID_ID), user_name_(), literal_value_() {}
+    RuleValueKey(uint64_t rule_id, common::ObString user_name, common::ObString literal_value) :
+      rule_id_(rule_id), user_name_(user_name), literal_value_(literal_value)
     { }
-    uint64_t tenant_id_;
     uint64_t rule_id_;
     // user name is case sensitive.
     common::ObString user_name_;
     common::ObString literal_value_;
     inline uint64_t hash() const
     {
-      uint64_t hash_val = tenant_id_;
+      uint64_t hash_val = 0;
       hash_val = common::murmurhash(&rule_id_, sizeof(uint64_t), hash_val);
       hash_val = common::murmurhash(user_name_.ptr(), user_name_.length(), hash_val);
       hash_val = common::murmurhash(literal_value_.ptr(), literal_value_.length(), hash_val);
@@ -146,12 +146,11 @@ private:
     }
     inline bool operator==(const RuleValueKey& key) const
     {
-      return tenant_id_ == key.tenant_id_
-             && rule_id_ == key.rule_id_
+      return rule_id_ == key.rule_id_
              && 0 == user_name_.compare(key.user_name_)
              && 0 == literal_value_.compare(key.literal_value_);
     }
-    TO_STRING_KV(K(tenant_id_), K(rule_id_), K(user_name_), K(literal_value_));
+    TO_STRING_KV(K(rule_id_), K(user_name_), K(literal_value_));
   };
   struct RuleValue
   {
@@ -159,14 +158,14 @@ private:
     RuleValue(uint64_t group_id, common::ObString user_name, common::ObString literal_value) :
       group_id_(group_id), user_name_ptr_(user_name.ptr()), literal_value_ptr_(literal_value.ptr())
     { }
-    void release_memory()
+    void release_memory(common::ObIAllocator &allocator)
     {
       if (NULL != user_name_ptr_) {
-        ob_free(user_name_ptr_);
+        allocator.free(user_name_ptr_);
         user_name_ptr_ = NULL;
       }
       if (OB_NOT_NULL(literal_value_ptr_)) {
-        ob_free(literal_value_ptr_);
+        allocator.free(literal_value_ptr_);
         literal_value_ptr_ = NULL;
       }
     }
@@ -176,30 +175,75 @@ private:
     TO_STRING_KV(K(group_id_), KP(user_name_ptr_), KP(literal_value_ptr_));
   };
 public:
+  ObTenantResColMappingInfo()
+  {}
+  int init(uint64_t tenant_id);
+  int refresh(sql::ObPlanCache *plan_cache, const common::ObString &plan);
+  int get_rule_id(uint64_t tenant_id, uint64_t database_id, const common::ObString &table_name,
+                       const common::ObString &column_name, common::ObNameCaseMode case_mode,
+                       uint64_t &rule_id);
+  int get_group_id(uint64_t rule_id, const ObString &user_name,
+                        const common::ObString &literal_value, uint64_t &group_id);
+  int64_t get_version() { return version_; }
+private:
+  uint64_t tenant_id_;
+  //avoid concurrent modification on maps.
+  obutil::Mutex lock_;
+  ObArenaAllocator allocator_;
+  common::hash::ObHashMap<ColumnNameKey, uint64_t> rule_id_map_;
+  common::hash::ObHashMap<RuleValueKey, RuleValue> group_id_map_;
+  int64_t version_;
+};
+
+
+class ObResourceColMappingRuleManager
+{
+private:
+  class AllocHandle
+  {
+  public:
+    static ObTenantResColMappingInfo *alloc_value() { return NULL; }
+    static void free_value(ObTenantResColMappingInfo *info)
+    {
+      if (NULL != info) {
+        info->~ObTenantResColMappingInfo();
+        ob_free(info);
+        info = NULL;
+      }
+    }
+    static ObResColMapInfoNode *alloc_node(ObTenantResColMappingInfo *p)
+    {
+      UNUSED(p);
+      return OB_NEW(ObResColMapInfoNode, "ResRuleInfoMap");
+    }
+    static void free_node(ObResColMapInfoNode *node)
+    {
+      if (NULL != node) {
+        OB_DELETE(ObResColMapInfoNode, "ResRuleInfoMap", node);
+        node = NULL;
+      }
+    }
+  };
+public:
   ObResourceColMappingRuleManager(): inited_(false)
   { }
   virtual ~ObResourceColMappingRuleManager() = default;
   int init();
+  int add_tenant(uint64_t tenant_id);
+  int drop_tenant(uint64_t tenant_id);
   int refresh_resource_column_mapping_rule(uint64_t tenant_id,
                                            sql::ObPlanCache *plan_cache,
                                            const common::ObString &plan);
   uint64_t get_column_mapping_rule_id(uint64_t tenant_id, uint64_t database_id,
                                      const common::ObString &table_name,
                                      const common::ObString &column_name,
-                                     common::ObNameCaseMode case_mode) const;
+                                     common::ObNameCaseMode case_mode);
   uint64_t get_column_mapping_group_id(uint64_t tenant_id, uint64_t rule_id,
                                        const common::ObString &user_name,
                                        const common::ObString &literal_value);
   int64_t get_column_mapping_version(uint64_t tenant_id);
 private:
-  // get version of inner table data in __all_sys_stat.
-  int query_inner_table_version(int64_t &current_version);
-private:
-  //avoid concurrent modification on maps.
-  obutil::Mutex lock_;
-  common::hash::ObHashMap<ColumnNameKey, uint64_t> rule_id_map_;
-  common::hash::ObHashMap<RuleValueKey, RuleValue> group_id_map_;
-  common::hash::ObHashMap<uint64_t, int64_t> tenant_version_;
+  common::ObLinkHashMap<ObResTenantId, ObTenantResColMappingInfo, AllocHandle> tenant_rule_infos_;
   bool inited_;
 
   DISALLOW_COPY_AND_ASSIGN(ObResourceColMappingRuleManager);

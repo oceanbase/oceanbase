@@ -111,55 +111,55 @@ int ObResourceColumnMappingRule::assign(const ObResourceColumnMappingRule &other
   return OB_SUCCESS;
 }
 
-void ObResourceColumnMappingRule::reset_table_column_name()
+void ObResourceColumnMappingRule::reset_table_column_name(ObIAllocator &allocator)
 {
   if (OB_NOT_NULL(table_name_.ptr())) {
-    ob_free(table_name_.ptr());
+    allocator.free(table_name_.ptr());
     table_name_.reset();
   }
   if (OB_NOT_NULL(column_name_.ptr())) {
-    ob_free(column_name_.ptr());
+    allocator.free(column_name_.ptr());
     column_name_.reset();
   }
 }
-void ObResourceColumnMappingRule::reset_user_name_literal()
+void ObResourceColumnMappingRule::reset_user_name_literal(ObIAllocator &allocator)
 {
   if (OB_NOT_NULL(literal_value_.ptr())) {
-    ob_free(literal_value_.ptr());
+    allocator.free(literal_value_.ptr());
     literal_value_.reset();
   }
   if (OB_NOT_NULL(user_name_.ptr())) {
-    ob_free(user_name_.ptr());
+    allocator.free(user_name_.ptr());
     user_name_.reset();
   }
 }
 
 int ObResourceColumnMappingRule::write_string_values(uint64_t tenant_id,
                         common::ObString table_name, common::ObString column_name,
-                        common::ObString literal_value, common::ObString user_name)
+                        common::ObString literal_value, common::ObString user_name,
+                        ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(tenant_id, "ResColMapRule");
-  void *table_name_buf = ob_malloc(table_name.length(), attr);
-  void *column_name_buf = ob_malloc(column_name.length(), attr);
-  void *literal_value_buf = ob_malloc(literal_value.length(), attr);
-  void *user_name_buf = user_name.empty() ? NULL : ob_malloc(user_name.length(), attr);
+  void *table_name_buf = allocator.alloc(table_name.length());
+  void *column_name_buf = allocator.alloc(column_name.length());
+  void *literal_value_buf = allocator.alloc(literal_value.length());
+  void *user_name_buf = user_name.empty() ? NULL : allocator.alloc(user_name.length());
   if (OB_ISNULL(table_name_buf) || OB_ISNULL(column_name_buf)
       || OB_ISNULL(literal_value_buf)
       || (!user_name.empty() && OB_ISNULL(user_name_buf))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(literal_value));
     if (NULL != table_name_buf) {
-      ob_free(table_name_buf);
+      allocator.free(table_name_buf);
     }
     if (NULL != column_name_buf) {
-      ob_free(column_name_buf);
+      allocator.free(column_name_buf);
     }
     if (NULL != literal_value_buf) {
-      ob_free(literal_value_buf);
+      allocator.free(literal_value_buf);
     }
     if (NULL != user_name_buf) {
-      ob_free(user_name_buf);
+      allocator.free(user_name_buf);
     }
   } else {
     MEMCPY(table_name_buf, table_name.ptr(), table_name.length());

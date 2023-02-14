@@ -1937,6 +1937,7 @@ int ObResourceManagerProxy::parse_column_mapping_rule(ObString &value,
 int ObResourceManagerProxy::get_all_resource_mapping_rules_by_column(
     uint64_t tenant_id,
     const common::ObString &plan,
+    ObIAllocator &allocator,
     common::ObIArray<ObResourceColumnMappingRule> &rules)
 {
   int ret = OB_SUCCESS;
@@ -1999,11 +2000,11 @@ int ObResourceManagerProxy::get_all_resource_mapping_rules_by_column(
                 LOG_WARN("get database_id", K(ret));
               } else if (OB_INVALID_ID == database_id) {
                 // do nothing
-              } else if (OB_FAIL(rule.write_string_values(tenant_id, table_name, column_name,
-                                                          literal_value, user_name))) {
-                LOG_WARN("write string values failed", K(ret));
               } else if (OB_FAIL(schema_guard.get_tenant_name_case_mode(tenant_id, case_mode))) {
                 LOG_WARN("get tenant name case mode failed", K(ret));
+              } else if (OB_FAIL(rule.write_string_values(tenant_id, table_name, column_name,
+                                                          literal_value, user_name, allocator))) {
+                LOG_WARN("write string values failed", K(ret));
               } else {
                 rule.set_database_id(database_id);
                 // get and set case mode in oracle mode is ok. When TableNameHashWrapper compare
@@ -2011,7 +2012,7 @@ int ObResourceManagerProxy::get_all_resource_mapping_rules_by_column(
                 rule.set_case_mode(case_mode);
                 if (OB_FAIL(rules.push_back(rule))) {
                   LOG_WARN("fail push back rules", K(rule), K(ret));
-                  rule.reset();
+                  rule.reset(allocator);
                 }
               }
             }

@@ -720,6 +720,8 @@ int ObTenant::init(const ObTenantMeta &meta)
   if (OB_SUCC(ret) && !is_virtual_tenant_id(id_)) {
     if (OB_FAIL(OB_PX_TARGET_MGR.add_tenant(id_))) {
       LOG_WARN("add tenant into px target mgr failed", K(ret), K(id_));
+    } else if (OB_FAIL(G_RES_MGR.get_col_mapping_rule_mgr().add_tenant(id_))) {
+      LOG_WARN("add tenant into res col maping rule mgr failed", K(ret), K(id_));
     }
   }
 
@@ -962,6 +964,7 @@ void ObTenant::wait()
     ObTenantSwitchGuard guard(this);
     ObTenantBase::stop_mtl_module();
     OB_PX_TARGET_MGR.delete_tenant(id_);
+    G_RES_MGR.get_col_mapping_rule_mgr().drop_tenant(id_);
     ObTenantBase::wait_mtl_module();
     wait_mtl_finished_ = true;
   }

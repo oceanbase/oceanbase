@@ -152,6 +152,7 @@ public:
   int get_all_resource_mapping_rules_by_column(
       uint64_t tenant_id,
       const common::ObString &plan,
+      ObIAllocator &allocator,
       common::ObIArray<ObResourceColumnMappingRule> &rules);
   int get_next_element(
       const common::ObString &value,
