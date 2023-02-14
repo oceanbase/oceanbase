@@ -243,8 +243,9 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     // 4. only init lob locator helper when nessary?
     if (OB_FAIL(build_lob_locator_helper(ctx, trans_version_range))) {
       STORAGE_LOG(WARN, "Failed to build lob locator helper", K(ret));
+    } else {
+      is_inited_ = true;
     }
-    is_inited_ = true;
   }
   return ret;
 }
