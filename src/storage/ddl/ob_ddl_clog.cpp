@@ -183,7 +183,6 @@ int ObDDLMacroBlockClogCb::on_success()
   ObDDLMacroBlock macro_block;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
-  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_); // unlock first, because set_macro_block need to acquire this lock
   {
     ObSpinLockGuard data_buffer_guard(data_buffer_lock_);
     if (is_data_buffer_freed_) {

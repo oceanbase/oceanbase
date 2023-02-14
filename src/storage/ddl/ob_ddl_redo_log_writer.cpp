@@ -637,7 +637,6 @@ int ObDDLRedoLogWriter::write(
   } else {
     handle.cb_ = cb;
     cb = nullptr;
-    lock_tid = 0;
     handle.scn_ = scn;
     LOG_INFO("submit ddl redo log succeed", K(lsn), K(base_scn), K(scn));
   }
