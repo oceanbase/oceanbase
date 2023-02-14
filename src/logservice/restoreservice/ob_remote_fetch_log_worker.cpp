@@ -239,6 +239,7 @@ void ObRemoteFetchWorker::do_thread_task_()
 
 int ObRemoteFetchWorker::handle_single_task_()
 {
+  DEBUG_SYNC(BEFORE_RESTORE_HANDLE_FETCH_LOG_TASK);
   int ret = OB_SUCCESS;
   void *data = NULL;
   if (OB_FAIL(task_queue_.pop(data))) {

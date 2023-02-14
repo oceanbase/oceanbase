@@ -28,6 +28,7 @@ namespace logservice
 struct ObRemoteFetchContext
 {
   int64_t issue_task_num_;
+  int64_t issue_version_;
   int64_t last_fetch_ts_;     // 最后一次拉日志时间
   palf::LSN max_submit_lsn_;        // 提交远程日志拉取任务最大LSN
   palf::LSN max_fetch_lsn_;         // 拉到最后一条日志end_lsn
@@ -40,8 +41,10 @@ struct ObRemoteFetchContext
   ObRemoteFetchContext &operator=(const ObRemoteFetchContext &other);
   void reset();
   int reset_sorted_tasks();
-  TO_STRING_KV(K_(issue_task_num), K_(last_fetch_ts), K_(max_submit_lsn), K_(max_fetch_lsn),
-      K_(max_fetch_scn), K_(error_context), "task_count", submit_array_.count());
+  void set_issue_version();
+  TO_STRING_KV(K_(issue_task_num), K_(issue_version), K_(last_fetch_ts),
+      K_(max_submit_lsn), K_(max_fetch_lsn), K_(max_fetch_scn),
+      K_(error_context), "task_count", submit_array_.count());
 };
 } // namespace logservice
 } // namespace oceanbase

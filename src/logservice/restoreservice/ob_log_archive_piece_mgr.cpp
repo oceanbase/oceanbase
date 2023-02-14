@@ -56,8 +56,8 @@ void ObLogArchivePieceContext::RoundContext::reset()
 
 bool ObLogArchivePieceContext::RoundContext::is_valid() const
 {
-  return ((RoundContext::State::ACTIVE == state_ && end_scn_ == SCN::max_scn())
-      || (RoundContext::State::STOP == state_ && end_scn_ > start_scn_))
+  return ((RoundContext::State::ACTIVE == state_ && min_piece_id_ > 0 && start_scn_ != SCN::max_scn())
+      || (RoundContext::State::STOP == state_ && end_scn_ != SCN::max_scn() && end_scn_ > start_scn_))
     && round_id_ > 0
     && start_scn_.is_valid()
     && base_piece_id_ > 0

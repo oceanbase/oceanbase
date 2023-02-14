@@ -186,10 +186,13 @@ int ObLogRestoreHandler::add_source(logservice::DirArray &array, const SCN &end_
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     ObRemoteRawPathParent *source = static_cast<ObRemoteRawPathParent *>(parent_);
+    const bool source_exist = source->is_valid();
     if (OB_FAIL(source->set(array, end_scn))) {
       CLOG_LOG(WARN, "ObRemoteRawPathParent set failed", K(ret), K(array), K(end_scn));
       ObResSrcAlloctor::free(parent_);
       parent_ = NULL;
+    } else if (! source_exist) {
+      context_.set_issue_version();
     }
   }
   return ret;;
@@ -212,10 +215,13 @@ int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, const SCN &end_sc
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     ObRemoteLocationParent *source = static_cast<ObRemoteLocationParent *>(parent_);
+    const bool source_exist = source->is_valid();
     if (OB_FAIL(source->set(dest, end_scn))) {
       CLOG_LOG(WARN, "ObRemoteLocationParent set failed", K(ret), K(end_scn), K(dest));
       ObResSrcAlloctor::free(parent_);
       parent_ = NULL;
+    } else if (! source_exist) {
+      context_.set_issue_version();
     }
   }
   return ret;
@@ -238,11 +244,14 @@ int ObLogRestoreHandler::add_source(const common::ObAddr &addr, const SCN &end_s
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     ObRemoteSerivceParent *source = static_cast<ObRemoteSerivceParent *>(parent_);
+    const bool source_exist = source->is_valid();
     if (OB_FAIL(source->set(addr, end_scn))) {
       CLOG_LOG(WARN, "ObRemoteSerivceParent set failed",
           K(ret), K(end_scn), K(addr), KPC(this));
       ObResSrcAlloctor::free(parent_);
       parent_ = NULL;
+    } else if (! source_exist) {
+      context_.set_issue_version();
     }
   }
   return ret;
@@ -261,6 +270,7 @@ int ObLogRestoreHandler::clean_source()
     CLOG_LOG(INFO, "log_restore_source is empty, clean source", KPC(parent_));
     ObResSrcAlloctor::free(parent_);
     parent_ = NULL;
+    context_.reset();
   }
   return ret;
 }
@@ -340,6 +350,7 @@ void ObLogRestoreHandler::deep_copy_source(ObRemoteSourceGuard &source_guard)
 
 int ObLogRestoreHandler::schedule(const int64_t id,
     const int64_t proposal_id,
+    const int64_t version,
     const LSN &lsn,
     bool &scheduled)
 {
@@ -350,7 +361,7 @@ int ObLogRestoreHandler::schedule(const int64_t id,
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(! lsn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (id != id_ || proposal_id != proposal_id_) {
+  } else if (id != id_ || proposal_id != proposal_id_ || version != context_.issue_version_) {
     // stale task
   } else {
     scheduled = true;
@@ -365,22 +376,23 @@ int ObLogRestoreHandler::try_retire_task(ObFetchLogTask &task, bool &done)
   done = false;
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
-  if (OB_UNLIKELY(!task.is_valid())) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!task.is_valid() || task.id_.id() != id_)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), K(task));
   } else if (! is_strong_leader(role_) || NULL == parent_) {
     done = true;
-    CLOG_LOG(INFO, "ls not leader, stale task, just skip it", K(task), K(role_));
-  } else if (OB_UNLIKELY(task.id_.id() != id_ || task.proposal_id_ != proposal_id_)) {
+    CLOG_LOG(INFO, "ls not leader or source is NULL, stale task, just skip it", K(task), K(role_));
+  } else if (OB_UNLIKELY(task.proposal_id_ != proposal_id_
+        || task.version_ != context_.issue_version_)) {
     done = true;
     CLOG_LOG(INFO, "stale task, just skip it", K(task), KPC(this));
   } else if (context_.max_fetch_lsn_ >= task.end_lsn_ || parent_->to_end()) {
     done = true;
+    context_.issue_task_num_--;
   } else if (context_.max_fetch_lsn_ >= task.start_lsn_) {
     task.cur_lsn_ = context_.max_fetch_lsn_;
-  }
-  if (done) {
-    context_.issue_task_num_--;
   }
   return ret;
 }

@@ -76,9 +76,11 @@ ObFetchLogTask::ObFetchLogTask(const share::ObLSID &id,
     const SCN &pre_scn,
     const palf::LSN &lsn,
     const int64_t size,
-    const int64_t proposal_id) :
+    const int64_t proposal_id,
+    const int64_t version) :
   id_(id),
   proposal_id_(proposal_id),
+  version_(version),
   start_lsn_(lsn),
   cur_lsn_(lsn),
   end_lsn_(lsn + size),
@@ -93,6 +95,7 @@ bool ObFetchLogTask::is_valid() const
 {
   return id_.is_valid()
     && proposal_id_ > 0
+    && version_ > 0
     && pre_scn_.is_valid()
     && start_lsn_.is_valid()
     && cur_lsn_.is_valid()
@@ -104,6 +107,7 @@ void ObFetchLogTask::reset()
 {
   id_.reset();
   proposal_id_ = 0;
+  version_ = 0;
   pre_scn_.reset();
   start_lsn_.reset();
   cur_lsn_.reset();

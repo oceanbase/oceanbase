@@ -116,7 +116,11 @@ public:
   // @brief the big range of log is separated into small tasks, so as to do parallel,
   //        concise dispatch is needed, here is to check if new task is in turn
   int need_schedule(bool &need_schedule, int64_t &proposal_id, ObRemoteFetchContext &context) const;
-  int schedule(const int64_t id, const int64_t proposal_id, const LSN &lsn, bool &scheduled);
+  int schedule(const int64_t id,
+      const int64_t proposal_id,
+      const int64_t version,
+      const LSN &lsn,
+      bool &scheduled);
   // @brief try retire fetch log task
   // @param[in] ObFetchLogTask &, the remote fetch log task
   // @param[out] bool &, the remote fetch log task is to end or not, retire it if true

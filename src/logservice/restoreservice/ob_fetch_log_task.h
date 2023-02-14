@@ -35,18 +35,20 @@ public:
                  const share::SCN &pre_scn,
                  const palf::LSN &lsn,
                  const int64_t size,
-                 const int64_t proposal_id);
+                 const int64_t proposal_id,
+                 const int64_t version);
 
   ~ObFetchLogTask() { reset(); }
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(id), K_(proposal_id), K_(pre_scn), K_(start_lsn), K_(cur_lsn),
-      K_(end_lsn), K_(max_fetch_scn), K_(max_submit_scn), K_(iter));
+  TO_STRING_KV(K_(id), K_(proposal_id), K_(version), K_(pre_scn), K_(start_lsn),
+      K_(cur_lsn), K_(end_lsn), K_(max_fetch_scn), K_(max_submit_scn), K_(iter));
 
 public:
   share::ObLSID id_;
   // to distinguish stale tasks which is generated in previous leader
   int64_t proposal_id_;
+  int64_t version_;
   share::SCN pre_scn_;    // heuristic log scn to locate piece, may be imprecise one
   palf::LSN start_lsn_;
   palf::LSN cur_lsn_;
