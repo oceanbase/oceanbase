@@ -2747,25 +2747,19 @@ int ObDDLService::add_primary_key(const ObIArray<ObString> &pk_column_names, ObT
   }
   if (OB_SUCC(ret)) {
     // step2: set new primary key rowkey_position
-    int32_t rowkey_position = 1;
+    int64_t rowkey_position = 1;
     new_table_schema.reset_rowkey_info();
-    ObTableSchema::const_column_iterator tmp_begin = new_table_schema.column_begin();
-    ObTableSchema::const_column_iterator tmp_end = new_table_schema.column_end();
-    for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
-      ObColumnSchemaV2 *col = (*tmp_begin);
-      if (OB_ISNULL(col)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pk_column_names.count(); i++) {
+      ObColumnSchemaV2 *col_schema = nullptr;
+      const ObString &col_name = pk_column_names.at(i);
+      if (OB_ISNULL(col_schema = new_table_schema.get_column_schema(col_name))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("col is NULL", K(ret));
+        LOG_WARN("unexpected err, can not find column", K(ret), K(col_name), K(new_table_schema));
       } else {
-        for (int32_t i = 0; OB_SUCC(ret) && i < pk_column_names.count(); ++i) {
-          const ObString &col_name = pk_column_names.at(i);
-          if (0 == col->get_column_name_str().case_compare(col_name)) {
-            col->set_rowkey_position(rowkey_position++);
-            col->set_nullable(false);
-            if (OB_FAIL(new_table_schema.set_rowkey_info((*col)))) {
-              LOG_WARN("failed to set rowkey info", K(ret));
-            }
-          }
+        col_schema->set_rowkey_position(rowkey_position++);
+        col_schema->set_nullable(false);
+        if (OB_FAIL(new_table_schema.set_rowkey_info(*col_schema))) {
+          LOG_WARN("set rowkey info failed", K(ret));
         }
       }
     }
