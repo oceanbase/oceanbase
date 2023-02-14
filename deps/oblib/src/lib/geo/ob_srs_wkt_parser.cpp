@@ -348,7 +348,10 @@ int ObSrsWktParser::parse_srs_wkt(common::ObIAllocator &allocator, uint64_t srid
   ObGeographicRs *geog_rs = NULL;
   ObProjectionRs *proj_rs = NULL;
 
-  if (OB_FAIL(parse_coordinate_system(allocator, srs_str, geo_rs))) {
+  if (srs_str.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srs string is empty", K(ret), K(srid));
+  } else if (OB_FAIL(parse_coordinate_system(allocator, srs_str, geo_rs))) {
     LOG_WARN("failed to parse srs wkt", K(ret));
   } else if (OB_NOT_NULL(geog_rs = boost::get<ObGeographicRs>(&geo_rs))) {
     if (OB_FAIL(ObSpatialReferenceSystemBase::create_geographic_srs(&allocator, srid, geog_rs, tmp_result))) {
