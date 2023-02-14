@@ -425,7 +425,8 @@ private:
       const int64_t gts, const share::ObLSID &ls, const common::ObIArray<common::ObTabletID> &tablet_id_list);
   int build_backup_data_ls_tablet_desc_(const share::ObLSID &ls_id, const int64_t gts,
       const common::ObIArray<common::ObTabletID> &tablet_id, share::ObBackupDataTabletToLSDesc &info);
-
+  int filter_unneed_tablet_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const ObBackupLSMetaInfo &ls_meta_info, common::ObArray<common::ObTabletID> &tablet_id_list);
 
 private:
   bool is_inited_;

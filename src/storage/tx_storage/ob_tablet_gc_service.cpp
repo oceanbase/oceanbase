@@ -186,7 +186,9 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
           // 6. check and gc deleted_tablet_ids
           else if (times == 0 || ObTabletGCHandler::is_tablet_gc_trigger(tablet_persist_trigger)) {
             // to do check gc and gc tablets
-            if (!deleted_tablet_ids.empty() && OB_FAIL(tablet_gc_handler->gc_tablets(deleted_tablet_ids))) {
+            if (!tablet_gc_handler->check_tablet_gc()) {
+              need_retry = true;
+            } else if (!deleted_tablet_ids.empty() && OB_FAIL(tablet_gc_handler->gc_tablets(deleted_tablet_ids))) {
               need_retry = true;
               STORAGE_LOG(WARN, "failed to gc tablet", KR(ret), K(deleted_tablet_ids));
             }
@@ -465,13 +467,19 @@ void ObTabletGCHandler::online()
 
 bool ObTabletGCHandler::check_tablet_gc()
 {
+  bool need_gc = true;
   int64_t now = ObTimeUtility::current_time();
   static int64_t last_gc_time = now;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  int64_t deleted_tablet_preservation_time = tenant_config->_ob_deleted_tablet_preservation_time;
+  int64_t deleted_tablet_preservation_time = 0;
   int used_percent = OB_SERVER_BLOCK_MGR.get_used_macro_block_count() / OB_SERVER_BLOCK_MGR.get_total_macro_block_count();
-  bool need_gc = !((last_gc_time + deleted_tablet_preservation_time > now)
-                   && used_percent < DISK_USED_PERCENT_TRIGGER_FOR_GC_TABLET);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    deleted_tablet_preservation_time = tenant_config->_ob_deleted_tablet_preservation_time;
+  }
+  if (deleted_tablet_preservation_time > 0) {
+    need_gc = !((last_gc_time + deleted_tablet_preservation_time > now)
+                && used_percent < DISK_USED_PERCENT_TRIGGER_FOR_GC_TABLET);
+  }
   STORAGE_LOG(INFO, "[tabletgc] check tablet gc", KPC(this), KPC(ls_), K(ls_->get_ls_meta()), K(need_gc),
               K(last_gc_time), K(deleted_tablet_preservation_time), K(used_percent));
   if (need_gc) {

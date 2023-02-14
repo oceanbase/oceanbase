@@ -3433,6 +3433,8 @@ int ObLSBackupMetaTask::process()
         LOG_WARN("failed to get backup meta ctx", K(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(backup_ls_meta_package_(ls_meta_info))) {
         LOG_WARN("failed to backup ls meta package", K(ret), KPC(ls));
+      } else if (OB_FAIL(filter_unneed_tablet_list_(tenant_id, ls_id, ls_meta_info, tablet_id_list))) {
+        LOG_WARN("failed to filter unneeded tablet list", K(ret), K(tenant_id), K(ls_id), K(ls_meta_info));
       } else if (OB_FAIL(backup_ls_tablet_list_(start_scn, ls_id, tablet_id_list))) {
         LOG_WARN("failed to backup tablet list", K(ret), K(start_scn), K(ls_id), K(tablet_id_list));
       } else {
@@ -3563,6 +3565,65 @@ int ObLSBackupMetaTask::build_backup_data_ls_tablet_desc_(const share::ObLSID &l
   } else if (FALSE_IT(desc.backup_scn_ = gts)) {
   } else if (OB_FAIL(desc.tablet_to_ls_.push_back(info))) {
     LOG_WARN("failed to push back", K(ret), K(info));
+  }
+  return ret;
+}
+
+int ObLSBackupMetaTask::filter_unneed_tablet_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const ObBackupLSMetaInfo &ls_meta_info, common::ObArray<common::ObTabletID> &tablet_id_list)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<common::ObTabletID> tmp_tablet_list;
+  ObLS *ls = NULL;
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = NULL;
+  const int64_t timeout_us = ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
+  int64_t deleted_tablet_preservation_time = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    deleted_tablet_preservation_time = tenant_config->_ob_deleted_tablet_preservation_time;
+  }
+  if (0 == deleted_tablet_preservation_time) {
+    LOG_INFO("do nothing if hidden config is not enabled");
+  } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("MTL ObLSService is null", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("fail to get ls handle", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("LS is null", K(ret));
+  } else {
+    const int64_t clog_checkpoint_ts = ls_meta_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_ts();
+    const int64_t timeout_us = ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
+    ObTabletTxMultiSourceDataUnit tx_data;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_list.count(); ++i) {
+      tx_data.reset();
+      const common::ObTabletID &tablet_id = tablet_id_list.at(i);
+      ObTabletHandle tablet_handle;
+      if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, timeout_us))) {
+        if (OB_TABLET_NOT_EXIST == ret) {
+          // already garbage collected, skip
+          ret = OB_SUCCESS;
+          continue;
+        } else {
+          LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+        }
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
+        LOG_WARN("failed to get tx data", K(ret), K(tablet_id));
+      } else if (ObTabletStatus::DELETED == tx_data.tablet_status_
+          && ObTabletCommon::FINAL_TX_ID == tx_data.tx_id_
+          && tx_data.tx_log_ts_ < clog_checkpoint_ts) {
+        LOG_INFO("skip those tablet", K(tablet_id), K(tx_data));
+      } else if (OB_FAIL(tmp_tablet_list.push_back(tablet_id))) {
+        LOG_WARN("failed to push back", K(ret), K(tablet_id));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tablet_id_list.assign(tmp_tablet_list))) {
+        LOG_WARN("failed to assign tablet list", K(ret));
+      }
+    }
   }
   return ret;
 }
