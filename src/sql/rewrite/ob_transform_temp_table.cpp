@@ -976,9 +976,7 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
                                                   ObStmtMapInfo& common_map_info)
 {
   int ret = OB_SUCCESS;
-  ObSelectStmt *child_stmt = NULL;
-  ObSEArray<ObRawExpr*, 8> pushdown_exprs;
-  if (OB_ISNULL(parent_stmt)) {
+  if (OB_ISNULL(parent_stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (parent_stmt->is_set_stmt()) {
@@ -988,46 +986,81 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
       LOG_TRACE("succeed to create temp table", KPC(parent_stmt));
     }
   } else {
-    if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_,
-                                                    parent_stmt,
-                                                    child_stmt,
-                                                    false,
-                                                    false))) {
-      LOG_WARN("failed to create simple view", K(ret));
-      //下压condition
-    } else if (parent_stmt->get_condition_size() > 0 &&
+    TableItem *view_table = NULL;
+    ObSEArray<TableItem *, 8> from_tables;
+    ObSEArray<SemiInfo *, 4> semi_infos;
+    ObSEArray<ObRawExpr *, 8> pushdown_select;
+    ObSEArray<ObRawExpr *, 8> pushdown_where;
+    ObSEArray<ObRawExpr *, 8> pushdown_groupby;
+    ObSEArray<ObRawExpr *, 8> pushdown_rollup;
+    ObSEArray<ObRawExpr *, 8> pushdown_having;
+
+    if (parent_stmt->get_condition_size() > 0 &&
               OB_FAIL(pushdown_conditions(parent_stmt,
                                           map_info.cond_map_,
                                           common_map_info.cond_map_,
-                                          pushdown_exprs))) {
+                                          pushdown_where))) {
       LOG_WARN("failed to pushdown conditions", K(ret));
     } else if (!common_map_info.is_cond_equal_ ||
               !common_map_info.is_group_equal_) {
       //do nothing
       //下压group by
     } else if (parent_stmt->has_group_by() &&
-              OB_FAIL(pushdown_group_by(parent_stmt, pushdown_exprs))) {
+              OB_FAIL(ObTransformUtils::pushdown_group_by(parent_stmt,
+                                                          pushdown_groupby,
+                                                          pushdown_rollup,
+                                                          pushdown_select))) {
       LOG_WARN("failed to pushdown group by", K(ret));
       //下压having
     } else if (parent_stmt->get_having_expr_size() > 0 &&
               OB_FAIL(pushdown_having_conditions(parent_stmt,
                                                   map_info.having_map_,
                                                   common_map_info.having_map_,
-                                                  pushdown_exprs))) {
+                                                  pushdown_having))) {
       LOG_WARN("failed to pushdown having conditions", K(ret));
-    } else if (is_mysql_mode() && !pushdown_exprs.empty() && OB_FAIL(pushdown_shared_subqueries(parent_stmt, pushdown_exprs))) {
-      LOG_WARN("failed to extract shared expr", K(ret));
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*parent_stmt))) {
-        LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*child_stmt))) {
-        LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
-      } else if (OB_FAIL(parent_stmt->adjust_subquery_list())) {
-        LOG_WARN("failed to adjust subquery list", K(ret));
-      } else if (OB_FAIL(child_stmt->adjust_subquery_list())) {
-        LOG_WARN("failed to adjust subquery list", K(ret));
-      }
+
+    ObSEArray<TableItem *, 8> origin_tables;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTransformUtils::pushdown_pseudo_column_like_exprs(*parent_stmt, pushdown_select))) {
+      LOG_WARN("failed to pushdown pseudo column like exprs", K(ret));
+    } else if (OB_FAIL(origin_tables.assign(parent_stmt->get_table_items()))) {
+      LOG_WARN("failed to get table items", K(ret));
+    } else if (OB_FAIL(parent_stmt->get_from_tables(from_tables))) {
+      LOG_WARN("failed to get from tables", K(ret));
+    } else if (OB_FAIL(semi_infos.assign(parent_stmt->get_semi_infos()))) {
+      LOG_WARN("failed to assign semi info", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                                 parent_stmt,
+                                                                 view_table,
+                                                                 from_tables,
+                                                                 &semi_infos))) {
+      LOG_WARN("failed to create empty view", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                            parent_stmt,
+                                                            view_table,
+                                                            from_tables,
+                                                            &pushdown_where,
+                                                            &semi_infos,
+                                                            &pushdown_select,
+                                                            &pushdown_groupby,
+                                                            &pushdown_rollup,
+                                                            &pushdown_having))) {
+      LOG_WARN("failed to create inline view", K(ret));
+    } else if (OB_ISNULL(view_table->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null view query", K(ret));
+
+    // recover the order of table items,
+    // the table_map in ObStmtMapInfo will be used in apply_temp_table
+    } else if (OB_FAIL(view_table->ref_query_->get_table_items().assign(origin_tables))) {
+      LOG_WARN("failed to adjust table map", K(ret));
+    } else if (OB_FAIL(view_table->ref_query_->rebuild_tables_hash())) {
+      LOG_WARN("failed to rebuild table hash", K(ret));
+    } else if (OB_FAIL(view_table->ref_query_->update_column_item_rel_id())) {
+      LOG_WARN("failed to update column item by id", K(ret));
+    } else if (OB_FAIL(view_table->ref_query_->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
     }
   }
   return ret;
@@ -1107,35 +1140,13 @@ int ObTransformTempTable::create_spj(ObSelectStmt *parent_stmt)
 int ObTransformTempTable::pushdown_conditions(ObSelectStmt *parent_stmt,
                                               const ObIArray<int64_t> &cond_map,
                                               const ObIArray<int64_t> &common_cond_map,
-                                              ObIArray<ObRawExpr*> &pushdown_exprs)
+                                              ObIArray<ObRawExpr*> &pushdown_conds)
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session_info = NULL;
-  ObRawExprFactory *expr_factory = NULL;
-  ObSelectStmt *subquery = NULL;
-  TableItem *table = NULL;
-  int64_t table_id = OB_INVALID_ID;
   ObSEArray<ObRawExpr*, 8> keep_conds;
-  ObSEArray<ObRawExpr*, 8> pushdown_conds;
-  ObSEArray<ObRawExpr*, 8> rename_conds;
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(ctx_) ||
-      OB_ISNULL(session_info = ctx_->session_info_) ||
-      OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
+  if (OB_ISNULL(parent_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
-  }  else if (1 != parent_stmt->get_table_size()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect one table item in stmt", KPC(parent_stmt), K(ret));
-  } else if (OB_ISNULL(table = parent_stmt->get_table_item(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null table item", K(ret));
-  } else if (!table->is_generated_table()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect generate table item", KPC(table), K(ret));
-  } else if (OB_ISNULL(subquery = table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null ref query", K(ret));
-  } else if (OB_FALSE_IT(table_id = table->table_id_)) {
   } else if (cond_map.count() != common_cond_map.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect map info", K(cond_map), K(common_cond_map), K(ret));
@@ -1164,135 +1175,6 @@ int ObTransformTempTable::pushdown_conditions(ObSelectStmt *parent_stmt,
     if (OB_SUCC(ret) && !pushdown_conds.empty()) {
       if (OB_FAIL(parent_stmt->get_condition_exprs().assign(keep_conds))) {
         LOG_WARN("failed to assign exprs", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::rename_pushdown_filter(*parent_stmt,
-                                                                *subquery,
-                                                                table_id,
-                                                                session_info,
-                                                                *expr_factory,
-                                                                pushdown_conds,
-                                                                rename_conds))) {
-        LOG_WARN("failed to rename pushdown filter", K(ret));
-      } else if (OB_FAIL(append(subquery->get_condition_exprs(), rename_conds))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-/**
- * @brief pushdown_group_by
- * 下压所有的group by expr、rollup expr到视图中
- * 同时需要把上层stmt的所有aggr expr下压到视图中计算
- */
-int ObTransformTempTable::pushdown_group_by(ObSelectStmt *parent_stmt, ObIArray<ObRawExpr*> &pushdown_exprs)
-{
-  int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session_info = NULL;
-  ObRawExprFactory *expr_factory = NULL;
-  ObSelectStmt *subquery = NULL;
-  TableItem *table = NULL;
-  int64_t table_id = OB_INVALID_ID;
-  ObSEArray<ObRawExpr*, 8> pushdown_conds;
-  ObSEArray<ObRawExpr*, 8> rename_conds;
-  ObSEArray<ObAggFunRawExpr*, 8> aggr_items;
-
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(ctx_) ||
-      OB_ISNULL(session_info = ctx_->session_info_) ||
-      OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ret));
-  }  else if (1 != parent_stmt->get_table_size()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect one table item in stmt", KPC(parent_stmt), K(ret));
-  } else if (OB_ISNULL(table = parent_stmt->get_table_item(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null table item", K(ret));
-  } else if (!table->is_generated_table()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect generate table item", KPC(table), K(ret));
-  } else if (OB_ISNULL(subquery = table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null ref query", K(ret));
-  } else if (OB_FALSE_IT(table_id = table->table_id_)) {
-    //下推group by exprs
-  } else if (OB_FAIL(append(pushdown_conds, parent_stmt->get_group_exprs()))) {
-    LOG_WARN("failed to append group by rollup exprs.", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::rename_pushdown_filter(*parent_stmt,
-                                                            *subquery,
-                                                            table_id,
-                                                            session_info,
-                                                            *expr_factory,
-                                                            pushdown_conds,
-                                                            rename_conds))) {
-    LOG_WARN("failed to rename pushdown filter", K(ret));
-  } else if (OB_FAIL(append(subquery->get_group_exprs(), rename_conds))) {
-    LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
-    LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FALSE_IT(pushdown_conds.reuse()) ||
-             OB_FALSE_IT(rename_conds.reuse()) ||
-             OB_FALSE_IT(parent_stmt->get_group_exprs().reset())) {
-    //下推rollup exprs
-  } else if (OB_FAIL(append(pushdown_conds, parent_stmt->get_rollup_exprs()))) {
-    LOG_WARN("failed to append group by rollup exprs.", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::rename_pushdown_filter(*parent_stmt,
-                                                            *subquery,
-                                                            table_id,
-                                                            session_info,
-                                                            *expr_factory,
-                                                            pushdown_conds,
-                                                            rename_conds))) {
-    LOG_WARN("failed to rename pushdown filter", K(ret));
-  } else if (OB_FAIL(append(subquery->get_rollup_exprs(), rename_conds))) {
-    LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
-    LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FALSE_IT(pushdown_conds.reuse()) ||
-             OB_FALSE_IT(rename_conds.reuse()) ||
-             OB_FALSE_IT(parent_stmt->get_rollup_exprs().reset())) {
-    //下推aggr items
-  } else if (OB_FAIL(append(pushdown_conds, parent_stmt->get_aggr_items()))) {
-    LOG_WARN("failed to append group by rollup exprs.", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::rename_pushdown_filter(*parent_stmt,
-                                                            *subquery,
-                                                            table_id,
-                                                            session_info,
-                                                            *expr_factory,
-                                                            pushdown_conds,
-                                                            rename_conds))) {
-    LOG_WARN("failed to rename pushdown filter", K(ret));
-  } else {
-    //下推group by的同时需要把parent stmt的所有聚合函数下推到子查询，并输出
-    parent_stmt->get_aggr_items().reset();
-    for (int64_t i = 0; OB_SUCC(ret) && i < rename_conds.count(); ++i) {
-      ObRawExpr *expr = rename_conds.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null expr", K(ret));
-      } else if (!expr->is_aggr_expr()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expect aggr expr", KPC(expr), K(ret));
-      } else if (OB_FAIL(aggr_items.push_back(static_cast<ObAggFunRawExpr*>(expr)))) {
-        LOG_WARN("failed to push back aggr expr", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ObSEArray<ObRawExpr*, 8> new_column_list;
-      if (OB_FAIL(append(subquery->get_aggr_items(), aggr_items))) {
-        LOG_WARN("failed to append aggr items", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
-                                                                   *table,
-                                                                   parent_stmt,
-                                                                   rename_conds,
-                                                                   new_column_list))) {
-        LOG_WARN("failed to create columns for view", K(ret));
-      } else if (OB_FAIL(parent_stmt->replace_relation_exprs(pushdown_conds, new_column_list))) {
-        LOG_WARN("failed to replace relation exprs", K(ret));
-      } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
-        LOG_WARN("failed to append exprs", K(ret));
       }
     }
   }
@@ -1306,36 +1188,14 @@ int ObTransformTempTable::pushdown_group_by(ObSelectStmt *parent_stmt, ObIArray<
 int ObTransformTempTable::pushdown_having_conditions(ObSelectStmt *parent_stmt,
                                                     const ObIArray<int64_t> &having_map,
                                                     const ObIArray<int64_t> &common_having_map,
-                                                    ObIArray<ObRawExpr*> &pushdown_exprs)
+                                                    ObIArray<ObRawExpr*> &pushdown_conds)
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session_info = NULL;
-  ObRawExprFactory *expr_factory = NULL;
-  ObSelectStmt *subquery = NULL;
-  TableItem *table = NULL;
-  int64_t table_id = OB_INVALID_ID;
   ObSEArray<ObRawExpr*, 8> keep_conds;
-  ObSEArray<ObRawExpr*, 8> pushdown_conds;
-  ObSEArray<ObRawExpr*, 8> rename_conds;
 
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(ctx_) ||
-      OB_ISNULL(session_info = ctx_->session_info_) ||
-      OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
+  if (OB_ISNULL(parent_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
-  }  else if (1 != parent_stmt->get_table_size()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect one table item in stmt", KPC(parent_stmt), K(ret));
-  } else if (OB_ISNULL(table = parent_stmt->get_table_item(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null table item", K(ret));
-  } else if (!table->is_generated_table()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect generate table item", KPC(table), K(ret));
-  } else if (OB_ISNULL(subquery = table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null ref query", K(ret));
-  } else if (OB_FALSE_IT(table_id = table->table_id_)) {
   } else if (having_map.count() != common_having_map.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect map info", K(having_map), K(common_having_map), K(ret));
@@ -1365,20 +1225,6 @@ int ObTransformTempTable::pushdown_having_conditions(ObSelectStmt *parent_stmt,
       parent_stmt->get_having_exprs().reset();
       if (OB_FAIL(append(parent_stmt->get_condition_exprs(), keep_conds))) {
         LOG_WARN("failed to assign exprs", K(ret));
-      } else if (pushdown_conds.empty()) {
-        //do nothing
-      } else if (OB_FAIL(ObOptimizerUtil::rename_pushdown_filter(*parent_stmt,
-                                                                *subquery,
-                                                                table_id,
-                                                                session_info,
-                                                                *expr_factory,
-                                                                pushdown_conds,
-                                                                rename_conds))) {
-        LOG_WARN("failed to rename pushdown filter", K(ret));
-      } else if (OB_FAIL(append(subquery->get_having_exprs(), rename_conds))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
-        LOG_WARN("failed to append exprs", K(ret));
       }
     }
   }

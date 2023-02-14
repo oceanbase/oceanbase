@@ -51,9 +51,6 @@ private:
   int try_push_down_outer_join_conds(ObDMLStmt *stmt,
                                      JoinedTable *join_table,
                                      bool &trans_happened);
-  int push_down_on_condition(ObDMLStmt *stmt,
-                             JoinedTable *join_table,
-                             ObIArray<ObRawExpr*> &conds);
 
   ObItemType get_opposite_expr_type(ObItemType item_type);
 

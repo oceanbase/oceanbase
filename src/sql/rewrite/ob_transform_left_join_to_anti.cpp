@@ -40,18 +40,20 @@ int ObTransformLeftJoinToAnti::transform_one_stmt(common::ObIArray<ObParentDMLSt
   } else if (stmt->is_set_stmt()) {
     // do nothing
   } else {
-    JoinedTable *joined_table = NULL;
     ObSEArray<ObSEArray<TableItem *, 4>, 4> trans_tables;
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_from_item_size(); ++i) {
-      FromItem &from_item = stmt->get_from_item(i);
-      if (!from_item.is_joined_) {
-      } else if (OB_ISNULL(joined_table = stmt->get_joined_table(from_item.table_id_))) {
+    ObSEArray<JoinedTable*, 4> joined_tables;
+    if (OB_FAIL(joined_tables.assign(stmt->get_joined_tables()))) {
+      LOG_WARN("failed to assign joined table", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables.count(); ++i) {
+      TableItem *table = NULL;
+      if (OB_ISNULL(table = joined_tables.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table", K(ret));
       } else if (OB_FAIL(SMART_CALL(transform_left_join_to_anti_join_rec(stmt,
-                                                                         joined_table,
+                                                                         table,
                                                                          trans_tables,
-                                                                         joined_table->table_id_,
+                                                                         true,
                                                                          trans_happened)))) {
         LOG_WARN("failed to transform left join to anti join", K(ret));
       }
@@ -103,35 +105,31 @@ int ObTransformLeftJoinToAnti::construct_transform_hint(ObDMLStmt &stmt, void *t
 }
 
 int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join_rec(ObDMLStmt *stmt,
-                                                                    JoinedTable *joined_table,
+                                                                    TableItem *table,
                                                                     ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
-                                                                    uint64_t root_table_id,
+                                                                    bool is_root_table,
                                                                     bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   bool left_trans = false;
   bool cur_trans = false;
-  bool is_root_table = false; ;
-  TableItem *left_table = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) ||
-      OB_ISNULL(left_table = joined_table->left_table_) ||
-      OB_ISNULL(joined_table->right_table_)) {
+  JoinedTable *joined_table = static_cast<JoinedTable *>(table);
+  if (OB_ISNULL(stmt) || OB_ISNULL(table) || OB_UNLIKELY(!table->is_joined_table())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null stmt or table item", K(ret), K(stmt), K(joined_table));
-  } else if (joined_table->joined_type_ == LEFT_OUTER_JOIN) {
-    is_root_table = joined_table->table_id_ == root_table_id;
-    if (left_table->is_joined_table()) {
+    LOG_WARN("get unexpected null stmt or table item", K(ret), K(stmt), K(table));
+  } else if (joined_table->is_left_join()) {
+    if (joined_table->left_table_->is_joined_table()) {
       if (OB_FAIL(SMART_CALL(transform_left_join_to_anti_join_rec(stmt,
-                                                                  static_cast<JoinedTable *>(left_table),
+                                                                  joined_table->left_table_,
                                                                   trans_tables,
-                                                                  root_table_id,
+                                                                  false,
                                                                   left_trans)))) {
         LOG_WARN("failed to transform joined table to anti join", K(ret));
       }
     }
     OPT_TRACE("try transform left join to anti join:", joined_table);
     if (OB_SUCC(ret) && OB_FAIL(transform_left_join_to_anti_join(stmt,
-                                                                 joined_table,
+                                                                 table,
                                                                  trans_tables,
                                                                  is_root_table,
                                                                  cur_trans))) {
@@ -143,8 +141,9 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join_rec(ObDMLStmt *s
   return ret;
 }
 
+
 int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt,
-                                                                JoinedTable *joined_table,
+                                                                TableItem *table,
                                                                 ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
                                                                 bool is_root_table,
                                                                 bool &trans_happened)
@@ -152,16 +151,13 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
   int ret = OB_SUCCESS;
   trans_happened = false;
   bool is_valid = false;
-  TableItem *right_table = NULL;
-  TableItem *view_table = NULL;
+  JoinedTable *joined_table = static_cast<JoinedTable *>(table);
   ObSEArray<ObRawExpr *, 8> target_exprs;
   ObArray<ObRawExpr *> constraints;
-  if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) ||
-      OB_ISNULL(joined_table->left_table_) ||
-      OB_ISNULL(right_table = joined_table->right_table_)) {
+  if (OB_ISNULL(stmt) || OB_UNLIKELY(!table->is_joined_table())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null stmt or table item", K(ret), K(stmt), K(joined_table));
-  } else if (OB_FAIL(check_hint_valid(*stmt, *right_table, is_valid))) {
+    LOG_WARN("get unexpected null stmt or table item", K(ret), K(stmt), K(table));
+  } else if (OB_FAIL(check_hint_valid(*stmt, *joined_table->right_table_, is_valid))) {
     LOG_WARN("failed to check hint valid", K(ret));
   } else if (!is_valid) {
     // do nothing
@@ -181,37 +177,27 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(),
                                                   target_exprs))) {
     LOG_WARN("failed to remove condition exprs", K(ret));
-  } else if (OB_FAIL(construct_trans_table_list(stmt, right_table, trans_tables))) {
+  } else if (OB_FAIL(construct_trans_table_list(stmt, joined_table->right_table_, trans_tables))) {
     LOG_WARN("failed to construct transformed table list", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), target_exprs))) {
-    LOG_WARN("failed to remove condition exprs", K(ret));
   } else if (is_root_table) {
-    if ((right_table->is_joined_table() ||
-        (lib::is_mysql_mode() && right_table->has_for_update())) &&
-        OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
-                                                         ctx_,
-                                                         right_table,
-                                                         view_table))) {
-      LOG_WARN("failed to create semi view", K(ret));
-    } else if (OB_FAIL(trans_stmt_to_anti(stmt, joined_table))) {
+    if (OB_FAIL(trans_stmt_to_anti(stmt, joined_table))) {
       LOG_WARN("failed to create semi stmt", K(ret));
     } else {
       trans_happened = true;
     }
   } else {
-    TableItem *table = joined_table;
+    TableItem *view_table = NULL;
     ObDMLStmt *ref_query = NULL;
-    TableItem *view_table_for_update = NULL;
-    if (lib::is_mysql_mode() && right_table->has_for_update() &&
-        OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
-                                                         ctx_,
-                                                         right_table,
-                                                         view_table_for_update))) {
-      LOG_WARN("failed to create semi view", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
-                                                         ctx_,
-                                                         table,
-                                                         view_table))) {
+    TableItem *push_table = table;
+    if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                          stmt,
+                                                          view_table,
+                                                          push_table))) {
+      LOG_WARN("failed to create empty view", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                            stmt,
+                                                            view_table,
+                                                            push_table))) {
       LOG_WARN("failed to create semi view", K(ret));
     } else if (OB_ISNULL(view_table) ||
               !view_table->is_generated_table() ||
@@ -233,21 +219,20 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
   return ret;
 }
 
-int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedTable *joined_table)
+int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *joined_table)
 {
   int ret = OB_SUCCESS;
   // 1. create semi info, adjust from item
   SemiInfo *semi_info = NULL;
-  int64_t idx = OB_INVALID_INDEX;
   TableItem *left_table = NULL;
   TableItem *right_table = NULL;
-  TableItem *right_view_table = NULL;
-  uint64_t right_table_id = OB_INVALID_ID;
+  TableItem *view_table = NULL;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
       OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(ctx_));
-  } else if (OB_ISNULL(joined_table) || OB_ISNULL(left_table = joined_table->left_table_) ||
+  } else if (OB_ISNULL(joined_table) ||
+             OB_ISNULL(left_table = joined_table->left_table_) ||
              OB_ISNULL(right_table = joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null table", K(ret), K(joined_table));
@@ -260,18 +245,30 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
   } else if (lib::is_oracle_mode() && OB_FAIL(clear_for_update(right_table))) {
     // avoid for update op in the right side of the anti/semi.
     LOG_WARN("failed to clear for update", K(ret));
-  } else if (right_table->is_joined_table() &&
-             OB_FAIL(ObTransformUtils::create_view_with_table(stmt, ctx_, right_table, right_view_table))) {
+  } else if (!right_table->has_for_update() && !right_table->is_joined_table()) {
+    // do nothing
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               stmt,
+                                                               view_table,
+                                                               right_table))) {
+    LOG_WARN("failed to create empty view", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          stmt,
+                                                          view_table,
+                                                          right_table))) {
     LOG_WARN("failed to create right view table", K(ret));
   } else {
-    right_table_id = right_view_table == NULL ? right_table->table_id_ : right_view_table->table_id_;
+    right_table = view_table;
+  }
+
+  if (OB_SUCC(ret)) {
     semi_info->join_type_ = LEFT_ANTI_JOIN;
-    semi_info->right_table_id_ = right_table_id;
+    semi_info->right_table_id_ = right_table->table_id_;
     semi_info->semi_id_ = stmt->get_query_ctx()->available_tb_id_--;
-    idx = stmt->get_from_item_idx(joined_table->table_id_);
+    int64_t idx = stmt->get_from_item_idx(joined_table->table_id_);
     if (OB_UNLIKELY(idx < 0 || idx >= stmt->get_from_item_size())) {
-      ret = OB_INVALID_INDEX;
-      LOG_WARN("invalid index", K(ret));
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid index", K(ret), K(idx));
     } else {
       stmt->get_from_item(idx).table_id_ = left_table->table_id_;
       stmt->get_from_item(idx).is_joined_ = left_table->is_joined_table();
@@ -296,12 +293,8 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
   }
   // 2. generate null exprs for exprs in right side of the joined table
   if (OB_SUCC(ret)) {
-    ObSEArray<ObRawExprPointer, 16> relation_exprs;
     ObSEArray<ObRawExpr *, 4> from_exprs;
     ObSEArray<ObRawExpr *, 4> to_exprs;
-    if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
-      LOG_WARN("failed to get relation exprs", K(ret));
-    }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); ++i) {
       const ColumnItem *col_item = NULL;
       ObRawExpr *from_expr = NULL;
@@ -310,7 +303,7 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
           OB_ISNULL(from_expr = col_item->expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null column", K(ret));
-      } else if (right_table_id != col_item->table_id_) {
+      } else if (right_table->table_id_ != col_item->table_id_) {
         // do nothing
       } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_,
                                                          to_expr))) {
@@ -329,23 +322,13 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
       }
     }
     // do in-place modification
-    for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
-      ObRawExpr *expr = NULL;
-      if (OB_FAIL(relation_exprs.at(i).get(expr))) {
-        LOG_WARN("failed to get expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_expr(from_exprs,
-                                                        to_exprs,
-                                                        expr))) {
-        LOG_WARN("failed to replace expr", K(ret));
-      } else if (OB_FAIL(relation_exprs.at(i).set(expr))) {
-        LOG_WARN("failed to set expr", K(ret));
-      }
-    }
     // a shared expr in semi_condition may be modified by the above replacemenet,
     // we revert the replacement in the following.
     if (OB_SUCC(ret)) {
       ObRawExprCopier copier(*ctx_->expr_factory_);
-      if (OB_FAIL(copier.add_replaced_expr(to_exprs, from_exprs))) {
+      if (OB_FAIL(stmt->replace_relation_exprs(from_exprs, to_exprs))) {
+        LOG_WARN("failed to replace relation exprs", K(ret));
+      } else if (OB_FAIL(copier.add_replaced_expr(to_exprs, from_exprs))) {
         LOG_WARN("failed to add replaced expr", K(ret));
       } else if (OB_FAIL(copier.copy_on_replace(semi_info->semi_conditions_,
                                                 semi_info->semi_conditions_))) {
@@ -353,15 +336,16 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
       }
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(stmt->get_semi_infos().push_back(semi_info))) {
-    LOG_WARN("failed to assign semi infos", K(ret));
-  } else if (OB_FAIL(stmt->rebuild_tables_hash())) {
-    LOG_WARN("failed to rebuild table hash", K(ret));
-  } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
-    LOG_WARN("failed to update column item rel id", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
-    LOG_WARN("failed to formlize stmt", K(ret));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(stmt->get_semi_infos().push_back(semi_info))) {
+      LOG_WARN("failed to assign semi infos", K(ret));
+    } else if (OB_FAIL(stmt->rebuild_tables_hash())) {
+      LOG_WARN("failed to rebuild table hash", K(ret));
+    } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
+      LOG_WARN("failed to update column item rel id", K(ret));
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formlize stmt", K(ret));
+    }
   }
   return ret;
 }

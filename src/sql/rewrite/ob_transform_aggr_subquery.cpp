@@ -220,8 +220,6 @@ int ObTransformAggrSubquery::transform_with_aggregation_first(ObDMLStmt *&stmt,
 int ObTransformAggrSubquery::transform_with_aggr_first_for_having(ObDMLStmt *&stmt, bool &trans_happened) 
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 4> exprs;
-  ObSelectStmt *sel_stmt = NULL; 
   ObSelectStmt *view_stmt = NULL; 
   bool need_spj = false;
   if (OB_ISNULL(stmt)) {
@@ -233,9 +231,7 @@ int ObTransformAggrSubquery::transform_with_aggr_first_for_having(ObDMLStmt *&st
     LOG_WARN("check need spj failed", K(ret));
   } else if (!need_spj) {
     //do nothing
-  } else if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, stmt, view_stmt)) ||
-             OB_FAIL(ObTransformUtils::push_down_groupby(ctx_, static_cast<ObSelectStmt *>(stmt), 
-                                    stmt->get_table_size() == 1 ? stmt->get_table_item(0) : NULL))) {
+  } else if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, stmt, view_stmt, true, true, true))) {
     LOG_WARN("create simple view failed", K(ret));
   } else if (OB_FAIL(transform_with_aggregation_first(stmt, trans_happened))) {
     LOG_WARN("transform with aggr first failed", K(ret));
@@ -1192,7 +1188,7 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
     } else if (OB_UNLIKELY(!ObOptimizerUtil::find_item(view_stmt->get_subquery_exprs(),
                                                        param.ja_query_ref_))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the subquery is not found in view stmt", K(ret));
+      LOG_WARN("the subquery is not found in view stmt", K(ret), KPC(view_stmt), KPC(param.ja_query_ref_));
     } else if (OB_FAIL(do_join_first_transform(*view_stmt, param, root_expr, !join_first_happened_))) {
       LOG_WARN("failed to do join first transform", K(ret));
     } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, param.not_null_const_))) {
@@ -1373,42 +1369,20 @@ int ObTransformAggrSubquery::get_trans_view(ObDMLStmt &stmt,
   }
   if (OB_SUCC(ret)) {
     TableItem *table = NULL;
+    ObAliasRefRawExpr *alias = NULL;
+    bool push_group_by = stmt.is_select_stmt() && post_group_by && has_groupby;
+    bool push_vector_assign = stmt.is_update_stmt() && root_expr->has_flag(CNT_ALIAS);
     if (!has_rownum && !has_groupby && stmt.is_select_stmt()) {
       view_stmt = static_cast<ObSelectStmt *>(&stmt);
-    } else if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, &stmt, view_stmt))) {
+    } else if (push_vector_assign &&
+               OB_FAIL(ObRawExprUtils::find_alias_expr(root_expr, alias))) {
+      LOG_WARN("failed to find alias expr", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, &stmt, view_stmt,
+                                                            true, true, push_group_by,
+                                                            alias))) {
       LOG_WARN("failed to create simple view", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_size(); ++i) {
-        if (OB_ISNULL(stmt.get_table_item(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("table item is null", K(ret));
-        } else if (stmt.get_table_item(i)->ref_query_ == view_stmt) {
-          table = stmt.get_table_item(i);
-          break;
-        }
-      }
-      if (OB_SUCC(ret) && stmt.is_select_stmt()) {
-        if (has_groupby && post_group_by) {
-          if (OB_FAIL(ObTransformUtils::push_down_groupby(ctx_,
-                                                          static_cast<ObSelectStmt *>(&stmt),
-                                                          table))) {
-            LOG_WARN("failed to push down group by", K(ret));
-          } else {
-            view_stmt = static_cast<ObSelectStmt *>(&stmt);
-          }
-        }
-      }
-      if (OB_SUCC(ret) && stmt.is_update_stmt()) {
-        if (root_expr->has_flag(CNT_ALIAS)) {
-          ObAliasRefRawExpr *alias = NULL;
-          if (OB_FAIL(ObRawExprUtils::find_alias_expr(root_expr, alias))) {
-            LOG_WARN("failed to find alias expr", K(ret));
-          } else if (OB_FAIL(ObTransformUtils::push_down_vector_assign(
-                               ctx_, static_cast<ObUpdateStmt *>(&stmt), alias, table))) {
-            LOG_WARN("failed to push down vector query", K(ret));
-          }
-        }
-      }
+    } else if (push_group_by) {
+      view_stmt = static_cast<ObSelectStmt *>(&stmt);
     }
   }
   return ret;
@@ -1751,7 +1725,7 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
         LOG_WARN("failed to get select exprs", K(ret));
       } else if (OB_FAIL(modify_vector_comparison_expr_if_necessary(select_stmt, expr_factory, select_exprs, parent_expr_of_query_ref))) {
         LOG_WARN("failed to modify vector comparison expr", K(ret));
-      } else if (OB_FAIL(select_stmt.replace_inner_stmt_expr(trans_param.query_refs_,
+      } else if (OB_FAIL(select_stmt.replace_relation_exprs(trans_param.query_refs_,
                                                             select_exprs))) {
         LOG_WARN("failed to update query ref value expr", K(ret));
       }
@@ -1822,6 +1796,9 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(
       LOG_WARN("unexpected root_expr type", K(ret), K(value_cmp_type));
     } else {
       ObOpRawExpr *new_parent_expr = NULL;
+      ObSEArray<ObRawExpr*, 1> old_exprs;
+      ObSEArray<ObRawExpr*, 1> new_exprs;
+
       if (OB_FAIL(expr_factory->create_raw_expr(value_cmp_type, new_parent_expr))) {
         LOG_WARN("failed to build expr", K(ret), K(new_parent_expr));
       } else {
@@ -1830,12 +1807,12 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(
             LOG_WARN("failed to add param expr", K(ret));
           }
         }
-        ObSEArray<ObRawExpr*, 1> old_exprs;
-        ObSEArray<ObRawExpr*, 1> new_exprs;
-        if (OB_FAIL(old_exprs.push_back(parent_expr_of_query_ref)) || OB_FAIL(new_exprs.push_back(new_parent_expr))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(old_exprs.push_back(parent_expr_of_query_ref)) ||
+                   OB_FAIL(new_exprs.push_back(new_parent_expr))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to push back expr", K(ret));
-        } else if (OB_FAIL(select_stmt.replace_inner_stmt_expr(old_exprs, new_exprs))) {
+        } else if (OB_FAIL(select_stmt.replace_relation_exprs(old_exprs, new_exprs))) {
           LOG_WARN("failed to replace expr in stmt", K(ret));
         }
       }

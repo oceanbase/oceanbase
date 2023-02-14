@@ -184,8 +184,6 @@ public:
                         const ObIArray<int64_t> &common_cond_map,
                         ObIArray<ObRawExpr*> &pushdown_exprs);
 
-  int pushdown_group_by(ObSelectStmt *parent_stmt, ObIArray<ObRawExpr*> &pushdown_exprs);
-
   int pushdown_having_conditions(ObSelectStmt *parent_stmt,
                               const ObIArray<int64_t> &having_map,
                               const ObIArray<int64_t> &common_having_map,

@@ -3023,9 +3023,16 @@ int ObTransformPreProcess::transform_for_temporary_table(ObDMLStmt *&stmt,
             } else {
               trans_happened = true;
             }
-          } else if(OB_FAIL(ObTransformUtils::create_view_with_table(stmt, ctx_, table_item,
-                                                                     view_table))) {
-            LOG_WARN("failed to create view with table", K(ret));
+          } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                                       stmt,
+                                                                       view_table,
+                                                                       table_item))) {
+            LOG_WARN("failed to create empty view table", K(ret));
+          } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                                  stmt,
+                                                                  view_table,
+                                                                  table_item))) {
+            LOG_WARN("failed to create inline view", K(ret));
           } else if (!view_table->is_generated_table()
                      || OB_ISNULL(ref_query = view_table->ref_query_)
                      || !ref_query->is_single_table_stmt()
@@ -3693,9 +3700,16 @@ int ObTransformPreProcess::add_filter_for_rls_select(ObDMLStmt &stmt,
     if (OB_FAIL(add_filter_for_rls(stmt, table_item, columns, expr))) {
       LOG_WARN("failed to add filter for rls table", K(ret));
     }
-  } else if(OB_FAIL(ObTransformUtils::create_view_with_table(&stmt, ctx_, &table_item,
-                                                              view_table))) {
-    LOG_WARN("failed to create view with table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               &stmt,
+                                                               view_table,
+                                                               &table_item))) {
+    LOG_WARN("failed to create empty view table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          &stmt,
+                                                          view_table,
+                                                          &table_item))) {
+    LOG_WARN("failed to create inline view", K(ret));
   } else if (!view_table->is_generated_table()
               || OB_ISNULL(ref_query = view_table->ref_query_)
               || !ref_query->is_single_table_stmt()
@@ -4714,7 +4728,6 @@ int ObTransformPreProcess::create_source_view_for_merge_into(ObMergeStmt *merge_
   const int64_t SOURCE_TABLE_IDX = 1;
   TableItem *source_table = NULL;
   ObSEArray<ObRawExpr*, 8> insert_values_subquery_exprs;
-
   if (OB_ISNULL(merge_stmt) || OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->allocator_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4722,10 +4735,15 @@ int ObTransformPreProcess::create_source_view_for_merge_into(ObMergeStmt *merge_
   } else if (OB_ISNULL(source_table = merge_stmt->get_table_item(SOURCE_TABLE_IDX))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table item is null", K(ret), K(merge_stmt), K(ctx_));
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_table(merge_stmt,
-                                                              ctx_,
-                                                              source_table,
-                                                              view_table))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               merge_stmt,
+                                                               view_table,
+                                                               source_table))) {
+    LOG_WARN("failed to create empty view table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          merge_stmt,
+                                                          view_table,
+                                                          source_table))) {
     LOG_WARN("failed to create view with table", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::get_subquery_exprs(merge_stmt->get_values_vector(),
                                                          insert_values_subquery_exprs))) {
@@ -7263,7 +7281,7 @@ int ObTransformPreProcess::transform_full_outer_join(ObDMLStmt *&stmt, bool &tra
       if (OB_ISNULL(joined_tables.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(i), K(joined_tables));
-      } else if (OB_FAIL(recursively_eliminate_full_join(*stmt, *joined_tables.at(i),
+      } else if (OB_FAIL(recursively_eliminate_full_join(*stmt, joined_tables.at(i),
                                                          is_happened))) {
         LOG_WARN("failed to recursively eliminate full join", K(ret));
       } else {
@@ -7275,24 +7293,26 @@ int ObTransformPreProcess::transform_full_outer_join(ObDMLStmt *&stmt, bool &tra
 }
 
 int ObTransformPreProcess::recursively_eliminate_full_join(ObDMLStmt &stmt,
-                                                          TableItem &table_item,
-                                                          bool &trans_happened)
+                                                           TableItem *table_item,
+                                                           bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  JoinedTable *joined_table = NULL;
-  TableItem *view_table = NULL;
   bool has_euqal = false;
   bool has_subquery = false;
-  if (!table_item.is_joined_table()) {
-    /* do nothing */
-  } else if (OB_FALSE_IT(joined_table = static_cast<JoinedTable*>(&table_item))) {
-  } else if (OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
+  JoinedTable *joined_table = static_cast<JoinedTable *>(table_item);
+  TableItem *view_table = NULL;
+  TableItem *from_table = table_item;
+  if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null.", K(ret));
-  } else if (OB_FAIL(recursively_eliminate_full_join(stmt, *joined_table->left_table_,
+    LOG_WARN("table item is null", K(ret), K(table_item));
+  } else if (!table_item->is_joined_table()) {
+    /* do nothing */
+  } else if (OB_FAIL(recursively_eliminate_full_join(stmt,
+                                                     joined_table->left_table_,
                                                      trans_happened))) {
     LOG_WARN("failed to transform full nl join.", K(ret));
-  } else if (OB_FAIL(recursively_eliminate_full_join(stmt, *joined_table->right_table_,
+  } else if (OB_FAIL(recursively_eliminate_full_join(stmt,
+                                                     joined_table->right_table_,
                                                      trans_happened))) {
     LOG_WARN("failed to transform full nl join.", K(ret));
   } else if (!joined_table->is_full_join()) {
@@ -7301,13 +7321,24 @@ int ObTransformPreProcess::recursively_eliminate_full_join(ObDMLStmt &stmt,
     LOG_WARN("failed to check join condition", K(ret));
   } else if (has_euqal || has_subquery) {
     /* do nothing */
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_table(&stmt, ctx_, joined_table,
-                                                              view_table))) {
-    LOG_WARN("failed to create view with table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               &stmt,
+                                                               view_table,
+                                                               from_table))) {
+    LOG_WARN("failed to create empty view table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          &stmt,
+                                                          view_table,
+                                                          from_table))) {
+    LOG_WARN("failed to create inline view", K(ret));
+  } else if (OB_ISNULL(view_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("view table is null", K(ret), K(view_table));
   } else if (OB_FAIL(expand_full_outer_join(view_table->ref_query_))) {
     LOG_WARN("failed to create view for full nl join.", K(ret));
   } else {
     trans_happened = true;
+    view_table->for_update_ = false;
   }
   return ret;
 }
@@ -7410,7 +7441,6 @@ int ObTransformPreProcess::switch_left_outer_to_semi_join(ObSelectStmt *&sub_stm
   int ret = OB_SUCCESS;
   SemiInfo *semi_info = NULL;
   ObSEArray<SelectItem, 4> output_select_items;
-  TableItem *view_item = NULL;
   ObSEArray<FromItem, 4> from_items;
   ObSEArray<SemiInfo *, 4> semi_infos;
   ObSEArray<JoinedTable *, 4> joined_tables;
@@ -7421,10 +7451,24 @@ int ObTransformPreProcess::switch_left_outer_to_semi_join(ObSelectStmt *&sub_stm
   } else if (OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer.", K(ret));
-  } else if (joined_table->left_table_->is_joined_table() &&
-             OB_FAIL(ObTransformUtils::create_view_with_table(sub_stmt, ctx_,
-                                              joined_table->left_table_, view_item))) {
-    LOG_WARN("failed to create view with table", K(ret));
+  } else if (joined_table->left_table_->is_joined_table()) {
+    TableItem *view_table = NULL;
+    TableItem *push_table = joined_table->left_table_;
+    if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                          sub_stmt,
+                                                          view_table,
+                                                          push_table))) {
+      LOG_WARN("failed to create empty view table", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                            sub_stmt,
+                                                            view_table,
+                                                            push_table))) {
+      LOG_WARN("failed to create inline view with table", K(ret));
+    } else {
+      joined_table->left_table_ = view_table;
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(semi_info = static_cast<SemiInfo*>(ctx_->allocator_->alloc(
                                                                     sizeof(SemiInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

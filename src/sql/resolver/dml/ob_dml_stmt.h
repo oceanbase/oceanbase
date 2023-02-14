@@ -667,24 +667,6 @@ public:
   int replace_relation_exprs(const common::ObIArray<ObRawExpr *> &other_exprs,
                              const common::ObIArray<ObRawExpr *> &new_exprs);
 
-  /**
-   * @brief replace_inner_stmt_expr
-   * 对本层出现的 expr 进行替换。
-   * stmt 中有一些 expr 可能出现在多处。对 stmt 进行深拷贝后，要调整新stmt中对应expr的指向。
-   * other_exprs 与 new_exprs 一一映射。函数会将 a \in other_exprs 替换为对应的 b \in new_exprs
-   * 构造 other_exprs 与 new_exprs 构成的映射关系需要包含以下几类表达式
-   * 1. ObColumnRefRawExpr: 列表达式
-   * 2. ObAggFunRawExpr: 聚合函数表达式
-   * 3. ObQueryRefRawExpr: 子查询引用表达式
-   * 4. ObWinFunRawExpr: 窗口函数表达式
-   * 其中 2-4 仅出现在 ObSelectStmt 中。
-   * @param other_exprs
-   * @param new_exprs
-   * @return
-   */
-  int replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                              const common::ObIArray<ObRawExpr*> &new_exprs);
-
   int copy_and_replace_stmt_expr(ObRawExprCopier &copier);
 
   virtual int iterate_stmt_expr(ObStmtExprVisitor &vistor);
@@ -899,6 +881,7 @@ public:
   int get_table_rel_ids(const ObIArray<TableItem*> &tables, ObSqlBitSet<> &table_set) const;
   int get_from_tables(ObRelIds &table_set) const;
   int get_from_tables(ObSqlBitSet<> &table_set) const;
+  int get_from_tables(common::ObIArray<TableItem*>& from_tables) const;
 
   int add_table_item(const ObSQLSessionInfo *session_info, TableItem *table_item);
   int add_table_item(const ObSQLSessionInfo *session_info, TableItem *table_item, bool &have_same_table_name);

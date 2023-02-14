@@ -787,21 +787,6 @@ int ObDMLStmt::replace_relation_exprs(const common::ObIArray<ObRawExpr *> &other
   return ret;
 }
 
-int ObDMLStmt::replace_inner_stmt_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
-                                       const common::ObIArray<ObRawExpr *> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  ObStmtExprReplacer visitor;
-  visitor.remove_scope(SCOPE_BASIC_TABLE);
-  visitor.set_recursive(true);
-  if (OB_FAIL(visitor.add_replace_exprs(other_exprs, new_exprs))) {
-    LOG_WARN("failed to add replace exprs", K(ret));
-  } else if (OB_FAIL(iterate_stmt_expr(visitor))) {
-    LOG_WARN("failed to iterate stmt expr", K(ret));
-  }
-  return ret;
-}
-
 int ObDMLStmt::copy_and_replace_stmt_expr(ObRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
@@ -3040,6 +3025,27 @@ int ObDMLStmt::get_from_tables(ObSqlBitSet<> &table_set) const
       LOG_WARN("invalid table bit index", K(ret), K(from_items_.at(i).table_id_), K(bit_id));
     } else if (OB_FAIL(table_set.add_member(bit_id))) {
       LOG_WARN("failed to add member", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_from_tables(common::ObIArray<TableItem *>& from_tables) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_items_.count(); ++i) {
+    TableItem *table_item = NULL;
+    const FromItem &from_item = from_items_.at(i);
+    if (from_item.is_joined_ &&
+        OB_ISNULL(table_item = get_joined_table(from_item.table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (!from_item.is_joined_ &&
+               OB_ISNULL(table_item = get_table_item_by_id(from_item.table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(from_tables.push_back(table_item))) {
+      LOG_WARN("failed to push back", K(ret));
     }
   }
   return ret;

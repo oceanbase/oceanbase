@@ -559,7 +559,7 @@ struct DistinctObjMeta
    * 以左-右-后的方式后续遍历from item及semi from item中的joined_table结构
    */
   int recursively_eliminate_full_join(ObDMLStmt &stmt,
-                                      TableItem &table_item,
+                                      TableItem *table_item,
                                       bool &trans_happened);
 
   /**

@@ -373,9 +373,6 @@ private:
                                  TableItem *&view_table,
                                  int64_t &expr_pos,
                                  ObIArray<ObRawExpr*> *&conds_exprs);
-  int get_all_tables(ObSelectStmt &stmt,
-                     ObIArray<TableItem *> &rel_tables,
-                     ObIArray<SemiInfo *> &or_semi_infos);
   int check_delay_expr(ObRawExpr* expr, bool &delay);
   int check_valid_rel_table(ObSelectStmt &stmt,
                             ObRelIds &rel_ids,

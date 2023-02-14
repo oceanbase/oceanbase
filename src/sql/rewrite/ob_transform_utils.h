@@ -288,7 +288,7 @@ public:
                                 ObSelectStmt *select_stmt);
 
   static int create_select_item(ObIAllocator &allocator,
-                                common::ObIArray<ObRawExpr*> &select_exprs,
+                                const common::ObIArray<ObRawExpr*> &select_exprs,
                                 ObSelectStmt *select_stmt);
 
   static int copy_stmt(ObStmtFactory &stmt_factory,
@@ -1090,30 +1090,26 @@ public:
                              ObSelectStmt *right_stmt,
                              ObSelectStmt *&union_stmt);
 
+  static int pushdown_group_by(ObSelectStmt *parent_stmt,
+                               ObIArray<ObRawExpr *> &pushdown_groupby,
+                               ObIArray<ObRawExpr *> &pushdown_rollup,
+                               ObIArray<ObRawExpr *> &pushdown_aggr);
+
   static int create_simple_view(ObTransformerCtx *ctx,
                                 ObDMLStmt *stmt,
                                 ObSelectStmt *&view_stmt,
                                 bool push_subquery = true,
-                                bool push_conditions = true);
+                                bool push_conditions = true,
+                                bool push_group_by = false,
+                                ObAliasRefRawExpr *alias_expr = NULL);
 
   static int pushdown_pseudo_column_like_exprs(ObDMLStmt &upper_stmt,
-                                               ObSelectStmt &view_stmt,
                                                ObIArray<ObRawExpr*> &pushdown_exprs);
-  static int check_need_pushdown_pseudo_column(ObDMLStmt &view_stmt,
-                                               ObRawExpr &expr,
-                                               bool &need_pushdown);
 
   static int adjust_updatable_view(ObRawExprFactory &expr_factory,
                                    ObDelUpdStmt *stmt,
                                    TableItem &view_table_item,
                                    ObIArray<uint64_t>* origin_table_ids = NULL);
-
-  static int push_down_groupby(ObTransformerCtx *ctx, ObSelectStmt *stmt, TableItem *view_table);
-
-  static int push_down_vector_assign(ObTransformerCtx *ctx,
-                                     ObUpdateStmt *stmt,
-                                     ObAliasRefRawExpr *root_expr,
-                                     TableItem *view_table);
 
   static int create_stmt_with_generated_table(ObTransformerCtx *ctx,
                                               ObSelectStmt *child_stmt,
@@ -1135,11 +1131,6 @@ public:
 
   static int inner_copy_joined_table_expr(ObRawExprCopier &copier,
                                           JoinedTable *table);
-
-  static int create_view_with_table(ObDMLStmt *stmt,
-                                    ObTransformerCtx *ctx,
-                                    TableItem *table,
-                                    TableItem *&view_table);
 
   static int extract_right_tables_from_semi_infos(ObDMLStmt *stmt,
                                                   const ObIArray<SemiInfo *> &semi_infos, 
@@ -1358,18 +1349,6 @@ public:
                                         ObQueryRefRawExpr *query_ref,
                                         ObSelectStmt *subquery,
                                         bool &is_match);
-  /**
-   * @brief create_view_with_from_items
-   * 使用给定的from items，创建一个generate table聚合这些表
-   * 如果给定了new_select_exprs，则使用给定的表达式创建新的select item
-   * 如果new_select_exprs为空，则使用from items包含表的所有列创建新的select item
-   */
-  static int create_view_with_from_items(ObDMLStmt *stmt,
-                                        ObTransformerCtx *ctx,
-                                        TableItem *table_item,
-                                        const ObIArray<ObRawExpr*> &new_select_exprs,
-                                        const ObIArray<ObRawExpr*> &new_conds,
-                                        TableItem *&view_table);
 
   static int add_table_item(ObDMLStmt *stmt, TableItem *table_item);
 
@@ -1651,21 +1630,46 @@ public:
   static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
                                              bool &is_valid);
 
-  static int create_view_with_tables(ObDMLStmt *stmt,
-                                     ObTransformerCtx *ctx,
-                                     const ObIArray<TableItem *> &tables,
-                                     const ObIArray<SemiInfo *> &semi_infos,
-                                     TableItem *&view_table);
+  static int replace_with_empty_view(ObTransformerCtx *ctx,
+                                     ObDMLStmt *stmt,
+                                     TableItem *&view_table,
+                                     TableItem *from_table,
+                                     ObIArray<SemiInfo *> *semi_infos = NULL);
 
-  static int construct_simple_view(ObDMLStmt *stmt,
-                                   const ObIArray<TableItem *> &tables,
-                                   const ObIArray<SemiInfo *> &semi_infos,
-                                   ObTransformerCtx *ctx,
-                                   ObSelectStmt *&simple_stmt);
+  static int replace_with_empty_view(ObTransformerCtx *ctx,
+                                     ObDMLStmt *stmt,
+                                     TableItem *&view_table,
+                                     ObIArray<TableItem *> &from_tables,
+                                     ObIArray<SemiInfo *> *semi_infos = NULL);
+
+  static int create_inline_view(ObTransformerCtx *ctx,
+                                ObDMLStmt *stmt,
+                                TableItem *&view_table,
+                                TableItem * push_table,
+                                ObIArray<ObRawExpr *> *conditions = NULL,
+                                ObIArray<SemiInfo *> *semi_infos = NULL,
+                                ObIArray<ObRawExpr *> *select_exprs = NULL,
+                                ObIArray<ObRawExpr *> *group_exprs = NULL,
+                                ObIArray<ObRawExpr *> *rollup_exprs = NULL,
+                                ObIArray<ObRawExpr *> *having_exprs = NULL,
+                                ObIArray<OrderItem> *order_items = NULL);
+
+  static int create_inline_view(ObTransformerCtx *ctx,
+                                ObDMLStmt *stmt,
+                                TableItem *&view_table,
+                                ObIArray<TableItem *> &from_tables,
+                                ObIArray<ObRawExpr *> *conditions = NULL,
+                                ObIArray<SemiInfo *> *semi_infos = NULL,
+                                ObIArray<ObRawExpr *> *select_exprs = NULL,
+                                ObIArray<ObRawExpr *> *group_exprs = NULL,
+                                ObIArray<ObRawExpr *> *rollup_exprs = NULL,
+                                ObIArray<ObRawExpr *> *having_exprs = NULL,
+                                ObIArray<OrderItem> *order_items = NULL);
 
   static int generate_select_list(ObTransformerCtx *ctx,
                                   ObDMLStmt *stmt,
-                                  TableItem *table);
+                                  TableItem *table,
+                                  ObIArray<ObRawExpr *> *basic_select_exprs = NULL);
 
   static int remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
                                 ObIArray<ObRawExpr *> &output_exprs);
@@ -1735,7 +1739,8 @@ private:
 
   static int extract_shared_exprs(ObDMLStmt *parent,
                                   ObSelectStmt *view_stmt,
-                                  ObIArray<ObRawExpr *> &common_exprs);
+                                  ObIArray<ObRawExpr *> &common_exprs,
+                                  const ObIArray<ObRawExpr *> *extra_view_exprs = NULL);
 
   static int generate_col_exprs(ObDMLStmt *stmt,
                                 const ObIArray<TableItem *> &tables,

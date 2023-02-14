@@ -2510,10 +2510,9 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
 {
   int ret = OB_SUCCESS;
   TableItem *right_table = NULL;
-  ObSelectStmt *child_stmt = NULL;
+  TableItem *view_table = NULL;
   bool can_push = false;
   ObSEArray<ObRawExpr*, 16> right_filters;
-  ObSEArray<ObRawExpr*, 16> new_right_filters;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(semi_info) || OB_ISNULL(ctx->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(ctx), K(semi_info), K(ctx->expr_factory_));
@@ -2524,37 +2523,32 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
     LOG_WARN("failed to extract table exprs", K(ret));
   } else if (right_filters.empty()) {
     // do nothing
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(semi_info->semi_conditions_, right_filters))) {
+    LOG_WARN("failed to remove right filters", K(ret));
   } else if (OB_FAIL(ObTransformUtils::can_push_down_filter_to_table(*right_table, can_push))) {
     LOG_WARN("failed to check can push down", K(ret), K(*right_table));
   } else if (can_push) {
-    // do nothing
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt, ctx, right_table, right_table))) {
-    LOG_WARN("failed to create view with table", K(ret));
-  } else if (FALSE_IT(right_filters.reuse())) {
-    // do nothing
-  } else if (OB_FAIL(extract_semi_right_table_filter(stmt, semi_info, right_filters))) {
-    LOG_WARN("failed to extract table exprs", K(ret));
-  } 
-  
-  if (OB_SUCC(ret) && !right_filters.empty()) {
-    if (OB_ISNULL(right_table) || OB_UNLIKELY(!right_table->is_generated_table())
-        || OB_ISNULL(child_stmt = right_table->ref_query_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected right table", K(ret), K(right_table), K(child_stmt));
-    } else if (OB_FAIL(ObOptimizerUtil::remove_item(semi_info->semi_conditions_,
-                                                    right_filters))) {
-      LOG_WARN("failed to remove item", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::move_expr_into_view(*ctx->expr_factory_,
-                                                             *stmt,
-                                                             *right_table,
-                                                             right_filters,
-                                                             new_right_filters))) {
+    ObArray<ObRawExpr *> new_right_filters;
+    if (OB_FAIL(ObTransformUtils::move_expr_into_view(*ctx_->expr_factory_,
+                                                      *stmt,
+                                                      *right_table,
+                                                      right_filters,
+                                                      new_right_filters))) {
       LOG_WARN("failed to move expr into view", K(ret));
-    } else if (OB_FAIL(child_stmt->add_condition_exprs(new_right_filters))) {
-      LOG_WARN("failed to add condotion exprs", K(ret));
-    } else if (OB_FAIL(child_stmt->formalize_stmt(ctx->session_info_))) {
-      LOG_WARN("failed to formalize stmt", K(ret));
+    } else if (OB_FAIL(right_table->ref_query_->add_condition_exprs(new_right_filters))) {
+      LOG_WARN("failed to add condition exprs", K(ret));
     }
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               stmt,
+                                                               view_table,
+                                                               right_table))) {
+    LOG_WARN("failed to create empty view table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          stmt,
+                                                          view_table,
+                                                          right_table,
+                                                          &right_filters))) {
+    LOG_WARN("failed to create view with table", K(ret));
   }
   return ret;
 }

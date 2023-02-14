@@ -588,6 +588,7 @@ int ObTransformSimplifySubquery::try_push_down_outer_join_conds(ObDMLStmt *stmt,
   } else {
     ObSEArray<ObRawExpr*, 16> push_down_conds;
     TableItem *view_item = NULL;
+    TableItem *right_table = join_table->right_table_;
     if (OB_FAIL(get_push_down_conditions(stmt,
                                          join_table,
                                          join_table->get_join_conditions(),
@@ -595,52 +596,25 @@ int ObTransformSimplifySubquery::try_push_down_outer_join_conds(ObDMLStmt *stmt,
       LOG_WARN("failed to get_push_down_conditions", K(ret), K(join_table));
     } else if (push_down_conds.empty()) {
       /*do nothing*/
-    } else if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt, ctx_,
-                                                                join_table->right_table_,
-                                                                view_item))) {
-      LOG_WARN("failed to create view with table", K(ret));
-    } else if (OB_FAIL(push_down_on_condition(stmt, join_table, push_down_conds))) {
-      LOG_WARN("failed to push down on condition", K(ret));
+    } else if (ObOptimizerUtil::remove_item(join_table->get_join_conditions(), push_down_conds)) {
+      LOG_WARN("failed to remove item", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                                 stmt,
+                                                                 view_item,
+                                                                 right_table))) {
+      LOG_WARN("failed to create empty view table", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                            stmt,
+                                                            view_item,
+                                                            right_table,
+                                                            &push_down_conds))) {
+      LOG_WARN("failed to create inline view", K(ret));
     } else {
       trans_happened = true;
     }
   }
   return ret;
 }
-
-//将left join 部分连接条件conds 下推到 right generate table
-//right table 为仅含 select 输出的 generate table
-int ObTransformSimplifySubquery::push_down_on_condition(ObDMLStmt *stmt,
-                                                JoinedTable *join_table,
-                                                ObIArray<ObRawExpr*> &conds) {
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 16> new_conds;
-  ObSelectStmt *child_stmt = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(join_table) ||
-      OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->allocator_) ||
-      OB_ISNULL(join_table->right_table_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret));
-  } else if (!join_table->is_left_join() || !join_table->right_table_->is_generated_table()
-             || OB_ISNULL(child_stmt = join_table->right_table_->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected join table", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(join_table->get_join_conditions(), conds))) {
-    LOG_WARN("failed to remove item", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::move_expr_into_view(*ctx_->expr_factory_,
-                                                           *stmt,
-                                                           *join_table->right_table_,
-                                                           conds,
-                                                           new_conds))) {
-    LOG_WARN("failed to move expr into view", K(ret));
-  } else if (OB_FAIL(child_stmt->add_condition_exprs(new_conds))) {
-    LOG_WARN("failed to add new conditions exprs", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
-    LOG_WARN("failed to formalize stmt", K(ret));
-  }
-  return ret;
-}
-
 
 int ObTransformSimplifySubquery::add_limit_for_exists_subquery(ObDMLStmt *stmt,
                                                                bool &trans_happened)

@@ -1152,9 +1152,6 @@ int ObTransformDBlink::inner_pack_link_table(ObDMLStmt *stmt, LinkTableHelper &h
 {
   int ret = OB_SUCCESS;
   TableItem *view_table = NULL;
-  ObSelectStmt *ref_query = NULL;
-  ObSEArray<SemiInfo*, 2> dummy_semi_infos;
-  ObSEArray<TableItem *, 8> reverse_tables;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
@@ -1164,50 +1161,24 @@ int ObTransformDBlink::inner_pack_link_table(ObDMLStmt *stmt, LinkTableHelper &h
                                          helper.is_reverse_link_ ? 0
                                          : helper.dblink_id_))) {
     LOG_WARN("failed to reverse link table", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::construct_simple_view(stmt,
-                                                             helper.table_items_,
-                                                             helper.semi_infos_,
-                                                             ctx_,
-                                                             ref_query))) {
-    LOG_WARN("failed to construct simple view", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_,
+  } else if (ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), helper.conditions_)) {
+    LOG_WARN("failed to remove item", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               stmt,
+                                                               view_table,
+                                                               helper.table_items_,
+                                                               &helper.semi_infos_))) {
+    LOG_WARN("failed to create empty view", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
                                                           stmt,
-                                                          ref_query,
-                                                          view_table))) {
-    LOG_WARN("failed to add new table item", K(ret));
-  } else if (OB_FAIL(stmt->rebuild_tables_hash())) {
-    LOG_WARN("failed to rebuild table hash", K(ret));
-  } else if (NULL == helper.parent_table_ &&
-             NULL == helper.parent_semi_info_ &&
-             OB_FAIL(stmt->add_from_item(view_table->table_id_, false))) {
-    LOG_WARN("failed to add from item", K(ret));
-  } else if (OB_FAIL(append(ref_query->get_condition_exprs(), helper.conditions_))) {
-    LOG_WARN("failed to push back conditions", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(),
-                                                  helper.conditions_))) {
-    LOG_WARN("failed to remove extracted conditions from stmt", K(ret));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < helper.table_items_.count(); ++i) {
-    TableItem *table = helper.table_items_.at(i);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table is null", K(ret), K(table));
-    } else if (OB_FAIL(ObTransformUtils::replace_table_in_semi_infos(
-                         stmt, view_table, table))) {
-      LOG_WARN("failed to replace table in semi infos", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::replace_table_in_joined_tables(
-                         stmt, view_table, table))) {
-      LOG_WARN("failed to replace table in joined tables", K(ret));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
+                                                          view_table,
+                                                          helper.table_items_,
+                                                          &helper.conditions_,
+                                                          &helper.semi_infos_))) {
+    LOG_WARN("failed to create inline view", K(ret));
   } else if (OB_ISNULL(view_table) || OB_ISNULL(view_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table item", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::generate_select_list(ctx_, stmt, view_table))) {
-    LOG_WARN("failed to generate select list", K(ret), K(view_table));
   } else if (OB_FAIL(formalize_link_table(view_table->ref_query_))) {
     LOG_WARN("failed to formalize link table", K(ret));
   } else {
@@ -1226,8 +1197,6 @@ int ObTransformDBlink::formalize_link_table(ObDMLStmt *stmt)
     LOG_WARN("failed to formalize select item", K(ret));
   } else if (OB_FAIL(formalize_column_item(stmt))) {
     LOG_WARN("failed to formalize column item", K(ret));
-  } else if (OB_FAIL(stmt->adjust_subquery_list())) {
-    LOG_WARN("failed to adjust subquery list", K(ret));
   }
   return ret;
 }

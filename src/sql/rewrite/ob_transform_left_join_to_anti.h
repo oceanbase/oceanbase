@@ -40,17 +40,17 @@ private:
                        const TableItem &table,
                        bool &is_valid);
   int transform_left_join_to_anti_join_rec(ObDMLStmt *stmt,
-                                           JoinedTable *joined_table,
+                                           TableItem *table,
                                            ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
-                                           uint64_t root_table_id,
+                                           bool is_root_table,
                                            bool &trans_happened);
   int transform_left_join_to_anti_join(ObDMLStmt *&stmt,
-                                       JoinedTable *joined_table,
+                                       TableItem *table,
                                        ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
                                        bool is_root_table,
                                        bool &trans_happened);
   int trans_stmt_to_anti(ObDMLStmt *stmt,
-                         const JoinedTable *joined_table);
+                         JoinedTable *joined_table);
   int construct_trans_table_list(const ObDMLStmt *stmt,
                                  const TableItem *table,
                                  ObIArray<ObSEArray<TableItem *, 4>> &trans_tables);

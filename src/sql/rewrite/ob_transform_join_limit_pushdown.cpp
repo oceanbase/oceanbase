@@ -843,26 +843,23 @@ int ObTransformJoinLimitPushDown::do_transform(ObSelectStmt *select_stmt,
                                                LimitPushDownHelper &helper)
 {
   int ret = OB_SUCCESS;
-  ObSelectStmt *ref_query = NULL;
-  ObSEArray<ObRawExpr *, 16> new_conds;
   if (OB_ISNULL(select_stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (!helper.lazy_join_tables_.empty() && 
              OB_FAIL(remove_lazy_left_join(select_stmt, helper))) {
     LOG_WARN("failed to remove lazy left join table", K(ret));
-    //pushdown other join table item
-  } else if (OB_FAIL(ObTransformUtils::construct_simple_view(select_stmt,
-                                                             helper.pushdown_tables_,
-                                                             helper.pushdown_semi_infos_,
-                                                             ctx_,
-                                                             ref_query))) {
-    LOG_WARN("failed to construct simple view", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_,
-                                                          select_stmt,
-                                                          ref_query,
-                                                          helper.view_table_))) {
-    LOG_WARN("failed to add new table item", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(select_stmt->get_condition_exprs(),
+                                                  helper.pushdown_conds_))) {
+    LOG_WARN("failed to remove conditions from stmt", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(select_stmt->get_semi_infos(),
+                                                  helper.pushdown_semi_infos_))) {
+    LOG_WARN("failed to remove semi infos from stmt", K(ret));
+  } else if (ObTransformUtils::add_new_table_item(ctx_,
+                                                  select_stmt,
+                                                  NULL,
+                                                  helper.view_table_)) {
+    LOG_WARN("failed to create table item", K(ret));
   } else if (OB_FAIL(select_stmt->add_from_item(helper.view_table_->table_id_, false))) {
     LOG_WARN("failed to add from item", K(ret));
   }
@@ -881,28 +878,29 @@ int ObTransformJoinLimitPushDown::do_transform(ObSelectStmt *select_stmt,
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (!helper.lazy_join_tables_.empty() &&
-        OB_FAIL(build_lazy_left_join(select_stmt, helper))) {
+  if (OB_SUCC(ret) && !helper.lazy_join_tables_.empty()) {
+    if (OB_FAIL(build_lazy_left_join(select_stmt, helper))) {
       LOG_WARN("failed to build lazy left join table", K(ret));
-    } else if (OB_ISNULL(helper.view_table_) ||
-               OB_ISNULL(ref_query = helper.view_table_->ref_query_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("target table should not be null", K(ret));
-    } else if (OB_FAIL(append(ref_query->get_condition_exprs(), helper.pushdown_conds_))) {
-      LOG_WARN("failed to push back conditions", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::remove_item(select_stmt->get_condition_exprs(),
-                                                    helper.pushdown_conds_))) {
-      LOG_WARN("failed to remove extracted conditions from stmt", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::generate_select_list(ctx_, select_stmt, helper.view_table_))) {
-      LOG_WARN("failed to generate select list", K(ret), K(helper.view_table_));
-    } else if (OB_FAIL(add_order_by_limit_for_view(ref_query,
-                                                   *helper.view_table_,
-                                                   select_stmt,
-                                                   helper.pushdown_order_items_,
-                                                   helper.all_lazy_join_is_unique_join_))) {
-      LOG_WARN("failed to add limit for generated view table", K(ret));
     }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          select_stmt,
+                                                          helper.view_table_,
+                                                          helper.pushdown_tables_,
+                                                          &helper.pushdown_conds_,
+                                                          &helper.pushdown_semi_infos_,
+                                                          NULL,
+                                                          NULL,
+                                                          NULL,
+                                                          NULL,
+                                                          &helper.pushdown_order_items_))) {
+    LOG_WARN("failed to create inline view", K(ret));
+  } else if (OB_FAIL(add_limit_for_view(helper.view_table_->ref_query_,
+                                        select_stmt,
+                                        helper.all_lazy_join_is_unique_join_))) {
+    LOG_WARN("failed to add order by limit for view", K(ret));
   }
   return ret;
 }
@@ -1017,11 +1015,9 @@ int ObTransformJoinLimitPushDown::build_lazy_left_join(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformJoinLimitPushDown::add_order_by_limit_for_view(ObSelectStmt *generated_view,
-                                                              TableItem &view,
-                                                              ObSelectStmt *upper_stmt,
-                                                              ObIArray<OrderItem> &order_items,
-                                                              bool pushdown_offset)
+int ObTransformJoinLimitPushDown::add_limit_for_view(ObSelectStmt *generated_view,
+                                                     ObSelectStmt *upper_stmt,
+                                                     bool pushdown_offset)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(generated_view) || OB_ISNULL(upper_stmt) ||
@@ -1029,36 +1025,11 @@ int ObTransformJoinLimitPushDown::add_order_by_limit_for_view(ObSelectStmt *gene
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret), K(generated_view), K(upper_stmt), K(ctx_));
   } else {
-    ObSEArray<ObRawExpr *, 16> old_order_exprs;
-    ObSEArray<ObRawExpr *, 16> new_order_exprs;
-    for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); i++) {
-      if (OB_FAIL(old_order_exprs.push_back(order_items.at(i).expr_))) {
-        LOG_WARN("failed to push back", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObTransformUtils::move_expr_into_view(*ctx_->expr_factory_,
-                                                             *upper_stmt,
-                                                             view,
-                                                             old_order_exprs,
-                                                             new_order_exprs))) {
-      LOG_WARN("failed to move expr into view", K(ret));
-    } else if (OB_UNLIKELY(new_order_exprs.count() != order_items.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected exprs count", K(ret), K(new_order_exprs), K(order_items));
-    } else {
-      for (int64_t i = 0; i < order_items.count(); i++) {
-        order_items.at(i).expr_ = new_order_exprs.at(i);
-      }
-    }
-
     ObRawExpr *offset_expr = upper_stmt->get_offset_expr();
     ObRawExpr *limit_expr = upper_stmt->get_limit_expr();
     if (OB_ISNULL(limit_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("illegal limit expr", K(ret));
-    } else if (OB_FAIL(generated_view->get_order_items().assign(order_items))) {
-      LOG_WARN("failed to copy order by items", K(ret));
     } else if (pushdown_offset) {
       generated_view->set_limit_offset(limit_expr, offset_expr);
       upper_stmt->set_limit_offset(NULL, NULL);

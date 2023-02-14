@@ -146,11 +146,9 @@ private:
 
   int build_lazy_left_join(ObDMLStmt *stmt, LimitPushDownHelper &helper);
 
-  int add_order_by_limit_for_view(ObSelectStmt *generated_view,
-                                  TableItem &view,
-                                  ObSelectStmt *upper_stmt,
-                                  ObIArray<OrderItem> &order_items,
-                                  bool pushdown_offset);
+  int add_limit_for_view(ObSelectStmt *generated_view,
+                         ObSelectStmt *upper_stmt,
+                         bool pushdown_offset);
 
   int rename_pushdown_exprs(ObSelectStmt *select_stmt,
                             ObIArray<LimitPushDownHelper*> &helpers);

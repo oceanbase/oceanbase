@@ -274,41 +274,31 @@ int ObTransformWinMagic::do_transform_from_type(ObDMLStmt *&stmt,
   int ret = OB_SUCCESS;
   ObDMLStmt *main_stmt = stmt;
   TableItem *drill_down_table = NULL;
-  TableItem *&rewrite_table = drill_down_table;
   TableItem *roll_up_table = NULL;
   ObSelectStmt *drill_down_stmt = NULL;
-  ObSelectStmt *&rewrite_view_stmt = drill_down_stmt;
   ObDMLStmt *roll_up_stmt = NULL;
   bool match_main =false; 
 
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) ||
+      OB_ISNULL(drill_down_table = main_stmt->get_table_item(main_stmt->get_from_item(drill_down_idx))) ||
+      OB_ISNULL(drill_down_stmt = drill_down_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret));
-  } else if (OB_ISNULL(drill_down_table = main_stmt->get_table_item_by_id(
-                                              main_stmt->get_from_item(drill_down_idx).table_id_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is null", K(ret));
-  } else if (OB_ISNULL(drill_down_stmt = drill_down_table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is null", K(ret));
+    LOG_WARN("stmt is null", K(ret), K(stmt), K(drill_down_table), K(drill_down_stmt));
   } else if (roll_up_idx == -1) {
     roll_up_stmt = main_stmt;
     match_main = true;
-  } else if (OB_ISNULL(roll_up_table = main_stmt->get_table_item_by_id(
-                                          main_stmt->get_from_item(roll_up_idx).table_id_))) {
+  } else if (OB_ISNULL(roll_up_table = main_stmt->get_table_item(main_stmt->get_from_item(roll_up_idx))) ||
+             OB_ISNULL(roll_up_stmt = roll_up_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is null", K(ret));
-  } else if (OB_ISNULL(roll_up_stmt = roll_up_table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is null", K(ret));
+    LOG_WARN("rollup table is invalid", K(roll_up_table), K(roll_up_stmt));
   }
 
   if (OB_FAIL(ret)) {
     //do nothing
   } else if (match_main) {
-    if (OB_FAIL(adjust_column_and_table(main_stmt, rewrite_table, map_info))) {
+    if (OB_FAIL(adjust_column_and_table(main_stmt, drill_down_table, map_info))) {
       LOG_WARN("adjust column and table failed");
-    } else if (OB_FAIL(adjust_agg_to_win(rewrite_view_stmt))) {
+    } else if (OB_FAIL(adjust_agg_to_win(drill_down_stmt))) {
       LOG_WARN("adjust agg to win faield", K(ret));
     }
   } else {
@@ -338,7 +328,6 @@ int ObTransformWinMagic::do_transform_from_type(ObDMLStmt *&stmt,
       LOG_WARN("failed to formalize stmt info", K(ret));
     }
   }
-  LOG_DEBUG("transformed stmt: ",K(*stmt));
   return ret;
 }
 
@@ -1352,12 +1341,12 @@ int ObTransformWinMagic::adjust_agg_to_win(ObSelectStmt *view_stmt)
 }
 
 int ObTransformWinMagic::adjust_view_for_trans(ObDMLStmt *main_stmt, 
-                                             TableItem *&drill_down_table, 
-                                             TableItem *roll_up_table,
-                                             TableItem *&transed_view_table,
-                                             ObIArray<ObRawExpr *> &new_transed_output,
-                                             ObStmtCompareContext &context,
-                                             ObStmtMapInfo &map_info)
+                                               TableItem *&drill_down_table,
+                                               TableItem *roll_up_table,
+                                               TableItem *&transed_view_table,
+                                               ObIArray<ObRawExpr *> &new_transed_output,
+                                               ObStmtCompareContext &context,
+                                               ObStmtMapInfo &map_info)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *drill_down_stmt = NULL;
@@ -1369,21 +1358,27 @@ int ObTransformWinMagic::adjust_view_for_trans(ObDMLStmt *main_stmt,
   ObSEArray<ObRawExpr *, 4> new_select_exprs_for_trans;
   ObSEArray<ObRawExpr *, 4> old_roll_up_view_output_columns;
   ObSEArray<ObRawExpr *, 4> new_transed_view_output_columns;
+
   if (OB_ISNULL(main_stmt) || OB_ISNULL(drill_down_table) || OB_ISNULL(roll_up_table) ||
       OB_ISNULL(drill_down_stmt = drill_down_table->ref_query_) ||
       OB_ISNULL(roll_up_stmt = roll_up_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_table(main_stmt,
-                                                       ctx_,
-                                                       drill_down_table,
-                                                       transed_view_table))) {
-    LOG_WARN("create view with table failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               main_stmt,
+                                                               transed_view_table,
+                                                               drill_down_table))) {
+    LOG_WARN("failed to create empty view table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          main_stmt,
+                                                          transed_view_table,
+                                                          drill_down_table))) {
+    LOG_WARN("failed to create inline view", K(ret));
   } else if (OB_ISNULL(transed_view_table) ||
              OB_ISNULL(transed_view_table->ref_query_) ||
-             transed_view_table->ref_query_->get_table_size() != 1 ) {
+             OB_UNLIKELY(transed_view_table->ref_query_->get_table_size() != 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("transed view table is null", K(ret));
+    LOG_WARN("transed view table is null", K(ret), K(transed_view_table));
   } else {
     drill_down_table = transed_view_table->ref_query_->get_table_item(0);
   }

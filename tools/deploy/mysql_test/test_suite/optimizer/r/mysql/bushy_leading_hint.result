@@ -926,16 +926,16 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                       |NAME        |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |TEMP TABLE TRANSFORMATION      |            |2       |79          |
-|1 | TEMP TABLE INSERT             |TEMP1       |11      |78          |
-|2 |  HASH JOIN                    |            |11      |76          |
-|3 |   HASH JOIN                   |            |121     |36          |
-|4 |    HASH JOIN                  |            |11      |15          |
+|0 |TEMP TABLE TRANSFORMATION      |            |2       |78          |
+|1 | TEMP TABLE INSERT             |TEMP1       |11      |76          |
+|2 |  HASH JOIN                    |            |11      |74          |
+|3 |   HASH JOIN                   |            |121     |35          |
+|4 |    HASH JOIN                  |            |11      |14          |
 |5 |     TABLE SCAN                |t6          |11      |3           |
 |6 |     HASH JOIN                 |            |11      |9           |
 |7 |      TABLE SCAN               |t5          |11      |3           |
 |8 |      TABLE SCAN               |t4          |11      |3           |
-|9 |    NESTED-LOOP JOIN CARTESIAN |            |121     |9           |
+|9 |    NESTED-LOOP JOIN CARTESIAN |            |121     |8           |
 |10|     TABLE SCAN                |t3          |11      |3           |
 |11|     MATERIAL                  |            |11      |3           |
 |12|      TABLE SCAN               |t1          |11      |3           |
@@ -950,17 +950,17 @@ Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output(nil), filter(nil), rowset=256
-  2 - output([t1.c1], [t2.c1], [t2.c2], [t5.c1], [t5.c2], [t6.c2]), filter(nil), rowset=256
+  2 - output([t5.c2], [t2.c1], [t1.c1], [t2.c2], [t5.c1], [t6.c2]), filter(nil), rowset=256
       equal_conds([t1.c1 = t2.c1], [t2.c2 = t3.c1]), other_conds(nil)
-  3 - output([t1.c1], [t5.c1], [t5.c2], [t6.c2], [t3.c1]), filter(nil), rowset=256
+  3 - output([t5.c2], [t1.c1], [t5.c1], [t6.c2], [t3.c1]), filter(nil), rowset=256
       equal_conds([t3.c2 = t4.c1]), other_conds(nil)
-  4 - output([t5.c1], [t5.c2], [t6.c2], [t4.c1]), filter(nil), rowset=256
+  4 - output([t5.c2], [t5.c1], [t6.c2], [t4.c1]), filter(nil), rowset=256
       equal_conds([t5.c2 = t6.c1]), other_conds(nil)
   5 - output([t6.c1], [t6.c2]), filter(nil), rowset=256
       access([t6.c1], [t6.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([t5.c1], [t5.c2], [t4.c1]), filter(nil), rowset=256
+  6 - output([t5.c2], [t5.c1], [t4.c1]), filter(nil), rowset=256
       equal_conds([t4.c2 = t5.c1]), other_conds(nil)
   7 - output([t5.c1], [t5.c2]), filter([t5.c2 != 44 OR t5.c2 != 55]), rowset=256
       access([t5.c1], [t5.c2]), partitions(p0)
@@ -989,11 +989,11 @@ Outputs & filters:
  15 - output([cast(T_FUN_COUNT(*), DECIMAL(20, 0))], [T_FUN_SUM(VIEW1.t2.c1)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(VIEW1.t2.c1)])
  16 - output([VIEW1.t2.c1]), filter([VIEW1.t5.c2 != 44]), rowset=256
-      access([VIEW1.t2.c1], [VIEW1.t5.c2])
+      access([VIEW1.t5.c2], [VIEW1.t2.c1])
  17 - output([T_FUN_SUM(VIEW2.t1.c1)], [cast(T_FUN_MAX(VIEW2.t2.c2), DECIMAL(11, 0)) + T_FUN_SUM(VIEW2.t5.c1 - VIEW2.t6.c2)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_SUM(VIEW2.t1.c1)], [T_FUN_MAX(VIEW2.t2.c2)], [T_FUN_SUM(VIEW2.t5.c1 - VIEW2.t6.c2)])
  18 - output([VIEW2.t1.c1], [VIEW2.t2.c2], [VIEW2.t5.c1], [VIEW2.t6.c2]), filter([VIEW2.t5.c2 != 55]), rowset=256
-      access([VIEW2.t1.c1], [VIEW2.t2.c2], [VIEW2.t5.c1], [VIEW2.t5.c2], [VIEW2.t6.c2])
+      access([VIEW2.t5.c2], [VIEW2.t1.c1], [VIEW2.t2.c2], [VIEW2.t5.c1], [VIEW2.t6.c2])
 select /*+ leading(t6, (t5, t4), (t3, t1), (t2)) */ count(*), sum(t2.c1) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
 where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 44
 union ALL
@@ -2479,10 +2479,10 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   5 - output(nil), filter(nil), rowset=256
       access(nil)
-  6 - output([UNION([1])]), filter(nil), rowset=256
+  6 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
-  7 - output([UNION([1])]), filter(nil), rowset=256
-  8 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+  8 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
   9 - output(nil), filter(nil), rowset=256
       equal_conds([a.c1 = b.d1]), other_conds(nil)
@@ -2494,7 +2494,7 @@ Outputs & filters:
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 12 - output([1]), filter(nil), rowset=256
+ 12 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
  13 - output(nil), filter(nil), rowset=256
       equal_conds([a.c1 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
@@ -2509,10 +2509,10 @@ Outputs & filters:
  16 - output(nil), filter(nil), rowset=256
  17 - output(nil), filter(nil), rowset=256
       access(nil)
- 18 - output([UNION([1])]), filter(nil), rowset=256
+ 18 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
- 19 - output([UNION([1])]), filter(nil), rowset=256
- 20 - output([1]), filter(nil), rowset=256
+ 19 - output(nil), filter(nil), rowset=256
+ 20 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
  21 - output(nil), filter(nil), rowset=256
       equal_conds([a.c2 = b.d1]), other_conds(nil)
@@ -2524,7 +2524,7 @@ Outputs & filters:
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 24 - output([1]), filter(nil), rowset=256
+ 24 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
  25 - output(nil), filter(nil), rowset=256
       equal_conds([a.c2 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
@@ -2611,10 +2611,10 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   5 - output(nil), filter(nil), rowset=256
       access(nil)
-  6 - output([UNION([1])]), filter(nil), rowset=256
+  6 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
-  7 - output([UNION([1])]), filter(nil), rowset=256
-  8 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+  8 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
   9 - output(nil), filter(nil), rowset=256
       equal_conds([a.c1 = b.d1]), other_conds(nil)
@@ -2626,7 +2626,7 @@ Outputs & filters:
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 12 - output([1]), filter(nil), rowset=256
+ 12 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
  13 - output(nil), filter(nil), rowset=256
       equal_conds([a.c1 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
@@ -2641,10 +2641,10 @@ Outputs & filters:
  16 - output(nil), filter(nil), rowset=256
  17 - output(nil), filter(nil), rowset=256
       access(nil)
- 18 - output([UNION([1])]), filter(nil), rowset=256
+ 18 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
- 19 - output([UNION([1])]), filter(nil), rowset=256
- 20 - output([1]), filter(nil), rowset=256
+ 19 - output(nil), filter(nil), rowset=256
+ 20 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
  21 - output(nil), filter(nil), rowset=256
       equal_conds([a.c2 = b.d1]), other_conds(nil)
@@ -2656,7 +2656,7 @@ Outputs & filters:
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 24 - output([1]), filter(nil), rowset=256
+ 24 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
  25 - output(nil), filter(nil), rowset=256
       equal_conds([a.c2 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
@@ -2743,10 +2743,10 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   5 - output(nil), filter(nil), rowset=256
       access(nil)
-  6 - output([UNION([1])]), filter(nil), rowset=256
+  6 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
-  7 - output([UNION([1])]), filter(nil), rowset=256
-  8 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+  8 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
   9 - output(nil), filter(nil), rowset=256
       equal_conds([a.c1 = b.d1]), other_conds(nil)
@@ -2758,7 +2758,7 @@ Outputs & filters:
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 12 - output([1]), filter(nil), rowset=256
+ 12 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
  13 - output(nil), filter(nil), rowset=256
       equal_conds([a.c1 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
@@ -2773,10 +2773,10 @@ Outputs & filters:
  16 - output(nil), filter(nil), rowset=256
  17 - output(nil), filter(nil), rowset=256
       access(nil)
- 18 - output([UNION([1])]), filter(nil), rowset=256
+ 18 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
- 19 - output([UNION([1])]), filter(nil), rowset=256
- 20 - output([1]), filter(nil), rowset=256
+ 19 - output(nil), filter(nil), rowset=256
+ 20 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
  21 - output(nil), filter(nil), rowset=256
       equal_conds([a.c2 = b.d1]), other_conds(nil)
@@ -2788,7 +2788,7 @@ Outputs & filters:
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 24 - output([1]), filter(nil), rowset=256
+ 24 - output(nil), filter(nil), rowset=256
       limit(1), offset(nil)
  25 - output(nil), filter(nil), rowset=256
       equal_conds([a.c2 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])

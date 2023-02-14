@@ -35,8 +35,6 @@ int ObTransformOrExpansion::transform_one_stmt(ObIArray<ObParentDMLStmt> &parent
                                                bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  ObDMLStmt *upper_stmt = NULL;
-  ObSelectStmt *spj_stmt = NULL;
   trans_happened = false;
   if (OB_FAIL(transform_in_joined_table(parent_stmts, stmt, trans_happened))) {
     LOG_WARN("failed to do or expansion in joined condition", K(ret));
@@ -589,12 +587,19 @@ int ObTransformOrExpansion::create_single_joined_table_stmt(ObDMLStmt *trans_stm
   } else if (OB_ISNULL(cur_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(cur_table));
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_table(trans_stmt, ctx_, cur_table,
-                                                              view_table))) {
-    LOG_WARN("failed to create view with table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               trans_stmt,
+                                                               view_table,
+                                                               cur_table))) {
+    LOG_WARN("failed to create empty view table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          trans_stmt,
+                                                          view_table,
+                                                          cur_table))) {
+    LOG_WARN("failed to create inline view", K(ret));
   } else if (OB_ISNULL(view_table)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(view_table));
+    LOG_WARN("view table is null", K(ret), K(view_table));
   } else {
     ref_query = view_table->ref_query_;
   }
@@ -3033,10 +3038,10 @@ int ObTransformOrExpansion::get_condition_related_tables(ObSelectStmt &stmt,
         //            (t1.c = 1 or t3.c = 1)) v
         //      where v.d in (select d from t4 where t4.a > v.a limit 10)
         or_expr_tables.reuse();
-        if (OB_FAIL(get_all_tables(stmt,
-                                   or_expr_tables,
-                                   or_semi_infos))) {
-          LOG_WARN("failed to get all tables", K(ret));
+        if (OB_FAIL(or_semi_infos.assign(stmt.get_semi_infos()))) {
+          LOG_WARN("failed to assign semi infos", K(ret));
+        } else if (OB_FAIL(stmt.get_from_tables(or_expr_tables))) {
+          LOG_WARN("failed to get from tables", K(ret));
         }
       }
     }
@@ -3067,7 +3072,7 @@ int ObTransformOrExpansion::get_condition_related_view(ObSelectStmt *stmt,
   bool create_view = false;
   ObSEArray<TableItem *, 4> or_expr_tables;
   ObSEArray<SemiInfo *, 4> or_semi_infos;
-  ObSqlBitSet<> view_table_set;
+  ObSqlBitSet<> table_set;
   int64_t new_expr_pos = OB_INVALID_ID;
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(stmt_factory = ctx_->stmt_factory_)
       || OB_ISNULL(expr_factory = ctx_->expr_factory_) || OB_ISNULL(conds_exprs)
@@ -3083,21 +3088,15 @@ int ObTransformOrExpansion::get_condition_related_view(ObSelectStmt *stmt,
     LOG_WARN("failed to get condition related tables", K(ret));
   } else if (!create_view) {
     // do nothing
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_tables(stmt, ctx_,
-                        or_expr_tables, or_semi_infos, view_table))) {
-    LOG_WARN("failed to create simple view", K(ret));
-  } else if (OB_ISNULL(view_stmt = view_table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get view stmt", K(ret));
-  } else if (OB_FAIL(stmt->get_table_rel_ids(*view_table, view_table_set))) {
-    LOG_WARN("failed to get rel ids", K(ret));
   } else {
     // push down a predicate, if:
     // 1. it is the or expansion cond; or
     // 2. a. it does not contain not onetime subquery; and
     //    b. it is only related to view tables
-    ObSEArray<ObRawExpr *, 16> new_conds;
-    ObSEArray<ObRawExpr *, 16> old_push_conds;
+    ObSEArray<ObRawExpr *, 4> push_conditions;
+    if (OB_FAIL(stmt->get_table_rel_ids(or_expr_tables, table_set))) {
+      LOG_WARN("failed to get table rel ids", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < conds_exprs->count(); i++) {
       ObRawExpr *cond = NULL;
       if (OB_ISNULL(cond = (conds_exprs->at(i)))) {
@@ -3105,27 +3104,36 @@ int ObTransformOrExpansion::get_condition_related_view(ObSelectStmt *stmt,
         LOG_WARN("unexpected null", K(ret));
       } else if (i != expr_pos &&
                  (conds_exprs->at(i)->has_flag(CNT_SUB_QUERY) ||
-                 !cond->get_relation_ids().is_subset(view_table_set))) {
+                  !cond->get_relation_ids().is_subset(table_set))) {
         // do not push
-      } else if (OB_FAIL(old_push_conds.push_back(cond))) {
+      } else if (OB_FAIL(push_conditions.push_back(cond))) {
         LOG_WARN("failed to push cond", K(ret));
       } else if (i == expr_pos){
-        new_expr_pos = old_push_conds.count() - 1;
+        new_expr_pos = push_conditions.count() - 1;
       }
     }
-
+    // get push down conditions
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObTransformUtils::move_expr_into_view(*expr_factory,
-                                                             *stmt,
-                                                             *view_table,
-                                                             old_push_conds,
-                                                             new_conds))) {
-      LOG_WARN("failed to move expr into view", K(ret));
-    } else if (OB_FAIL(view_stmt->add_condition_exprs(new_conds))) {
-      LOG_WARN("failed to add view conditions exprs", K(ret));
+      // do nothing
     } else if (OB_FAIL(ObOptimizerUtil::remove_item(*conds_exprs,
-                                                    old_push_conds))) {
-      LOG_WARN("failed to remove push down filters", K(ret));
+                                                    push_conditions))) {
+      LOG_WARN("failed to remove pushed conditions", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                                 stmt,
+                                                                 view_table,
+                                                                 or_expr_tables,
+                                                                 &or_semi_infos))) {
+      LOG_WARN("failed to create empty view table", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                            stmt,
+                                                            view_table,
+                                                            or_expr_tables,
+                                                            &push_conditions,
+                                                            &or_semi_infos))) {
+      LOG_WARN("failed to create inline view", K(ret));
+    } else if (OB_ISNULL(view_table) || OB_ISNULL(view_stmt = view_table->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("view table is null", K(ret), K(view_table), K(view_stmt));
     } else {
       expr_pos = new_expr_pos;
       conds_exprs = &view_stmt->get_condition_exprs();
@@ -3212,33 +3220,6 @@ int ObTransformOrExpansion::check_left_bottom_table(ObSelectStmt &stmt,
     }
   } else if (rel_table == table){
     left_bottom = true;
-  }
-  return ret;
-}
-
-int ObTransformOrExpansion::get_all_tables(ObSelectStmt &stmt,
-                                           ObIArray<TableItem *> &all_tables,
-                                           ObIArray<SemiInfo *> &or_semi_infos)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(or_semi_infos.assign(stmt.get_semi_infos()))) {
-    LOG_WARN("failed to assign semi infos", K(ret));
-  }
-  ObSqlBitSet<> from_table_ids;
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_from_item_size(); i ++) {
-    TableItem *table_item = NULL;
-    FromItem &from_item = stmt.get_from_item(i);
-    if (from_item.is_joined_ &&
-        OB_ISNULL(table_item = stmt.get_joined_table(from_item.table_id_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (!from_item.is_joined_ &&
-               OB_ISNULL(table_item = stmt.get_table_item_by_id(from_item.table_id_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(all_tables.push_back(table_item))) {
-      LOG_WARN("failed to push back", K(ret));
-    }
   }
   return ret;
 }

@@ -293,9 +293,11 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
                              trans_param))) {
       LOG_WARN("failed to do transform (INNER)", K(ret));
       // Just in case different parameters hit same plan, we need add const param constraint
-    } else if (trans_param.need_add_limit_constraint_ && OB_FAIL(ObTransformUtils::add_const_param_constraints(
-                                                                 stmt->get_limit_expr(), ctx_))) {
-      LOG_WARN("failed to add const param constraints", K(ret));
+    } else if (!trans_param.need_add_limit_constraint_) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::add_const_param_constraints(
+                         stmt->get_limit_expr(), ctx_))) {
+      LOG_WARN("failed to add const param constriants", K(ret));
     }
   } else if (trans_param.use_aggr_inner()) {
     if (OB_FAIL(do_transform_with_aggr(*stmt, semi_info, ctx, trans_param))) {
@@ -1098,13 +1100,11 @@ int ObTransformSemiToInner::do_transform(ObDMLStmt &stmt,
                                          TransformParam &trans_param)
 {
   int ret = OB_SUCCESS;
+  TableItem *right_table = NULL;
   TableItem *view_table = NULL;
   ObSelectStmt *ref_query = NULL;
-  bool is_all_equal_cond = false;
-  bool is_multi_join_cond = false;
   bool need_add_distinct = trans_param.need_add_distinct_;
   bool right_table_need_add_limit = trans_param.right_table_need_add_limit_;
-  ObSEArray<ObRawExpr *, 2> view_filter_conds;
   ObSEArray<ObRawExpr *, 2> new_condition_exprs;
   if (OB_ISNULL(ctx_) || OB_ISNULL(semi_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1121,18 +1121,29 @@ int ObTransformSemiToInner::do_transform(ObDMLStmt &stmt,
     } else if (OB_FAIL(ObTransformUtils::add_limit_to_semi_right_table(&stmt, ctx_, semi_info))) {
       LOG_WARN("failed to add limit to semi right table", K(ret), K(stmt));
     }
-  } else if (OB_FAIL(view_filter_conds.assign(trans_param.filter_conds_on_right_))) {
-    LOG_WARN("failed to assign view filter conditions", K(ret));
   } else if (OB_FAIL(new_condition_exprs.assign(semi_info->semi_conditions_))) {
     LOG_WARN("failed to assign semi join conditions", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(new_condition_exprs, view_filter_conds))) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(new_condition_exprs,
+                                                  trans_param.filter_conds_on_right_))) {
     LOG_WARN("failed to remove non-correlated filter conditions on right table", K(ret));
   } else if (OB_FAIL(append(stmt.get_condition_exprs(), new_condition_exprs))) {
     LOG_WARN("failed to append semi conditions", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_from_items(&stmt, ctx_,
-                                              stmt.get_table_item_by_id(semi_info->right_table_id_),
-                                              trans_param.equal_right_exprs_, view_filter_conds, view_table))) {
-    LOG_WARN("failed to merge from items as inner join", K(ret));
+  } else if (OB_ISNULL(right_table = stmt.get_table_item_by_id(semi_info->right_table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("right table item is null", K(ret), K(right_table));
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               &stmt,
+                                                               view_table,
+                                                               right_table))) {
+    LOG_WARN("failed to create empty view table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          &stmt,
+                                                          view_table,
+                                                          right_table,
+                                                          &trans_param.filter_conds_on_right_,
+                                                          NULL,
+                                                          &trans_param.equal_right_exprs_))) {
+    LOG_WARN("failed to create inline view", K(ret));
   } else if (OB_ISNULL(view_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table item", K(ret));
@@ -1144,8 +1155,6 @@ int ObTransformSemiToInner::do_transform(ObDMLStmt &stmt,
     LOG_WARN("unexpect null ref query", K(ret));
   } else if (OB_FAIL(add_distinct(*ref_query, trans_param.equal_left_exprs_, trans_param.equal_right_exprs_))) {
     LOG_WARN("failed to add distinct exprs", K(ret));
-  } else if (OB_FAIL(ref_query->add_from_item(semi_info->right_table_id_, false))) {
-    LOG_WARN("failed to add from items", K(ret));
   } else if (OB_FAIL(stmt.add_from_item(view_table->table_id_, false))) {
     LOG_WARN("failed to add from items", K(ret));
   } else if (OB_FAIL(find_basic_table(ref_query, ctx.table_id_))) {
@@ -1193,6 +1202,7 @@ int ObTransformSemiToInner::do_transform_with_aggr(ObDMLStmt& stmt,
                                                    TransformParam& trans_param)
 {
   int ret = OB_SUCCESS;
+  TableItem *right_table = NULL;
   TableItem* view_table = NULL;
   ObSelectStmt* ref_query = NULL;
   ObSEArray<ObRawExpr*, 4> new_condition_exprs;
@@ -1223,13 +1233,22 @@ int ObTransformSemiToInner::do_transform_with_aggr(ObDMLStmt& stmt,
     LOG_WARN("failed to remove semi info", K(ret));
   } else if (OB_FAIL(append(stmt.get_condition_exprs(), new_condition_exprs))) {
     LOG_WARN("failed to append semi conditions", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_from_items(&stmt,
-                                                                   ctx_,
-                                                                   stmt.get_table_item_by_id(semi_info->right_table_id_),
-                                                                   view_select_exprs,
-                                                                   view_filter_conds,
-                                                                   view_table))) {
-    LOG_WARN("failed to merge from items as inner join", K(ret));
+  } else if (OB_ISNULL(right_table = stmt.get_table_item_by_id(semi_info->right_table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("right table item is null", K(ret), K(right_table));
+  } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
+                                                               &stmt,
+                                                               view_table,
+                                                               right_table))) {
+    LOG_WARN("failed to create empty view table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
+                                                          &stmt,
+                                                          view_table,
+                                                          right_table,
+                                                          &view_filter_conds,
+                                                          NULL,
+                                                          &view_select_exprs))) {
+    LOG_WARN("failed to create inline view", K(ret));
   } else if (OB_ISNULL(view_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table item", K(ret));
@@ -1239,12 +1258,8 @@ int ObTransformSemiToInner::do_transform_with_aggr(ObDMLStmt& stmt,
   } else if (OB_ISNULL(ref_query = view_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null ref query", K(ret));
-  } else if (OB_FAIL(ref_query->add_from_item(semi_info->right_table_id_, false))) {
-    LOG_WARN("failed to add from items", K(ret));
   } else if (OB_FAIL(stmt.add_from_item(view_table->table_id_, false))) {
     LOG_WARN("failed to add from items", K(ret));
-  } else if (OB_FAIL(ref_query->add_agg_item(*static_cast<ObAggFunRawExpr*>(view_aggr_expr)))) {
-    LOG_WARN("failed to add aggr item in view", K(ret));
   } else if (need_add_group_by) {
     if (OB_FAIL(add_group_by_with_cast(*ref_query, trans_param.equal_left_exprs_, trans_param.equal_right_exprs_))) {
       LOG_WARN("failed to add group by expr in view", K(ret));
