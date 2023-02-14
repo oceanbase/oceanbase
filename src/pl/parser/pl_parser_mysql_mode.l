@@ -50,7 +50,7 @@ c_cmt_end        \*+\/
 identifer        (([A-Za-z0-9$_]|{UTF8_GB_CHAR})*)
 int_num          [0-9]+
 system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)
-user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)
+user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)|(@%)
 
 quote         '
 sqbegin       {quote}
