@@ -922,7 +922,9 @@ int ObTextStringIter::append_outrow_lob_fulldata(ObObj &obj,
 int ObTextStringIter::convert_outrow_lob_to_inrow_templob(const ObObj &in_obj,
                                                           ObObj &out_obj,
                                                           const sql::ObBasicSessionInfo *session,
-                                                          ObIAllocator *allocator)
+                                                          ObIAllocator *allocator,
+                                                          bool allow_persist_inrow,
+                                                          bool need_deep_copy)
 {
   int ret = OB_SUCCESS;
   ObObjType type = in_obj.get_type();
@@ -938,7 +940,8 @@ int ObTextStringIter::convert_outrow_lob_to_inrow_templob(const ObObj &in_obj,
     if (!loc.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "Lob: invalid lob loc", K(ret), K(loc), K(in_obj));
-    } else if (!loc.is_persist_lob() && (loc.is_inrow() || loc.is_simple())) { // do nothing
+    } else if ((!loc.is_persist_lob() || allow_persist_inrow) &&
+               (loc.is_inrow() || loc.is_simple())) { // do nothing
     } else if (loc.is_delta_temp_lob()) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "Lob: converting delta lob!", K(ret));
@@ -982,7 +985,13 @@ int ObTextStringIter::convert_outrow_lob_to_inrow_templob(const ObObj &in_obj,
     }
 
     if (OB_SUCC(ret) && is_pass_thougth) {
-      out_obj = in_obj;
+      if (need_deep_copy) {
+        if (OB_FAIL(ob_write_obj(*allocator, in_obj, out_obj))) {
+          LOG_WARN("do deepy copy obj failed.", K(ret), K(in_obj));
+        }
+      } else {
+        out_obj = in_obj;
+      }
     }
   }
   return ret;
@@ -1053,7 +1062,7 @@ int ObTextStringResult::init(int64_t res_len, ObIAllocator *allocator)
   if (OB_NOT_NULL(buffer_) || is_init_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Lob: textstring result init already", K(ret), K(*this));
-  } else if (!(ob_is_string_or_lob_type(type_) || ob_is_json(type_))) {
+  } else if (!(ob_is_string_or_lob_type(type_) || is_lob_storage(type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Lob: unexpected expr result type for textstring result", K(ret), K(type_));
   } else if (OB_FAIL(calc_buffer_len(res_len))) {

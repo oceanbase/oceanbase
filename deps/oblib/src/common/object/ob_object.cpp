@@ -485,7 +485,7 @@ int ObLobLocatorV2:: get_mem_locator(ObMemLobCommon *&mem_loc) const
 {
   validate_has_lob_header(has_lob_header_);
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!has_lob_header_)) {
+  if (OB_UNLIKELY(!has_lob_header_ || size_ == 0 || OB_ISNULL(ptr_))) {
     ret = OB_ERR_NULL_VALUE;
   } else if (is_lob_disk_locator()) {
     ret = OB_ERR_NULL_VALUE;
@@ -500,7 +500,7 @@ int ObLobLocatorV2::get_extern_header(ObMemLobExternHeader *&extern_header) cons
   validate_has_lob_header(has_lob_header_);
   int ret = OB_SUCCESS;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon*>(ptr_);
-  if (OB_UNLIKELY(!has_lob_header_)) {
+  if (OB_UNLIKELY(!has_lob_header_ || size_ == 0 || OB_ISNULL(ptr_))) {
     ret = OB_ERR_NULL_VALUE;
   } else if (is_lob_disk_locator()) {
     ret = OB_ERR_NULL_VALUE;
@@ -531,7 +531,7 @@ int ObLobLocatorV2::get_disk_locator(ObLobCommon *&disk_loc) const
   validate_has_lob_header(has_lob_header_);
   int ret = OB_SUCCESS;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
-  if (OB_UNLIKELY(!has_lob_header_)) {
+  if (OB_UNLIKELY(!has_lob_header_ || size_ == 0 || OB_ISNULL(ptr_))) {
     ret = OB_ERR_NULL_VALUE;
     COMMON_LOG(WARN, "Lob: try to get disk locator without lob header", K(ret));
   } else if (is_lob_disk_locator()) {
@@ -576,8 +576,11 @@ int ObLobLocatorV2::get_inrow_data(ObString &inrow_data) const
   int ret =  OB_SUCCESS;
   ObString disk_loc_buff;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
-  if (!has_lob_header_) {
+  if (!has_lob_header_ || size_ == 0) {
     inrow_data.assign_ptr(ptr_, size_);
+  } else if (OB_ISNULL(ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "Lob: get null ptr", K(ret), K(size_), K(ptr_));
   } else if (!is_lob_disk_locator() && loc->is_simple()) {
     inrow_data.assign_ptr(ptr_ + MEM_LOB_COMMON_HEADER_LEN, size_ - MEM_LOB_COMMON_HEADER_LEN);
   } else if (OB_FAIL(get_disk_locator(disk_loc_buff))) {
@@ -610,7 +613,7 @@ bool ObLobLocatorV2::is_inrow() const
   bool bret = false;
   ObString disk_loc_buff;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
-  if (!has_lob_header_) {
+  if (!has_lob_header_ || size_ == 0 || OB_ISNULL(ptr_)) {
     bret = true;
   } else if (!is_lob_disk_locator() && loc->is_simple()) {
     bret = true;
@@ -629,7 +632,7 @@ bool ObLobLocatorV2::is_empty_lob() const
   bool bret = false;
   ObString disk_loc_buff;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
-  if (!has_lob_header_ || size_ == 0) {
+  if (!has_lob_header_ || size_ == 0 || OB_ISNULL(ptr_)) {
     bret = (size_ == 0);
   } else if (!is_lob_disk_locator() && loc->is_simple()) {
     bret = (size_ - MEM_LOB_COMMON_HEADER_LEN == 0);
@@ -649,7 +652,7 @@ int ObLobLocatorV2::get_lob_data_byte_len(int64_t &len) const
   int ret =  OB_SUCCESS;
   ObString disk_loc_buff;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
-  if (!has_lob_header_) {
+  if (!has_lob_header_ || size_ == 0 || OB_ISNULL(ptr_)) {
     len = size_;
   } else if (!is_lob_disk_locator() && loc->is_simple()) {
     len = size_ - MEM_LOB_COMMON_HEADER_LEN;
@@ -713,7 +716,7 @@ int ObLobLocatorV2::get_real_locator_len(int64_t &real_len) const
   ObLobCommon *disk_loc = NULL;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
   real_len = size_;
-  if (!has_lob_header_) {
+  if (!has_lob_header_ || size_ == 0 || OB_ISNULL(ptr_)) {
   } else if (!is_lob_disk_locator() && loc->is_simple_) {
   } else if (OB_FAIL(get_disk_locator(disk_loc))) {
     COMMON_LOG(WARN, "Lob: get disk locator failed", K(ret), K(*this));
@@ -733,16 +736,23 @@ int ObLobLocatorV2::set_payload_data(const ObString& payload)
   OB_ASSERT(has_lob_header_); // only used in build_lob_locator_v2, must has lob header
   int ret = OB_SUCCESS;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
-  OB_ASSERT(loc->lob_common_.is_mem_loc_ == 1);
-  uint32_t buf_len = size_ - (loc->data_ - ptr_);
-  if (!loc->has_extern()) {
-    OB_ASSERT(payload.length() == buf_len); // debug
-    MEMCPY(loc->data_, payload.ptr(), buf_len);
+  if (size_ == 0 || OB_ISNULL(ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "Lob: get null ptr", K(ret), K(size_), K(ptr_));
+  } else if (loc->lob_common_.is_mem_loc_ != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "Lob: get disk loc", K(ret), K(loc->lob_common_));
   } else {
-    ObString disk_loc_buff;
-    if (OB_SUCC(get_disk_locator(disk_loc_buff))) {
-      OB_ASSERT(payload.length() == disk_loc_buff.length());
-      MEMCPY(disk_loc_buff.ptr(), payload.ptr(), disk_loc_buff.length());
+    uint32_t buf_len = size_ - (loc->data_ - ptr_);
+    if (!loc->has_extern()) {
+      OB_ASSERT(payload.length() == buf_len); // debug
+      MEMCPY(loc->data_, payload.ptr(), buf_len);
+    } else {
+      ObString disk_loc_buff;
+      if (OB_SUCC(get_disk_locator(disk_loc_buff))) {
+        OB_ASSERT(payload.length() == disk_loc_buff.length());
+        MEMCPY(disk_loc_buff.ptr(), payload.ptr(), disk_loc_buff.length());
+      }
     }
   }
   return ret;
@@ -754,8 +764,13 @@ int ObLobLocatorV2::set_payload_data(const ObLobCommon *lob_comm, const ObString
   int ret = OB_SUCCESS;
   uint32_t buf_len = 0;
   ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
-  OB_ASSERT(loc->lob_common_.is_mem_loc_ == 1);
-  if (loc->is_simple()) {
+  if (size_ == 0 || OB_ISNULL(ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "Lob: get null ptr", K(ret), K(size_), K(ptr_));
+  } else if (loc->lob_common_.is_mem_loc_ != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "Lob: get disk loc", K(ret), K(loc->lob_common_));
+  } else if (loc->is_simple()) {
     buf_len = size_ - (loc->data_ - ptr_);
     OB_ASSERT(payload.length() <= buf_len);
     if (payload.length() > 0) {

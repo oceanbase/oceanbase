@@ -178,7 +178,9 @@ public:
   static int convert_outrow_lob_to_inrow_templob(const ObObj &in_obj,
                                                  ObObj &out_obj,
                                                  const sql::ObBasicSessionInfo *session,
-                                                 ObIAllocator *allocator);
+                                                 ObIAllocator *allocator,
+                                                 bool allow_persist_inrow = false,
+                                                 bool need_deep_copy = false);
 
 private:
   int get_outrow_lob_full_data();

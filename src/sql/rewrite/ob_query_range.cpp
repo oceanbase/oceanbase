@@ -5970,6 +5970,10 @@ int ObQueryRange::get_result_value(ObObj &val, ObExecContext &exec_ctx, ObIAlloc
         val = phy_ctx->get_param_store().at(param_idx);
         if (val.is_nop_value()) {
           ret = OB_ERR_NOP_VALUE;
+        } else if (val.is_lob_storage()) {
+          if (OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(val, val, NULL, &res_allocator, true))) {
+            LOG_WARN("fail to convert to inrow lob", K(ret), K(val));
+          }
         }
       }
     } else if (OB_ISNULL(temp_expr = expr_final_infos_.at(expr_idx).temp_expr_)) {
@@ -5979,6 +5983,10 @@ int ObQueryRange::get_result_value(ObObj &val, ObExecContext &exec_ctx, ObIAlloc
       LOG_WARN("failed to eval temp expr", K(ret));
     } else if (result.is_nop_value()) {
       ret = OB_ERR_NOP_VALUE;
+    } else if (result.is_lob_storage()) {
+      if (OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(result, val, NULL, &res_allocator, true, true))) {
+        LOG_WARN("fail to convert to inrow lob", K(ret), K(result));
+      }
     } else if (OB_FAIL(ob_write_obj(res_allocator, result, val))) {
       LOG_WARN("failed to write obj", K(result), K(ret));
     }

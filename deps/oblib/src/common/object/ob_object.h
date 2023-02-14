@@ -968,7 +968,7 @@ public:
   OB_INLINE bool has_inrow_data() const
   {
     bool bret = false;
-    if (!has_lob_header_) {
+    if (!has_lob_header_ || size_ == 0) {
       bret = true;
     } else if (OB_NOT_NULL(ptr_)) {
       if (is_lob_disk_locator()) {
