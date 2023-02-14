@@ -1064,13 +1064,20 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
     } else {
       LOG_WARN("fail to get leader replica", KR(ret), K(ls_log_stat_info));
     }
-  } else if (!tenant_schema->get_previous_locality_str().empty()
-      || leader.get_paxos_replica_num() != paxos_replica_num) { // make sure paxos_replica_num is consistent
+  } else if (!tenant_schema->get_previous_locality_str().empty()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("locality is changing, can't stop server or zone",
-        KR(ret), K(ls_log_stat_info), K(leader), K(paxos_replica_num), K(to_stop_servers));
-    (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) locality is chaning, %s",
+        KR(ret), K(ls_log_stat_info), K(leader), K(paxos_replica_num), K(to_stop_servers),
+        "previous_locality", tenant_schema->get_previous_locality_str());
+    (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) locality is changing, %s",
         ls_log_stat_info.get_tenant_id(), print_str);
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+  } else if (leader.get_paxos_replica_num() != paxos_replica_num) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("paxos replica number is incorrect, can't stop server or zone",
+        KR(ret), K(ls_log_stat_info), K(leader), K(paxos_replica_num), K(to_stop_servers));
+    (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) paxos replica number does not match with tenant. It should be %ld. %s",
+        ls_log_stat_info.get_tenant_id(), leader.get_ls_id().id(), paxos_replica_num, print_str);
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
   } else if (OB_FAIL(generate_valid_servers_(
       leader.get_member_list(),

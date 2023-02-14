@@ -6903,7 +6903,7 @@ int ObRootService::stop_server(const obrpc::ObAdminServerArg &arg)
       if (OB_FAIL(check_can_stop(zone, arg.servers_, false /*is_stop_zone*/))) {
         LOG_WARN("fail to check can stop", KR(ret), K(zone), K(arg));
         if (OB_OP_NOT_ALLOW == ret) {
-          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Stop all server in primary region is disabled");
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Stop all servers in primary region is");
         }
       }
     } else {
