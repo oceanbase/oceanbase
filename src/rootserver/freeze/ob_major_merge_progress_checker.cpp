@@ -91,7 +91,7 @@ int ObMajorMergeProgressChecker::prepare_handle()
   return ret;
 }
 
-int ObMajorMergeProgressChecker::check_table_status(bool &exist_uncompacted, bool &exist_unverified)
+int ObMajorMergeProgressChecker::check_table_status(bool &exist_unverified)
 {
   int ret = OB_SUCCESS;
   SMART_VARS_2((ObArray<ObTableCompactionInfo>, uncompacted_tables),
@@ -102,11 +102,12 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_uncompacted, boo
       const ObTableCompactionInfo &compaction_info = iter->second;
       if (!compaction_info.is_verified()) {
         if (!has_exist_in_array(table_ids_, compaction_info.table_id_)) {
-          // treat tables whose table_id not exist in 'table_ids_' as verified.
-          ++ele_count;
+          ++ele_count; // ignore tables whose table_id does not exist in 'table_ids_'
         } else if (compaction_info.is_uncompacted()) {
           if (OB_FAIL(uncompacted_tables.push_back(compaction_info))) {
             LOG_WARN("fail to push back", KR(ret), K(compaction_info));
+          } else {
+            ++ele_count; // ignore uncompacted tables, which are caused by truncate table
           }
         } else if (OB_FAIL(unverified_tables.push_back(compaction_info))) {
           LOG_WARN("fail to push back", KR(ret), K(compaction_info));
@@ -117,11 +118,15 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_uncompacted, boo
     }
 
     if (OB_SUCC(ret)) {
-      exist_uncompacted = uncompacted_tables.count() > 0;
+      if (uncompacted_tables.count() > 0) {
+        // Note: uncompacted tables are caused by truncate table. ignore these uncomapted tables.
+        // otherwise, major compaction cannot finish forever in case of truncate table.
+        // https://work.aone.alibaba-inc.com/issue/47565111
+        FLOG_INFO("ignore uncompacted tables", "uncompacted cnt", uncompacted_tables.count(), K(uncompacted_tables));
+      }
       exist_unverified = unverified_tables.count() > 0;
-      if (exist_uncompacted || exist_unverified) {
-        FLOG_INFO("exists compaction/verification unfinished table", "uncompacted cnt", uncompacted_tables.count(),
-          "unverified cnt", unverified_tables.count(), K(uncompacted_tables), K(unverified_tables));
+      if (exist_unverified) {
+        FLOG_INFO("exists unverified tables", "unverified cnt", unverified_tables.count(), K(unverified_tables));
       } else if (ele_count != table_count_) {
         ret = OB_INNER_STAT_ERROR;
         LOG_WARN("table_compaction_map element count should not be less than table count", KR(ret), K(ele_count),

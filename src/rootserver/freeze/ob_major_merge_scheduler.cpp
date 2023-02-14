@@ -622,17 +622,14 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
 
     // 2. check all table finished compaction and verification
     if (OB_SUCC(ret) && all_merged) {
-      bool exist_uncompacted = false;
       bool exist_unverified = false;
-      if (OB_FAIL(progress_checker_.check_table_status(exist_uncompacted, exist_unverified))) {
+      if (OB_FAIL(progress_checker_.check_table_status(exist_unverified))) {
         LOG_WARN("fail to check table status", KR(ret), K_(tenant_id));
-      } else if (exist_uncompacted || exist_unverified) {
-        // 1. uncompacted tables: may be caused by fail to get ls of truncated table's tablet.
-        // 2. unverified tables: may be caused by has not performed cross-cluster checksum
-        // verification due to waiting tablet checksum items.
+      } else if (exist_unverified) {
+        // 1. has not validated cross-cluster checksum due to waiting tablet checksum items.
+        // 2. encounting errors during checksum verification.
         all_merged = false;
-        FLOG_INFO("although all zone merged in check_merge_progress, there still exists uncompacted"
-                  "/unverified tables", K(all_merged), K(exist_uncompacted), K(exist_unverified));
+        FLOG_INFO("although all zone merged in check_merge_progress, there still exists unverified tables");
       }
     }
 #ifdef ERRSIM

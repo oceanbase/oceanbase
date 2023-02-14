@@ -936,8 +936,9 @@ int ObTabletReplicaChecksumOperator::check_tablet_replica_checksum(
     SMART_VAR(ObArray<ObTabletReplicaChecksumItem>, items) {
       if (OB_FAIL(batch_get(tenant_id, pairs, compaction_scn, sql_proxy, items))) {
         LOG_WARN("fail to batch get tablet replica checksum items", KR(ret), K(tenant_id), K(compaction_scn));
-      } else if (items.count() == 0) {
-        ret = OB_ITER_END;
+      } else if (0 == items.count()) {
+        ret = OB_ITEM_NOT_MATCH;
+        LOG_WARN("fail to get tablet replica checksum items", KR(ret), K(tenant_id), K(compaction_scn), K(pairs));
       } else if (OB_FAIL(innner_verify_tablet_replica_checksum(items))) {
         LOG_WARN("fail to execute tablet replica checksum verification", KR(ret), K(items));
       }
@@ -1493,6 +1494,9 @@ int ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items_(
         sql_proxy, items, true/*include_larger_than*/))) {
       LOG_WARN("fail to batch get tablet checksum item", KR(ret), K(tenant_id), K(compaction_scn),
                 "pairs_count", tablet_pairs.count());
+    } else if (0 == items.count()) {
+      ret = OB_ITEM_NOT_MATCH;
+      LOG_WARN("fail to get tablet replica checksum items", KR(ret), K(tenant_id), K(compaction_scn), K(items));
     }
   }
   return ret;

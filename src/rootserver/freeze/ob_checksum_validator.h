@@ -86,6 +86,11 @@ protected:
   // because tables may be dropped during major freeze, and we should skip these dropped tables.
   int remove_not_exist_table(const ObArray<uint64_t> &table_ids,
                              hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+  // infos of one table's tablets in __all_tablet_to_ls/__all_tablet_replica_checksum/__all_tablet_checksum
+  // will change in case of truncate table (delete old tablets, create new tablets). when one
+  // table's tablets chanage in these three inner tables, we directly mark this table as verified.
+  int handle_table_can_not_verify(const uint64_t table_id,
+                                  hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
 
 private:
   virtual int check_all_table_verification_finished(const volatile bool &stop,
@@ -125,10 +130,20 @@ private:
                                                     const int64_t expected_epoch) override;
   // check whether all tablets of this table finished compaction or not,
   // and execute tablet replica checksum verification if this table has tablet.
-  int check_table_compaction_finished(const share::schema::ObTableSchema &table_schema,
-                                      const share::SCN &frozen_scn,
-                                      const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
-                                      hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+  int check_table_compaction_and_validate_checksum(const share::schema::ObTableSchema &table_schema,
+                                                   const share::SCN &frozen_scn,
+                                                   const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
+                                                   hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+  // check table compaction info according to tablet_compaction_map
+  int check_table_compaction_info(const ObArray<ObTabletID> &tablet_ids,
+                                  const ObArray<share::ObTabletLSPair> &pairs,
+                                  const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
+                                  share::ObTableCompactionInfo &latest_compaction_info);
+  int validate_tablet_replica_checksum(const share::SCN &frozen_scn,
+                                       const uint64_t table_id,
+                                       const ObArray<share::ObTabletLSPair> &pairs,
+                                       hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                       bool &need_update_map);
 };
 
 // Mainly to verify checksum of cross-cluster's tablet which sync from primary cluster
@@ -160,6 +175,12 @@ private:
                                                     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
                                                     ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) override;
+  int validate_cross_cluster_checksum(const volatile bool &stop,
+                                      const share::SCN &frozen_scn,
+                                      const int64_t expected_epoch,
+                                      const share::schema::ObTableSchema *table_schema,
+                                      hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                      ObMergeTimeStatistics &merge_time_statistics);
   int check_need_validate(const bool is_primary_service,
                           const share::SCN &frozen_scn,
                           bool &need_validate) const;
@@ -230,6 +251,14 @@ private:
   int check_data_table_with_index(const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
                                   hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
                                   common::ObIArray<uint64_t> &data_tables_to_update);
+  // handle index tables. validate column checksum if needed, and mark index tables as INDEX_CKM_VERIFIED
+  int handle_index_table(const share::SCN &frozen_scn,
+                         const share::ObTableCompactionInfo &index_compaction_info,
+                         const share::schema::ObTableSchema *index_table_schema,
+                         const share::schema::ObSimpleTableSchemaV2 *simple_schema,
+                         share::schema::ObSchemaGetterGuard &schema_guard,
+                         hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                         const int64_t expected_epoch);
 };
 
 } // end namespace rootserver

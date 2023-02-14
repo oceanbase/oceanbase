@@ -144,9 +144,8 @@ public:
                          const share::SCN &global_broadcast_scn,
                          const int64_t expected_epoch);
 
-  // @exist_uncompacted means not all table finished compaction
   // @exist_unverified means not all table finished verification
-  int check_table_status(bool &exist_uncompacted, bool &exist_unverified);
+  int check_table_status(bool &exist_unverified);
 
   // write tablet checksum and update report_scn of the table which contains first tablet of sys ls
   int handle_table_with_first_tablet_in_sys_ls(const volatile bool &stop,

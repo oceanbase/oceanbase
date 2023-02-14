@@ -167,7 +167,7 @@ int ObChecksumValidatorBase::get_table_compaction_info(
 
 int ObChecksumValidatorBase::remove_not_exist_table(
     const ObArray<uint64_t> &table_ids,
-    hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map)
+    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -190,6 +190,25 @@ int ObChecksumValidatorBase::remove_not_exist_table(
         LOG_WARN("fail to erase refactored", KR(ret), K(i), K(table_id));
       }
     }
+  }
+  return ret;
+}
+
+int ObChecksumValidatorBase::handle_table_can_not_verify(
+    const uint64_t table_id,
+    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map)
+{
+  int ret = OB_SUCCESS;
+  ObTableCompactionInfo table_compaction_info;
+  table_compaction_info.table_id_ = table_id;
+  table_compaction_info.set_verified();
+  if (OB_FAIL(table_compaction_map.set_refactored(table_id, table_compaction_info, true/*overwrite*/))) {
+    LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(table_compaction_info));
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("succ to handle table can not verify", K(table_id));
+  } else {
+    LOG_INFO("fail to handle table can not verify", K(table_id));
   }
   return ret;
 }
@@ -240,8 +259,8 @@ int ObTabletChecksumValidator::check_all_table_verification_finished(
             }
             // check whether all tablets of this table finished compaction or not, and
             // execute tablet replica checksum verification if this table has tablet.
-            else if (OB_FAIL(check_table_compaction_finished(*table_schema, frozen_scn,
-                              tablet_compaction_map, table_compaction_map))) {
+            else if (OB_FAIL(check_table_compaction_and_validate_checksum(*table_schema, frozen_scn,
+                             tablet_compaction_map, table_compaction_map))) {
               LOG_WARN("fail to check table compaction finished", KR(ret), K(frozen_scn),
                       KPC(table_schema));
             }
@@ -267,13 +286,14 @@ int ObTabletChecksumValidator::check_all_table_verification_finished(
 // check all tablets of this table finished compaction or not.
 // note that, when one table finished compaction, we need to execute tablet_replica
 // checksum verification if this table has tablet.
-int ObTabletChecksumValidator::check_table_compaction_finished(
+int ObTabletChecksumValidator::check_table_compaction_and_validate_checksum(
     const ObTableSchema &table_schema,
     const SCN &frozen_scn,
     const hash::ObHashMap<ObTabletLSPair, ObTabletCompactionStatus> &tablet_compaction_map,
     hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   uint64_t table_id = UINT64_MAX;
   ObTableCompactionInfo latest_compaction_info;
   if (OB_FAIL(get_table_compaction_info(table_schema, table_compaction_map, latest_compaction_info))) {
@@ -291,61 +311,38 @@ int ObTabletChecksumValidator::check_table_compaction_finished(
             LOG_WARN("fail to get tablet_ids of current table schema", KR(ret), K_(tenant_id), K(table_schema));
           } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(tenant_id_,
                      table_id, *sql_proxy_, tablet_ids, pairs))) {
-            LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(table_id));
+            if (OB_LIKELY(OB_ITEM_NOT_MATCH == ret)) {
+              if (OB_TMP_FAIL(handle_table_can_not_verify(table_id, table_compaction_map))) {
+                LOG_WARN("fail to handle table can not verify", KR(tmp_ret), K(table_id));
+              } else {
+                ret = OB_SUCCESS; // ignore ret
+              }
+            } else {
+              LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(table_id));
+            }
           } else if (OB_UNLIKELY(pairs.count() < 1)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get tablet_ls pairs of current table schema", KR(ret),
                      K_(tenant_id), K(table_id), K(tablet_ids));
           } else {
-            // iterate all tablets to check 'compacted/finished status' or not.
-            const int64_t tablet_cnt = tablet_ids.count();
-            int64_t idx = 0;
-            bool exist_skip_verifying_tablet = false;
-            for (; OB_SUCC(ret) && (idx < tablet_cnt); ++idx) {
-              ObTabletCompactionStatus tablet_status = ObTabletCompactionStatus::INITIAL;
-              if (OB_FAIL(tablet_compaction_map.get_refactored(pairs.at(idx), tablet_status))) {
-                // if tablet not finish compaction, it won't be added into this map
-                if (OB_HASH_NOT_EXIST == ret) {
-                  ret = OB_SUCCESS;
-                  break;
-                } else {
-                  LOG_WARN("fail to get tablet compaction status from map", KR(ret), K(idx),
-                           "pair", pairs.at(idx));
-                }
-              } else if ((tablet_status != ObTabletCompactionStatus::COMPACTED)
-                        && (tablet_status != ObTabletCompactionStatus::CAN_SKIP_VERIFYING)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected tablet status", KR(ret), K(tablet_status), K(frozen_scn), K(table_id));
-              } else if (tablet_status == ObTabletCompactionStatus::CAN_SKIP_VERIFYING) {
-                exist_skip_verifying_tablet = true;
-              }
-            } /*end outer for loop*/
-            if (OB_SUCC(ret) && (idx == tablet_cnt)) {
-              latest_compaction_info.tablet_cnt_ = tablet_ids.count();
-              if (exist_skip_verifying_tablet) {
-                latest_compaction_info.set_can_skip_verifying();
-              } else {
-                latest_compaction_info.set_compacted();
-              }
+            if (OB_FAIL(check_table_compaction_info(tablet_ids, pairs, tablet_compaction_map, latest_compaction_info))) {
+              LOG_WARN("fail to check compaction_scn", KR(ret), K_(tenant_id), K(table_id), K(tablet_ids), K(pairs));
             }
+            // set it to false, if succ to handle_table_can_not_verify
+            bool need_update_map = true;
             // if current table 'has tablet' & 'finished compaction' & 'not skip verifying',
             // verify tablet replica checksum
             if (OB_SUCC(ret) && latest_compaction_info.is_compacted()) {
-              FREEZE_TIME_GUARD;
-              if (OB_FAIL(ObTabletReplicaChecksumOperator::check_tablet_replica_checksum(tenant_id_,
-                          pairs, frozen_scn, *sql_proxy_))) {
-                if (OB_CHECKSUM_ERROR == ret) {
-                  LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in major tablet_replica_checksum",
-                            KR(ret), K_(tenant_id), K(frozen_scn), "pair_cnt", pairs.count());
-                } else {
-                  LOG_WARN("fail to check major tablet_replica checksum", KR(ret), K_(tenant_id),
-                           K(frozen_scn), K(table_schema));
-                }
+              if (OB_FAIL(validate_tablet_replica_checksum(frozen_scn, table_id, pairs,
+                          table_compaction_map, need_update_map))) {
+                LOG_WARN("fail to validate tablet replica checksum", KR(ret), K(frozen_scn), K(table_id));
               }
             }
-            // final, set this table as COMPACTED/CAN_SKIP_VERIFYING
-            if (FAILEDx(table_compaction_map.set_refactored(table_id, latest_compaction_info, true/*overwrite*/))) {
-              LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(latest_compaction_info));
+            // set this table as COMPACTED/CAN_SKIP_VERIFYING if needed
+            if (OB_SUCC(ret) && need_update_map) {
+              if (OB_FAIL(table_compaction_map.set_refactored(table_id, latest_compaction_info, true/*overwrite*/))) {
+                LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(latest_compaction_info));
+              }
             }
           }
         } else { // like VIEW, it does not have tablet, treat it as compaction finished and can skip verifying
@@ -355,6 +352,86 @@ int ObTabletChecksumValidator::check_table_compaction_finished(
             LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(latest_compaction_info));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletChecksumValidator::check_table_compaction_info(
+    const ObArray<ObTabletID> &tablet_ids,
+    const ObArray<ObTabletLSPair> &pairs,
+    const hash::ObHashMap<ObTabletLSPair, ObTabletCompactionStatus> &tablet_compaction_map,
+    ObTableCompactionInfo &latest_compaction_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((tablet_ids.count() < 1) || (pairs.count() < 1))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tablet_ids), K(pairs));
+  } else {
+    // iterate all tablets to check 'COMPACTED/CAN_SKIP_VERIFYING status' or not.
+    const int64_t tablet_cnt = tablet_ids.count();
+    int64_t idx = 0;
+    bool exist_skip_verifying_tablet = false;
+    for (; OB_SUCC(ret) && (idx < tablet_cnt); ++idx) {
+      ObTabletCompactionStatus tablet_status = ObTabletCompactionStatus::INITIAL;
+      if (OB_FAIL(tablet_compaction_map.get_refactored(pairs.at(idx), tablet_status))) {
+        // if tablet not finish compaction, it won't be added into this map
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("fail to get tablet compaction status from map", KR(ret), K(idx), "pair", pairs.at(idx));
+        }
+      } else if ((tablet_status != ObTabletCompactionStatus::COMPACTED)
+                 && (tablet_status != ObTabletCompactionStatus::CAN_SKIP_VERIFYING)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected tablet status", KR(ret), K(tablet_status), K(table_id));
+      } else if (tablet_status == ObTabletCompactionStatus::CAN_SKIP_VERIFYING) {
+        exist_skip_verifying_tablet = true;
+      }
+    } /*end for loop*/
+    if (OB_SUCC(ret) && (idx == tablet_cnt)) {
+      latest_compaction_info.tablet_cnt_ = tablet_ids.count();
+      if (exist_skip_verifying_tablet) {
+        latest_compaction_info.set_can_skip_verifying();
+      } else {
+        latest_compaction_info.set_compacted();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletChecksumValidator::validate_tablet_replica_checksum(
+    const SCN &frozen_scn,
+    const uint64_t table_id,
+    const ObArray<ObTabletLSPair> &pairs,
+    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    bool &need_update_map)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!frozen_scn.is_valid() || pairs.count() < 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(frozen_scn), K(pairs));
+  } else {
+    FREEZE_TIME_GUARD;
+    if (OB_FAIL(ObTabletReplicaChecksumOperator::check_tablet_replica_checksum(tenant_id_,
+                pairs, frozen_scn, *sql_proxy_))) {
+      if (OB_ITEM_NOT_MATCH == ret) {
+        if (OB_TMP_FAIL(handle_table_can_not_verify(table_id, table_compaction_map))) {
+          LOG_WARN("fail to handle table can not verify", KR(tmp_ret), K(table_id));
+        } else {
+          ret = OB_SUCCESS; // ignore ret
+          need_update_map = false;
+        }
+      } else if (OB_CHECKSUM_ERROR == ret) {
+        LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in major "
+          "tablet_replica_checksum", KR(ret), K_(tenant_id), K(frozen_scn), "pair_cnt", pairs.count());
+      } else {
+        LOG_WARN("fail to check major tablet_replica checksum", KR(ret), K_(tenant_id),
+                 K(frozen_scn), K(table_id));
       }
     }
   }
@@ -465,38 +542,10 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
             } else if (table_schema->has_tablet()) {
               if (cur_compaction_info.is_index_ckm_verified()) {
                 if (need_validate()) {  // need to validate cross-cluster checksum
-                  // check whether waiting all tablet checksum has timed out
-                  bool is_wait_tablet_checksum_timeout = check_waiting_tablet_checksum_timeout();
-                  if (OB_UNLIKELY(is_wait_tablet_checksum_timeout)) {
-                    LOG_ERROR("waiting all tablet checksum has timed out, validate cross-cluster"
-                      " checksum with available tablet checksum" , K_(tenant_id), K(frozen_scn),
-                      K_(major_merge_start_us), "current_time_us",
-                      ObTimeUtil::current_time());
-                  }
-                  // check whether all tablet checksum has already exist
-                  bool is_exist = false;
-                  FREEZE_TIME_GUARD;
-                  if (OB_FAIL(ObTabletChecksumOperator::is_first_tablet_in_sys_ls_exist(*sql_proxy_,
-                        tenant_id_, frozen_scn, is_exist))) {
-                    LOG_WARN("fail to check is first tablet in first ls exist", KR(ret), K_(tenant_id), K(frozen_scn));
-                  } else if (is_exist || is_wait_tablet_checksum_timeout) { // all tablet checksum exist or timeout
-                    if (OB_FAIL(check_cross_cluster_checksum(*table_schema, frozen_scn))) {
-                      if (OB_CHECKSUM_ERROR == ret) {
-                        LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in cross-cluster checksum", KR(ret),
-                                  K_(tenant_id), K(frozen_scn), KPC(table_schema));
-                      } else {
-                        LOG_WARN("fail to check cross-cluster checksum", KR(ret), K_(tenant_id),
-                                K(frozen_scn), KPC(table_schema));
-                      }
-                    } else if (OB_FAIL(handle_table_verification_finished(stop, table_schema, frozen_scn,
-                                        table_compaction_map, merge_time_statistics, expected_epoch))) {
-                      LOG_WARN("fail to handle table verification finished", KR(ret), K_(tenant_id),
-                              K(frozen_scn), KPC(table_schema));
-                    }
-                  } else if (TC_REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000)) {  // 10 min
-                    LOG_WARN("can not check cross-cluster checksum now, please wait until first tablet"
-                      "in sys ls exists", K_(tenant_id), K(frozen_scn), KPC(table_schema),
-                      K_(major_merge_start_us), "current_time_us", ObTimeUtil::current_time());
+                  if (OB_FAIL(validate_cross_cluster_checksum(stop, frozen_scn, expected_epoch,
+                              table_schema, table_compaction_map, merge_time_statistics))) {
+                    LOG_WARN("fail to validate cross-cluster checksum", KR(ret), K(stop),
+                             K(frozen_scn), K(expected_epoch), K(table_id));
                   }
                 } else {  // no need to validate cross-cluster checksum
                   if (OB_FAIL(handle_table_verification_finished(stop, table_schema, frozen_scn,
@@ -540,6 +589,63 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
   return ret;
 }
 
+int ObCrossClusterTabletChecksumValidator::validate_cross_cluster_checksum(
+    const volatile bool &stop,
+    const SCN &frozen_scn,
+    const int64_t expected_epoch,
+    const ObTableSchema *table_schema,
+    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    ObMergeTimeStatistics &merge_time_statistics)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!frozen_scn.is_valid() || expected_epoch < 0 || OB_ISNULL(table_schema))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(frozen_scn), K(expected_epoch), KP(table_schema));
+  } else {
+    // check whether waiting all tablet checksum has timed out
+    bool is_wait_tablet_checksum_timeout = check_waiting_tablet_checksum_timeout();
+    if (OB_UNLIKELY(is_wait_tablet_checksum_timeout)) {
+      LOG_ERROR("waiting all tablet checksum has timed out, validate cross-cluster"
+        " checksum with available tablet checksum" , K_(tenant_id), K(frozen_scn),
+        K_(major_merge_start_us), "current_time_us",
+        ObTimeUtil::current_time());
+    }
+    // check whether all tablet checksum has already exist
+    bool is_exist = false;
+    FREEZE_TIME_GUARD;
+    if (OB_FAIL(ObTabletChecksumOperator::is_first_tablet_in_sys_ls_exist(*sql_proxy_,
+          tenant_id_, frozen_scn, is_exist))) {
+      LOG_WARN("fail to check is first tablet in first ls exist", KR(ret), K_(tenant_id), K(frozen_scn));
+    } else if (is_exist || is_wait_tablet_checksum_timeout) { // all tablet checksum exist or timeout
+      if (OB_FAIL(check_cross_cluster_checksum(*table_schema, frozen_scn))) {
+        if (OB_ITEM_NOT_MATCH == ret) {
+          if (OB_TMP_FAIL(handle_table_can_not_verify(table_id, table_compaction_map))) {
+            LOG_WARN("fail to handle table can not verify", KR(ret), K(table_id));
+          } else {
+            ret = OB_SUCCESS; // ignore ret
+          }
+        } else if (OB_CHECKSUM_ERROR == ret) {
+          LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in "
+            "cross-cluster checksum", KR(ret), K_(tenant_id), K(frozen_scn), KPC(table_schema));
+        } else {
+          LOG_WARN("fail to check cross-cluster checksum", KR(ret), K_(tenant_id),
+                  K(frozen_scn), KPC(table_schema));
+        }
+      } else if (OB_FAIL(handle_table_verification_finished(stop, table_schema, frozen_scn,
+                         table_compaction_map, merge_time_statistics, expected_epoch))) {
+        LOG_WARN("fail to handle table verification finished", KR(ret), K_(tenant_id),
+                K(frozen_scn), KPC(table_schema));
+      }
+    } else if (TC_REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000)) {  // 10 min
+      LOG_WARN("can not check cross-cluster checksum now, please wait until first tablet "
+               "in sys ls exists", K_(tenant_id), K(frozen_scn), KPC(table_schema),
+               K_(major_merge_start_us), "current_time_us", ObTimeUtil::current_time());
+    }
+  }
+  return ret;
+}
+
 int ObCrossClusterTabletChecksumValidator::check_cross_cluster_checksum(
     const ObTableSchema &table_schema,
     const SCN &frozen_scn)
@@ -575,6 +681,11 @@ int ObCrossClusterTabletChecksumValidator::check_cross_cluster_checksum(
           } else if (OB_FAIL(ObTabletChecksumOperator::load_tablet_checksum_items(*sql_proxy_,
                               pairs, tenant_id_, frozen_scn, tablet_checksum_items))) {
             LOG_WARN("fail to batch get tablet checksum items", KR(ret), K_(tenant_id), K(frozen_scn));
+          } else if ((0 == tablet_replica_checksum_items.count())
+                     || (0 == tablet_checksum_items.count())) {
+            ret = OB_ITEM_NOT_MATCH;
+            LOG_WARN("fail to get checksum items", KR(ret), K_(tenant_id), K(frozen_scn),
+                     K(tablet_replica_checksum_items), K(tablet_checksum_items));
           } else if (OB_FAIL(check_column_checksum(tablet_replica_checksum_items, tablet_checksum_items))) {
             if (OB_CHECKSUM_ERROR == ret) {
               LOG_ERROR("ERROR! ERROR! ERROR! checksum error in cross-cluster checksum", KR(ret),
@@ -670,6 +781,7 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   bool is_containing = false;
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
@@ -685,16 +797,27 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
       LOG_WARN("table must finish index checksum valiation when arriving here", KR(ret),
                K(table_id), K(cur_compaction_info));
     } else {
+      // set it to false, if succ to handle_table_can_not_verify
+      bool need_update_map = true;
       if (table_schema->has_tablet()) {
         SMART_VAR(ObArray<ObTabletLSPair>, pairs) {
           FREEZE_TIME_GUARD;
           if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(tenant_id_, *table_schema, *sql_proxy_, pairs))) {
-            LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(table_id));
+            if (OB_LIKELY(OB_ITEM_NOT_MATCH == ret)) {
+              if (OB_TMP_FAIL(handle_table_can_not_verify(table_id, table_compaction_map))) {
+                LOG_WARN("fail to handle table can not verify", KR(tmp_ret), K(table_id));
+              } else {
+                ret = OB_SUCCESS; // ignore ret
+                need_update_map = false;
+              }
+            } else {
+              LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(table_id));
+            }
           } else if (OB_UNLIKELY(pairs.count() < 1)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get tablet_ls pairs of current table schema", KR(ret), K_(tenant_id), K(table_id));
           } else {
-            bool need_udpate_report_scn = true;
+            bool need_update_report_scn = true;
             if (is_primary_service_) { // only primary major_freeze_service need to write tablet checksum
               const int64_t write_start_time_us = ObTimeUtil::current_time();
               if (OB_FAIL(contains_first_tablet_in_sys_ls(pairs, is_containing))) {
@@ -704,19 +827,29 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
                 // instead, just record the table_id of this table here. write tablet checksum
                 // and update report_scn of this table in the end of this round of major freeze.
                 special_table_id_ = table_id;
-                need_udpate_report_scn = false;
+                need_update_report_scn = false;
                 LOG_INFO("this table contains first tablet in sys ls, write tablet checksum and update"
                         " report_scn of this table later", K(table_id), K(pairs));
               } else if (OB_FAIL(write_tablet_checksum_at_table_level(stop, pairs, frozen_scn,
                                   cur_compaction_info, table_id, expected_epoch))) {
-                LOG_WARN("fail to write tablet checksum at table level", KR(ret), K_(tenant_id), K(pairs));
+                if (OB_LIKELY(OB_ITEM_NOT_MATCH == ret)) {
+                  if (OB_TMP_FAIL(handle_table_can_not_verify(table_id, table_compaction_map))) {
+                    LOG_WARN("fail to handle table can not verify", KR(tmp_ret), K(table_id));
+                  } else {
+                    ret = OB_SUCCESS; // ignore ret
+                    need_update_map = false;
+                    need_update_report_scn = false;
+                  }
+                } else {
+                  LOG_WARN("fail to write tablet checksum at table level", KR(ret), K_(tenant_id), K(pairs));
+                }
               }
               const int64_t write_cost_time_us = ObTimeUtil::current_time() - write_start_time_us;
               merge_time_statistics.update_merge_status_us_.write_tablet_checksum_us_ += write_cost_time_us;
             }
-            if (need_udpate_report_scn) {
+            if (OB_SUCC(ret) && need_update_report_scn) {
               const int64_t update_start_time_us = ObTimeUtil::current_time();
-              if (FAILEDx(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
+              if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
                             tenant_id_, frozen_scn.get_val_for_tx(),
                             pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
                 LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(pairs));
@@ -728,7 +861,7 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
         }
       }
 
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && need_update_map) {
         cur_compaction_info.set_verified();
         if (OB_FAIL(table_compaction_map.set_refactored(table_id, cur_compaction_info, true/*overwrite*/))) {
           LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(cur_compaction_info));
@@ -823,6 +956,9 @@ int ObCrossClusterTabletChecksumValidator::try_update_tablet_checksum_items(
       FREEZE_TIME_GUARD;
       if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id_, pairs, frozen_scn, *sql_proxy_, items))) {
         LOG_WARN("fail to batch get tablet replica checksum items", KR(ret), K_(tenant_id), K(frozen_scn));
+      } else if (0 == items.count()) {
+        ret = OB_ITEM_NOT_MATCH;
+        LOG_WARN("fail to get tablet replica checksum items", KR(ret), K_(tenant_id), K(frozen_scn), K(pairs));
       } else {
         ObTabletReplicaChecksumItem curr_replica_item;
         ObTabletReplicaChecksumItem prev_replica_item;
@@ -989,81 +1125,9 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
             } else if (cur_compaction_info.is_index_ckm_verified()
                       || cur_compaction_info.is_verified()) { // already finished verification, skip it!
             } else if (is_index_table(*simple_schema)) { // for index table, may need to check column checksum
-              const uint64_t data_table_id = simple_schema->get_data_table_id();
-              const ObTableSchema *data_table_schema = nullptr;
-              if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id, data_table_schema))) {
-                LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(data_table_id));
-              } else if (OB_ISNULL(data_table_schema)) {
-                ret = OB_TABLE_NOT_EXIST;
-                LOG_WARN("fail to get data table schema", KR(ret), K_(tenant_id), K(table_id), K(data_table_id));
-              } else {
-                ObTableCompactionInfo data_compaction_info;
-                if (OB_FAIL(get_table_compaction_info(*data_table_schema, table_compaction_map, data_compaction_info))) {
-                  LOG_WARN("fail to get table compaction info", KR(ret), K(frozen_scn), KPC(data_table_schema));
-                } else if (data_compaction_info.is_index_ckm_verified()
-                          || data_compaction_info.is_verified()) {
-                  // if a data table finished verification, then create index on this data table.
-                  // we should skip verification for this index table, cuz the data table may already
-                  // launched another medium compaction.
-                  LOG_INFO("index table is not verified while data table is already verified, skip"
-                    " verification for this index table", K(table_id), K(data_table_id),
-                    K(cur_compaction_info), K(data_compaction_info));
-                  if (cur_compaction_info.finish_compaction()) {
-                    if (OB_FAIL(handle_table_verification_finished(table_id, frozen_scn, table_compaction_map))) {
-                      LOG_WARN("fail to handle index table compaction finished", KR(ret), K(table_id), K(frozen_scn));
-                    }
-                  }
-                } else if (table_schema->has_tablet()) {
-                  if (!cur_compaction_info.finish_compaction() || !data_compaction_info.finish_compaction()) {
-                  } else if (cur_compaction_info.is_compacted() && data_compaction_info.is_compacted()) {
-                    #ifdef ERRSIM
-                        ret = OB_E(EventTable::EN_MEDIUM_VERIFY_GROUP_SKIP_SET_VERIFY) OB_SUCCESS;
-                        if (OB_FAIL(ret)) {
-                          if (!is_inner_table(table_id)) {
-                            ret = OB_EAGAIN;
-                            STORAGE_LOG(INFO, "ERRSIM EN_MEDIUM_VERIFY_GROUP_SKIP_SET_VERIFY failed", K(ret));
-                          } else {
-                            ret = OB_SUCCESS;
-                          }
-                        }
-                    #endif
-                    // both tables' all tablets finished compaction, validate column checksum if need_validate()
-                    if (need_validate()) {
-                      FREEZE_TIME_GUARD;
-                      if (FAILEDx(ObTabletReplicaChecksumOperator::check_column_checksum(tenant_id_,
-                            *data_table_schema, *table_schema, frozen_scn, *sql_proxy_, expected_epoch))) {
-                        if (OB_CHECKSUM_ERROR == ret) {
-                          LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in index checksum", KR(ret), KPC(data_table_schema),
-                            K_(tenant_id), K(frozen_scn), KPC(table_schema));
-                        } else {
-                          LOG_WARN("fail to check index column checksum", KR(ret), K_(tenant_id), KPC(data_table_schema),
-                            KPC(table_schema));
-                        }
-                      }
-                    }
-                    // after index checksum verification, mark it as INDEX_CKM_VERIFIED
-                    if (FAILEDx(handle_table_verification_finished(table_id, frozen_scn, table_compaction_map))) {
-                      LOG_WARN("fail to handle table verification finished", KR(ret), K(table_id), K(frozen_scn));
-                    }
-                  } else if (cur_compaction_info.can_skip_verifying() || data_compaction_info.can_skip_verifying()) {
-                    // if one of them can skip verifying, that means we don't need to execute index checksum verification.
-                    // Mark index table as INDEX_CKM_VERIFIED directly.
-                    if (OB_FAIL(handle_table_verification_finished(table_id, frozen_scn, table_compaction_map))) {
-                      LOG_WARN("fail to handle index table verification finished", KR(ret), K(table_id), K(frozen_scn));
-                    }
-                  }
-                  if (OB_SUCC(ret)) {
-                    if (OB_FAIL(table_compaction_map.set_refactored(data_table_id, data_compaction_info, true/*overwrite*/))) {
-                      LOG_WARN("fail to set refactored", KR(ret), K(data_table_id), K(data_compaction_info));
-                    }
-                  }
-                } else { // virtual index table has no tablet, no need to execute index checksum verification.
-                  if (cur_compaction_info.finish_compaction() && data_compaction_info.finish_compaction()) {
-                    if (OB_FAIL(handle_table_verification_finished(table_id, frozen_scn, table_compaction_map))) {
-                      LOG_WARN("fail to handle index table verification finished", KR(ret), K(table_id), K(frozen_scn));
-                    }
-                  }
-                }
+              if (OB_FAIL(handle_index_table(frozen_scn, cur_compaction_info, table_schema,
+                          simple_schema, schema_guard, table_compaction_map, expected_epoch))) {
+                LOG_WARN("fail to handle index table", KR(ret), K(frozen_scn), K(simple_schema), K(expected_epoch));
               }
             } else {
               if (table_schema->get_index_tid_count() < 1) { // handle data table, meanwhile not have relative index table
@@ -1074,7 +1138,6 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
                 }
               }
             }
-
             if (OB_CHECKSUM_ERROR == ret) {
               check_ret = ret;
             }
@@ -1231,6 +1294,107 @@ int ObIndexChecksumValidator::check_data_table_with_index(
         if (has_exist_in_array(data_tables_to_update, data_table_id, &idx)) {
           if (OB_FAIL(data_tables_to_update.remove(idx))) {
             LOG_WARN("fail to remove", KR(ret), K(data_tables_to_update), K(idx));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIndexChecksumValidator::handle_index_table(
+    const SCN &frozen_scn,
+    const ObTableCompactionInfo &index_compaction_info,
+    const ObTableSchema *index_table_schema,
+    const ObSimpleTableSchemaV2 *simple_schema,
+    ObSchemaGetterGuard &schema_guard,
+    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!frozen_scn.is_valid() || OB_ISNULL(index_table_schema) || OB_ISNULL(simple_schema))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn), KP(index_table_schema), KP(simple_schema));
+  } else {
+    const uint64_t index_table_id = simple_schema->get_table_id();
+    const uint64_t data_table_id = simple_schema->get_data_table_id();
+    const ObTableSchema *data_table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id, data_table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(data_table_id));
+    } else if (OB_ISNULL(data_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("fail to get data table schema", KR(ret), K_(tenant_id), K(index_table_id), K(data_table_id));
+    } else {
+      ObTableCompactionInfo data_compaction_info;
+      if (OB_FAIL(get_table_compaction_info(*data_table_schema, table_compaction_map, data_compaction_info))) {
+        LOG_WARN("fail to get table compaction info", KR(ret), K(frozen_scn), KPC(data_table_schema));
+      } else if (data_compaction_info.is_index_ckm_verified() || data_compaction_info.is_verified()) {
+        // if a data table finished verification, then create index on this data table.
+        // we should skip verification for this index table, cuz the data table may already
+        // launched another medium compaction.
+        LOG_INFO("index table is not verified while data table is already verified, skip"
+                 " verification for this index table", K(index_table_id), K(data_table_id),
+                 K(index_compaction_info), K(data_compaction_info));
+        if (index_compaction_info.finish_compaction()) {
+          if (OB_FAIL(handle_table_verification_finished(index_table_id, frozen_scn, table_compaction_map))) {
+            LOG_WARN("fail to handle index table compaction finished", KR(ret), K(index_table_id), K(frozen_scn));
+          }
+        }
+      } else if (index_table_schema->has_tablet()) {
+        if (!index_compaction_info.finish_compaction() || !data_compaction_info.finish_compaction()) {
+        } else if (index_compaction_info.is_compacted() && data_compaction_info.is_compacted()) {
+          #ifdef ERRSIM
+              ret = OB_E(EventTable::EN_MEDIUM_VERIFY_GROUP_SKIP_SET_VERIFY) OB_SUCCESS;
+              if (OB_FAIL(ret)) {
+                if (!is_inner_table(index_table_id)) {
+                  ret = OB_EAGAIN;
+                  STORAGE_LOG(INFO, "ERRSIM EN_MEDIUM_VERIFY_GROUP_SKIP_SET_VERIFY failed", K(ret));
+                } else {
+                  ret = OB_SUCCESS;
+                }
+              }
+          #endif
+          // set it to false, if succ to handle_table_can_not_verify
+          bool need_update_map = true;
+          // both tables' all tablets finished compaction, validate column checksum if need_validate()
+          if (need_validate()) {
+            FREEZE_TIME_GUARD;
+            if (FAILEDx(ObTabletReplicaChecksumOperator::check_column_checksum(tenant_id_,
+                  *data_table_schema, *index_table_schema, frozen_scn, *sql_proxy_, expected_epoch))) {
+              if (OB_ITEM_NOT_MATCH == ret) {
+                if (OB_TMP_FAIL(handle_table_can_not_verify(index_table_id, table_compaction_map))) {
+                  LOG_WARN("fail to handle table can not verify", KR(tmp_ret), K(index_table_id));
+                } else {
+                  ret = OB_SUCCESS;
+                  need_update_map = false;
+                }
+              } else if (OB_CHECKSUM_ERROR == ret) {
+                LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in index checksum",
+                  KR(ret), KPC(data_table_schema), K_(tenant_id), K(frozen_scn), KPC(index_table_schema));
+              } else {
+                LOG_WARN("fail to check index column checksum", KR(ret), K_(tenant_id), KPC(data_table_schema),
+                  KPC(index_table_schema));
+              }
+            }
+          }
+          // after index checksum verification, mark it as INDEX_CKM_VERIFIED
+          if (OB_SUCC(ret) && need_update_map) {
+            if (OB_FAIL(handle_table_verification_finished(index_table_id, frozen_scn, table_compaction_map))) {
+              LOG_WARN("fail to handle table verification finished", KR(ret), K(index_table_id), K(frozen_scn));
+            }
+          }
+        } else if (index_compaction_info.can_skip_verifying() || data_compaction_info.can_skip_verifying()) {
+          // if one of them can skip verifying, that means we don't need to execute index checksum verification.
+          // Mark index table as INDEX_CKM_VERIFIED directly.
+          if (OB_FAIL(handle_table_verification_finished(index_table_id, frozen_scn, table_compaction_map))) {
+            LOG_WARN("fail to handle index table verification finished", KR(ret), K(index_table_id), K(frozen_scn));
+          }
+        }
+      } else { // virtual index table has no tablet, no need to execute index checksum verification.
+        if (index_compaction_info.finish_compaction() && data_compaction_info.finish_compaction()) {
+          if (OB_FAIL(handle_table_verification_finished(index_table_id, frozen_scn, table_compaction_map))) {
+            LOG_WARN("fail to handle index table verification finished", KR(ret), K(index_table_id), K(frozen_scn));
           }
         }
       }
