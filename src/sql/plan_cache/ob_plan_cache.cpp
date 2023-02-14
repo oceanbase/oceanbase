@@ -303,7 +303,8 @@ ObPlanCache::ObPlanCache()
    inner_allocator_(),
    ref_handle_mgr_(),
    pcm_(NULL),
-   destroy_(0)
+   destroy_(0),
+   tg_id_(-1)
 {
 }
 

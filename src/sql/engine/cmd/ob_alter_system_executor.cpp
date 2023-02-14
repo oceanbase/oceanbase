@@ -1748,7 +1748,6 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
       ObPCMemPctConf pc_mem_conf;
       // tenant has been locked before
       ObPlanCache *pc  = conn->tenant_->get<ObPlanCache*>();
-      ObPsCache *ps = conn->tenant_->get<ObPsCache*>();
       int64_t received_schema_version = OB_INVALID_VERSION;
       if (OB_SUCC(ret)) {
         ret = OB_E(EventTable::EN_CHANGE_TENANT_FAILED) OB_SUCCESS;
@@ -1770,15 +1769,10 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
                  K(effective_tenant_id), K(pre_effective_tenant_id), K(received_schema_version));
       } else if (OB_FAIL(pc->set_mem_conf(pc_mem_conf))) {
         SQL_PC_LOG(WARN, "fail to set plan cache memory conf", K(ret));
-      } else if (OB_FAIL(ps->set_mem_conf(pc_mem_conf))) {
-        SQL_PC_LOG(WARN, "fail to set plan cache memory conf", K(ret));
-      } else if (!ps->is_inited() &&
-                  OB_FAIL(ps->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, effective_tenant_id))) {
-        LOG_WARN("failed to init ps cache");
       } else {
         session_info->set_database_id(OB_SYS_DATABASE_ID);
         session_info->set_plan_cache(pc);
-        session_info->set_ps_cache(ps);
+        session_info->set_ps_cache(NULL);
 
         if (OB_SUCC(ret)) {
           // System tenant's __oceanbase_inner_standby_user is used to execute remote sqls
