@@ -392,7 +392,8 @@ int LsElectionReferenceInfoRow::get_row_from_table_()
   LC_TIME_GUARD(1_s);
   #define PRINT_WRAPPER KR(ret), K(*this)
   int ret = OB_SUCCESS;
-  const char *columns[5] = { "tenant_id", "ls_id", "zone_priority", "manual_leader_server", "blacklist" };
+  constexpr int64_t culumn_size = 5;
+  const char *columns[culumn_size] = { "tenant_id", "ls_id", "zone_priority", "manual_leader_server", "blacklist" };
   char buffer[STACK_BUFFER_SIZE] = {0};
   int64_t pos = 0;
   if (CLICK_FAIL(databuff_printf(buffer, STACK_BUFFER_SIZE, pos, "where tenant_id=%ld and ls_id=%ld for update", tenant_id_, ls_id_.id()))) {
@@ -402,8 +403,10 @@ int LsElectionReferenceInfoRow::get_row_from_table_()
     COORDINATOR_LOG_(WARN, "transaction is not started yet");
   } else {
     HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
-      common::sqlclient::ObMySQLResult *result = ObTableAccessHelper::get_my_sql_result_(columns, share::OB_ALL_LS_ELECTION_REFERENCE_INFO_TNAME, buffer, trans_, exec_tenant_id_, res);
-      if (OB_NOT_NULL(result)) {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(ObTableAccessHelper::get_my_sql_result_(columns, culumn_size, share::OB_ALL_LS_ELECTION_REFERENCE_INFO_TNAME, buffer, trans_, exec_tenant_id_, res, result))) {
+        COORDINATOR_LOG_(WARN, "fail to get mysql result");
+      } else if (OB_NOT_NULL(result)) {
         int64_t iter_times = 0;
         while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           if (++iter_times > 1) {

@@ -22243,7 +22243,8 @@ def_table_schema(
   normal_columns  = [],
   view_definition =
   """
-  SELECT EVENT_ID,
+  SELECT TENANT_ID,
+         EVENT_ID,
          SVR_IP,
          SVR_PORT,
          DETECTOR_ID,
