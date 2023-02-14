@@ -164,12 +164,12 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
           }
           // 2. get gc tablet
           else if ((times == 0 || ObTabletGCHandler::is_tablet_gc_trigger(tablet_persist_trigger))
-                   && OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(deleted_tablet_ids, only_deleted, checkpoint_ts))) {
+                   && OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(deleted_tablet_ids, need_retry, only_deleted, checkpoint_ts))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls), KR(ret));
           }
           // 3. get unpersist_tablet_ids
-          else if (OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(unpersist_tablet_ids, !only_deleted))) {
+          else if (OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(unpersist_tablet_ids, need_retry, !only_deleted))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls), KR(ret));
           }
@@ -271,6 +271,7 @@ uint8_t ObTabletGCHandler::get_tablet_persist_trigger_and_reset()
 }
 
 int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_tablet_ids,
+                                                bool &need_retry,
                                                 bool only_deleted /* = false */,
                                                 const int64_t checkpoint_ts /* = -1 */)
 {
@@ -283,7 +284,7 @@ int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObTabletIDArray &unpersi
   } else if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     STORAGE_LOG(WARN, "failed to build ls tablet iter", KR(ret), KPC(this));
   } else if (only_deleted && !check_tablet_gc()) {
-    ret = OB_EAGAIN;
+    need_retry = true;
   } else {
     ObTabletHandle tablet_handle;
     while (OB_SUCC(ret)) {
@@ -466,7 +467,8 @@ bool ObTabletGCHandler::check_tablet_gc()
 {
   int64_t now = ObTimeUtility::current_time();
   static int64_t last_gc_time = now;
-  int64_t deleted_tablet_preservation_time = GCONF._ob_deleted_tablet_preservation_time;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  int64_t deleted_tablet_preservation_time = tenant_config->_ob_deleted_tablet_preservation_time;
   int used_percent = OB_SERVER_BLOCK_MGR.get_used_macro_block_count() / OB_SERVER_BLOCK_MGR.get_total_macro_block_count();
   bool need_gc = !((last_gc_time + deleted_tablet_preservation_time > now)
                    && used_percent < DISK_USED_PERCENT_TRIGGER_FOR_GC_TABLET);

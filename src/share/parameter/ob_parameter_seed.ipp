@@ -1310,6 +1310,6 @@ ERRSIM_DEF_STR(errsim_migration_src_server_addr, OB_CLUSTER_PARAMETER, "",
 DEF_BOOL(enable_cgroup, OB_CLUSTER_PARAMETER, "True",
          "when set to false, cgroup will not init; when set to true but cgroup root dir is not ready, print ERROR",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-DEF_TIME(_ob_deleted_tablet_preservation_time, OB_CLUSTER_PARAMETER, "1s", "[1s,1d]",
+DEF_TIME(_ob_deleted_tablet_preservation_time, OB_TENANT_PARAMETER, "1s", "[1s,1d]",
          "the timeval for tablet gc: [1s,1d]",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
