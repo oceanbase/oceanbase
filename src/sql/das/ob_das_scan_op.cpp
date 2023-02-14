@@ -163,6 +163,9 @@ ObDASScanOp::~ObDASScanOp()
   if (result_ != nullptr && result_->get_type() == ObNewRowIterator::ObTableScanIterator) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "table scan iter is not released, maybe some bug occured",
               KPC(scan_ctdef_), K(scan_param_), KPC(scan_rtdef_));
+    #ifdef ENABLE_SANITY
+    abort();
+    #endif
   }
   scan_param_.destroy();
 }
