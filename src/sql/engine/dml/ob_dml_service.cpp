@@ -1890,7 +1890,6 @@ int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
         ObSQLSessionInfo *session = dml_rtctx.get_exec_ctx().get_my_session();
         ObSqlSchemaGuard sql_schema_guard;
         sql_schema_guard.set_schema_guard(schema_guard);
-        const ObTableSchema *table_schema = nullptr;
         // Here, judge the schema version at the check table level.
         // If the table-level schema_version is not equal, directly report an error schema_again
         if (OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
@@ -1899,16 +1898,6 @@ int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
         } else if (OB_FAIL(tmp_location->init_table_location_with_column_ids(
             sql_schema_guard, table_id, dml_ctdef.column_ids_, dml_rtctx.get_exec_ctx()))) {
           LOG_WARN("init table location with column ids failed", K(ret), K(dml_ctdef), K(table_id));
-        } else if (OB_FAIL(schema_guard->get_table_schema(
-            session->get_effective_tenant_id(), table_id, table_schema))) {
-          LOG_WARN("failed to get table schema", K(ret));
-        } else if (OB_ISNULL(table_schema)) {
-          ret = OB_SCHEMA_ERROR;
-          LOG_WARN("failed to get schema", K(ret));
-        } else if (table_schema->get_schema_version() != dml_ctdef.das_base_ctdef_.schema_version_) {
-          ret = OB_SCHEMA_EAGAIN;
-          LOG_WARN("table version mismatch", K(ret), K(table_id),
-              K(table_schema->get_schema_version()), K(dml_ctdef.das_base_ctdef_.schema_version_));
         }
       }
     } else {
@@ -1929,12 +1918,32 @@ int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
                                                                   partition_ids))) {
         LOG_WARN("calculate tablet id by row failed", K(ret));
       } else if (tablet_ids.count() != 1 || tablet_loc.tablet_id_ != tablet_ids.at(0)) {
-        ret = OB_ERR_DEFENSIVE_CHECK;
-        ObString func_name = ObString::make_string("check_dml_tablet_validity");
-        LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
-                  K(tablet_loc), K(tablet_ids),
-                  KPC(dml_rtdef.check_row_), KPC(dml_rtdef.check_location_));
+        ObSchemaGetterGuard *schema_guard = dml_rtctx.get_exec_ctx().get_sql_ctx()->schema_guard_;
+        ObSQLSessionInfo *session = dml_rtctx.get_exec_ctx().get_my_session();
+        const ObTableSchema *table_schema = nullptr;
+        // Here, judge the schema version at the check table level.
+        // If the table-level schema_version is not equal, directly report an error schema_again
+        if (OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(schema_guard), K(session));
+        } else if (OB_FAIL(schema_guard->get_table_schema(
+            session->get_effective_tenant_id(), table_id, table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_SCHEMA_ERROR;
+          LOG_WARN("failed to get schema", K(ret));
+        } else if (table_schema->get_schema_version() != dml_ctdef.das_base_ctdef_.schema_version_) {
+          ret = OB_SCHEMA_EAGAIN;
+          LOG_WARN("table version mismatch", K(ret), K(table_id),
+              K(table_schema->get_schema_version()), K(dml_ctdef.das_base_ctdef_.schema_version_));
+        } else {
+          ret = OB_ERR_DEFENSIVE_CHECK;
+          ObString func_name = ObString::make_string("check_dml_tablet_validity");
+          LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+          LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+                    K(tablet_loc), K(tablet_ids),
+                    KPC(dml_rtdef.check_row_), KPC(dml_rtdef.check_location_));
+        }
       }
     }
   }
