@@ -280,13 +280,15 @@ int calc_timestampadd_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datu
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(session)) {
-    uint64_t cast_mode = 0;
-    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode))) {
-      LOG_WARN("get_default_cast_mode failed", K(ret), K(session->get_stmt_type()));
+    ObCastMode cast_mode = CM_NONE;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_UNLIKELY(OB_SUCCESS !=
+                    (tmp_ret = ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode)))) {
+      LOG_WARN("get_default_cast_mode failed", K(tmp_ret), K(session->get_stmt_type()));
     } else if (CM_IS_WARN_ON_FAIL(cast_mode)) {
       ret = OB_SUCCESS;
-      res_datum.set_null();
     }
+    res_datum.set_null();
   }
   return ret;
 }
