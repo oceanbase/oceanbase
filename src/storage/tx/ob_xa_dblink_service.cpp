@@ -361,10 +361,11 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
         //commit record
         if (OB_FAIL(trans.end(true))) {
           TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
+          const bool need_decrease_ref = true;
+          xa_ctx->try_exit(need_decrease_ref);
+          xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
+          tx_desc = NULL;
         }
-        const bool need_decrease_ref = true;
-        xa_ctx->try_exit(need_decrease_ref);
-        xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
       } else {
         //rollback record
         if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
