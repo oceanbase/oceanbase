@@ -433,18 +433,18 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
     LOG_WARN("[TenantFreezer] get tenant tx data mem used failed.", KR(ret));
   } else {
     int64_t total_memory = lib::get_tenant_memory_limit(tenant_info_.tenant_id_);
-    int64_t hold_memory = lib::get_tenant_memory_hold(tenant_info_.tenant_id_);
+    int64_t memstore_hold_memory = lib::get_tenant_memory_hold(tenant_info_.tenant_id_, ObCtxIds::MEMSTORE_CTX_ID);
     int64_t self_freeze_min_limit_ = total_memory * (ObTxDataTable::TX_DATA_FREEZE_TRIGGER_MIN_PERCENTAGE / 100);
     int64_t self_freeze_max_limit_ = total_memory * (ObTxDataTable::TX_DATA_FREEZE_TRIGGER_MAX_PERCENTAGE / 100);
     int64_t self_freeze_tenant_hold_limit_
       = (total_memory * (double(get_freeze_trigger_percentage_()) / 100));
 
     if ((tenant_tx_data_mem_used > self_freeze_max_limit_)
-        || ((hold_memory > self_freeze_tenant_hold_limit_)
+        || ((memstore_hold_memory > self_freeze_tenant_hold_limit_)
             && (tenant_tx_data_mem_used > self_freeze_min_limit_))) {
       // trigger tx data self freeze
       LOG_INFO("[TenantFreezer] Trigger Tx Data Table Self Freeze. ", K(tenant_info_.tenant_id_),
-               K(tenant_tx_data_mem_used), K(self_freeze_max_limit_), K(hold_memory),
+               K(tenant_tx_data_mem_used), K(self_freeze_max_limit_), K(memstore_hold_memory),
                K(self_freeze_tenant_hold_limit_), K(self_freeze_min_limit_));
 
       int tmp_ret = OB_SUCCESS;

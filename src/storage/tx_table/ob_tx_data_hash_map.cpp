@@ -31,7 +31,7 @@ void ObTxDataHashMap::destroy()
         curr = next;
       }
     }
-    ob_free(buckets_);
+    allocator_.free(buckets_);
     total_cnt_ = 0;
   }
 }
@@ -40,7 +40,7 @@ int ObTxDataHashMap::init()
 {
   int ret = OB_SUCCESS;
   const int64_t alloc_size = BUCKETS_CNT * sizeof(ObTxDataHashHeader);
-  void *ptr = ob_malloc(alloc_size);
+  void *ptr = allocator_.alloc(alloc_size);
   if (OB_ISNULL(ptr)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "allocate memory failed when init tx data hash map", KR(ret), K(alloc_size), K(BUCKETS_CNT));
