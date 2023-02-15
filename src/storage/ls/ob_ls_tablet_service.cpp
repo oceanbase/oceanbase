@@ -2830,7 +2830,7 @@ int ObLSTabletService::rebuild_create_tablet(
       OB_FAIL(migrate_update_tablet(mig_tablet_param))) {
     LOG_WARN("failed to rebuild create tablet", K(ret), K(tablet_id), K(mig_tablet_param));
   } else if (b_exist && keep_old) {
-    if (OB_FAIL(check_and_get_tablet(tablet_id, old_tablet_handle))) {
+    if (OB_FAIL(check_and_get_tablet(tablet_id, old_tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
       LOG_WARN("failed to check and get tablet", K(ret), K(tablet_id));
     } else if (OB_UNLIKELY(old_tablet_handle.get_obj()->get_tablet_meta().has_next_tablet_)) {
       ret = OB_ERR_UNEXPECTED;

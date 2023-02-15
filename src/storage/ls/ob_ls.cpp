@@ -1090,7 +1090,7 @@ int ObLS::finish_slog_replay()
 
   if (OB_FAIL(get_migration_status(current_migration_status))) {
     LOG_WARN("failed to get migration status", K(ret), KPC(this));
-  } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status,
+  } else if (OB_FAIL(ObMigrationStatusHelper::trans_reboot_status(current_migration_status,
                                                                 new_migration_status))) {
     LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status),
              K(new_migration_status));

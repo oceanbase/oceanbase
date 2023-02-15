@@ -148,7 +148,7 @@ int ObMigrationStatusHelper::trans_fail_status(const ObMigrationStatus &cur_stat
       break;
     }
     case OB_MIGRATION_STATUS_REBUILD: {
-      fail_status = OB_MIGRATION_STATUS_NONE;
+      fail_status = OB_MIGRATION_STATUS_REBUILD;
       break;
     }
     case OB_MIGRATION_STATUS_CHANGE: {
