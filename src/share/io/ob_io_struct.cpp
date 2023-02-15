@@ -2504,7 +2504,7 @@ int ObIORunner::handle(ObIORequest *req)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("io request can not do callback", K(ret), K(*req));
       } else if (OB_FAIL(req->copied_callback_->process(OB_SUCCESS == req->ret_code_.io_ret_))) {
-        LOG_WARN("fail to callback", K(ret), K(*req));
+        LOG_WARN("fail to callback", K(ret), K(*req), K(MTL_ID()));
       }
       req->time_log_.callback_finish_ts_ = ObTimeUtility::fast_current_time();
     }

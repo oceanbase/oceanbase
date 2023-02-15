@@ -756,21 +756,23 @@ int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
   } else if (io_config == io_config_) {
     // basic config not change, do nothing
   } else {
-    if (OB_FAIL(io_allocator_.update_memory_limit(io_config.memory_limit_))) {
-      LOG_WARN("update memory limit failed", K(ret), K(io_config.memory_limit_));
-    } else if (OB_FAIL(callback_mgr_.update_thread_count(io_config.callback_thread_count_))) {
-      LOG_WARN("callback manager adjust thread failed", K(ret), K(io_config));
-    } else {
-      // just update basic config
-      DRWLock::WRLockGuard guard(io_config_lock_);
-      io_config_.memory_limit_ = io_config.memory_limit_;
-      io_config_.callback_thread_count_ = io_config.callback_thread_count_;
-      io_config_.unit_config_ = io_config.unit_config_;
-      ATOMIC_SET(&io_config_.enable_io_tracer_, io_config.enable_io_tracer_);
-      if (!io_config.enable_io_tracer_) {
-        io_tracer_.reuse();
+    MTL_SWITCH(tenant_id_) {
+      if (OB_FAIL(io_allocator_.update_memory_limit(io_config.memory_limit_))) {
+        LOG_WARN("update memory limit failed", K(ret), K(io_config.memory_limit_));
+      } else if (OB_FAIL(callback_mgr_.update_thread_count(io_config.callback_thread_count_))) {
+        LOG_WARN("callback manager adjust thread failed", K(ret), K(io_config));
+      } else {
+        // just update basic config
+        DRWLock::WRLockGuard guard(io_config_lock_);
+        io_config_.memory_limit_ = io_config.memory_limit_;
+        io_config_.callback_thread_count_ = io_config.callback_thread_count_;
+        io_config_.unit_config_ = io_config.unit_config_;
+        ATOMIC_SET(&io_config_.enable_io_tracer_, io_config.enable_io_tracer_);
+        if (!io_config.enable_io_tracer_) {
+          io_tracer_.reuse();
+        }
+        LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_));
       }
-      LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_));
     }
   }
   return ret;
