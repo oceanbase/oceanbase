@@ -405,6 +405,8 @@ int new_keepalive_packet(easy_connection_t* conn)
     if (ret != EASY_OK) {
       LOG_WARN("failed to send easy session.", K(ret));
       eret = ret;
+    } else {
+      eret = EASY_OK;
     }
   }
 

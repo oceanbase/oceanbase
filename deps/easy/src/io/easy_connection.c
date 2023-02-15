@@ -574,7 +574,7 @@ int easy_connection_session_build(easy_session_t* s)
 
   if (c->type != EASY_TYPE_CLIENT) {
     if (s->type != EASY_TYPE_KEEPALIVE_SESSION) {
-      easy_debug_log("Only keepalive session can be built on server side, session type(%d), conn(%s).",
+      easy_info_log("Only keepalive session can be built on server side, session type(%d), conn(%s).",
           s->type,
           easy_connection_str(c));
       return EASY_ERROR;
@@ -633,6 +633,11 @@ int easy_connection_send_session(easy_connection_t* c, easy_session_t* s)
   easy_io_thread_t* ioth = EASY_IOTH_SELF;
 
   if (ioth == NULL || ioth->iot == 0 || ioth->eio->stoped) {
+    if (ioth == NULL) {
+      easy_info_log("ioth is NULL.");
+    } else {
+      easy_info_log("ioth is wrong, ioth->iot(%d).", ioth->iot);
+    }
     return EASY_ERROR;
   }
 
@@ -1752,7 +1757,7 @@ static void easy_connection_on_timeout_conn(struct ev_loop* loop, ev_timer* w, i
     ack_timeout_ms = eio->ack_timeout;
     if ((conn->keepalive_enabled) && (ack_timeout_ms > 0) && (conn->magic_ver >= MIN_MAGIC_VERSION_KEEPALIVE)) {
       if (now > (conn->last_rx_tstamp + ack_timeout_ms / 1000 - 0.1)) {
-        easy_error_log("Easy keepalive failed, and will destroy connection, time(%fs), conn(%s).",
+        easy_warn_log("Easy keepalive failed, and will destroy connection, time(%fs), conn(%s).",
             (now - conn->last_rx_tstamp),
             easy_connection_str(conn));
         conn->conn_has_error = 1;
