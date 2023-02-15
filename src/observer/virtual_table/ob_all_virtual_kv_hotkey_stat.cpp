@@ -22,7 +22,7 @@ namespace observer {
 
 ObAllVirtualKvHotKeyStat::ObAllVirtualKvHotKeyStat()
     : ObVirtualTableScannerIterator(),
-      inited_(false), idx(0),
+      inited_(false), closed_(false), idx(0),
       arena_allocator_(ObModIds::OB_TABLE_HOTKEY),
       virtual_tbl_mgr_()
 {
@@ -58,7 +58,9 @@ int ObAllVirtualKvHotKeyStat::init()
 int ObAllVirtualKvHotKeyStat::inner_open()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(init())) {
+  if(closed_) {
+    // do nothing
+  } else if (OB_FAIL(init())) {
     SERVER_LOG(WARN, "fail to init hotkey stat virtual table", K(ret));
   }
   return ret;
@@ -67,8 +69,9 @@ int ObAllVirtualKvHotKeyStat::inner_open()
 int ObAllVirtualKvHotKeyStat::inner_get_next_row(ObNewRow*& row)
 {
   int ret = OB_SUCCESS;
-
-  if (!inited_) {
+  if (closed_) {
+    ret = OB_ITER_END;
+  } else if (!inited_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "ObAllVirtualKvHotKeyStat has not been inited, ", K(ret));
   } else if (OB_FAIL(fill_cells())) {
@@ -227,6 +230,11 @@ char* ObAllVirtualKvHotKeyStat::to_hotkey_string(ObRowkey rowkey)
     LOG_WARN("unpected error when transforming rowkey", K(rowkey), K(ret));
   }
   return hotkey_buffer_;
+}
+
+void ObAllVirtualKvHotKeyStat::set_closed(bool closed)
+{
+  closed_ = closed;
 }
 
 } /* namespace observer */

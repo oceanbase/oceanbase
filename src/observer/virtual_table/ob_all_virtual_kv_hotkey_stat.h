@@ -42,6 +42,7 @@ public:
   virtual int inner_open() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
   virtual int inner_close() override;
+  void set_closed(bool closed);
 
 private:
   int init();
@@ -50,6 +51,7 @@ private:
   char* to_hotkey_string(ObRowkey rowkey);
 private:
   bool inited_;
+  bool closed_;
   int64_t idx;
   int32_t svr_port_;
   char svr_ip_[common::OB_IP_STR_BUFF];

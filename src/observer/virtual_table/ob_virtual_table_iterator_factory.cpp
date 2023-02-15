@@ -2343,12 +2343,11 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam& params, ObVirtualTableIte
             ObAllVirtualKvHotKeyStat* hotkey_stat = NULL;
             uint64_t real_tenant_id = session->get_effective_tenant_id();
             omt::ObTenantConfigGuard tenant_config(TENANT_CONF(real_tenant_id));
-            if (tenant_config->kv_hotkey_throttle_threshold == 0) {
-              ret = OB_INVALID_ARGUMENT;
-              SERVER_LOG(ERROR, "throttle service is closed", K(ret));
-            } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualKvHotKeyStat, hotkey_stat))) {
+            int64_t throttle_threshold = tenant_config->kv_hotkey_throttle_threshold;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualKvHotKeyStat, hotkey_stat))) {
               SERVER_LOG(ERROR, "ObVirtual open hotkey stat table failed", K(ret));
             } else {
+              hotkey_stat->set_closed(throttle_threshold == 0);
               OX(vt_iter = static_cast<ObAllVirtualKvHotKeyStat*>(hotkey_stat));
             }
             break;
