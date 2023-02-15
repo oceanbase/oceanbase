@@ -2505,7 +2505,7 @@ int ObDelUpdResolver::build_column_conv_function_with_value_desc(ObInsertTableIn
       } else {
         skip_convert = table_schema->is_index_table() || 
                        column_item->column_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
-        LOG_INFO("skip convert expr in ddl", K(table_item->ddl_table_id_), K(skip_convert));
+        LOG_TRACE("skip convert expr in ddl", K(table_item->ddl_table_id_), K(skip_convert));
       }
     } else {
       const TableItem *table_item = NULL;
