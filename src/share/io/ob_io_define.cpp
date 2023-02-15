@@ -1370,6 +1370,7 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
   } else if (r_heap_.empty()){
     ret = OB_ENTRY_NOT_EXIST;
   } else {
+    ObTimeGuard time_guard("pop_phyqueue", 100000); //100ms
     ObPhyQueue *tmp_phy_queue = r_heap_.top();
     if (OB_ISNULL(tmp_phy_queue)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1380,6 +1381,7 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
       //R schedule
       if(OB_FAIL(remove_from_heap(tmp_phy_queue))) {
         LOG_WARN("remove phy queue from heap failed(R schedule)", K(ret));
+      } else if (FALSE_IT(time_guard.click("R_leave_heap"))) {
       } else {
         req = tmp_phy_queue->req_list_.remove_first();
         if (OB_ISNULL(req)) {
@@ -1397,10 +1399,12 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
               LOG_WARN("get null next_req", KP(next_req));
             } else if (OB_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, *next_req))) {
               LOG_WARN("calc phyqueue clock failed", K(ret), KPC(next_req));
+            } else if (FALSE_IT(time_guard.click("R_calc_clock"))) {
             }
           }
         }
         int tmp_ret = push_phyqueue(tmp_phy_queue);
+        time_guard.click("R_into_heap");
         if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
           LOG_WARN("re_into heap failed(R schedule)", K(tmp_ret));
           abort();
@@ -1412,8 +1416,10 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
         if (OB_EAGAIN != ret) {
           LOG_WARN("pop with ready queue failed", K(ret));
         }
+      } else {
+        time_guard.click("P_schedule");
       }
-    }    
+    }
   }
   return ret;  
 }
