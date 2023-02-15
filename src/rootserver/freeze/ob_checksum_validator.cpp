@@ -620,8 +620,8 @@ int ObCrossClusterTabletChecksumValidator::validate_cross_cluster_checksum(
     } else if (is_exist || is_wait_tablet_checksum_timeout) { // all tablet checksum exist or timeout
       if (OB_FAIL(check_cross_cluster_checksum(*table_schema, frozen_scn))) {
         if (OB_ITEM_NOT_MATCH == ret) {
-          if (OB_TMP_FAIL(handle_table_can_not_verify(table_id, table_compaction_map))) {
-            LOG_WARN("fail to handle table can not verify", KR(ret), K(table_id));
+          if (OB_TMP_FAIL(handle_table_can_not_verify(table_schema->get_table_id(), table_compaction_map))) {
+            LOG_WARN("fail to handle table can not verify", KR(ret), "table_id", table_schema->get_table_id());
           } else {
             ret = OB_SUCCESS; // ignore ret
           }
