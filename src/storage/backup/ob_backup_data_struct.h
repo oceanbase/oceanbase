@@ -183,7 +183,7 @@ struct ObBackupDataFileTrailer {
 
 struct ObBackupMacroBlockId {
   ObBackupMacroBlockId();
-  bool is_valid();
+  bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(logic_id), K_(macro_block_id));
   common::ObLogicMacroBlockId logic_id_;

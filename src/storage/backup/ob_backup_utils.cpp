@@ -31,6 +31,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "common/object/ob_object.h"
 
 #include <algorithm>
 
@@ -654,14 +655,17 @@ int ObBackupTabletStat::mark_item_reused(const share::ObBackupDataType &backup_d
   ObMutexGuard guard(mutex_);
   ObBackupProviderItem item;
   ObBackupProviderItemType item_type = PROVIDER_ITEM_MACRO_ID;
+  ObBackupMacroBlockId macro_id;
   blocksstable::MacroBlockId fake_macro_id;
+  macro_id.logic_id_ = id_pair.logic_id_;
+  macro_id.macro_block_id_ = fake_macro_id;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup tablet stat do not init", K(ret));
   } else if (backup_data_type.type_ != backup_data_type_.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup data type not match", K(backup_data_type), K(backup_data_type_));
-  } else if (OB_FAIL(item.set(item_type, id_pair.logic_id_, fake_macro_id, table_key, ObTabletID(id_pair.logic_id_.tablet_id_)))) {
+  } else if (OB_FAIL(item.set(item_type, macro_id, table_key, ObTabletID(id_pair.logic_id_.tablet_id_)))) {
     LOG_WARN("failed to set provider item", K(ret), K(item));
   } else if (OB_FAIL(do_with_stat_when_reused_(item, id_pair.physical_id_))) {
     LOG_WARN("failed to do with stat when reused", K(ret));
@@ -1117,16 +1121,50 @@ ObBackupProviderItem::ObBackupProviderItem()
 ObBackupProviderItem::~ObBackupProviderItem()
 {}
 
-int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const common::ObLogicMacroBlockId &logic_id,
-    const blocksstable::MacroBlockId &macro_block_id, const ObITable::TableKey &table_key,
-    const common::ObTabletID &tablet_id)
+int ObBackupProviderItem::set_with_fake(const ObBackupProviderItemType &item_type, const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  item_type_ = item_type;
-  logic_id_ = logic_id;
-  macro_block_id_ = macro_block_id;
-  table_key_ = table_key;
-  tablet_id_ = tablet_id;
+  if (PROVIDER_ITEM_SSTABLE_META != item_type && PROVIDER_ITEM_TABLET_META != item_type) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("get invalid args", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tablet_id));
+  } else {
+    item_type_ = item_type;
+    logic_id_ = get_fake_logic_id_();
+    macro_block_id_ = get_fake_macro_id_();
+    table_key_ = get_fake_table_key_();
+    tablet_id_ = tablet_id;
+    if (!is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("provider item not valid", K(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const ObBackupMacroBlockId &macro_id,
+     const ObITable::TableKey &table_key, const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (PROVIDER_ITEM_MACRO_ID != item_type) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("get invalid args", K(ret));
+  } else if (!macro_id.is_valid() || !table_key.is_valid() || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(macro_id), K(table_key), K(tablet_id));
+  } else {
+    item_type_ = item_type;
+    logic_id_ = macro_id.logic_id_;
+    macro_block_id_ = macro_id.macro_block_id_;
+    table_key_ = table_key;
+    tablet_id_ = tablet_id;
+    if (!is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("provider item not valid", K(ret), KPC(this));
+    }
+  }
   return ret;
 }
 
@@ -1185,15 +1223,14 @@ int ObBackupProviderItem::deep_copy(const ObBackupProviderItem &src, char *buf, 
 
 bool ObBackupProviderItem::is_valid() const
 {
-  bool bret = true;
-  if (PROVIDER_ITEM_MACRO_ID == item_type_) {
-    bret = logic_id_.is_valid() && table_key_.is_valid() && tablet_id_.is_valid(); // no need to check macro id valid
-  } else if (PROVIDER_ITEM_SSTABLE_META == item_type_) {
-    bret = tablet_id_.is_valid();
-  } else if (PROVIDER_ITEM_TABLET_META == item_type_) {
-    bret = tablet_id_.is_valid();
-  } else {
+  bool bret = false;
+  if (PROVIDER_ITEM_MACRO_ID != item_type_
+      && PROVIDER_ITEM_SSTABLE_META != item_type_
+      && PROVIDER_ITEM_TABLET_META != item_type_) {
     bret = false;
+  } else {
+    bret = logic_id_.is_valid() && macro_block_id_.is_valid()
+        && table_key_.is_valid() && tablet_id_.is_valid();
   }
   return bret;
 }
@@ -1253,6 +1290,26 @@ DEFINE_GET_SERIALIZE_SIZE(ObBackupProviderItem)
   size += table_key_.get_serialize_size();
   size += tablet_id_.get_serialize_size();
   return size;
+}
+
+ObITable::TableKey ObBackupProviderItem::get_fake_table_key_() const
+{
+  ObITable::TableKey table_key;
+  table_key.tablet_id_ = ObTabletID(1);
+  table_key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+  table_key.version_range_.snapshot_version_ = 0;
+  table_key.column_group_idx_ = 0;
+  return table_key;
+}
+
+ObLogicMacroBlockId ObBackupProviderItem::get_fake_logic_id_() const
+{
+  return ObLogicMacroBlockId(0/*data_seq*/, 1/*logic_version*/, 1/*tablet_id*/);
+}
+
+MacroBlockId ObBackupProviderItem::get_fake_macro_id_() const
+{
+  return MacroBlockId(4096/*first_id*/, 0/*second_id*/, 0/*third_id*/);
 }
 
 /* ObBackupProviderItemCompare */
@@ -1807,8 +1864,7 @@ int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTablet
       LOG_WARN("failed to check macro block need skip", K(ret), K(macro_id));
     } else if (need_skip) {
       // do nothing
-    } else if (OB_FAIL(item.set(
-                   PROVIDER_ITEM_MACRO_ID, macro_id.logic_id_, macro_id.macro_block_id_, table_key, tablet_id))) {
+    } else if (OB_FAIL(item.set(PROVIDER_ITEM_MACRO_ID, macro_id, table_key, tablet_id))) {
       LOG_WARN("failed to set item", K(ret), K(macro_id), K(table_key), K(tablet_id));
     } else if (!item.is_valid()) {
       ret = OB_INVALID_DATA;
@@ -1826,10 +1882,7 @@ int ObBackupTabletProvider::add_sstable_item_(const common::ObTabletID &tablet_i
 {
   int ret = OB_SUCCESS;
   ObBackupProviderItem item;
-  ObLogicMacroBlockId fake_logic_id;
-  MacroBlockId fake_macro_block_id;
-  ObITable::TableKey fake_table_key;
-  if (OB_FAIL(item.set(PROVIDER_ITEM_SSTABLE_META, fake_logic_id, fake_macro_block_id, fake_table_key, tablet_id))) {
+  if (OB_FAIL(item.set_with_fake(PROVIDER_ITEM_SSTABLE_META, tablet_id))) {
     LOG_WARN("failed to set item", K(ret), K(tablet_id));
   } else if (!item.is_valid()) {
     ret = OB_INVALID_DATA;
@@ -1846,11 +1899,8 @@ int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id
 {
   int ret = OB_SUCCESS;
   ObBackupProviderItem item;
-  ObLogicMacroBlockId fake_logic_id;
-  MacroBlockId fake_macro_block_id;
-  ObITable::TableKey fake_table_key;
-  if (OB_FAIL(item.set(PROVIDER_ITEM_TABLET_META, fake_logic_id, fake_macro_block_id, fake_table_key, tablet_id))) {
-    LOG_WARN("failed to set item", K(ret), K(fake_table_key), K(tablet_id));
+  if (OB_FAIL(item.set_with_fake(PROVIDER_ITEM_TABLET_META, tablet_id))) {
+    LOG_WARN("failed to set item", K(ret), K(tablet_id));
   } else if (!item.is_valid()) {
     ret = OB_INVALID_DATA;
     LOG_WARN("backup item is not valid", K(ret), K(item));

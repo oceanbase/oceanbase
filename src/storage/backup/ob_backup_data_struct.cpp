@@ -259,7 +259,7 @@ int ObBackupDataFileTrailer::check_valid() const
 ObBackupMacroBlockId::ObBackupMacroBlockId() : logic_id_(), macro_block_id_()
 {}
 
-bool ObBackupMacroBlockId::is_valid()
+bool ObBackupMacroBlockId::is_valid() const
 {
   return logic_id_.is_valid() && macro_block_id_.is_valid();
 }

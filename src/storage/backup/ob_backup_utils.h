@@ -177,9 +177,11 @@ class ObBackupProviderItem {
 public:
   ObBackupProviderItem();
   virtual ~ObBackupProviderItem();
-  int set(const ObBackupProviderItemType &item_type, const common::ObLogicMacroBlockId &logic_id,
-      const blocksstable::MacroBlockId &macro_block_id, const storage::ObITable::TableKey &table_key,
-      const common::ObTabletID &tablet_id);
+  // for tablet meta and sstable meta
+  int set_with_fake(const ObBackupProviderItemType &item_type, const common::ObTabletID &tablet_id);
+  // for macro block
+  int set(const ObBackupProviderItemType &item_type, const ObBackupMacroBlockId &backup_macro_id,
+      const storage::ObITable::TableKey &table_key, const common::ObTabletID &tablet_id);
   bool operator==(const ObBackupProviderItem &other) const;
   bool operator!=(const ObBackupProviderItem &other) const;
   ObBackupProviderItemType get_item_type() const;
@@ -193,6 +195,11 @@ public:
   void reset();
   TO_STRING_KV(K_(item_type), K_(logic_id), K_(table_key), K_(tablet_id));
   NEED_SERIALIZE_AND_DESERIALIZE;
+private:
+  // for parallel external sort serialization restriction
+  ObITable::TableKey get_fake_table_key_() const;
+  common::ObLogicMacroBlockId get_fake_logic_id_() const;
+  blocksstable::MacroBlockId get_fake_macro_id_() const;
 
 private:
   ObBackupProviderItemType item_type_;
