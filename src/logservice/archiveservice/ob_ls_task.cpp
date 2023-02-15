@@ -531,7 +531,7 @@ void ObLSArchiveTask::ArchiveDest::init(const LSN &piece_min_lsn,
   LogFileTuple tmp_tuple(lsn, max_archived_scn, piece);
   LogFileTuple tuple;
   if (max_archived_info_.is_valid()) {
-    tuple = std::max(tuple, max_archived_info_);
+    tuple = std::max(tmp_tuple, max_archived_info_);
   } else {
     tuple = tmp_tuple;
   }
