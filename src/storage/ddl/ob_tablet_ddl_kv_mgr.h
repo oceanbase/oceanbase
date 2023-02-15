@@ -57,6 +57,7 @@ public:
   share::SCN get_commit_scn(const ObTabletMeta &tablet_meta);
   int set_commit_success(const share::SCN &start_scn);
   bool is_commit_success();
+  void reset_commit_success();
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
   share::ObLSID get_ls_id() const { return ls_id_; }
   int cleanup();

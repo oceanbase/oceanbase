@@ -470,6 +470,12 @@ bool ObTabletDDLKvMgr::is_commit_success_unlock() const
   return success_start_scn_ > SCN::min_scn() && success_start_scn_ == start_scn_;
 }
 
+void ObTabletDDLKvMgr::reset_commit_success()
+{
+  ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+  success_start_scn_.set_min();
+}
+
 bool ObTabletDDLKvMgr::can_schedule_major_compaction(const ObTabletMeta &tablet_meta)
 {
   ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
