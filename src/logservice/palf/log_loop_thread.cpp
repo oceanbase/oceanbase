@@ -85,7 +85,7 @@ void LogLoopThread::log_loop_()
     };
     if (start_ts - last_switch_state_time >= 10 * 1000) {
       if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(switch_state_func))) {
-        PALF_LOG(WARN, "for_each switch_state_func failed", K(tmp_ret));
+        PALF_LOG_RET(WARN, tmp_ret, "for_each switch_state_func failed", K(tmp_ret));
       }
       last_switch_state_time = start_ts;
     }
@@ -95,7 +95,7 @@ void LogLoopThread::log_loop_()
     };
     if (start_ts - last_check_freeze_mode_time >= 1 * 1000 * 1000) {
       if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(switch_freeze_mode_func))) {
-        PALF_LOG(WARN, "for_each switch_freeze_mode_func failed", K(tmp_ret));
+        PALF_LOG_RET(WARN, tmp_ret, "for_each switch_freeze_mode_func failed", K(tmp_ret));
       }
       last_check_freeze_mode_time = start_ts;
     }
@@ -104,7 +104,7 @@ void LogLoopThread::log_loop_()
       return ipalf_handle_impl->period_freeze_last_log();
     };
     if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(try_freeze_log_func))) {
-      PALF_LOG(WARN, "for_each try_freeze_log_func failed", K(tmp_ret));
+      PALF_LOG_RET(WARN, tmp_ret, "for_each try_freeze_log_func failed", K(tmp_ret));
     }
 
     const int64_t round_cost_time = ObTimeUtility::current_time() - start_ts;

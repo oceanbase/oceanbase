@@ -89,10 +89,9 @@ public:
           TRANS_LOG(WARN, "get_next from keybtree fail", "ret", ret, "value", value_);
         }
       } else {
-        // IN_GAP & BIG_GAP_HINT
         key_.encode(key_wrapper.get_rowkey());
-        iter_flag_ = (uint8_t)((uint64_t)value_ & 3UL);
-        value_ = (ObMvccRow*)((uint64_t)value_ & ~3UL);
+        BTREE_ASSERT(((uint64_t)value_ & 7ULL) == 0);
+        iter_flag_ = 0;
         if (OB_ISNULL(value_)) {
           ret = common::OB_ITER_END;
         } else {

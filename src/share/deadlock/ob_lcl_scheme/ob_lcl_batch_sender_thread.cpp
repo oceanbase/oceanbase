@@ -40,7 +40,7 @@ bool ObLCLBatchSenderThread::RemoveIfOp::operator()(const ObDependencyResource &
   DETECT_TIME_GUARD(100_ms);
   if (OB_SUCCESS != (temp_ret = lcl_message_list_.push_back(lcl_msg))) {
     ret = false;
-    DETECT_LOG(WARN, "push lcl message to lcl_message_list failed",
+    DETECT_LOG_RET(WARN, temp_ret, "push lcl message to lcl_message_list failed",
                       KR(temp_ret), K(lcl_msg));
   }
   return ret;
@@ -54,7 +54,7 @@ bool ObLCLBatchSenderThread::MergeOp::operator()(const ObDependencyResource &key
 
   DETECT_TIME_GUARD(100_ms);
   if (OB_SUCCESS != (temp_ret = value.merge(lcl_message_))) {
-    DETECT_LOG(WARN, "merge msg failed", K(temp_ret), K(value), K(lcl_message_));
+    DETECT_LOG_RET(WARN, temp_ret, "merge msg failed", K(temp_ret), K(value), K(lcl_message_));
   }
   return true;
 }
@@ -141,7 +141,7 @@ void ObLCLBatchSenderThread::record_summary_info_and_logout_when_necessary_(int6
   int64_t _lcl_op_interval = ObServerConfig::get_instance()._lcl_op_interval;
   if (diff > _lcl_op_interval) {
     ++over_night_times_;
-    DETECT_LOG(WARN, "ObLCLBatchSenderThread is too busy",
+    DETECT_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "ObLCLBatchSenderThread is too busy",
                       K(end_ts), K(begin_ts), K(diff), K(*this));
   }
 
@@ -210,7 +210,7 @@ void ObLCLBatchSenderThread::run1()
     record_summary_info_and_logout_when_necessary_(begin_ts, end_ts, diff);
 
     if (diff < _lcl_op_interval) {
-      ob_usleep(_lcl_op_interval - diff);
+      ob_usleep(static_cast<uint32_t>(_lcl_op_interval - diff));
       // DETECT_LOG(DEBUG, "scan done", K(diff), K(*this));
     }
   }

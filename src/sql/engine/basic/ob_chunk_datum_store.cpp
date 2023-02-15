@@ -2122,7 +2122,7 @@ void ObChunkDatumStore::ChunkIterator::reset_cursor(const int64_t file_size)
     cur_iter_blk_ = NULL;
     store_->callback_free(chunk_read_size_);
     if (read_file_iter_end()) {
-      LOG_ERROR("unexpect status: chunk mem is allocated, but don't free");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpect status: chunk mem is allocated, but don't free");
     }
   }
 

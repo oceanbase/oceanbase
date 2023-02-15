@@ -49,6 +49,7 @@ int ObDirectLoadFastHeapTableContext::init(uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tenant_id), K(ls_partition_ids), K(target_ls_partition_ids));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(create_all_tablet_contexts(tenant_id, ls_partition_ids, target_ls_partition_ids, reserved_parallel))) {
       LOG_WARN("fail to create all tablet contexts", KR(ret));
     } else {
@@ -71,7 +72,7 @@ int ObDirectLoadFastHeapTableContext::create_all_tablet_contexts(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(ls_partition_ids), K(target_ls_partition_ids));
   } else if (OB_FAIL(
-               tablet_ctx_map_.create(ls_partition_ids.count(), "TLD_TabInsCtx", "TLD_TabInsCtx"))) {
+               tablet_ctx_map_.create(ls_partition_ids.count(), "TLD_TabInsCtx", "TLD_TabInsCtx", MTL_ID()))) {
     LOG_WARN("fail to create tablet ctx map", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_partition_ids.count(); ++i) {

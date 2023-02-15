@@ -20,12 +20,12 @@ public:
   ObTableLoadTransCtx(ObTableLoadTableCtx *ctx, const table::ObTableLoadTransId &trans_id);
   OB_INLINE table::ObTableLoadTransStatusType get_trans_status() const
   {
-    lib::ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     return trans_status_;
   }
   OB_INLINE int get_error_code() const
   {
-    lib::ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     return error_code_;
   }
   int advance_trans_status(table::ObTableLoadTransStatusType trans_status);
@@ -36,7 +36,7 @@ public:
 public:
   ObTableLoadTableCtx * const ctx_;
   const table::ObTableLoadTransId trans_id_;
-  mutable lib::ObMutex mutex_;
+  mutable obsys::ObRWLock rwlock_;
   common::ObArenaAllocator allocator_;
   table::ObTableLoadTransStatusType trans_status_;
   int error_code_;

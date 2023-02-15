@@ -153,7 +153,7 @@ int ObUDFMgr::init()
 void ObUDFMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("udf manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "udf manger not init");
   } else {
     udf_infos_.clear();
     udf_map_.clear();

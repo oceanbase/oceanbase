@@ -39,7 +39,7 @@ using namespace storage;
 namespace datadict
 {
 
-const int64_t ObDataDictService::TIMER_TASK_INTERVAL = 5 * _SEC_; // schedule timer task with interval 5s
+const int64_t ObDataDictService::TIMER_TASK_INTERVAL = 1 * _SEC_; // schedule timer task with interval 5s
 const int64_t ObDataDictService::PRINT_DETAIL_INTERVAL = 60 * _SEC_;
 const int64_t ObDataDictService::SCHEMA_OP_TIMEOUT = 2 * _SEC_;
 const int64_t ObDataDictService::DEFAULT_REPORT_TIMEOUT = 10 * _MIN_;
@@ -56,7 +56,8 @@ ObDataDictService::ObDataDictService()
     ls_service_(NULL),
     dump_interval_(INT64_MAX),
     timer_tg_id_(-1),
-    last_dump_succ_time_(OB_INVALID_TIMESTAMP)
+    last_dump_succ_time_(OB_INVALID_TIMESTAMP),
+    force_need_dump_(false)
 {}
 
 int ObDataDictService::mtl_init(ObDataDictService *&datadict_service)
@@ -147,6 +148,7 @@ void ObDataDictService::destroy()
 {
   if (IS_INIT) {
     TG_DESTROY(timer_tg_id_);
+    force_need_dump_ = false;
     last_dump_succ_time_ = OB_INVALID_TIMESTAMP;
     timer_tg_id_ = -1;
     dump_interval_ = 0;
@@ -170,24 +172,31 @@ void ObDataDictService::runTimerTask()
     bool is_leader = ATOMIC_LOAD(&is_leader_);
     const int64_t start_time = OB_TSC_TIMESTAMP.current_time();
     const bool is_reach_time_interval = (start_time >= ATOMIC_LOAD(&last_dump_succ_time_) + ATOMIC_LOAD(&dump_interval_));
+    const bool force_need_dump = ATOMIC_LOAD(&force_need_dump_);
 
-    if (is_leader && is_reach_time_interval) {
+    if (is_leader && (is_reach_time_interval || force_need_dump)) {
       int ret = OB_SUCCESS;
       uint64_t data_version = 0;
 
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
-        DDLOG(WARN, "get_min_data_version failed", KR(ret), K_(tenant_id));
+        DDLOG(WARN, "get_min_data_version failed", KR(ret), K_(tenant_id), K(force_need_dump));
       } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_1_0_0)) {
         // tenant data_version less than 4100, ignore.
       } else if (OB_FAIL(do_dump_data_dict_())) {
         if (OB_STATE_NOT_MATCH == ret) {
-          DDLOG(WARN, "dump_data_dict_, maybe not ls_leader or lsn not valid, ignore.", KR(ret), K_(tenant_id));
+          DDLOG(WARN, "dump_data_dict_, maybe not ls_leader or lsn not valid, ignore.", KR(ret), K_(tenant_id), K(force_need_dump));
         } else if (OB_IN_STOP_STATE != ret) {
-          DDLOG(WARN, "dump_data_dict_ failed", KR(ret), K_(tenant_id));
+          DDLOG(WARN, "dump_data_dict_ failed", KR(ret), K_(tenant_id), K(force_need_dump));
         }
       } else {
         const int64_t end_time = OB_TSC_TIMESTAMP.current_time();
         ATOMIC_SET(&last_dump_succ_time_, end_time);
+
+        if (force_need_dump) {
+          DDLOG(INFO, "force dump_data_dict done", K_(last_dump_succ_time), K(start_time));
+          mark_force_dump_data_dict(false);
+        }
+
         DDLOG(INFO, "do_dump_data_dict_ success", K_(tenant_id), "cost_time", end_time - start_time);
       }
     }
@@ -245,6 +254,8 @@ int ObDataDictService::do_dump_data_dict_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObLSHandle ls_handle; // NOTICE: ls_handle is a guard for usage of log_handler.
+  ObLS *ls = NULL;
   ObLogHandler *log_handler = NULL;
   bool is_leader = false;
   share::SCN snapshot_scn;
@@ -252,12 +263,16 @@ int ObDataDictService::do_dump_data_dict_()
   palf::LSN end_lsn;
   bool is_cluster_status_normal = false;
   bool is_data_dict_dump_success = false;
+  bool is_any_log_callback_fail = false;
   storage_.reuse();
   allocator_.reset();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     DDLOG(WARN, "data_dict_service not inited", KR(ret), K_(tenant_id), K_(is_inited));
+  } else if (OB_ISNULL(ls_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    DDLOG(WARN, "invalid ls_service", KR(ret), K_(tenant_id));
   } else if (OB_UNLIKELY(stop_flag_)) {
     ret = OB_NOT_RUNNING;
     DDLOG(WARN, "data_dict_service not running", KR(ret), K_(tenant_id), K_(stop_flag));
@@ -265,10 +280,16 @@ int ObDataDictService::do_dump_data_dict_()
     DDLOG(TRACE, "check_cluster_status_normal_ failed", KR(ret), K(is_cluster_status_normal));
   } else if (OB_UNLIKELY(! is_cluster_status_normal)) {
     DDLOG(TRACE, "cluster_status not normal, won't dump_data_dict", K(is_cluster_status_normal));
-  } else if (OB_FAIL(get_sys_ls_log_handle_(log_handler))) {
+  } else if (OB_FAIL(ls_service_->get_ls(share::SYS_LS, ls_handle, ObLSGetMod::DATA_DICT_MOD))) {
     if (OB_LS_NOT_EXIST != ret || REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_DETAIL_INTERVAL)) {
-      DDLOG(WARN, "get_sys_ls_log_handle_ failed", KR(ret));
+      DDLOG(WARN, "get_ls for data_dict_service from ls_service failed", KR(ret), K_(tenant_id));
     }
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    DDLOG(WARN, "invalid ls get from ls_handle", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    DDLOG(WARN, "invalid log_handler_ get from OBLS", KR(ret), K_(tenant_id));
   } else if (check_ls_leader(log_handler, is_leader)) {
     DDLOG(WARN, "check_is_sys_ls_leader failed", KR(ret));
   } else if (! is_leader) {
@@ -288,13 +309,15 @@ int ObDataDictService::do_dump_data_dict_()
       start_lsn,
       end_lsn,
       is_data_dict_dump_success,
+      is_any_log_callback_fail,
       stop_flag_))) {
     if (OB_IN_STOP_STATE != tmp_ret && OB_STATE_NOT_MATCH != tmp_ret) {
       DDLOG(WARN, "finish storage for data_dict_service failed", KR(ret), KR(tmp_ret),
           K(snapshot_scn), K(start_lsn), K(end_lsn), K_(stop_flag), K_(is_inited));
     }
     ret = tmp_ret;
-  } else if (is_data_dict_dump_success) {
+  } else if (is_data_dict_dump_success && ! is_any_log_callback_fail) {
+    // only report when dict dump success and all log_callback success.
     const int64_t half_dump_interval = ATOMIC_LOAD(&dump_interval_) / 2;
     const int64_t report_timeout = DEFAULT_REPORT_TIMEOUT > half_dump_interval ? half_dump_interval : DEFAULT_REPORT_TIMEOUT;
     const int64_t current_time = get_timestamp_us();
@@ -342,29 +365,6 @@ int ObDataDictService::check_cluster_status_normal_(bool &is_normal)
   } else {
     const ObClusterSchemaStatus cluster_status = schema_service->get_cluster_schema_status();
     is_normal = (ObClusterSchemaStatus::NORMAL_STATUS == cluster_status);
-  }
-
-  return ret;
-}
-
-int ObDataDictService::get_sys_ls_log_handle_(ObLogHandler *&log_handler)
-{
-  int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLS *ls = NULL;
-
-  if (OB_ISNULL(ls_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid ls_service", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(ls_service_->get_ls(share::SYS_LS, ls_handle, ObLSGetMod::DATA_DICT_MOD))) {
-    DDLOG(WARN, "get_ls for data_dict_service from ls_service failed", KR(ret), K_(tenant_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid ls get from ls_handle", KR(ret), K_(tenant_id));
-  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
-    ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid log_handler_ get from OBLS", KR(ret), K_(tenant_id));
-  } else {
   }
 
   return ret;

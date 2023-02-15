@@ -84,7 +84,7 @@ const char *ObBackupConfigType::get_backup_config_type_str()
   const char *str = "UNKNOWN";
   STATIC_ASSERT(Type::MAX_CONFIG_NAME == ARRAYSIZEOF(type_str), "types count mismatch");
   if (type_ < Type::DATA_BACKUP_DEST || type_ >= Type::MAX_CONFIG_NAME) {
-    LOG_ERROR("invalid backup config type", K(type_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid backup config type", K(type_));
   } else {
     str = type_str[type_];
   }

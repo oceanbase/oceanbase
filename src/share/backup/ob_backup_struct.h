@@ -1122,13 +1122,13 @@ int ObBackupUtils::parse_backup_format_input(
 
       if (format_input.ptr()[i] == split_commma || format_input.ptr()[i] == split_semicolon) {
         length = i - pos;
-        if (length <= 0 || length > max_length) {
+        if (length <= 0 || length > max_length || length > INT32_MAX) {
           ret = OB_ERR_UNEXPECTED;
           OB_LOG(WARN, "format input value is unexpcted", K(ret), K(format_input), K(length), K(max_length));
         } else {
           ObString tmp_string;
           object.reset();
-          tmp_string.assign_ptr(format_input.ptr() + pos, length);
+          tmp_string.assign_ptr(format_input.ptr() + pos, static_cast<int32_t>(length));
           if (OB_FAIL(object.set(tmp_string, priority))) {
             OB_LOG(WARN, "failed to set object", K(ret), K(tmp_string), K(priority));
           } else if (OB_FAIL(array.push_back(object))) {
@@ -1150,7 +1150,7 @@ int ObBackupUtils::parse_backup_format_input(
         length = format_input.length() - pos;
         ObString tmp_string;
         object.reset();
-        tmp_string.assign_ptr(format_input.ptr() + pos, length);
+        tmp_string.assign_ptr(format_input.ptr() + pos, static_cast<int32_t>(length));
         if (OB_FAIL(object.set(tmp_string, priority))) {
           OB_LOG(WARN, "failed to set object", K(ret), K(tmp_string), K(priority));
         } else if (OB_FAIL(array.push_back(object))) {

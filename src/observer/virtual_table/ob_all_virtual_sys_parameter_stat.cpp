@@ -50,7 +50,7 @@ void ObAllVirtualSysParameterStat::reset()
   if (tenant_config_.is_valid()) {
     tenant_iter_ = tenant_config_->get_container().begin();
   } else {
-    SERVER_LOG(ERROR, "failed to get tenant config");
+    SERVER_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "failed to get tenant config");
   }
 }
 

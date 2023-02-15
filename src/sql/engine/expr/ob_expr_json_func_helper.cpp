@@ -57,7 +57,10 @@ int ObJsonExprHelper::get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
     LOG_WARN("eval json arg failed", K(ret));
   } else if (json_datum->is_null() || val_type == ObNullType) {
     is_null = true;
-  } else if (val_type != ObExtendType && val_type != ObJsonType && !ob_is_string_type(val_type)) {
+  } else if (!ob_is_extend(val_type)
+              && !ob_is_json(val_type)
+              && !ob_is_raw(val_type)
+              && !ob_is_string_type(val_type)) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("input type error", K(val_type));
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *json_datum,
@@ -1304,21 +1307,6 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
     }
   }
 
-  return ret;
-}
-
-template <typename T>
-int ObJsonExprHelper::pack_json_str_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, T &str, common::ObIAllocator *allocator)
-{
-  int ret = OB_SUCCESS;
-  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
-  if (OB_FAIL(text_result.init(str.length(), allocator))) {
-    LOG_WARN("init lob result failed");
-  } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
-    LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
-  } else {
-    text_result.set_result();
-  }
   return ret;
 }
 

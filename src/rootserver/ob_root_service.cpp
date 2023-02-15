@@ -397,7 +397,7 @@ ObAsyncTask *ObRootService::ObInnerTableMonitorTask::deep_copy(char *buf, const 
 {
   ObInnerTableMonitorTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
     task = new(buf) ObInnerTableMonitorTask(rs_);
   }
@@ -961,6 +961,7 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_INFO("[ROOTSERVICE_NOTICE] init rootservice success", KR(ret), K_(inited));
   } else {
     LOG_ERROR("[ROOTSERVICE_NOTICE] fail to init root service", KR(ret));
+    LOG_DBA_ERROR(OB_ERR_ROOTSERVICE_START, "msg", "rootservice init() has failure", KR(ret));
   }
 
   return ret;
@@ -969,16 +970,19 @@ int ObRootService::init(ObServerConfig &config,
 void ObRootService::destroy()
 {
   int ret = OB_SUCCESS;
+  int fail_ret = OB_SUCCESS;
   FLOG_INFO("[ROOTSERVICE_NOTICE] start to destroy rootservice");
   if (in_service()) {
     if (OB_FAIL(stop_service())) {
       FLOG_WARN("stop service failed", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     }
   }
 
   FLOG_INFO("start destroy archive_service_");
   if (OB_FAIL(archive_service_.destroy())) {
     FLOG_INFO("archive_service_ destory failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("finish destroy archive_service_");
   }
@@ -986,23 +990,27 @@ void ObRootService::destroy()
   // continue executing while error happen
   if (OB_FAIL(root_balancer_.destroy())) {
     FLOG_WARN("root balance destroy failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("root balance destroy");
   }
 
   if (OB_FAIL(empty_server_checker_.destroy())) {
     FLOG_WARN("empty server checker destroy failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("empty server checker destroy");
   }
 
   if (OB_FAIL(thread_checker_.destroy())) {
     FLOG_WARN("rs_monitor_check : thread checker destroy failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("rs_monitor_check : thread checker destroy");
   }
   if (OB_FAIL(schema_history_recycler_.destroy())) {
     FLOG_WARN("schema history recycler destroy failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("schema history recycler destroy");
   }
@@ -1015,6 +1023,7 @@ void ObRootService::destroy()
   FLOG_INFO("ddl builder destroy");
   if (OB_FAIL(hb_checker_.destroy())) {
     FLOG_WARN("heartbeat checker destroy failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("heartbeat checker destroy");
   }
@@ -1025,12 +1034,14 @@ void ObRootService::destroy()
 
   if (OB_FAIL(backup_task_scheduler_.destroy())) {
     FLOG_WARN("root backup task scheduler destroy failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("root backup task scheduler destroy");
   }
 
   if (OB_FAIL(backup_service_.destroy())) {
     FLOG_WARN("root backup mgr destroy failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("root backup mgr destroy");
   }
@@ -1044,6 +1055,7 @@ void ObRootService::destroy()
 
   if (OB_FAIL(disaster_recovery_task_mgr_.destroy())) {
     FLOG_WARN("disaster recovery task mgr destroy failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("disaster recovery task mgr destroy");
   }
@@ -1061,6 +1073,9 @@ void ObRootService::destroy()
   }
 
   FLOG_INFO("[ROOTSERVICE_NOTICE] destroy rootservice end", KR(ret));
+  if (OB_SUCCESS != fail_ret) {
+    LOG_DBA_WARN(OB_ERR_ROOTSERVICE_STOP, "msg", "rootservice destroy() has failure", KR(fail_ret));
+  }
 }
 
 int ObRootService::start_service()
@@ -1155,6 +1170,7 @@ int ObRootService::stop_service()
 int ObRootService::stop()
 {
   int ret = OB_SUCCESS;
+  int fail_ret = OB_SUCCESS;
   start_service_time_ = 0;
   int64_t start_time = ObTimeUtility::current_time();
   ROOTSERVICE_EVENT_ADD("root_service", "stop_rootservice", K_(self_addr));
@@ -1162,8 +1178,10 @@ int ObRootService::stop()
   if (!inited_) {
     ret = OB_NOT_INIT;
     FLOG_WARN("rootservice not inited", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else if (OB_FAIL(rs_status_.set_rs_status(status::STOPPING))) {
     FLOG_WARN("fail to set rs status", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     // set to rpc ls table as soon as possible
     if (OB_FAIL(lst_operator_->set_callback_for_obs(
@@ -1172,6 +1190,7 @@ int ObRootService::stop()
         *rs_mgr_,
         sql_proxy_))) {
       FLOG_WARN("set as rs follower failed", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("set old rs to follower finished");
     }
@@ -1191,17 +1210,20 @@ int ObRootService::stop()
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = upgrade_executor_.stop())) {
       FLOG_WARN("upgrade_executor stop failed", KR(tmp_ret));
+      fail_ret = OB_SUCCESS == fail_ret ? tmp_ret : fail_ret;
     } else {
       FLOG_INFO("upgrade_executor stop finished");
     }
     if (OB_SUCCESS != (tmp_ret = upgrade_storage_format_executor_.stop())) {
       FLOG_WARN("fail to stop upgrade storage format executor", KR(tmp_ret));
+      fail_ret = OB_SUCCESS == fail_ret ? tmp_ret : fail_ret;
     } else {
       FLOG_INFO("upgrade_storage_format_executor stop finished");
     }
 
     if (OB_SUCCESS != (tmp_ret = create_inner_schema_executor_.stop())) {
       FLOG_WARN("fail to stop create inner schema executor", KR(tmp_ret));
+      fail_ret = OB_SUCCESS == fail_ret ? tmp_ret : fail_ret;
     } else {
       FLOG_INFO("create_inner_schema_executor stop finished");
     }
@@ -1209,6 +1231,7 @@ int ObRootService::stop()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(stop_timer_tasks())) {
         FLOG_WARN("stop timer tasks failed", KR(ret));
+        fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
       } else {
         FLOG_INFO("stop timer tasks success");
       }
@@ -1265,6 +1288,9 @@ int ObRootService::stop()
 
   ROOTSERVICE_EVENT_ADD("root_service", "finish_stop_thread", KR(ret), K_(self_addr));
   FLOG_INFO("[ROOTSERVICE_NOTICE] finish stop rootservice", KR(ret));
+  if (OB_SUCCESS != fail_ret) {
+    LOG_DBA_WARN(OB_ERR_ROOTSERVICE_STOP, "msg", "rootservice stop() has failure", KR(fail_ret));
+  }
   return ret;
 }
 
@@ -5401,7 +5427,7 @@ ObAsyncTask *ObRootService::ObRestartTask::deep_copy(char *buf, const int64_t bu
 {
   ObRestartTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
     task = new(buf) ObRestartTask(root_service_);
   }
@@ -5432,7 +5458,7 @@ ObAsyncTask *ObRootService::ObRefreshServerTask::deep_copy(char *buf, const int6
 {
   ObRefreshServerTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
     task = new(buf) ObRefreshServerTask(root_service_);
   }
@@ -7355,7 +7381,7 @@ int ObRootService::check_can_stop(const ObZone &zone,
 bool ObRootService::have_other_stop_task(const ObZone &zone)
 {
   bool bret = false;
-  int64_t ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   ObArray<ObZoneInfo> zone_infos;
   bool stopped = false;
   //Check if there are other servers in the stopped state on other zones
@@ -8129,7 +8155,7 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -8572,17 +8598,18 @@ bool ObRootService::check_config(const ObConfigItem &item, const char *&err_info
   err_info = NULL;
   if (!inited_) {
     bret = false;
-    LOG_WARN("service not init");
+    LOG_WARN_RET(OB_NOT_INIT, "service not init");
   } else if (0 == STRCMP(item.name(), MIN_OBSERVER_VERSION)) {
     if (OB_SUCCESS != ObClusterVersion::is_valid(item.str())) {
-      LOG_WARN("fail to parse min_observer_version value");
+      LOG_WARN_RET(OB_INVALID_ERROR, "fail to parse min_observer_version value");
       bret = false;
     }
   } else if (0 == STRCMP(item.name(), __BALANCE_CONTROLLER)) {
     ObString balance_troller_str(item.str());
     ObRootBalanceHelp::BalanceController switch_info;
-     if (OB_SUCCESS != ObRootBalanceHelp::parse_balance_info(balance_troller_str, switch_info)) {
-      LOG_WARN("fail to parse balance switch", K(balance_troller_str));
+    int tmp_ret = ObRootBalanceHelp::parse_balance_info(balance_troller_str, switch_info);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN_RET(tmp_ret, "fail to parse balance switch", K(balance_troller_str));
       bret = false;
     }
   }
@@ -8721,7 +8748,7 @@ ObAsyncTask *ObRootService::ObReportCoreTableReplicaTask::deep_copy(char *buf, c
 {
   ObReportCoreTableReplicaTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size), KP(buf));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size), KP(buf));
   } else {
     task = new (buf) ObReportCoreTableReplicaTask(root_service_);
   }
@@ -8752,7 +8779,7 @@ ObAsyncTask *ObRootService::ObReloadUnitManagerTask::deep_copy(char *buf, const 
 {
   ObReloadUnitManagerTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size), KP(buf));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size), KP(buf));
   } else {
     task = new (buf) ObReloadUnitManagerTask(root_service_, unit_manager_);
   }
@@ -8779,7 +8806,7 @@ ObAsyncTask *ObRootService::ObLoadDDLTask::deep_copy(char *buf, const int64_t bu
 {
   ObLoadDDLTask *task = nullptr;
   if (nullptr == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buf is not enough", K(buf_size), "request_size", sizeof(*this));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buf is not enough", K(buf_size), "request_size", sizeof(*this));
   } else {
     task = new (buf) ObLoadDDLTask(root_service_);
   }
@@ -8809,7 +8836,7 @@ ObAsyncTask *ObRootService::ObRefreshIOCalibrationTask::deep_copy(char *buf, con
 {
   ObRefreshIOCalibrationTask *task = nullptr;
   if (nullptr == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buf is not enough", K(buf_size), "request_size", sizeof(*this));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buf is not enough", K(buf_size), "request_size", sizeof(*this));
   } else {
     task = new (buf) ObRefreshIOCalibrationTask(root_service_);
   }
@@ -8839,7 +8866,7 @@ ObAsyncTask *ObRootService::ObSelfCheckTask::deep_copy(char *buf, const int64_t 
 {
   ObSelfCheckTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
     task = new(buf) ObSelfCheckTask(root_service_);
   }
@@ -8869,7 +8896,7 @@ ObAsyncTask *ObRootService::ObUpdateAllServerConfigTask::deep_copy(char *buf, co
 {
   ObUpdateAllServerConfigTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size), KP(buf));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size), KP(buf));
   } else {
     task = new (buf) ObUpdateAllServerConfigTask(root_service_);
   }
@@ -9661,6 +9688,8 @@ void ObRootService::update_fail_count(int ret)
   } else {
     LOG_WARN("rs_monitor_check : fail to start root service", KR(ret), K(count));
   }
+  LOG_DBA_WARN(OB_ERR_ROOTSERVICE_START, "msg", "rootservice start()/do_restart() has failure",
+               KR(ret), "fail_cnt", count);
 }
 
 int ObRootService::send_physical_restore_result(const obrpc::ObPhysicalRestoreResult &res)

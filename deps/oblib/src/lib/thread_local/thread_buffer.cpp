@@ -69,7 +69,7 @@ ThreadSpecificBuffer::Buffer *ThreadSpecificBuffer::get_buffer() const
 {
   Buffer *buffer = NULL;
   if (INVALID_THREAD_KEY == key_ || size_ <= 0) {
-    _OB_LOG(ERROR, "thread key must be initialized "
+    _OB_LOG_RET(ERROR, OB_NOT_INIT, "thread key must be initialized "
               "and size must great than zero, key:%u,size:%d", key_, size_);
   } else {
     void *ptr = pthread_getspecific(key_);
@@ -80,7 +80,7 @@ ThreadSpecificBuffer::Buffer *ThreadSpecificBuffer::get_buffer() const
       ptr = ob_malloc(size_ + sizeof(Buffer), ObModIds::OB_THREAD_BUFFER);
       if (NULL == ptr) {
         // malloc failed;
-        _OB_LOG(ERROR, "malloc thread specific memeory failed.");
+        _OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "malloc thread specific memeory failed.");
       } else {
         int ret = pthread_setspecific(key_, ptr);
         if (0 != ret) {

@@ -526,6 +526,69 @@ do {                                                                            
 #define malloc_time_node_s(malloc_pool, type) malloc_time_node(malloc_pool, type, '\'');
 #define malloc_time_node_d(malloc_pool, type) malloc_time_node(malloc_pool, type, '\"');
 
+// special case json object ( key :ident/intnum)
+#define  malloc_object_key_node(malloc_pool)                                      \
+do {                                                                              \
+  ParseNode *key_node = NULL;                                                     \
+  malloc_new_node(key_node, malloc_pool, T_CHAR, 0);                              \
+  char *begin_k = strchr(yytext, '\'');                                           \
+  check_value(begin_k);                                                           \
+  char *end_k = strchr(begin_k + 1, '\'');                                        \
+  check_value(end_k);                                                             \
+  char *dest = NULL;                                                              \
+  size_t len = end_k - begin_k - 1;                                               \
+  dest = parse_strndup(begin_k + 1, len, malloc_pool);                            \
+  check_malloc(dest);                                                             \
+  key_node->str_value_ = dest;                                                    \
+  key_node->str_len_ = len;                                                       \
+  char *raw_dest = NULL;                                                          \
+  raw_dest = parse_strndup(begin_k + 1, len, malloc_pool);                        \
+  check_malloc(raw_dest);                                                         \
+  key_node->str_value_ = raw_dest;                                                \
+  key_node->str_len_ = len;                                                       \
+  ParseNode *object_node = NULL;                                                  \
+  malloc_new_node(object_node, malloc_pool, T_LINK_NODE, 2);                      \
+  object_node->children_[0] = key_node;                                           \
+  check_value(yylval);                                                            \
+  yylval->node = object_node;                                                     \
+} while (0);
+
+#define  malloc_key_colon_ident_value_node(malloc_pool)                                 \
+do {                                                                              \
+  malloc_object_key_node(malloc_pool);                                            \
+  ParseNode *value_node = NULL;                                                   \
+  malloc_new_node(value_node, malloc_pool, T_IDENT, 0);                           \
+  char *begin_v = strchr(yytext, ':');                                            \
+  check_value(begin_v);                                                           \
+  size_t end_v = strlen(begin_v);                                                 \
+  size_t len_v = end_v - 1;                                                       \
+  char *dest_v = NULL;                                                            \
+  dest_v = parse_strndup(begin_v + 1, len_v, malloc_pool);                        \
+  check_malloc(dest_v);                                                           \
+  value_node->str_len_ = len_v;                                                   \
+  value_node->str_value_ = dest_v;                                                \
+  yylval->node->children_[1] = value_node;                                         \
+  check_value(yylval);                                                            \
+} while (0);
+
+#define  malloc_key_colon_intnum_value_node(malloc_pool)                                 \
+do {                                                                              \
+  malloc_object_key_node(malloc_pool);                                            \
+  ParseNode *value_node = NULL;                                                   \
+  malloc_new_node(value_node, malloc_pool, T_INT, 0);                           \
+  char *begin_v = strchr(yytext, ':');                                            \
+  check_value(begin_v);                                                           \
+  size_t end_v = strlen(begin_v);                                                 \
+  size_t len_v = end_v - 1;                                                       \
+  char *dest_v = NULL;                                                            \
+  dest_v = parse_strndup(begin_v + 1, len_v, malloc_pool);                        \
+  check_malloc(dest_v);                                                           \
+  value_node->str_len_ = len_v;                                                   \
+  value_node->str_value_ = dest_v;                                                \
+  yylval->node->children_[1] = value_node;                                         \
+  check_value(yylval);                                                            \
+} while (0);
+
 #define check_value(val_ptr)                                                       \
 do {                                                                               \
   if (OB_UNLIKELY(NULL == val_ptr))                                                \

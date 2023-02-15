@@ -299,6 +299,220 @@ TEST_F(TestObjLock, out_trans_lock)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+TEST_F(TestObjLock, out_trans_unlock_twice)
+{
+  LOG_INFO("TestObjLock::out_trans_lock");
+  // TEST SET
+  // 1. UNLOCK AFTER A COMMITTED UNLOCK
+  // 2. UNLOCK AFTER A REPLAY AND COMMITTED UNLOCK
+  // 3. UNLCOK AFTER A REPLAY AND UNCOMMITTED UNLOCK
+  int ret = OB_SUCCESS;
+  bool is_try_lock = true;
+  int64_t expired_time = 0;
+  share::SCN min_commited_scn;
+  share::SCN flushed_scn;
+  share::SCN commit_version;
+  share::SCN commit_scn;
+  ObTxIDSet conflict_tx_set;
+  unsigned char lock_mode_in_same_trans = 0x0;
+  ObLockParam param;
+
+  MyTxCtx default_ctx;
+  ObStoreCtx store_ctx;
+
+  min_commited_scn.set_min();
+  flushed_scn.set_min();
+  start_tx(DEFAULT_TRANS_ID, default_ctx);
+  get_store_ctx(default_ctx, store_ctx);
+
+  // 1. UNLOCK AFTER A COMMON UNLOCK
+  // The complete progress is:
+  // lock -> lock commit -> unlock -> unlock commit -> unlock
+  // The second unlock will throw an error due to there's no
+  // paired lock.
+  // 1.1 lock
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 1.1");
+  param.is_try_lock_ = is_try_lock;
+  param.expired_time_ = expired_time;
+  ret = obj_lock_.lock(param,
+                       store_ctx,
+                       DEFAULT_OUT_TRANS_LOCK_OP,
+                       lock_mode_in_same_trans,
+                       allocator_,
+                       conflict_tx_set);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+  // 1.2 lock commit
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 1.2");
+  commit_version.set_base();
+  commit_scn.set_base();
+  ret = obj_lock_.update_lock_status(DEFAULT_OUT_TRANS_LOCK_OP,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS,
+                                     allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, commit_scn);
+  // 1.3 unlock
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 1.3");
+  ret = obj_lock_.unlock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                         is_try_lock,
+                         expired_time,
+                         allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, commit_scn);
+  // 1.4 unlock commit
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 1.4");
+  ret = obj_lock_.update_lock_status(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS,
+                                     allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+  // 1.5 try to unlock again
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 1.5");
+  ret = obj_lock_.unlock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                         is_try_lock,
+                         expired_time,
+                         allocator_);
+  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+
+  // 2. UNLOCK AFTER A REPLAY AND COMMITTED UNLOCK
+  // The complete progress is:
+  // replay unlock -> unlock commit -> replay lock -> lock commit -> unlock
+  // The replay logic of unlocking doesn't check whether there's a paired lock,
+  // so the first unlcok will be executed successfully. And the second unlock
+  // will see the same unlock op which is before it, so it should return error.
+  // 2.1 replay unlock
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 2.1");
+  ret = obj_lock_.recover_lock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                               allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  // 2.2 unlock commit
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 2.2");
+  commit_version.set_base();
+  commit_scn.set_base();
+  ret = obj_lock_.update_lock_status(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS,
+                                     allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+  // 2.3 replay lock
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 2.3");
+  ret = obj_lock_.recover_lock(DEFAULT_OUT_TRANS_LOCK_OP,
+                               allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  // 2.4 lock commit
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 2.4");
+  commit_version.set_base();
+  commit_scn.set_base();
+  ret = obj_lock_.update_lock_status(DEFAULT_OUT_TRANS_LOCK_OP,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS,
+                                     allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, commit_scn);
+  // 2.5 unlock
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 2.5");
+  ret = obj_lock_.unlock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                         is_try_lock,
+                         expired_time,
+                         allocator_);
+  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, commit_scn);
+  // 2.6 unlock commit to compat
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 2.6");
+  ret = obj_lock_.update_lock_status(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS,
+                                     allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+  // 2.7 check
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 2.7");
+  ret = obj_lock_.update_lock_status(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS,
+                                     allocator_);
+  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+
+  // 3. UNLOCK AFTER A REPLAY AND UNCOMMITTED UNLOCK
+  // The complete progress is:
+  // replay unlock -> replay lock -> lock commit -> unlock -> unlcok commit
+  // The second unlock will be failed due to there's another unlock op
+  // in progress, but the latest unlock commit will executed successfully,
+  // because it can see and commit the first unlock.
+  // 3.1 replay unlock
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 3.1");
+  ret = obj_lock_.recover_lock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                               allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  // 3.2 replay lock
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 3.2");
+  ret = obj_lock_.recover_lock(DEFAULT_OUT_TRANS_LOCK_OP,
+                               allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  // 3.3 lock commit
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 3.3");
+  commit_version.set_base();
+  commit_scn.set_base();
+  ret = obj_lock_.update_lock_status(DEFAULT_OUT_TRANS_LOCK_OP,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS,
+                                     allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, commit_scn);
+  // 3.4 unlock
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 3.4");
+  ret = obj_lock_.unlock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                         is_try_lock,
+                         expired_time,
+                         allocator_);
+  ASSERT_EQ(OB_OBJ_UNLOCK_CONFLICT, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, commit_scn);
+  // 3.5 unlock commit
+  LOG_INFO("TestObjLock::out_trans_unlock_twice 3.5");
+  ret = obj_lock_.update_lock_status(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS,
+                                     allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+  // 3.6 check lock exist
+  LOG_INFO("TestObjLock::out_trans_lock 3.6");
+  ret = obj_lock_.update_lock_status(DEFAULT_OUT_TRANS_LOCK_OP,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS,
+                                     allocator_);
+  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
+  min_commited_scn = obj_lock_.get_min_ddl_lock_committed_scn(flushed_scn);
+  ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+}
+
 TEST_F(TestObjLock, lock_conflict_in_in)
 {
   // 1. IN TRANS VS IN TRANS

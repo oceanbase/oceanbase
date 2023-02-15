@@ -30,9 +30,12 @@ int ObIMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
   MemMgrRLockGuard lock_guard(lock_);
-  if (OB_UNLIKELY(memtable_tail_ <= 0)) {
+  if (OB_UNLIKELY(memtable_tail_ < memtable_head_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected error, tail < head", K(ret), K(memtable_tail_), K(memtable_head_));
+  } else if (OB_UNLIKELY(memtable_tail_ == memtable_head_)) {
     ret = OB_ENTRY_NOT_EXIST;
-    STORAGE_LOG(WARN, "There is no memtable in MemtableMgr", K(ret), K(memtable_tail_));
+    STORAGE_LOG(WARN, "There is no memtable in MemtableMgr", K(ret), K(memtable_head_), K(memtable_tail_));
   } else if (OB_FAIL(get_ith_memtable(memtable_tail_ - 1, handle))) {
     STORAGE_LOG(WARN, "fail to get ith memtable", K(ret), K(memtable_tail_));
   } else if (OB_UNLIKELY(!handle.is_valid())) {
@@ -261,7 +264,7 @@ void ObIMemtableMgr::reset_tables()
 void ObIMemtableMgr::release_head_memtable()
 {
   if (OB_ISNULL(t3m_)) {
-    STORAGE_LOG(ERROR, "t3m is nullptr", KP_(t3m));
+    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "t3m is nullptr", KP_(t3m));
   } else {
     memtable::ObIMemtable *memtable = tables_[get_memtable_idx(memtable_head_)];
     tables_[get_memtable_idx(memtable_head_)] = nullptr;
@@ -277,7 +280,7 @@ void ObIMemtableMgr::release_tail_memtable()
 {
   if (memtable_tail_ > memtable_head_) {
     if (OB_ISNULL(t3m_)) {
-      STORAGE_LOG(ERROR, "t3m is nullptr", KP_(t3m));
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "t3m is nullptr", KP_(t3m));
     } else {
       memtable::ObIMemtable *memtable = tables_[get_memtable_idx(memtable_tail_ - 1)];
       tables_[get_memtable_idx(memtable_tail_ - 1)] = nullptr;

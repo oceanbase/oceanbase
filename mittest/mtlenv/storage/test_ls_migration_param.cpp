@@ -118,7 +118,8 @@ void TestLSMigrationParam::SetUp()
   sstable_meta_.basic_meta_.filled_tx_scn_.set_min();
   sstable_meta_.basic_meta_.contain_uncommitted_row_ = 0;
   sstable_meta_.data_root_info_.addr_ = addr;
-  sstable_meta_.basic_meta_.row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
+  sstable_meta_.basic_meta_.root_row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
+  sstable_meta_.basic_meta_.latest_row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
   sstable_meta_.basic_meta_.data_index_tree_height_ = 0;
   sstable_meta_.macro_info_.macro_meta_info_.addr_ = addr;
 
@@ -181,7 +182,8 @@ TEST_F(TestLSMigrationParam, test_migrate_sstable_param)
   sstable_param.basic_meta_.max_merged_trans_version_      = sstable_meta_.basic_meta_.max_merged_trans_version_;
   sstable_param.basic_meta_.table_mode_                    = sstable_meta_.basic_meta_.table_mode_;
   sstable_param.basic_meta_.contain_uncommitted_row_       = sstable_meta_.basic_meta_.contain_uncommitted_row_;
-  sstable_param.basic_meta_.row_store_type_                = sstable_meta_.basic_meta_.row_store_type_;
+  sstable_param.basic_meta_.root_row_store_type_           = sstable_meta_.basic_meta_.root_row_store_type_;
+  sstable_param.basic_meta_.latest_row_store_type_         = sstable_meta_.basic_meta_.latest_row_store_type_;
   sstable_param.table_key_                     = key;
   sstable_param.basic_meta_.compressor_type_               = sstable_meta_.basic_meta_.compressor_type_;
   sstable_param.basic_meta_.encrypt_id_                    = sstable_meta_.basic_meta_.encrypt_id_;

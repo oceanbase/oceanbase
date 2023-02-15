@@ -90,6 +90,7 @@ private:
 
 
   void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
+  void record_execute_time(const sql::ObPhysicalPlan *plan, const int64_t end_time) const;
   void update_audit_info(const ObWaitEventStat &total_wait_desc,
                          ObAuditRecordData &record);
   int fill_feedback_session_info(ObMySQLResultSet &result,
@@ -106,6 +107,9 @@ private:
                                           bool &need_disconnect,
                                           bool is_ins_multi_val_opt);
   int deserialize_com_field_list();
+  int store_params_value_to_str(ObIAllocator &allocator,
+                                sql::ObSQLSessionInfo &session,
+                                common::ParamStore &params);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPQuery);
 private:
@@ -119,6 +123,8 @@ private:
   //由于mysql的COM_FIELD_LIST命令本质上就是获取列的定义信息，只需要返回列定义
   bool is_com_filed_list_;
   common::ObString wild_str_;//used to save wildware string in COM_FIELD_LIST
+  int64_t params_value_len_;
+  char *params_value_;
 }; // end of class ObMPQuery
 } // end of namespace observer
 } // end of namespace oceanbase

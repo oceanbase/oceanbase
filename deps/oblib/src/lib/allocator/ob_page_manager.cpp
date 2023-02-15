@@ -80,7 +80,7 @@ AChunk *ObPageManagerCenter::alloc_from_thread_local_cache(int64_t tenant_id, in
   if (OB_SUCCESS == tmpret) {
     ret = alloc_from_thread_local_cache_(tenant_id, ctx_id);
     if (OB_SUCCESS != (tmpret = mutex_.unlock())) {
-      OB_LOG(ERROR, "unlock failed", K(tmpret));
+      OB_LOG_RET(ERROR, tmpret, "unlock failed", K(tmpret));
     }
   }
   return ret;

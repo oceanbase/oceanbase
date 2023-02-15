@@ -146,7 +146,7 @@ void ObTabletTableUpdateTask::check_task_status() const
   const int64_t safe_interval = TABLET_CHECK_INTERVAL;
   // need to print a WARN log if this task is not executed correctly since two minuts ago
   if (now - add_timestamp_ > safe_interval) {
-    FLOG_WARN("tablet table update task cost too much time to execute",
+    FLOG_WARN_RET(OB_ERR_UNEXPECTED, "tablet table update task cost too much time to execute",
               K(*this), K(safe_interval), "cost_time", now - add_timestamp_);
   }
 }

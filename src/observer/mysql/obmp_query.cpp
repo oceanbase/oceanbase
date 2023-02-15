@@ -74,7 +74,9 @@ ObMPQuery::ObMPQuery(const ObGlobalContext &gctx)
       single_process_timestamp_(0),
       exec_start_timestamp_(0),
       exec_end_timestamp_(0),
-      is_com_filed_list_(false)
+      is_com_filed_list_(false),
+      params_value_len_(0),
+      params_value_(NULL)
 {
   ctx_.exec_type_ = MpQuery;
 }
@@ -496,6 +498,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(mpquery_single_stmt);
+  ctx_.spm_ctx_.reset();
   bool need_response_error = true;
   const bool enable_trace_log = lib::is_trace_log_enabled();
   session.get_raw_audit_record().request_memory_used_ = 0;
@@ -717,7 +720,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   ObSqlFatalErrExtraInfoGuard extra_info_guard;
   extra_info_guard.set_cur_sql(sql);
   extra_info_guard.set_tenant_id(session.get_effective_tenant_id());
-  SMART_VAR(ObMySQLResultSet, result, session, CURRENT_CONTEXT->get_arena_allocator()) {
+  ObIAllocator &allocator = CURRENT_CONTEXT->get_arena_allocator();
+  SMART_VAR(ObMySQLResultSet, result, session, allocator) {
     if (OB_FAIL(get_tenant_schema_info_(session.get_effective_tenant_id(),
                                         &cached_schema_info,
                                         schema_guard,
@@ -790,7 +794,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
             need_response_error = false;
           }
         } else {
-          session.set_session_in_retry(ObSessionRetryStatus::SESS_IN_RETRY);
+          retry_ctrl_.set_packet_retry(ret);
           session.get_retry_info_for_update().set_last_query_retry_err(ret);
           session.get_retry_info_for_update().inc_retry_cnt();
         }
@@ -858,6 +862,11 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         // some statistics must be recorded for plan stat
         // even though sql audit disabled
         update_audit_info(total_wait_desc, audit_record);
+      }
+      if (enable_perf_event && !THIS_THWORKER.need_retry()
+        && OB_NOT_NULL(result.get_physical_plan())) {
+        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+        ObSQLUtils::record_execute_time(result.get_physical_plan()->get_plan_type(), time_cost);
       }
       // 重试需要满足一下条件：
       // 1. rs.open 执行失败
@@ -951,6 +960,10 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       audit_record.is_multi_stmt_ = session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS;
       audit_record.is_batched_multi_stmt_ = ctx_.multi_stmt_item_.is_batched_multi_stmt();
 
+      OZ (store_params_value_to_str(allocator, session, result.get_ps_params()));
+      audit_record.params_value_ = params_value_;
+      audit_record.params_value_len_ = params_value_len_;
+
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_ISNULL(plan_ctx)) {
         //do nothing
@@ -1000,6 +1013,38 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         RETRY_TYPE_NONE != retry_ctrl_.get_retry_type();
     (void)ObSQLUtils::handle_audit_record(is_need_retry, EXECUTE_LOCAL, session,
         ctx_.is_sensitive_);
+  }
+  return ret;
+}
+
+int ObMPQuery::store_params_value_to_str(ObIAllocator &allocator,
+                                         sql::ObSQLSessionInfo &session,
+                                         common::ParamStore &params)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t length = OB_MAX_SQL_LENGTH;
+  CK (OB_NOT_NULL(params_value_ = static_cast<char *>(allocator.alloc(OB_MAX_SQL_LENGTH))));
+  for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+    const common::ObObjParam &param = params.at(i);
+    if (param.is_ext()) {
+      pos = 0;
+      params_value_ = NULL;
+      params_value_len_ = 0;
+      break;
+    } else {
+      OZ (param.print_sql_literal(params_value_, length, pos, allocator, TZ_INFO(&session)));
+      if (i != params.count() - 1) {
+        OZ (databuff_printf(params_value_, length, pos, allocator, ","));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    params_value_ = NULL;
+    params_value_len_ = 0;
+    ret = OB_SUCCESS;
+  } else {
+    params_value_len_ = pos;
   }
   return ret;
 }

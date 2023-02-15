@@ -63,7 +63,7 @@ public:
   // get one task from wait_list_, for per task choosing a server to execute,
   // then set to scheduler state and move to schedule_list;
   // return OB_SUCCESS or assign NULL to task, if no task can be scheduled
-  int pop_task(ObBackupScheduleTask *&task);
+  int pop_task(ObBackupScheduleTask *&output_task, common::ObArenaAllocator &allocator);
   int execute_over(const ObBackupScheduleTask &task, const int execute_ret);
   // remove task 
   // When finished, task memory will be released and %task can not be used again.
@@ -184,8 +184,6 @@ public:
   int reload_task_(int64_t &last_reload_task_ts, bool &reload_flag);
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return *schema_service_; }
 private:
-  // Return OB_SUCCESS or assign NULL to %task, if no task can be scheduled
-  int pop_task_(ObBackupScheduleTask *&task);
   // Send task to execute.
   int execute_task_(const ObBackupScheduleTask &task);
   int do_execute_(const ObBackupScheduleTask &task);

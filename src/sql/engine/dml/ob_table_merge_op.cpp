@@ -483,8 +483,12 @@ int ObTableMergeOp::update_row_das()
     } else if (need_after_row_process(*upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
         LOG_WARN("failed to push dml modify row to modified row list", K(ret));
     } else {
-      affected_rows_++;
+      // do nothing
     }
+  }
+
+  if (OB_SUCC(ret)) {
+    affected_rows_++;
   }
   return ret;
 }

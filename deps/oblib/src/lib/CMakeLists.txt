@@ -190,6 +190,7 @@ ob_set_subtarget(oblib_lib oblog
   oblog/ob_log_time_fmt.cpp
   oblog/ob_trace_log.cpp
   oblog/ob_warning_buffer.cpp
+  oblog/ob_syslog_rate_limiter.cpp
 )
 
 

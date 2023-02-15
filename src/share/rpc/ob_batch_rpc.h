@@ -296,7 +296,7 @@ public:
   }
   void set_dst_cluster_id(const int64_t cluster_id) {
     if (cluster_id == common::OB_INVALID_CLUSTER_ID) {
-      RPC_LOG(ERROR, "cluster_id is invalid, unexpected", "server", server_, K(cluster_id));
+      RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "cluster_id is invalid, unexpected", "server", server_, K(cluster_id));
     } else if (cluster_id != dst_cluster_id_) {
       const int64_t old_cluster_id = dst_cluster_id_;
       dst_cluster_id_ = cluster_id;

@@ -36,7 +36,7 @@ const char* ObArchiveMode::to_str() const
   const char *str = OB_ARCHIVE_MODE_STR[0];
   if (OB_UNLIKELY(mode_ >= ARRAYSIZEOF(OB_ARCHIVE_MODE_STR)
                   || mode_ < Mode::INVALID)) {
-    LOG_ERROR("fatal error, unknown archive mode", K_(mode));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown archive mode", K_(mode));
   } else {
     str = OB_ARCHIVE_MODE_STR[mode_];
   }
@@ -57,7 +57,7 @@ ObArchiveMode::ObArchiveMode(const ObString &str)
   }
 
   if (Mode::INVALID == mode_) {
-    LOG_WARN("invalid archive mode", K_(mode), K(str));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid archive mode", K_(mode), K(str));
   }
 }
 

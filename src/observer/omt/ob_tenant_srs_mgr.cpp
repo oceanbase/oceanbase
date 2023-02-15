@@ -168,14 +168,8 @@ int ObTenantSrsMgr::delete_nonexist_tenants_srs()
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("tenant srs in recycle list is null", K(ret));
     } else {
-      bool is_exist = true;
-      ObTenantSrs::TenantSrsUpdatePeriodicTask &task = tenant_srs->get_update_srs_task();
-      if (OB_FAIL(TG_TASK_EXIST(lib::TGDefIDs::SRS_MGR, task, is_exist))) {
-        LOG_WARN("failed to check tenant srs update task", K(ret), K(tenant_srs->tenant_id()));
-      } else if (is_exist) {
-        if (OB_FAIL(TG_CANCEL_R(lib::TGDefIDs::SRS_MGR, task))) {
-          LOG_WARN("failed to cancel tenant srs update task", K(ret), K(tenant_srs->tenant_id()));
-        }
+      if (OB_FAIL(tenant_srs->cancle_update_task())) {
+        LOG_WARN("failed to cancle tenant srs update task", K(ret), K(tenant_srs->tenant_id()));
       } else {
         tenant_srs->recycle_old_snapshots();
         tenant_srs->recycle_last_snapshots();
@@ -277,8 +271,12 @@ int ObTenantSrsMgr::add_tenant_srs(const uint64_t tenant_id)
         LOG_WARN("failed to set new tenant srs", K(ret), K(tenant_id));
       }
       if (OB_FAIL(ret)) {
-        new_tenant_srs->~ObTenantSrs();
-        allocator_.free(new_tenant_srs);
+        if (OB_FAIL(new_tenant_srs->cancle_update_task())) {
+          LOG_WARN("failed to cancle update srs task", K(ret), K(tenant_id));
+        } else {
+          new_tenant_srs->~ObTenantSrs();
+          allocator_.free(new_tenant_srs);
+        }
       }
     }
   }

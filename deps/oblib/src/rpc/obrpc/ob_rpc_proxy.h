@@ -117,11 +117,15 @@ public:
         tenant_id_(common::OB_SYS_TENANT_ID), group_id_(0),
         priv_tenant_id_(common::OB_INVALID_TENANT_ID),
         max_process_handler_time_(0), compressor_type_(common::INVALID_COMPRESSOR),
+        src_cluster_id_(common::OB_INVALID_CLUSTER_ID),
         dst_cluster_id_(common::OB_INVALID_CLUSTER_ID), init_(false),
         active_(true), is_trace_time_(false), do_ratelimit_(false), is_bg_flow_(0), rcode_() {}
   virtual ~ObRpcProxy() = default;
 
   int init(const rpc::frame::ObReqTransport *transport,
+           const common::ObAddr &dst = common::ObAddr());
+  int init(const rpc::frame::ObReqTransport *transport,
+           const int64_t src_cluster_id,
            const common::ObAddr &dst = common::ObAddr());
   void destroy()                                { init_ = false; }
   bool is_inited() const                        { return init_; }
@@ -253,6 +257,7 @@ protected:
   uint64_t priv_tenant_id_;
   uint32_t max_process_handler_time_;
   common::ObCompressorType compressor_type_;
+  int64_t src_cluster_id_;
   int64_t dst_cluster_id_;
   bool init_;
   bool active_;
@@ -370,7 +375,7 @@ extern ObRpcProxy::NoneT None;
   }                                                                     \
   inline CLS& group_id(uint64_t group_id)                                    \
   {                                                                     \
-    set_group_id(group_id);                                              \
+    set_group_id(static_cast<int32_t>(group_id));                       \
     return *this;                                                       \
   }                                                                     \
   inline CLS& as(uint64_t tenant_id)                                    \

@@ -69,7 +69,7 @@ public:
   int report_sqc_finish(int end_ret) {
     return sqc_ctx_.sqc_proxy_.report(end_ret);
   }
-  int init_first_buffer_cache(bool is_rpc_worker, int64_t dop);
+  int init_first_buffer_cache(int64_t dop);
   void destroy_first_buffer_cache();
   void destroy_bloom_filter();
 

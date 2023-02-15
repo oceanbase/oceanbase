@@ -93,7 +93,7 @@ TEST_F(ObserverExpandShink, basic_func)
   sleep(6);
   EXPECT_EQ(GCONF.log_disk_size, 3 * 1024 * 1024 * 1024ul);
   EXPECT_EQ(OB_ZONE_RESOURCE_NOT_ENOUGH, create_tenant("runlin"));
-  CLOG_LOG(ERROR, "create runlin finished");
+  CLOG_LOG_RET(ERROR, OB_SUCCESS, "create runlin finished");
   GCONF.log_disk_size = 1024 * 1024 * 1024ul * 1024 * 100ul;
   int64_t log_disk_size = 0;
   int64_t log_disk_percentage = 0;
@@ -143,6 +143,7 @@ TEST_F(ObserverExpandShink, direct_set_observer)
 
 TEST_F(ObserverExpandShink, paralle_set)
 {
+  LOG_INFO("start to test parallel_set");
   share::ObTenantSwitchGuard tguard;
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(1));
   ObLogService *log_service = MTL(ObLogService*);
@@ -150,7 +151,7 @@ TEST_F(ObserverExpandShink, paralle_set)
   ASSERT_NE(nullptr, log_service);
   EXPECT_EQ(OB_SUCCESS, log_service->get_palf_options(opts));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_service->update_log_disk_usage_limit_size(1000));
-  opts.disk_options_.log_disk_utilization_limit_threshold_ = 12;
+  opts.disk_options_.log_disk_utilization_limit_threshold_ = 10;
   opts.disk_options_.log_disk_utilization_threshold_ = 11;
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_service->palf_env_->update_options(opts));
   {

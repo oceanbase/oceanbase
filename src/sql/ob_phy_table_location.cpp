@@ -27,7 +27,7 @@ bool ObPhyTableLocation::compare_phy_part_loc_info_asc(const ObCandiTabletLoc *&
 {
   bool is_less_than = false;
   if (OB_ISNULL(left) || OB_ISNULL(right)) {
-    LOG_ERROR("phy part loc info ptr is NULL", K(left), K(right));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "phy part loc info ptr is NULL", K(left), K(right));
   } else {
     is_less_than = left->get_partition_location().get_partition_id()
         < right->get_partition_location().get_partition_id();
@@ -40,7 +40,7 @@ bool ObPhyTableLocation::compare_phy_part_loc_info_desc(const ObCandiTabletLoc *
 {
   bool is_larger_than = false;
   if (OB_ISNULL(left) || OB_ISNULL(right)) {
-    LOG_ERROR("phy part loc info ptr is NULL", K(left), K(right));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "phy part loc info ptr is NULL", K(left), K(right));
   } else {
     is_larger_than = left->get_partition_location().get_partition_id()
         > right->get_partition_location().get_partition_id();

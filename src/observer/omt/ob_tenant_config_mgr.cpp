@@ -266,7 +266,6 @@ int ObTenantConfigMgr::add_tenant_config(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObTenantConfig *const *config = nullptr;
-  DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
   DRWLock::WRLockGuard guard(rwlock_);
   if (is_virtual_tenant_id(tenant_id)
       || OB_NOT_NULL(config = config_map_.get(ObTenantID(tenant_id)))) {
@@ -300,7 +299,6 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObTenantConfig *config = nullptr;
-  DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
   DRWLock::WRLockGuard guard(rwlock_);
   ObTenant *tenant = NULL;
   bool has_dropped = false;

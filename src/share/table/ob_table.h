@@ -172,7 +172,7 @@ ObITableEntity *ObTableEntityFactory<T>::alloc()
   if (NULL == entity) {
     void * ptr = alloc_.alloc(sizeof(T));
     if (NULL == ptr) {
-      CLIENT_LOG(WARN, "no memory for table entity");
+      CLIENT_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "no memory for table entity");
     } else {
       entity = new(ptr) T();
       used_list_.add_last(entity);

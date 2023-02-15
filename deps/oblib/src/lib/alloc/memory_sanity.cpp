@@ -244,8 +244,8 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 {
   static int (*real_func)(char *, size_t, const char *, va_list)
     = (__typeof__(real_func)) dlsym(RTLD_NEXT, "vsnprintf");
-  sanity_check_range(str, size);
   int n = real_func(str, size, format, ap);
+  sanity_check_range(str, OB_LIKELY((n + 1) < size) ? (n + 1) : size);
   return n;
 }
 

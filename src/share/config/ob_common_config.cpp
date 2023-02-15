@@ -329,13 +329,12 @@ int ObCommonConfig::add_extra_config(const char *config_str,
         name = "";
       }
       if (OB_SUCC(ret)) {
-        const int value_len = strlen(value);
+        const int value_len = static_cast<int>(strlen(value));
         // hex2cstring -> value_len / 2 + 1
         // '\0' -> 1
         const int external_info_val_len = value_len / 2 + 1 + 1;
         char *external_info_val = (char*)ob_malloc(external_info_val_len, "temp");
         DEFER(if (external_info_val != nullptr) ob_free(external_info_val););
-        DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
         if (OB_ISNULL(external_info_val)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("failed to alloc", K(ret));

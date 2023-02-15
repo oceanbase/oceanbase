@@ -63,6 +63,7 @@ default_enable_extended_rowid
 default_progressive_merge_num
 default_row_format
 devname
+diag_syslog_per_error_limit
 disk_io_thread_count
 dtl_buffer_size
 dump_data_dictionary_to_log_interval
@@ -118,6 +119,7 @@ log_disk_size
 log_disk_utilization_limit_threshold
 log_disk_utilization_threshold
 log_restore_concurrency
+log_storage_warning_tolerance_time
 log_transport_compress_all
 log_transport_compress_func
 ls_meta_table_check_interval
@@ -268,6 +270,7 @@ _ignore_system_memory_over_limit_error
 _io_callback_thread_count
 _large_query_io_percentage
 _lcl_op_interval
+_load_tde_encrypt_engine
 _max_elr_dependent_trx_count
 _max_schema_slot_num
 _migrate_block_verify_level

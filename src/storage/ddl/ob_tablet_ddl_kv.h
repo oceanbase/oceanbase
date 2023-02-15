@@ -72,20 +72,19 @@ public:
   int get_last_rowkey(const blocksstable::ObDatumRowkey *&last_rowkey);
   int build_sorted_rowkeys();
   const blocksstable::ObDataStoreDesc &get_data_desc() const { return data_desc_; }
-  TO_STRING_KV(K(is_inited_), K(macro_blocks_.count()), K(sorted_rowkeys_.count()), K(data_desc_));
+  TO_STRING_KV(K(is_inited_), K(macro_blocks_.count()), K(arena_.total()), K(data_desc_), K(sorted_rowkeys_.count()));
 private:
   struct IndexItem final
   {
   public:
-    IndexItem() : rowkey_(nullptr), block_meta_(nullptr), is_header_valid_(false) {}
+    IndexItem() : rowkey_(nullptr), block_meta_(nullptr) {}
     IndexItem(const blocksstable::ObDatumRowkey *rowkey,
               const blocksstable::ObDataMacroBlockMeta *block_meta)
-      : rowkey_(rowkey), block_meta_(block_meta), is_header_valid_(false) {}
+      : rowkey_(rowkey), block_meta_(block_meta) {}
     TO_STRING_KV(KPC_(rowkey), KPC_(block_meta), K_(header));
     const blocksstable::ObDatumRowkey *rowkey_;
     const blocksstable::ObDataMacroBlockMeta *block_meta_;
     blocksstable::ObIndexBlockRowHeader header_;
-    bool is_header_valid_;
   };
   struct CompareFunctor
   {
@@ -98,7 +97,7 @@ private:
 private:
   bool is_inited_;
   ObArray<ObDDLMacroHandle> macro_blocks_;
-  ObFIFOAllocator fifo_allocator_;
+  ObArenaAllocator arena_;
   BtreeNodeAllocator tree_allocator_;
   KeyBtree block_tree_;
   blocksstable::ObDataStoreDesc data_desc_;

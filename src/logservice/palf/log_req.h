@@ -383,12 +383,13 @@ struct LogGetStatResp {
   OB_UNIS_VERSION(1);
 public:
   LogGetStatResp();
-  LogGetStatResp(const share::SCN &max_scn);
+  LogGetStatResp(const share::SCN &max_scn, const LSN &end_lsn);
   ~LogGetStatResp();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(max_scn));
+  TO_STRING_KV(K_(max_scn), K_(end_lsn));
   share::SCN max_scn_;
+  LSN end_lsn_;
 };
 
 } // end namespace palf

@@ -44,7 +44,7 @@ const char *ObDataDictSqlClient::query_ls_info_sql_format =
 const char *ObDataDictSqlClient::query_tenant_schema_version_sql_format =
     "SELECT MAX(SCHEMA_VERSION) AS SCHEMA_VERSION FROM %s AS OF SNAPSHOT %lu";
 const char *ObDataDictSqlClient::report_data_dict_persist_info_sql_format =
-    "REPLACE INTO %s (SNAPSHOT_SCN, START_LSN, END_LSN) VALUES (%lu, %ld, %ld)";
+    "REPLACE INTO %s (SNAPSHOT_SCN, START_LSN, END_LSN) VALUES (%lu, %lu, %lu)";
 
 ObDataDictSqlClient::ObDataDictSqlClient()
   : is_inited_(false),

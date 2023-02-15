@@ -80,6 +80,7 @@ public:
                const ObTabletID &tablet_id,
                const common::ObIArray<common::ObNewRow> &row_array);
 private:
+  int px_clean_up_trans(ObTableLoadStoreTrans *trans);
   int px_flush(ObTableLoadStoreTrans *trans);
 
 private:

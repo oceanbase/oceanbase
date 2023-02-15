@@ -1084,12 +1084,12 @@ void ObLSService::del_ls_after_create_ls_failed_(ObLSCreateState& ls_create_stat
       if (ls_create_state >= ObLSCreateState::CREATE_STATE_ADDED_TO_MAP) {
         if (OB_SUCCESS != (tmp_ret = remove_ls_from_map_(ls->get_ls_id()))) {
           need_retry = true;
-          LOG_ERROR("remove ls from map failed", K(tmp_ret));
+          LOG_ERROR_RET(tmp_ret, "remove ls from map failed", K(tmp_ret));
         }
       } else if (ls_create_state >= ObLSCreateState::CREATE_STATE_INNER_CREATED) {
         if (OB_SUCCESS != (tmp_ret = inner_del_ls_(ls))) {
           need_retry = true;
-          LOG_ERROR("inner del ls failed.", K(tmp_ret));
+          LOG_ERROR_RET(tmp_ret, "inner del ls failed.", K(tmp_ret));
         }
       }
     } while (need_retry);

@@ -34,7 +34,6 @@ class SCN;
 }
 namespace palf
 {
-#define PALF_ENV_ID (OB_INVALID_TENANT_ID == MTL_ID() ? OB_SERVER_TENANT_ID : MTL_ID())
 #define FLASHBACK_SUFFIX ".flashback"
 #define TMP_SUFFIX ".tmp"
 

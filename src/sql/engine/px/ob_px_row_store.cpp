@@ -310,6 +310,7 @@ int ObReceiveRowReader::get_next_row(common::ObNewRow &row)
 }
 
 int ObReceiveRowReader::to_expr(const ObChunkDatumStore::StoredRow *srow,
+                                const ObIArray<ObExpr*> &dynamic_const_exprs,
                                 const ObIArray<ObExpr*> &exprs,
                                 ObEvalCtx &eval_ctx)
 {
@@ -321,15 +322,33 @@ int ObReceiveRowReader::to_expr(const ObChunkDatumStore::StoredRow *srow,
       exprs.at(i)->locate_expr_datum(eval_ctx) = srow->cells()[i];
       exprs.at(i)->set_evaluated_projected(eval_ctx);
     }
+    // deep copy dynamic const expr datum
+    if (dynamic_const_exprs.count() > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < dynamic_const_exprs.count(); i++) {
+        ObExpr *expr = dynamic_const_exprs.at(i);
+        if (OB_FAIL(expr->deep_copy_self_datum(eval_ctx))) {
+          LOG_WARN("fail to deep copy datum", K(ret), K(eval_ctx), K(*expr));
+        }
+      }
+    }
   }
   return ret;
 }
 
-int ObReceiveRowReader::get_next_row(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx)
+int ObReceiveRowReader::get_next_row(const ObIArray<ObExpr*> &exprs,
+                                     const ObIArray<ObExpr*> &dynamic_const_exprs,
+                                     ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   if (NULL != datum_iter_) {
-    ret = datum_iter_->get_next_row(exprs, eval_ctx);
+    const ObChunkDatumStore::StoredRow *srow = NULL;
+    if (OB_FAIL(datum_iter_->get_next_row(srow))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next stored row failed", K(ret));
+      }
+    } else {
+      ret = to_expr(srow, dynamic_const_exprs, exprs, eval_ctx);
+    }
   } else {
     free_iterated_buffers();
     const ObChunkDatumStore::StoredRow *srow
@@ -337,19 +356,23 @@ int ObReceiveRowReader::get_next_row(const ObIArray<ObExpr*> &exprs, ObEvalCtx &
     if (NULL == srow) {
       ret = OB_ITER_END;
     } else {
-      ret = to_expr(srow, exprs, eval_ctx);
+      ret = to_expr(srow, dynamic_const_exprs, exprs, eval_ctx);
     }
   }
+
   return ret;
 }
 
-void ObReceiveRowReader::attach_rows(const common::ObIArray<ObExpr*> &exprs,
-                                     ObEvalCtx &eval_ctx,
-                                     const ObChunkDatumStore::StoredRow **srows,
-                                     const int64_t read_rows)
+int ObReceiveRowReader::attach_rows(const common::ObIArray<ObExpr*> &exprs,
+                                    const ObIArray<ObExpr*> &dynamic_const_exprs,
+                                    ObEvalCtx &eval_ctx,
+                                    const ObChunkDatumStore::StoredRow **srows,
+                                    const int64_t read_rows)
 {
+  int ret = OB_SUCCESS;
   if (OB_ISNULL(srows)) {
-    // do nothing
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
   } else {
     for (int64_t col_idx = 0; col_idx < exprs.count(); col_idx++) {
       ObExpr *e = exprs.at(col_idx);
@@ -366,10 +389,26 @@ void ObReceiveRowReader::attach_rows(const common::ObIArray<ObExpr*> &exprs,
       info.notnull_ = false;
       info.point_to_frame_ = false;
     }
+    // deep copy dynamic const expr datum
+    if (OB_SUCC(ret) && dynamic_const_exprs.count() > 0 && read_rows > 0) {
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+      batch_info_guard.set_batch_size(read_rows);
+      batch_info_guard.set_batch_idx(0);
+      for (int64_t i = 0; OB_SUCC(ret) && i < dynamic_const_exprs.count(); i++) {
+        ObExpr *expr = dynamic_const_exprs.at(i);
+        OB_ASSERT(!expr->is_batch_result());
+        if (OB_FAIL(expr->deep_copy_self_datum(eval_ctx))) {
+          LOG_WARN("fail to deep copy datum", K(ret), K(eval_ctx), K(*expr));
+        }
+      }
+    }
   }
+
+  return ret;
 }
 
 int ObReceiveRowReader::get_next_batch(const ObIArray<ObExpr*> &exprs,
+                                       const ObIArray<ObExpr*> &dynamic_const_exprs,
                                        ObEvalCtx &eval_ctx,
                                        const int64_t max_rows,
                                        int64_t &read_rows,
@@ -381,7 +420,18 @@ int ObReceiveRowReader::get_next_batch(const ObIArray<ObExpr*> &exprs,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL store rows", K(ret));
   } else if (NULL != datum_iter_) {
-    ret = datum_iter_->get_next_batch(exprs, eval_ctx, max_rows, read_rows, srows);
+    if (max_rows > eval_ctx.max_batch_size_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(max_rows), K(eval_ctx.max_batch_size_));
+    } else if (OB_FAIL(datum_iter_->get_next_batch(srows, max_rows, read_rows))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next batch failed", K(ret), K(max_rows));
+      } else {
+        read_rows = 0;
+      }
+    } else {
+      OZ(attach_rows(exprs, dynamic_const_exprs, eval_ctx, srows, read_rows));
+    }
   } else {
     free_iterated_buffers();
     read_rows = 0;
@@ -394,7 +444,7 @@ int ObReceiveRowReader::get_next_batch(const ObIArray<ObExpr*> &exprs,
       ret = OB_ITER_END;
     } else {
       LOG_DEBUG("read rows", K(read_rows), KP(this));
-      attach_rows(exprs, eval_ctx, srows, read_rows);
+      OZ(attach_rows(exprs, dynamic_const_exprs, eval_ctx, srows, read_rows));
     }
   }
   return ret;

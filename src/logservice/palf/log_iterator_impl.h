@@ -718,9 +718,9 @@ void LogIteratorImpl<ENTRY>::try_clean_up_cache_()
   if (true == matched_type) {
     // do nothing
   } else if (INVALID_PROPOSAL_ID == current_mode_version || init_mode_version_ > current_mode_version) {
-    PALF_LOG(WARN, "current_mode_version is unexpected", K(current_mode_version), KPC(this));
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "current_mode_version is unexpected", K(current_mode_version), KPC(this));
   } else if (init_mode_version_ < current_mode_version) {
-    PALF_LOG(WARN, "mode version has been changed, need reset cache buf", KPC(this), K(current_mode_version));
+    PALF_LOG_RET(WARN, OB_SUCCESS, "mode version has been changed, need reset cache buf", KPC(this), K(current_mode_version));
     init_mode_version_ = current_mode_version;
     LSN curr_read_lsn = log_storage_->get_lsn(curr_read_pos_);
     log_storage_->reuse(curr_read_lsn);

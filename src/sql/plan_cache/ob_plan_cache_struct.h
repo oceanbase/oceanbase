@@ -56,22 +56,6 @@ struct ObPlanCacheKey : public ObILibCacheKey
         db_id_(common::OB_INVALID_ID),
         sessid_(0),
         mode_(PC_TEXT_MODE) {}
-  ObPlanCacheKey(const ObString &name,
-                 uint64_t key_id,
-                 uint64_t db_id,
-                 uint64_t sessid,
-                 PlanCacheMode mode,
-                 const ObString &sys_vars_str,
-                 const ObString &config_str,
-                 ObLibCacheNameSpace namespace_arg)
-      : ObILibCacheKey(namespace_arg),
-        name_(name),
-        key_id_(key_id),
-        db_id_(db_id),
-        sessid_(sessid),
-        mode_(mode),
-        sys_vars_str_(sys_vars_str),
-        config_str_(config_str) {}
 
   inline void reset()
   {

@@ -380,7 +380,7 @@ int ObDataAccessService::do_async_remote_das_task(
   ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
   int64_t timeout = plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time();
 #ifdef ERRSIM
-  int inject_timeout = -E(EventTable::EN_DAS_SIMULATE_ASYNC_RPC_TIMEOUT) OB_SUCCESS;
+  int inject_timeout = -OB_E(EventTable::EN_DAS_SIMULATE_ASYNC_RPC_TIMEOUT) OB_SUCCESS;
   if (OB_SUCCESS != inject_timeout) {
     LOG_INFO("das async rpc simulate timeout", K(inject_timeout));
     timeout = inject_timeout - 10;
@@ -604,11 +604,13 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   }
   if (OB_FAIL(ret)) {
     // if error happened, it must be the last.
+    // Special case is rpc error, because we cannot do a partition retry on rpc error.
+    // So it's safe to only mark the first das task op failed.
     task_op->set_task_status(ObDasTaskStatus::FAILED);
     task_op->errcode_ = ret;
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(task_op->state_advance())) {
-      LOG_WARN("failed to advance das task state.",K(ret));
+      LOG_WARN("failed to advance das task state.",K(tmp_ret));
     }
   } else {
     // if no error happened, all tasks were executed successfully.

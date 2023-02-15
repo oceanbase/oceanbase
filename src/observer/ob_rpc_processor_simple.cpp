@@ -86,7 +86,7 @@ namespace observer
 int ObErrorP::process()
 {
   if (ret_ == OB_SUCCESS) {
-    LOG_ERROR("should not return success in error packet", K(ret_));
+    LOG_ERROR_RET(ret_, "should not return success in error packet", K(ret_));
   }
   return ret_;
 }
@@ -1979,19 +1979,29 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
       MacroBlockId macro_block_id;
       ObMacroBlockHandle macro_handle;
       ObMacroBlockWriteInfo write_info;
+      ObLSService *ls_service = MTL(ObLSService*);
+      ObLSHandle ls_handle;
+      ObTabletHandle tablet_handle;
+      ObDDLKvMgrHandle ddl_kv_mgr_handle;
 
       // restruct write_info
       write_info.buffer_ = arg_.redo_info_.data_buffer_.ptr();
       write_info.size_= arg_.redo_info_.data_buffer_.length();
       write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       const int64_t io_timeout_ms = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
-      if (OB_FAIL(ObBlockManager::async_write_block(write_info, macro_handle))) {
+      if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        LOG_WARN("get ls failed", K(ret), K(arg_));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(arg_.redo_info_.table_key_.tablet_id_, tablet_handle))) {
+        LOG_WARN("get tablet failed", K(ret));
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+        LOG_WARN("get ddl kv manager failed", K(ret));
+      } else if (OB_FAIL(ObBlockManager::async_write_block(write_info, macro_handle))) {
         LOG_WARN("fail to async write block", K(ret), K(write_info), K(macro_handle));
       } else if (OB_FAIL(macro_handle.wait(io_timeout_ms))) {
         LOG_WARN("fail to wait macro block io finish", K(ret));
       } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, arg_.redo_info_.table_key_.tablet_id_))) {
         LOG_WARN("init sstable redo writer", K(ret), K_(arg));
-      } else if (OB_FAIL(sstable_redo_writer.write_redo_log(arg_.redo_info_, macro_handle.get_macro_id()))) {
+      } else if (OB_FAIL(sstable_redo_writer.write_redo_log(arg_.redo_info_, macro_handle.get_macro_id(), false, arg_.task_id_, tablet_handle, ddl_kv_mgr_handle))) {
         LOG_WARN("fail to write macro redo", K(ret), K_(arg));
       } else if (OB_FAIL(sstable_redo_writer.wait_redo_log_finish(arg_.redo_info_,
                                                                   macro_handle.get_macro_id()))) {
@@ -2022,13 +2032,19 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(table_key.tablet_id_, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      LOG_WARN("get ddl kv manager failed", K(ret));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_EAGAIN;
+      } else {
+        LOG_WARN("get ddl kv manager failed", K(ret));
+      }
     } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
     } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
     } else {
       SCN commit_scn;
-      if (OB_FAIL(sstable_redo_writer.write_commit_log(table_key,
+      if (OB_FAIL(sstable_redo_writer.write_commit_log(tablet_handle,
+                                                       ddl_kv_mgr_handle,
+                                                       table_key,
                                                        arg_.table_id_,
                                                        arg_.execution_id_,
                                                        arg_.ddl_task_id_,

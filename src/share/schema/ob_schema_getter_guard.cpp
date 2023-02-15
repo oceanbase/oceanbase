@@ -7224,7 +7224,7 @@ bool ObSchemaGetterGuard::is_tenant_schema_valid(const int64_t tenant_id) const
   int tmp_ret = OB_SUCCESS;
   int64_t schema_version = OB_INVALID_VERSION;
   if (OB_SUCCESS != (tmp_ret = get_schema_version(tenant_id, schema_version))) {
-    LOG_WARN("fail to get schema version", K(tmp_ret), K(tenant_id));
+    LOG_WARN_RET(tmp_ret, "fail to get schema version", K(tmp_ret), K(tenant_id));
     bret = false;
   } else if (schema_version <= OB_CORE_SCHEMA_VERSION) {
     bret = false;
@@ -8700,7 +8700,7 @@ bool ObSchemaGetterGuard::ignore_tenant_not_exist_error(
     bool is_restore = false;
     int tmp_ret = check_tenant_is_restore(tenant_id, is_restore);
     if (OB_SUCCESS != tmp_ret) {
-      LOG_WARN("fail to check tenant is restore", K(bret), K(tmp_ret), K(tenant_id));
+      LOG_WARN_RET(tmp_ret, "fail to check tenant is restore", K(bret), K(tmp_ret), K(tenant_id));
     } else if (is_restore) {
       bret = true;
     }

@@ -161,7 +161,11 @@ public:
   virtual int remove_directory(const char *base_dir) = 0;
   virtual bool check_disk_space_enough() = 0;
   virtual int get_io_start_time(int64_t &last_working_time) = 0;
+  virtual int64_t get_tenant_id() = 0;
+  // should be removed in version 4.2.0.0
+  virtual int update_replayable_point(const SCN &replayable_scn) = 0;
   VIRTUAL_TO_STRING_KV("IPalfEnvImpl", "Dummy");
+
 };
 
 // 日志服务的容器类，同时管理logservice对象的生命周期
@@ -174,6 +178,8 @@ public:
   int init(const PalfOptions &options,
            const char *base_dir,
            const common::ObAddr &self,
+           const int64_t cluster_id,
+           const int64_t tenant_id,
            rpc::frame::ObReqTransport *transport,
            common::ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool);
@@ -220,6 +226,8 @@ public:
   int for_each(const common::ObFunction<int(IPalfHandleImpl *ipalf_handle_impl)> &func) override final;
   common::ObILogAllocator* get_log_allocator() override final;
   int get_io_start_time(int64_t &last_working_time) override final;
+  int64_t get_tenant_id() override final;
+  int update_replayable_point(const SCN &replayable_scn) override final;
   INHERIT_TO_STRING_KV("IPalfEnvImpl", IPalfEnvImpl, K_(self), K_(log_dir), K_(disk_options_wrapper),
       KPC(log_alloc_mgr_));
   // =================== disk space management ==================
@@ -323,6 +331,7 @@ private:
 
   LogIOWorkerConfig log_io_worker_config_;
   bool diskspace_enough_;
+  int64_t tenant_id_;
   bool is_inited_;
   bool is_running_;
 private:

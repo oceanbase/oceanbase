@@ -24,6 +24,7 @@
 #define SANITY_TO_SHADOW_SIZE(args...) 0x0
 #define SANITY_MIN_CANONICAL_ADDR 0x0
 #define SANITY_MAX_CANONICAL_ADDR 0x0
+#define SANITY_CHECK_RANGE(args...)
 #else
 #define _DEFINE_SANITY_GUARD(check, var_name) SanityCheckRangeGuard<check> var_name;
 #define SANITY_ENABLE_CHECK_RANGE()  _DEFINE_SANITY_GUARD(true, CONCAT(sanity_guard, __COUNTER__))
@@ -36,6 +37,7 @@
 #define SANITY_TO_SHADOW_SIZE(size) sanity_to_shadow_size(size)
 #define SANITY_MIN_CANONICAL_ADDR sanity_min_canonical_addr
 #define SANITY_MAX_CANONICAL_ADDR sanity_max_canonical_addr
+#define SANITY_CHECK_RANGE(args...) sanity_check_range(args)
 
 #include <stdio.h>
 #include <stdint.h>
@@ -90,7 +92,7 @@ static inline void sanity_poison(const void *ptr, ssize_t len)
   if (!sanity_addr_in_range(ptr)) return;
   if (((uint64_t)ptr & 0x7) != 0) abort();
   char *shadow = (char*)sanity_to_shadow(ptr);
-  int32_t n_bytes = sanity_to_shadow_size(len);
+  int32_t n_bytes = static_cast<int32_t>(sanity_to_shadow_size(len));
   if (n_bytes > 0) {
     static void *(*real_memset)(void *, int, size_t)
       = (__typeof__(real_memset)) dlsym(RTLD_NEXT, "memset");
@@ -107,7 +109,7 @@ static inline void sanity_unpoison(const void *ptr, ssize_t len)
   if (!sanity_addr_in_range(ptr)) return;
   if (((uint64_t)ptr & 0x7) != 0) abort();
   char *shadow = (char*)sanity_to_shadow(ptr);
-  int32_t n_bytes = sanity_to_shadow_size(len);
+  int32_t n_bytes = static_cast<int32_t>(sanity_to_shadow_size(len));
   if (n_bytes > 0) {
     static void *(*real_memset)(void *, int, size_t)
       = (__typeof__(real_memset)) dlsym(RTLD_NEXT, "memset");

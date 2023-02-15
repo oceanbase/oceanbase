@@ -105,7 +105,7 @@ int64_t ObUDRItemMgr::UDRKeyNodePair::dec_ref_count()
     this->~UDRKeyNodePair();
     allocator_.free(this);// I'm sure this is the last line, so it's safe here
   } else {
-    LOG_ERROR("invalid ref count", K(ref_count));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid ref count", K(ref_count));
   }
   return ref_count;
 }

@@ -234,6 +234,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
   ObLogRestoreSourceMgr restore_source_mgr;
   ObLogRestoreSourceItem item;
 
+  DEBUG_SYNC(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY);
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else if (OB_UNLIKELY(!tenant_info.is_prepare_flashback_for_switch_to_primary_status())) {
@@ -380,7 +382,7 @@ int ObTenantRoleTransitionService::do_flashback_(const share::ObAllTenantInfo &t
 }
 
 int ObTenantRoleTransitionService::do_switch_access_mode_to_append(
-    share::ObAllTenantInfo &tenant_info,
+    const share::ObAllTenantInfo &tenant_info,
     const share::ObTenantRole &target_tenant_role)
 {
   int ret = OB_SUCCESS;
@@ -399,21 +401,28 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_append(
     LOG_WARN("failed to get access mode", KR(ret), K(access_mode), K(ref_scn), K(tenant_info));
   } else {
     common::ObMySQLTransaction trans;
+    share::ObAllTenantInfo cur_tenant_info;
     const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
     if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
       LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K_(tenant_id));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans, true, tenant_info))) {
+    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans, true, cur_tenant_info))) {
       LOG_WARN("failed to load all tenant info", KR(ret), K(tenant_id_));
+    } else if (OB_UNLIKELY(tenant_info.get_switchover_status() != cur_tenant_info.get_switchover_status()
+                           || tenant_info.get_switchover_epoch() != cur_tenant_info.get_switchover_epoch())) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("Tenant status changed by concurrent operation, switch to primary not allowed",
+               KR(ret), K(tenant_info), K(cur_tenant_info));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Tenant status changed by concurrent operation, switch to primary");
     } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
             tenant_id_, &trans, tenant_info.get_switchover_epoch(),
             share::PRIMARY_TENANT_ROLE, tenant_info.get_switchover_status(),
             share::NORMAL_SWITCHOVER_STATUS, switchover_epoch_))) {
-      LOG_WARN("failed to update tenant switchover status", KR(ret), K(tenant_id_), K(tenant_info));
-    } else if (tenant_info.get_recovery_until_scn().is_max()) {
-      LOG_INFO("recovery_until_scn already is max_scn", KR(ret), K_(tenant_id), K(tenant_info));
+      LOG_WARN("failed to update tenant switchover status", KR(ret), K(tenant_id_), K(tenant_info), K(cur_tenant_info));
+    } else if (cur_tenant_info.get_recovery_until_scn().is_max()) {
+      LOG_INFO("recovery_until_scn already is max_scn", KR(ret), K_(tenant_id), K(cur_tenant_info));
     } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
                   tenant_id_, trans, switchover_epoch_, SCN::max_scn()))) {
-      LOG_WARN("failed to update_tenant_recovery_until_scn", KR(ret), K_(tenant_id), K(tenant_info));
+      LOG_WARN("failed to update_tenant_recovery_until_scn", KR(ret), K_(tenant_id), K(tenant_info), K(cur_tenant_info));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -427,24 +436,20 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_append(
 }
 
 int ObTenantRoleTransitionService::do_switch_access_mode_to_raw_rw(
-    const share::ObAllTenantInfo &tenant_info,
-    const share::ObTenantRole &target_tenant_role)
+    const share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
-  palf::AccessMode access_mode = logservice::ObLogService::get_palf_access_mode(target_tenant_role);
+  palf::AccessMode access_mode = logservice::ObLogService::get_palf_access_mode(STANDBY_TENANT_ROLE);
   ObLSStatusOperator status_op;
 
-  if (OB_UNLIKELY(!target_tenant_role.is_standby())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid target_tenant_role", KR(ret), K(target_tenant_role));
-  } else if (OB_FAIL(check_inner_stat())) {
+  if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else if (OB_UNLIKELY(!tenant_info.is_switching_to_standby_status()
-        || target_tenant_role == tenant_info.get_tenant_role()
+        || !tenant_info.is_standby()
         || switchover_epoch_ != tenant_info.get_switchover_epoch())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant switchover status not valid", KR(ret), K(tenant_info),
-        K(target_tenant_role), K(switchover_epoch_));
+        K(switchover_epoch_));
   } else if (OB_FAIL(status_op.create_abort_ls_in_switch_tenant(
                      tenant_id_, tenant_info.get_switchover_status(),
                      tenant_info.get_switchover_epoch(), *sql_proxy_))) {
@@ -840,7 +845,7 @@ int ObTenantRoleTransitionService::switchover_update_tenant_status(
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), KR(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, KR(temp_ret));
       ret = OB_SUCC(ret) ? temp_ret : ret;
     }
   }
@@ -971,7 +976,7 @@ int ObTenantRoleTransitionService::check_sync_to_latest_(const uint64_t tenant_i
     has_sync_to_latest = true;
     for (int64_t i = 0; i < switchover_checkpoints.count() && OB_SUCC(ret) && has_sync_to_latest; i++) {
       const auto &checkpoint = switchover_checkpoints.at(i);
-      if (checkpoint.is_sync_to_latest() && checkpoint.get_cur_sync_scn().is_valid_and_not_min()) {
+      if (checkpoint.is_sync_to_latest()) {
         // LS is sync
       } else {
         has_sync_to_latest = false;
@@ -1064,7 +1069,7 @@ int ObTenantRoleTransitionService::get_checkpoints_by_rpc_(const uint64_t tenant
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("result is null", KR(ret), K(i));
           } else {
-            ObCheckpoint checkpoint(result->get_ls_id(), result->get_cur_sync_scn(), result->is_sync_to_latest());
+            ObCheckpoint checkpoint(result->get_ls_id(), result->get_cur_sync_scn(), result->get_cur_restore_source_max_scn());
             if (OB_FAIL(checkpoints.push_back(checkpoint))) {
               LOG_WARN("failed to push back checkpoint", KR(ret), K(checkpoint));
             }

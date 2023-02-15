@@ -80,13 +80,13 @@ int ObSMHandler::on_connect(easy_connection_t *c)
   ObSMConnection *conn = NULL;
   if (OB_ISNULL(c) || OB_ISNULL(gctx_.session_mgr_) || OB_ISNULL(gctx_.scramble_rand_)) {
     eret = EASY_ERROR;
-    LOG_ERROR("easy_connection_t or session_mgr is null", K(eret), K(c), K(gctx_.session_mgr_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "easy_connection_t or session_mgr is null", K(eret), K(c), K(gctx_.session_mgr_));
   } else {
     uint32_t sessid = 0;
     crt_id_ret =  gctx_.session_mgr_->create_sessid(sessid);
     if (OB_UNLIKELY(OB_SUCCESS != crt_id_ret && OB_ERR_CON_COUNT_ERROR != crt_id_ret)) {
       eret = EASY_ERROR;
-      LOG_WARN("fail to create sessid", K(crt_id_ret), K(sessid));
+      LOG_WARN_RET(OB_ERROR, "fail to create sessid", K(crt_id_ret), K(sessid));
     } else {
       // send handshake
       obmysql::OMPKHandshake hsp;
@@ -97,7 +97,7 @@ int ObSMHandler::on_connect(easy_connection_t *c)
       const int64_t BUF_LEN = sizeof(conn->scramble_buf_);
       if (OB_ISNULL(conn = reinterpret_cast<ObSMConnection*>(easy_alloc(c->pool, sizeof(ObSMConnection))))) {
         eret = EASY_ERROR;
-        LOG_ERROR("easy alloc memory failed", K(sizeof(ObSMConnection)), K(eret));
+        LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "easy alloc memory failed", K(sizeof(ObSMConnection)), K(eret));
       } else {
         conn = new (conn) ObSMConnection;
         c->user_data = conn;
@@ -105,13 +105,13 @@ int ObSMHandler::on_connect(easy_connection_t *c)
         conn->ret_ = crt_id_ret;
         if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = create_scramble_string(conn->scramble_buf_, BUF_LEN, thread_scramble_rand)))) {
           eret = EASY_ERROR;
-          LOG_WARN("create scramble string failed", K(tmp_ret), K(eret));
+          LOG_WARN_RET(tmp_ret, "create scramble string failed", K(tmp_ret), K(eret));
         } else if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = hsp.set_scramble(conn->scramble_buf_, BUF_LEN)))) {
           eret = EASY_ERROR;
-          LOG_WARN("set scramble failed", K(tmp_ret), K(eret));
+          LOG_WARN_RET(tmp_ret, "set scramble failed", K(tmp_ret), K(eret));
         } else if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = send_handshake(c->fd, hsp)))) {
           eret = EASY_ERROR;
-          LOG_WARN("send handshake packet failed", K(tmp_ret), K(eret));
+          LOG_WARN_RET(tmp_ret, "send handshake packet failed", K(tmp_ret), K(eret));
         } else {
           LOG_INFO("new mysql sessid created", K(easy_connection_str(c)), K(sessid), K(crt_id_ret));
         }
@@ -119,7 +119,7 @@ int ObSMHandler::on_connect(easy_connection_t *c)
 
       if (EASY_ERROR == eret && OB_SUCCESS == crt_id_ret) {
         if (OB_SUCCESS != (tmp_ret = gctx_.session_mgr_->mark_sessid_unused(sessid))) {
-          LOG_ERROR("fail to mark sessid unused", K(tmp_ret), K(sessid));
+          LOG_ERROR_RET(tmp_ret, "fail to mark sessid unused", K(tmp_ret), K(sessid));
         }
       }
     }
@@ -140,13 +140,13 @@ int ObSMHandler::on_disconnect(easy_connection_t *c)
   ObSMConnection *conn = NULL;
   if (OB_ISNULL(c) || OB_ISNULL(gctx_.session_mgr_)) {
     eret = EASY_ERROR;
-    LOG_ERROR("easy_connection_t or gctx_.session_mgr_ is null", K(eret), K(c), K(gctx_.session_mgr_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "easy_connection_t or gctx_.session_mgr_ is null", K(eret), K(c), K(gctx_.session_mgr_));
   } else if (OB_ISNULL(c->user_data)) {
     eret = EASY_ERROR;
-    LOG_ERROR("connection user data is NULL", K(eret));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "connection user data is NULL", K(eret));
   } else if (OB_ISNULL(conn = reinterpret_cast<ObSMConnection*>(c->user_data))) {
     eret = EASY_ERROR;
-    LOG_ERROR("conn is null", K(eret));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "conn is null", K(eret));
   } else {
     // get reason for disconnect.
     sql::ObDisconnectState dis_state;
@@ -159,11 +159,11 @@ int ObSMHandler::on_disconnect(easy_connection_t *c)
       sql::ObSQLSessionInfo *sess_info = NULL;
       sql::ObSessionGetterGuard guard(*gctx_.session_mgr_, conn->sessid_);
       if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = guard.get_session(sess_info)))) {
-        LOG_WARN("fail to get session", K(tmp_ret), K(conn->sessid_),
+        LOG_WARN_RET(tmp_ret, "fail to get session", K(tmp_ret), K(conn->sessid_),
                  "proxy_sessid", conn->proxy_sessid_);
       } else if (OB_ISNULL(sess_info)) {
         tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("session info is NULL", K(tmp_ret), K(conn->sessid_),
+        LOG_WARN_RET(tmp_ret, "session info is NULL", K(tmp_ret), K(conn->sessid_),
                  "proxy_sessid", conn->proxy_sessid_);
       } else {
         // tcp disconnect
@@ -335,7 +335,7 @@ rpc::ConnectionPhaseEnum ObSMHandler::get_connection_phase(easy_connection_t *c)
 void ObSMHandler::set_ssl_connect_phase(easy_connection_t *c)
 {
   if (OB_ISNULL(c) || OB_ISNULL(c->user_data)) {
-    LOG_ERROR("easy_connection_t is null", KP(c));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "easy_connection_t is null", KP(c));
   } else {
     ObSMConnection *conn = reinterpret_cast<ObSMConnection*>(c->user_data);
     conn->connection_phase_ = rpc::ConnectionPhaseEnum::CPE_SSL_CONNECT;
@@ -345,7 +345,7 @@ void ObSMHandler::set_ssl_connect_phase(easy_connection_t *c)
 void ObSMHandler::set_connect_phase(easy_connection_t *c)
 {
   if (OB_ISNULL(c) || OB_ISNULL(c->user_data)) {
-    LOG_ERROR("easy_connection_t is null", KP(c));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "easy_connection_t is null", KP(c));
   } else {
     ObSMConnection *conn = reinterpret_cast<ObSMConnection*>(c->user_data);
     conn->connection_phase_ = rpc::ConnectionPhaseEnum::CPE_CONNECTED;
@@ -356,7 +356,7 @@ bool ObSMHandler::is_compressed(easy_connection_t *c) const
 {
   bool bool_ret = false;
   if (OB_ISNULL(c) || OB_ISNULL(c->user_data)) {
-    LOG_ERROR("easy_connection_t is null");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "easy_connection_t is null");
   } else {
     ObSMConnection *conn = reinterpret_cast<ObSMConnection*>(c->user_data);
     bool_ret = (1 == conn->cap_flags_.cap_flags_.OB_CLIENT_COMPRESS);
@@ -379,7 +379,7 @@ obmysql::ObProto20PktContext *ObSMHandler::get_proto20_pkt_context(easy_connecti
 {
   obmysql::ObProto20PktContext *ret_pkt_context = NULL;
   if (OB_ISNULL(c) || OB_ISNULL(c->user_data)) {
-    LOG_ERROR("easy_connection_t is null");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "easy_connection_t is null");
   } else {
     ObSMConnection *conn = reinterpret_cast<ObSMConnection*>(c->user_data);
     ret_pkt_context = &(conn->proto20_pkt_context_);
@@ -391,7 +391,7 @@ obmysql::ObCompressedPktContext *ObSMHandler::get_compressed_pkt_context(easy_co
 {
   obmysql::ObCompressedPktContext *ret_pkt_context = NULL;
   if (OB_ISNULL(c) || OB_ISNULL(c->user_data)) {
-    LOG_ERROR("easy_connection_t is null");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "easy_connection_t is null");
   } else {
     ObSMConnection *conn = reinterpret_cast<ObSMConnection*>(c->user_data);
     ret_pkt_context = &(conn->compressed_pkt_context_);
@@ -403,7 +403,7 @@ obmysql::ObMysqlPktContext *ObSMHandler::get_mysql_pkt_context(easy_connection_t
 {
   obmysql::ObMysqlPktContext *ret_pkt_context = NULL;
   if (OB_ISNULL(c) || OB_ISNULL(c->user_data)) {
-    LOG_ERROR("easy_connection_t is null");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "easy_connection_t is null");
   } else {
     ObSMConnection *conn = reinterpret_cast<ObSMConnection*>(c->user_data);
     ret_pkt_context = &(conn->mysql_pkt_context_);
@@ -415,7 +415,7 @@ ObCSProtocolType ObSMHandler::get_cs_protocol_type(easy_connection_t *c) const
 {
   ObCSProtocolType type = OB_INVALID_CS_TYPE;
   if (OB_ISNULL(c) || OB_ISNULL(c->user_data)) {
-    LOG_ERROR("easy_connection_t is null");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "easy_connection_t is null");
   } else {
     ObSMConnection *conn = reinterpret_cast<ObSMConnection*>(c->user_data);
     type = conn->get_cs_protocol_type();

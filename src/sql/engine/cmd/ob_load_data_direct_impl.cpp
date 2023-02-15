@@ -96,7 +96,7 @@ const char *ObLoadDataDirectImpl::Logger::log_file_column_names =
 const char *ObLoadDataDirectImpl::Logger::log_file_row_fmt = "%.*s\t%ld\t%d\t%s\t\n";
 
 ObLoadDataDirectImpl::Logger::Logger()
-  : is_oracle_mode_(false), buf_(nullptr), is_inited_(false)
+  : is_oracle_mode_(false), buf_(nullptr), is_create_log_succ_(false), is_inited_(false)
 {
 }
 
@@ -117,25 +117,35 @@ int ObLoadDataDirectImpl::Logger::init(const ObString &load_info)
   } else if (OB_UNLIKELY(load_info.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(load_info));
+  } else if (OB_ISNULL(
+        buf_ = static_cast<char *>(ob_malloc(DEFAULT_BUF_LENGTH, ObModIds::OB_SQL_LOAD_DATA)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", KR(ret));
   } else {
-    ObString file_name;
-    if (OB_ISNULL(
-          buf_ = static_cast<char *>(ob_malloc(DEFAULT_BUF_LENGTH, ObModIds::OB_SQL_LOAD_DATA)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory", KR(ret));
-    } else if (OB_FAIL(generate_log_file_name(buf_, DEFAULT_BUF_LENGTH, file_name))) {
-      LOG_WARN("fail to generate log file name", KR(ret));
-    } else if (OB_FAIL(file_appender_.open(file_name, false, true))) {
-      LOG_WARN("fail to open file", KR(ret), K(file_name));
-    } else if (OB_FAIL(file_appender_.append(load_info.ptr(), load_info.length(), true))) {
-      LOG_WARN("fail to append log", KR(ret));
-    } else if (OB_FAIL(file_appender_.append(log_file_column_names, strlen(log_file_column_names),
-                                             true))) {
-      LOG_WARN("fail to append log", KR(ret));
+    if (OB_SUCCESS != create_log_file(load_info)) {
+      is_create_log_succ_ = false;
     } else {
-      is_oracle_mode_ = lib::is_oracle_mode();
-      is_inited_ = true;
+      is_create_log_succ_ = true;
     }
+    is_oracle_mode_ = lib::is_oracle_mode();
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObLoadDataDirectImpl::Logger::create_log_file(const ObString &load_info)
+{
+  int ret = OB_SUCCESS;
+  ObString file_name;
+  if (OB_FAIL(generate_log_file_name(buf_, DEFAULT_BUF_LENGTH, file_name))) {
+    LOG_WARN("fail to generate log file name", KR(ret));
+  } else if (OB_FAIL(file_appender_.open(file_name, false, true))) {
+    LOG_WARN("fail to open file", KR(ret), K(file_name));
+  } else if (OB_FAIL(file_appender_.append(load_info.ptr(), load_info.length(), true))) {
+    LOG_WARN("fail to append log", KR(ret));
+  } else if (OB_FAIL(file_appender_.append(log_file_column_names, strlen(log_file_column_names),
+                                            true))) {
+    LOG_WARN("fail to append log", KR(ret));
   }
   return ret;
 }
@@ -176,7 +186,7 @@ int ObLoadDataDirectImpl::Logger::log_error_line(const ObString &file_name, int6
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLoadDataDirectImpl::Logger not init", KR(ret), KP(this));
-  } else {
+  } else if (is_create_log_succ_) {
     const char *err_msg = ob_errpkt_strerror(err_code, is_oracle_mode_);
     const int err_no = ob_errpkt_errno(err_code, is_oracle_mode_);
     int64_t pos = 0;
@@ -1882,11 +1892,19 @@ int ObLoadDataDirectImpl::init_execute_param()
   }
   // need_sort_
   if (OB_SUCC(ret)) {
+    int64_t append = 0;
+    int64_t enable_direct = 0;
     int64_t hint_need_sort = 0;
-    if (OB_FAIL(hint.get_value(ObLoadDataHint::NEED_SORT, hint_need_sort))) {
+    if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
+      LOG_WARN("fail to get value of APPEND", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::ENABLE_DIRECT, enable_direct))) {
+      LOG_WARN("fail to get value of ENABLE_DIRECT", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::NEED_SORT, hint_need_sort))) {
       LOG_WARN("fail to get value of NEED_SORT", KR(ret), K(hint));
-    } else {
+    } else if (enable_direct != 0) {
       execute_param_.need_sort_ = hint_need_sort > 0 ? true : false;
+    } else {
+      execute_param_.need_sort_ = true;
     }
   }
   // sql_mode_
@@ -1904,6 +1922,8 @@ int ObLoadDataDirectImpl::init_execute_param()
   }
   // online_opt_stat_gather_
   if (OB_SUCC(ret)) {
+    int64_t append = 0;
+    int64_t gather_optimizer_statistics = 0 ;
     ObSQLSessionInfo *session = nullptr;
     ObObj obj;
     if (OB_ISNULL(session = ctx_->get_my_session())) {
@@ -1911,17 +1931,31 @@ int ObLoadDataDirectImpl::init_execute_param()
       LOG_WARN("session is null", KR(ret));
     } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_ONLINE_OPT_STAT_GATHER, obj))) {
       LOG_WARN("fail to get sys variable", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
+      LOG_WARN("fail to get value of APPEND", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::GATHER_OPTIMIZER_STATISTICS, gather_optimizer_statistics))) {
+      LOG_WARN("fail to get value of APPEND", K(ret));
+    } else if ((append != 0) || (gather_optimizer_statistics != 0) || obj.get_bool()) {
+      execute_param_.online_opt_stat_gather_  = true;
     } else {
-      execute_param_.online_opt_stat_gather_ = obj.get_bool();
+      execute_param_.online_opt_stat_gather_ = false;
     }
   }
   // max_error_rows_
   if (OB_SUCC(ret)) {
+    int64_t append = 0;
+    int64_t enable_direct = 0;
     int64_t hint_error_rows = 0;
-    if (OB_FAIL(hint.get_value(ObLoadDataHint::ERROR_ROWS, hint_error_rows))) {
+    if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
+      LOG_WARN("fail to get value of APPEND", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::ENABLE_DIRECT, enable_direct))) {
+      LOG_WARN("fail to get value of ENABLE_DIRECT", K(ret));
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::ERROR_ROWS, hint_error_rows))) {
       LOG_WARN("fail to get value of ERROR_ROWS", KR(ret), K(hint));
-    } else {
+    } else if (enable_direct != 0) {
       execute_param_.max_error_rows_ = hint_error_rows;
+    } else {
+      execute_param_.max_error_rows_ = 0;
     }
   }
   // data_access_param_
@@ -2003,7 +2037,6 @@ int ObLoadDataDirectImpl::init_execute_context()
   execute_ctx_.allocator_ = &ctx_->get_allocator();
   ObTableLoadParam load_param;
   load_param.tenant_id_ = execute_param_.tenant_id_;
-  load_param.database_id_ = execute_param_.database_id_;
   load_param.table_id_ = execute_param_.table_id_;
   load_param.session_count_ = execute_param_.parallel_;
   load_param.batch_size_ = execute_param_.batch_row_count_;

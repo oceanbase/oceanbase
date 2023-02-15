@@ -508,7 +508,7 @@ void ObQueryRangeTest::get_query_range(const char *sql_expr, const char *&json_e
   resolve_expr(final_sql, expr, range_columns, params, CS_TYPE_UTF8MB4_GENERAL_CI, CS_TYPE_UTF8MB4_GENERAL_CI);
   OB_ASSERT(expr);
   //_OB_LOG(INFO,"-----%s\n", final_sql);
-  _OB_LOG(WARN, "expr: %s", CSJ(expr));
+  _OB_LOG(INFO, "expr: %s", CSJ(expr));
   query_range.reset();
   OB_LOG(INFO, "get query range sql", K(final_sql));
   OK(pre_query_range.preliminary_extract_query_range(range_columns, expr, dtc_params, &exec_ctx_));

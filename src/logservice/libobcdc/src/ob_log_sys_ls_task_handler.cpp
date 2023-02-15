@@ -218,7 +218,7 @@ void ObLogSysLsTaskHandler::stop()
       int pthread_ret = pthread_join(handle_pid_, NULL);
 
       if (0 != pthread_ret) {
-        LOG_ERROR("join DDL handle thread fail", K(handle_pid_), K(pthread_ret),
+        LOG_ERROR_RET(OB_ERR_SYS, "join DDL handle thread fail", K(handle_pid_), K(pthread_ret),
             KERRNOMSG(pthread_ret));
       } else {
         LOG_INFO("stop ObLogSysLsTaskHandler thread succ");

@@ -38,6 +38,35 @@ struct ObLobQueryResult {
   TO_STRING_KV(K_(meta_result), K_(piece_info));
 };
 
+struct ObLobCompareParams {
+
+  ObLobCompareParams()
+    : collation_left_(CS_TYPE_INVALID),
+      collation_right_(CS_TYPE_INVALID),
+      offset_left_(0),
+      offset_right_(0),
+      compare_len_(0),
+      timeout_(0)
+  {
+  }
+
+  TO_STRING_KV(K(collation_left_),
+               KP(collation_right_),
+               K(offset_left_),
+               K(offset_right_),
+               K(compare_len_),
+               K(timeout_));
+
+  ObCollationType collation_left_;
+  ObCollationType collation_right_;
+  uint64_t offset_left_;
+  uint64_t offset_right_;
+
+  // compare length
+  uint64_t compare_len_;
+  int64_t timeout_;
+};
+
 class ObLobQueryRemoteReader
 {
 public:
@@ -166,6 +195,23 @@ public:
   int write(ObLobAccessParam& param,
             ObLobLocatorV2& lob,
             uint64_t offset);
+
+  // compare lob byte wise, collation type is binary
+  // @param [in] lob_left lob param of left operand for comparison
+  // @param [in] collation_left collation type of left operand for comparison
+  // @param [in] offset_left start position of left lob for comparison
+  // @param [in] lob_right lob param of right operand for comparison
+  // @param [in] collation_right collation type of right operand for comparison
+  // @param [in] offset_right start position of right lob for comparison
+  // @param [in] amount_len comparison length
+  // @param [in] timeout lob read timeout
+  // @param [out] result: 0 if the data exactly matches over the range specified by the offset and amount parameters.
+  //                      -1 if the first is less than the second, and 1 if it is greater.
+  int compare(ObLobLocatorV2& lob_left,
+              ObLobLocatorV2& lob_right,
+              ObLobCompareParams& cmp_params,
+              int64_t& result);
+
   // int insert(const common::ObTabletID &tablet_id, ObObj *obj, uint64_t offset, char *data, uint64_t len);
   // int erase(const common::ObTabletID &tablet_id, ObObj *obj, uint64_t offset, uint64_t len);
   int get_real_data(ObLobAccessParam& param,
@@ -247,6 +293,12 @@ private:
   int prepare_lob_common(ObLobAccessParam& param, bool &alloc_inside);
   bool lob_handle_has_char_len(ObLobAccessParam& param);
   int64_t* get_char_len_ptr(ObLobAccessParam& param);
+  int fill_lob_locator_extern(ObLobAccessParam& param);
+
+  int compare(ObLobAccessParam& param_left,
+              ObLobAccessParam& param_right,
+              int64_t& result);
+
 private:
   static const int64_t DEFAULT_LOB_META_BUCKET_CNT = 1543;
   static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K

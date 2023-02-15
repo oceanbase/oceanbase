@@ -455,7 +455,7 @@ public:
                              ObArenaAllocator &allocator,
                              int64_t &task_id);
   virtual int new_truncate_table(const obrpc::ObTruncateTableArg &arg,
-                                 const obrpc::ObDDLRes &ddl_res,
+                                 obrpc::ObDDLRes &ddl_res,
                                  const share::SCN &frozen_scn);
   int drop_not_null_cst_in_column_flag(const ObTableSchema &orig_table_schema,
                                        const AlterTableSchema &alter_table_schema,
@@ -959,6 +959,18 @@ public:
                                   ObDDLOperator &ddl_operator,
                                   ObTriggerInfo &trigger_info,
                                   bool is_create_trigger);
+  int recursive_alter_ref_trigger(share::schema::ObSchemaGetterGuard &schema_guard,
+                                  ObDDLSQLTransaction &trans,
+                                  ObDDLOperator &ddl_operator,
+                                  const ObTriggerInfo &ref_trigger_info,
+                                  const common::ObIArray<uint64_t> &trigger_list,
+                                  const ObString &trigger_name,
+                                  int64_t action_order);
+  int recursive_check_trigger_ref_cyclic(share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const ObTriggerInfo &ref_trigger_info,
+                                         const common::ObIArray<uint64_t> &trigger_list,
+                                         const ObString &create_trigger_name,
+                                         const ObString &generate_cyclic_name);
 
   // only push schema version, and publish schema
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);
@@ -1506,7 +1518,8 @@ private:
                               const common::ObString &db_name);
   int new_truncate_table_in_trans(const ObIArray<const share::schema::ObTableSchema*> &orig_table_schemas,
                                   ObDDLSQLTransaction &trans,
-                                  const ObString *ddl_stmt_str);
+                                  const ObString *ddl_stmt_str,
+                                  obrpc::ObDDLRes &ddl_res);
   int restore_obj_priv_after_truncation(
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,

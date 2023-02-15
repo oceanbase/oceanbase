@@ -40,11 +40,13 @@ int ObAllVirtualPsItemInfo::inner_get_next_row()
       tenant_id_array_idx_ = 0;
     } else {
       uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
-      if (OB_FAIL(get_next_row_from_specified_tenant(tenant_id, is_sub_end))) {
-        SERVER_LOG(WARN, "get_next_row_from_specified_tenant failed", K(ret), K(tenant_id));
-      } else {
-        if (is_sub_end) {
-          ++tenant_id_array_idx_;
+      MTL_SWITCH(tenant_id) {
+        if (OB_FAIL(get_next_row_from_specified_tenant(tenant_id, is_sub_end))) {
+          SERVER_LOG(WARN, "get_next_row_from_specified_tenant failed", K(ret), K(tenant_id));
+        } else {
+          if (is_sub_end) {
+            ++tenant_id_array_idx_;
+          }
         }
       }
     }
@@ -185,16 +187,14 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
   int ret = OB_SUCCESS;
   is_end = false;
   if (OB_INVALID_ID == stmt_id_array_idx_) {
-    MTL_SWITCH(tenant_id) {
-      ps_cache_ = MTL(ObPsCache*);
-      if (false == ps_cache_->is_inited()) {
-        is_end = true;
-        SERVER_LOG(DEBUG, "ps cache is not ready, ignore this", K(ret), K(ps_cache_->is_inited()));
-      } else if (OB_FAIL(ps_cache_->get_all_stmt_id(&stmt_id_array_))) {
-        SERVER_LOG(WARN, "get_all_stmt_id failed", K(ret));
-      } else {
-        stmt_id_array_idx_ = 0;
-      }
+    ps_cache_ = MTL(ObPsCache*);
+    if (false == ps_cache_->is_inited()) {
+      is_end = true;
+      SERVER_LOG(DEBUG, "ps cache is not ready, ignore this", K(ret), K(ps_cache_->is_inited()));
+    } else if (OB_FAIL(ps_cache_->get_all_stmt_id(&stmt_id_array_))) {
+      SERVER_LOG(WARN, "get_all_stmt_id failed", K(ret));
+    } else {
+      stmt_id_array_idx_ = 0;
     }
   }
   if (OB_SUCCESS == ret && false == is_end) {

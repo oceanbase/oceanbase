@@ -2804,59 +2804,62 @@ int ObRawExprUtils::resolve_gen_column_udf_expr(ObRawExpr *&udf_expr,
                                                 )
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *expr = NULL;
-  ObResolverParams params;
-  ObStmtFactory stmt_factory(expr_factory.get_allocator());
-  params.expr_factory_ = &expr_factory;
-  params.allocator_ = &(expr_factory.get_allocator());
-  params.session_info_ = const_cast<ObSQLSessionInfo *>(&session_info);
-  params.schema_checker_ = const_cast<ObSchemaChecker *>(schema_checker);
-  params.sql_proxy_ = GCTX.sql_proxy_;
-  params.stmt_factory_ = &stmt_factory;
-  params.query_ctx_ = NULL;
-  // indicate not from pl scope; all symbol is searched inside schema
-  params.secondary_namespace_ = NULL;
+  // ObRawExpr *expr = NULL;
+  // ObResolverParams params;
+  // ObStmtFactory stmt_factory(expr_factory.get_allocator());
+  // params.expr_factory_ = &expr_factory;
+  // params.allocator_ = &(expr_factory.get_allocator());
+  // params.session_info_ = const_cast<ObSQLSessionInfo *>(&session_info);
+  // params.schema_checker_ = const_cast<ObSchemaChecker *>(schema_checker);
+  // params.sql_proxy_ = GCTX.sql_proxy_;
+  // params.stmt_factory_ = &stmt_factory;
+  // params.query_ctx_ = NULL;
+  // // indicate not from pl scope; all symbol is searched inside schema
+  // params.secondary_namespace_ = NULL;
 
-  CK (OB_NOT_NULL(schema_checker));
-  CK (OB_NOT_NULL(schema_checker->get_schema_guard()));
-  if (OB_FAIL(ret)) {
-    LOG_WARN("faile to check params, NULL schema guard", K(ret));
-  } else if (OB_FAIL(ObResolverUtils::resolve_external_symbol(*params.allocator_,
-                                                        *params.expr_factory_,
-                                                        *params.session_info_,
-                                                        *params.schema_checker_->get_schema_guard(),
-                                                        params.sql_proxy_,
-                                                        &(params.external_param_info_),
-                                                        params.secondary_namespace_,
-                                                        q_name,
-                                                        columns,
-                                                        real_exprs,
-                                                        expr))) {
-    LOG_WARN("failed to resolve var", K(q_name), K(ret));
-  } else if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Invalid expr", K(expr), K(ret));
-  } else if (expr->is_udf_expr() && !expr->is_deterministic()) {
-    ret = OB_ERR_USE_UDF_NOT_DETERMIN;
-    LOG_WARN("generated column expect deterministic udf", K(q_name), K(ret));
-    LOG_USER_ERROR(OB_ERR_USE_UDF_NOT_DETERMIN);
-  } else if (expr->is_udf_expr()) {
-    ObUDFRawExpr *udf1_expr = static_cast<ObUDFRawExpr*>(expr);
-    ObSchemaObjVersion udf_version;
-    CK (OB_NOT_NULL(udf1_expr));
-    if (OB_SUCC(ret) && udf1_expr->need_add_dependency() && OB_NOT_NULL(stmt)) {
-      OZ (udf1_expr->get_schema_object_version(udf_version));
-      OZ (stmt->add_global_dependency_table(udf_version));
-    }
-    //for udf without params, we just set called_in_sql = true,
-    //if this expr go through pl :: build_raw_expr later,
-    //the flag will change to false;
-    OX (expr->set_is_called_in_sql(true));
-    OX (udf_expr = expr);
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expr, expect udf expr", K(ret), K(q_name));
-  }
+  // CK (OB_NOT_NULL(schema_checker));
+  // CK (OB_NOT_NULL(schema_checker->get_schema_guard()));
+  // if (OB_FAIL(ret)) {
+  //   LOG_WARN("faile to check params, NULL schema guard", K(ret));
+  // } else if (OB_FAIL(ObResolverUtils::resolve_external_symbol(*params.allocator_,
+  //                                                       *params.expr_factory_,
+  //                                                       *params.session_info_,
+  //                                                       *params.schema_checker_->get_schema_guard(),
+  //                                                       params.sql_proxy_,
+  //                                                       &(params.external_param_info_),
+  //                                                       params.secondary_namespace_,
+  //                                                       q_name,
+  //                                                       columns,
+  //                                                       real_exprs,
+  //                                                       expr))) {
+  //   LOG_WARN("failed to resolve var", K(q_name), K(ret));
+  // } else if (OB_ISNULL(expr)) {
+  //   ret = OB_ERR_UNEXPECTED;
+  //   LOG_WARN("Invalid expr", K(expr), K(ret));
+  // } else if (expr->is_udf_expr() && !expr->is_deterministic()) {
+  //   ret = OB_ERR_USE_UDF_NOT_DETERMIN;
+  //   LOG_WARN("generated column expect deterministic udf", K(q_name), K(ret));
+  //   LOG_USER_ERROR(OB_ERR_USE_UDF_NOT_DETERMIN);
+  // } else if (expr->is_udf_expr()) {
+  //   ObUDFRawExpr *udf1_expr = static_cast<ObUDFRawExpr*>(expr);
+  //   ObSchemaObjVersion udf_version;
+  //   CK (OB_NOT_NULL(udf1_expr));
+  //   if (OB_SUCC(ret) && udf1_expr->need_add_dependency() && OB_NOT_NULL(stmt)) {
+  //     OZ (udf1_expr->get_schema_object_version(udf_version));
+  //     OZ (stmt->add_global_dependency_table(udf_version));
+  //   }
+  //   //for udf without params, we just set called_in_sql = true,
+  //   //if this expr go through pl :: build_raw_expr later,
+  //   //the flag will change to false;
+  //   OX (expr->set_is_called_in_sql(true));
+  //   OX (udf_expr = expr);
+  // } else {
+  //   ret = OB_ERR_UNEXPECTED;
+  //   LOG_WARN("unexpected expr, expect udf expr", K(ret), K(q_name));
+  // }
+  ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "using udf as generated column");
+  LOG_WARN("using udf as generated column is not supported", K(ret));
   return ret;
 }
 
@@ -3678,6 +3681,20 @@ const ObRawExpr *ObRawExprUtils::skip_inner_added_expr(const ObRawExpr *expr)
   return expr;
 }
 
+const ObColumnRefRawExpr *ObRawExprUtils::get_column_ref_expr_recursively(const ObRawExpr *expr)
+{
+  const ObColumnRefRawExpr *res = NULL;
+  if (OB_ISNULL(expr)) {
+  } else if (expr->is_column_ref_expr()) {
+    res = static_cast<const ObColumnRefRawExpr *>(expr);
+  } else {
+    for (int i = 0; OB_ISNULL(res) && i < expr->get_param_count(); i++) {
+      res = get_column_ref_expr_recursively(expr->get_param_expr(i));
+    }
+  }
+  return res;
+}
+
 ObRawExpr *ObRawExprUtils::skip_implicit_cast(ObRawExpr *e)
 {
   ObRawExpr *res = e;
@@ -3696,35 +3713,6 @@ ObRawExpr *ObRawExprUtils::skip_inner_added_expr(ObRawExpr *expr)
     expr = skip_inner_added_expr(expr->get_param_expr(0));
   }
   return expr;
-}
-
-int ObRawExprUtils::is_contain_spatial_exprs(ObRawExpr *raw_expr,
-                                             bool &is_contain)
-{
-  int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-
-  if (is_contain) {
-   // return
-  } else if (NULL == raw_expr) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid raw expr", K(ret), K(raw_expr));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret));
-  } else if (raw_expr->is_spatial_expr()) {
-    is_contain = true;
-  } else {
-    int64_t N = raw_expr->get_param_count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      if (OB_FAIL(SMART_CALL(is_contain_spatial_exprs(raw_expr->get_param_expr(i), is_contain)))) {
-        LOG_WARN("fail to extract contain expr", K(ret));
-      }
-    }
-  }
-  return ret;
 }
 
 int ObRawExprUtils::create_to_type_expr(ObRawExprFactory &expr_factory,
@@ -5726,7 +5714,7 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObCo
                                            column_schema.get_column_name_str().length());
   column_expr.set_column_flags(column_schema.get_column_flags());
   column_expr.set_hidden_column(column_schema.is_hidden());
-  column_expr.set_lob_column(ob_is_text_tc(column_schema.get_data_type()));
+  column_expr.set_lob_column(is_lob_storage(column_schema.get_data_type()));
   column_expr.set_is_rowkey_column(column_schema.is_rowkey_column());
   column_expr.set_srs_id(column_schema.get_srs_id());
   if (ob_is_string_type(column_schema.get_data_type())

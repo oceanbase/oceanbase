@@ -21,6 +21,7 @@
 #include "share/ob_cluster_version.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_service_epoch_proxy.h"
+#include "lib/container/ob_array_wrap.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
@@ -71,7 +72,8 @@ int ObZoneMergeManagerBase::reload()
       LOG_WARN("not init", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(tmp_merge_infos.init())) {
       LOG_WARN("fail to alloc temp zone merge infos", KR(ret), K_(tenant_id));
-    } else if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(*proxy_, tenant_id_, global_merge_info))) {
+    } else if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(*proxy_, tenant_id_,
+                          global_merge_info, true/*print_sql*/))) {
       LOG_WARN("fail to get global merge info", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(ObZoneMergeTableOperator::get_zone_list(*proxy_, tenant_id_, zone_list))) {
       LOG_WARN("fail to get zone list", KR(ret), K_(tenant_id));
@@ -88,7 +90,8 @@ int ObZoneMergeManagerBase::reload()
         ObZoneMergeInfo &info = tmp_merge_infos.ptr()[i];
         info.zone_ = zone_list[i];
         info.tenant_id_ = tenant_id_;
-        if (OB_FAIL(ObZoneMergeTableOperator::load_zone_merge_info(*proxy_, tenant_id_, info))) {
+        if (OB_FAIL(ObZoneMergeTableOperator::load_zone_merge_info(*proxy_, tenant_id_, info,
+                                                                   true/*print_sql*/))) {
           LOG_WARN("fail to reload zone merge info", KR(ret), K_(tenant_id), "zone", zone_list[i]);
         }
       }
@@ -110,7 +113,8 @@ int ObZoneMergeManagerBase::reload()
 
     if (OB_SUCC(ret)) {
       is_loaded_ = true;
-      LOG_INFO("succ to reload zone merge manager", K(zone_list));
+      LOG_INFO("succ to reload zone merge manager", K(zone_list), K_(global_merge_info),
+               "zone_merge_infos", ObArrayWrap<ObZoneMergeInfo>(zone_merge_infos_, zone_count_));
     } else {
       LOG_WARN("fail to reload zone merge manager", KR(ret));
     }
@@ -174,7 +178,7 @@ void ObZoneMergeManagerBase::handle_trans_stat(
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
@@ -1192,7 +1196,7 @@ ObZoneMergeManager::ObZoneMergeMgrGuard::~ObZoneMergeMgrGuard()
   if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
   } else if (OB_UNLIKELY(OB_SUCCESS !=
       (tmp_ret = ObZoneMergeManager::copy_infos(zone_merge_mgr_, shadow_)))) {
-    LOG_WARN("fail to copy from zone_merge_mgr shadow", K(tmp_ret), K_(ret));
+    LOG_WARN_RET(tmp_ret, "fail to copy from zone_merge_mgr shadow", K(tmp_ret), K_(ret));
   }
   if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
     ret_ = tmp_ret;

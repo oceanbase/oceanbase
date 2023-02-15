@@ -216,7 +216,7 @@ void ObMsQueueThread<MAX_THREAD_NUM, ModuleClass>::stop()
         int pthread_ret = pthread_join(tc.tid_, NULL);
 
         if (0 != pthread_ret) {
-          LIB_LOG(ERROR, "pthread_join fail", "thread_id", tc.tid_, K(pthread_ret));
+          LIB_LOG_RET(ERROR, OB_ERR_SYS, "pthread_join fail", "thread_id", tc.tid_, K(pthread_ret));
         } else {
           // do nothing
         }

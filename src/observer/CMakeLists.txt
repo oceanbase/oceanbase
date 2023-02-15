@@ -163,6 +163,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_finish_processor.cpp
   table_load/ob_table_load_general_table_compactor.cpp
   table_load/ob_table_load_get_status_processor.cpp
+  table_load/ob_table_load_manager.cpp
   table_load/ob_table_load_merger.cpp
   table_load/ob_table_load_obj_cast.cpp
   table_load/ob_table_load_parallel_merge_ctx.cpp

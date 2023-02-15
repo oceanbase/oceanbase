@@ -143,7 +143,7 @@ int64_t ObConstEncoder::calc_size() const
       tmp_ret = get_cell_len(*const_list_header_->datum_, size);
     }
     if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-      LOG_WARN("failed to get cell len", K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "failed to get cell len", K(tmp_ret));
     } else {
       size += sizeof(ObConstMetaHeader);
     }

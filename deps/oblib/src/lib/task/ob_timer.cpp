@@ -313,7 +313,7 @@ void ObTimer::run1()
         token.scheduled_time = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds() + token.delay;
         if (OB_SUCCESS != (tmp_ret = insert_token(
             Token(token.scheduled_time, token.delay, token.task)))) {
-          OB_LOG(WARN, "insert token error", K(tmp_ret), K(token));
+          OB_LOG_RET(WARN, tmp_ret, "insert token error", K(tmp_ret), K(token));
         }
       }
       has_running_task_ = false;
@@ -363,9 +363,9 @@ void ObTimer::run1()
             static const int64_t MAX_REALTIME_DELTA1 = 20000; // 20ms
             static const int64_t MAX_REALTIME_DELTA2 = 500000; // 500ms
             if (delta > MAX_REALTIME_DELTA1) {
-              OB_LOG(WARN, "Hardware clock skew", K(rt1), K(rt2), K_(wakeup_time), K(now));
+              OB_LOG_RET(WARN, OB_ERR_SYS, "Hardware clock skew", K(rt1), K(rt2), K_(wakeup_time), K(now));
             } else if (delta > MAX_REALTIME_DELTA2) {
-              OB_LOG(ERROR, "Hardware clock error", K(rt1), K(rt2), K_(wakeup_time), K(now));
+              OB_LOG_RET(ERROR, OB_ERR_SYS, "Hardware clock error", K(rt1), K(rt2), K_(wakeup_time), K(now));
             }
           }
           monitor_.timed_wait(ObSysTime(wakeup_time_ - now));
@@ -392,7 +392,7 @@ void ObTimer::run1()
       }
 
       if (elapsed_time > 1000 * 1000) {
-        OB_LOG(WARN, "timer task cost too much time", "task", to_cstring(*token.task),
+        OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "timer task cost too much time", "task", to_cstring(*token.task),
             K(start_time), K(end_time), K(elapsed_time), KP(this), K_(thread_id));
       }
     }

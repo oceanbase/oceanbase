@@ -97,6 +97,7 @@ public:
   virtual int inner_rescan() override;
   virtual void destroy() override;
   virtual int inner_close() override { return ObOperator::inner_close(); }
+  virtual void do_clear_datum_eval_flag() override;
 
   ObPxTaskChSet &get_ch_set() { return task_ch_set_; };
   virtual int try_link_channel() = 0;

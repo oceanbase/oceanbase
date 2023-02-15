@@ -1192,25 +1192,25 @@ inline int64_t encode_length_number_type(const ObNumberDesc &desc)
 inline int decode_number_type(const char *buf, const int64_t buf_len, int64_t &pos, ObNumberDesc &desc,
                               uint32_t *&digits)
 {
-  int err = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
-  if (OB_SUCCESS == err) {
-    err = decode_i32(buf, buf_len, tmp_pos, (int32_t *)(&desc.desc_));
+  if (OB_SUCCESS == ret) {
+    ret = decode_i32(buf, buf_len, tmp_pos, (int32_t *)(&desc.desc_));
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     if (0 == desc.len_) {
       digits = NULL;
     } else if (buf_len < (tmp_pos + (int64_t)sizeof(uint32_t) * desc.len_)) {
-      err = OB_DESERIALIZE_ERROR;
+      ret = OB_DESERIALIZE_ERROR;
     } else {
       digits = (uint32_t *)(buf + tmp_pos);
       tmp_pos += (sizeof(uint32_t) * desc.len_);
     }
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     pos = tmp_pos;
   }
-  return err;
+  return ret;
 }
 
 inline int encode_number_type(char *buf,
@@ -1219,18 +1219,18 @@ inline int encode_number_type(char *buf,
                               const ObNumberDesc &desc,
                               const uint32_t *digits)
 {
-  int err = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
-  //if (OB_SUCCESS == err) {
+  //if (OB_SUCCESS == ret) {
   //  int8_t first_byte = OB_NUMBER_TYPE;
-  //  err = encode_i8(buf, buf_len, tmp_pos, first_byte);
+  //  ret = encode_i8(buf, buf_len, tmp_pos, first_byte);
   //}
-  if (OB_SUCCESS == err) {
-    err = encode_i32(buf, buf_len, tmp_pos, (int32_t)desc.desc_);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i32(buf, buf_len, tmp_pos, (int32_t)desc.desc_);
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     if (buf_len < (tmp_pos + (int64_t)sizeof(uint32_t) * desc.len_)) {
-      err = OB_BUF_NOT_ENOUGH;
+      ret = OB_BUF_NOT_ENOUGH;
     } else {
       if (0 < desc.len_) {
         MEMCPY(buf + tmp_pos, digits, sizeof(uint32_t) * desc.len_);
@@ -1238,10 +1238,10 @@ inline int encode_number_type(char *buf,
       }
     }
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     pos = tmp_pos;
   }
-  return err;
+  return ret;
 }
 
 inline int64_t encode_length_otimestamp_tz_type()
@@ -1298,41 +1298,41 @@ inline int encode_otimestamp_type(char *buf, const int64_t buf_len, int64_t &pos
 inline int encode_decimal_type(char *buf, const int64_t buf_len, int64_t &pos, bool is_add,
                                int8_t precision, int8_t scale, int8_t vscale, int8_t nwords, const uint32_t *words)
 {
-  int err = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   if (buf == NULL || buf_len <= 0 || pos >= buf_len || NULL == words) {
-    err = OB_INVALID_ARGUMENT;
+    ret = OB_INVALID_ARGUMENT;
   }
   int8_t first_byte = OB_DECIMAL_TYPE;
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, first_byte);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, first_byte);
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     int8_t op = is_add ? 1 : 0;
-    err = encode_i8(buf, buf_len, pos, op);
+    ret = encode_i8(buf, buf_len, pos, op);
   }
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, precision);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, precision);
   }
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, scale);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, scale);
   }
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, vscale);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, vscale);
   }
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, nwords);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, nwords);
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     for (int8_t i = 0; i < nwords; ++i) {
-      if (OB_SUCCESS != (err = encode_vi32(buf, buf_len, pos, static_cast<int32_t>(words[i])))) {
+      if (OB_SUCCESS != (ret = encode_vi32(buf, buf_len, pos, static_cast<int32_t>(words[i])))) {
         break;
       }
     }
   }
-  if (OB_SUCCESS != err) {
-    _OB_LOG(WARN, "fail to encode decimal. err = %d", err);
+  if (OB_SUCCESS != ret) {
+    _OB_LOG(WARN, "fail to encode decimal. ret = %d", ret);
   }
-  return err;
+  return ret;
 }
 
 int decode_decimal_type(const char *buf, const int64_t buf_len, int64_t &pos, bool &is_add,
@@ -1340,15 +1340,15 @@ int decode_decimal_type(const char *buf, const int64_t buf_len, int64_t &pos, bo
 
 inline int64_t encoded_length_decimal_type(int8_t nwords, const uint32_t *words)
 {
-  int64_t ret = 6;
+  int64_t len = 6;
   if (OB_UNLIKELY(NULL == words)) {
-    _OB_LOG(ERROR, "null decimal words");
+    _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "null decimal words");
   } else {
     for (int8_t i = 0; i < nwords; ++i) {
-      ret += static_cast<int32_t>(encoded_length_vi32(words[i]));
+      len += static_cast<int32_t>(encoded_length_vi32(words[i]));
     }
   }
-  return ret;
+  return len;
 }
 
 inline int encode_double_type(char *buf, const int64_t buf_len, int64_t &pos, double val,

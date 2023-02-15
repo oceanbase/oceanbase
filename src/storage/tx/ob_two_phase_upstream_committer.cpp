@@ -264,7 +264,7 @@ int ObTxCycleTwoPhaseCommitter::post_downstream_msg(const ObTwoPhaseCommitMsgTyp
   for (int64_t downstream_id = 0; downstream_id < get_downstream_size(); downstream_id++) {
     if (downstream_id != get_self_id()) {
       if (OB_TMP_FAIL(post_msg(msg_type, downstream_id))) {
-        TRANS_LOG(WARN, "post downstream msg failed, will retry later", K(tmp_ret),
+        TRANS_LOG_RET(WARN, tmp_ret, "post downstream msg failed, will retry later", K(tmp_ret),
                   K(downstream_id), K(msg_type), KPC(this));
       }
     }

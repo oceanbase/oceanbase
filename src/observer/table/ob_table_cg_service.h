@@ -22,7 +22,7 @@
 #include "ob_table_context.h"
 #include "share/table/ob_table.h" // for ObTableQuery
 #include "sql/engine/dml/ob_conflict_checker.h" // for ObConflictCheckerCtdef
-#include "ob_table_cache.h"
+#include "ob_table_executor_factory.h"
 
 namespace oceanbase
 {
@@ -230,6 +230,8 @@ private:
   static int generate_constraint_ctdefs(ObTableCtx &ctx,
                                         ObIAllocator &allocator,
                                         sql::ObRowkeyCstCtdefArray &cst_ctdefs);
+  static int replace_exprs_with_dependant(const common::ObIArray<sql::ObRawExpr *> &src_exprs,
+                                          common::ObIArray<sql::ObRawExpr *> &dst_exprs);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDmlCgService);
 };
@@ -241,7 +243,33 @@ public:
   template<int TYPE>
   static int generate(common::ObIAllocator &alloc,
                       ObTableCtx &ctx,
-                      ObTableApiSpec *&root_spec);
+                      ObTableApiSpec *&root_spec)
+  {
+    int ret = OB_SUCCESS;
+    ObTableApiSpec *spec = nullptr;
+    if (TYPE <= TABLE_API_EXEC_INVALID || TYPE >= TABLE_API_EXEC_MAX) {
+      ret = OB_INVALID_ARGUMENT;
+      SERVER_LOG(WARN, "input TYPE is invalid", K(ret), K(TYPE));
+    } else if (TYPE == TABLE_API_EXEC_UPDATE) {
+      ret = ObTableSpecCgService::generate_with_child
+          <TABLE_API_EXEC_UPDATE, TABLE_API_EXEC_SCAN>(alloc, ctx, root_spec);
+    } else if (TYPE == TABLE_API_EXEC_DELETE) {
+      ret = ObTableSpecCgService::generate_with_child
+          <TABLE_API_EXEC_DELETE, TABLE_API_EXEC_SCAN>(alloc, ctx, root_spec);
+    } else if (TYPE == TABLE_API_EXEC_LOCK) {
+      ret = ObTableSpecCgService::generate_with_child
+          <TABLE_API_EXEC_LOCK, TABLE_API_EXEC_SCAN>(alloc, ctx, root_spec);
+    } else if (OB_FAIL(ObTableExecutorFactory::generate_spec(alloc,
+                                                            static_cast<ObTableExecutorType>(TYPE),
+                                                            ctx,
+                                                            spec))) {
+      SERVER_LOG(WARN, "fail to generate spec", K(ret));
+    } else {
+      root_spec = spec;
+    }
+
+    return ret;
+  }
 public:
   static int generate_spec(common::ObIAllocator &alloc,
                            ObTableCtx &ctx,
@@ -275,7 +303,31 @@ private:
   template<int FATHER_TYPE, int CHILD_TYPE>
   static int generate_with_child(common::ObIAllocator &alloc,
                                  ObTableCtx &ctx,
-                                 ObTableApiSpec *&root_spec);
+                                 ObTableApiSpec *&root_spec)
+  {
+    int ret = OB_SUCCESS;
+    ObTableApiSpec *child_spec = nullptr;
+    if (FATHER_TYPE <= TABLE_API_EXEC_INVALID || FATHER_TYPE >= TABLE_API_EXEC_MAX ||
+        CHILD_TYPE <= TABLE_API_EXEC_INVALID || CHILD_TYPE >= TABLE_API_EXEC_MAX) {
+      ret = OB_INVALID_ARGUMENT;
+      SERVER_LOG(WARN, "invalid type", K(ret), K(FATHER_TYPE), K(CHILD_TYPE));
+    } else if (OB_FAIL(ObTableExecutorFactory::generate_spec(
+                        alloc, static_cast<ObTableExecutorType>(CHILD_TYPE), ctx, child_spec))) {
+      SERVER_LOG(WARN, "fail to generate scan spec", K(ret));
+    } else {
+      ObTableApiSpec *father_spec = nullptr;
+      if (OB_FAIL(ObTableExecutorFactory::generate_spec(
+                    alloc, static_cast<ObTableExecutorType>(FATHER_TYPE), ctx, father_spec))) {
+        SERVER_LOG(WARN, "fail to generate update spec", K(ret));
+      } else {
+        father_spec->set_child(child_spec);
+        child_spec->set_parent(father_spec);
+        root_spec = father_spec;
+      }
+    }
+
+    return ret;
+  }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableSpecCgService);
@@ -298,6 +350,10 @@ private:
   static int generate_das_tsc_ctdef(const ObTableCtx &ctx,
                                     ObIAllocator &allocator,
                                     sql::ObDASScanCtDef &das_tsc_ctdef);
+  static int replace_gen_col_exprs(const ObTableCtx &ctx,
+                                  common::ObIArray<sql::ObRawExpr*> &access_exprs);
+  static int generate_output_exprs(const ObTableCtx &ctx,
+                                   common::ObIArray<sql::ObExpr *> &output_exprs);
   static int generate_access_ctdef(const ObTableCtx &ctx,
                                    ObIAllocator &allocator,
                                    sql::ObDASScanCtDef &das_tsc_ctdef);

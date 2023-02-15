@@ -118,7 +118,7 @@ public:
       type_names_(NULL)
   {
     if (OB_ISNULL(type_names)) {
-      SQL_SESSION_LOG(ERROR, "type names is NULL");
+      SQL_SESSION_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "type names is NULL");
     } else {
       // 这里没法按照编码规范检查下标
       for (count_ = 0; 0 != type_names[count_]; count_++);

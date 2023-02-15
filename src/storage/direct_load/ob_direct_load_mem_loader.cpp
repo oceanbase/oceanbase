@@ -89,7 +89,7 @@ int ObDirectLoadMemLoader::work()
           LOG_WARN("some error ocurr", KR(ret));
         }
         if (OB_SUCC(ret)) {
-          chunk = OB_NEW(ChunkType, "TLD_row_chunk");
+          chunk = OB_NEW(ChunkType, ObMemAttr(MTL_ID(), "TLD_MemChunkVal"));
           if (chunk == nullptr) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to allocate mem", KR(ret));

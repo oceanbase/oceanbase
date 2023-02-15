@@ -211,7 +211,8 @@ void ObRpcDasAsyncAccessCallBack::on_timeout()
 {
   int ret = OB_SUCCESS;
   LOG_WARN("das async task timeout", K(get_task_ops()));
-  result_.set_rpc_rcode(OB_TIMEOUT);
+  result_.set_err_code(OB_TIMEOUT);
+  result_.get_op_results().reuse();
   context_->get_das_ref().inc_concurrency_limit_with_signal();
 }
 
@@ -220,7 +221,8 @@ void ObRpcDasAsyncAccessCallBack::on_invalid()
   int ret = OB_SUCCESS;
   // a valid packet on protocol level, but can't decode it.
   LOG_WARN("das async task invalid", K(get_task_ops()));
-  result_.set_rpc_rcode(OB_INVALID_ERROR);
+  result_.set_err_code(OB_INVALID_ERROR);
+  result_.get_op_results().reuse();
   context_->get_das_ref().inc_concurrency_limit_with_signal();
 }
 
@@ -233,6 +235,12 @@ int ObRpcDasAsyncAccessCallBack::process()
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("DAS async access callback process", K_(result));
+  if (OB_FAIL(get_rcode())) {
+    result_.set_err_code(get_rcode());
+    // we need to clear op results because they are not decoded from das async rpc due to rpc error.
+    result_.get_op_results().reuse();
+    LOG_WARN("das async rpc execution failed", K(get_rcode()), K_(result));
+  }
   context_->get_das_ref().inc_concurrency_limit_with_signal();
   return ret;
 }

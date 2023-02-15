@@ -17,7 +17,7 @@
 #include "lib/oblog/ob_log_module.h"  // LOG_*
 #include "lib/utility/ob_print_utils.h" // TO_STRING_KV
 #include "logservice/ob_log_service.h" // ObLogService
-#include "rootserver/ob_tenant_recovery_reportor.h" // ObTenantRecoveryReportor
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 
 namespace oceanbase
 {
@@ -98,15 +98,15 @@ int ObLSRecoveryStatHandler::increase_ls_replica_readable_scn_(SCN &readable_scn
   common::ObRole first_role;
   common::ObRole second_role;
   logservice::ObLogService *ls_svr = MTL(logservice::ObLogService*);
-  rootserver::ObTenantRecoveryReportor *tenant_recovery_reportor = MTL(rootserver::ObTenantRecoveryReportor*);
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
   share::ObAllTenantInfo tenant_info;
   palf::PalfHandleGuard palf_handle_guard;
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
-  } else if (OB_ISNULL(ls_svr) || OB_ISNULL(tenant_recovery_reportor)) {
+  } else if (OB_ISNULL(ls_svr) || OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pointer is null", KR(ret), KP(ls_svr), KP(tenant_recovery_reportor));
+    LOG_WARN("pointer is null", KR(ret), KP(ls_svr), KP(tenant_info_loader));
   } else if (OB_FAIL(ls_svr->get_palf_role(ls_->get_ls_id(), first_role, first_proposal_id))) {
     LOG_WARN("failed to get first role", KR(ret), K(ls_->get_ls_id()), KP(ls_svr));
   } else if (!is_strong_leader(first_role)) {
@@ -118,7 +118,7 @@ int ObLSRecoveryStatHandler::increase_ls_replica_readable_scn_(SCN &readable_scn
   } else if (OB_FAIL(ls_svr->open_palf(ls_->get_ls_id(), palf_handle_guard))) {
     LOG_WARN("failed to open palf", KR(ret), K_(ls));
   // scn get order: read_scn before replayable_scn before sync_scn
-  } else if (OB_FAIL(tenant_recovery_reportor->get_tenant_info(tenant_info))) {
+  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
     LOG_WARN("failed to get_tenant_info", KR(ret));
   } else if (OB_FAIL(palf_handle_guard.get_end_scn(sync_scn))) {
     LOG_WARN("failed to get end ts", KR(ret), K_(ls));

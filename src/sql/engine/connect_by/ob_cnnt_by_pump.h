@@ -32,7 +32,7 @@ private:
     virtual ~MallocWrapper()
     {
       if (OB_UNLIKELY(alloc_cnt_ != 0)) {
-        OB_LOG(WARN, "memory expanded in cby execution.", K(alloc_cnt_));
+        OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "memory expanded in cby execution.", K(alloc_cnt_));
       }
     }
     void *alloc(const int64_t sz)

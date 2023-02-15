@@ -315,7 +315,7 @@ bool ObDictEncoder::DictCmp::operator()(
   if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
   } else if (OB_UNLIKELY(nullptr == lhs.header_ || nullptr == rhs.header_)) {
     ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K_(ret), KP(lhs.header_), KP(rhs.header_));
+    LOG_WARN_RET(ret_, "invalid argument", K_(ret), KP(lhs.header_), KP(rhs.header_));
   } else {
     int cmp_ret = cmp_func_.cmp_func_(*lhs.header_->datum_, *rhs.header_->datum_);
     res = cmp_ret < 0;

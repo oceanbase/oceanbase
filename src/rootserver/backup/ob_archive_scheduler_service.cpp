@@ -153,7 +153,7 @@ void ObArchiveSchedulerService::run3()
   FLOG_INFO("ObArchiveSchedulerService run start");
   if (IS_NOT_INIT) {
     tmp_ret = OB_NOT_INIT;
-    LOG_ERROR("not init", K(tmp_ret));
+    LOG_ERROR_RET(tmp_ret, "not init", K(tmp_ret));
   } else {
     while (true) {
       ++round;
@@ -161,16 +161,16 @@ void ObArchiveSchedulerService::run3()
       FLOG_INFO("start do ObArchiveSchedulerService round", K(round));
       if (stop_) {
         tmp_ret = OB_IN_STOP_STATE;
-        LOG_WARN("exit for stop state", K(tmp_ret));
+        LOG_WARN_RET(tmp_ret, "exit for stop state", K(tmp_ret));
         break;
       } else if (OB_SUCCESS != (tmp_ret = process_())) {
-        LOG_WARN("failed to do process", K(tmp_ret));
+        LOG_WARN_RET(tmp_ret, "failed to do process", K(tmp_ret));
       }
 
       int64_t checkpoint_interval = 1 * 1000 * 1000L;
       idling_.set_checkpoint_interval(checkpoint_interval);
       if (OB_SUCCESS != (tmp_ret = idling_.idle())) {
-        LOG_WARN("failed to to idling", K(tmp_ret));
+        LOG_WARN_RET(tmp_ret, "failed to to idling", K(tmp_ret));
       }
     }
     is_working_ = false;

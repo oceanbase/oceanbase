@@ -68,6 +68,15 @@ public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
   int64_t get_serialize_size() const;
+private:
+  OB_INLINE bool is_latest_row_store_type_valid() const
+  {
+    // Before version 4.0, latest_row_store_type was not serialized in sstable meta, but it is
+    // required and added in version 4.1. For compatibility, when deserialize from older version
+    // data, latest_row_store_type_ is filled with DUMMY_ROW_STORE
+    return latest_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
+        || ObRowStoreType::DUMMY_ROW_STORE == latest_row_store_type_;
+  }
 public:
   TO_STRING_KV(K_(version), K_(length), K(row_count_), K(occupy_size_), K(original_size_),
       K(data_checksum_), K(index_type_), K(rowkey_column_count_), K(column_cnt_),
@@ -77,8 +86,9 @@ public:
       K(progressive_merge_step_), K(data_index_tree_height_), K(table_mode_),
       K(upper_trans_version_), K(max_merged_trans_version_), K_(recycle_version),
       K(ddl_scn_), K(filled_tx_scn_),
-      K(contain_uncommitted_row_), K(status_), K_(row_store_type), K_(compressor_type),
-      K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)));
+      K(contain_uncommitted_row_), K(status_), K_(root_row_store_type), K_(compressor_type),
+      K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
+      K_(latest_row_store_type));
 
 public:
   int32_t version_;
@@ -110,11 +120,12 @@ public:
   share::schema::ObTableMode table_mode_;
   uint8_t status_;
   bool contain_uncommitted_row_;
-  common::ObRowStoreType row_store_type_;
+  common::ObRowStoreType root_row_store_type_;
   common::ObCompressorType compressor_type_;
   int64_t encrypt_id_;
   int64_t master_key_id_;
   int16_t sstable_logic_seq_;
+  common::ObRowStoreType latest_row_store_type_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   //Add new variable need consider ObSSTableMetaChecker
 };

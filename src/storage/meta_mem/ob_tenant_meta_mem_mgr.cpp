@@ -226,7 +226,7 @@ void ObTenantMetaMemMgr::destroy()
 void ObTenantMetaMemMgr::mtl_destroy(ObTenantMetaMemMgr *&meta_mem_mgr)
 {
   if (OB_UNLIKELY(nullptr == meta_mem_mgr)) {
-    LOG_WARN("meta mem mgr is nullptr", KP(meta_mem_mgr));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "meta mem mgr is nullptr", KP(meta_mem_mgr));
   } else {
     OB_DELETE(ObTenantMetaMemMgr, oceanbase::ObModIds::OMT_TENANT, meta_mem_mgr);
     meta_mem_mgr = nullptr;
@@ -288,10 +288,13 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
       } else {
         TableGCItem *item = static_cast<TableGCItem *>(ptr);
         ObITable *table = item->table_;
+        bool is_safe = false;
         if (OB_ISNULL(table)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("the table in gc item is nullptr", K(ret), KP(item));
-        } else {
+        } else if (OB_FAIL(table->safe_to_destroy(is_safe))) {
+          LOG_WARN("fail to check safe_to_destroy", K(ret), KPC(table));
+        } else if (is_safe) {
           ObITable::TableType table_type = item->table_type_;
           int64_t index = static_cast<int>(table_type);
           if (OB_UNLIKELY(!ObITable::is_table_type_valid(table_type) || nullptr == pool_arr_[index])) {
@@ -301,9 +304,11 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
             pool_arr_[index]->free_obj(static_cast<void *>(table));
             table_cnt_arr[index]++;
           }
+        } else if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
+          LOG_INFO("the table is unsafe to destroy", KPC(table));
         }
 
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && is_safe) {
           left_recycle_cnt--;
           ob_free(item);
           item = nullptr;
@@ -362,7 +367,7 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
 void ObTenantMetaMemMgr::gc_sstable(ObSSTable *sstable)
 {
   if (OB_UNLIKELY(nullptr == sstable)) {
-    LOG_WARN("invalid argument");
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument");
   } else {
     const int64_t block_cnt = sstable->get_meta().get_macro_info().get_total_block_cnt();
     const int64_t start_time = ObTimeUtility::current_time();
@@ -373,7 +378,7 @@ void ObTenantMetaMemMgr::gc_sstable(ObSSTable *sstable)
     }
     const int64_t end_time = ObTimeUtility::current_time();
     if (end_time - start_time > SSTABLE_GC_MAX_TIME) {
-      LOG_WARN("sstable gc costs too much time", K(start_time), K(end_time), K(block_cnt));
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "sstable gc costs too much time", K(start_time), K(end_time), K(block_cnt));
     }
   }
 }
@@ -530,7 +535,7 @@ void ObTenantMetaMemMgr::release_sstable(ObSSTable *sstable)
 {
   if (OB_NOT_NULL(sstable)) {
     if (0 != sstable->get_ref()) {
-      LOG_ERROR("ObSSTable reference count may be leak", KPC(sstable));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObSSTable reference count may be leak", KPC(sstable));
     } else {
       sstable_pool_.release(sstable);
     }
@@ -566,7 +571,7 @@ void ObTenantMetaMemMgr::release_ddl_kv(ObDDLKV *ddl_kv)
 {
   if (OB_NOT_NULL(ddl_kv)) {
     if (0 != ddl_kv->get_ref()) {
-      LOG_ERROR("ddl kv reference count may be leak", KPC(ddl_kv));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ddl kv reference count may be leak", KPC(ddl_kv));
     } else {
       ddl_kv_pool_.release(ddl_kv);
     }
@@ -672,7 +677,7 @@ void ObTenantMetaMemMgr::release_memtable(ObMemtable *memtable)
 {
   if (OB_NOT_NULL(memtable)) {
     if (0 != memtable->get_ref()) {
-      LOG_ERROR("ObSSTable reference count may be leak", KPC(memtable));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObSSTable reference count may be leak", KPC(memtable));
     } else {
       memtable_pool_.release(memtable);
     }
@@ -683,7 +688,7 @@ void ObTenantMetaMemMgr::release_tx_data_memtable_(ObTxDataMemtable *memtable)
 {
   if (OB_NOT_NULL(memtable)) {
     if (0 != memtable->get_ref()) {
-      LOG_ERROR("ObTxDataMemtable reference count may be leak", KPC(memtable));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTxDataMemtable reference count may be leak", KPC(memtable));
     } else {
       tx_data_memtable_pool_.release(memtable);
     }
@@ -723,7 +728,7 @@ void ObTenantMetaMemMgr::release_tablet_ddl_kv_mgr(ObTabletDDLKvMgr *ddl_kv_mgr)
 {
   if (OB_NOT_NULL(ddl_kv_mgr)) {
     if (0 != ddl_kv_mgr->get_ref()) {
-      LOG_ERROR("ObTabletDDLKvMgr reference count may be leak", KPC(ddl_kv_mgr));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTabletDDLKvMgr reference count may be leak", KPC(ddl_kv_mgr));
     } else {
       tablet_ddl_kv_mgr_pool_.release(ddl_kv_mgr);
     }
@@ -762,7 +767,7 @@ void ObTenantMetaMemMgr::release_tablet_memtable_mgr(ObTabletMemtableMgr *memtab
 {
   if (OB_NOT_NULL(memtable_mgr)) {
     if (0 != memtable_mgr->get_ref()) {
-      LOG_ERROR("ObTabletMemtableMgr reference count may be leak", KPC(memtable_mgr));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTabletMemtableMgr reference count may be leak", KPC(memtable_mgr));
     } else {
       tablet_memtable_mgr_pool_.release(memtable_mgr);
     }
@@ -773,7 +778,7 @@ void ObTenantMetaMemMgr::release_tx_ctx_memtable_(ObTxCtxMemtable *memtable)
 {
   if (OB_NOT_NULL(memtable)) {
     if (0 != memtable->get_ref()) {
-      LOG_ERROR("ObTxCtxMemtable reference count may be leak", KPC(memtable));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTxCtxMemtable reference count may be leak", KPC(memtable));
     } else {
       tx_ctx_memtable_pool_.release(memtable);
     }
@@ -784,7 +789,7 @@ void ObTenantMetaMemMgr::release_lock_memtable_(ObLockMemtable *memtable)
 {
   if (OB_NOT_NULL(memtable)) {
     if (0 != memtable->get_ref()) {
-      LOG_ERROR("ObLockMemtable reference count may be leak", KPC(memtable));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObLockMemtable reference count may be leak", KPC(memtable));
     } else {
       lock_memtable_pool_.release(memtable);
     }
@@ -1225,7 +1230,7 @@ void ObTenantMetaMemMgr::release_tablet(ObTablet *tablet)
 {
   if (OB_NOT_NULL(tablet)) {
     if (0 != tablet->get_ref()) {
-      LOG_ERROR("ObTablet reference count may be leak", KPC(tablet));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTablet reference count may be leak", KPC(tablet));
     } else {
       tablet_pool_.release(tablet);
     }

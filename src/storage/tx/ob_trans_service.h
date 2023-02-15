@@ -224,6 +224,7 @@ public:
                     const bool is_rollback,
                     const int64_t expire_ts);
   int get_max_commit_version(share::SCN &commit_version) const;
+  int get_max_decided_scn(const share::ObLSID &ls_id, share::SCN & scn);
   #include "ob_trans_service_v4.h"
   #include "ob_tx_free_route_api.h"
 private:

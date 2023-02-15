@@ -22,7 +22,6 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h" // ObMySqlProxy
 #include "share/ob_ls_id.h" // ObLSID
 #include "observer/omt/ob_tenant_timezone_mgr.h" // for OTTZ_MGR.get_tenant_tz
-#include "observer/ob_server_struct.h"      // GCTX
 
 namespace oceanbase
 {

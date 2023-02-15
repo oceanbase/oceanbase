@@ -35,7 +35,7 @@ STATIC_ASSERT(sizeof(ObPrecision) == sizeof(ObLengthSemantics),
 OB_SERIALIZE_MEMBER(ObDatumMeta, type_, cs_type_, scale_, precision_);
 
 
-ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx)
+ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator)
   : frames_(exec_ctx.get_frames()),
     max_batch_size_(0),
     exec_ctx_(exec_ctx),
@@ -44,7 +44,7 @@ ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx)
     tmp_alloc_used_(exec_ctx.get_tmp_alloc_used()),
     batch_idx_(0),
     batch_size_(0),
-    expr_res_alloc_(exec_ctx.get_eval_res_allocator())
+    expr_res_alloc_((dynamic_cast<ObArenaAllocator*>(allocator) != NULL) ? (*(dynamic_cast<ObArenaAllocator*>(allocator))) : exec_ctx.get_eval_res_allocator())
 {
 }
 
@@ -622,6 +622,7 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
     } else {
       reset_datum_ptr(frame, ctx.get_batch_size(), ctx.get_batch_idx());
       ret = eval_func_(*this, ctx, *datum);
+      CHECK_STRING_LENGTH((*this), (*datum));
       if (OB_SUCC(ret)) {
         ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
         evaluated_flags->set(ctx.get_batch_idx());
@@ -676,6 +677,16 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
           info->cnt_ = size;
           info->evaluated_ = true;
         }
+        #ifndef NDEBUG
+          if (is_oracle_mode() && (ob_is_string_tc(datum_meta_.type_) || ob_is_raw(datum_meta_.type_))) {
+            ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
+            for (int64_t i = 0; i < size; i++) {
+              if (!skip.contain(i) && 0 == datum[i].len_ && !datum[i].is_null()) {
+                SQL_ENG_LOG(ERROR, "unexpected datum length", KPC(this));
+              }
+            }
+          }
+        #endif
       } else {
         ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
         ObDatum *datum_end = datum + size;
@@ -706,6 +717,7 @@ int expr_default_eval_batch_func(const ObExpr &expr,
       // set current evaluate index
       batch_info_guard.set_batch_idx(i);
       ret = expr.eval_func_(expr, ctx, datum[i]);
+      CHECK_STRING_LENGTH(expr, datum[i]);
       evaluated_flags->set(i);
       if (datum[i].is_null()) {
         got_null = true;

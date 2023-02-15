@@ -46,7 +46,7 @@ ObTimeoutCtx::~ObTimeoutCtx()
 {
   if (NULL != header()) {
     if (this != header()) {
-      LOG_ERROR("destruct timeout context should be header");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "destruct timeout context should be header");
     } else {
       header() = next_;
     }

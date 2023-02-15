@@ -261,7 +261,7 @@ void ObIMvccCtx::check_row_callback_registration_between_stmt_()
   transaction::ObPartTransCtx *trans_ctx =
     (transaction::ObPartTransCtx *)(i_mem_ctx->get_trans_ctx());
   if (NULL != trans_ctx && !trans_ctx->has_pending_write()) {
-    TRANS_LOG(ERROR, "register commit not match expection", K(*trans_ctx));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "register commit not match expection", K(*trans_ctx));
   }
 }
 }

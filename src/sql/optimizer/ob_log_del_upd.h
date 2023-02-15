@@ -175,7 +175,8 @@ public:
                K_(is_primary_index),
                K_(ck_cst_exprs),
                K_(is_update_unique_key),
-               K_(is_update_part_key));
+               K_(is_update_part_key),
+               K_(assignments));
 };
 
 class ObDelUpdLogPlan;

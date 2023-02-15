@@ -37,7 +37,7 @@ namespace oceanbase
 namespace lib
 {
   int get_max_thread_num() {
-    return 0 == GCONF._ob_max_thread_num ? INT32_MAX : GCONF._ob_max_thread_num;
+    return 0 == GCONF._ob_max_thread_num ? INT32_MAX : static_cast<int32_t>(GCONF._ob_max_thread_num);
   }
 }
 

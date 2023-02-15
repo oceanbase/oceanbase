@@ -498,7 +498,7 @@ public:
     const Int64 result = ObXARpcProxy::AsyncCB<PC>::result_;
  
     if (OB_SUCCESS != rcode.rcode_) {
-      TRANS_LOG(WARN, "xa rpc returns error code", K(rcode), K(dst));
+      TRANS_LOG_RET(WARN, rcode.rcode_, "xa rpc returns error code", K(rcode), K(dst));
       // TODO, check ret code
       if (OB_NOT_NULL(cond_)) {
         cond_->notify(rcode.rcode_);
@@ -576,7 +576,7 @@ public:
       *has_tx_level_temp_table_ = result.has_tx_level_temp_table_;
     }
     if (OB_SUCCESS != rcode.rcode_) {
-      TRANS_LOG(WARN, "xa rpc returns error code", K(rcode), K(dst));
+      TRANS_LOG_RET(WARN, rcode.rcode_, "xa rpc returns error code", K(rcode), K(dst));
       // TODO, check ret code
       if (OB_NOT_NULL(cond_)) {
         cond_->notify(rcode.rcode_);

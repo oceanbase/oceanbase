@@ -39013,7 +39013,7 @@ ObTZNameKey::ObTZNameKey(const ObString &tz_key_str)
 {
   int64_t len = tz_key_str.length();
   if (OB_UNLIKELY(len + 1 > OB_MAX_TZ_NAME_LEN)) {
-    LOG_ERROR("invalid tz_key_str", K(tz_key_str));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid tz_key_str", K(tz_key_str));
   } else {
     for (int64_t i = 0; i < len; ++i) {
       tz_name_[i] = static_cast<char>(tolower(tz_key_str[i]));
@@ -39058,7 +39058,7 @@ uint64_t ObTZNameKey::hash(uint64_t seed) const
   uint64_t seed_ret = 0;
   int32_t str_len = static_cast<int32_t>(strlen(tz_name_));
   if (OB_ISNULL(tz_name_) || OB_UNLIKELY(str_len > OB_MAX_TZ_NAME_LEN)) {
-    LOG_WARN("invalid tz_name", K(str_len));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid tz_name", K(str_len));
   } else {
     seed_ret = murmurhash(tz_name_, str_len, seed);
   }

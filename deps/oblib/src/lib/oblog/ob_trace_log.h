@@ -74,7 +74,7 @@ OB_INLINE bool CHECK_TRACE_TIMES(uint64_t times, const uint64_t *cur_trace_id)
 
 //For logs that are forced to be printed, you can also judge according to the log level: if it is ERROR level, it will not print, and other levels will be forced to print
 #define FORCE_PRINT_TRACE(log_buffer, HEAD)                                         \
-  if (oceanbase::lib::is_trace_log_enabled() && OB_LOGGER.get_log_level() != ObLogger::LogLevel::LOG_ERROR) {              \
+  if (oceanbase::lib::is_trace_log_enabled() && OB_LOGGER.get_log_level() != OB_LOG_LEVEL_DBA_ERROR) {              \
     _Pragma("GCC diagnostic push")                                      \
     _Pragma("GCC diagnostic ignored \"-Wtautological-pointer-compare\"")    \
     if (NULL != log_buffer) {                                                       \

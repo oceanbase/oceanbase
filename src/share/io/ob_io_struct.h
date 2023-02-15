@@ -184,6 +184,7 @@ public:
   virtual void run1() override;
 
 private:
+  void print_sender_status();
   void print_io_status();
 private:
   bool is_inited_;
@@ -224,7 +225,7 @@ class ObIOSender : public lib::TGRunnable
 public:
   ObIOSender(ObIAllocator &allocator);
   virtual ~ObIOSender();
-  int init();
+  int init(const int64_t sender_index);
   void stop();
   void wait();
   void destroy();
@@ -242,14 +243,19 @@ public:
   int remove_group_queues(const uint64_t tenant_id);
   int stop_phy_queue(const uint64_t tenant_id, const uint64_t index);
   int notify();
-  int32_t get_queue_count() const;
+  int64_t get_queue_count() const;
+  int get_sender_info(int64_t &reservation_ts,
+                      int64_t &group_limitation_ts,
+                      int64_t &tenant_limitation_ts,
+                      int64_t &proportion_ts);
   int get_sender_status(const uint64_t tenant_id, const uint64_t index, ObSenderInfo &sender_info);
-  TO_STRING_KV(K(is_inited_), K(stop_submit_), KPC(io_queue_), K(tg_id_));
+  TO_STRING_KV(K(is_inited_), K(stop_submit_), KPC(io_queue_), K(tg_id_), K(sender_index_));
 //private:
   void pop_and_submit();
   int64_t calc_wait_timeout(const int64_t queue_deadline);
   int submit(ObIORequest &req);
   int64_t sender_req_count_;
+  int64_t sender_index_;
   int tg_id_; // thread group id
   bool is_inited_;
   bool stop_submit_;

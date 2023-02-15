@@ -46,6 +46,7 @@ int ObLSDDLLogHandler::init(ObLS *ls)
     TCWLockGuard guard(online_lock_);
     is_online_ = true;
     ls_ = ls;
+    last_rec_scn_ = ls_->get_clog_checkpoint_scn();
     is_inited_ = true;
   }
   return ret;
@@ -57,6 +58,7 @@ void ObLSDDLLogHandler::reset()
   is_online_ = false;
   is_inited_ = false;
   ls_ = nullptr;
+  last_rec_scn_.reset();
   ddl_log_replayer_.reset();
 }
 
@@ -158,6 +160,9 @@ int ObLSDDLLogHandler::replay(const void *buffer,
       case ObDDLClogType::DDL_REDO_LOG: {
         ret = replay_ddl_redo_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
+      }
+      case ObDDLClogType::OLD_DDL_COMMIT_LOG: {
+        break; // ignore the old ddl commit log
       }
       case ObDDLClogType::DDL_COMMIT_LOG: {
         ret = replay_ddl_commit_log_(log_buf, buf_size, tmp_pos, log_scn);
@@ -283,7 +288,6 @@ SCN ObLSDDLLogHandler::get_rec_scn()
   } else {
     while (OB_SUCC(ret)) {
       ObDDLKvMgrHandle ddl_kv_mgr_handle;
-      SCN min_scn = SCN::max_scn();
       if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -294,18 +298,17 @@ SCN ObLSDDLLogHandler::get_rec_scn()
       } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid ddl kv mgr handle", K(ret), K(ddl_kv_mgr_handle));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
-        LOG_WARN("failed to check ddl kv", K(ret));
-      } else if (has_ddl_kv) {
-        if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kv_min_scn(min_scn))) {
-          LOG_WARN("fail to get ddl kv min log ts", K(ret));
-        } else {
-          rec_scn = SCN::min(rec_scn, min_scn);
-        }
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_rec_scn(rec_scn))) {
+        LOG_WARN("failed to get rec scn", K(ret));
       }
     }
   }
-  return OB_SUCC(ret) ? rec_scn : SCN::max_scn();
+  if (OB_FAIL(ret)) {
+    rec_scn = SCN::max(last_rec_scn_, ls_->get_clog_checkpoint_scn());
+  } else if (!rec_scn.is_max()) {
+    last_rec_scn_ = SCN::max(last_rec_scn_, rec_scn);
+  }
+  return rec_scn;
 }
 
 int ObLSDDLLogHandler::replay_ddl_redo_log_(const char *log_buf,

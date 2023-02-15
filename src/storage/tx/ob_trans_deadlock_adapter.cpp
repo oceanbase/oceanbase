@@ -64,7 +64,7 @@ void SessionGuard::revert_session_()
 {
   if (nullptr != sess_ptr_) {
     if (OB_ISNULL(GCTX.session_mgr_)) {
-      DETECT_LOG(ERROR, "GCTX.session_mgr is NULL, session will leak", K_(sess_ptr));
+      DETECT_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "GCTX.session_mgr is NULL, session will leak", K_(sess_ptr));
     } else {
       GCTX.session_mgr_->revert_session(sess_ptr_);
     }
@@ -747,7 +747,7 @@ int ObTransDeadlockDetectorAdapter::autonomous_register_to_deadlock(const ObTran
     DETECT_LOG(ERROR, "tenant deadlock detector mgr is null", PRINT_WRAPPER);
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->register_key(last_trans_id,
                                                   [](const common::ObIArray<ObDetectorInnerReportInfo> &,
-                                                    const int64_t) { DETECT_LOG(ERROR, "should not kill inner node");
+                                                    const int64_t) { DETECT_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "should not kill inner node");
                                                                       return common::OB_ERR_UNEXPECTED; },
                                                   [last_trans_id](ObDetectorUserReportInfo& report_info) {
                                                     ObSharedGuard<char> ptr;
@@ -759,7 +759,7 @@ int ObTransDeadlockDetectorAdapter::autonomous_register_to_deadlock(const ObTran
                                                       buffer[63] = '\0';
                                                       ptr.assign((char*)buffer, [](char* p){ ob_free(p); });
                                                     } else {
-                                                      DETECT_LOG(WARN, "alloc memory failed");
+                                                      DETECT_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "alloc memory failed");
                                                       ptr.assign((char*)"inner visitor", [](char*){});
                                                     }
                                                     report_info.set_visitor(ptr);

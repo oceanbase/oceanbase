@@ -422,7 +422,7 @@ ObWkbGeomCollection::size_type ObWkbGeomCollection::get_sub_size(const_pointer d
       break;
     }
     default: {
-      LOG_WARN("Invalid geo type.", K(type));
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "Invalid geo type.", K(type));
     }
   }
   return s;
@@ -835,7 +835,7 @@ ObWkbGeogCollection::size_type ObWkbGeogCollection::get_sub_size(const_pointer d
       break;
     }
     default: {
-      LOG_WARN("Invalid geo type.", K(type));
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "Invalid geo type.", K(type));
     }
   }
   return s;

@@ -435,7 +435,7 @@ bool ObRoutePolicy::is_same_idc(const share::ObServerLocality &locality1, const 
   if (locality1.get_region().is_empty() || locality2.get_region().is_empty()) {
     //如果没有为集群设置REGION，则无法判断是否在同一REGION
     ret_bool = false;
-    LOG_WARN("cluster region is not set", K(locality1), K(locality2));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "cluster region is not set", K(locality1), K(locality2));
   } else if (locality1.get_idc().is_empty() || locality2.get_idc().is_empty()) {
     //如果没有为zone设置IDC，则无法判断是否在同一IDC
     ret_bool = false;
@@ -455,7 +455,7 @@ bool ObRoutePolicy::is_same_region(const share::ObServerLocality &locality1, con
   if (locality1.get_region().is_empty() || locality2.get_region().is_empty()) {
     //如果没有为集群设置REGION，则无法判断是否在同一REGION
     ret_bool = false;
-    LOG_WARN("cluster region is not set", K(locality1), K(locality2));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "cluster region is not set", K(locality1), K(locality2));
   } else if (locality1.get_region() == locality2.get_region()) {
     ret_bool = true;
   }

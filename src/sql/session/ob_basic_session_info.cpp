@@ -249,10 +249,10 @@ int ObBasicSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
 void ObBasicSessionInfo::destroy()
 {
   if (magic_num_ != 0x13572468) {
-    LOG_ERROR("ObBasicSessionInfo may be double free!!!", K(magic_num_));
+    LOG_ERROR_RET(OB_ERROR, "ObBasicSessionInfo may be double free!!!", K(magic_num_));
   }
   if (OB_NOT_NULL(tx_desc_)) {
-    LOG_ERROR("tx_desc != NULL", KPC(this), KPC_(tx_desc));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tx_desc != NULL", KPC(this), KPC_(tx_desc));
   }
   tx_desc_ = NULL;
   tx_result_.reset();
@@ -1783,7 +1783,7 @@ int ObBasicSessionInfo::defragment_sys_variable_to(common::ObStringBuf &allocato
 {
   int ret = OB_SUCCESS;
   const SysVarIds &all_sys_var_ids = sys_var_inc_info_.get_all_sys_var_ids();
-  for (int i = 0; i < all_sys_var_ids.count(); i++) {
+  for (int i = 0; OB_SUCC(ret) && i < all_sys_var_ids.count(); i++) {
     int64_t store_idx = -1;
     ObSysVarClassType sys_var_id = all_sys_var_ids.at(i);
     OZ (ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx));
@@ -3608,13 +3608,28 @@ int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
           if (OB_FAIL(sys_var_delta_ids.push_back(ids.at(i)))) {
             LOG_WARN("fail to push_back id", K(ret));
           } else {
-            LOG_DEBUG("schema_and_def not identical", K(sys_var_idx),
+            LOG_TRACE("sys var need sync", K(sys_var_idx),
             "val", sys_vars_[sys_var_idx]->get_value(),
-            "def", ObSysVariables::get_default_value(sys_var_idx));
+            "def", ObSysVariables::get_default_value(sys_var_idx),
+            K(sessid_), K(proxy_sessid_));
           }
         }
+      } else {
+         LOG_TRACE("sys var not need sync", K(sys_var_idx),
+         "val", sys_vars_[sys_var_idx]->get_value(),
+         "def", ObSysVariables::get_default_value(sys_var_idx),
+         K(sessid_), K(proxy_sessid_));
       }
     }
+    if (sys_var_delta_ids.count() == 0) {
+      if (OB_FAIL(sys_var_delta_ids.push_back(ids.at(0)))) {
+        LOG_WARN("fail to push_back id", K(ret));
+      } else {
+        LOG_TRACE("success to get default sync sys vars", K(ret), K(sys_var_delta_ids),
+         K(sessid_), K(proxy_sessid_));
+      }
+    }
+
   }
   return ret;
 }
@@ -3646,10 +3661,11 @@ int ObBasicSessionInfo::serialize_sync_sys_vars(ObIArray<ObSysVarClassType>
         LOG_WARN("fail to serialize sys var", K(buf_len), K(pos), K(i), K(sys_var_idx),
                   K(*sys_vars_[sys_var_idx]), K(ret));
       } else {
-        LOG_DEBUG("serialize sys vars", K(sys_var_idx),
+        LOG_TRACE("serialize sys vars", K(sys_var_idx),
                   "name", ObSysVariables::get_name(sys_var_idx),
                   "val", sys_vars_[sys_var_idx]->get_value(),
-                  "def", ObSysVariables::get_default_value(sys_var_idx));
+                  "def", ObSysVariables::get_default_value(sys_var_idx),
+                  K(sessid_), K(proxy_sessid_));
       }
     }
   }
@@ -3660,6 +3676,8 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
                               const char *buf, const int64_t &data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  LOG_TRACE("before deserialize sync sys vars", "inc var ids", sys_var_inc_info_.get_all_sys_var_ids(),
+                                        K(sessid_), K(proxy_sessid_));
   if (OB_FAIL(serialization::decode(buf, data_len, pos, deserialize_sys_var_count))) {
       LOG_WARN("fail to deserialize sys var count", K(data_len), K(pos), K(ret));
   } else {
@@ -3702,14 +3720,21 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
       } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
                                                   check_timezone_valid))) {
         LOG_ERROR("process system variable error",  K(ret), K(*sys_var));
+      } else {
+        LOG_TRACE("deserialize sync sys var", K(sys_var_id), K(*sys_var),
+                   K(sessid_), K(proxy_sessid_));
       }
 
       // update the current session's array if there is no updated deserialization sys_var.
       if (!sys_var_inc_info_.all_has_sys_var_id(sys_var_id)) {
-        sys_var_inc_info_.add_sys_var_id(sys_var_id);
+        if (OB_SUCC(ret) && OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
+          LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
+        }
       }
       // add all deserialize sys_var id.
-      tmp_sys_var_inc_info.add_sys_var_id(sys_var_id);
+      if (OB_SUCC(ret) && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
+        LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
+      }
     }
     const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
     int64_t store_idx = -1;
@@ -3728,27 +3753,20 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
             LOG_WARN("create sys var is NULL", K(ret));
           } else {
             ObObj tmp_obj = ObSysVariables::get_default_value(store_idx);
-            if (ob_is_string_type(tmp_obj.get_type())) {
-              if (OB_FAIL(deep_copy_sys_variable(*sys_var, ids.at(i), tmp_obj))) {
-                LOG_WARN("fail to update system variable", K(ret));
-              }
-            } else if (ob_is_number_tc(tmp_obj.get_type())) {
-              if (OB_FAIL(deep_copy_sys_variable(*sys_var, ids.at(i), tmp_obj))) {
-                LOG_WARN("fail to update system variable", K(ret));
-              }
-            } else {
-              // int, bool, enum, uint do not need to do deep copy
-              sys_vars_[store_idx]->set_value(tmp_obj);
-            }
+            sys_vars_[store_idx]->set_value(tmp_obj);
+            LOG_TRACE("sync sys var set default value", K(ids.at(i)), K(tmp_obj),
+                     K(sessid_), K(proxy_sessid_));
           }
         }
       }
     }
-    if (OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
+    if (OB_SUCC(ret) && OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
       LOG_WARN("fail to assign sys var delta info",K(ret));
     } else {
       //do nothing.
     }
+    LOG_TRACE("after deserialize sync sys vars", "inc var ids", sys_var_inc_info_.get_all_sys_var_ids(),
+                                          K(sessid_), K(proxy_sessid_));
   }
   return ret;
 }
@@ -5028,7 +5046,7 @@ bool ObBasicSessionInfo::is_isolation_serializable() const
 void ObBasicSessionInfo::set_tx_isolation(ObTxIsolationLevel isolation)
 {
   if (isolation == ObTxIsolationLevel::INVALID) {
-    LOG_ERROR("set invalid tx isolation", K(isolation), KPC(this));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "set invalid tx isolation", K(isolation), KPC(this));
   }
   next_tx_isolation_ = isolation;
   trans_spec_status_ = TRANS_SPEC_SET;
@@ -6062,20 +6080,20 @@ observer::ObSMConnection *ObBasicSessionInfo::get_sm_connection()
   if (rpc::ObRequest::TRANSPORT_PROTO_EASY == sock_desc.type_) {
     easy_connection_t* easy_conn = nullptr;
     if (OB_ISNULL((easy_conn = static_cast<easy_connection_t *>(sock_desc.sock_desc_)))) {
-      LOG_ERROR("easy sock_desc is null");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "easy sock_desc is null");
     } else {
       conn = static_cast<observer::ObSMConnection*>(easy_conn->user_data);
     }
   } else if (rpc::ObRequest::TRANSPORT_PROTO_POC == sock_desc.type_) {
     obmysql::ObSqlSockSession *sess = nullptr;
     if (OB_ISNULL(sess = static_cast<obmysql::ObSqlSockSession *>(sock_desc.sock_desc_))) {
-      LOG_ERROR("sql nio sock_desc is null");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "sql nio sock_desc is null");
     } else {
       conn = &sess->conn_;
     }
   }
     else {
-    LOG_ERROR("invalid sock_desc type", K(sock_desc.type_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid sock_desc type", K(sock_desc.type_));
   }
   return conn;
 }

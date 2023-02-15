@@ -19,6 +19,7 @@
 #include "share/ob_occam_time_guard.h"
 #include <algorithm>
 
+/* to do bin.lb: to be removed
 #define LOG_PHASE(level, phase, info, args...) \
 do {\
   if (phase == LogPhase::NONE) {\
@@ -55,6 +56,11 @@ do {\
     ELECT_LOG(level, joined_info, ##args, PRINT_WRAPPER);\
   }\
 } while(0)
+*/
+
+#define LOG_PHASE(level, phase, info, args...) ELECT_LOG(level, "[" #phase "]" info, ##args, PRINT_WRAPPER)
+#define LOG_PHASE_RET(level, errcode, phase, info, args...) ELECT_LOG_RET(level, errcode, "[" #phase "]" info, ##args, PRINT_WRAPPER)
+
 #define LOG_INIT(level, info, args...) LOG_PHASE(level, LogPhase::INIT, info, ##args)
 #define LOG_DESTROY(level, info, args...) LOG_PHASE(level, LogPhase::DESTROY, info, ##args)
 #define LOG_ELECT_LEADER(level, info, args...) LOG_PHASE(level, LogPhase::ELECT_LEADER, info, ##args)
@@ -62,7 +68,16 @@ do {\
 #define LOG_CHANGE_LEADER(level, info, args...) LOG_PHASE(level, LogPhase::CHANGE_LEADER, info, ##args)
 #define LOG_EVENT(level, info, args...) LOG_PHASE(level, LogPhase::EVENT, info, ##args)
 #define LOG_SET_MEMBER(level, info, args...) LOG_PHASE(level, LogPhase::SET_MEMBER, info, ##args)
-#define LOG_NONE(level, info, args...) LOG_PHASE(level, LogPhase::NONE, info, ##args)
+#define LOG_NONE(level, info, args...) ELECT_LOG(level, info, ##args, PRINT_WRAPPER)
+
+#define LOG_INIT_RET(level, errcode, args...) { int ret = errcode; LOG_INIT(level, ##args); }
+#define LOG_DESTROY_RET(level, errcode, args...) { int ret = errcode; LOG_DESTROY(level, ##args); }
+#define LOG_RENEW_LEASE_RET(level, errcode, args...) { int ret = errcode; LOG_RENEW_LEASE(level, ##args); }
+#define LOG_CHANGE_LEADER_RET(level, errcode, args...) { int ret = errcode; LOG_CHANGE_LEADER(level, ##args); }
+#define LOG_EVENT_RET(level, errcode, args...) { int ret = errcode; LOG_EVENT(level, ##args); }
+#define LOG_SET_MEMBER_RET(level, errcode, args...) { int ret = errcode; LOG_SET_MEMBER(level, ##args); }
+#define LOG_NONE_RET(level, errcode, args...) { int ret = errcode; LOG_NONE(level, ##args); }
+
 #define ELECT_TIME_GUARD(func_cost_threshold) TIMEGUARD_INIT(ELECT, func_cost_threshold, 10_s)
 
 namespace oceanbase
@@ -84,9 +99,13 @@ enum class LogPhase
   SET_MEMBER = 7,
 };
 
-// inner priority seed define
-constexpr int64_t DEFAULT_SEED = (1ULL << 12);
-constexpr int64_t SEED_NOT_NORMOL_REPLICA_BIT = (1ULL << 48);
+// inner priority seed define, bigger means lower priority
+enum class PRIORITY_SEED_BIT : uint64_t
+{
+  DEFAULT_SEED = (1ULL << 12),
+  SEED_IN_REBUILD_PHASE_BIT = (1ULL << 32),
+  SEED_NOT_NORMOL_REPLICA_BIT = (1ULL << 48),
+};
 
 constexpr int64_t MSG_DELAY_WARN_THRESHOLD = 200_ms;
 constexpr int64_t MAX_LEASE_TIME = 10_s;

@@ -18,51 +18,10 @@
 #include "ob_htable_utils.h"
 #include "ob_htable_filter_operator.h"
 #include "ob_table_insert_up_executor.h"
-#include "ob_table_cg_service.h"
-
 namespace oceanbase
 {
 namespace table
 {
-template<int TYPE>
-int ObTableOpWrapper::process_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
-{
-  int ret = OB_SUCCESS;
-  ObTableApiSpec *spec = nullptr;
-  ObTableApiCacheGuard cache_guard;
-  if (OB_FAIL(get_or_create_spec<TYPE>(tb_ctx, cache_guard, spec))) {
-    LOG_WARN("fail to get or create spec", K(ret), K(TYPE));
-  }else if (OB_FAIL(process_op_with_spec(tb_ctx, spec, op_result))) {
-    LOG_WARN("fail to process op with spec", K(ret), K(TYPE));
-  } else {
-    tb_ctx.set_expr_info(nullptr);
-  }
-
-  return ret;
-}
-
-// 生成/匹配计划
-template<int TYPE>
-int ObTableOpWrapper::get_or_create_spec(ObTableCtx &tb_ctx,
-                                         ObTableApiCacheGuard &cache_guard,
-                                         ObTableApiSpec *&spec)
-{
-  int ret = OB_SUCCESS;
-  ObExprFrameInfo *expr_frame_info;
-  if (OB_FAIL(cache_guard.init(&tb_ctx))) {
-    LOG_WARN("fail to init cache guard", K(ret));
-  } else if (OB_FAIL(cache_guard.get_expr_info(&tb_ctx, expr_frame_info))) {
-    LOG_WARN("fail to get expr frame info", K(ret));
-  } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(tb_ctx, *expr_frame_info))) {
-    LOG_WARN("fail to alloc exprs memory", K(ret));
-  } else if (FALSE_IT(tb_ctx.set_expr_info(expr_frame_info))) {
-  } else if (FALSE_IT(tb_ctx.set_init_flag(true))) {
-  } else if (OB_FAIL(cache_guard.get_spec<TYPE>(&tb_ctx, spec))) {
-    LOG_WARN("fail to get spec from cache", K(ret), K(TYPE));
-  }
-  return ret;
-}
-
 // 根据执行计划驱动executor执行
 int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
                                            ObTableApiSpec *spec,
@@ -125,7 +84,7 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
     const ObIArray<ObExpr *> &ins_exprs = ins_up_spec.get_ctdef().ins_ctdef_.new_row_;
     const ObTableCtx::ObAssignIds &assign_ids = tb_ctx.get_assign_ids();
     const int64_t N = assign_ids.count();
-    ObObj* obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * N));
+    ObObj *obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * N));
     if (OB_ISNULL(obj_array)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("faild to alloc memory for objs", K(ret));
@@ -171,6 +130,7 @@ int ObTableOpWrapper::process_get(ObTableCtx &tb_ctx, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObTableApiSpec *spec = nullptr;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
   if (OB_FAIL(get_or_create_spec<TABLE_API_EXEC_SCAN>(tb_ctx, cache_guard, spec))) {
     LOG_WARN("fail to get or create scan spec", K(ret));

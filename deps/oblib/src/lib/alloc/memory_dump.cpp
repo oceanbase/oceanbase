@@ -60,7 +60,7 @@ void do_with_segv_catch(Function &&func, bool &has_segv, decltype(func()) &ret)
   } else if (1 == js) {
     has_segv = true;
   } else {
-    LOG_ERROR("unexpected error!!!", K(js));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected error!!!", K(js));
     ob_abort();
   }
   get_signal_handler() = handler_bak;
@@ -92,7 +92,7 @@ ObMemoryDump &ObMemoryDump::get_instance()
 {
   static ObMemoryDump the_one;
   if (OB_UNLIKELY(!the_one.is_inited()) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    LOG_WARN("memory dump not init");
+    LOG_WARN_RET(OB_NOT_INIT, "memory dump not init");
   }
   return the_one;
 }
@@ -338,7 +338,7 @@ int print_object_meta(AChunk *chunk, ABlock *block, AObject *object, char *buf,
   int len = end ? (char*)end - (char*)label : sizeof(object->label_);
   ret = databuff_printf(buf, buf_len, pos,
                         "        object: %p, offset: %04d, in_use: %d, is_large: %d, nobjs: %04d," \
-                        " label: \'%.*s\', alloc_bytes: %d\n",
+                        " label: \'%.*s\', alloc_bytes: %u\n",
                         object, offset, object->in_use_, object->is_large_, object->nobjs_,
                         len, (char*)label, object->alloc_bytes_);
   return ret;

@@ -255,7 +255,7 @@ void ObPxMSReceiveOp::LocalOrderInput::clean_row_store(ObExecContext &ctx)
 void ObPxMSReceiveOp::LocalOrderInput::destroy()
 {
   if (nullptr != get_row_store_ || nullptr != add_row_store_) {
-    LOG_ERROR("unexpected status: row store is not null", K(get_row_store_), K(add_row_store_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected status: row store is not null", K(get_row_store_), K(add_row_store_));
   }
   get_row_store_ = nullptr;
   add_row_store_ = nullptr;
@@ -367,8 +367,8 @@ int ObPxMSReceiveOp::GlobalOrderInput::get_one_row_from_channels(
       while (OB_SUCC(ret) && ms_receive_op->row_reader_.has_more()) {
         ms_receive_op->clear_evaluated_flag();
         ms_receive_op->clear_dynamic_const_parent_flag();
-        if (OB_FAIL(ms_receive_op->row_reader_.get_next_row(
-                    ms_receive_op->my_spec().child_exprs_, eval_ctx))) {
+        if (OB_FAIL(ms_receive_op->row_reader_.get_next_row(ms_receive_op->my_spec().child_exprs_,
+                                      ms_receive_op->my_spec().dynamic_const_exprs_, eval_ctx))) {
           LOG_WARN("get row failed", K(ret));
         } else {
           processed_cnt_++;
@@ -493,7 +493,7 @@ void ObPxMSReceiveOp::GlobalOrderInput::clean_row_store(
 void ObPxMSReceiveOp::GlobalOrderInput::destroy()
 {
   if (nullptr != add_row_store_ || nullptr != get_row_store_) {
-    LOG_ERROR("unexpect status: row store is not null", K(add_row_store_), K(get_row_store_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpect status: row store is not null", K(add_row_store_), K(get_row_store_));
   }
   get_row_store_ = nullptr;
   add_row_store_ = nullptr;
@@ -620,7 +620,14 @@ int ObPxMSReceiveOp::inner_get_next_row()
     const ObChunkDatumStore::StoredRow *store_row = nullptr;
     // (1) 向 heap 中添加一个或多个元素，直至 heap 满
     while (OB_SUCC(ret) && row_heap_.capacity() > row_heap_.count()) {
-      clear_evaluated_flag();
+      // Note:
+      //   inner_get_next_row is invoked in two pathes (batch vs
+      //   non-batch). The eval flag should be cleared with seperated flags
+      //   under each invoke path (batch vs non-batch). Therefore call the
+      //   overriding API do_clear_datum_eval_flag() to replace
+      //   clear_evaluated_flag
+      // TODO qubin.qb: Implement seperated inner_get_next_batch to isolate them
+      do_clear_datum_eval_flag();
       clear_dynamic_const_parent_flag();
       if (OB_FAIL(get_one_row_from_channels(phy_plan_ctx,
                                             row_heap_.writable_channel_idx(),
@@ -651,7 +658,10 @@ int ObPxMSReceiveOp::inner_get_next_row()
       } else if (row_heap_.capacity() == row_heap_.count()) {
         if (OB_FAIL(row_heap_.pop(store_row))) {
           LOG_WARN("fail pop row from heap", K(ret));
-        } else if (OB_FAIL(ObReceiveRowReader::to_expr(store_row, MY_SPEC.all_exprs_, eval_ctx_))) {
+        } else if (OB_FAIL(ObReceiveRowReader::to_expr(store_row,
+                                                       MY_SPEC.dynamic_const_exprs_,
+                                                       MY_SPEC.all_exprs_,
+                                                       eval_ctx_))) {
           LOG_WARN("failed to convert store row", K(ret));
         } else {
           LOG_TRACE("trace output row", K(ret), K(ObToStringExprRow(eval_ctx_, MY_SPEC.all_exprs_)));
@@ -766,7 +776,9 @@ int ObPxMSReceiveOp::get_all_rows_from_channels(
           clear_evaluated_flag();
           clear_dynamic_const_parent_flag();
           // Get row to %child_exprs_ instead of %all_exprs_ which contain sort expressions
-          if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_, eval_ctx_))) {
+          if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_,
+                                               MY_SPEC.dynamic_const_exprs_,
+                                               eval_ctx_))) {
             LOG_WARN("get row from reader failed", K(ret));
           } else {
             ++processed_cnt_;

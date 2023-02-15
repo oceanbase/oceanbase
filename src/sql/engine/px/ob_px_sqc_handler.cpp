@@ -101,31 +101,17 @@ int ObPxSqcHandler::pre_acquire_px_worker(int64_t &reserved_thread_count)
   int ret = OB_SUCCESS;
   int64_t max_thread_count = sqc_init_args_->sqc_.get_max_task_count();
   int64_t min_thread_count = sqc_init_args_->sqc_.get_min_task_count();
-  const int64_t rpc_worker_count = 1;
-  const bool rpc_worker = sqc_init_args_->sqc_.is_rpc_worker();
-  if (rpc_worker) {
-    // 单线程单dfo的情况下
-    reserved_px_thread_count_ = 0;
-    if (OB_FAIL(notifier_->set_expect_worker_count(reserved_px_thread_count_))) {
-      LOG_WARN("failed to set expect worker count", K(ret), K(reserved_px_thread_count_));
-    } else {
-      reserved_thread_count = rpc_worker_count;
-      sqc_init_args_->sqc_.set_task_count(rpc_worker_count);
-    }
-  } else {
     // 提前在租户中预留线程数，用于 px worker 执行
-    ObPxSubAdmission::acquire(max_thread_count, min_thread_count, reserved_px_thread_count_);
-    reserved_px_thread_count_ = reserved_px_thread_count_ < min_thread_count ? 0 : reserved_px_thread_count_;
-    if (OB_FAIL(notifier_->set_expect_worker_count(reserved_px_thread_count_))) {
-      LOG_WARN("failed to set expect worker count", K(ret), K(reserved_px_thread_count_));
-    } else {
-      sqc_init_args_->sqc_.set_task_count(reserved_px_thread_count_);
-      reserved_thread_count = reserved_px_thread_count_;
-    }
+  ObPxSubAdmission::acquire(max_thread_count, min_thread_count, reserved_px_thread_count_);
+  reserved_px_thread_count_ = reserved_px_thread_count_ < min_thread_count ? 0 : reserved_px_thread_count_;
+  if (OB_FAIL(notifier_->set_expect_worker_count(reserved_px_thread_count_))) {
+    LOG_WARN("failed to set expect worker count", K(ret), K(reserved_px_thread_count_));
+  } else {
+    sqc_init_args_->sqc_.set_task_count(reserved_px_thread_count_);
+    reserved_thread_count = reserved_px_thread_count_;
   }
   if (OB_SUCC(ret)) {
-    if (!rpc_worker &&
-        reserved_px_thread_count_ < max_thread_count &&
+    if (reserved_px_thread_count_ < max_thread_count &&
         reserved_px_thread_count_ >= min_thread_count) {
       LOG_INFO("Downgrade px thread allocation",
               K_(reserved_px_thread_count),
@@ -138,7 +124,7 @@ int ObPxSqcHandler::pre_acquire_px_worker(int64_t &reserved_thread_count)
      * sqc handler的引用计数，1为rpc线程, 此时只有rpc线程引用.
      */
     reference_count_ = 1;
-    LOG_TRACE("SQC acquire px worker", K(max_thread_count), K(min_thread_count), K(rpc_worker),
+    LOG_TRACE("SQC acquire px worker", K(max_thread_count), K(min_thread_count),
         K(reserved_px_thread_count_), K(reserved_thread_count));
   }
   return ret;
@@ -153,7 +139,7 @@ void ObPxSqcHandler::release_handler(ObPxSqcHandler *sqc_handler)
 {
   bool all_released = false;
   if (OB_ISNULL(sqc_handler)) {
-    LOG_ERROR("Get null sqc handler", K(sqc_handler));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "Get null sqc handler", K(sqc_handler));
   } else if (FALSE_IT(sqc_handler->release(all_released))) {
   } else if (all_released) {
     IGNORE_RETURN sqc_handler->destroy_sqc();

@@ -189,7 +189,7 @@ public:
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
   int get_key(uint64_t index, common::ObString &key_out) const override;
   int get_raw_binary(common::ObString &out, ObIAllocator *allocator = NULL) const;
-  int get_use_size(uint64_t& obj_size, uint64_t& used_size) const;
+  int get_use_size(uint64_t& used_size) const;
   int get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_t& max_offset) const ;
   int array_remove(uint64_t index) override;
   int object_remove(const common::ObString &key) override;
@@ -398,10 +398,10 @@ private:
     uint32_t idx_;       // the index of array or object array
     uint64_t offset_;    // cur node offset from 
     uint64_t obj_size_;  // cur node total size
-    ObJBNodeMeta(uint8_t ver_type, uint8_t size_type, uint8_t entry_type, uint64_t idx, uint64_t offset, uint64_t obj_size) :
-                ver_type_(ver_type), size_type_(size_type), entry_type_(entry_type), idx_(idx), offset_(offset), obj_size_(obj_size) {}
-    ObJBNodeMeta() : ver_type_(0), size_type_(0), entry_type_(0), idx_(0), offset_(0), obj_size_(0) {}
-    ObJBNodeMeta(const ObJBNodeMeta& src): ver_type_(src.ver_type_), size_type_(src.size_type_), entry_type_(src.entry_type_),
+    ObJBNodeMeta(uint8_t ver_type, uint8_t size_type, uint8_t entry_type, uint32_t idx, uint64_t offset, uint64_t obj_size) :
+                ver_type_(ver_type), size_type_(size_type), entry_type_(entry_type), reserve(0), idx_(idx), offset_(offset), obj_size_(obj_size) {}
+    ObJBNodeMeta() : ver_type_(0), size_type_(0), entry_type_(0), reserve(0), idx_(0), offset_(0), obj_size_(0) {}
+    ObJBNodeMeta(const ObJBNodeMeta& src): ver_type_(src.ver_type_), size_type_(src.size_type_), entry_type_(src.entry_type_), reserve(0),
                 idx_(src.idx_), offset_(src.offset_), obj_size_(src.obj_size_) {}
   };
 
@@ -439,7 +439,8 @@ private:
                              uint64_t length,
                              uint8_t type,
                              uint64_t value_offset,
-                             ObJsonNode *&json_tree);
+                             ObJsonNode *&json_tree,
+                             uint64_t type_size);
 
   int deserialize_json_object_v0(const char *data, uint64_t length, ObJsonObject *object);
   inline int deserialize_json_object(const char *data, uint64_t length, ObJsonObject *object, ObJBVerType vertype);
@@ -447,7 +448,7 @@ private:
   int deserialize_json_array_v0(const char *data, uint64_t length, ObJsonArray *array);
   inline int deserialize_json_array(const char *data, uint64_t length, ObJsonArray *array, ObJBVerType vertype);
 
-  int set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t type);
+  int set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t type, uint8_t entry_size = 0);
   void parse_obj_header(const char *data, uint64_t &offset, uint8_t &node_type,
                         uint8_t &type, uint8_t& obj_size_type, uint64_t &count, uint64_t &obj_size) const;
   
@@ -547,7 +548,7 @@ public:
   static uint8_t get_var_type(uint64_t var);
   static int read_var(const char *data, uint8_t type, int64_t *var);
   static uint64_t var_int2uint(int64_t var);
-  static int64_t var_uint2int(uint64_t var);
+  static int64_t var_uint2int(uint64_t var, uint8_t entry_size);
   static uint8_t get_var_type(int64_t var);
 };
 

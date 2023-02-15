@@ -60,7 +60,7 @@ void ObTenantConfig::print() const
   ObConfigContainer::const_iterator it = container_.begin();
   for (; it != container_.end(); ++it) {
     if (OB_ISNULL(it->second)) {
-      OB_LOG(WARN, "config item is null", "name", it->first.str());
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "config item is null", "name", it->first.str());
     } else {
       _OB_LOG(INFO, "| %-36s = %s", it->first.str(), it->second->str());
     }
@@ -124,7 +124,6 @@ int ObTenantConfig::read_config()
   ObSystemConfigKey key;
   ObAddr server;
   char local_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
-  DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
   DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
   server = GCTX.self_addr();
   if (OB_UNLIKELY(true != server.ip_to_string(local_ip, sizeof(local_ip)))) {
@@ -379,7 +378,6 @@ int ObTenantConfig::add_extra_config(const char *config_str,
   } else {
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
-    DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
     DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
     token = STRTOK_R(buf, ",\n", &saveptr);
     while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {

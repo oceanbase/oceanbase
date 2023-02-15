@@ -94,7 +94,7 @@ inline int64_t get_monotonic_ts()
   int64_t ts = 0;
   timespec tm;
   if (OB_UNLIKELY(0 != clock_gettime(CLOCK_MONOTONIC, &tm))) {
-    ELECT_LOG(ERROR, "FATAL ERROR!!! get monotonic clock ts failed!");
+    ELECT_LOG_RET(ERROR, common::OB_ERROR, "FATAL ERROR!!! get monotonic clock ts failed!");
     abort();
   } else {
     ts = tm.tv_sec * 1000000 + tm.tv_nsec / 1000;

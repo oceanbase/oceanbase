@@ -65,6 +65,7 @@ install(FILES
   tools/upgrade/upgrade_post.py
   tools/upgrade/upgrade_checker.py
   tools/upgrade/upgrade_health_checker.py
+  tools/upgrade/oceanbase_upgrade_dep.yml
   DESTINATION etc
   COMPONENT server)
 

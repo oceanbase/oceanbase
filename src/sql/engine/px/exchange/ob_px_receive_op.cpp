@@ -790,6 +790,21 @@ int ObPxReceiveOp::try_send_bloom_filter()
   return ret;
 }
 
+// Routine "do_clear_datum_eval_flag" behave almost the same as
+// "ObOperator::do_clear_datum_eval_flag" except explicitly clear
+// projected flag under batch_result mode(vectorization)
+void ObPxReceiveOp::do_clear_datum_eval_flag()
+{
+  FOREACH_CNT(e, spec_.calc_exprs_) {
+    if ((*e)->is_batch_result()) {
+      (*e)->get_evaluated_flags(eval_ctx_).unset(eval_ctx_.get_batch_idx());
+      (*e)->get_eval_info(eval_ctx_).projected_ = 0;
+    } else {
+      (*e)->get_eval_info(eval_ctx_).clear_evaluated_flag();
+    }
+  }
+}
+
 int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
 {
   int ret = OB_SUCCESS;
@@ -881,7 +896,9 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
       clear_evaluated_flag();
       clear_dynamic_const_parent_flag();
       if (!is_vectorized()) {
-        if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_, eval_ctx_))) {
+        if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_,
+                                             MY_SPEC.dynamic_const_exprs_,
+                                             eval_ctx_))) {
           LOG_WARN("get next row from row reader failed", K(ret));
         } else {
           got_row = true;
@@ -889,8 +906,12 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
         }
       } else {
         int64_t read_rows = 0;
-        if (OB_FAIL(row_reader_.get_next_batch(MY_SPEC.child_exprs_, eval_ctx_,
-                                               row_cnt, read_rows, stored_rows_))) {
+        if (OB_FAIL(row_reader_.get_next_batch(MY_SPEC.child_exprs_,
+                                               MY_SPEC.dynamic_const_exprs_,
+                                               eval_ctx_,
+                                               row_cnt,
+                                               read_rows,
+                                               stored_rows_))) {
           LOG_WARN("get next batch failed", K(ret));
         } else {
           got_row = true;

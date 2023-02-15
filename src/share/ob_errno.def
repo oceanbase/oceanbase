@@ -249,6 +249,7 @@ DEFINE_ERROR(OB_SCHEDULER_TASK_CNT_MISMATCH, -4188, -1, "HY000", "Running task c
 DEFINE_ERROR(OB_INVALID_MACRO_BLOCK_TYPE, -4189, -1, "HY000", "the macro block type does not exist");
 DEFINE_ORACLE_ERROR_DEP(OB_INVALID_DATE_FORMAT_END, -4190, ER_TRUNCATED_WRONG_VALUE, "22007", "Incorrect value", 1830, "date format picture ends before converting entire input string");
 DEFINE_ERROR(OB_PG_IS_REMOVED, -4191, -1, "HY000", "partition group is removed");
+DEFINE_ERROR_DEP(OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME, -4192, -1, "42000", "ddl task executes too much time");
 DEFINE_ERROR_EXT_DEP(OB_HASH_EXIST, -4200, -1, "HY000", "hash map/set entry exist", "%s");
 DEFINE_ERROR_EXT_DEP(OB_HASH_NOT_EXIST, -4201, -1, "HY000", "hash map/set entry not exist", "%s");
 DEFINE_ERROR_DEP(OB_HASH_GET_TIMEOUT, -4204, -1, "HY000", "hash map/set get timeout");
@@ -435,11 +436,15 @@ DEFINE_ERROR(OB_GTI_NOT_READY, -4383, -1, "HY000", "transaction id is not ready"
 DEFINE_ERROR(OB_STACK_OVERFLOW, -4385, -1, "HY000", "stack overflow");
 DEFINE_ERROR(OB_NOT_ALLOW_REMOVING_LEADER, -4386, -1, "HY000", "Do not allow removing leader");
 DEFINE_ERROR(OB_NEED_SWITCH_CONSUMER_GROUP, -4387, 13937, "HY000", "Failed to switch resource group");
-DEFINE_ERROR(OB_UNEXPECT_INTERNAL_ERROR, -4388, -1, "HY000", "Unexpected internal error happen, please checkout the internal errcode");
-DEFINE_ERROR(OB_ERR_TOO_MUCH_TIME, -4389, -1, "HY000", "Porcessing time is too long");
+DEFINE_ERROR_DEP(OB_UNEXPECT_INTERNAL_ERROR, -4388, -1, "HY000", "Unexpected internal error happen, please checkout the internal errcode");
+DEFINE_ERROR_DEP(OB_ERR_TOO_MUCH_TIME, -4389, -1, "HY000", "Porcessing time is too long");
 DEFINE_ERROR(OB_ERR_REMOTE_SCHEMA_NOT_FULL, -4390, -1, "HY000", "Schema of remote server is not refreshed yet");
 DEFINE_ERROR(OB_DDL_SSTABLE_RANGE_CROSS, -4391, -1, "HY000", "ddl sstable version range cross");
 DEFINE_ERROR(OB_DISK_CORRUPTED, -4392, -1, "HY000", "disk is corrupted");
+DEFINE_ERROR(OB_ERR_OBSERVER_START, -4393, -1, "HY000", "observer start process failure");
+DEFINE_ERROR(OB_ERR_OBSERVER_STOP, -4394, -1, "HY000", "observer stop process failure");
+DEFINE_ERROR(OB_ERR_OBSERVICE_START, -4395, -1, "HY000", "observice start process has failure");
+DEFINE_ERROR_DEP(OB_ERR_THREAD_PANIC, -4396, -1, "HY000", "Worker thread pannic, thread may be terminated or hung");
 
 ////////////////////////////////////////////////////////////////
 //error code for root server & server management -4500 ---- -5000
@@ -630,6 +635,10 @@ DEFINE_ERROR(OB_ARBITRATION_SERVICE_ALREADY_EXIST, -4748, -1, "HY000", "arbitrat
 //-4749: OB_UNEXPECTED_TABLET_STATUS
 //-4750: OB_INVALID_TABLE_STORE
 DEFINE_ERROR(OB_WAIT_DEGRATION_TIMEOUT, -4751, -1, "HY000", "wait degration finished timeout")
+DEFINE_ERROR(OB_ERR_ROOTSERVICE_START, -4752, -1, "HY000", "rootservice start process has failure");
+DEFINE_ERROR(OB_ERR_ROOTSERVICE_STOP, -4753, -1, "HY000", "rootservice stop process has failure");
+DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not passed");
+DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice backgroud thread may be hung");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -1006,6 +1015,8 @@ DEFINE_ERROR_EXT(OB_ERR_RESERVED_SYNTAX, -5405, ER_RESERVED_SYNTAX, "HY000", "Th
 DEFINE_ERROR_EXT(OB_ERR_INVALID_PARAM_TO_PROCEDURE, -5406, ER_WRONG_PARAMETERS_TO_PROCEDURE, "HY000", "Incorrect parameters to procedure \'%.*s\'", "Incorrect parameters to procedure \'%.*s\'");
 DEFINE_ERROR_EXT(OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT, -5407, ER_WRONG_PARAMETERS_TO_NATIVE_FCT, "42000", "Incorrect parameters in the call to native function", "Incorrect parameters in the call to native function '%.*s'");
 DEFINE_ERROR_EXT(OB_ERR_CTE_MAX_RECURSION_DEPTH, -5408, ER_CTE_MAX_RECURSION_DEPTH, "HY000", "Recursive query aborted after multiple iterations. Try increasing @@cte_max_recursion_depth to a larger value.", "Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value.");
+DEFINE_ERROR(OB_DUPLICATE_OBJECT_NAME_EXIST, -5409, -1, "HY000", "Duplicate object name exists, schema refreshing may be hung");
+DEFINE_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG, -5410, -1, "HY000", "Refresh schema failed continuously, ddl may be hung");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for json  -5410 ---- -5433, as for json only support mysql mode, error code for oracle use special values
@@ -1659,7 +1670,10 @@ DEFINE_ERROR(OB_SCN_OUT_OF_BOUND, -6277, -1, "HY000", "scn is out of bounds of m
 
 DEFINE_ORACLE_ERROR(OB_TRANS_IDLE_TIMEOUT, -6278, 6002, "25000", "Transaction idle timeout occurred, please rollback the transaction, set the variable ob_trx_idle_timeout to a larger value and then restart the transaction", 24761, "transaction rolled back: transaction idle timeout");
 // for transaction free route
-DEFINE_ERROR(OB_TRANS_FREE_ROUTE_NOT_SUPPORTED, -6279, -1, "HY000", "Query is not supported to be executed on txn temporary node");
+DEFINE_ORACLE_ERROR(OB_TRANS_FREE_ROUTE_NOT_SUPPORTED, -6279, 6279, "HY000", "Query is not supported to be executed on txn temporary node", 6279, "Query is not supported to be executed on txn temporary node");
+
+DEFINE_ERROR(OB_TRANS_LIVE_TOO_MUCH_TIME, -6280, -1, "HY000", "Transaction cost too much without commit or rollback");
+DEFINE_ERROR(OB_TRANS_COMMIT_TOO_MUCH_TIME, -6281, -1, "HY000", "Transaction commit cost too much");
 
 // for clog
 DEFINE_ERROR(OB_LOG_ID_NOT_FOUND, -6301, -1, "HY000", "log id not found");
@@ -1684,6 +1698,7 @@ DEFINE_ERROR(OB_LOG_NEED_REBUILD, -6319, -1, "HY000", "need rebuild");
 DEFINE_ERROR(OB_TOO_MANY_LOG_TASK, -6320, -1, "HY000", "too many log tasks");
 DEFINE_ERROR(OB_INVALID_BATCH_SIZE, -6321, -1, "HY000", "ob invalid batch size");
 DEFINE_ERROR(OB_CLOG_SLIDE_TIMEOUT, -6322, -1, "HY000", "ob clog slide timeout");
+DEFINE_ERROR(OB_LOG_REPLAY_ERROR, -6323, -1, "HY000", "log replay error");
 
 // for freeze
 // DEFINE_ERROR(OB_TABLET_FREEZE_TIMEOUT, -6400, -1, "HY000", "tablet_freeze timeout");
@@ -1929,6 +1944,7 @@ DEFINE_ERROR_DEP(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH, -9084, -1, "HY000", "the co
 
 DEFINE_ERROR(OB_BACKUP_MAJOR_NOT_COVER_MINOR, -9085, -1, "HY000", "backup major sstable range not cover minor sstable");
 DEFINE_ERROR(OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT, -9086, -1, "HY000", "backup advance checkpoint by flush timeout");
+DEFINE_ERROR(OB_CLOG_RECYCLE_BEFORE_ARCHIVE, -9087, -1, "HY000", "observer clog is recycled before archive");
 
 
 DEFINE_ERROR(OB_ESI_SESSION_NOT_EXIST, -9090, -1, "HY000", "obesi process session not exist");

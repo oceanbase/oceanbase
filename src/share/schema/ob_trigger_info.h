@@ -403,8 +403,8 @@ public:
   OB_INLINE uint64_t get_sql_mode() const { return sql_mode_; }
   OB_INLINE OrderType get_order_type() const { return order_type_; }
   OB_INLINE int64_t get_order_type_value() const { return static_cast<int64_t>(order_type_); }
-  OB_INLINE bool is_order_follows() { return OT_FOLLOWS == order_type_; }
-  OB_INLINE bool is_order_precedes() { return OT_PRECEDES == order_type_; }
+  OB_INLINE bool is_order_follows() const { return OT_FOLLOWS == order_type_; }
+  OB_INLINE bool is_order_precedes() const { return OT_PRECEDES == order_type_; }
   OB_INLINE const common::ObString &get_ref_trg_db_name() const { return ref_trg_db_name_; }
   OB_INLINE const common::ObString &get_ref_trg_name() const { return ref_trg_name_; }
   OB_INLINE int64_t get_action_order() const { return action_order_; }

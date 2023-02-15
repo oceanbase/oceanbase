@@ -227,7 +227,7 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
           if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = register_to_deadlock_detector_(self_tx_id,
                                                                                   blocked_tx_id,
                                                                                   node->sessid_)))) {
-            DETECT_LOG(WARN, "register to deadlock detector failed", K(tmp_ret), K(*node));
+            DETECT_LOG_RET(WARN, tmp_ret, "register to deadlock detector failed", K(tmp_ret), K(*node));
           } else {
             DETECT_LOG(TRACE, "register to deadlock detector success", K(tmp_ret), K(*node));
           }
@@ -242,7 +242,7 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
           wait_succ = wait(node);
         }
         if (OB_UNLIKELY(!wait_succ)) {
-          TRANS_LOG(WARN, "fail to wait node", KR(tmp_ret), KPC(node));
+          TRANS_LOG_RET(WARN, tmp_ret, "fail to wait node", KR(tmp_ret), KPC(node));
         }
       }
     }
@@ -446,7 +446,7 @@ ObLink* ObLockWaitMgr::check_timeout()
       uint64_t last_lock_seq = iter->lock_seq_;
       uint64_t curr_lock_seq = ATOMIC_LOAD(&sequence_[(hash >> 1)% LOCK_BUCKET_COUNT]);
       if (iter->is_timeout() || has_set_stop()) {
-        TRANS_LOG(WARN, "LOCK_MGR: req wait lock timeout", K(curr_lock_seq), K(last_lock_seq), K(*iter));
+        TRANS_LOG_RET(WARN, OB_TIMEOUT, "LOCK_MGR: req wait lock timeout", K(curr_lock_seq), K(last_lock_seq), K(*iter));
         need_check_session = true;
         node2del = iter;
         EVENT_INC(MEMSTORE_WRITE_LOCK_WAIT_TIMEOUT_COUNT);
@@ -493,7 +493,7 @@ ObLink* ObLockWaitMgr::check_timeout()
           // in order to prevent missing to wakeup request, so we force to wakeup every 5s
           node2del = iter;
           iter->on_retry_lock(hash);
-          TRANS_LOG(WARN, "LOCK_MGR: req wait lock cost too much time", K(curr_lock_seq), K(last_lock_seq), K(*iter));
+          TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "LOCK_MGR: req wait lock cost too much time", K(curr_lock_seq), K(last_lock_seq), K(*iter));
         } else {
           auto tx_desc = session_info->get_tx_desc();
           bool ac = false, has_explicit_start_tx = session_info->has_explicit_start_trans();
@@ -754,7 +754,7 @@ void ObLockWaitMgr::fetch_deadlocked_sessions_(DeadlockedSessionArray* &sessions
   deadlocked_sessions_index_ = 1 - deadlocked_sessions_index_;
   if (0 != deadlocked_sessions_index_
       && 1 != deadlocked_sessions_index_) {
-    TRANS_LOG(ERROR, "unexpected deadlocked session index", K(deadlocked_sessions_index_));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected deadlocked session index", K(deadlocked_sessions_index_));
   }
   deadlocked_sessions_[deadlocked_sessions_index_].reset();
   sessions = deadlocked_sessions_ + (1 - deadlocked_sessions_index_);

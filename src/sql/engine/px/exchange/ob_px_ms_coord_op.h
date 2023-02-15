@@ -176,6 +176,7 @@ private:
   common::ObArenaAllocator alloc_;
 };
 
+
 } // end namespace sql
 } // end namespace oceanbase
 

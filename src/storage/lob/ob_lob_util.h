@@ -44,6 +44,11 @@ struct ObLobAccessParam {
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_fill_zero_(false), from_rpc_(false),
       inrow_read_nocopy_(false)
   {}
+  ~ObLobAccessParam() {
+    if (OB_NOT_NULL(dml_base_param_)) {
+      dml_base_param_->~ObDMLBaseParam();
+    }
+  }
 public:
   int set_lob_locator(common::ObLobLocatorV2 *lob_locator);
   TO_STRING_KV(K_(ls_id), K_(tablet_id), KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size),
@@ -129,7 +134,7 @@ struct ObLobMetaInfo {
     ObString tmp_seq = seq_id_;
     size_t len = tmp_seq.length();
     const uint32_t* ori_dig = reinterpret_cast<const uint32_t*>(tmp_seq.ptr());
-    const uint32_t ori_len = len / sizeof(uint32_t);
+    const uint32_t ori_len = static_cast<uint32_t>(len / sizeof(uint32_t)); //TODO(yuanzhi.zy): check is len int32 enough
     uint32_t cur_pos = 0;
     common::databuff_printf(buf, buf_len, pos, ", seq_id:[");
     while (cur_pos < ori_len) {

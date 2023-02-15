@@ -245,7 +245,7 @@ T* ObNodeArray<T>::at(const int64_t idx)
 {
   T *ret_ptr = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
-    COMMON_LOG(WARN, "ObNodeArray has not been inited");
+    COMMON_LOG_RET(WARN, OB_NOT_INIT, "ObNodeArray has not been inited");
   } else if (idx >= 0 && idx < max_cnt_) {
     ret_ptr = &array_[idx];
   }

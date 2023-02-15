@@ -98,6 +98,7 @@
 #include "share/longops_mgr/ob_longops_mgr.h"
 #include "logservice/palf/election/interface/election.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
+#include "observer/ob_server_utils.h"
 #include "observer/table_load/ob_table_load_partition_calc.h"
 
 using namespace oceanbase::lib;
@@ -438,6 +439,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     set_stop();
     destroy();
     LOG_ERROR("[OBSERVER_NOTICE] fail to init observer", KR(ret));
+    LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "msg", "observer init() has failure", KR(ret));
   } else {
     FLOG_INFO("[OBSERVER_NOTICE] success to init observer", "cluster_id", obrpc::ObRpcNetHandler::CLUSTER_ID,
         "lib::g_runtime_enabled", lib::g_runtime_enabled);
@@ -499,6 +501,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy ctas clean up timer");
     TG_DESTROY(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer destroyed");
+
+    FLOG_INFO("begin to destroy memory dump timer");
+    TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
+    FLOG_INFO("memory dump timer destroyed");
 
     FLOG_INFO("begin to destroy redef heart beat task");
     TG_DESTROY(lib::TGDefIDs::RedefHeartBeatTask);
@@ -620,7 +626,8 @@ void ObServer::destroy()
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
   } else {
-    FLOG_WARN("[OBSERVER_NOTICE] can not destroy observer", K_(has_destroy), K_(has_stopped));
+    FLOG_WARN_RET(OB_ERROR, "[OBSERVER_NOTICE] can not destroy observer", K_(has_destroy), K_(has_stopped));
+    LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer exits without calling destroy()", K_(has_destroy), K_(has_stopped));
   }
 }
 
@@ -886,6 +893,7 @@ int ObServer::start()
 
   if (OB_FAIL(ret)) {
     LOG_ERROR("failure occurs, try to set stop and wait", KR(ret));
+    LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "msg", "observer start() has failure", KR(ret));
     set_stop();
     wait();
   } else if (!stop_) {
@@ -894,6 +902,7 @@ int ObServer::start()
     FLOG_INFO("[OBSERVER_NOTICE] observer start service", "start_service_time", GCTX.start_service_time_);
   } else {
     FLOG_INFO("[OBSERVER_NOTICE] observer is set to stop", KR(ret), K_(stop));
+    LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "msg", "observer start process is interrupted", KR(ret), K_(stop));
   }
 
   return ret;
@@ -947,6 +956,7 @@ void ObServer::set_stop()
 int ObServer::stop()
 {
   int ret = OB_SUCCESS;
+  int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer begin");
 
   if (is_arbitration_mode()) {
@@ -968,6 +978,7 @@ int ObServer::stop()
     FLOG_INFO("begin to mysql shutdown network");
     if (OB_FAIL(net_frame_.mysql_shutdown())) {
       FLOG_WARN("fail to mysql shutdown network", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("mysql shutdown network stopped");
     }
@@ -1032,6 +1043,10 @@ int ObServer::stop()
     TG_STOP(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer stopped");
 
+    FLOG_INFO("begin to stop memory dump timer");
+    TG_STOP(lib::TGDefIDs::MemDumpTimer);
+    FLOG_INFO("memory dump timer stopped");
+
     FLOG_INFO("begin to stop ctas clean up timer");
     TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
     FLOG_INFO("ctas clean up timer stopped");
@@ -1059,6 +1074,7 @@ int ObServer::stop()
     FLOG_INFO("begin to stop root service");
     if (OB_FAIL(root_service_.stop())) {
       FLOG_WARN("fail to stop root service", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("root service stopped");
     }
@@ -1114,6 +1130,7 @@ int ObServer::stop()
     FLOG_INFO("begin to shutdown rpc network");
     if (OB_FAIL(net_frame_.rpc_shutdown())) {
       FLOG_WARN("fail to rpc shutdown network", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("rpc network shutdowned");
     }
@@ -1121,6 +1138,7 @@ int ObServer::stop()
     FLOG_INFO("begin to shutdown high priority rpc");
     if (OB_FAIL(net_frame_.high_prio_rpc_shutdown())) {
       FLOG_WARN("fail to shutdown high priority rpc", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("high priority rpc shutdowned");
     }
@@ -1128,6 +1146,7 @@ int ObServer::stop()
     FLOG_INFO("begin to shutdown clog rpc network");
     if (OB_FAIL(net_frame_.batch_rpc_shutdown())) {
       FLOG_WARN("fail to shutdown clog rpc network", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("clog rpc network shutdowned");
     }
@@ -1135,6 +1154,7 @@ int ObServer::stop()
     FLOG_INFO("begin to shutdown unix rpc");
     if (OB_FAIL(net_frame_.unix_rpc_shutdown())) {
       FLOG_WARN("fail to shutdown unix rpc", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("unix rpc network shutdowned");
     }
@@ -1144,6 +1164,7 @@ int ObServer::stop()
     FLOG_INFO("begin to stop net frame");
     if (OB_FAIL(net_frame_.stop())) {
       FLOG_WARN("fail to stop net frame", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("net frame stopped");
     }
@@ -1152,6 +1173,9 @@ int ObServer::stop()
 
   has_stopped_ = true;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer end", KR(ret));
+  if (OB_SUCCESS != fail_ret) {
+    LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer stop() has failure", KR(fail_ret));
+  }
 
   return ret;
 }
@@ -1159,6 +1183,7 @@ int ObServer::stop()
 int ObServer::wait()
 {
   int ret = OB_SUCCESS;
+  int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] wait observer begin");
   // wait for stop flag
 
@@ -1172,6 +1197,7 @@ int ObServer::wait()
   FLOG_INFO("begin to stop observer");
   if (OB_FAIL(stop())) {
     FLOG_WARN("stop observer fail", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
   } else {
     FLOG_INFO("observer stopped");
   }
@@ -1221,6 +1247,10 @@ int ObServer::wait()
     TG_WAIT(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("wait ctas clean up timer success");
 
+    FLOG_INFO("begin to wait memory dump timer");
+    TG_WAIT(lib::TGDefIDs::MemDumpTimer);
+    FLOG_INFO("wait memory dump timer success");
+
     FLOG_INFO("begin to wait root service");
     root_service_.wait();
     FLOG_INFO("wait root service success");
@@ -1263,6 +1293,7 @@ int ObServer::wait()
     FLOG_INFO("begin to wait sql_conn_pool");
     if (OB_FAIL(sql_conn_pool_.wait())) {
       FLOG_WARN("fail to wait inner sql connection release", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("wait sql_conn_pool success");
     }
@@ -1270,6 +1301,7 @@ int ObServer::wait()
     FLOG_INFO("begin to wait ddl_conn_pool");
     if (OB_FAIL(ddl_conn_pool_.wait())) {
       FLOG_WARN("fail to wait ddl sql connection release", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("wait ddl_conn_pool success");
     }
@@ -1277,6 +1309,7 @@ int ObServer::wait()
     FLOG_INFO("begin to wait inner_sql_conn_pool");
     if (OB_FAIL(res_inner_conn_pool_.get_inner_sql_conn_pool().wait())) {
       FLOG_WARN("fail to wait resource inner connection release", KR(ret));
+      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     } else {
       FLOG_INFO("wait inner_sql_conn_pool success");
     }
@@ -1324,6 +1357,9 @@ int ObServer::wait()
 
     gctx_.status_ = SS_STOPPED;
     FLOG_INFO("[OBSERVER_NOTICE] wait observer end", KR(ret));
+    if (OB_SUCCESS != fail_ret) {
+      LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer wait() has failure", KR(fail_ret));
+    }
   }
   return ret;
 }
@@ -1443,8 +1479,6 @@ int ObServer::init_config()
   // update gctx_.startup_mode_
   if (FAILEDx(parse_mode())) {
     LOG_ERROR("parse_mode failed", KR(ret));
-  } else if (is_arbitration_mode()) {
-    ObMallocAllocator::get_instance()->make_allocator_create_on_demand();
   }
 
   config_.print();
@@ -1467,6 +1501,10 @@ int ObServer::init_config()
       int32_t ipv4 = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname));
       self_addr_.set_ipv4_addr(ipv4, local_port);
     }
+
+    const char *syslog_file_info = ObServerUtils::build_syslog_file_info(self_addr_);
+    OB_LOGGER.set_new_file_info(syslog_file_info);
+    LOG_INFO("Build basic information for each syslog file", "info", syslog_file_info);
 
     // initialize self address
     obrpc::ObRpcProxy::myaddr_ = self_addr_;
@@ -1501,6 +1539,8 @@ int ObServer::init_config()
         LOG_ERROR("fail to init server trace timer", KR(ret));
       } else if (OB_FAIL(TG_START(lib::TGDefIDs::CTASCleanUpTimer))) {
         LOG_ERROR("fail to init ctas clean up timer", KR(ret));
+      } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
+        LOG_ERROR("fail to init memory dump timer", KR(ret));
       } else if (OB_FAIL(config_mgr_.base_init())) {
         LOG_ERROR("config_mgr_ base_init failed", KR(ret));
       } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {
@@ -1566,6 +1606,7 @@ int ObServer::init_pre_setting()
       LOG_ERROR("init task controller fail", KR(ret));
     } else {
       ObTaskController::get().set_log_rate_limit(config_.syslog_io_bandwidth_limit);
+      ObTaskController::get().set_diag_per_error_limit(config_.diag_syslog_per_error_limit);
       ObTaskController::get().switch_task(share::ObTaskType::GENERIC);
     }
   }
@@ -2281,7 +2322,7 @@ static int64_t nic_rate_parse(const char *str, bool &valid)
       value <<= 30;
     } else {
       valid = false;
-      LOG_ERROR("parse nic rate error", K(str), K(p_unit));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "parse nic rate error", K(str), K(p_unit));
     }
   }
   return value;

@@ -1699,6 +1699,9 @@ public:
                           hash::ObHashSet<uint64_t> &expr_set,
                           ObIArray<ObRawExpr *> &common_exprs);
 
+  static int extract_shared_exprs(ObDMLStmt *parent,
+                                  ObIArray<ObRawExpr *> &relation_exprs,
+                                  ObIArray<ObRawExpr *> &common_exprs);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
@@ -1740,6 +1743,8 @@ private:
                                 const ObIArray<ObRawExpr *> &tmp_column_exprs,
                                 ObIArray<ObRawExpr *> &old_column_exprs,
                                 ObIArray<ObRawExpr *> &new_column_exprs);
+
+  static int is_scalar_expr(ObRawExpr* expr, bool &is_scalar);
 
 };
 

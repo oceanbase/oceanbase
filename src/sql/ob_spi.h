@@ -106,7 +106,7 @@ public:
       allocator_(ObModIds::OB_PL_TEMP),
       result_set_(NULL),
       sql_ctx_(),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_SPI_RESULT_SET),
       orign_nested_count_(-1),
       cursor_nested_count_(-1),
       orign_session_value_(NULL),
@@ -272,7 +272,7 @@ public:
         mem_context_(nullptr),
         mem_context_destroy_guard_(mem_context_),
         sql_ctx_(),
-        schema_guard_() {}
+        schema_guard_(share::schema::ObSchemaMgrItem::MOD_PL_PREPARE_RESULT) {}
     ~PLPrepareResult() { reset(); }
     int init(sql::ObSQLSessionInfo &session_info);
     void reset()
@@ -319,6 +319,13 @@ public:
                            const ObSqlExpression *expr,
                            const int64_t result_idx,
                            ObObjParam *result);
+
+  static int spi_calc_subprogram_expr(pl::ObPLExecCtx *ctx,
+                                      uint64_t package_id,
+                                      uint64_t routine_id,
+                                      int64_t expr_idx,
+                                      ObObjParam *result);
+
   static int spi_calc_package_expr(pl::ObPLExecCtx *ctx,
                            uint64_t package_id,
                            int64_t expr_idx,
@@ -945,6 +952,15 @@ private:
                                     const ObSqlExpression &expr,
                                     ObIArray<ObObj> &src_array,
                                     ObIArray<ObObj> &dst_array);
+
+  static int prepare_cursor_parameters(pl::ObPLExecCtx *ctx,
+                                    ObSQLSessionInfo &session_info,
+                                    uint64_t package_id,
+                                    uint64_t routine_id,
+                                    ObCusorDeclareLoc loc,
+                                    const int64_t *formal_param_idxs,
+                                    const ObSqlExpression **actual_param_exprs,
+                                    int64_t cursor_param_count);
 };
 
 }

@@ -172,7 +172,7 @@ void ObMQThread<MAX_THREAD_NUM, ModuleClass>::stop()
         int pthread_ret = pthread_join(tids_[index], NULL);
 
         if (0 != pthread_ret) {
-          LIB_LOG(ERROR, "pthread_join fail", "thread_id", tids_[index], K(pthread_ret));
+          LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "pthread_join fail", "thread_id", tids_[index], K(pthread_ret));
         } else {
           // do nothing
         }

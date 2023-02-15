@@ -3814,7 +3814,9 @@ int ObLogPlan::inner_remove_redundancy_pred(ObIArray<ObRawExpr*> &join_pred,
     if (OB_ISNULL(cur_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(cur_expr));
-    } else if (T_OP_EQ == cur_expr->get_expr_type()) {
+    } else if (T_OP_EQ == cur_expr->get_expr_type() &&
+               2 == cur_expr->get_param_count() &&
+               cur_expr->get_param_expr(0) != cur_expr->get_param_expr(1)) {
       if (OB_ISNULL(left_expr = cur_expr->get_param_expr(0)) ||
           OB_ISNULL(right_expr = cur_expr->get_param_expr(1))) {
         ret = OB_ERR_UNEXPECTED;
@@ -8604,10 +8606,28 @@ int ObLogPlan::allocate_select_into_as_top(ObLogicalOperator *&old_top)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory for ObLogSelectInto failed", K(ret));
   } else {
-    ObSelectIntoItem *into_item = stmt->get_select_into();;
+    ObSelectIntoItem *into_item = stmt->get_select_into();
+    ObSEArray<ObRawExpr*, 4> select_exprs;
+    ObRawExpr *to_outfile_expr = NULL;
     if (OB_ISNULL(into_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("into item is null", K(ret));
+    } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (T_INTO_OUTFILE == into_item->into_type_ &&
+               OB_FAIL(ObRawExprUtils::build_to_outfile_expr(
+                                    get_optimizer_context().get_expr_factory(),
+                                    get_optimizer_context().get_session_info(),
+                                    into_item,
+                                    select_exprs,
+                                    to_outfile_expr))) {
+      LOG_WARN("failed to build_to_outfile_expr", K(*into_item), K(ret));
+    } else if (T_INTO_OUTFILE == into_item->into_type_ &&
+               OB_FAIL(select_into->get_select_exprs().push_back(to_outfile_expr))) {
+      LOG_WARN("failed to add into outfile expr", K(ret));
+    } else if (T_INTO_OUTFILE != into_item->into_type_ &&
+               OB_FAIL(select_into->get_select_exprs().assign(select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
     } else {
       select_into->set_into_type(into_item->into_type_);
       select_into->set_outfile_name(into_item->outfile_name_);
@@ -11201,10 +11221,8 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
     } else if (OB_FAIL(scan_op->replace_gen_col_op_exprs(gen_col_replaced_exprs_))) {
       LOG_WARN("failed to replace generated tsc expr", K(ret));
     }
-  } else if (((op->get_type() == log_op_def::LOG_INSERT) &&
-            !static_cast<ObLogInsert*>(op)->is_insert_select()) ||
-            ((op->get_type() == log_op_def::LOG_INSERT_ALL) &&
-            !static_cast<ObLogInsertAll*>(op)->is_insert_select())) {
+  } else if ((op->get_type() == log_op_def::LOG_INSERT) ||
+            ((op->get_type() == log_op_def::LOG_INSERT_ALL))) {
     ObLogDelUpd *insert_op = static_cast<ObLogDelUpd*>(op);
     if (OB_FAIL(generate_ins_replace_exprs_pair(insert_op))) {
       LOG_WARN("fail to generate insert replace exprs pair");
@@ -11493,6 +11511,19 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("get unexpected null", K(op->get_name()));
       } else if (OB_FAIL(allocate_material_for_recursive_cte_plan(right_child->get_child_list()))) {
         LOG_WARN("faile to allocate material for recursive cte plan", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && op->get_type() == LOG_SELECT_INTO && !op->is_plan_root() &&
+        GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
+      if (!op->get_stmt()->is_select_stmt()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected stmt type", K(ret));
+      } else {
+        const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt*>(op->get_stmt());
+        if (OB_FAIL(sel_stmt->get_select_exprs(op->get_output_exprs()))) {
+          LOG_WARN("failed to get select exprs", K(ret));
+        }
       }
     }
 
@@ -12802,6 +12833,9 @@ int ObLogPlan::create_hash_sortkey(const int64_t part_cnt,
   ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
   if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_HASH, hash_expr))) {
     LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_UNLIKELY(part_cnt > order_keys.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected order_keys count", K(ret), K(part_cnt), K(order_keys));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < part_cnt; ++i) {
       if (OB_FAIL(hash_expr->add_param_expr(order_keys.at(i).expr_))) {

@@ -324,7 +324,7 @@ public:
     abort_unless(magic_code_ == MAGIC_CODE);
 #else
     if (OB_UNLIKELY(node->host_ != this || magic_code_ != MAGIC_CODE)) {
-      COMMON_LOG(ERROR, "unexpected error", K(node->host_), K(this), K(magic_code_));
+      COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected error", K(node->host_), K(this), K(magic_code_));
     }
 #endif
     if (OB_NOT_NULL(node)) {

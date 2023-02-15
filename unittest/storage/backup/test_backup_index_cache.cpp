@@ -84,10 +84,10 @@ static bool cmp_backup_index_cache_value(const ObBackupIndexCacheValue *lhs, con
   bool bret = true;
   if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
     bret = false;
-    LOG_WARN("lhs or rhs is null", KP(lhs), KP(rhs));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "lhs or rhs is null", KP(lhs), KP(rhs));
   } else if (lhs->len() != rhs->len()) {
     bret = false;
-    LOG_WARN("lhs and rhs not equal", K(lhs), K(rhs));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "lhs and rhs not equal", K(lhs), K(rhs));
   } else {
     const int64_t len = lhs->len();
     const char *lhs_buf = lhs->buf();
@@ -95,7 +95,7 @@ static bool cmp_backup_index_cache_value(const ObBackupIndexCacheValue *lhs, con
     for (int64_t i = 0; i < len; ++i) {
       if (lhs_buf[i] != rhs_buf[i]) {
         bret = false;
-        LOG_WARN("buf content is not same", K(lhs_buf[i]), K(rhs_buf[i]), K(i));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "buf content is not same", K(lhs_buf[i]), K(rhs_buf[i]), K(i));
         break;
       }
     }

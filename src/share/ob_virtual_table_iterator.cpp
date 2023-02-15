@@ -24,6 +24,7 @@
 #include "sql/das/ob_das_location_router.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "deps/oblib/src/lib/alloc/memory_sanity.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

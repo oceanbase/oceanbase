@@ -809,7 +809,7 @@ ObSessionGetterGuard::ObSessionGetterGuard(ObSQLSessionMgr &sess_mgr, uint32_t s
 {
   ret_ = mgr_.get_session(sessid, session_);
   if (OB_SUCCESS != ret_) {
-    LOG_WARN("get session fail", K(ret_), K(sessid));
+    LOG_WARN_RET(ret_, "get session fail", K(ret_), K(sessid));
   } else {
     NG_TRACE_EXT(session, OB_ID(sid), session_->get_sessid(),
                  OB_ID(tenant_id), session_->get_priv_tenant_id());

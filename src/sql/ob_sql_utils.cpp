@@ -126,7 +126,7 @@ void ObSQLUtils::check_if_need_disconnect_after_end_trans(const int end_trans_er
     if (OB_UNLIKELY(OB_SUCCESS != end_trans_err && is_explicit)) {
       // 显式rollback失败，要断连接
       is_need_disconnect = true;
-      LOG_WARN("fail to rollback explicitly, disconnect", K(end_trans_err));
+      LOG_WARN_RET(end_trans_err, "fail to rollback explicitly, disconnect", K(end_trans_err));
     } else {
       // 隐式rollback（不管成功还是失败），或者显式rollback成功，不用断连接
       is_need_disconnect = false;
@@ -135,7 +135,7 @@ void ObSQLUtils::check_if_need_disconnect_after_end_trans(const int end_trans_er
     // commit
     if (OB_UNLIKELY(ObSQLUtils::is_trans_commit_need_disconnect_err(end_trans_err))) {
       is_need_disconnect = true;
-      LOG_WARN("fail to commit, and error number is unexpected, disconnect", K(end_trans_err), K(lbt()));
+      LOG_WARN_RET(end_trans_err, "fail to commit, and error number is unexpected, disconnect", K(end_trans_err), K(lbt()));
     } else {
       is_need_disconnect = false;
     }
@@ -482,7 +482,8 @@ void ObSQLUtils::clear_expr_eval_flags(const ObExpr &expr, ObEvalCtx &ctx)
 int ObSQLUtils::calc_sql_expression_without_row(
   ObExecContext &exec_ctx,
   const ObISqlExpression &expr,
-  ObObj &result)
+  ObObj &result,
+  ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
@@ -499,7 +500,7 @@ int ObSQLUtils::calc_sql_expression_without_row(
       LOG_WARN("static engine should have implement this function. unexpected null", K(ret));
     } else {
       ObDatum *datum = NULL;
-      ObEvalCtx eval_ctx(exec_ctx);
+      ObEvalCtx eval_ctx(exec_ctx, allocator);
       clear_expr_eval_flags(*new_expr, eval_ctx);
       OZ(new_expr->eval(eval_ctx, datum)); // sql exprs called here
       OZ(datum->to_obj(result, new_expr->obj_meta_, new_expr->obj_datum_map_));
@@ -963,7 +964,7 @@ int64_t ObSQLUtils::get_usec()
 {
   struct timeval time_val;
   if (0 != gettimeofday(&time_val, NULL)) { //success: return 0, failed: return -1
-    LOG_WARN("fail to get time of day");
+    LOG_WARN_RET(OB_ERR_SYS, "fail to get time of day");
   }
   return time_val.tv_sec*1000000 + time_val.tv_usec;
 }
@@ -2813,7 +2814,7 @@ void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &t
     }
     CHECK_COMPATIBILITY_MODE(session);
   } else {
-    LOG_WARN("Molly couldn't get compatibility mode from session, use default", K(lbt()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Molly couldn't get compatibility mode from session, use default", K(lbt()));
   }
   type_ctx.set_session(session);
 }
@@ -2975,7 +2976,7 @@ int ObSQLUtils::ConvertFiledNameAttribute(ObIAllocator& allocator,
       }
 
       if (OB_SUCC(ret)) {
-        dst.assign(buf, result_len);
+        dst.assign(buf, static_cast<int32_t>(result_len));
       }
     }
   }
@@ -3965,6 +3966,23 @@ int64_t ObSqlFatalErrExtraInfoGuard::to_string(char *buf, const int64_t buf_len)
   return pos;
 }
 
+void ObSQLUtils::record_execute_time(const ObPhyPlanType type,
+                                     const int64_t time_cost)
+{
+  #define ADD_EXECUTE_TIME(type)                  \
+    case OB_PHY_PLAN_##type:                      \
+      EVENT_ADD(SQL_##type##_TIME, time_cost);    \
+      break
+  switch(type)
+  {
+    ADD_EXECUTE_TIME(LOCAL);
+    ADD_EXECUTE_TIME(REMOTE);
+    ADD_EXECUTE_TIME(DISTRIBUTED);
+    default: {}
+  }
+  #undef ADD_EXECUTE_TIME
+}
+
 int ObSQLUtils::handle_audit_record(bool need_retry,
                                     const ObExecuteMode exec_mode,
                                     ObSQLSessionInfo &session,
@@ -4280,10 +4298,29 @@ bool ObSQLUtils::is_pl_nested_sql(ObExecContext *cur_ctx)
     ObExecContext *parent_ctx = cur_ctx->get_parent_ctx();
     //parent_sql = is_dml_stmt means this sql is triggered by a sql, not pl procedure
     if (OB_NOT_NULL(parent_ctx->get_sql_ctx())
-        && ObStmt::is_dml_stmt(parent_ctx->get_sql_ctx()->stmt_type_)
         && parent_ctx->get_pl_stack_ctx() != nullptr
         && !parent_ctx->get_pl_stack_ctx()->in_autonomous()) {
-      bret = true;
+      if (ObStmt::is_dml_stmt(parent_ctx->get_sql_ctx()->stmt_type_)) {
+        bret = true;
+      } else if (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_) {
+        /* anonymous block in a store procedure will be send to sql engine as sql, which will make new obexeccontext.
+           consider follow scene:
+            dml1(exec_ctx1)->udf/trigger->procedure->anonymous block(exec_ctx2)->dml2
+          outer dml1 and inner dml2 form a nested scene. bug current code logic cannot identify this scene.
+          so it need to skip anonymous block obexeccontext */
+        do {
+          parent_ctx = parent_ctx->get_parent_ctx();
+        } while (OB_NOT_NULL(parent_ctx) && OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&
+                 (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_));
+
+        if (OB_NOT_NULL(parent_ctx) &&
+            OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&
+            OB_NOT_NULL(parent_ctx->get_pl_stack_ctx()) &&
+            ObStmt::is_dml_stmt(parent_ctx->get_sql_ctx()->stmt_type_) &&
+            !parent_ctx->get_pl_stack_ctx()->in_autonomous()) {
+          bret = true;
+        }
+      }
     }
   }
   return bret;
@@ -4324,7 +4361,7 @@ bool ObSQLUtils::is_select_from_dual(ObExecContext &ctx)
       depend_tables = ctx.get_sql_ctx()->cur_stmt_->get_global_dependency_table();
     }
     if (depend_tables == nullptr) {
-      LOG_WARN("depend tables is nullptr");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "depend tables is nullptr");
     } else if (depend_tables->empty()) {
       bret = true;
     } else {
@@ -4668,7 +4705,9 @@ void ObSQLUtils::adjust_time_by_ntp_offset(int64_t &dst_timeout_ts)
 
 int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                      ObSelectStmt *select_stmt,
-                                     bool reset_column_infos)
+                                     bool reset_column_infos,
+                                     ObIAllocator &alloc,
+                                     ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   ObTableSchema new_view_schema;
@@ -4684,6 +4723,7 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
     LOG_WARN("failed to get sql engine", K(ret));
   } else if ((0 == old_view_schema.get_object_status() || 0 == old_view_schema.get_column_count())) {
     if (!reset_column_infos) {
+      ObArray<ObString> dummy_column_list;
       if (OB_ISNULL(select_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get select stmt", K(ret));
@@ -4692,7 +4732,7 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
       } else if (OB_ISNULL(select_stmt->get_ref_obj_table())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ref obj is null", K(ret));
-      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(), *select_stmt, new_view_schema))) {
+      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(), *select_stmt, new_view_schema, alloc, session_info, dummy_column_list))) {
         LOG_WARN("failed to update view column info", K(ret));
       } else if (!new_view_schema.is_view_table() || new_view_schema.get_column_count() <= 0) {
         ret = OB_ERR_UNEXPECTED;

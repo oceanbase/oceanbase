@@ -144,7 +144,7 @@ void ObArchiveSender::wait()
 void ObArchiveSender::release_send_task(ObArchiveSendTask *task)
 {
   if (NULL == task || NULL == allocator_) {
-    ARCHIVE_LOG(ERROR, "invalid arguments", K(task), K(allocator_));
+    ARCHIVE_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid arguments", K(task), K(allocator_));
   } else {
     allocator_->free_send_task(task);
   }
@@ -238,7 +238,7 @@ void ObArchiveSender::run1()
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "archive sender not init");
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "archive sender not init");
   } else {
     while (!has_set_stop() && !(OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
       do_thread_task_();
@@ -264,11 +264,6 @@ void ObArchiveSender::do_thread_task_()
       ARCHIVE_LOG(TRACE, "after handle task", KPC(task), K(consume_status));
       switch (consume_status) {
         case TaskConsumeStatus::DONE:
-          if (! task->is_task_finish()) {
-            ret = OB_ERR_UNEXPECTED;
-            ARCHIVE_LOG(ERROR, "task consume status is done while task not in finish status",
-                K(ret), K(consume_status), KPC(task));
-          }
           break;
         case TaskConsumeStatus::STALE_TASK:
           task->mark_stale();
@@ -417,7 +412,6 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
   const ObLSID &id = task.get_ls_id();
   const ArchiveWorkStation &station = task.get_station();
   share::ObBackupDest backup_dest;
-  //consume_status = TaskConsumeStatus::DONE;   // 默认task需要被消费掉, 只有补偿piece场景才不会消费
   if (OB_UNLIKELY(! task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(task));
@@ -743,6 +737,13 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
     // skip it
   } else if (! in_normal_status_(key)) {
     // skip it
+  } else if (OB_BACKUP_DEVICE_OUT_OF_SPACE == ret_code) {
+    // ret code should report to user
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+      LOG_DBA_ERROR(OB_BACKUP_DEVICE_OUT_OF_SPACE, "msg", "archive device is full", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
   } else if (is_ignore_ret_code_(ret_code)) {
   } else {
     ARCHIVE_LOG(ERROR, "archive sender encounter fatal error", K(ret), K(id), K(key), K(ret_code));

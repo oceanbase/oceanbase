@@ -182,10 +182,10 @@ private:
 
 inline bool ObTriggerNameHashWrapper::operator ==(const ObTriggerNameHashWrapper &rv) const
 {
-  common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
+  ObCompareNameWithTenantID name_cmp(tenant_id_);
   return (tenant_id_ == rv.get_tenant_id())
       && (database_id_ == rv.get_database_id())
-      && (0 == common::ObCharset::strcmp(cs_type, trigger_name_, rv.get_trigger_name()));
+      && (0 == name_cmp.compare(trigger_name_, rv.get_trigger_name()));
 }
 
 inline uint64_t ObTriggerNameHashWrapper::hash() const

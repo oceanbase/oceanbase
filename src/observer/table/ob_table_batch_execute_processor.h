@@ -80,7 +80,6 @@ private:
   table::ObTableEntity result_entity_;
   common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
-  table::ObTableApiCacheGuard cache_guard_;
   bool need_rollback_trans_;
 };
 

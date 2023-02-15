@@ -223,7 +223,7 @@ void ObTenantBase::destroy()
 {
   destroy_mtl_module();
   if (tg_set_.size() > 0) {
-    LOG_ERROR("tg thread not execute tg_destory make tg_id leak", K(tg_set_.size()), K(tg_set_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tg thread not execute tg_destory make tg_id leak", K(tg_set_.size()), K(tg_set_));
   }
   tg_set_.destroy();
   thread_dynamic_factor_map_.destroy();
@@ -401,7 +401,7 @@ int ObTenantBase::update_thread_cnt(double tenant_unit_cpu)
 void ObTenantEnv::set_tenant(ObTenantBase *ctx)
 {
   if (ctx != nullptr && ctx->id_ == OB_INVALID_TENANT_ID) {
-    LOG_ERROR("ObTenantEnv::set_tenant", KP(ctx));
+    LOG_ERROR_RET(OB_ERROR, "ObTenantEnv::set_tenant", KP(ctx));
     ob_abort();
   }
   get_tenant() = ctx;

@@ -164,10 +164,20 @@ int ObLobSeqId::get_next_seq_id(ObString& seq_id, ObLobSeqId &end)
       seq_id.assign_ptr(buf_, len_);
     }
   } else {
+    bool need_expend = false;
     uint64_t cur = digits_[dig_len_ - 1];
     // TODO @luohongdi.lhd. try smaller step rather than add digits
     cur += LOB_SEQ_STEP_LEN;
-    if (cur > LOB_SEQ_STEP_MAX || compare(end) != -1) {
+    if (cur > LOB_SEQ_STEP_MAX) {
+      need_expend = true;
+    } else {
+      digits_[dig_len_ - 1] = cur;
+      if (compare(end) != -1) {
+        need_expend = true;
+      }
+      digits_[dig_len_ - 1] = (cur - LOB_SEQ_STEP_LEN);
+    }
+    if (need_expend) {
       if (OB_FAIL(add_digits(LOB_SEQ_ID_MIN)) || OB_FAIL(append_seq_buf(LOB_SEQ_ID_MIN))) {
         LOG_WARN("failed add seq node.", K(ret), K(len_), K(cap_), K(dig_len_), K(dig_cap_));
       } else {

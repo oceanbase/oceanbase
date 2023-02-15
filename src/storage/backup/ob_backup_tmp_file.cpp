@@ -153,7 +153,7 @@ void ObBackupIndexBufferNode::reset()
   if (!tmp_file_.is_opened()) {
     // do nothing
   } else if (OB_TMP_FAIL(tmp_file_.close())) {
-    LOG_ERROR("failed to close tmp file", K(tmp_ret));
+    LOG_ERROR_RET(tmp_ret, "failed to close tmp file", K(tmp_ret));
   }
 }
 

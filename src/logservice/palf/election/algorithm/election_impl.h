@@ -126,6 +126,9 @@ public:
   virtual int handle_message(const ElectionAcceptResponseMsg &msg) override final;
   virtual int handle_message(const ElectionChangeLeaderMsg &msg) override final;
   virtual const common::ObAddr &get_self_addr() const override;
+  int add_inner_priority_seed_bit(const PRIORITY_SEED_BIT new_bit);
+  int clear_inner_priority_seed_bit(const PRIORITY_SEED_BIT old_bit);
+  int set_inner_priority_seed(const uint64_t seed);
   TO_STRING_KV(K_(is_inited), K_(is_running), K_(proposer), K_(acceptor), KPC_(priority));
 private:// 定向暴露给友元类
   void refresh_priority_();
@@ -239,6 +242,8 @@ private:// 定向暴露给友元类
               }
               LOG_PHASE(TRACE, phase, "compare priority done");
             }
+            lhs_priority->~ElectionPriority();
+            rhs_priority->~ElectionPriority();
           }
         }
       }
@@ -269,7 +274,6 @@ private:
   bool is_inited_;
   bool is_running_;
   uint64_t inner_priority_seed_;
-  common::ObOccamThreadPool *thread_pool_;
   common::ObOccamTimer *timer_;
   EventRecorder event_recorder_;
   mutable ElectionMsgCounter msg_counter_;

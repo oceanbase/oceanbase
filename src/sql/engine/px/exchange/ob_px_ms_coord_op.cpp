@@ -330,7 +330,14 @@ int ObPxMSCoordOp::inner_get_next_row()
     // 为了实现 orderly receive， TASKs-QC 通道需要逐个加入到 loop 中
     int64_t timeout_us = 0;
     int64_t nth_channel = OB_INVALID_INDEX_INT64;
-    clear_evaluated_flag();
+    // Note:
+    //   ObPxMSCoordOp::inner_get_next_row is invoked in two pathes (batch vs
+    //   non-batch). The eval flag should be cleared with seperated flags
+    //   under each invoke path (batch vs non-batch). Therefore call the overriding
+    //   API do_clear_datum_eval_flag() to replace clear_evaluated_flag
+    // TODO qubin.qb: Implement seperated ObPxMSCoordOp::inner_get_next_batch to
+    // isolate them
+    do_clear_datum_eval_flag();
     clear_dynamic_const_parent_flag();
     if (row_heap_.capacity() > 0) {
       int64_t idx = row_heap_.writable_channel_idx();
@@ -447,7 +454,7 @@ int ObPxMSCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg)
   wait_next_msg = true;
   LOG_TRACE("Begin next_row");
   metric_.mark_interval_start();
-  ret = reader.get_next_row(MY_SPEC.child_exprs_, eval_ctx_);
+  ret = reader.get_next_row(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_);
   metric_.mark_interval_end(&time_recorder_);
   if (OB_ITER_END == ret) {
     finish_ch_cnt_++;
@@ -534,6 +541,7 @@ int ObPxMSCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg)
            K(wait_next_msg));
   return ret;
 }
+
 
 } // end namespace sql
 } // end namespace oceanbase

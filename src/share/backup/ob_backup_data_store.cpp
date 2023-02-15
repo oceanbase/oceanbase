@@ -939,7 +939,7 @@ int ObBackupDataStore::get_max_sys_ls_retry_id(const share::ObBackupPath &backup
   if (backup_path.is_empty() || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(backup_path), K(ls_id));
-  } else if (OB_FAIL(prefix_op.init(sys_data_prefix, strlen(sys_data_prefix)))) {
+  } else if (OB_FAIL(prefix_op.init(sys_data_prefix, static_cast<int32_t>(strlen(sys_data_prefix))))) {
     LOG_WARN("failed to init dir prefix", K(ret), K(sys_data_prefix));
   } else if (OB_FAIL(util.list_directories(backup_path.get_obstr(), backup_set_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret), K(backup_path), K(backup_set_dest_));

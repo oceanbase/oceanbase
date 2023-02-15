@@ -1009,7 +1009,7 @@ bool ObTriggerInfo::ActionOrderComparator::operator()(const ObTriggerInfo *left,
     // ignore
   } else if (OB_UNLIKELY(NULL == left) || OB_UNLIKELY(NULL == right)) {
     ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret_), KP(left), KP(right));
+    LOG_WARN_RET(ret_,   "invalid argument", K(ret_), KP(left), KP(right));
   } else {
     bool_ret = (left->get_action_order() < right->get_action_order());
   }

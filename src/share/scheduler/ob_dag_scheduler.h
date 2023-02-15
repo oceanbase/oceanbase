@@ -561,7 +561,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       bret = dlists_[prio].add_first(item);
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return bret;
   }
@@ -572,7 +572,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       bret = dlists_[prio].add_last(item);
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return bret;
   }
@@ -585,7 +585,7 @@ public:
         bret = true;
       }
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return bret;
   }
@@ -596,7 +596,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       result = dlists_[prio].get_header();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return result;
   }
@@ -607,7 +607,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       result = dlists_[prio].get_first();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return result;
   }
@@ -618,7 +618,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       result = dlists_[prio].remove_first();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return result;
   }
@@ -629,7 +629,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       result = dlists_[prio].remove_last();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return result;
   }
@@ -640,7 +640,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       bret = dlists_[prio].is_empty();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return bret;
   }
@@ -668,13 +668,13 @@ public:
 
   int64_t size(const int64_t prio)
   {
-    int64_t ret = 0;
+    int64_t len = 0;
     if (prio >= 0 && prio < PRIO_CNT) {
-      ret = dlists_[prio].get_size();
+      len = dlists_[prio].get_size();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
-    return ret;
+    return len;
   }
 private:
   common::ObDList<T> dlists_[PRIOS];
@@ -780,7 +780,7 @@ public:
   void notify();
   void destroy();
   void get_default_config();
-  int32_t get_work_thread_num() const { return work_thread_num_; }
+  int64_t get_work_thread_num() const { return work_thread_num_; }
   bool is_empty() const
   {
     return dag_list_[READY_DAG_LIST].is_empty() && dag_list_[WAITING_DAG_LIST].is_empty()
@@ -789,8 +789,8 @@ public:
   int64_t get_cur_dag_cnt() const { return dag_cnt_; }
   int sys_task_start(ObIDag *dag);
   int64_t get_dag_count(const ObDagType::ObDagTypeEnum type);
-  int32_t get_running_task_cnt(const ObDagPrio::ObDagPrioEnum priority);
-  int32_t get_up_limit(const int64_t prio, int32_t &up_limit);
+  int64_t get_running_task_cnt(const ObDagPrio::ObDagPrioEnum priority);
+  int32_t get_up_limit(const int64_t prio, int64_t &up_limit);
   int check_dag_exist(const ObIDag *dag, bool &exist);
   int cancel_dag(const ObIDag *dag, ObIDag *parent_dag = nullptr);
   int get_all_dag_info(
@@ -881,7 +881,7 @@ private:
   int schedule_one(const int64_t priority);
   int dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority);
   void destroy_all_workers();
-  int set_thread_score(const int64_t priority, const int32_t concurrency);
+  int set_thread_score(const int64_t priority, const int64_t concurrency);
   bool try_switch(ObTenantDagWorker &worker);
   int try_switch(ObTenantDagWorker &worker, const int64_t src_prio, const int64_t dest_prio, bool &need_pause);
   void pause_worker(ObTenantDagWorker &worker, const int64_t priority);
@@ -925,13 +925,13 @@ private:
   int64_t dag_limit_;
   int64_t check_period_;
   int64_t loop_waiting_dag_list_period_;
-  int32_t total_worker_cnt_;
-  int32_t work_thread_num_;
-  int32_t default_work_thread_num_;
-  int32_t total_running_task_cnt_;
-  int32_t running_task_cnts_[ObDagPrio::DAG_PRIO_MAX];
-  int32_t low_limits_[ObDagPrio::DAG_PRIO_MAX]; // wait to delete
-  int32_t up_limits_[ObDagPrio::DAG_PRIO_MAX]; // wait to delete
+  int64_t total_worker_cnt_;
+  int64_t work_thread_num_;
+  int64_t default_work_thread_num_;
+  int64_t total_running_task_cnt_;
+  int64_t running_task_cnts_[ObDagPrio::DAG_PRIO_MAX];
+  int64_t low_limits_[ObDagPrio::DAG_PRIO_MAX]; // wait to delete
+  int64_t up_limits_[ObDagPrio::DAG_PRIO_MAX]; // wait to delete
   int64_t dag_cnts_[ObDagType::DAG_TYPE_MAX];
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];
   common::ObFIFOAllocator allocator_;

@@ -590,21 +590,21 @@ int ObObjectDevice::rename(const char *oldpath, const char *newpath)
 {
   UNUSED(oldpath);
   UNUSED(newpath);
-  OB_LOG(WARN, "rename is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "rename is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
 int ObObjectDevice::reconfig(const ObIODOpts &opts)
 {
   UNUSED(opts);
-  OB_LOG(WARN, "reconfig is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "reconfig is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
 int ObObjectDevice::seal_file(const ObIOFd &fd)
 {
   UNUSED(fd);
-  OB_LOG(WARN, "seal file is not support in object device !", K(fd));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "seal file is not support in object device !", K(fd));
   return OB_NOT_SUPPORTED;
 }
 
@@ -612,14 +612,14 @@ int ObObjectDevice::scan_dir(const char *dir_name, int (*func)(const dirent *ent
 {
   UNUSED(dir_name);
   UNUSED(func);
-  OB_LOG(WARN, "scan_dir with callback is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "scan_dir with callback is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
 int ObObjectDevice::fsync(const ObIOFd &fd)
 {
   UNUSED(fd);
-  OB_LOG(WARN, "fsync is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "fsync is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
@@ -629,7 +629,7 @@ int ObObjectDevice::fallocate(const ObIOFd &fd, mode_t mode, const int64_t offse
   UNUSED(mode);
   UNUSED(offset);
   UNUSED(len);
-  OB_LOG(WARN, "fallocate is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "fallocate is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
@@ -637,7 +637,7 @@ int ObObjectDevice::truncate(const char *pathname, const int64_t len)
 {
   UNUSED(pathname);
   UNUSED(len);
-  OB_LOG(WARN, "truncate is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "truncate is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
@@ -645,7 +645,7 @@ int ObObjectDevice::truncate(const char *pathname, const int64_t len)
 int ObObjectDevice::mark_blocks(ObIBlockIterator &block_iter)
 {
   UNUSED(block_iter);
-  OB_LOG(WARN, "mark_blocks is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "mark_blocks is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;  
 }
 
@@ -653,7 +653,7 @@ int ObObjectDevice::alloc_block(const ObIODOpts *opts, ObIOFd &block_id)
 {
   UNUSED(opts);
   UNUSED(block_id);
-  OB_LOG(WARN, "alloc_block is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "alloc_block is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
@@ -662,33 +662,33 @@ int ObObjectDevice::alloc_blocks(const ObIODOpts *opts, const int64_t count, ObI
   UNUSED(opts);
   UNUSED(count);
   UNUSED(blocks);
-  OB_LOG(WARN, "alloc_blocks is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "alloc_blocks is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
 void ObObjectDevice::free_block(const ObIOFd &block_id)
 {
   UNUSED(block_id);
-  OB_LOG(WARN, "free_block is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "free_block is not support in object device !", K(device_type_));
 }
 
 int ObObjectDevice::fsync_block()
 {
-  OB_LOG(WARN, "fsync_block is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "fsync_block is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
 int ObObjectDevice::mark_blocks(const ObIArray<ObIOFd> &blocks)
 {
   UNUSED(blocks);
-  OB_LOG(WARN, "mark_blocks is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "mark_blocks is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
 int ObObjectDevice::get_restart_sequence(uint32_t &restart_id) const
 {
   UNUSED(restart_id);
-  OB_LOG(WARN, "get_restart_sequence is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "get_restart_sequence is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
@@ -697,14 +697,14 @@ int ObObjectDevice::io_setup(uint32_t max_events, ObIOContext *&io_context)
 {
   UNUSED(max_events);
   UNUSED(io_context);
-  OB_LOG(WARN, "io_setup is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "io_setup is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
 int ObObjectDevice::io_destroy(ObIOContext *io_context)
 {
   UNUSED(io_context);
-  OB_LOG(WARN, "io_destroy is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "io_destroy is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
@@ -717,7 +717,7 @@ int ObObjectDevice::io_prepare_pwrite(const ObIOFd &fd, void *buf, size_t count,
   UNUSED(offset);
   UNUSED(iocb);
   UNUSED(callback);
-  OB_LOG(WARN, "io_prepare_pwrite is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "io_prepare_pwrite is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
@@ -730,7 +730,7 @@ int ObObjectDevice::io_prepare_pread(const ObIOFd &fd, void *buf, size_t count,
   UNUSED(offset);
   UNUSED(iocb);
   UNUSED(callback);
-  OB_LOG(WARN, "io_prepare_pread is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "io_prepare_pread is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
@@ -738,7 +738,7 @@ int ObObjectDevice::io_submit(ObIOContext *io_context, ObIOCB *iocb)
 {
   UNUSED(io_context);
   UNUSED(iocb);
-  OB_LOG(WARN, "io_submit is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "io_submit is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
@@ -746,7 +746,7 @@ int ObObjectDevice::io_cancel(ObIOContext *io_context, ObIOCB *iocb)
 {
   UNUSED(io_context);
   UNUSED(iocb);
-  OB_LOG(WARN, "io_cancel is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "io_cancel is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;  
 }
 int ObObjectDevice::io_getevents(ObIOContext *io_context, int64_t min_nr,
@@ -756,58 +756,58 @@ int ObObjectDevice::io_getevents(ObIOContext *io_context, int64_t min_nr,
   UNUSED(min_nr);
   UNUSED(events);
   UNUSED(timeout);
-  OB_LOG(WARN, "io_getevents is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "io_getevents is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 
 ObIOCB *ObObjectDevice::alloc_iocb()
 {
-  OB_LOG(WARN, "alloc_iocb is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "alloc_iocb is not support in object device !", K(device_type_));
   return NULL;
 }
 
 ObIOEvents *ObObjectDevice::alloc_io_events(const uint32_t max_events)
 {
   UNUSED(max_events);
-  OB_LOG(WARN, "alloc_io_events is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "alloc_io_events is not support in object device !", K(device_type_));
   return NULL;
 }
 
 void ObObjectDevice::free_iocb(ObIOCB *iocb)
 {
   UNUSED(iocb);
-  OB_LOG(WARN, "free_iocb is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "free_iocb is not support in object device !", K(device_type_));
 }
 
 void ObObjectDevice::free_io_events(ObIOEvents *io_event)
 {
   UNUSED(io_event);
-  OB_LOG(WARN, "free_io_events is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "free_io_events is not support in object device !", K(device_type_));
 }
 
   // space management interface
 int64_t ObObjectDevice::get_total_block_size() const
 {
-  OB_LOG(WARN, "get_total_block_size is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "get_total_block_size is not support in object device !", K(device_type_));
   return -1;
 }
 
 int64_t ObObjectDevice::get_free_block_count() const
 {
-  OB_LOG(WARN, "get_free_block_count is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "get_free_block_count is not support in object device !", K(device_type_));
   return -1;
 }
 
 int64_t ObObjectDevice::get_reserved_block_count() const
 {
-  OB_LOG(WARN, "get_reserved_block_count is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "get_reserved_block_count is not support in object device !", K(device_type_));
   return -1;
 }
 
 int ObObjectDevice::check_space_full(const int64_t required_size) const
 {
   UNUSED(required_size);
-  OB_LOG(WARN, "check_space_full is not support in object device !", K(device_type_));
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "check_space_full is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;  
 }
 

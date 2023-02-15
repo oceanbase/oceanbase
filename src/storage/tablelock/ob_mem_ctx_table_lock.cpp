@@ -251,7 +251,7 @@ void ObLockMemCtx::remove_lock_record(
     ObMemCtxLockOpLinkNode *lock_op)
 {
   if (OB_ISNULL(lock_op)) {
-    LOG_WARN("invalid argument.", K(lock_op));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument.", K(lock_op));
   } else {
     {
       WRLockGuard guard(list_rwlock_);
@@ -267,7 +267,7 @@ void ObLockMemCtx::remove_lock_record(
     const ObTableLockOp &lock_op)
 {
   if (OB_UNLIKELY(!lock_op.is_valid())) {
-    LOG_WARN("invalid argument.", K(lock_op));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument.", K(lock_op));
   } else {
     WRLockGuard guard(list_rwlock_);
     DLIST_FOREACH_REMOVESAFE_NORET(curr, lock_list_) {
@@ -288,7 +288,7 @@ void ObLockMemCtx::set_log_synced(
     const SCN &scn)
 {
   if (OB_ISNULL(lock_op)) {
-    LOG_WARN("invalid argument.", K(lock_op));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument.", K(lock_op));
   } else {
     max_durable_scn_.inc_update(scn);
     lock_op->logged_ = true;

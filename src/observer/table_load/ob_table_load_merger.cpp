@@ -156,7 +156,7 @@ int ObTableLoadMerger::start()
 
 void ObTableLoadMerger::stop()
 {
-  LOG_WARN("LOAD MERGE STOP");
+  LOG_WARN_RET(OB_SUCCESS, "LOAD MERGE STOP");
   is_stop_ = true;
   // 停止table合并
   table_compact_ctx_.stop();

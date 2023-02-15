@@ -80,7 +80,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableInsertUpSpec)
     if (insert_up_ctdef != nullptr) {
       OB_UNIS_ADD_LEN(*insert_up_ctdef);
     } else {
-      LOG_WARN("insert_up_ctdef is null, unexpected");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "insert_up_ctdef is null, unexpected");
     }
   }
   OB_UNIS_ADD_LEN(conflict_checker_ctdef_);

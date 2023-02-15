@@ -119,7 +119,7 @@ int ObPartDMLGenerator::gen_interval_part_name(int64_t part_id, ObString &part_n
 {
   int ret = OB_SUCCESS;
   int64_t str_size = common::OB_MAX_PARTITION_NAME_LENGTH;
-  int64_t str_len = 0;
+  int32_t str_len = 0;
   memset(&interval_part_name_, 0, str_size);
   str_len += snprintf(interval_part_name_, str_size, "SYS_P%ld", part_id);
   part_name.assign_ptr(interval_part_name_, str_len);
@@ -260,7 +260,7 @@ int ObPartSqlHelper::iterate_all_sub_part(const bool only_history)
       }
       for (int64_t j = 0; OB_SUCC(ret) && j < sub_part_num; j++) {
         dml.reset();
-        int sub_part_id = -1;
+        int64_t sub_part_id = -1;
         if (OB_ISNULL(subpart_array) || OB_ISNULL(subpart_array[j])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("subpart_array is invalid", KR(ret));

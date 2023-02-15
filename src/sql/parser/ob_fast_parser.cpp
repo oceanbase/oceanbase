@@ -2587,6 +2587,8 @@ int ObFastParserOracle::process_identifier(bool is_number_begin)
 int ObFastParserOracle::parse_next_token()
 {
   int ret = OB_SUCCESS;
+  char last_ch;
+  last_ch = '0';
   while (OB_SUCC(ret) && !raw_sql_.is_search_end()) {
     process_leading_space();
     char ch = raw_sql_.char_at(raw_sql_.cur_pos_);
@@ -2659,7 +2661,7 @@ int ObFastParserOracle::parse_next_token()
         break;
       }
       case ':': {
-        if (-1 != is_first_identifier_flags(raw_sql_.cur_pos_ + 1) || is_digit(raw_sql_.peek())) {
+        if ((-1 != is_first_identifier_flags(raw_sql_.cur_pos_ + 1) || is_digit(raw_sql_.peek())) && last_ch != '\'') {
           raw_sql_.scan();
           OZ (process_ps_statement());
         } else {
@@ -2701,6 +2703,7 @@ int ObFastParserOracle::parse_next_token()
         break;
       }
     } // end switch
+    last_ch = ch;
     OX (process_token());
   } // end while
   if (OB_SUCC(ret)) {

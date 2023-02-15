@@ -36,10 +36,12 @@ public:
                            common::ObIArray<common::ObZone> &zone_list);
   static int load_zone_merge_info(common::ObISQLClient &sql_client,
                                   const uint64_t tenant_id,
-                                  share::ObZoneMergeInfo &info);
+                                  share::ObZoneMergeInfo &info,
+                                  const bool print_sql = false);
   static int load_zone_merge_infos(common::ObISQLClient &sql_client,
                                    const uint64_t tenant_id,
-                                   common::ObIArray<share::ObZoneMergeInfo> &infos);
+                                   common::ObIArray<share::ObZoneMergeInfo> &infos,
+                                   const bool print_sql = false);
 
   static int insert_zone_merge_info(common::ObISQLClient &sql_client,
                                     const uint64_t tenant_id,
@@ -68,7 +70,8 @@ public:
 private:
   static int inner_load_zone_merge_infos_(common::ObISQLClient &sql_client,
                                           const uint64_t tenant_id,
-                                          common::ObIArray<share::ObZoneMergeInfo> &infos);
+                                          common::ObIArray<share::ObZoneMergeInfo> &infos,
+                                          const bool print_sql = false);
   static int inner_insert_or_update_zone_merge_infos_(common::ObISQLClient &sql_client,
                                                       const uint64_t tenant_id,
                                                       const bool is_update,
@@ -76,6 +79,10 @@ private:
   static int construct_zone_merge_info_(common::sqlclient::ObMySQLResult &result,
                                         const bool need_check,
                                         common::ObIArray<share::ObZoneMergeInfo> &infos);
+
+  static int check_scn_revert(common::ObISQLClient &sql_client,
+                              const uint64_t tenant_id,
+                              const share::ObZoneMergeInfo &info);
 };
 
 } // end namespace share

@@ -23,13 +23,12 @@
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
-
 void *ObTenantCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   abort_unless(attr.tenant_id_ == tenant_id_);
   abort_unless(attr.ctx_id_ == ctx_id_);
-  BACKTRACE(WARN, !attr.label_.is_valid(), "[OB_MOD_DO_NOT_USE_ME ALLOC]size:%ld", size);
+  BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, !attr.label_.is_valid(), "[OB_MOD_DO_NOT_USE_ME ALLOC]size:%ld", size);
   void *ptr = NULL;
   AObject *obj = obj_mgr_.alloc_object(size, attr);
   if(OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
@@ -43,8 +42,9 @@ void *ObTenantCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
     SANITY_POISON((void*)upper_align((int64_t)obj->data_ + obj->alloc_bytes_, 8), sizeof(AOBJECT_TAIL_MAGIC_CODE));
   }
   if (NULL == ptr && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    _OB_LOG(WARN, "[OOPS] alloc failed reason: %s", alloc_failed_msg());
-    _OB_LOG(WARN, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
+    const char *msg = alloc_failed_msg();
+    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "[OOPS]", "alloc failed reason", KCSTRING(msg));
+    _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
             "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
             tenant_id_, ctx_id_,
             common::get_global_ctx_info().get_ctx_name(ctx_id_),
@@ -67,7 +67,7 @@ void* ObTenantCtxAllocator::realloc(const void *ptr, const int64_t size, const O
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   void *nptr = NULL;
   AObject *obj = NULL;
-  BACKTRACE(WARN, !attr.label_.is_valid(), "[OB_MOD_DO_NOT_USE_ME REALLOC]size:%ld",  size);
+  BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, !attr.label_.is_valid(), "[OB_MOD_DO_NOT_USE_ME REALLOC]size:%ld",  size);
   if (NULL != ptr) {
     obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     abort_unless(obj->is_valid());
@@ -87,8 +87,9 @@ void* ObTenantCtxAllocator::realloc(const void *ptr, const int64_t size, const O
     SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
     SANITY_POISON((void*)upper_align((int64_t)obj->data_ + obj->alloc_bytes_, 8), sizeof(AOBJECT_TAIL_MAGIC_CODE));
   } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    _OB_LOG(WARN, "[OOPS] alloc failed reason: %s", alloc_failed_msg());
-    _OB_LOG(WARN, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
+    const char *msg = alloc_failed_msg();
+    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "[OOPS]", "alloc failed reason", KCSTRING(msg));
+    _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
             "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
             tenant_id_, ctx_id_,
             common::get_global_ctx_info().get_ctx_name(ctx_id_),
@@ -212,6 +213,7 @@ void ObTenantCtxAllocator::print_usage() const
     }
 
     if (ctx_hold_bytes > 0 || sum_item.used_ > 0) {
+      allow_next_syslog();
       _LOG_INFO("\n[MEMORY] tenant_id=%5ld ctx_id=%25s hold=% '15ld used=% '15ld limit=% '15ld"
                 "\n[MEMORY] idle_size=% '10ld free_size=% '10ld"
                 "\n[MEMORY] wash_related_chunks=% '10ld washed_blocks=% '10ld washed_size=% '10ld\n%s",
@@ -297,7 +299,7 @@ void ObTenantCtxAllocator::free_chunk(AChunk *chunk, const ObMemAttr &attr)
     push_chunk(chunk);
   } else {
     if (!resource_handle_.is_valid()) {
-      LIB_LOG(ERROR, "resource_handle is invalid", K_(tenant_id), K_(ctx_id));
+      LIB_LOG_RET(ERROR, OB_INVALID_ERROR, "resource_handle is invalid", K_(tenant_id), K_(ctx_id));
     } else {
       resource_handle_.get_memory_mgr()->free_chunk(chunk, attr);
     }
@@ -308,7 +310,7 @@ bool ObTenantCtxAllocator::update_hold(const int64_t size)
 {
   bool update = false;
   if (!resource_handle_.is_valid()) {
-    LIB_LOG(ERROR, "resource_handle is invalid", K_(tenant_id), K_(ctx_id));
+    LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "resource_handle is invalid", K_(tenant_id), K_(ctx_id));
   } else {
     bool reach_ctx_limit = false;
     if (size <=0) {

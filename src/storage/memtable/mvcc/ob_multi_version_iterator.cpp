@@ -124,7 +124,7 @@ void ObMultiVersionValueIterator::print_cur_status()
 {
   ObMvccTransNode *node = value_->get_list_head();
   while (OB_NOT_NULL(node)) {
-    TRANS_LOG(ERROR, "print_cur_status", KPC(node));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "print_cur_status", KPC(node));
     node = node->prev_;
   }
 }

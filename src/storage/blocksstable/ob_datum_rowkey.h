@@ -281,12 +281,12 @@ OB_INLINE bool ObDatumRowkey::operator==(const ObDatumRowkey &other) const
 
   } else if (datum_cnt_ != other.datum_cnt_) {
     is_equal = false;
-    STORAGE_LOG(WARN, "datum rowkey count no equal", K(other), K(*this));
+    STORAGE_LOG(DEBUG, "datum rowkey count no equal", K(other), K(*this));
   } else {
     for (int64_t i = 0; is_equal && i < datum_cnt_; i++) {
       is_equal = datums_[i] == other.datums_[i];
       if (!is_equal) {
-        STORAGE_LOG(WARN, "datum not equal", K(i), K(other), K(*this));
+        STORAGE_LOG(DEBUG, "datum not equal", K(i), K(other), K(*this));
       }
     }
   }

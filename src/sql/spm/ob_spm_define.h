@@ -297,6 +297,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
     BASELINE_PLAN,
     MAX_TYPE
   };
+  void reset();
   void set_get_normal_mode(uint64_t v) { plan_hash_value_ = v; handle_cache_mode_ = MODE_GET_NORMAL; }
   void set_get_offset_mode() { handle_cache_mode_ = MODE_GET_OFFSET; }
   void set_get_for_update_mode(uint64_t v) { plan_hash_value_ = v; handle_cache_mode_ = MODE_GET_FOR_UPDATE; }

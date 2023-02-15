@@ -31,14 +31,15 @@ int ObDDLTransController::init(share::schema::ObMultiVersionSchemaService *schem
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(schema_service)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("schema_service is null", KR(ret));
     } else if (OB_FAIL(tenants_.create(10))) {
       LOG_WARN("hashset create fail", KR(ret));
     } else if (OB_FAIL(tenant_for_ddl_trans_new_lock_.create(10))) {
       LOG_WARN("hashset create fail", KR(ret));
-    } else if (OB_FAIL(timer_.init("RefreshSchema"))) {
-      LOG_WARN("init timer fail", KR(ret));
-    } else if (OB_FAIL(timer_.schedule(*this, 200 * 1000, true))) {
-      LOG_WARN("schedule refresh task fail", KR(ret));
+    } else if (OB_FAIL(ObThreadPool::start())) {
+      LOG_WARN("thread start fail", KR(ret));
     } else {
       schema_service_ = schema_service;
       inited_ = true;
@@ -47,10 +48,24 @@ int ObDDLTransController::init(share::schema::ObMultiVersionSchemaService *schem
   return ret;
 }
 
-void ObDDLTransController::runTimerTask()
+ObDDLTransController::~ObDDLTransController()
+{
+  ObThreadPool::stop();
+  wait_cond_.signal();
+  ObThreadPool::wait();
+  ObThreadPool::destroy();
+  tasks_.destroy();
+  tenants_.destroy();
+  tenant_for_ddl_trans_new_lock_.destroy();
+  schema_service_ = NULL;
+  inited_ = false;
+}
+
+void ObDDLTransController::run1()
 {
   int ret = OB_SUCCESS;
-  while (OB_SUCC(ret)) {
+  lib::set_thread_name("DDLTransCtr");
+  while (!has_set_stop()) {
     ObArray<uint64_t> tenant_ids;
     {
       SpinWLockGuard guard(lock_);
@@ -78,8 +93,9 @@ void ObDDLTransController::runTimerTask()
           }
          }
       }
-    } else {
-      break;
+    }
+    if (tenant_ids.empty()) {
+      wait_cond_.timedwait(100 * 1000);
     }
   }
 }
@@ -193,6 +209,8 @@ int ObDDLTransController::remove_task(int64_t task_id)
         LOG_WARN("remove_task fail", KR(ret), K(task_id));
       } else if (OB_FAIL(tenants_.set_refactored(tenant_id, 1, 0, 1))) {
         LOG_WARN("set_refactored fail", KR(ret), K(tenant_id));
+      } else {
+        wait_cond_.signal();
       }
       break;
     }

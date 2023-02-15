@@ -356,10 +356,10 @@ public:
     int rewind();
     bool empty() const { return 0 == row_count_; }
     bool is_iterated() const { return iter_idx_ > 0; }
-    int get_row_count() const { return row_count_; }
+    int64_t get_row_count() const { return row_count_; }//TODO(jiangxiu.wt): fix it in previous versions
     ObDatum *&get_separator_datum() { return separator_datum_; }
     int reserve_bool_mark_count(int64_t count) { return bool_mark_.reserve(count); }
-    int get_bool_mark_size() { return bool_mark_.count(); }
+    int64_t get_bool_mark_size() { return bool_mark_.count(); }//TODO(jiangxiu.wt): fix it in previous versions
     int get_bool_mark(int64_t col_index, bool &is_bool);
     int set_bool_mark(int64_t col_index, bool is_bool);
     DECLARE_VIRTUAL_TO_STRING;
@@ -621,7 +621,7 @@ public:
                             const bool release_mem = true);
   inline int get_group_row(const int64_t group_id, GroupRow *&group_row)
   { return group_rows_.at(group_id, group_row); }
-  inline int get_group_rows_count() const
+  inline int64_t get_group_rows_count() const//TODO(jiangxiu.wt): fix it in previous versions
   { return group_rows_.count(); }
   inline int swap_group_row(const int a, const int b) // dangerous
   {

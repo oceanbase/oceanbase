@@ -49,6 +49,7 @@ public:
       K_(root_block_addr),
       K_(root_block_data),
       K_(root_row_store_type),
+      K_(latest_row_store_type),
       K_(data_index_tree_height),
       K_(data_block_macro_meta_addr),
       K_(data_block_macro_meta),
@@ -89,6 +90,7 @@ public:
   ObMetaDiskAddr root_block_addr_;
   blocksstable::ObMicroBlockData root_block_data_;
   common::ObRowStoreType root_row_store_type_;
+  common::ObRowStoreType latest_row_store_type_;
   int16_t data_index_tree_height_;
   ObMetaDiskAddr data_block_macro_meta_addr_;
   blocksstable::ObMicroBlockData data_block_macro_meta_;

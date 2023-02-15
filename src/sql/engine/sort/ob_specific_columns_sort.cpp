@@ -203,9 +203,9 @@ int ObSpecificColumnsSort::specific_columns_cmp(const void * p1,
   ObSpecificColumnsSort** scs1 = (ObSpecificColumnsSort**) p1;
   ObSpecificColumnsSort** scs2 = (ObSpecificColumnsSort**) p2;
   if (OB_ISNULL(scs1) || OB_ISNULL(scs2)) {
-    LOG_WARN("scs1 is null or scs2 is null", K(bret));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "scs1 is null or scs2 is null", K(bret));
   } else if (OB_ISNULL(*scs1) || OB_ISNULL(*scs2)) {
-    LOG_WARN("*scs1 is null or *scs2 is null", K(bret));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "*scs1 is null or *scs2 is null", K(bret));
   } else if (OB_UNLIKELY(OB_SUCCESS != (*scs1)->err_)
       || OB_UNLIKELY(OB_SUCCESS != (*scs2)->err_)) {
     // do nothing if we already have an error,

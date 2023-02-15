@@ -153,7 +153,7 @@ void ObPostExprItem::set_op(ObIAllocator &alloc, const char *op_name, int32_t re
 {
   ObExprOperatorType type = ObExprOperatorFactory::get_type_by_name(ObString::make_string(op_name));
   if (T_INVALID == type) {
-    LOG_ERROR("invaid op type", K(type));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invaid op type", K(type));
     right_to_die_or_duty_to_live();
   } else {
     ObExprOperator *op = NULL;
@@ -189,7 +189,7 @@ int64_t ObPostExprItem::to_string(char *buf, const int64_t buf_len) const
         if (IS_EXPR_OP(item_type_)) {
           J_OW(J_KV(N_OP, *get_expr_operator()));
         } else {
-          LOG_WARN("unknown item", K_(item_type));
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "unknown item", K_(item_type));
         }
         break;
       }
@@ -274,7 +274,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObPostExprItem)
   } else if (IS_EXPR_OP(item_type_)) {
     OB_UNIS_ADD_LEN(*v2_.op_);
   } else {
-    LOG_ERROR("Unknown expr item to serialize", K_(item_type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Unknown expr item to serialize", K_(item_type));
   }
   return len;
 }

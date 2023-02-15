@@ -841,14 +841,19 @@ int ObXAService::gc_invalid_xa_record(const uint64_t tenant_id)
 }
 
 #define XA_INNER_TABLE_GC_SQL "delete from %s where tenant_id = %lu and gtrid = x'%.*s'"
-#define XA_INNER_TABLE_CHECK_SELF_SQL "select HEX(gtrid) as gtrid, trans_id \
-  from %s where tenant_id = %lu and coordinator is null and \
-  scheduler_ip = '%s' and scheduler_port = %d and \
+#define XA_INNER_TABLE_CHECK_SELF_SQL "select HEX(gtrid) as gtrid, trans_id\
+  from %s where tenant_id = %lu and \
+  coordinator is null and \
+  format_id <> -2 and \
+  scheduler_ip = '%s' and \
+  scheduler_port = %d and \
   unix_timestamp(now()) - %ld > unix_timestamp(gmt_modified) limit 20"
 #define XA_INNER_TABLE_CHECK_NOT_SELF_SQL "select HEX(gtrid) as gtrid, scheduler_ip, scheduler_port \
-  from %s where tenant_id = %lu and coordinator is null \
-  and (scheduler_ip != '%s' or scheduler_port != %d) \
-  and unix_timestamp(now()) - %ld > unix_timestamp(gmt_modified) limit 20"
+  from %s where tenant_id = %lu and \
+  coordinator is null and \
+  format_id <> -2 and \
+  (scheduler_ip != '%s' or scheduler_port != %d) and \
+  unix_timestamp(now()) - %ld > unix_timestamp(gmt_modified) limit 20"
 
 int ObXAService::gc_invalid_xa_record_(const uint64_t tenant_id,
                                        const bool check_self,
@@ -993,7 +998,7 @@ int ObXAService::xa_start(const ObXATransID &xid,
     }
   } else if (ObXAFlag::is_tmjoin(flags) || ObXAFlag::is_tmresume(flags)) {
   // } else if (ObXAFlag::contain_tmjoin(flags) || ObXAFlag::contain_tmresume(flags)) {
-    if (OB_FAIL(xa_start_join_(xid, flags, timeout_seconds, tx_desc))) {
+    if (OB_FAIL(xa_start_join_(xid, flags, timeout_seconds, session_id, tx_desc))) {
       TRANS_LOG(WARN, "xa start join failed", K(ret), K(flags), K(xid), K(tx_desc));
     }
   } else {
@@ -1218,6 +1223,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
           }
         }
       }
+      // xa_start on new session, adjust tx_desc.sess_id_
+      if (OB_SUCC(ret)) {
+        tx_desc->set_sessid(session_id);
+      }
     }
   }
 
@@ -1227,6 +1236,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
 int ObXAService::xa_start_join_(const ObXATransID &xid,
                                 const int64_t flags,
                                 const int64_t timeout_seconds,
+                                const uint32_t session_id,
                                 ObTxDesc *&tx_desc)
 {
   int ret = OB_SUCCESS;
@@ -1318,7 +1328,10 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
       }
     }
   }
-
+  // xa_join/resume on new session, adjust tx_desc.sess_id_
+  if (OB_SUCC(ret)) {
+    tx_desc->set_sessid(session_id);
+  }
   return ret;
 }
 
@@ -1757,7 +1770,7 @@ int ObXAService::one_phase_xa_rollback_(const ObXATransID &xid,
     if (OB_FAIL(xa_ctx->one_phase_end_trans(xid, true/*is_rollback*/, timeout_us, request_id))) {
       TRANS_LOG(WARN, "one phase xa rollback failed", K(ret), K(tx_id));
     } else if (OB_FAIL(xa_ctx->wait_one_phase_end_trans(true/*is_rollback*/, timeout_us))) {
-      TRANS_LOG(WARN, "fail to wait one phase xa end trans", K(ret), K(xid), K(trans_id));
+      TRANS_LOG(WARN, "fail to wait one phase xa end trans", K(ret), K(xid), K(tx_id));
     }
     xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
   }
@@ -2817,11 +2830,11 @@ void ObXAService::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc)
 {
   const ObTransID &tx_id = tx_desc->tid();
   if (OB_UNLIKELY(!is_inited_)) {
-    TRANS_LOG(WARN, "xa service not inited");
+    TRANS_LOG_RET(WARN, OB_NOT_INIT, "xa service not inited");
   } else {
     ObXACtx *xa_ctx = tx_desc->get_xa_ctx();
     if (NULL == xa_ctx) {
-      TRANS_LOG(WARN, "xa ctx is null", K(tx_id), K(xid));
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "xa ctx is null", K(tx_id), K(xid));
     } else {
       xa_ctx->dec_xa_ref_count();
       if (0 == xa_ctx->get_xa_ref_count()) {

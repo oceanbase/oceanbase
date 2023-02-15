@@ -46,7 +46,7 @@
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "rootserver/ob_bootstrap.h"
-#include "rootserver/ob_tenant_recovery_reportor.h" // ObTenantRecoveryReportor
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "observer/ob_server.h"
 #include "observer/ob_dump_task_generator.h"
 #include "observer/ob_server_schema_updater.h"
@@ -222,6 +222,9 @@ int ObService::init(common::ObMySQLProxy &sql_proxy,
     inited_ = true;
   }
   FLOG_INFO("[OBSERVICE_NOTICE] init ob_service finish", KR(ret), K_(inited));
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR(OB_ERR_OBSERVICE_START, "msg", "observice init() has failure", KR(ret));
+  }
   return ret;
 }
 
@@ -270,6 +273,9 @@ int ObService::start()
     LOG_ERROR("start meta table checker failed", KR(ret));
   }
   FLOG_INFO("[OBSERVICE_NOTICE] start ob_service end", KR(ret));
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR(OB_ERR_OBSERVICE_START, "msg", "observice start() has failure", KR(ret));
+  }
   return ret;
 }
 
@@ -284,7 +290,7 @@ void ObService::stop()
 {
   FLOG_INFO("[OBSERVICE_NOTICE] start to stop observice");
   if (!inited_) {
-    FLOG_WARN("ob_service not init", K_(inited));
+    FLOG_WARN_RET(OB_NOT_INIT, "ob_service not init", K_(inited));
   } else {
     FLOG_INFO("begin to add server event");
     SERVER_EVENT_ADD("observer", "stop");
@@ -316,7 +322,7 @@ void ObService::wait()
 {
   FLOG_INFO("[OBSERVICE_NOTICE] wait ob_service begin");
   if (!inited_) {
-    LOG_WARN("ob_service not init", K_(inited));
+    LOG_WARN_RET(OB_NOT_INIT, "ob_service not init", K_(inited));
   } else {
     FLOG_INFO("begin to wait schema updater");
     schema_updater_.wait();
@@ -1728,7 +1734,7 @@ bool ObService::is_heartbeat_expired() const
 {
   bool bret = false;  // returns false on error
   if (OB_UNLIKELY(!inited_)) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     bret = !lease_state_mgr_.is_valid_heartbeat();
   }
@@ -1740,7 +1746,7 @@ bool ObService::is_svr_lease_valid() const
   // Determine if local lease is valid in OFS mode
   bool bret = false;
   if (OB_UNLIKELY(!inited_)) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     bret = lease_state_mgr_.is_valid_lease();
   }
@@ -1835,11 +1841,8 @@ int ObService::detect_master_rs_ls(
   } else if (replica.is_strong_leader()) {
     // case 2 : replica is leader, do not use in_service to check whether it is leader or not
     //          use in_service could lead to bad case: https://yuque.antfin.com/ob/rootservice/pbw2qw
-    const ObLSReplica *leader = NULL;
-
-    // FIXME: Need Use in memory table operator to fill log stream info
-    if (OB_FAIL(ls_info.init_by_replica(replica))) {
-      LOG_WARN("init by replica failed", KR(ret), K(replica));
+    if (OB_FAIL(generate_master_rs_ls_info_(replica, ls_info))) {
+      LOG_WARN("generate master rs ls info failed", KR(ret), K(replica), K(ls_info));
     } else if (OB_FAIL(result.init(ObRole::LEADER, master_rs, replica, ls_info))) {
       LOG_WARN("fail to init result", KR(ret), K(master_rs), K(replica), K(ls_info));
     }
@@ -1858,6 +1861,68 @@ int ObService::detect_master_rs_ls(
     FLOG_WARN("detect rs too much time", KR(ret), K(cost_ts), K(result));
   }
   LOG_TRACE("detect rs cost", KR(ret), K(cost_ts), K(result));
+  return ret;
+}
+
+// Use the local leader replica as ls_info by default, while trying to get full ls info from inmemory ls table.
+// If proposal_id and server of inmemory leader and cur_leader are same, ls_info = cur_leader + inmemory followers.
+int ObService::generate_master_rs_ls_info_(
+    const share::ObLSReplica &cur_leader,
+    share::ObLSInfo &ls_info)
+{
+  int ret = OB_SUCCESS;
+  ls_info.reset();
+  ObInMemoryLSTable *inmemory_ls_table = NULL;
+  const ObLSReplica *inmemory_leader = NULL;
+  ObLSInfo inmemory_ls_info;
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(gctx_.lst_operator_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!cur_leader.is_valid()
+      || !cur_leader.is_strong_leader()
+      || cur_leader.get_server() != gctx_.self_addr())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid current leader", KR(ret), K(cur_leader), "self_addr", gctx_.self_addr());
+  } else if (OB_FAIL(ls_info.init_by_replica(cur_leader))) {
+    LOG_WARN("init by replica failed", KR(ret), K(cur_leader));
+  } else if (OB_ISNULL(inmemory_ls_table = gctx_.lst_operator_->get_inmemory_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inmemory ls_table is null", KR(ret), KP(inmemory_ls_table));
+  } else if (OB_UNLIKELY(!inmemory_ls_table->is_inited())) {
+    // if RS is not started, inmemory_ls_table may be uninitialized
+  } else if (OB_FAIL(inmemory_ls_table->get(
+      GCONF.cluster_id,
+      OB_SYS_TENANT_ID,
+      SYS_LS,
+      share::ObLSTable::DEFAULT_MODE,
+      inmemory_ls_info))) {
+    LOG_WARN("failed to get in memory sys tenant ls info", KR(ret), K(inmemory_ls_info));
+  } else if (OB_FAIL(inmemory_ls_info.find_leader(inmemory_leader))) {
+    if (OB_ENTRY_NOT_EXIST == ret) { // ls replica hasn't been reported to memory
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to find leader in inmemory_ls_info", KR(ret), K(inmemory_ls_info));
+    }
+  } else if (OB_ISNULL(inmemory_leader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("leader replica can not be null", KR(ret), K(inmemory_ls_info));
+  } else if (inmemory_leader->get_proposal_id() != cur_leader.get_proposal_id()
+      || inmemory_leader->get_server() != cur_leader.get_server()) {
+    // do not use unreliable inmemory ls info
+  } else {
+    ARRAY_FOREACH(inmemory_ls_info.get_replicas(), idx) {
+      const ObLSReplica &replica = inmemory_ls_info.get_replicas().at(idx);
+      if (!replica.is_strong_leader()) {
+        if (OB_FAIL(ls_info.add_replica(replica))) {
+          LOG_WARN("add replica failed", KR(ret), K(replica), K(ls_info), K(inmemory_ls_info));
+        }
+      }
+    }
+    if (FAILEDx(ls_info.update_replica_status())) {
+      LOG_WARN("update replica status failed", KR(ret),
+          K(ls_info), K(cur_leader), K(inmemory_ls_info));
+    }
+  }
   return ret;
 }
 
@@ -2212,6 +2277,24 @@ int ObService::fill_tablet_report_info(
   return ret;
 }
 
+int ObService::get_role_from_palf_(
+    logservice::ObLogService &log_service,
+    const share::ObLSID &ls_id,
+    common::ObRole &role,
+    int64_t &proposal_id)
+{
+  int ret = OB_SUCCESS;
+  role = FOLLOWER;
+  proposal_id = 0;
+  palf::PalfHandleGuard palf_handle_guard;
+  if (OB_FAIL(log_service.open_palf(ls_id, palf_handle_guard))) {
+    LOG_WARN("open palf failed", KR(ret), K(ls_id));
+  } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
+    LOG_WARN("get role failed", KR(ret), K(ls_id));
+  }
+  return ret;
+}
+
 int ObService::fill_ls_replica(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
@@ -2232,7 +2315,6 @@ int ObService::fill_ls_replica(
   } else {
     MTL_SWITCH(tenant_id) {
       ObLSHandle ls_handle;
-      palf::PalfHandleGuard palf_handle_guard;
       ObLSService *ls_svr = nullptr;
       logservice::ObLogService *log_service = nullptr;
       common::ObRole role = FOLLOWER;
@@ -2241,6 +2323,7 @@ int ObService::fill_ls_replica(
       int64_t proposal_id = 0;
       int64_t paxos_replica_number = 0;
       ObLSRestoreStatus restore_status;
+      ObReplicaStatus replica_status = REPLICA_STATUS_NORMAL;
       if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
@@ -2252,13 +2335,13 @@ int ObService::fill_ls_replica(
         LOG_WARN("get paxos_member_list from ObLS failed", KR(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_restore_status(restore_status))) {
         LOG_WARN("get restore status failed", KR(ret));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_replica_status(replica_status))) {
+        LOG_WARN("get replica status failed", KR(ret));
       } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
-        LOG_WARN("open palf failed", KR(ret), K(tenant_id), K(ls_id));
-      } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
-        LOG_WARN("get role failed", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_FAIL(get_role_from_palf_(*log_service, ls_id, role, proposal_id))) {
+        LOG_WARN("failed to get role from palf", KR(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(replica.init(
             0,          /*create_time_us*/
             0,          /*modify_time_us*/
@@ -2269,7 +2352,7 @@ int ObService::fill_ls_replica(
             role,                      /*role*/
             REPLICA_TYPE_FULL,         /*replica_type*/
             proposal_id,              /*proposal_id*/
-            REPLICA_STATUS_NORMAL,     /*replica_status*/
+            is_strong_leader(role) ? REPLICA_STATUS_NORMAL : replica_status,/*replica_status*/
             restore_status,            /*restore_status*/
             100,                       /*memstore_percent*/
             unit_id,                   /*unit_id*/
@@ -2433,6 +2516,7 @@ int ObService::get_ls_sync_scn(
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObLSService *ls_svr = nullptr;
   SCN cur_sync_scn = SCN::min_scn();
+  SCN cur_restore_source_max_scn = SCN::min_scn();
   bool restore_to_newest = false;
   LOG_INFO("start get_ls_sync_scn", K(arg));
 
@@ -2476,13 +2560,15 @@ int ObService::get_ls_sync_scn(
     } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get restore_handler failed", KR(ret), K(ls_id), KP(ls));
-    } else if (FALSE_IT(restore_to_newest =
-               arg.check_sync_to_latest() ? restore_handler->check_restore_to_newest() : false)) {
+    // scn get order, sync_scn from leader before archive_scn
     } else if (OB_FAIL(log_handler->get_end_scn(cur_sync_scn))) {
       LOG_WARN("failed to get ls cur_sync_scn", KR(ret), K(ls_id), KPC(ls));
-    } else if (OB_FAIL(result.init(arg.get_tenant_id(), ls_id, cur_sync_scn, restore_to_newest))) {
+    } else if (arg.check_sync_to_latest()
+               && OB_FAIL(restore_handler->check_restore_to_newest(cur_sync_scn, cur_restore_source_max_scn))) {
+      LOG_WARN("failed to check_restore_to_newest", KR(ret), K(arg), KPC(ls));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id(), ls_id, cur_sync_scn, cur_restore_source_max_scn))) {
       LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()), K(ls_id), K(cur_sync_scn),
-                                     K(restore_to_newest));
+                                     K(cur_restore_source_max_scn));
     } else if (OB_FAIL(log_ls_svr->get_palf_role(ls_id, role, second_leader_epoch))) {
       COMMON_LOG(WARN, "failed to get palf role", KR(ret), K(ls_id));
     } else if (first_leader_epoch != second_leader_epoch || !is_strong_leader(role)) {
@@ -2491,7 +2577,7 @@ int ObService::get_ls_sync_scn(
           K(second_leader_epoch), K(role));
     }
   }
-  LOG_INFO("finish get_ls_sync_scn", KR(ret), K(cur_sync_scn), K(arg), K(result));
+  LOG_INFO("finish get_ls_sync_scn", KR(ret), K(cur_sync_scn), K(cur_restore_source_max_scn), K(arg), K(result));
   return ret;
 }
 
@@ -2513,13 +2599,13 @@ int ObService::refresh_tenant_info(
   }
 
   if (OB_SUCC(ret)) {
-    rootserver::ObTenantRecoveryReportor *tenant_reportor = MTL(rootserver::ObTenantRecoveryReportor*);
+    rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
 
-    if (OB_ISNULL(tenant_reportor)) {
+    if (OB_ISNULL(tenant_info_loader)) {
       ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "tenant_reportor should not be null", KR(ret));
-    } else if (OB_FAIL(tenant_reportor->load_tenant_info())) {
-      COMMON_LOG(WARN, "load_tenant_info failed", KR(ret), K(arg));
+      COMMON_LOG(ERROR, "tenant_info_loader should not be null", KR(ret));
+    } else if (OB_FAIL(tenant_info_loader->refresh_tenant_info())) {
+      COMMON_LOG(WARN, "refresh_tenant_info failed", KR(ret), K(arg));
     } else if (OB_FAIL(result.init(arg.get_tenant_id()))) {
       LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()));
     } else {

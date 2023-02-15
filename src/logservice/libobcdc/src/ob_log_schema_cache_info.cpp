@@ -132,7 +132,7 @@ void ColumnSchemaInfo::reset()
   collation_type_ = ObCollationType::CS_TYPE_INVALID;
 
   if (NULL != orig_default_value_str_) {
-    LOG_ERROR("orig_default_value_str_ should be null", K(orig_default_value_str_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "orig_default_value_str_ should be null", K(orig_default_value_str_));
     orig_default_value_str_ = NULL;
   }
 
@@ -346,7 +346,7 @@ int ObLogRowkeyInfo::do_init_(
 void ObLogRowkeyInfo::destroy()
 {
   if (OB_NOT_NULL(column_stored_idx_array_)) {
-    LOG_ERROR("column_id_array_ should be null", K(column_stored_idx_array_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "column_id_array_ should be null", K(column_stored_idx_array_));
     column_stored_idx_array_ = NULL;
   }
   size_ = 0;

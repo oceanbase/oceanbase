@@ -218,7 +218,7 @@ TEST_F(TestIndexBlockRowStruct, test_set_rowkey)
 int main(int argc, char** argv)
 {
   system("rm -f test_index_block_row_struct.log*");
-  OB_LOGGER.set_file_name("test_index_block_row_struct.log", true, false);
+  OB_LOGGER.set_file_name("test_index_block_row_struct.log");
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

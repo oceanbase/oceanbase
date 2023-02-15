@@ -131,15 +131,22 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
             : parse_tree.children_[TABLE_LIST_NODE]->children_[i];
         ObString dblink_name;
         bool has_reverse_link = false;
+        bool has_dblink_node = false;
         if (NULL == table_node) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "table_node is null", K(ret));
-        } else if (OB_FAIL(resolve_dblink_name(table_node, dblink_name, has_reverse_link))) {
+        } else if (OB_FAIL(resolve_dblink_name(table_node, dblink_name, has_reverse_link, has_dblink_node))) {
           SQL_RESV_LOG(WARN, "failed to resolv dblink name", K(ret));
-        } else if (has_reverse_link || !dblink_name.empty()) {
-          ret = OB_ERR_DDL_ON_REMOTE_DATABASE;
-          SQL_RESV_LOG(WARN, "drop table on remote database by dblink.", K(ret));
-          LOG_USER_ERROR(OB_ERR_DDL_ON_REMOTE_DATABASE);
+        } else if (has_dblink_node) {
+          if (has_reverse_link || !dblink_name.empty()) {
+            ret = OB_ERR_DDL_ON_REMOTE_DATABASE;
+            SQL_RESV_LOG(WARN, "drop table on remote database by dblink", K(ret));
+            LOG_USER_ERROR(OB_ERR_DDL_ON_REMOTE_DATABASE);
+          } else {
+            ret = OB_ERR_DATABASE_LINK_EXPECTED;
+            SQL_RESV_LOG(WARN, "database link name expected", K(ret));
+            LOG_USER_ERROR(OB_ERR_DATABASE_LINK_EXPECTED);
+          }
         } else {
           db_name.reset();
           table_name.reset();

@@ -249,7 +249,7 @@ public:
   {
     bool ret_bool = false;
     if (OB_UNLIKELY(!is_inited_)) {
-      SQL_ENG_LOG(ERROR, "ObKmpSeparatorDetector not inited.");
+      SQL_ENG_LOG_RET(ERROR, common::OB_NOT_INIT, "ObKmpSeparatorDetector not inited.");
     } else {
       while (matched_pos_ > 0 && c != str_[matched_pos_]) {
         matched_pos_ = next_[matched_pos_];

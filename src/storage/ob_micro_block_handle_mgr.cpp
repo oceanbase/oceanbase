@@ -333,5 +333,21 @@ int ObMicroBlockHandleMgr::put_micro_block_handle(
   return ret;
 }
 
+int ObMicroBlockHandleMgr::reset_handle_cache()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "block handle mgr is not inited", K(ret));
+  } else if (is_multi_) {
+    if (is_ordered_) {
+      last_handle_->reset();
+    } else {
+      handle_cache_->reset_handles();
+    }
+  }
+  return ret;
+}
+
 }
 }

@@ -176,9 +176,9 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
           LOG_WARN("snapshot version has been discarded", K(ret));
         }
       } else if (OB_FAIL(local_scan.init(*param.col_ids_, *param.org_col_ids_, *param.output_projector_,
-              param.data_table_schema_, param.snapshot_version_, trans_service, param.index_schema_, true/*output org cols only*/))) {
+              *param.data_table_schema_, param.snapshot_version_, trans_service, *param.index_schema_, true/*output org cols only*/))) {
         LOG_WARN("init local scan failed", K(ret));
-      } else if (OB_FAIL(local_scan.table_scan(ls_id_, tablet_id_, iterator, query_flag, range, nullptr))) {
+      } else if (OB_FAIL(local_scan.table_scan(*param.data_table_schema_, ls_id_, tablet_id_, iterator, query_flag, range, nullptr))) {
         LOG_WARN("fail to table scan", K(ret));
       } else {
         const ObColDescIArray &out_cols = *param.org_col_ids_;
@@ -746,7 +746,7 @@ int64_t ObUniqueCheckingDag::hash() const
   int64_t hash_val = 0;
   if (NULL == index_schema_) {
     tmp_ret = OB_ERR_SYS;
-    STORAGE_LOG(ERROR, "index schema must not be NULL", K(tmp_ret));
+    STORAGE_LOG_RET(ERROR, tmp_ret, "index schema must not be NULL", K(tmp_ret));
   } else {
     hash_val = tablet_id_.hash() + index_schema_->get_table_id();
   }
@@ -798,7 +798,7 @@ bool ObUniqueCheckingDag::operator==(const ObIDag &other) const
     const ObUniqueCheckingDag &dag = static_cast<const ObUniqueCheckingDag &>(other);
     if (NULL == index_schema_ || NULL == dag.index_schema_) {
       tmp_ret = OB_ERR_SYS;
-      STORAGE_LOG(ERROR, "index schema must not be NULL", K(tmp_ret), KP(index_schema_),
+      STORAGE_LOG_RET(ERROR, tmp_ret, "index schema must not be NULL", K(tmp_ret), KP(index_schema_),
           KP(dag.index_schema_));
     } else {
       is_equal = tablet_id_ == dag.tablet_id_

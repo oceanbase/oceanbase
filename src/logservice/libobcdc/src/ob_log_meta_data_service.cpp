@@ -56,7 +56,6 @@ int ObLogMetaDataService::init(
     const ClientFetchingMode fetching_mode,
     const share::ObBackupPathString &archive_dest,
     IObLogSysLsTaskHandler *sys_ls_handler,
-    ObLogSysTableHelper &systable_helper,
     ObISQLClient *proxy,
     IObLogErrHandler *err_handler,
     const int64_t cluster_id,
@@ -76,7 +75,7 @@ int ObLogMetaDataService::init(
     LOG_ERROR("ObLogMetaDataReplayer init fail", KR(ret));
   } else if (OB_FAIL(fetcher_dispatcher_.init(&incremental_replayer_, start_seq))) {
     LOG_ERROR("ObLogMetaDataFetcherDispatcher init fail", KR(ret));
-  } else if (OB_FAIL(fetcher_.init(fetching_mode, archive_dest, &fetcher_dispatcher_, sys_ls_handler, systable_helper,
+  } else if (OB_FAIL(fetcher_.init(fetching_mode, archive_dest, &fetcher_dispatcher_, sys_ls_handler,
       proxy, err_handler, cluster_id, cfg, start_seq))) {
     LOG_ERROR("ObLogMetaDataFetcher init fail", KR(ret),
         K(fetching_mode), "fetching_log_mode", print_fetching_mode(fetching_mode), K(archive_dest));
@@ -125,7 +124,7 @@ int ObLogMetaDataService::refresh_baseline_meta_data(
     } else if (OB_FAIL(get_data_dict_in_log_info_(tenant_id, start_timestamp_ns, data_dict_in_log_info))) {
       LOG_ERROR("log_meta_data_service get_data_dict_in_log_info failed", KR(ret), K(tenant_id));
     } else {
-      ISTAT("get_data_dict_in_log_info success", K(tenant_id), K(data_dict_in_log_info));
+      ISTAT("get_data_dict_in_log_info success", K(tenant_id), K(start_timestamp_ns), K(data_dict_in_log_info));
       start_parameters.reset(data_dict_in_log_info.snapshot_scn_, start_timestamp_ns, data_dict_in_log_info);
     }
 
@@ -219,9 +218,73 @@ int ObLogMetaDataService::ObLogMetaDataService::get_tenant_info_guard(
   return ret;
 }
 
+int ObLogMetaDataService::get_tenant_id_in_archive(
+    const int64_t start_timestamp_ns,
+    uint64_t &tenant_id)
+{
+  int ret = OB_SUCCESS;
+  datadict::ObDataDictMetaInfo data_dict_meta_info;
+
+  if (OB_FAIL(read_meta_info_in_archive_log_(start_timestamp_ns, data_dict_meta_info))) {
+    LOG_ERROR("read_meta_info_in_archive_log_ failed", K(ret), K(start_timestamp_ns),
+        K(data_dict_meta_info));
+  } else {
+    tenant_id = data_dict_meta_info.get_tenant_id();
+  }
+
+  return ret;
+}
+
 int ObLogMetaDataService::get_data_dict_in_log_info_in_archive_(
     const int64_t start_timestamp_ns,
     DataDictionaryInLogInfo &data_dict_in_log_info)
+{
+  int ret = OB_SUCCESS;
+  datadict::ObDataDictMetaInfo data_dict_meta_info;
+
+  if (OB_FAIL(read_meta_info_in_archive_log_(start_timestamp_ns, data_dict_meta_info))) {
+    LOG_ERROR("read_meta_info_in_archive_log_ failed", K(ret), K(start_timestamp_ns),
+        K(data_dict_meta_info));
+  } else {
+    datadict::ObDataDictMetaInfoItem data_dict_item;
+
+    // TODO: (binary) search a item which is the first one whose snapshot_scn <= start_timestamp_ns
+    // int64_t start = 0, end = item_arr.count()-1;
+    // int64_t cur = (start + end)/2;
+    // while (start <= end) {
+    //   const datadict::ObDataDictMetaInfoItem &cur_item = item_arr.at(cur),
+    //       &start_item = item_arr.at(start), &end_item = item_arr.at(end);
+    //   if (cur_item.snapshot_scn_ > start_timestamp_ns) {
+    //     start = cur+1;
+    //   } else {
+    //     if (cur == 0 || item_arr[cur-1].snapshot_scn_ > start_timestamp_ns) {
+    //       break;
+    //     } else {
+    //       end = cur-1;
+    //     }
+    //   }
+    //   cur = (start + end)/2;
+    // }
+    const datadict::DataDictMetaInfoItemArr &item_arr = data_dict_meta_info.get_item_arr();
+    const int64_t cur = 0;
+
+    if (item_arr.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("no datadict metainfo item in item_arr, unexpected", KR(ret), K(data_dict_meta_info));
+    } else {
+      data_dict_item = item_arr.at(cur);
+      data_dict_in_log_info.reset(data_dict_item.snapshot_scn_,
+          palf::LSN(data_dict_item.start_lsn_),
+          palf::LSN(data_dict_item.end_lsn_));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogMetaDataService::read_meta_info_in_archive_log_(
+    const int64_t start_timestamp_ns,
+    datadict::ObDataDictMetaInfo &data_dict_meta_info)
 {
   int ret = OB_SUCCESS;
   const char *archive_dest_c_str = TCONF.archive_dest;
@@ -251,54 +314,27 @@ int ObLogMetaDataService::get_data_dict_in_log_info_in_archive_(
       LOG_WARN("piece ctx get logstream meta data failed", KR(ret), K(start_scn), K(data_dict_in_log_info_buffer),
           K(buffer_size), K(data_size));
     } else {
-      datadict::ObDataDictMetaInfo data_dict_info;
-      datadict::ObDataDictMetaInfoItem data_dict_item;
       int64_t archive_header_pos = 0;
       int64_t data_pos = archive::COMMON_HEADER_SIZE;
       archive::ObLSMetaFileHeader ls_meta_file_header;
+
       if (OB_FAIL(ls_meta_file_header.deserialize(data_dict_in_log_info_buffer,
           data_size, archive_header_pos))) {
-        LOG_WARN("failed to deserialize ls meta file header", KR(ret), K(data_dict_in_log_info),
+        LOG_WARN("failed to deserialize ls meta file header", KR(ret),
             K(data_size), K(archive_header_pos));
       } else if (! ls_meta_file_header.is_valid()) {
         ret = OB_INVALID_DATA;
         LOG_WARN("ls meta file header is not valid, maybe data is invalid", KR(ret), K(ls_meta_file_header));
-      } else if (OB_FAIL(data_dict_info.deserialize(data_dict_in_log_info_buffer,
+      } else if (OB_FAIL(data_dict_meta_info.deserialize(data_dict_in_log_info_buffer,
           data_size, data_pos))) {
         LOG_WARN("data dict info deserialize failed", KR(ret), K(data_dict_in_log_info_buffer),
             K(data_size), K(data_pos));
-      } else if (! data_dict_info.check_integrity()) {
+      } else if (! data_dict_meta_info.check_integrity()) {
         ret = OB_INVALID_DATA;
-        LOG_WARN("data dict info is not valid", KR(ret), K(data_dict_info));
+        LOG_WARN("data dict info is not valid", KR(ret), K(data_dict_meta_info));
       } else {
-        const datadict::DataDictMetaInfoItemArr &item_arr = data_dict_info.get_item_arr();
-        if (item_arr.empty()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("no datadict metainfo item in item_arr, unexpected", KR(ret), K(data_dict_info));
-        } else {
-          // TODO: (binary) search a item which is the first one whose snapshot_scn <= start_timestamp_ns
-          // int64_t start = 0, end = item_arr.count()-1;
-          // int64_t cur = (start + end)/2;
-          // while (start <= end) {
-          //   const datadict::ObDataDictMetaInfoItem &cur_item = item_arr.at(cur),
-          //       &start_item = item_arr.at(start), &end_item = item_arr.at(end);
-          //   if (cur_item.snapshot_scn_ > start_timestamp_ns) {
-          //     start = cur+1;
-          //   } else {
-          //     if (cur == 0 || item_arr[cur-1].snapshot_scn_ > start_timestamp_ns) {
-          //       break;
-          //     } else {
-          //       end = cur-1;
-          //     }
-          //   }
-          //   cur = (start + end)/2;
-          // }
-          int64_t cur = 0;
-          data_dict_item = item_arr.at(cur);
-          data_dict_in_log_info.reset(data_dict_item.snapshot_scn_,
-              palf::LSN(data_dict_item.start_lsn_),
-              palf::LSN(data_dict_item.end_lsn_));
-        }
+        const uint64_t tenant_id = data_dict_meta_info.get_tenant_id();
+        LOG_INFO("read_meta_info_in_archive_log success", K(tenant_id), K(data_dict_meta_info));
       }
     }
   }
@@ -306,6 +342,7 @@ int ObLogMetaDataService::get_data_dict_in_log_info_in_archive_(
   if (OB_NOT_NULL(data_dict_in_log_info_buffer)) {
     ob_free(data_dict_in_log_info_buffer);
   }
+
   return ret;
 }
 
@@ -317,8 +354,8 @@ int ObLogMetaDataService::get_data_dict_in_log_info_(
   int ret = OB_SUCCESS;
   bool done = false;
   int64_t record_count = 0;
-  // TODO support get info from archive log
   const ClientFetchingMode fetching_mode =  TCTX.fetching_mode_;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogMetaDataService is not initialized", KR(ret));

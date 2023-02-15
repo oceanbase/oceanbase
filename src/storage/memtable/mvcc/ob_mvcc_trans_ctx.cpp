@@ -202,7 +202,7 @@ void ObTransCallbackMgr::reset()
     for (int i = 0; i < MAX_CALLBACK_LIST_COUNT; ++i) {
       if (!callback_lists_[i].empty()) {
         ob_abort();
-        TRANS_LOG(ERROR, "txn callback list is broken", K(stat), K(i), K(this));
+        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "txn callback list is broken", K(stat), K(i), K(this));
       }
     }
   }
@@ -369,7 +369,7 @@ void ObTransCallbackMgr::reset_pdml_stat()
     WRLockGuard guard(rwlock_);
     int64_t stat = ATOMIC_LOAD(&parallel_stat_);
     if (!ATOMIC_BCAS(&parallel_stat_, stat, 0)) {
-      TRANS_LOG(ERROR, "reset parallel stat when leader revoke encounter parallel",
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "reset parallel stat when leader revoke encounter parallel",
                 K(stat), K(parallel_stat_));
     } else {
       need_retry = false;
@@ -390,14 +390,14 @@ int ObTransCallbackMgr::remove_callbacks_for_fast_commit(bool &has_remove)
   return ret;
 }
 
-int ObTransCallbackMgr::remove_callback_for_uncommited_txn(ObIMemtable *memtable)
+int ObTransCallbackMgr::remove_callback_for_uncommited_txn(ObIMemtable *memtable, const share::SCN max_applied_scn)
 {
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(memtable)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "memtable is null", K(ret));
-  } else if (OB_FAIL(callback_list_.remove_callbacks_for_remove_memtable(memtable))) {
+  } else if (OB_FAIL(callback_list_.remove_callbacks_for_remove_memtable(memtable, max_applied_scn))) {
     TRANS_LOG(WARN, "fifo remove callback fail", K(ret), K(*memtable));
   }
 
@@ -449,11 +449,11 @@ int64_t ObTransCallbackMgr::inc_pending_log_size(const int64_t size)
       ObIMemtableCtx *mt_ctx = NULL;
       transaction::ObTransCtx *trans_ctx = NULL;
       if (NULL == (mt_ctx = static_cast<ObIMemtableCtx *>(&host_))) {
-        TRANS_LOG(ERROR, "mt_ctx is null", K(size), K(old_size), K(new_size), K(host_));
+        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mt_ctx is null", K(size), K(old_size), K(new_size), K(host_));
       } else if (NULL == (trans_ctx = mt_ctx->get_trans_ctx())) {
-        TRANS_LOG(ERROR, "trans ctx get failed", K(size), K(old_size), K(new_size), K(*mt_ctx));
+        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "trans ctx get failed", K(size), K(old_size), K(new_size), K(*mt_ctx));
       } else {
-        TRANS_LOG(ERROR, "increase remaining data size less than 0!",
+        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "increase remaining data size less than 0!",
                   K(size), K(old_size), K(new_size), K(*trans_ctx));
       }
     }
@@ -503,7 +503,7 @@ void ObTransCallbackMgr::acquire_callback_list()
     }
   } else if (tid == (stat >> 32)) {
     if (!ATOMIC_BCAS(&parallel_stat_, stat, stat + 1)) {
-      TRANS_LOG(ERROR, "Unexpected status", K(this), K(tid_), K(ref_cnt_), K(tid));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "Unexpected status", K(this), K(tid_), K(ref_cnt_), K(tid));
     }
   } else {
     // https://yuque.antfin.com/ob/transaction/xzwarh
@@ -543,7 +543,7 @@ void ObTransCallbackMgr::revert_callback_list()
 void ObTransCallbackMgr::wakeup_waiting_txns_()
 {
   if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
-    TRANS_LOG(WARN, "MTL(ObLockWaitMgr*) is null");
+    TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "MTL(ObLockWaitMgr*) is null");
   } else {
     ObMemtableCtx &mem_ctx = static_cast<ObMemtableCtx&>(host_);
     MTL(ObLockWaitMgr*)->wakeup(mem_ctx.get_trans_ctx()->get_trans_id());
@@ -876,7 +876,7 @@ int ObMvccRowCallback::calc_checksum(const SCN checksum_scn,
     if (not_calc_checksum_) {
       // verification
       if (blocksstable::ObDmlFlag::DF_LOCK != get_dml_flag()) {
-        TRANS_LOG(ERROR, "only LOCK node can not calc checksum",
+        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "only LOCK node can not calc checksum",
                   K(*this), K(get_dml_flag()));
       }
     } else if (checksum_scn <= scn_) {
@@ -1049,7 +1049,7 @@ int ObMvccRowCallback::trans_abort()
       wakeup_row_waiter_if_need_();
       unlink_trans_node();
     } else if (tnode_->is_committed()) {
-      TRANS_LOG(ERROR, "abort on a committed node", K(*this));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "abort on a committed node", K(*this));
     }
   }
   return OB_SUCCESS;

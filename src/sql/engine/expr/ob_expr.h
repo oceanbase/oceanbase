@@ -192,7 +192,7 @@ struct ObEvalCtx
     int64_t batch_idx_default_val_ = 0;
     int64_t batch_size_default_val_ = 0;
   };
-  explicit ObEvalCtx(ObExecContext &exec_ctx);
+  explicit ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator = NULL);
   explicit ObEvalCtx(ObEvalCtx &eval_ctx);
   virtual ~ObEvalCtx();
 
@@ -351,6 +351,18 @@ typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ObStrValues
 #define EVAL_FUNC_ARG_DECL const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
 #define EVAL_FUNC_ARG_LIST expr, ctx, expr_datum
 
+
+#ifndef NDEBUG
+#define CHECK_STRING_LENGTH(expr, datum)   \
+  if (OB_SUCC(ret) && 0 == datum.len_ && !datum.is_null() && is_oracle_mode() &&\
+      (ob_is_string_tc(expr.datum_meta_.type_) || ob_is_raw(expr.datum_meta_.type_))) {  \
+    SQL_ENG_LOG(ERROR, "unexpected datum length", K(expr)); \
+  }
+#else
+#define CHECK_STRING_LENGTH(expr, datum)
+#endif
+
+
 // default evaluate batch function which call eval() for every datum of batch.
 extern int expr_default_eval_batch_func(BATCH_EVAL_FUNC_ARG_DECL);
 
@@ -456,7 +468,7 @@ public:
     len = 0;
     int64_t idx = batch_idx_mask_ & datum_idx;
     if (OB_UNLIKELY(!ObDynReserveBuf::supported(datum_meta_.type_))) {
-      SQL_ENG_LOG(ERROR, "unexpected alloc string result memory called", K(*this));
+      SQL_ENG_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected alloc string result memory called", K(*this));
     } else {
       ObDynReserveBuf *drb = reinterpret_cast<ObDynReserveBuf *>(
         ctx.frames_[frame_idx_] + dyn_buf_header_offset_ + sizeof(ObDynReserveBuf) * idx);
@@ -504,6 +516,8 @@ public:
   template <typename ...TS>
   OB_INLINE int eval_batch_param_value(ObEvalCtx &ctx, const ObBitVector &skip,
                                        const int64_t size, TS &...args) const;
+
+  OB_INLINE int deep_copy_self_datum(ObEvalCtx &ctx) const;
 
   // deep copy %datum to reserve buffer or new allocated buffer if reserved buffer is not enough.
   OB_INLINE int deep_copy_datum(ObEvalCtx &ctx, const common::ObDatum &datum) const;
@@ -1016,6 +1030,7 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
         datum->ptr_ = frame + res_buf_off_;
       }
       ret = eval_func_(*this, ctx, *datum);
+      CHECK_STRING_LENGTH((*this), (*datum));
       if (OB_LIKELY(common::OB_SUCCESS == ret)) {
         eval_info->evaluated_ = true;
       } else {
@@ -1044,6 +1059,17 @@ OB_INLINE int ObExpr::eval_batch(ObEvalCtx &ctx,
   } else if (size > 0) {
     ret = do_eval_batch(ctx, skip, size);
   }
+  return ret;
+}
+
+OB_INLINE int ObExpr::deep_copy_self_datum(ObEvalCtx &ctx) const
+{
+  int ret = OB_SUCCESS;
+  const ObDatum &datum = locate_expr_datum(ctx);
+  if (OB_FAIL(deep_copy_datum(ctx, datum))) {
+    SQL_LOG(WARN, "fail to deep copy datum", K(ret), K(ctx), K(datum));
+  }
+
   return ret;
 }
 
@@ -1080,7 +1106,7 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
   mgr->inc_level();
   CStringBufMgr::BufNode *node = mgr->acquire();
   if (OB_ISNULL(node)) {
-    LIB_LOG(ERROR, "buffer is NULL");
+    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
     buffer = node->buf_;
     databuff_printf(buffer, CStringBufMgr::BUF_SIZE, pos, "vectorized_rows(%ld)=", index);
@@ -1133,7 +1159,7 @@ inline int encode(char *buf, const int64_t buf_len, int64_t &pos, sql::ObExpr *e
   if (NULL != expr) {
     sql::ObExpr::ObExprIArray *array = sql::ObExpr::get_serialize_array();
     if (OB_UNLIKELY(NULL == array || array->empty() || expr < &array->at(0)
-                    || (idx = expr - &array->at(0) + 1) > array->count())) {
+                    || (idx = static_cast<uint32_t>(expr - &array->at(0) + 1)) > array->count())) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "expr not in array", K(ret), KP(array), KP(idx), KP(expr));
     }

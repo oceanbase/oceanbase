@@ -92,7 +92,7 @@ public:
   void free(T *data)
   {
     if (NULL == data || NULL == allocator_) {
-      SQL_LOG(WARN, "invalid param null pointer", KP(data), KP(allocator_));
+      SQL_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid param null pointer", KP(data), KP(allocator_));
     } else {
       data->~T();
       allocator_->free(data);
@@ -455,7 +455,7 @@ public:
   static ObRawExpr *skip_implicit_cast(ObRawExpr *e);
 
   static ObRawExpr *skip_inner_added_expr(ObRawExpr *expr);
-  static int is_contain_spatial_exprs(ObRawExpr *raw_expr, bool &is_contain);
+  static const ObColumnRefRawExpr *get_column_ref_expr_recursively(const ObRawExpr *expr);
 
   static int create_to_type_expr(ObRawExprFactory &expr_factory,
                                  ObRawExpr *src_expr,

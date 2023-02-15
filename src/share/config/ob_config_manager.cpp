@@ -86,6 +86,8 @@ int ObConfigManager::reload_config()
     LOG_WARN("reload config for ratelimit manager fail", K(ret));
   } else if (OB_FAIL(OBSERVER.get_net_frame().reload_mysql_login_thread_config())) {
     LOG_WARN("reload config for mysql login thread count failed", K(ret));
+  } else if (OB_FAIL(ObTdeEncryptEngineLoader::get_instance().reload_config())) {
+    LOG_WARN("reload config for tde encrypt engine fail", K(ret));
   }
   return ret;
 }
@@ -208,7 +210,6 @@ int ObConfigManager::dump2file(const char* path) const
     char *tmp_path = nullptr;
     char *hist_path = nullptr;
     int64_t pos = 0;
-    DRWLock::WRLockGuard lguard(ObConfigManager::get_serialize_lock());
     if (OB_ISNULL(buf = pa.alloc(OB_MAX_PACKET_LENGTH))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("ob tc malloc memory for buf failed", K(ret));

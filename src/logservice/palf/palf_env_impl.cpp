@@ -146,7 +146,9 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              palf_handle_impl_map_(64),  // 指定min_size=64
                              last_palf_epoch_(0),
                              diskspace_enough_(true),
-                             is_inited_(false)
+                             tenant_id_(0),
+                             is_inited_(false),
+                             is_running_(false)
 {
   log_dir_[0] = '\0';
   tmp_log_dir_[0] = '\0';
@@ -160,6 +162,8 @@ PalfEnvImpl::~PalfEnvImpl()
 int PalfEnvImpl::init(
     const PalfOptions &options,
     const char *base_dir, const ObAddr &self,
+    const int64_t cluster_id,
+    const int64_t tenant_id,
     rpc::frame::ObReqTransport *transport,
     common::ObILogAllocator *log_alloc_mgr,
     ILogBlockPool *log_block_pool)
@@ -182,11 +186,12 @@ int PalfEnvImpl::init(
              KP(log_alloc_mgr), KP(log_block_pool));
   } else if (OB_FAIL(fetch_log_engine_.init(this, log_alloc_mgr))) {
     PALF_LOG(ERROR, "FetchLogEngine init failed", K(ret));
-  } else if (OB_FAIL(log_rpc_.init(self, transport))) {
+  } else if (OB_FAIL(log_rpc_.init(self, cluster_id, tenant_id, transport))) {
     PALF_LOG(ERROR, "LogRpc init failed", K(ret));
   } else if (OB_FAIL(cb_thread_pool_.init(io_cb_num, this))) {
     PALF_LOG(ERROR, "LogIOTaskThreadPool init failed", K(ret));
   } else if (OB_FAIL(log_io_worker_.init(log_io_worker_config_,
+                                         tenant_id,
                                          cb_thread_pool_.get_tg_id(),
                                          log_alloc_mgr, this))) {
     PALF_LOG(ERROR, "LogIOWorker init failed", K(ret));
@@ -200,7 +205,7 @@ int PalfEnvImpl::init(
   } else if (pret < 0 || pret >= MAX_PATH_SIZE) {
     ret = OB_BUF_NOT_ENOUGH;
     PALF_LOG(ERROR, "construct log path failed", K(ret), K(pret));
-  } else if (OB_FAIL(palf_handle_impl_map_.init("LOG_HASH_MAP", PALF_ENV_ID))) {
+  } else if (OB_FAIL(palf_handle_impl_map_.init("LOG_HASH_MAP", tenant_id))) {
     PALF_LOG(ERROR, "palf_handle_impl_map_ init failed", K(ret));
   } else if (OB_FAIL(log_loop_thread_.init(this))) {
     PALF_LOG(ERROR, "log_loop_thread_ init failed", K(ret));
@@ -217,6 +222,7 @@ int PalfEnvImpl::init(
     log_alloc_mgr_ = log_alloc_mgr;
     log_block_pool_ = log_block_pool;
     self_ = self;
+    tenant_id_ = tenant_id;
     is_inited_ = true;
     is_running_ = true;
     PALF_LOG(INFO, "PalfEnvImpl init success", K(ret), K(self_), KPC(this));
@@ -248,7 +254,7 @@ int PalfEnvImpl::start()
     PALF_LOG(ERROR, "LogUpdater start failed", K(ret));
   } else {
     is_running_ = true;
-    PALF_LOG(INFO, "PalfEnv start success", K(ret), K(PALF_ENV_ID));
+    PALF_LOG(INFO, "PalfEnv start success", K(ret));
   }
   return ret;
 }
@@ -282,7 +288,7 @@ void PalfEnvImpl::wait()
 
 void PalfEnvImpl::destroy()
 {
-  PALF_LOG(WARN, "PalfEnvImpl destroy", KPC(this));
+  PALF_LOG_RET(WARN, OB_SUCCESS, "PalfEnvImpl destroy", KPC(this));
   is_running_ = false;
   is_inited_ = false;
   palf_handle_impl_map_.destroy();
@@ -553,7 +559,7 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
 {
   bool bool_ret = true;
   if (NULL == palf_handle_impl) {
-    PALF_LOG(ERROR, "the value in hashmap is NULL, unexpected error", K(palf_id), KP(palf_handle_impl));
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "the value in hashmap is NULL, unexpected error", K(palf_id), KP(palf_handle_impl));
     bool_ret = false;
   } else {
     int ret = OB_SUCCESS;
@@ -667,7 +673,8 @@ int PalfEnvImpl::try_recycle_blocks()
       ATOMIC_STORE(&diskspace_enough_, curr_diskspace_enough);
     }
     if ((true == need_recycle && false == has_recycled && false == is_shrinking) || false == diskspace_enough_) {
-      PALF_LOG(ERROR, "clog disk space is almost full",
+      int tmp_ret = OB_LOG_OUTOF_DISK_SPACE;
+      LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "log disk space is almost full", "ret", tmp_ret,
           "total_size(MB)", disk_opts_for_recycling_blocks.log_disk_usage_limit_size_/MB,
           "used_size(MB)", total_used_size_byte/MB,
           "used_percent(%)", (total_used_size_byte* 100) / (disk_opts_for_recycling_blocks.log_disk_usage_limit_size_ + 1),
@@ -1134,6 +1141,21 @@ int PalfEnvImpl::get_io_start_time(int64_t &last_working_time)
     ret = OB_NOT_INIT;
   } else {
     last_working_time = log_io_worker_.get_last_working_time();
+  }
+  return ret;
+}
+
+int64_t PalfEnvImpl::get_tenant_id()
+{
+  return tenant_id_;
+}
+int PalfEnvImpl::update_replayable_point(const SCN &replayable_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(fetch_log_engine_.update_replayable_point(replayable_scn))) {
+    PALF_LOG(WARN, "update_replayable_point failed", KPC(this), K(replayable_scn));
   }
   return ret;
 }

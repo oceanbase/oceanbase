@@ -762,7 +762,7 @@ int ObExprRegexContext::get_valid_replace_string(ObIAllocator &alloc,
   int ret = OB_SUCCESS;
   u_replace_len = 0;
   u_replace = NULL;
-  int32_t buf_len = origin_replace.empty() ? sizeof(UChar) : origin_replace.length();
+  int32_t buf_len = origin_replace.empty() ? sizeof(UChar) : origin_replace.length() * 2;
   if (lib::is_mysql_mode()) {
     if (OB_FAIL(get_valid_unicode_string(alloc, origin_replace, u_replace, u_replace_len))) {
       LOG_WARN("failed to get valid unicode string", K(ret));
@@ -782,12 +782,13 @@ int ObExprRegexContext::get_valid_replace_string(ObIAllocator &alloc,
     //oracle mode replace string '\1' <==> '$1' in mysql mode, we need extra convert.
     UErrorCode m_error_code = U_ZERO_ERROR;
     int32_t group_count = uregex_groupCount(regexp_engine_, &m_error_code);
-    MEMSET(u_replace, 0, origin_replace.length() * sizeof(UChar));
+    MEMSET(u_replace, 0, buf_len);
     if (OB_FAIL(check_icu_regexp_status(m_error_code))) {
       LOG_WARN("failed to check icu regexp status", K(ret), K(u_errorName(m_error_code)));
     } else {
       const UChar *tmp_buf = static_cast<const UChar *>((void*)origin_replace.ptr());
       int32_t tmp_len = origin_replace.length() / sizeof(UChar);
+      int32_t max_u_replace_len = buf_len / sizeof(UChar);
       int32_t backslash_cnt = 0;
       for (int64_t i = 0; i < tmp_len; ++i) {
         u_replace[u_replace_len++] = htons(static_cast<uint16_t>(tmp_buf[i]));
@@ -802,7 +803,7 @@ int ObExprRegexContext::get_valid_replace_string(ObIAllocator &alloc,
               is_continue = false;
             }
           }
-          if (i < tmp_len && u_replace_len < origin_replace.length()) {
+          if (i < tmp_len && u_replace_len < max_u_replace_len) {
             if (backslash_cnt % 2 == 1 &&
                 static_cast<uint16_t>(u_replace[u_replace_len - 1]) >= 0x31 &&
                 static_cast<uint16_t>(u_replace[u_replace_len - 1]) <= 0x39) {//'\1'=>'$1'
@@ -813,21 +814,21 @@ int ObExprRegexContext::get_valid_replace_string(ObIAllocator &alloc,
                 } else {
                   u_replace[u_replace_len - 2] = 0x24;
                 }
-              } else if (u_replace_len < origin_replace.length()) {
+              } else if (u_replace_len < max_u_replace_len) {
                 uint16_t tmp_val = static_cast<uint16_t>(u_replace[u_replace_len - 1]);
                 u_replace[u_replace_len - 1] = 0x5c;
                 u_replace[u_replace_len++] = tmp_val;
               }
             } else if (backslash_cnt % 2 == 0 &&
                        static_cast<uint16_t>(u_replace[u_replace_len - 1]) == 0x24 &&
-                       u_replace_len < origin_replace.length()) {//'\\$' =>'\\\$'
+                       u_replace_len < max_u_replace_len) {//'\\$' =>'\\\$'
               u_replace[u_replace_len - 1] = 0x5c;
               u_replace[u_replace_len++] = 0x24;
             }
           }
           backslash_cnt = 0;
         } else if (static_cast<uint16_t>(u_replace[u_replace_len - 1]) == 0x24 &&
-                   u_replace_len < origin_replace.length()) {//'$' ==>'\$'
+                   u_replace_len < max_u_replace_len) {//'$' ==>'\$'
           u_replace[u_replace_len - 1] = 0x5c;
           u_replace[u_replace_len++] = 0x24;
         } else {//reset

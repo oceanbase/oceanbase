@@ -1138,7 +1138,7 @@ void ObAccessService::ObStoreCtxGuard::reset()
     }
     const int64_t guard_used_us = ObClockGenerator::getClock() - init_ts_;
     if (guard_used_us >= WARN_TIME_US) {
-      LOG_WARN("guard used too much time", K(guard_used_us), K_(ls_id), K(lbt()));
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "guard used too much time", K(guard_used_us), K_(ls_id), K(lbt()));
     }
     ls_id_.reset();
     is_inited_ = false;
@@ -1157,6 +1157,7 @@ int ObAccessService::ObStoreCtxGuard::init(const share::ObLSID &ls_id)
     LOG_WARN("invalid argument(s)", K(ret), K(ls_id));
   } else {
     ls_id_ = ls_id;
+    ctx_.reset();
     ctx_.ls_id_ = ls_id;
     is_inited_ = true;
     init_ts_ = ObClockGenerator::getClock();

@@ -213,8 +213,6 @@ public:
   int64_t get_total_part_count() const { return total_part_count_; }
   void set_fulltree(bool v) { is_fulltree_ = v; }
   bool is_fulltree() const { return is_fulltree_; }
-  void set_rpc_worker(bool v) { is_rpc_worker_ = v; }
-  bool is_rpc_worker() const { return is_rpc_worker_; }
   void set_thread_inited(bool v) { thread_inited_ = v; }
   bool is_thread_inited() const { return thread_inited_; }
   void set_thread_finish(bool v) { thread_finish_ = v; }
@@ -428,8 +426,6 @@ public:
   inline bool has_dml_op() { return has_dml_op_; }
   inline void set_temp_table_scan(bool has_scan) { has_temp_scan_ = has_scan; }
   inline bool has_temp_table_scan() const { return has_temp_scan_; }
-  inline void set_rpc_worker(bool v) { is_rpc_worker_ = v; }
-  inline bool is_rpc_worker() const { return is_rpc_worker_; }
   inline bool is_fast_dfo() const { return is_prealloc_receive_channel() || is_prealloc_transmit_channel(); }
   inline void set_slave_mapping_type(SlaveMappingType v) { slave_mapping_type_ = v; }
   inline SlaveMappingType get_slave_mapping_type() { return slave_mapping_type_; }

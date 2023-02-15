@@ -1082,11 +1082,11 @@ int ObMethodOptPrefs::check_global_method_opt_prefs_value_validity(ObString &met
   bool is_valid = false;
   while (i < val_len && ISSPACE(val_ptr[i])) { ++i; }
   if (i < val_len && 0 == strncasecmp(val_ptr + i, str1, strlen(str1))) {
-    i = i + strlen(str1);
+    i = i + static_cast<int32_t>(strlen(str1));
     if (i < val_len && ISSPACE(val_ptr[i++])) {
       while (i < val_len && ISSPACE(val_ptr[i])) { ++i; }
       if (i < val_len && 0 == strncasecmp(val_ptr + i, str2, strlen(str2))) {
-        i = i + strlen(str2);
+        i = i + static_cast<int32_t>(strlen(str2));
         if (i < val_len && ISSPACE(val_ptr[i])) {
           is_valid = true;
         }

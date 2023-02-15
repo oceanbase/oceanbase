@@ -25,12 +25,11 @@ namespace oceanbase
 using namespace share;
 namespace storage
 {
-
 void ObPrintTenantMemoryUsage::runTimerTask()
 {
   LOG_INFO("=== Run print tenant memory usage task ===");
   ObTenantMemoryPrinter &printer = ObTenantMemoryPrinter::get_instance();
-  printer.print_tenant_usage();
+  PRINT_WITH_TRACE_MODE(LIB, INFO, printer.print_tenant_usage());
   ObObjFreeListList::get_freelists().dump();
 }
 

@@ -112,7 +112,7 @@ inline void ObSchemaMgrHandle::revert()
         && ref_timestamp_ > 0
         && ObClockGenerator::getClock() - ref_timestamp_ >= REF_TIME_THRESHOLD) {
       ObSchemaMgr *&schema_mgr = schema_mgr_item_->schema_mgr_;
-      LOG_WARN("long time to hold one guard", K(schema_mgr),
+      LOG_WARN_RET(OB_SUCCESS, "long time to hold one guard", K(schema_mgr),
                "tenant_id", schema_mgr->get_tenant_id(),
                "version", schema_mgr->get_schema_version(),
                "cur_timestamp", ObTimeUtility::current_time(),
@@ -372,6 +372,8 @@ static const char* ref_info_type_strs[] = {
   "DIS_TASK_SPLITER",
   "DAS_CTX",
   "SCHEMA_RECORDER",
+  "SPI_RESULT_SET",
+  "PL_PREPARE_RESULT",
   "MOD_MAX",
 };
 
@@ -414,7 +416,7 @@ int ObSchemaMgrCache::build_ref_mod_infos_(const int64_t *mod_ref,
     }
   }
   if (OB_SUCC(ret)) {
-    int str_len = pos;
+    const int32_t str_len = static_cast<int32_t>(pos);
     if (0 != str_len) {
       str.assign(buff, str_len);
     }

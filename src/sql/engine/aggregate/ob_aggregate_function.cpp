@@ -38,7 +38,7 @@ uint64_t ObAggregateDistinctItem::hash() const
 {
   uint64_t hash_id = 0;
   if (OB_ISNULL(cells_) || OB_ISNULL(cs_type_list_)) {
-    LOG_ERROR("cells or cs type list is null");
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "cells or cs type list is null");
   } else {
     hash_id = group_id_ + col_idx_;
     for (int64_t i = 0; i < cs_type_list_->count(); ++i) {
@@ -52,7 +52,7 @@ bool ObAggregateDistinctItem::operator==(const ObAggregateDistinctItem &other) c
 {
   bool bool_ret = true;
   if (OB_ISNULL(cells_) || OB_ISNULL(cs_type_list_)) {
-    LOG_ERROR("cells or cs type list is null");
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "cells or cs type list is null");
   } else {
     bool_ret = (group_id_ == other.group_id_ && col_idx_ == other.col_idx_);
     if (bool_ret && cs_type_list_->count() != other.cs_type_list_->count()) {
@@ -288,7 +288,7 @@ int ObAggregateFunction::init_first_rollup_cols(common::ObIAllocator *alloc,
                                                 const ObIArray<ObColumnInfo>& group_idxs,
                                                 const ObIArray<ObColumnInfo>& rollup_idxs)
 {
-  int64_t ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   common::ObSEArray<int64_t, 16> no_dup_group_col_idxs;
   common::ObSEArray<int64_t, 16> no_dup_rollup_col_idxs;
   first_rollup_cols_.set_allocator(alloc);

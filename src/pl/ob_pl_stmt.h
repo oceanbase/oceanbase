@@ -219,7 +219,7 @@ public:
   ObPLSymbolDebugInfoTable(ObIAllocator &allocator) : variable_debuginfos_(allocator) {}
 
   inline int reserve(int capcity) { return variable_debuginfos_.reserve(capcity); }
-  inline int get_count() const { return variable_debuginfos_.count(); }
+  inline int64_t get_count() const { return variable_debuginfos_.count(); }
   inline const ObPLVarDebugInfo* get_symbol(int64_t idx) const
   {
     return idx < 0 || idx >= variable_debuginfos_.count() ? NULL : &variable_debuginfos_.at(idx);

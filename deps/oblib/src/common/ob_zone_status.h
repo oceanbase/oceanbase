@@ -40,7 +40,7 @@ inline ObZoneStatus::Status ObZoneStatus::get_status(const common::ObString &sta
   } else if (status_str == common::ObString::make_string(get_status_str(ACTIVE))) {
     ret_status = ACTIVE;
   } else {
-    SERVER_LOG(WARN, "invalid status_str, return UNKNOWN status", K(status_str));
+    SERVER_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "invalid status_str, return UNKNOWN status", K(status_str));
   }
   return ret_status;
 }
@@ -56,7 +56,7 @@ inline const char *ObZoneStatus::get_status_str(const ObZoneStatus::Status statu
       str = "INACTIVE";
       break;
     default:
-      SERVER_LOG(WARN, "unknown zone status, fatal error", K(status));
+      SERVER_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "unknown zone status, fatal error", K(status));
       break;
   }
 

@@ -176,13 +176,15 @@ int ObTableLoadInstance::check_merged()
   return ret;
 }
 
+// commit() = px_commit_data() + px_commit_ddl()
+// used in non px_mode
 int ObTableLoadInstance::commit(ObTableLoadResultInfo &result_info)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadInstance not init", KR(ret), KP(this));
-  } else if (!px_mode_) {
+  } else {
     // finish trans
     if (OB_FAIL(coordinator_->finish_trans(trans_id_))) {
       LOG_WARN("fail to finish trans", KR(ret));
@@ -191,10 +193,8 @@ int ObTableLoadInstance::commit(ObTableLoadResultInfo &result_info)
     else if (OB_FAIL(check_trans_committed())) {
       LOG_WARN("fail to check trans committed", KR(ret));
     }
-  }
-  if (OB_SUCC(ret)) {
     // finish
-    if (OB_FAIL(coordinator_->finish())) {
+    else if (OB_FAIL(coordinator_->finish())) {
       LOG_WARN("fail to finish", KR(ret));
     }
     // wait merge
@@ -205,8 +205,50 @@ int ObTableLoadInstance::commit(ObTableLoadResultInfo &result_info)
     else if (OB_FAIL(coordinator_->commit(*execute_ctx_->exec_ctx_, result_info))) {
       LOG_WARN("fail to commit", KR(ret));
     }
-    // sql statistics
     else {
+      // Setting coordinator_ to NULL to mark a normal termination
+      coordinator_->~ObTableLoadCoordinator();
+      allocator_->free(coordinator_);
+      coordinator_ = nullptr;
+    }
+  }
+  return ret;
+}
+
+// used in insert /*+ append */ into select clause
+int ObTableLoadInstance::px_commit_data()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadInstance not init", KR(ret), KP(this));
+  } else {
+    // finish
+    if (OB_FAIL(coordinator_->finish())) {
+      LOG_WARN("fail to finish", KR(ret));
+    }
+    // wait merge
+    else if (OB_FAIL(check_merged())) {
+      LOG_WARN("fail to check merged", KR(ret));
+    }
+    // commit
+    else if (OB_FAIL(coordinator_->px_commit_data(*execute_ctx_->exec_ctx_))) {
+      LOG_WARN("fail to do px_commit_data", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadInstance::px_commit_ddl()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadInstance not init", KR(ret), KP(this));
+  } else {
+    if (OB_FAIL(coordinator_->px_commit_ddl())) {
+      LOG_WARN("fail to do px_commit_ddl", KR(ret));
+    } else {
       // Setting coordinator_ to NULL to mark a normal termination
       coordinator_->~ObTableLoadCoordinator();
       allocator_->free(coordinator_);

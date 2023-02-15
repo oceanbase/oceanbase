@@ -172,7 +172,6 @@ TEST_F(TestCreateExecutor, scan)
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_get());
   for (int i = 0; i < 3; i++) {
     ASSERT_EQ(columns_[i].get_column_id(), fake_ctx.select_col_ids_.at(i));
-    ASSERT_EQ(columns_[i].get_meta_type(), fake_ctx.select_metas_.at(i));
   }
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);

@@ -3169,12 +3169,6 @@ create table t4 (
   b smallint(5) unsigned not null,
   c char(32) not null,
   primary key  (a)
-) engine=myisam default charset=latin1|
-create table t4 (
-  a mediumint(8) unsigned not null auto_increment,
-  b smallint(5) unsigned not null,
-  c char(32) not null,
-  primary key  (a)
 ) engine=myisam default charset=utf8mb4|
 insert into t4 values (1, 2, 'oneword')|
 insert into t4 values (2, 2, 'anotherword')|

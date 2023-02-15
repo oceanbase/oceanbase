@@ -204,7 +204,7 @@ TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
   }
 
   EXPECT_EQ(OB_SUCCESS, rebuild_server->palf_handle_impl_->log_engine_.get_block_id_range(min_block_id, max_block_id));
-  PALF_LOG(ERROR, "runlin trace get_block_id_range", K(min_block_id), K(max_block_id));
+  PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "runlin trace get_block_id_range", K(min_block_id), K(max_block_id));
 
   // after unblocking net, old leader will do rebuild
   unblock_net(leader_idx, follower_idx1);

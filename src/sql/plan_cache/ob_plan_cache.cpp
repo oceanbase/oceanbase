@@ -224,11 +224,11 @@ bool stat_compare(const LCKeyValue &left, const LCKeyValue &right)
   bool cmp_ret = false;
   if (OB_ISNULL(left.node_) || OB_ISNULL(right.node_)) {
     cmp_ret = false;
-    SQL_PC_LOG(ERROR, "invalid argument", KP(left.node_), KP(right.node_), K(cmp_ret));
+    SQL_PC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", KP(left.node_), KP(right.node_), K(cmp_ret));
   } else if (OB_ISNULL(left.node_->get_node_stat())
              || OB_ISNULL(right.node_->get_node_stat())) {
     cmp_ret = false;
-    SQL_PC_LOG(ERROR, "invalid argument", K(left.node_->get_node_stat()),
+    SQL_PC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", K(left.node_->get_node_stat()),
                       K(right.node_->get_node_stat()), K(cmp_ret));
   } else {
     cmp_ret = left.node_->get_node_stat()->weight() < right.node_->get_node_stat()->weight();
@@ -318,7 +318,7 @@ void ObPlanCache::destroy()
   if (inited_) {
     TG_DESTROY(tg_id_);
     if (OB_SUCCESS != (cache_evict_all_obj())) {
-      SQL_PC_LOG(WARN, "fail to evict all lib cache cache");
+      SQL_PC_LOG_RET(WARN, OB_ERROR, "fail to evict all lib cache cache");
     }
     inited_ = false;
   }
@@ -1187,6 +1187,8 @@ int ObPlanCache::ref_cache_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard
   ObGlobalReqTimeService::check_req_timeinfo();
   if (OB_FAIL(co_mgr_.atomic_get_alloc_cache_obj(obj_id, op))) {
     SQL_PC_LOG(WARN, "failed to get update plan statistic", K(obj_id), K(ret));
+  } else if (NULL == op.get_value()) {
+    ret = OB_HASH_NOT_EXIST;
   } else {
     guard.cache_obj_ = op.get_value();
   }

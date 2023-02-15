@@ -159,7 +159,7 @@ ObInnerSQLConnection::ObInnerSQLConnection()
 ObInnerSQLConnection::~ObInnerSQLConnection()
 {
   if (0 < ref_cnt_) {
-    LOG_ERROR("connection be referenced while destruct", K_(ref_cnt));
+    LOG_ERROR_RET(OB_ERROR, "connection be referenced while destruct", K_(ref_cnt));
   }
   if (OB_NOT_NULL(inner_session_.get_tx_desc())) {
     int ret = OB_SUCCESS;
@@ -248,11 +248,11 @@ int ObInnerSQLConnection::destroy()
 void ObInnerSQLConnection::ref()
 {
   if (!inited_) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     ref_cnt_++;
     if (ref_cnt_ > TOO_MANY_REF_ALERT) {
-      LOG_WARN("connection be referenced too many times, this should be rare",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "connection be referenced too many times, this should be rare",
           K_(ref_cnt));
     }
   }
@@ -584,6 +584,10 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
     }
 
     record_stat(session, result_set.get_stmt_type(), is_from_pl);
+    if (lib::is_diagnose_info_enabled() && OB_NOT_NULL(result_set.get_physical_plan())) {
+      const int64_t time_cost = ObTimeUtility::current_time() - session.get_query_start_time();
+      ObSQLUtils::record_execute_time(result_set.get_physical_plan()->get_plan_type(), time_cost);
+    }
     ObSQLUtils::handle_audit_record(false, sql::PSCursor == exec_timestamp.exec_type_
                                                   ? EXECUTE_PS_EXECUTE :
                                                   (is_from_pl ? EXECUTE_PL_EXECUTE : EXECUTE_INNER),
@@ -2300,12 +2304,12 @@ void ObInnerSQLConnection::dump_conn_bt_info()
   pos = 0;
   for (int i = 0; i < bt_size_; ++i) {
     if (OB_UNLIKELY(pos + 1 > BUF_SIZE)) {
-      LOG_WARN("buf is not large enough", K(pos), K(BUF_SIZE));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "buf is not large enough", K(pos), K(BUF_SIZE));
     } else {
       (void)databuff_printf(buf_bt, BUF_SIZE, pos, "%p ", bt_addrs_[i]);
     }
   }
-  LOG_WARN("dump inner sql connection backtrace", "tid", tid_, "init time", buf_time, "backtrace", buf_bt);
+  LOG_WARN_RET(OB_SUCCESS, "dump inner sql connection backtrace", "tid", tid_, "init time", buf_time, "backtrace", buf_bt);
 }
 
 void ObInnerSQLConnection::record_stat(sql::ObSQLSessionInfo& session,

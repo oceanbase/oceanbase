@@ -1782,7 +1782,7 @@ void ObSqlPlanSet::reset()
   if (OB_ISNULL(plan_cache_value_)
       || OB_ISNULL(plan_cache_value_->get_pc_alloc())) {
     //do nothing
-    LOG_WARN("plan_cache_value or pc allocator is NULL");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "plan_cache_value or pc allocator is NULL");
   }
   local_plan_ = NULL;
   array_binding_plan_ = NULL;

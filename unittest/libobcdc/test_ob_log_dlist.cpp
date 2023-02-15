@@ -82,7 +82,7 @@ bool TestObLogDlist::is_dlist_correct(const int64_t start_value, DeriveDlistNode
 	int64_t expect_val = start_value;
 
 	if (OB_ISNULL(head) || OB_NOT_NULL(head->get_prev())) {
-		LOG_ERROR("invalid argument");
+		LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument");
 		bool_ret = false;
 	} else if (OB_ISNULL(head->get_next())) { // single node
 		if (expect_val != head->value_) {

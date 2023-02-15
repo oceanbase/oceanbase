@@ -955,7 +955,7 @@ int ObRawExprPrinter::print_ora_json_arrayagg(ObAggFunRawExpr *expr)
     }
     // on null
     if (OB_SUCC(ret)
-        && static_cast<ObConstRawExpr *>(expr->get_param_expr(2))->get_value().get_int() == 1) {
+        && static_cast<ObConstRawExpr *>(expr->get_param_expr(2))->get_value().get_int() == 2) {
       DATA_PRINTF(" null on null");
     }
     // returning
@@ -4004,6 +4004,15 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
       }
       case T_DATE: {
         DATA_PRINTF("date");
+        break;
+      }
+      case T_YEAR: {
+        int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+        if (scale >= 0) {
+          DATA_PRINTF("year(%d)", scale);
+        } else {
+          DATA_PRINTF("year");
+        }
         break;
       }
       case T_TIME: {

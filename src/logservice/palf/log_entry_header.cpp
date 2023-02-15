@@ -119,19 +119,19 @@ bool LogEntryHeader::check_integrity(const char *buf, const int64_t data_len) co
 {
   bool bool_ret = false;
   if (NULL == buf || data_len <= 0) {
-    PALF_LOG(WARN, "invalid arguments", KP(buf), K(data_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", KP(buf), K(data_len));
   } else if (LogEntryHeader::MAGIC != magic_) {
     bool_ret = false;
-    PALF_LOG(WARN, "magic is different", K_(magic));
+    PALF_LOG_RET(WARN, OB_ERROR, "magic is different", K_(magic));
   } else if (false == check_header_checksum_()) {
-    PALF_LOG(WARN, "check header checsum failed", K(*this));
+    PALF_LOG_RET(WARN, OB_ERROR, "check header checsum failed", K(*this));
   } else {
     const int64_t tmp_data_checksum = common::ob_crc64(buf, data_len);
     if (data_checksum_ == tmp_data_checksum) {
       bool_ret = true;
     } else {
       bool_ret = false;
-      PALF_LOG(WARN, "data checksum mismatch", K_(data_checksum), K(tmp_data_checksum), K(data_len), KPC(this));
+      PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "data checksum mismatch", K_(data_checksum), K(tmp_data_checksum), K(data_len), KPC(this));
     }
   }
   return bool_ret;

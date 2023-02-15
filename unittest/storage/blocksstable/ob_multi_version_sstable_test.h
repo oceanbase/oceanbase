@@ -528,6 +528,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   param.progressive_merge_step_ = 0;
   param.table_mode_ = table_schema_.get_table_mode_struct();
   param.index_type_ = table_schema_.get_index_type();
+  param.latest_row_store_type_ = table_schema_.get_row_store_type();
   param.rowkey_column_cnt_ = table_schema_.get_rowkey_column_num()
       + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
 

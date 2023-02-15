@@ -485,7 +485,7 @@ OB_INLINE bool fp_int_cmp(const T left, const T right, const ObFPIntCmpOpType cm
     res = left != right;
     break;
   default:
-    STORAGE_LOG(ERROR, "Not Supported compare operation type", K(cmp_op));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Not Supported compare operation type", K(cmp_op));
   }
   return res;
 }

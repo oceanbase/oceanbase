@@ -103,7 +103,7 @@ public:
   common::ObIArray<common::ObObjParam>& get_one_batch_params(int64_t idx) {
     return params_.at(idx);
   }
-  int get_param_idx(int64_t idx) {
+  int64_t get_param_idx(int64_t idx) {
     return param_idxs_.at(idx);
   }
   int append_batch_rescan_param(const common::ObIArray<int64_t> &param_idxs,
@@ -519,7 +519,7 @@ protected:
   // try open operator
   int try_open() { return opened_ ? common::OB_SUCCESS : open(); }
 
-  void do_clear_datum_eval_flag();
+  virtual void do_clear_datum_eval_flag();
   void clear_batch_end_flag() { brs_.end_ = false; }
   inline void reset_batchrows()
   {
@@ -613,7 +613,7 @@ protected:
   inline void begin_ash_line_id_reg()
   {
     // begin with current operator
-    ObActiveSessionGuard::get_stat().plan_line_id_ = spec_.id_;
+    ObActiveSessionGuard::get_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
   }
   inline void end_ash_line_id_reg()
   {
@@ -621,7 +621,7 @@ protected:
     // known issue: when switch from batch to row in same op,
     // we shift line id to parent op un-intently. but we tolerate this inaccuracy
     if (OB_LIKELY(spec_.get_parent())) {
-      common::ObActiveSessionGuard::get_stat().plan_line_id_ = spec_.get_parent()->id_;
+      common::ObActiveSessionGuard::get_stat().plan_line_id_ = static_cast<int32_t>(spec_.get_parent()->id_);//TODO(xiaochu.yh): fix uint64 to int32
     } else {
       common::ObActiveSessionGuard::get_stat().plan_line_id_ = -1;
     }

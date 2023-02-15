@@ -372,6 +372,7 @@ int ObDDLTableMergeTask::process()
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_param(ddl_param))) {
       LOG_WARN("get tablet ddl param failed", K(ret));
     } else if (merge_param_.start_scn_ > SCN::min_scn() && merge_param_.start_scn_ < ddl_param.start_scn_) {
+      ret = OB_TASK_EXPIRED;
       LOG_INFO("ddl merge task expired, do nothing", K(merge_param_), "new_start_scn", ddl_param.start_scn_);
     } else if (merge_param_.is_commit_ && OB_FAIL(ObTabletDDLUtil::check_data_integrity(ddl_sstable_handles,
                                                                                         ddl_param.start_scn_,
@@ -380,8 +381,10 @@ int ObDDLTableMergeTask::process()
                                                                                         is_scn_overlap))) {
       LOG_WARN("check ddl sstable integrity failed", K(ret), K(ddl_sstable_handles), K(ddl_param), K(merge_param_));
     } else if (merge_param_.is_commit_ && !is_data_complete) {
-      ret = OB_NOT_ENOUGH_STORE;
-      LOG_WARN("current ddl sstables not contain all data", K(ddl_sstable_handles), K(ddl_param), K(merge_param_));
+      ret = OB_EAGAIN;
+      if (TC_REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
+        LOG_WARN("current ddl sstables not contain all data", K(ddl_sstable_handles), K(ddl_param), K(merge_param_));
+      }
     } else if (FALSE_IT(ddl_param.table_key_.table_type_ = merge_param_.is_commit_ ?
           ObITable::TableType::MAJOR_SSTABLE : ObITable::TableType::DDL_DUMP_SSTABLE)) {
     } else if (OB_FAIL(ObTabletDDLUtil::compact_ddl_sstable(ddl_sstable_handles.get_tables(),
@@ -477,7 +480,7 @@ int ObTabletDDLUtil::check_data_integrity(const ObTablesHandleArray &ddl_sstable
 }
 
 ObTabletDDLParam::ObTabletDDLParam()
-  : tenant_id_(0), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), snapshot_version_(0), cluster_version_(0)
+  : tenant_id_(0), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), commit_scn_(SCN::min_scn()), snapshot_version_(0), cluster_version_(0)
 {
 
 }
@@ -493,6 +496,7 @@ bool ObTabletDDLParam::is_valid() const
     && ls_id_.is_valid()
     && table_key_.is_valid()
     && start_scn_.is_valid_and_not_min()
+    && commit_scn_.is_valid() && commit_scn_ != SCN::max_scn()
     && snapshot_version_ > 0
     && cluster_version_ >= 0;
 }
@@ -533,11 +537,11 @@ int ObTabletDDLUtil::prepare_index_data_desc(const share::ObLSID &ls_id,
     if (nullptr != first_ddl_sstable) {
       // use the param in first ddl sstable, which persist the param when ddl start
       const ObSSTableBasicMeta &basic_meta = first_ddl_sstable->get_meta().get_basic_meta();
-      data_desc.row_store_type_ = basic_meta.row_store_type_;
+      data_desc.row_store_type_ = basic_meta.root_row_store_type_;
       data_desc.compressor_type_ = basic_meta.compressor_type_;
       data_desc.master_key_id_ = basic_meta.master_key_id_;
       data_desc.encrypt_id_ = basic_meta.encrypt_id_;
-      data_desc.encoder_opt_.set_store_type(basic_meta.row_store_type_);
+      data_desc.encoder_opt_.set_store_type(basic_meta.root_row_store_type_);
       MEMCPY(data_desc.encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
       data_desc.need_prebuild_bloomfilter_ = false;
     }
@@ -662,6 +666,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
         param.index_type_ = storage_schema.get_index_type();
         param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
         param.schema_version_ = storage_schema.get_schema_version();
+        param.latest_row_store_type_ = storage_schema.get_row_store_type();
         param.create_snapshot_version_ = ddl_param.snapshot_version_;
         param.ddl_scn_ = ddl_param.start_scn_;
         ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
@@ -740,6 +745,7 @@ int ObTabletDDLUtil::update_ddl_table_store(ObSSTableIndexBuilder *sstable_index
                                                 ddl_param.table_key_.is_major_sstable()); // need report checksum
       table_store_param.ddl_info_.keep_old_ddl_sstable_ = !ddl_param.table_key_.is_major_sstable();
       table_store_param.ddl_info_.ddl_cluster_version_ = ddl_param.cluster_version_;
+      table_store_param.ddl_info_.ddl_commit_scn_ = ddl_param.commit_scn_;
       if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {
         LOG_WARN("failed to update tablet table store", K(ret), K(ddl_param.table_key_), K(table_store_param));
       } else {

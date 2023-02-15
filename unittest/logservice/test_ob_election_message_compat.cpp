@@ -215,7 +215,7 @@ TEST_F(TestElectionMsgCompat, old_new_msg_serialize) {
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, prepare_msg_new1.deserialize(buffer, buffer_size, pos));
   ELECT_LOG(INFO, "test msg from old to new", K(prepare_msg_old1), K(prepare_msg_new1));
-  ASSERT_EQ(DEFAULT_SEED, prepare_msg_new1.get_inner_priority_seed());
+  ASSERT_EQ((uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED, prepare_msg_new1.get_inner_priority_seed());
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, prepare_msg_new2.serialize(buffer, buffer_size, pos));
   pos = 0;

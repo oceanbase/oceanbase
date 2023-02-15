@@ -68,6 +68,7 @@ public:
 private:
   int get_permission_check_file_path_(
       const share::ObBackupDest &backup_dest,
+      bool is_appender,
       share::ObBackupPath &path);
   int check_appender_permission_(const share::ObBackupDest &backup_dest);
   int set_connectivity_check_name_();

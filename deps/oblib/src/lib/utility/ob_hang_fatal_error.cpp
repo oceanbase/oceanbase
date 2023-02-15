@@ -33,7 +33,8 @@ void right_to_die_or_duty_to_live()
 {
   const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
   while (true) {
-    BACKTRACE(ERROR, true, "Trying so hard to die, extra_info=(%s)", (NULL == extra_info) ? NULL : to_cstring(*extra_info));
+    const char *info = (NULL == extra_info) ? NULL : to_cstring(*extra_info);
+    LOG_DBA_ERROR(OB_ERR_THREAD_PANIC, "msg", "Trying so hard to die", KCSTRING(info), KCSTRING(lbt()));
   #ifndef FATAL_ERROR_HANG
     if (in_try_stmt) {
       throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();

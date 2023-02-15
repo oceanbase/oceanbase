@@ -984,7 +984,7 @@ TEST_F(TestCompactionPolicy, check_major_merge_basic)
 
   ObGetMergeTablesParam param;
   param.merge_type_ = ObMergeType::MAJOR_MERGE;
-  param.merge_version_ = 340;
+  param.merge_version_ = 350;
   ObGetMergeTablesResult result;
   FakeLS ls;
   ret = ObPartitionMergePolicy::get_medium_merge_tables(param, ls, *tablet_handle_.get_obj(), result);

@@ -115,6 +115,7 @@ public:
   ObIndexTreePrefetcher() :
       is_inited_(false),
       is_rescan_(false),
+      rescan_cnt_(0),
       data_version_(0),
       sstable_(nullptr),
       data_block_cache_(nullptr),
@@ -172,8 +173,10 @@ private:
   }
 
 protected:
+  static const int64_t MAX_RESCAN_HOLD_LIMIT = 64;
   bool is_inited_;
   bool is_rescan_;
+  int64_t rescan_cnt_;
   int64_t data_version_;
   ObSSTable *sstable_;
   ObDataMicroBlockCache *data_block_cache_;
@@ -314,6 +317,7 @@ public:
       row_lock_check_version_(transaction::ObTransVersion::INVALID_TRANS_VERSION),
       agg_row_store_(nullptr),
       can_blockscan_(false),
+      need_check_prefetch_depth_(false),
       iter_type_(0),
       cur_level_(0),
       index_tree_height_(0),
@@ -373,7 +377,8 @@ public:
                        K_(is_prefetch_end), K_(cur_range_fetch_idx), K_(cur_range_prefetch_idx), K_(max_range_prefetching_cnt),
                        K_(cur_micro_data_fetch_idx), K_(micro_data_prefetch_idx), K_(max_micro_handle_cnt),
                        K_(iter_type), K_(cur_level), K_(index_tree_height), K_(prefetch_depth),
-                       K_(total_micro_data_cnt), KP_(query_range), K_(tree_handles), K_(border_rowkey));
+                       K_(total_micro_data_cnt), KP_(query_range), K_(tree_handles), K_(border_rowkey),
+                       K_(can_blockscan), K_(need_check_prefetch_depth));
 private:
   int init_basic_info(
       const int iter_type,
@@ -563,6 +568,7 @@ public:
   ObAggregatedStore *agg_row_store_;
 private:
   bool can_blockscan_;
+  bool need_check_prefetch_depth_;
   int16_t iter_type_;
   int16_t cur_level_;
   int16_t index_tree_height_;

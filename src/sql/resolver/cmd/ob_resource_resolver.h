@@ -246,7 +246,7 @@ public:
         name = "IOPS_WEIGHT";
         break;
       default:
-        LOG_WARN("invalid item type for RESOURCE UNIT", K(type));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid item type for RESOURCE UNIT", K(type));
         name = "UNKNOWN";
         break;
     }

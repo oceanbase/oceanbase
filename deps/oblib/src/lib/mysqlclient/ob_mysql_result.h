@@ -954,6 +954,7 @@
     从cur_default_value或者new_default_value获取，这里做了兼容处理，用default_value_v2_version做这两种情况的区分
 */
 #define EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, column_name, data_type, class_obj,is_cur_default_value, default_value_v2_version, tenant_id) \
+  [&]() { /*+ The original macro use too much stack space, wrap to lambda to avoid it. */ \
   if (OB_SUCC(ret)) \
   { \
     ObString str_value; \
@@ -1078,7 +1079,8 @@
     { \
       SQL_LOG(WARN, "fail to default value field mysql. ", K(ret)); \
     } \
-  }
+  } \
+  } ()
 
 #define EXTRACT_CREATE_TIME_FIELD_MYSQL(result, column_name, field, type) \
   EXTRACT_INT_FIELD_MYSQL(result, column_name, field, type)

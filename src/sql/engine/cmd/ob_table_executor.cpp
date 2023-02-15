@@ -138,7 +138,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
                                       (!no_osg_hint && (online_sys_var || osg_hint))
                                       ? "insert /*+GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
-                                      : "insert into %c%.*s%c.%c%.*s%c",
+                                      : "insert /*+NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
                                       sep_char,
                                       db_name.length(),
                                       db_name.ptr(),
@@ -1732,8 +1732,31 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
               break;
             }
           }
+          int64_t step_time = ObTimeUtility::current_time();
+          LOG_INFO("truncate_table_v2 finish trans", K(ret), "cost", step_time-start_time, "table_name", truncate_table_arg.table_name_, K(res));
+          if (OB_FAIL(ret)) {
+          } else if (!res.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("truncate invalid ddl_res", KR(ret), K(res));
+          } else {
+            // wait schema_version refreshed on this server
+            while (OB_SUCC(ret) && ctx.get_timeout() > 0) {
+              int64_t refreshed_schema_version = OB_INVALID_VERSION;
+              if (OB_FAIL(GCTX.schema_service_->get_tenant_refreshed_schema_version(res.tenant_id_, refreshed_schema_version))) {
+                LOG_WARN("get schema_version fail", KR(ret), K(res.tenant_id_));
+              } else if (refreshed_schema_version >= res.task_id_) {
+                break;
+              } else {
+                ob_usleep(10 * 1000);
+              }
+            }
+          }
           int64_t end_time = ObTimeUtility::current_time();
-          LOG_INFO("truncate_table_v2", K(ret), "cost", end_time-start_time, "table_name", truncate_table_arg.table_name_);
+          LOG_INFO("truncate_table_v2", K(ret), "cost", end_time-start_time,
+                                                "trans_cost", step_time - start_time,
+                                                "wait_refresh", end_time - step_time,
+                                                "table_name", truncate_table_arg.table_name_,
+                                                K(res));
         }
       }
 

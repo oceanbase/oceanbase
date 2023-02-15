@@ -144,7 +144,7 @@ void ObApplyServiceQueueTask::reset()
 {
   if (!queue_.is_empty()) {
     //防御性检查,默认apply status析构时队列一定为空
-    CLOG_LOG(ERROR, "queue is not empty when reset task", KPC(apply_status_));
+    CLOG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "queue is not empty when reset task", KPC(apply_status_));
   }
   ObApplyServiceTask::reset();
   total_submit_cb_cnt_ = 0;
@@ -916,7 +916,7 @@ void ObApplyStatus::statistics_cb_cost_(const LSN &lsn,
     cb_wait_commit_stat_.stat(cb_wait_commit_time);
     cb_execute_stat_.stat(cb_cost_time);
     if (total_cost_time > 1000 * 1000) { //1s
-      CLOG_LOG(WARN, "cb cost too much time", K(lsn), K(scn), K(idx), K(total_cost_time), K(append_cost_time),
+      CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "cb cost too much time", K(lsn), K(scn), K(idx), K(total_cost_time), K(append_cost_time),
                K(cb_wait_thread_time), K(cb_wait_commit_time), K(cb_cost_time), K(append_start_time), K(append_finish_time),
                K(cb_first_handle_time), K(cb_first_handle_time), K(cb_finish_time));
     }
@@ -1382,7 +1382,7 @@ int ObLogApplyService::wait_append_sync(const share::ObLSID &ls_id)
   } else {
     int64_t cost_time = ObTimeUtility::fast_current_time() - start_ts;
     if (cost_time > 10 * 1000) { //10ms
-      CLOG_LOG(WARN, "wait_append_sync cost too much time", K(ret), K(ls_id), K(cost_time));
+      CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "wait_append_sync cost too much time", K(ret), K(ls_id), K(cost_time));
     }
   }
   return ret;

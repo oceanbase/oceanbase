@@ -78,14 +78,14 @@ class ObOccamTimerTask : public ObTimeWheelTask
         if (OB_LIKELY(func_shared_ptr.is_valid())) {
           int64_t delay_time = ObClockGenerator::getRealClock() - schedule_time_;
           if (OB_UNLIKELY(delay_time > 50_ms)) {
-            OCCAM_LOG(WARN, "task executed too delay", K(delay_time), K(*p_task_));
+            OCCAM_LOG_RET(WARN, OB_ERR_UNEXPECTED, "task executed too delay", K(delay_time), K(*p_task_));
           }
           stop_flag = (*func_shared_ptr)();// run the task
           if (__time_guard__.is_timeout()) {
-            OCCAM_LOG(WARN, "run this task use too much time", K(*p_task_));
+            OCCAM_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "run this task use too much time", K(*p_task_));
           }
         } else {
-          OCCAM_LOG(WARN, "func_shared_ptr_ upgrade failed, task has been stopped", K(function_));
+          OCCAM_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "func_shared_ptr_ upgrade failed, task has been stopped", K(function_));
         }
       }
       if (need_delete_) {// can use task_ pointer here, cause it;s promised it won't be free in other place

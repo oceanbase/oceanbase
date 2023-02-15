@@ -82,6 +82,7 @@ int ObTransformMinMax::check_transform_validity(ObSelectStmt *select_stmt,
   int ret = OB_SUCCESS;
   const ObRawExpr *select_expr = NULL;
   is_valid = false;
+  bool invalid_for_dblink = false;
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(select_stmt));
@@ -95,7 +96,13 @@ int ObTransformMinMax::check_transform_validity(ObSelectStmt *select_stmt,
              || select_stmt->get_aggr_item_size() != 1) {
     //do nothing
     OPT_TRACE("not a simple query");
-  } else if (OB_FAIL(is_valid_select_list(*select_stmt, select_expr, is_valid))) {
+  } else if (OB_FAIL(ObTransformUtils::check_stmt_from_one_dblink(select_stmt, invalid_for_dblink))) {
+    LOG_WARN("failed to check if all tables from one dblink", K(ret));
+  } else if (invalid_for_dblink) {
+    is_valid = false;
+    // do not transform,
+    // for compatibility with Oracle before 12c
+  }  else if (OB_FAIL(is_valid_select_list(*select_stmt, select_expr, is_valid))) {
     LOG_WARN("failed to check is valid select list", K(ret));
   } else if (!is_valid) {
     //do nothing

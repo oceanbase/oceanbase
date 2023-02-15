@@ -125,7 +125,7 @@ void ObLogTimeZoneInfoGetter::stop()
 
       int pthread_ret = pthread_join(tz_tid_, NULL);
       if (0 != pthread_ret) {
-        LOG_ERROR("join timezone info thread fail", K(tz_tid_), K(pthread_ret),
+        LOG_ERROR_RET(OB_ERR_SYS, "join timezone info thread fail", K(tz_tid_), K(pthread_ret),
             KERRNOMSG(pthread_ret));
       } else {
         LOG_INFO("stop timezone info thread succ");
@@ -546,9 +546,9 @@ int ObLogTimeZoneInfoGetter::export_timezone_info_(common::ObTZInfoMap &tz_info_
   {
     int tmp_ret = OB_SUCCESS;
     if (OB_ISNULL(tz_info)) {
-      LOG_ERROR("invalid tz_info", KR(tmp_ret), K(key));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid tz_info", KR(tmp_ret), K(key));
     } else if (OB_TMP_FAIL(tz_info_res.tz_array_.push_back(*tz_info))) {
-      LOG_ERROR("push_back tz_info into ObRequestTZInfoResult failed", KR(tmp_ret), K(key));
+      LOG_ERROR_RET(tmp_ret, "push_back tz_info into ObRequestTZInfoResult failed", KR(tmp_ret), K(key));
     }
     return OB_SUCCESS == tmp_ret;
   };

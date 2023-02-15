@@ -232,6 +232,11 @@ public:
       const obrpc::ObInitTenantConfigArg &arg,
       obrpc::ObInitTenantConfigRes &result);
 private:
+  int get_role_from_palf_(
+      logservice::ObLogService &log_service,
+      const share::ObLSID &ls_id,
+      common::ObRole &role,
+      int64_t &proposal_id);
   int inner_fill_tablet_info_(
       const int64_t tenant_id,
       const ObTabletID &tablet_id,
@@ -248,6 +253,9 @@ private:
   int handle_ls_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
   int tenant_freeze_(const uint64_t tenant_id);
   int ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
+  int generate_master_rs_ls_info_(
+      const share::ObLSReplica &cur_leader,
+      share::ObLSInfo &ls_info);
 private:
   bool inited_;
   bool in_register_process_;

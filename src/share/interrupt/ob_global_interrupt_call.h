@@ -294,7 +294,7 @@ OB_INLINE ObInterruptChecker *get_checker()
 OB_INLINE int SET_INTERRUPTABLE(const ObInterruptibleTaskID &tid)
 {
   if (OB_ISNULL(get_checker())) {
-    LIB_LOG(ERROR, "interrupt checker may not be set correctly");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "interrupt checker may not be set correctly");
     return OB_ERR_UNEXPECTED;
   }
   return get_checker()->register_checker(tid);
@@ -304,7 +304,7 @@ OB_INLINE int SET_INTERRUPTABLE(const ObInterruptibleTaskID &tid)
 OB_INLINE bool IS_INTERRUPTED()
 {
   if (OB_ISNULL(get_checker())) {
-    LIB_LOG(ERROR, "interrupt checker may not be set correctly");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "interrupt checker may not be set correctly");
     return false;
   }
   return get_checker()->is_interrupted();
@@ -315,7 +315,7 @@ OB_INLINE ObInterruptCode &GET_INTERRUPT_CODE()
 {
   static ObInterruptCode err_code(OB_ERR_UNEXPECTED);
   if (OB_ISNULL(get_checker())) {
-    LIB_LOG(ERROR, "interrupt checker may not be set correctly");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "interrupt checker may not be set correctly");
     return err_code;
   }
   return get_checker()->get_interrupt_code();
@@ -325,7 +325,7 @@ OB_INLINE ObInterruptCode &GET_INTERRUPT_CODE()
 OB_INLINE void UNSET_INTERRUPTABLE(const ObInterruptibleTaskID &tid)
 {
   if (OB_ISNULL(get_checker())) {
-    LIB_LOG(ERROR, "interrupt checker may not be set correctly");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "interrupt checker may not be set correctly");
   } else {
     get_checker()->unregister_checker(tid);
   }
@@ -334,7 +334,7 @@ OB_INLINE void UNSET_INTERRUPTABLE(const ObInterruptibleTaskID &tid)
 OB_INLINE void CLEAR_INTERRUPTABLE()
 {
   if (OB_ISNULL(get_checker())) {
-    LIB_LOG(ERROR, "interrupt checker may not be set correctly");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "interrupt checker may not be set correctly");
   } else {
     get_checker()->clear_interrupt_status();
   }

@@ -193,7 +193,7 @@ class ObFunction<Ret(Args...)> {
       } else {
         const char* class_name = typeid(Fn).name();
         int class_size = sizeof(Derived<Fn>);
-        OCCAM_LOG(ERROR, "ptr is nullptr",
+        OCCAM_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "ptr is nullptr",
                       K(class_name), K(class_size),
                       K(function::SMALL_OBJ_MAX_SIZE), KP(local_buffer));
       }

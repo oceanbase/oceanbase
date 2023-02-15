@@ -294,7 +294,7 @@ OB_DEF_SERIALIZE_SIZE(ObCdcLSFetchLogResp)
     LST_DO_CODE(OB_UNIS_ADD_LEN, server_progress_);
   } else {
     tmp_ret = OB_NOT_SUPPORTED;
-    EXTLOG_LOG(ERROR, "get serialize size error, version not match",
+    EXTLOG_LOG_RET(ERROR, tmp_ret, "get serialize size error, version not match",
                K(tmp_ret), K(rpc_ver_), LITERAL_K(CUR_RPC_VER));
   }
 

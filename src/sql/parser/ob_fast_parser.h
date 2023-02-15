@@ -380,7 +380,7 @@ protected:
     inline bool is_latin1(char ch)
 	{
 		return is_valid_char(ch) &&
-		static_cast<uint8_t>(ch) >= 0x00 && static_cast<uint8_t>(ch) <= 0xFF;
+		static_cast<uint8_t>(ch) >= 0x80 && static_cast<uint8_t>(ch) <= 0xFF;
 	}
 	// [0-9]{n}
 	inline bool is_n_continuous_digits(const char *str,

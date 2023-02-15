@@ -117,7 +117,7 @@ public:
   {
     [[nodiscard]] explicit WLockGuardWithRetryInterval(TCRWLock &lock,
                                          const int64_t try_thresold_us,
-                                         const int64_t retry_interval_us)
+                                         const uint32_t retry_interval_us)
       : lock_(lock)
     {
       int ret = OB_SUCCESS;
@@ -291,14 +291,14 @@ public:
       : lock_(const_cast<TCRWLock&>(lock)), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
-      COMMON_LOG(WARN, "Fail to write lock, ", K_(ret));
+      COMMON_LOG_RET(WARN, ret_, "Fail to write lock, ", K_(ret));
     }
   }
   ~TCWLockGuard()
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrunlock()))) {
-        COMMON_LOG(WARN, "Fail to unlock, ", K_(ret));
+        COMMON_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
       }
     }
   }
@@ -317,14 +317,14 @@ public:
       : lock_(const_cast<TCRWLock&>(lock)), ret_(OB_SUCCESS), slot_id_(0)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(INT64_MAX, slot_id_)))) {
-      COMMON_LOG(WARN, "Fail to read lock, ", K_(ret));
+      COMMON_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
     }
   }
   ~TCRLockGuard()
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdunlock(slot_id_)))) {
-        COMMON_LOG(WARN, "Fail to unlock, ", K_(ret));
+        COMMON_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
       }
     }
   }

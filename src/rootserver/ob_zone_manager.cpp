@@ -949,7 +949,7 @@ ObZoneManager::ObZoneManagerShadowGuard::~ObZoneManagerShadowGuard()
   if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
   } else if (OB_UNLIKELY(OB_SUCCESS !=
       (ret_ = ObZoneManager::copy_infos(zone_mgr_, shadow_)))) {
-    LOG_WARN("copy from shadow_ failed", K(ret_));
+    LOG_WARN_RET(ret_, "copy from shadow_ failed", K(ret_));
   }
 }
 

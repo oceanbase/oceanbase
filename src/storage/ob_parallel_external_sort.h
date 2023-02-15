@@ -1882,7 +1882,7 @@ void ObExternalSort<T, Compare>::clean_up()
   for (int64_t i = 0; i < EXTERNAL_SORT_ROUND_CNT; ++i) {
     // ignore ret
     if (sort_rounds_[i].is_inited() && common::OB_SUCCESS != (tmp_ret = sort_rounds_[i].clean_up())) {
-      STORAGE_LOG(WARN, "fail to clean up sort rounds", K(tmp_ret), K(i));
+      STORAGE_LOG_RET(WARN, tmp_ret, "fail to clean up sort rounds", K(tmp_ret), K(i));
     }
   }
 }

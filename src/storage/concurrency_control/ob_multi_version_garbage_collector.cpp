@@ -432,10 +432,22 @@ int ObMultiVersionGarbageCollector::study_min_unallocated_WRS(
 {
   int ret = OB_SUCCESS;
 
+  const int64_t current_time = ObTimeUtility::current_time();
+  const int64_t max_read_stale_time =
+    transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID());
+
   if (OB_FAIL(MTL(transaction::ObTransService*)->get_weak_read_snapshot_version(
-                transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID()),
+                max_read_stale_time,
                 min_unallocated_WRS))) {
     MVCC_LOG(WARN, "fail to get weak read snapshot", K(ret));
+    if (OB_REPLICA_NOT_READABLE == ret) {
+      // The global weak read service cannot provide services in some cases(for
+      // example backup cluster's weak read service may hung during recovery).
+      // So instead of report the error, we decide to use the max allowed stale
+      // time for garbage collector.
+      min_unallocated_WRS.convert_from_ts(current_time - max_read_stale_time);
+      ret = OB_SUCCESS;
+    }
   }
 
   return ret;
@@ -538,7 +550,7 @@ int ObMultiVersionGarbageCollector::refresh_()
 void ObMultiVersionGarbageCollector::decide_gc_status_(const ObMultiVersionGCStatus gc_status)
 {
   if (gc_status & ObMultiVersionGCStatus::DISABLED_GC_STATUS) {
-    MVCC_LOG(WARN, "gc status is disabled", KPC(this),
+    MVCC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "gc status is disabled", KPC(this),
              K(global_reserved_snapshot_), K(gc_status));
     gc_is_disabled_ = true;
   } else if (gc_is_disabled_) {
@@ -593,12 +605,12 @@ share::SCN ObMultiVersionGarbageCollector::get_reserved_snapshot_for_active_txn(
     return share::SCN::max_scn();
   } else if (refresh_error_too_long_) {
     if (REACH_TENANT_TIME_INTERVAL(1_s)) {
-      MVCC_LOG(WARN, "get reserved snapshot for active txn with long not updated", KPC(this));
+      MVCC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get reserved snapshot for active txn with long not updated", KPC(this));
     }
     return share::SCN::max_scn();
   } else if (gc_is_disabled_) {
     if (REACH_TENANT_TIME_INTERVAL(1_s)) {
-      MVCC_LOG(WARN, "get reserved snapshot for active txn with gc is disabled", KPC(this));
+      MVCC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get reserved snapshot for active txn with gc is disabled", KPC(this));
     }
     return share::SCN::max_scn();
   } else {

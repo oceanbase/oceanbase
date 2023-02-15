@@ -366,7 +366,7 @@ int ObLogFileHandler::unlink(const char* file_path)
   while (OB_SUCC(ret)) {
     if (OB_FAIL(THE_IO_DEVICE->unlink(file_path)) && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
       LOG_WARN("unlink failed", K(ret), K(file_path));
-      ob_usleep(UNLINK_RETRY_INTERVAL_US);
+      ob_usleep(static_cast<uint32_t>(UNLINK_RETRY_INTERVAL_US));
       ret = OB_SUCCESS;
     } else if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
       ret = OB_SUCCESS;
@@ -401,7 +401,7 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
         if (REACH_TIME_INTERVAL(LOG_INTERVAL_US)) {
           LOG_WARN("fail to write", K(ret), KP(buf), K(size), K(offset), K(retry_cnt), K(write_size));
         } else {
-          ob_usleep(SLEEP_TIME_US);
+          ob_usleep(static_cast<uint32_t>(SLEEP_TIME_US));
         }
       }
     } while (OB_FAIL(ret));
@@ -425,7 +425,7 @@ int ObLogFileHandler::open(const char *file_path, const int flags, const mode_t 
         LOG_WARN("failed to open file", K(ret), K(file_path), K(errno), KERRMSG);
         if (OB_TIMEOUT == ret || OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
-          ob_usleep(ObLogDefinition::RETRY_SLEEP_TIME_IN_US);
+          ob_usleep(static_cast<uint32_t>(ObLogDefinition::RETRY_SLEEP_TIME_IN_US));
         }
       } else {
         break;
@@ -435,7 +435,7 @@ int ObLogFileHandler::open(const char *file_path, const int flags, const mode_t 
     if (OB_SUCC(ret)) {
       const int64_t total_retry_time = ObTimeUtility::fast_current_time() - start_time;
       if (total_retry_time > MAX_RETRY_TIME) {
-        LOG_WARN("open file costs too much time", K(ret), K(total_retry_time), K(file_path), K(io_fd));
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "open file costs too much time", K(ret), K(total_retry_time), K(file_path), K(io_fd));
       }
     }
   }

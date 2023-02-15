@@ -27,6 +27,7 @@
 #include "share/stat/ob_index_stats_estimator.h"
 #include "lib/timezone/ob_time_convert.h"
 #include "sql/das/ob_das_location_router.h"
+#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -841,7 +842,7 @@ int ObDbmsStats::delete_column_stats(ObExecContext &ctx, ParamStore &params, ObO
                                            params.at(3),
                                            stat_param))) {
     LOG_WARN("failed to parse owner", K(ret));
-  } else if (OB_FAIL(parse_column_info(params.at(2), stat_param))) {
+  } else if (OB_FAIL(parse_column_info(ctx, params.at(2), stat_param))) {
     LOG_WARN("failed to parse export column info", K(ret));
   } else if (!params.at(6).is_null() && OB_FAIL(params.at(6).get_bool(cascade_parts))) {
     LOG_WARN("failed to get cascade partition", K(ret));
@@ -851,6 +852,11 @@ int ObDbmsStats::delete_column_stats(ObExecContext &ctx, ParamStore &params, ObO
     LOG_WARN("failed to get no invalidate", K(ret));
   } else if (!params.at(10).is_null() && OB_FAIL(params.at(10).get_varchar(col_stat_type))) {
     LOG_WARN("failed to get no invalidate", K(ret));
+  } else if (!params.at(10).is_null() &&
+             OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              col_stat_type))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (0 == col_stat_type.case_compare("ALL")) {
     only_histogram = false;
   } else if (0 == col_stat_type.case_compare("HISTOGRAM")) {
@@ -992,7 +998,6 @@ int ObDbmsStats::delete_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
   obrpc::ObCommonRpcProxy *proxy = NULL;
   ObTableStatParam index_stat_param;
   index_stat_param.is_index_stat_ = true;
-  ObString col_stat_type("ALL");
   bool cascade_parts = false;
   bool only_histogram = false;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
@@ -1125,29 +1130,43 @@ int ObDbmsStats::create_stat_table(ObExecContext &ctx, ParamStore &params, ObObj
     param.tenant_id_ = session->get_effective_tenant_id();
     if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_varchar(param.db_name_))) {
       LOG_WARN("failed to get db_name", K(ret));
+    } else if (!params.at(0).is_null() &&
+               OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                session->get_dtc_params(),
+                                                param.db_name_,
+                                                lib::is_oracle_mode()))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_varchar(param.tab_name_))) {
       LOG_WARN("failed to get tab_name", K(ret));
+    } else if (!params.at(1).is_null() &&
+               OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                session->get_dtc_params(),
+                                                param.tab_name_,
+                                                lib::is_oracle_mode()))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_varchar(param.tab_group_))) {
       LOG_WARN("failed to get tblspace", K(ret));
+    } else if (!params.at(2).is_null() &&
+               OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                session->get_dtc_params(),
+                                                param.tab_group_,
+                                                lib::is_oracle_mode()))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (!params.at(3).is_null() && OB_FAIL(params.at(3).get_bool(is_temp_table))) {
       LOG_WARN("failed to get global_temporary", K(ret));
     } else if (param.tab_name_.empty()) {
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("Statistics table must be specified", K(ret));
       LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Statistics table must be specified");
-    } else if (FALSE_IT(try_caseup(params.at(1).get_collation_type(), param.tab_name_))) {
     } else if (is_temp_table) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("dbms_stats with temp table not support", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
     } else if (param.db_name_.empty()) {
       param.db_name_ = session->get_user_name();
-    } else if (FALSE_IT(try_caseup(params.at(0).get_collation_type(), param.db_name_))) {
     }
     if (OB_SUCC(ret)) {
-      if (lib::is_oracle_mode() && !param.tab_group_.empty() &&
-          FALSE_IT(try_caseup(params.at(2).get_collation_type(), param.tab_group_))) {
-      } else if (OB_FAIL(ObDbmsStatsExportImport::create_stat_table(ctx, param))) {
+      if (OB_FAIL(ObDbmsStatsExportImport::create_stat_table(ctx, param))) {
         LOG_WARN("failed to create table stats", K(ret));
       } else {
         LOG_TRACE("succeed to create table stat", K(param));
@@ -1179,16 +1198,26 @@ int ObDbmsStats::drop_stat_table(ObExecContext &ctx, ParamStore &params, ObObj &
     param.tenant_id_ = session->get_effective_tenant_id();
     if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_varchar(param.db_name_))) {
       LOG_WARN("failed to get db_name", K(ret));
+    } else if (!params.at(0).is_null() &&
+               OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                session->get_dtc_params(),
+                                                param.db_name_,
+                                                lib::is_oracle_mode()))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_varchar(param.tab_name_))) {
       LOG_WARN("failed to get tab_name", K(ret));
+    } else if (!params.at(1).is_null() &&
+               OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                session->get_dtc_params(),
+                                                param.tab_name_,
+                                                lib::is_oracle_mode()))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (param.tab_name_.empty()) {
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("Statistics table must be specified", K(ret));
       LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Statistics table must be specified");
-    } else if (FALSE_IT(try_caseup(params.at(1).get_collation_type(), param.tab_name_))) {
     } else if (param.db_name_.empty()) {
       param.db_name_ = session->get_user_name();
-    } else if (FALSE_IT(try_caseup(params.at(0).get_collation_type(), param.db_name_))) {
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDbmsStatsExportImport::drop_stat_table(ctx, param))) {
@@ -1252,6 +1281,11 @@ int ObDbmsStats::export_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
     } else if (!params.at(7).is_null() &&
               OB_FAIL(params.at(7).get_varchar(stat_param.stat_category_))) {
       LOG_WARN("failed to get stat category ", K(ret));
+    } else if (!params.at(7).is_null() &&
+               OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                stat_param.stat_category_))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (OB_FAIL(parse_stat_category(stat_param.stat_category_))) {
       LOG_WARN("failed to parse stat category", K(ret), K(stat_param.stat_category_));
     } else {
@@ -1303,7 +1337,7 @@ int ObDbmsStats::export_column_stats(sql::ObExecContext &ctx,
                                            params.at(3),
                                            stat_param))) {
     LOG_WARN("failed to parse owner", K(ret));
-  } else if (OB_FAIL(parse_column_info(params.at(2), stat_param))) {
+  } else if (OB_FAIL(parse_column_info(ctx, params.at(2), stat_param))) {
     LOG_WARN("failed to parse export column info", K(ret));
   } else if (OB_FAIL(parse_table_info(ctx,
                                       params.at(6).is_null() ? params.at(0) : params.at(6),
@@ -1558,6 +1592,11 @@ int ObDbmsStats::import_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
     } else if (!params.at(9).is_null() &&
               OB_FAIL(params.at(9).get_varchar(stat_param.stat_category_))) {
       LOG_WARN("failed to get stat stat_category ", K(ret));
+    } else if (!params.at(9).is_null() &&
+               OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                stat_param.stat_category_))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (OB_FAIL(parse_stat_category(stat_param.stat_category_))) {
       LOG_WARN("failed to parse stat category", K(ret), K(stat_param.stat_category_));
     } else {
@@ -1644,7 +1683,7 @@ int ObDbmsStats::import_column_stats(sql::ObExecContext &ctx,
                                            params.at(3),
                                            stat_param))) {
     LOG_WARN("failed to parse owner", K(ret));
-  } else if (OB_FAIL(parse_column_info(params.at(2), stat_param))) {
+  } else if (OB_FAIL(parse_column_info(ctx, params.at(2), stat_param))) {
     LOG_WARN("failed to parse column info", K(ret));
   } else if (OB_FAIL(parse_table_info(ctx,
                                       params.at(6).is_null() ? params.at(0) : params.at(6),
@@ -1969,6 +2008,10 @@ int ObDbmsStats::lock_table_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to parse owner", K(ret));
   } else if (OB_FAIL(params.at(2).get_varchar(stat_type_str))) {
     LOG_WARN("failed to get stattype", K(ret));
+  } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              stat_type_str))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (OB_FAIL(parse_stat_type(stat_type_str, stat_param.stattype_))) {
     LOG_WARN("failed to parse stat type", K(ret), K(stat_type_str));
   } else {
@@ -2054,6 +2097,10 @@ int ObDbmsStats::lock_schema_stats(sql::ObExecContext &ctx,
       LOG_WARN("failed to get all table ids in database", K(ret));
     } else if (OB_FAIL(params.at(1).get_varchar(stat_type_str))) {
       LOG_WARN("failed to get stattype", K(ret));
+    } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                stat_type_str))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (OB_FAIL(parse_stat_type(stat_type_str, global_param.stattype_))) {
       LOG_WARN("failed to parse stat type", K(ret), K(stat_type_str));
     } else {
@@ -2146,6 +2193,11 @@ int ObDbmsStats::unlock_table_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to parse owner", K(ret));
   } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_varchar(stat_type_str))) {
     LOG_WARN("failed to get stattype", K(ret));
+  } else if (!params.at(2).is_null() &&
+             OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              stat_type_str))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (OB_FAIL(parse_stat_type(stat_type_str, stat_param.stattype_))) {
     LOG_WARN("failed to parse stat type", K(ret), K(stat_type_str));
   } else {
@@ -2230,6 +2282,11 @@ int ObDbmsStats::unlock_schema_stats(sql::ObExecContext &ctx,
       LOG_WARN("failed to get all table ids in database", K(ret));
     } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_varchar(stat_type_str))) {
       LOG_WARN("failed to get stattype", K(ret));
+    } else if (!params.at(1).is_null() &&
+               OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                stat_type_str))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (OB_FAIL(parse_stat_type(stat_type_str, global_param.stattype_))) {
       LOG_WARN("failed to parse stat type", K(ret), K(stat_type_str));
     } else {
@@ -2243,8 +2300,8 @@ int ObDbmsStats::unlock_schema_stats(sql::ObExecContext &ctx,
         } else {
           stat_param.need_global_ = true;
           stat_param.need_approx_global_ = false;
-          stat_param.need_part_ = false;
-          stat_param.need_subpart_ = false;
+          stat_param.need_part_ = true;
+          stat_param.need_subpart_ = true;
           if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, false))) {
             LOG_WARN("failed to lock table stats", K(ret));
           } else if (OB_FAIL(lock_or_unlock_index_stats(ctx, stat_param, false))) {
@@ -2682,6 +2739,11 @@ int ObDbmsStats::get_prefs(sql::ObExecContext &ctx,
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_string(opt_name))) {
     LOG_WARN("failed to get string", K(ret));
+  } else if (!params.at(0).is_null() &&
+             OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              opt_name))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (!params.at(2).is_null() &&
              OB_FAIL(parse_table_part_info(ctx, params.at(1), params.at(2), dummy_param, param))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(2)));
@@ -2720,8 +2782,18 @@ int ObDbmsStats::set_global_prefs(sql::ObExecContext &ctx,
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_string(opt_name))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(0)));
+  } else if (!params.at(0).is_null() &&
+             OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              opt_name))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_string(opt_value))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(1)));
+  } else if (!params.at(1).is_null() &&
+             OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              opt_value))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (OB_FAIL(get_new_stat_pref(ctx, opt_name, opt_value, true, stat_pref))) {
     LOG_WARN("failed to get new stat pref", K(ret));
   } else if (OB_ISNULL(stat_pref)) {
@@ -2765,8 +2837,18 @@ int ObDbmsStats::set_schema_prefs(sql::ObExecContext &ctx,
     LOG_WARN("failed to get all table ids in database", K(ret));
   } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_string(opt_name))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(1)));
+  } else if (!params.at(1).is_null() &&
+             OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              opt_name))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_string(opt_value))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(2)));
+  } else if (!params.at(2).is_null() &&
+             OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              opt_value))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (OB_FAIL(get_new_stat_pref(ctx, opt_name, opt_value, false, stat_pref))) {
     LOG_WARN("failed to get new stat pref", K(ret));
   } else if (OB_ISNULL(stat_pref)) {
@@ -2815,8 +2897,18 @@ int ObDbmsStats::set_table_prefs(sql::ObExecContext &ctx,
     LOG_WARN("failed to push back", K(ret));
   } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_string(opt_name))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(2)));
+  } else if (!params.at(2).is_null() &&
+             OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              opt_name))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (!params.at(3).is_null() && OB_FAIL(params.at(3).get_string(opt_value))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(3)));
+  } else if (!params.at(3).is_null() &&
+             OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              opt_value))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (OB_FAIL(get_new_stat_pref(ctx, opt_name, opt_value, false, stat_pref))) {
     LOG_WARN("failed to get new stat pref", K(ret));
   } else if (OB_ISNULL(stat_pref)) {
@@ -2840,8 +2932,7 @@ int ObDbmsStats::set_table_prefs(sql::ObExecContext &ctx,
  * @param ctx
  * @param params
  *  ownname        VARCHAR2,
- *  pname          VARCHAR2,
- *  pvalue         VARCHAR2
+ *  pname          VARCHAR2
  * @param result
  * @return
  */
@@ -2864,6 +2955,10 @@ int ObDbmsStats::delete_schema_prefs(sql::ObExecContext &ctx,
     // if pname is null, do not check stat prefs.
   } else if (OB_FAIL(params.at(1).get_string(opt_name))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(1)));
+  } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              opt_name))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (OB_FAIL(get_new_stat_pref(ctx, opt_name, dummy_name, false, stat_pref))) {
     LOG_WARN("failed to get new stat pref", K(ret));
   } else if (OB_ISNULL(stat_pref)) {
@@ -2909,6 +3004,10 @@ int ObDbmsStats::delete_table_prefs(sql::ObExecContext &ctx,
     //if pname is null, skip check prefs.
   } else if (OB_FAIL(params.at(2).get_string(opt_name))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(2)));
+  } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              opt_name))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (OB_FAIL(get_new_stat_pref(ctx, opt_name, dummy_name, false, stat_pref))) {
     LOG_WARN("failed to get new stat pref", K(ret));
   } else if (OB_ISNULL(stat_pref)) {
@@ -3002,7 +3101,7 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
     param.table_id_ = table_schema->get_table_id();
     param.part_level_ = table_schema->get_part_level();
     param.total_part_cnt_ = table_schema->get_all_part_num();
-    if (OB_FAIL(parse_partition_name(table_schema, part_name, param))) {
+    if (OB_FAIL(parse_partition_name(ctx, table_schema, part_name, param))) {
       LOG_WARN("failed to parse partition name", K(ret));
     }
   } else {
@@ -3103,7 +3202,8 @@ int ObDbmsStats::parse_index_part_info(ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(index_schema), K(param.db_name_),
                                      K(param.tab_name_));
-  } else if (OB_FAIL(set_param_global_part_id(ctx, param, true, table_schema->get_table_id()))) {
+  } else if (OB_FAIL(set_param_global_part_id(ctx, param, true, table_schema->get_table_id(),
+                                              table_schema->get_part_level()))) {
     LOG_WARN("fail to set global part id for index data table", K(ret));
   } else if (OB_FAIL(ob_write_string(ctx.get_allocator(),
                                      table_schema->get_table_name_str(),
@@ -3119,7 +3219,7 @@ int ObDbmsStats::parse_index_part_info(ObExecContext &ctx,
              OB_FAIL(param.all_subpart_infos_.assign(param.subpart_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (!part_name.is_null()) {
-    if (OB_FAIL(parse_partition_name(index_schema, part_name, param))) {
+    if (OB_FAIL(parse_partition_name(ctx, index_schema, part_name, param))) {
       LOG_WARN("failed to parse partition name", K(ret));
     } else {/*do nothing*/}
   }
@@ -3307,7 +3407,7 @@ int ObDbmsStats::parse_set_table_info(ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(param.db_name_), K(param.tab_name_));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(param.db_name_), to_cstring(param.tab_name_));
-  } else if (OB_FAIL(parse_set_partition_name(table_schema, part_name, param))) {
+  } else if (OB_FAIL(parse_set_partition_name(ctx, table_schema, part_name, param))) {
     LOG_WARN("failed to parser part info", K(ret));
   } else if (OB_FAIL(init_column_stat_params(ctx.get_allocator(),
                                              *schema_guard,
@@ -3360,22 +3460,24 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(param.db_name_), to_cstring(param.tab_name_));
   } else if (OB_FAIL(colname.get_string(column_name))) {
     LOG_WARN("failed to get column name", K(ret));
+  } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              column_name,
+                                              lib::is_oracle_mode()))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (OB_UNLIKELY(column_name.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(colname), K(ret));
   } else {
-    int32_t pre_len = column_name.length();
-    try_caseup(colname.get_collation_type(), column_name);
-    bool is_sensitive_compare = (pre_len != column_name.length());
     bool find_it = false;
     for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < table_schema->get_column_count(); ++i) {
       const share::schema::ObColumnSchemaV2 *tmp_col = table_schema->get_column_schema_by_idx(i);
       if (OB_ISNULL(tmp_col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(tmp_col));
-      } else if ((is_sensitive_compare &&
+      } else if ((lib::is_oracle_mode() &&
                   ObCharset::case_sensitive_equal(column_name, tmp_col->get_column_name_str())) ||
-                 (!is_sensitive_compare &&
+                 (!lib::is_oracle_mode() &&
                   ObCharset::case_insensitive_equal(column_name, tmp_col->get_column_name_str()))) {
         if (OB_FAIL(ob_write_string(ctx.get_allocator(),
                                     tmp_col->get_column_name_str(),
@@ -3406,7 +3508,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
         // col_param.is_hidden_col_ = col->is_generated_column();
         if (OB_FAIL(param.column_params_.push_back(col_param))) {
           LOG_WARN("failed to push back column param", K(ret));
-        } else if (OB_FAIL(parse_set_partition_name(table_schema, part_name, param))) {
+        } else if (OB_FAIL(parse_set_partition_name(ctx, table_schema, part_name, param))) {
           LOG_WARN("failed to parser part info", K(ret));
         } else {
           param.table_id_ = table_schema->get_table_id();
@@ -3437,7 +3539,8 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsStats::parse_set_partition_name(const share::schema::ObTableSchema *&table_schema,
+int ObDbmsStats::parse_set_partition_name(ObExecContext &ctx,
+                                          const share::schema::ObTableSchema *&table_schema,
                                           const ObObjParam &part_name,
                                           ObTableStatParam &param)
 {
@@ -3451,6 +3554,11 @@ int ObDbmsStats::parse_set_partition_name(const share::schema::ObTableSchema *&t
     /*do nothing*/
   } else if (OB_FAIL(part_name.get_string(param.part_name_))) {
     LOG_WARN("failed to get part name", K(ret));
+  } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              param.part_name_,
+                                              lib::is_oracle_mode()))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (!table_schema->is_partitioned_table()) {
     ret = OB_ERR_NOT_PARTITIONED;
     LOG_WARN("the target table is not partitioned", K(ret));
@@ -3463,60 +3571,56 @@ int ObDbmsStats::parse_set_partition_name(const share::schema::ObTableSchema *&t
   } else if (OB_FAIL(param.all_part_infos_.assign(param.part_infos_)) ||
              OB_FAIL(param.all_subpart_infos_.assign(param.subpart_infos_))) {
     LOG_WARN("failed to assign", K(ret));
-  } else {
-    int32_t pre_len = param.part_name_.length();
-    try_caseup(part_name.get_collation_type(), param.part_name_);
-    bool is_sensitive_compare = (pre_len != param.part_name_.length());
-    if (OB_FAIL(find_selected_part_infos(param.part_name_,
-                                         param.part_infos_,
-                                         param.subpart_infos_,
-                                         is_sensitive_compare,
-                                         part_infos,
-                                         subpart_infos,
-                                         param.is_subpart_name_))) {
-      LOG_WARN("failed to find selected partition infos");
-    } else if (OB_FAIL(param.part_infos_.assign(part_infos))) {
-      LOG_WARN("failed to assign part infos", K(ret));
-    } else if (OB_FAIL(param.subpart_infos_.assign(subpart_infos))) {
-      LOG_WARN("failed to assign new subpart infos", K(ret));
-    } else {/*do nothing*/}
-  }
+  } else if (OB_FAIL(find_selected_part_infos(param.part_name_,
+                                              param.part_infos_,
+                                              param.subpart_infos_,
+                                              lib::is_oracle_mode(),
+                                              part_infos,
+                                              subpart_infos,
+                                              param.is_subpart_name_))) {
+    LOG_WARN("failed to find selected partition infos");
+  } else if (OB_FAIL(param.part_infos_.assign(part_infos))) {
+    LOG_WARN("failed to assign part infos", K(ret));
+  } else if (OB_FAIL(param.subpart_infos_.assign(subpart_infos))) {
+    LOG_WARN("failed to assign new subpart infos", K(ret));
+  } else {/*do nothing*/}
   return ret;
 }
 
-int ObDbmsStats::parse_partition_name(const share::schema::ObTableSchema *&table_schema,
+int ObDbmsStats::parse_partition_name(ObExecContext &ctx,
+                                      const share::schema::ObTableSchema *&table_schema,
                                       const ObObjParam &part_name,
                                       ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
   ObSEArray<PartInfo, 1> part_infos;
   ObSEArray<PartInfo, 32> subpart_infos;
-  if (OB_ISNULL(table_schema)) {
+  if (OB_ISNULL(table_schema) || OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(table_schema), K(ret));
+    LOG_WARN("get unexpected null", K(table_schema), K(ctx.get_my_session()), K(ret));
   } else if (OB_FAIL(part_name.get_string(param.part_name_))) {
     LOG_WARN("failed to get part name", K(ret));
+  } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              param.part_name_,
+                                              lib::is_oracle_mode()))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else if (!table_schema->is_partitioned_table()) {
     ret = OB_ERR_NOT_PARTITIONED;
     LOG_WARN("the target table is not partitioned", K(ret));
-  } else {
-    int32_t pre_len = param.part_name_.length();
-    try_caseup(part_name.get_collation_type(), param.part_name_);
-    bool is_sensitive_compare = (pre_len != param.part_name_.length());
-    if (OB_FAIL(find_selected_part_infos(param.part_name_,
-                                         param.part_infos_,
-                                         param.subpart_infos_,
-                                         is_sensitive_compare,
-                                         part_infos,
-                                         subpart_infos,
-                                         param.is_subpart_name_))) {
-      LOG_WARN("failed to find selected partition infos");
-    } else if (OB_FAIL(param.part_infos_.assign(part_infos))) {
-      LOG_WARN("failed to assign part infos", K(ret));
-    } else if (OB_FAIL(param.subpart_infos_.assign(subpart_infos))) {
-      LOG_WARN("failed to assign new subpart infos", K(ret));
-    } else {/*do nothing*/}
-  }
+  } else if (OB_FAIL(find_selected_part_infos(param.part_name_,
+                                              param.part_infos_,
+                                              param.subpart_infos_,
+                                              lib::is_oracle_mode(),
+                                              part_infos,
+                                              subpart_infos,
+                                              param.is_subpart_name_))) {
+    LOG_WARN("failed to find selected partition infos");
+  } else if (OB_FAIL(param.part_infos_.assign(part_infos))) {
+    LOG_WARN("failed to assign part infos", K(ret));
+  } else if (OB_FAIL(param.subpart_infos_.assign(subpart_infos))) {
+    LOG_WARN("failed to assign new subpart infos", K(ret));
+  } else {/*do nothing*/}
   return ret;
 }
 
@@ -3541,8 +3645,11 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
       param.db_name_ = session->get_database_name();
     } else if (OB_FAIL(owner.get_string(param.db_name_))) {
       LOG_WARN("failed to get db name", K(ret));
-    } else {
-      try_caseup(owner.get_collation_type(), param.db_name_);
+    } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                session->get_dtc_params(),
+                                                param.db_name_,
+                                                lib::is_oracle_mode()))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -3550,8 +3657,11 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
       is_valid = false;
     } else if (OB_FAIL(tab_name.get_string(param.tab_name_))) {
       LOG_WARN("failed to get table name", K(ret));
-    } else {
-      try_caseup(tab_name.get_collation_type(), param.tab_name_);
+    } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                session->get_dtc_params(),
+                                                param.tab_name_,
+                                                lib::is_oracle_mode()))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     }
   }
   // parse owner/database info
@@ -3580,7 +3690,7 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
       } else {/*do nothing*/}
     }
   }
-  if (OB_SUCC(ret) && table_schema != NULL) {
+  if (OB_SUCC(ret) && table_schema != NULL && !table_schema->is_view_table()) {
     param.table_id_ = table_schema->get_table_id();
     param.part_level_ = table_schema->get_part_level();
     if (OB_FAIL(set_param_global_part_id(ctx, param))) {
@@ -3629,7 +3739,7 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
     param.tenant_id_ = session->get_effective_tenant_id();
     param.is_temp_table_ = table_schema->is_tmp_table();
   }
-  if (OB_SUCC(ret) && table_schema != NULL) {
+  if (OB_SUCC(ret) && table_schema != NULL && !table_schema->is_view_table()) {
     param.table_id_ = table_schema->get_table_id();
     param.part_level_ = table_schema->get_part_level();
     if (OB_FAIL(set_param_global_part_id(ctx, param))) {
@@ -3662,32 +3772,32 @@ int ObDbmsStats::parse_index_table_info(ObExecContext &ctx,
                                        to_cstring(data_table_param.tab_name_));
   } else if (OB_FAIL(idx_name.get_string(index_name))) {
     LOG_WARN("failed to get string", K(ret), K(idx_name));
+  } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              index_name,
+                                              lib::is_oracle_mode()))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
+  } else if (OB_FAIL(get_index_schema(ctx,
+                                      table_schema->get_table_id(),
+                                      lib::is_oracle_mode(),
+                                      index_name,
+                                      index_schema))) {
+    LOG_WARN("failed to get index schema", K(ret), K(index_name));
+  } else if (OB_ISNULL(index_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("index schema is null", K(ret), K(index_schema), K(data_table_param.db_name_),
+                                    K(index_name));
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(data_table_param.db_name_),
+                                      to_cstring(index_name));
   } else {
-    int32_t pre_len = index_name.length();
-    try_caseup(idx_name.get_collation_type(), index_name);
-    bool is_sensitive_compare = (pre_len != index_name.length());
-    if (OB_FAIL(get_index_schema(ctx,
-                                 table_schema->get_table_id(),
-                                 is_sensitive_compare,
-                                 index_name,
-                                 index_schema))) {
-      LOG_WARN("failed to get index schema", K(ret), K(index_name));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("index schema is null", K(ret), K(index_schema), K(data_table_param.db_name_),
-                                      K(index_name));
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(data_table_param.db_name_),
-                                        to_cstring(index_name));
-    } else {
-      param.tab_name_ = index_name;
-      param.db_name_ = data_table_param.db_name_;
-      param.tenant_id_ = data_table_param.tenant_id_;
-      param.db_id_ = data_table_param.db_id_;
-      param.table_id_ = index_schema->get_table_id();
-      param.part_level_ = index_schema->get_part_level();
-      if (OB_FAIL(set_param_global_part_id(ctx, param))) {
-        LOG_WARN("failed to set param globa part id", K(ret));
-      }
+    param.tab_name_ = index_name;
+    param.db_name_ = data_table_param.db_name_;
+    param.tenant_id_ = data_table_param.tenant_id_;
+    param.db_id_ = data_table_param.db_id_;
+    param.table_id_ = index_schema->get_table_id();
+    param.part_level_ = index_schema->get_part_level();
+    if (OB_FAIL(set_param_global_part_id(ctx, param))) {
+      LOG_WARN("failed to set param globa part id", K(ret));
     }
   }
   return ret;
@@ -3742,6 +3852,10 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
       // do nothing
     } else if (OB_FAIL(method_opt.get_varchar(param.method_opt_))) {
       LOG_WARN("failed to get method opt", K(ret));
+    } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                param.method_opt_))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (0 == param.method_opt_.case_compare("Z")) {
       stat_options |= StatOptionFlags::OPT_METHOD_OPT;
     }
@@ -3765,6 +3879,10 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
                 " PARTITION | SUBPARTITION | GLOBAL AND PARTITION | APPROX_GLOBAL AND PARTITION");
     } else if (OB_FAIL(granularity.get_varchar(param.granularity_))) {
       LOG_WARN("failed to get granularity", K(ret));
+    } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                param.granularity_))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     } else if (0 == param.granularity_.case_compare("Z")) {
       stat_options |= StatOptionFlags::OPT_GRANULARITY;
     }
@@ -4426,6 +4544,39 @@ int ObDbmsStats::get_table_part_infos(const share::schema::ObTableSchema *table_
   return ret;
 }
 
+int ObDbmsStats::get_part_ids_from_schema(const ObTableSchema *table_schema,
+                                          common::ObIArray<ObObjectID> &target_part_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexptect null pointer", K(ret));
+  } else {
+    if (!table_schema->is_partitioned_table()) {
+      if (OB_FAIL(target_part_ids.push_back(table_schema->get_object_id()))) {
+        LOG_WARN("fail to push back part id", K(ret));
+      }
+    } else {
+      ObSEArray<PartInfo, 4> dummy_part_infos;
+      ObSEArray<PartInfo, 4> dummy_subpart_infos;
+      ObSEArray<int64_t, 4> part_ids;
+      ObSEArray<int64_t, 4> subpart_ids;
+      if (OB_FAIL(get_table_part_infos(table_schema,
+                                       dummy_part_infos,
+                                       dummy_subpart_infos,
+                                       part_ids,
+                                       subpart_ids))) {
+        LOG_WARN("fail to get part infos", K(ret));
+      } else if (OB_FAIL(append(target_part_ids, part_ids))) {
+        LOG_WARN("fail to append target part id", K(ret));
+      } else if (OB_FAIL(append(target_part_ids, subpart_ids))) {
+        LOG_WARN("fail to append target part id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 /*
 * epc          NUMBER    DEFAULT NULL, Number of buckets in histogram
 * minval       RAW       DEFAULT NULL, Minimum value
@@ -4924,7 +5075,8 @@ int ObDbmsStats::check_statistic_table_writeable(sql::ObExecContext &ctx)
 //   return ret;
 // }
 
-int ObDbmsStats::parse_column_info(const ObObjParam &column_name,
+int ObDbmsStats::parse_column_info(sql::ObExecContext &ctx,
+                                   const ObObjParam &column_name,
                                    ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
@@ -4933,16 +5085,18 @@ int ObDbmsStats::parse_column_info(const ObObjParam &column_name,
     /*do nothing*/
   } else if (OB_FAIL(column_name.get_varchar(col_name))) {
     LOG_WARN("failed to get varchar", K(ret));
+  } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                              ctx.get_my_session()->get_dtc_params(),
+                                              col_name,
+                                              lib::is_oracle_mode()))) {
+    LOG_WARN("failed to convert vaild ident name", K(ret));
   } else {
     ObSEArray<ObColumnStatParam, 1> new_col_params;
     bool find_it = false;
-    int32_t pre_len = col_name.length();
-    try_caseup(column_name.get_collation_type(), col_name);
-    bool is_sensitive_compare = (pre_len != col_name.length());
     for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < param.column_params_.count(); ++i) {
-      if ((is_sensitive_compare &&
+      if ((lib::is_oracle_mode() &&
            ObCharset::case_sensitive_equal(col_name, param.column_params_.at(i).column_name_)) ||
-          (!is_sensitive_compare &&
+          (!lib::is_oracle_mode() &&
            ObCharset::case_insensitive_equal(col_name, param.column_params_.at(i).column_name_))) {
         if (OB_FAIL(new_col_params.push_back(param.column_params_.at(i)))) {
           LOG_WARN("failed to push back column params", K(ret));
@@ -5073,8 +5227,11 @@ int ObDbmsStats::get_all_table_ids_in_database(ObExecContext &ctx,
       stat_param.db_name_ = session->get_user_name();
     } else if (OB_FAIL(owner.get_string(stat_param.db_name_))) {
       LOG_WARN("failed to get db name", K(ret));
-    } else {
-      try_caseup(owner.get_collation_type(), stat_param.db_name_);
+    } else if (OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                session->get_dtc_params(),
+                                                stat_param.db_name_,
+                                                lib::is_oracle_mode()))) {
+      LOG_WARN("failed to convert vaild ident name", K(ret));
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(schema_guard->get_database_id(stat_param.tenant_id_,
@@ -5094,7 +5251,8 @@ int ObDbmsStats::get_all_table_ids_in_database(ObExecContext &ctx,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret));
           } else if (!(table_schemas.at(i)->is_user_table() ||
-                       ObDbmsStatsUtils::is_stat_sys_table(table_schemas.at(i)->get_table_id()))) {
+                       ObDbmsStatsUtils::is_stat_sys_table(stat_param.tenant_id_,
+                                                           table_schemas.at(i)->get_table_id()))) {
             // only need following tables:
             // 1. user table
             // 2. valid sys table and real agent virtual table
@@ -5215,7 +5373,8 @@ int ObDbmsStats::get_need_statistics_tables(sql::ObExecContext &ctx,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), K(table_schema));
           } else if (!(table_schema->is_user_table() ||
-                       ObDbmsStatsUtils::is_stat_sys_table(table_schema->get_table_id()))) {
+                       ObDbmsStatsUtils::is_stat_sys_table(tenant_id,
+                                                           table_schema->get_table_id()))) {
             // only gather statistics for following tables:
             // 1. user table
             // 2. valid sys table and real agent virtual table
@@ -5673,7 +5832,7 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
     } else {
       stat_pref = tmp_pref;
     }
-  } else if (is_global_prefs && 0 == opt_name.case_compare("ESTIMATE_BLOCK")) {
+  } else if (0 == opt_name.case_compare("ESTIMATE_BLOCK")) {
     ObEstimateBlockPrefs *tmp_pref = NULL;
     if (OB_FAIL(new_stat_prefs(ctx.get_allocator(), ctx.get_my_session(), opt_value, tmp_pref))) {
       LOG_WARN("failed to new stat prefs", K(ret));
@@ -5721,18 +5880,31 @@ int ObDbmsStats::get_table_stale_percent_threshold(sql::ObExecContext &ctx,
   return ret;
 }
 
-void ObDbmsStats::try_caseup(ObCollationType cs_type, ObString &str_val)
+int ObDbmsStats::convert_vaild_ident_name(common::ObIAllocator &allocator,
+                                          const common::ObDataTypeCastParams &dtc_params,
+                                          ObString &ident_name,
+                                          bool need_extra_conv/*default false*/)
 {
-  if (!str_val.empty()) {
-    //oracle support lowercase name to gather and manager stats, eg:
-    //  create table "t1"(c1 int);
-    //  call dbms_stats.gather_table_stats(NULL, '"t1"');
-    if (str_val.ptr()[0] == '\"' && str_val.ptr()[str_val.length() - 1] == '\"') {
-      str_val.assign(str_val.ptr() + 1, str_val.length() - 2);
-    } else {
-      ObCharset::caseup(cs_type, str_val);
+  int ret = OB_SUCCESS;
+  if (!ident_name.empty()) {
+    if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator,
+                                                                   dtc_params,
+                                                                   ident_name))) {
+      LOG_WARN("fail to convert charset", K(ret));
+    } else if (need_extra_conv) {
+      //oracle support lowercase name to gather and manager stats, eg:
+      //  create table "t1"(c1 int);
+      //  call dbms_stats.gather_table_stats(NULL, '"t1"');
+      if (ident_name.length() > 1 &&
+          ident_name.ptr()[0] == '\"' &&
+          ident_name.ptr()[ident_name.length() - 1] == '\"') {
+        ident_name.assign(ident_name.ptr() + 1, ident_name.length() - 2);
+      } else {
+        ObCharset::caseup(CS_TYPE_UTF8MB4_BIN, ident_name);
+      }
     }
   }
+  return ret;
 }
 
 bool ObDbmsStats::is_table_gather_global_stats(const int64_t global_id,
@@ -5854,14 +6026,16 @@ int ObDbmsStats::get_index_schema(sql::ObExecContext &ctx,
 int ObDbmsStats::set_param_global_part_id(ObExecContext &ctx,
                                           ObTableStatParam &param, 
                                           bool is_data_table,
-                                          int64_t data_table_id)
+                                          int64_t data_table_id,
+                                          share::schema::ObPartitionLevel data_table_level)
 {
   int ret = OB_SUCCESS;
-  if (param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO) {
+  share::schema::ObPartitionLevel part_level = is_data_table ? data_table_level : param.part_level_;
+  int64_t target_table_id = is_data_table ? data_table_id : param.table_id_;
+  if (part_level == share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO) {
     ObDASTabletMapper tablet_mapper;
     ObSEArray<ObTabletID, 1> tmp_tablet_ids;
     ObSEArray<ObObjectID, 1> tmp_part_ids;
-    int64_t target_table_id = is_data_table ? data_table_id : param.table_id_;
     if (OB_FAIL(ctx.get_das_ctx().get_das_tablet_mapper(target_table_id, tablet_mapper))) {
       LOG_WARN("fail to get das tablet mapper", K(ret));
     } else if (OB_FAIL(tablet_mapper.get_non_partition_tablet_id(tmp_tablet_ids, tmp_part_ids))) {

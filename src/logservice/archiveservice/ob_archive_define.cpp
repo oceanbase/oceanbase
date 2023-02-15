@@ -382,7 +382,12 @@ int ObLSMetaFileHeader::generate_header(const share::SCN &timestamp, const int64
   return ret;
 }
 
-const char *reason_str[] = {"UNKONWN", "SEND_ERROR", "LOG_RECYCLE", "NOT_CONTINUOUS", "GC", "MAX"};
+const char *reason_str[] = {"UNKONWN",
+  "SEND LOG TO ARCHIVE_DEST ERROR",
+  "OBSERVER CLOG RECYCLED BEFORE ARCHIVED",
+  "INTERNAL ERROR, ARCHIVE LOG NOT CONTINUOUS",
+  "LS GC BEFORE ALL CLOG ARCHIVED",
+  "MAX"};
 const char *ObArchiveInterruptReason::get_str() const
 {
   const char *str = NULL;

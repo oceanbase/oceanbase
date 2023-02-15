@@ -326,7 +326,7 @@ public:
   }
   int add_routine(ObPLFunction *routine);
   int get_routine(int64_t routine_idx, ObPLFunction *&routine) const;
-  void init_routine_table(int64_t count) { routine_table_.set_capacity(count); }
+  void init_routine_table(int64_t count) { routine_table_.set_capacity(static_cast<uint32_t>(count)); }
   inline const ObIArray<ObUserDefinedType *> &get_type_table() const { return type_table_; }
   inline sql::ObRawExprFactory &get_expr_factory() { return expr_factory_; }
 
@@ -387,7 +387,13 @@ class ObPLSqlStmt;
 class ObPLSqlInfo
 {
 public:
-  ObPLSqlInfo() {}
+  ObPLSqlInfo()
+    : loc_(0), forall_sql_(false), for_update_(false), has_hidden_rowid_(false),
+      sql_(), params_(), array_binding_params_(), ps_sql_(),
+      stmt_type_(sql::stmt::StmtType::T_NONE), rowid_table_id_(OB_INVALID_ID),
+      into_(), not_null_flags_(), pl_integer_ranges_(),
+      data_type_(), bulk_(false), allocator_(nullptr) {}
+
   ObPLSqlInfo(common::ObIAllocator &allocator)
     : loc_(0), forall_sql_(false), for_update_(false), has_hidden_rowid_(false),
       sql_(), params_(allocator), array_binding_params_(allocator), ps_sql_(),

@@ -77,11 +77,20 @@ bool ObTabletStat::is_valid() const
   return ls_id_ > 0 && tablet_id_ > 0;
 }
 
-bool ObTabletStat::is_empty_query() const
+bool ObTabletStat::check_need_report() const
 {
   bool bret = false;
-  if (0 == scan_physical_row_cnt_ && 0 == scan_micro_block_cnt_) {
-    bret = true;
+
+  if (0 != query_cnt_) { // report by query
+    if (QUERY_REPORT_MIN_ROW_CNT <= scan_physical_row_cnt_ ||
+      QUERY_REPORT_MIN_MICRO_BLOCK_CNT <= scan_micro_block_cnt_ ||
+      QUERY_REPORT_MIN_SCAN_TABLE_CNT <= exist_row_total_table_cnt_) {
+      bret = true;
+    }
+  } else if (0 != merge_cnt_) { // report by compaction
+    bret = MERGE_REPORT_MIN_ROW_CNT <= merge_physical_row_cnt_;
+  } else { // invalid tablet stat
+    bret = false;
   }
   return bret;
 }
@@ -404,7 +413,7 @@ void ObTabletStreamPool::free(ObTabletStreamNode *node)
     int tmp_ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
       tmp_ret = OB_NOT_INIT;
-      LOG_ERROR("[MEMORY LEAK] ObTabletStreamPool is not inited, cannot free this node!!!",
+      LOG_ERROR_RET(tmp_ret, "[MEMORY LEAK] ObTabletStreamPool is not inited, cannot free this node!!!",
           K(tmp_ret), KPC(node));
     } else if (DYNAMIC_ALLOC == node->flag_) {
       node->~ObTabletStreamNode();
@@ -512,26 +521,20 @@ int ObTenantTabletStatMgr::report_stat(const ObTabletStat &stat)
   } else if (!stat.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(stat));
+  } else if (!stat.check_need_report()) {
   } else {
-    int64_t retry_cnt = 0;
-    while (retry_cnt < MAX_REPORT_RETRY_CNT) {
-      uint64_t pending_cur = ATOMIC_LOAD(&pending_cursor_);
-      uint64_t report_cur = ATOMIC_LOAD(&report_cursor_);
-      if (pending_cur - report_cur + 1 == DEFAULT_MAX_PENDING_CNT) { // full queue
-        if (REACH_TENANT_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
-          LOG_INFO("report_queue is full, wait to process", K(report_cur), K(pending_cur), K(stat));
-        }
-        break;
-      } else if (pending_cur != ATOMIC_CAS(&pending_cursor_, pending_cur, pending_cur + 1)) {
-        ++retry_cnt;
-      } else {
-        report_queue_[pending_cur % DEFAULT_MAX_PENDING_CNT] = stat; // allow dirty write
-        break;
+    uint64_t pending_cur = pending_cursor_;
+    if (pending_cur - report_cursor_ >= DEFAULT_MAX_PENDING_CNT) { // first check full queue with dirty read
+      if (REACH_TENANT_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
+        LOG_INFO("report_queue is full, wait to process", K(report_cursor_), K(pending_cur), K(stat));
       }
-    }
-    if (retry_cnt == MAX_REPORT_RETRY_CNT) {
-      // pending cursor has been moved in other thread, ignore this tablet_stat
-      LOG_INFO("pending cursor has beed moved in other thread, ignore current stat", K(stat));
+    } else if (FALSE_IT(pending_cur = ATOMIC_FAA(&pending_cursor_, 1))) {
+    } else if (pending_cur - report_cursor_ >= DEFAULT_MAX_PENDING_CNT) { // double check
+        if (REACH_TENANT_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
+        LOG_INFO("report_queue is full, wait to process", K(report_cursor_), K(pending_cur), K(stat));
+      }
+    } else {
+      report_queue_[pending_cur % DEFAULT_MAX_PENDING_CNT] = stat;
     }
   }
   return ret;
@@ -687,8 +690,11 @@ void ObTenantTabletStatMgr::dump_tablet_stat_status()
 void ObTenantTabletStatMgr::process_stats()
 {
   int tmp_ret = OB_SUCCESS;
-  uint64_t start_idx = ATOMIC_LOAD(&report_cursor_);
-  const uint64_t end_idx = ATOMIC_LOAD(&pending_cursor_);
+  const uint64_t start_idx = report_cursor_;
+  const uint64_t pending_cur = ATOMIC_LOAD(&pending_cursor_);
+  uint64_t end_idx = (pending_cur > start_idx + DEFAULT_MAX_PENDING_CNT)
+                   ? start_idx + DEFAULT_MAX_PENDING_CNT
+                   : pending_cur;
 
   if (start_idx == end_idx) { // empty queue
   } else {
@@ -697,10 +703,10 @@ void ObTenantTabletStatMgr::process_stats()
       if (!cur_stat.is_valid()) {
         // allow dirty read
       } else if (OB_TMP_FAIL(update_tablet_stream(cur_stat))) {
-        LOG_WARN("failed to update tablet stat", K(tmp_ret), K(cur_stat));
+        LOG_WARN_RET(tmp_ret, "failed to update tablet stat", K(tmp_ret), K(cur_stat));
       }
     }
-    ATOMIC_STORE(&report_cursor_, end_idx);
+    report_cursor_ = pending_cur; // only TabletStatUpdater update this value.
   }
 }
 
@@ -722,7 +728,7 @@ void ObTenantTabletStatMgr::TabletStatUpdater::runTimerTask()
   int64_t interval_step = 0;
   if (CHECK_SCHEDULE_TIME_INTERVAL(CHECK_INTERVAL, interval_step)) {
     if (OB_UNLIKELY(interval_step > 1)) {
-      LOG_WARN("tablet streams not refresh too long", K(interval_step));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "tablet streams not refresh too long", K(interval_step));
     }
     mgr_.refresh_all(interval_step);
     FLOG_INFO("TenantTabletStatMgr refresh all tablet stream", K(MTL_ID()), K(interval_step));

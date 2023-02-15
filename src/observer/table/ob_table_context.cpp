@@ -364,6 +364,9 @@ int ObTableCtx::adjust_properties()
         LOG_WARN("fail to get column schema", K(ret), K(col_name));
       } else if (is_get) {
         // do nothing
+      } else if (col_schema->is_rowkey_column()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("property should not be rowkey column", K(ret), K(prop_names), K(i));
       } else if (OB_FAIL(adjust_column(*col_schema, prop_obj))) {
         LOG_WARN("fail to adjust column", K(ret), K(prop_obj));
       }
@@ -559,19 +562,14 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
         } else if (has_exist_in_columns(select_columns, column_schema->get_column_name_str())) {
           if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
             LOG_WARN("fail to add column id", K(ret));
-          } else if (OB_FAIL(select_metas_.push_back(column_schema->get_meta_type()))) {
-            LOG_WARN("fail to add column meta", K(ret));
           }
         }
       }
       if (OB_SUCC(ret)) {
-        if (select_col_ids_.count() != select_columns.count() ||
-            select_metas_.count() != select_columns.count()) {
+        if (select_col_ids_.count() != select_columns.count()) {
           ret = OB_ERR_COLUMN_NOT_FOUND;
           LOG_WARN("select_col_ids or select_metas count is not equal to select_columns",
-                    K(select_columns),
-                    K(select_col_ids_),
-                    K(select_metas_));
+              K(select_columns), K(select_col_ids_));
         } else {
           // init query_col_ids_
           for (int64_t i = 0; OB_SUCC(ret) && i < select_columns.count(); i++) {
@@ -683,7 +681,7 @@ int ObTableCtx::init_delete()
   is_get_ = is_htable() ? false : true;
   scan_order_ = ObQueryFlag::Forward;
 
-  // 2. init select_col_ids_, select_metas_
+  // 2. init select_col_ids_
   const ObColumnSchemaV2 *column_schema = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_num; i++) {
     if (OB_ISNULL(column_schema = table_schema_->get_column_schema_by_idx(i))) {
@@ -693,8 +691,6 @@ int ObTableCtx::init_delete()
       // skip
     } else if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
       LOG_WARN("fail to push back column id", K(ret), K(column_schema->get_column_id()));
-    } else if (is_htable() && OB_FAIL(select_metas_.push_back(column_schema->get_meta_type()))) {
-      LOG_WARN("fail to push back meta type", K(ret), K(column_schema->get_meta_type()));
     }
   }
 
@@ -766,7 +762,7 @@ int ObTableCtx::init_get()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table scheam is null", K(ret));
   } else {
-    // init select_col_ids, select_metas_
+    // init select_col_ids
     for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
         OB_SUCC(ret) && iter != table_schema_->column_end();
         ++iter) {
@@ -776,9 +772,7 @@ int ObTableCtx::init_get()
         LOG_WARN("column schema is NULL", K(ret));
       } else if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
         LOG_WARN("fail to add column id", K(ret));
-      } else if (OB_FAIL(select_metas_.push_back(column_schema->get_meta_type()))) {
-        LOG_WARN("fail to add column meta", K(ret));
-      } else { /*do nothing*/ }
+      }
     }
   }
   return ret;
@@ -909,7 +903,7 @@ int ObTableCtx::classify_scan_exprs()
     // had classify, do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs_cnt; i++) {
-      if (T_REF_COLUMN == exprs->at(i)->get_expr_type()) {
+      if (exprs->at(i)->is_column_ref_expr()) {
         ObColumnRefRawExpr *expr = static_cast<ObColumnRefRawExpr *>(exprs->at(i));
         if (expr->is_rowkey_column() && OB_FAIL(rowkey_exprs_.push_back(expr))) {
           LOG_WARN("fail to push back rowkey expr", K(ret));
@@ -1008,9 +1002,7 @@ int ObTableCtx::init_trans(transaction::ObTxDesc *trans_desc,
     LOG_WARN("trans desc is null", K(ret));
   } else {
     get_session_info().get_tx_desc() = trans_desc;
-    // init tx_snapshot_
-    tx_snapshot_ = tx_snapshot;
-    exec_ctx_.get_das_ctx().set_snapshot(tx_snapshot_);
+    exec_ctx_.get_das_ctx().set_snapshot(tx_snapshot);
   }
 
   return ret;

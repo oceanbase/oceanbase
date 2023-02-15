@@ -194,7 +194,7 @@ void ObPLCtx::reset_obj()
   int tmp_ret = OB_SUCCESS;
   for (int64_t i = 0; i < objects_.count(); ++i) {
     if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(objects_.at(i)))) {
-      LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "failed to destruct pl object", K(i), K(tmp_ret));
     }
   }
   objects_.reset();
@@ -454,7 +454,7 @@ void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSes
       }
     }
   } else {
-    DETECT_LOG(WARN, "not register to deadlock", K(last_trans_id), K(now_trans_id));
+    DETECT_LOG_RET(WARN, OB_ERR_UNEXPECTED, "not register to deadlock", K(last_trans_id), K(now_trans_id));
   }
 }
 
@@ -470,12 +470,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
   
   OX (is_autonomous_ = is_autonomous);
   OX (is_function_or_trigger_ = is_function_or_trigger);
-  if (is_function_or_trigger && lib::is_mysql_mode()) {
-    last_insert_id_ = session_info.get_local_last_insert_id();
-    const ObString stash_savepoint_name("PL stash savepoint");
-    OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
-    OX (has_stash_savepoint_ = true);
-  }
+
   OZ (session_info.get_pl_block_timeout(pl_block_timeout));
   if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
     pl_block_timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
@@ -567,6 +562,13 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       OX (reset_autocommit_ = true);
       OX (session_info.set_autocommit(false));
     }
+  }
+
+  if (is_function_or_trigger && lib::is_mysql_mode()) {
+    last_insert_id_ = session_info.get_local_last_insert_id();
+    const ObString stash_savepoint_name("PL stash savepoint");
+    OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
+    OX (has_stash_savepoint_ = true);
   }
   if (is_autonomous_) {
     has_inner_dml_write_ = session_info.has_exec_inner_dml();
@@ -2823,13 +2825,13 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
   OX (ctx_.exec_ctx_->set_physical_plan_ctx(&get_physical_plan_ctx()));
   OX (need_reset_physical_plan_ = true);
   if (OB_SUCC(ret) && func_.get_expr_op_size() > 0)  {
-    OZ (ctx_.exec_ctx_->init_expr_op(func_.get_expr_op_size()));
+    OZ (ctx_.exec_ctx_->init_expr_op(func_.get_expr_op_size(), ctx_.allocator_));
   }
 
   if (OB_SUCC(ret)) {
     // TODO bin.lb: how about the memory?
     // https://aone.alibaba-inc.com/project/81079/task/34962640
-    OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_));
+    OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, ctx_.allocator_));
   }
 
 
@@ -3399,7 +3401,7 @@ void ObPLCompileUnit::dump_deleted_log_info(const bool is_debug_log /* = true */
   if (is_anon()) {
     const pl::ObPLFunction *pl_func = dynamic_cast<const pl::ObPLFunction *>(this);
     if (OB_ISNULL(pl_func)) {
-      LOG_ERROR("the plan is null", K(object_id_),
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "the plan is null", K(object_id_),
                                     K(tenant_id_),
                                     K(added_to_lc_),
                                     K(get_ref_count()),

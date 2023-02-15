@@ -25,6 +25,7 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "ob_storage_ha_utils.h"
 #include "storage/tablet/ob_tablet.h"
+#include "share/ls/ob_ls_table_operator.h"
 
 namespace oceanbase
 {
@@ -332,7 +333,7 @@ bool ObMigrationDagNet::operator == (const ObIDagNet &other) const
     const ObMigrationDagNet &other_migration_dag = static_cast<const ObMigrationDagNet &>(other);
     if (OB_ISNULL(other_migration_dag.ctx_) || OB_ISNULL(ctx_)) {
       is_same = false;
-      LOG_ERROR("migration ctx is NULL", KPC(ctx_), KPC(other_migration_dag.ctx_));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx is NULL", KPC(ctx_), KPC(other_migration_dag.ctx_));
     } else if (ctx_->arg_.ls_id_ != other_migration_dag.ctx_->arg_.ls_id_) {
       is_same = false;
     }
@@ -344,7 +345,7 @@ int64_t ObMigrationDagNet::hash() const
 {
   int64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
-    LOG_ERROR("migration ctx is NULL", KPC(ctx_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx is NULL", KPC(ctx_));
   } else {
     hash_value = common::murmurhash(&ctx_->arg_.ls_id_, sizeof(ctx_->arg_.ls_id_), hash_value);
   }
@@ -466,7 +467,7 @@ bool ObInitialMigrationDag::operator == (const ObIDag &other) const
       is_same = false;
     } else if (OB_ISNULL(ctx) || OB_ISNULL(other_dag.get_migration_ctx())) {
       is_same = false;
-      LOG_ERROR("migration ctx should not be NULL", KP(ctx), KP(other_dag.get_migration_ctx()));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx should not be NULL", KP(ctx), KP(other_dag.get_migration_ctx()));
     } else if (NULL != ctx && NULL != other_dag.get_migration_ctx()) {
       if (ctx->arg_.ls_id_ != other_dag.get_migration_ctx()->arg_.ls_id_) {
         is_same = false;
@@ -482,7 +483,7 @@ int64_t ObInitialMigrationDag::hash() const
   ObMigrationCtx * ctx = get_migration_ctx();
 
   if (OB_ISNULL(ctx)) {
-    LOG_ERROR("migration ctx should not be NULL", KP(ctx));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx should not be NULL", KP(ctx));
   } else {
     hash_value = common::murmurhash(
         &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
@@ -938,15 +939,17 @@ int ObStartMigrationTask::process()
   } else if (OB_FAIL(try_remove_member_list_())) {
     LOG_WARN("failed to try remove member list", K(ret));
   } else if (OB_FAIL(deal_with_local_ls_())) {
-    LOG_WARN("failed to deal with local ls", K(ret), K(*ctx_));
+    LOG_WARN("failed to deal with local ls", K(ret), KPC(ctx_));
   } else if (OB_FAIL(check_ls_need_copy_data_(need_copy_data))) {
     LOG_WARN("failed to check ls need copy data", K(ret), KPC(ctx_));
   } else if (!need_copy_data) {
     //do nothing
+  } else if (OB_FAIL(report_ls_meta_table_())) {
+    LOG_WARN("failed to report ls meta table", K(ret), KPC(ctx_));
   } else if (OB_FAIL(choose_src_())) {
-    LOG_WARN("failed to choose src", K(ret), K(*ctx_));
+    LOG_WARN("failed to choose src", K(ret), KPC(ctx_));
   } else if (OB_FAIL(update_ls_())) {
-    LOG_WARN("failed to update_ls_", K(ret), K(*ctx_));
+    LOG_WARN("failed to update_ls_", K(ret), KPC(ctx_));
   } else if (OB_FAIL(deal_local_restore_ls_(need_generate_dag))) {
     LOG_WARN("failed to deal local restore ls", K(ret), KPC(ctx_));
   } else if (!need_generate_dag) {
@@ -1078,6 +1081,39 @@ int ObStartMigrationTask::deal_with_local_ls_()
       }
     }
   }
+  return ret;
+}
+
+int ObStartMigrationTask::report_ls_meta_table_()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("start migration task do not init", K(ret));
+  } else if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx should not be null", K(ret));
+  } else if (ObMigrationOpType::ADD_LS_OP != ctx_->arg_.type_
+      && ObMigrationOpType::MIGRATE_LS_OP != ctx_->arg_.type_) {
+    // do nothing
+  } else {
+    const uint64_t tenant_id = ctx_->tenant_id_;
+    const share::ObLSID &ls_id = ctx_->arg_.ls_id_;
+    ObLSReplica ls_replica;
+    share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
+    const bool inner_table_only = false;
+    if (OB_FAIL(GCTX.ob_service_->fill_ls_replica(tenant_id, ls_id, ls_replica))) {
+      LOG_WARN("failed to fill ls replica", K(ret), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(lst_operator->update(ls_replica, inner_table_only))) {
+      LOG_WARN("failed to update ls meta table", K(ret), K(ls_replica));
+    } else {
+      SERVER_EVENT_ADD("storage_ha", "report_ls_meta_table",
+                        "tenant_id", tenant_id,
+                        "ls_id", ls_id);
+      LOG_INFO("report ls meta table", K(ls_replica));
+    }
+  }
+  DEBUG_SYNC(AFTER_MIGRATION_REPORT_LS_META_TABLE);
   return ret;
 }
 

@@ -54,7 +54,7 @@ static int check_and_assign_ptr_(const char *others_ptr,
       DETECT_LOG(WARN, "string length is not satisfied length limit",
                         PRINT_WRAPPER, K(STR_LEN_LIMIT));
     } else {
-      self_string->assign_ptr(others_ptr, calculated_len);
+      self_string->assign_ptr(others_ptr, static_cast<int32_t>(calculated_len));
     }
   }
 

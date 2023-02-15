@@ -143,7 +143,7 @@ int ObSchemaHistoryRecycler::idle()
 void ObSchemaHistoryRecycler::wakeup()
 {
   if (!inited_) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(common::OB_NOT_INIT, "not init");
   } else {
     idling_.wakeup();
   }
@@ -1251,7 +1251,7 @@ bool ObRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(recycler_)
       || NONE == mode_) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version), K_(mode),
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version), K_(mode),
              KP_(table_name), KP_(schema_key_name), KP_(sql_proxy), KP_(recycler));
   }
   return bret;
@@ -1744,7 +1744,7 @@ bool ObSecondRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(sql_proxy_)
       || OB_ISNULL(recycler_)) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version),
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version),
              KP_(table_name), KP_(schema_key_name), KP_(second_schema_key_name),
              KP_(sql_proxy), KP_(recycler));
   }
@@ -1860,7 +1860,7 @@ bool ObThirdRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(sql_proxy_)
       || OB_ISNULL(recycler_)) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version),
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version),
              KP_(table_name), KP_(schema_key_name), KP_(second_schema_key_name),
              KP_(third_schema_key_name), KP_(sql_proxy), KP_(recycler));
   }
@@ -2046,7 +2046,7 @@ bool ObSystemVariableRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(sql_proxy_)
       || OB_ISNULL(recycler_)) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version),
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version),
              KP_(table_name), KP_(sql_proxy), KP_(recycler));
   }
   return bret;
@@ -2283,7 +2283,7 @@ bool ObObjectPrivRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(sql_proxy_)
       || OB_ISNULL(recycler_)) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version),
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version),
              KP_(table_name), KP_(sql_proxy), KP_(recycler));
   }
   return bret;

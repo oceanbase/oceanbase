@@ -101,7 +101,7 @@ int ObRemoteLogIterator<LogEntryType>::next(LogEntryType &entry, LSN &lsn, const
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_RESTORE_LOG_FROM_SOURCE_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_RESTORE_LOG_FROM_SOURCE_FAILED) OB_SUCCESS;
   }
 #endif
   return ret;

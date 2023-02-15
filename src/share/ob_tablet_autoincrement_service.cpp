@@ -196,6 +196,7 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
         LOG_WARN("failed to get autoinc cache", K(ret));
       } else if (tablet_id.is_user_normal_rowid_table_tablet() && node.cache_end_ > OB_MAX_AUTOINC_SEQ_VALUE) {
         ret = OB_HEAP_TABLE_EXAUSTED;
+        LOG_DBA_ERROR(OB_HEAP_TABLE_EXAUSTED, "msg", "The hidden primary key sequence has exhausted", K(tablet_id), "current_seq", node.cache_end_);
         LOG_WARN("tablet autoinc seq has reached max", K(ret), K(node));
       } else {
         LOG_INFO("fetch new range success", K(tablet_id), K(node));
@@ -260,6 +261,7 @@ int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, cons
     ObTabletCacheInterval interval(tablet_id, 1/*cache size*/);
     lib::ObMutex &mutex = init_node_mutexs_[tablet_id.id() % INIT_NODE_MUTEX_NUM];
     lib::ObMutexGuard guard(mutex);
+    lib::DisableSchedInterGuard sched_guard;
     if (OB_ISNULL(autoinc_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("autoinc mgr is unexpected null", K(ret));

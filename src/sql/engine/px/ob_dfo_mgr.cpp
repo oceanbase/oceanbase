@@ -340,9 +340,6 @@ int ObDfoMgr::init(ObExecContext &exec_ctx,
     LOG_WARN("fail assign worker to dfos",
              K(admited_worker_count), K(expected_worker_count), K(ret));
   } else {
-    if (1 == edges_.count() && OB_NOT_NULL(rpc_dfo = edges_.at(0))) {
-      rpc_dfo->set_rpc_worker(1 == rpc_dfo->get_dop());
-    }
     inited_ = true;
   }
   return ret;

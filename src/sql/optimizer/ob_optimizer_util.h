@@ -413,11 +413,6 @@ public:
                                     ObRawExpr *child_expr,
                                     int64_t child_idx);
 
-  static int get_partition_count(const ObLogicalOperator *top,
-                                 const ObIArray<ObRawExpr*> &partition_exprs,
-                                 const int64_t prefix_pos,
-                                 int64_t &part_cnt);
-
   static int get_default_directions(const int64_t direction_num,
                                     ObIArray<ObOrderDirection> &directions);
 

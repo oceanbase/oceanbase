@@ -1516,7 +1516,11 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
         ret = cast_to_otimstamp(j_base, session, accuracy, dst_type, val, is_type_cast);
       }
       if (!try_set_error_val<ObDatum>(expr, ctx, res, ret, error_type, error_val, mismatch_val, mismatch_type, is_type_cast, accuracy, dst_type)) {
-        res.set_otimestamp_tiny(val);
+        if (dst_type == ObTimestampTZType) {
+          res.set_otimestamp_tz(val);
+        } else {
+          res.set_otimestamp_tiny(val);
+        }
       }
       break;
     }

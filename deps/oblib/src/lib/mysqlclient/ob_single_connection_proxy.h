@@ -73,7 +73,7 @@ inline bool ObSingleConnectionProxy::check_inner_stat() const
 {
   bool bret = (OB_SUCCESS == errno_ && NULL != pool_ && NULL != conn_);
   if (!bret) {
-    COMMON_MYSQLP_LOG(WARN, "invalid inner stat", "errno", errno_, K_(pool), K_(conn));
+    COMMON_MYSQLP_LOG_RET(WARN, errno_, "invalid inner stat", "errno", errno_, K_(pool), K_(conn));
   }
   return bret;
 }

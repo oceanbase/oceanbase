@@ -209,7 +209,7 @@ void ObMulSourceTxDataNotifier::ob_abort_log_cb_notify_(const NotifyType type,
   }
 
   if (need_core) {
-    TRANS_LOG(ERROR, "data source can not return error in log_cb on_success", K(type), K(err_code), K(for_replay));
+    TRANS_LOG_RET(ERROR, OB_ERROR, "data source can not return error in log_cb on_success", K(type), K(err_code), K(for_replay));
     ob_usleep(1000 * 1000);
     ob_abort();
 

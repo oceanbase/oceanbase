@@ -45,7 +45,7 @@ public:
       slot_id = (slot_id + 1) % MAX_QCLOCK_SLOT_NUM;
       if (OB_UNLIKELY(begin_id == slot_id)) {
         if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-          COMMON_LOG(ERROR, "QClock slot maybe not enough", K(begin_id), K(MAX_QCLOCK_SLOT_NUM));
+          COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "QClock slot maybe not enough", K(begin_id), K(MAX_QCLOCK_SLOT_NUM));
         }
       }
     }

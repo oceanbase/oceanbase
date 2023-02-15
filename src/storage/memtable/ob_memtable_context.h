@@ -140,7 +140,7 @@ public:
   ~ObQueryAllocator()
   {
     if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
-      TRANS_LOG(ERROR, "query allocator leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
+      TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "query allocator leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
     }
     ATOMIC_STORE(&is_inited_, false);
   }
@@ -171,7 +171,7 @@ public:
   void reset()
   {
     if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
-      TRANS_LOG(ERROR, "query allocator leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "query allocator leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
     }
     allocator_.reset();
     ATOMIC_STORE(&alloc_count_, 0);
@@ -183,7 +183,7 @@ public:
   {
     void *ret = nullptr;
     if (OB_ISNULL(ret = allocator_.alloc(size))) {
-      TRANS_LOG(ERROR, "query alloc failed",
+      TRANS_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "query alloc failed",
         K(alloc_count_), K(free_count_), K(alloc_size_), K(size));
     } else {
       ATOMIC_INC(&alloc_count_);
@@ -226,7 +226,7 @@ public:
   ~ObMemtableCtxCbAllocator()
   {
     if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
-      TRANS_LOG(ERROR, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
+      TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
     }
     ATOMIC_STORE(&is_inited_, false);
   }
@@ -258,7 +258,7 @@ public:
   void reset()
   {
     if (OB_UNLIKELY(free_count_ != alloc_count_)) {
-      TRANS_LOG(ERROR, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
     }
     allocator_.reset();
     ATOMIC_STORE(&alloc_count_, 0);
@@ -270,7 +270,7 @@ public:
   {
     void *ret = nullptr;
     if (OB_ISNULL(ret = allocator_.alloc(size))) {
-      TRANS_LOG(ERROR, "callback memory failed",
+      TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback memory failed",
         K(alloc_count_), K(free_count_), K(alloc_size_), K(size));
     } else {
       ATOMIC_INC(&alloc_count_);
@@ -399,7 +399,7 @@ public:
   uint64_t get_tenant_id() const;
   inline bool has_read_elr_data() const { return read_elr_data_; }
   int remove_callbacks_for_fast_commit();
-  int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
+  int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt, const share::SCN max_applied_scn);
   int rollback(const int64_t seq_no, const int64_t from_seq_no);
   bool is_all_redo_submitted();
   bool is_for_replay() const { return trans_mgr_.is_for_replay(); }

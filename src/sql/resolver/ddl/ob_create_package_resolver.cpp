@@ -153,9 +153,13 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
           } else if (OB_SYS_TENANT_ID == session_info_->get_effective_tenant_id()) {
             // 系统租户在创建系统包, 环境变量使用Oracle租户默认的环境变量
             // sql_mode = "PIPES_AS_CONCAT,STRICT_ALL_TABLES,PAD_CHAR_TO_FULL_LENGTH"
-            if (OB_FAIL(package_info.set_exec_env(ObString("2151677954,45,46,46,")))) {
-              LOG_WARN("failed to set system package exec env",
-                        K(ret), K(session_info_->get_effective_tenant_id()), K(package_info));
+            if (common::ORACLE_MODE == compa_mode) {
+              if (OB_FAIL(package_info.set_exec_env(ObString("2151677954,45,46,46,")))) {
+                LOG_WARN("failed to set system package exec env",
+                          K(ret), K(session_info_->get_effective_tenant_id()), K(package_info));
+              }
+            } else {
+              OZ (package_info.set_exec_env(ObString("4194304,45,45,45,")));
             }
           } else {
             char buf[OB_MAX_PROC_ENV_LENGTH];
@@ -635,7 +639,11 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
         if (OB_UNLIKELY(OB_SYS_TENANT_ID == session_info_->get_effective_tenant_id())) {
           // 系统租户在创建系统包, 环境变量使用Oracle租户默认的环境变量
           // sql_mode = "PIPES_AS_CONCAT,STRICT_ALL_TABLES,PAD_CHAR_TO_FULL_LENGTH"
-          OZ (package_info.set_exec_env(ObString("2151677954,45,46,46,")));
+          if (common::ORACLE_MODE == compa_mode) {
+            OZ (package_info.set_exec_env(ObString("2151677954,45,46,46,")));
+          } else {
+            OZ (package_info.set_exec_env(ObString("4194304,45,45,45,")));
+          }
         } else {
           char buf[OB_MAX_PROC_ENV_LENGTH];
           int64_t pos = 0;

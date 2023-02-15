@@ -39,7 +39,7 @@ using namespace oceanbase::share::schema;
 
 
 ObBlockMetaTree::ObBlockMetaTree()
-  : is_inited_(false), fifo_allocator_(), tree_allocator_(fifo_allocator_), block_tree_(tree_allocator_)
+  : is_inited_(false), arena_(), tree_allocator_(arena_), block_tree_(tree_allocator_)
 {
 
 }
@@ -55,15 +55,14 @@ int ObBlockMetaTree::init(const share::ObLSID &ls_id,
                           const int64_t cluster_version)
 {
   int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(MTL_ID(), "DDL_KV");
+  const ObMemAttr mem_attr(MTL_ID(), "BlockMetaTree");
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !table_key.is_valid() || cluster_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(table_key));
-  } else if (OB_FAIL(fifo_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
-    LOG_WARN("init fifo allocator failed", K(ret));
+  } else if (FALSE_IT(arena_.set_attr(mem_attr))) {
   } else if (OB_FAIL(block_tree_.init())) {
     LOG_WARN("init block tree failed", K(ret));
   } else if (OB_FAIL(ObTabletDDLUtil::prepare_index_data_desc(ls_id,
@@ -113,6 +112,7 @@ int ObDDLKV::init_sstable_param(const share::ObLSID &ls_id,
       sstable_param.index_type_ = storage_schema.get_index_type();
       sstable_param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
       sstable_param.schema_version_ = storage_schema.get_schema_version();
+      sstable_param.latest_row_store_type_ = storage_schema.get_row_store_type();
       sstable_param.create_snapshot_version_ = table_key.get_snapshot_version();
       sstable_param.ddl_scn_ = ddl_start_scn;
       sstable_param.root_row_store_type_ = data_desc.row_store_type_;
@@ -159,8 +159,15 @@ void ObBlockMetaTree::destroy()
   macro_blocks_.reset();
   block_tree_.destroy();
   data_desc_.reset();
+  for (int64_t i = 0; i < sorted_rowkeys_.count(); ++i) {
+    const ObDataMacroBlockMeta *cur_meta = sorted_rowkeys_.at(i).block_meta_;
+    if (OB_NOT_NULL(cur_meta)) {
+      cur_meta->~ObDataMacroBlockMeta();
+    }
+  }
   sorted_rowkeys_.reset();
-  fifo_allocator_.reset();
+  tree_allocator_.reset();
+  arena_.reset();
 }
 
 int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
@@ -187,11 +194,12 @@ int ObBlockMetaTree::build_sorted_rowkeys()
 {
   int ret = OB_SUCCESS;
   const int64_t version = INT64_MAX;
-  sorted_rowkeys_.reuse();
   BtreeIterator iter;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (sorted_rowkeys_.count() > 0) {
+    // already sorted, do nothing
   } else if (OB_FAIL(block_tree_.set_key_range(iter,
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MIN_ROWKEY, &data_desc_.datum_utils_),
                                                false,
@@ -215,6 +223,9 @@ int ObBlockMetaTree::build_sorted_rowkeys()
       } else if (OB_ISNULL(block_meta)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("block_meta is null", K(ret), KP(block_meta));
+      } else if (((uint64_t)(block_meta) & 7ULL) != 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid btree value", K(ret), KP(block_meta));
       } else {
         IndexItem cur_item(rowkey_wrapper.rowkey_, block_meta);
         cur_item.header_.version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V1;

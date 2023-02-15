@@ -88,7 +88,7 @@ ObTablet::ObTablet()
     is_inited_(false)
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTablet) <= 2496, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTablet) <= 2560, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -2178,6 +2178,7 @@ int ObTablet::build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_pa
     mig_tablet_param.max_serialized_medium_scn_ = tablet_meta_.max_serialized_medium_scn_;
     mig_tablet_param.ddl_execution_id_ = tablet_meta_.ddl_execution_id_;
     mig_tablet_param.ddl_cluster_version_ = tablet_meta_.ddl_cluster_version_;
+    mig_tablet_param.ddl_commit_scn_ = tablet_meta_.ddl_commit_scn_;
     mig_tablet_param.report_status_.reset();
 
     if (OB_FAIL(mig_tablet_param.storage_schema_.init(mig_tablet_param.allocator_, storage_schema_))) {
@@ -2582,7 +2583,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
         if (ObTimeUtility::fast_current_time() - start_time > SYNC_TABLET_SEQ_LOG_TIMEOUT) {
           wait_timeout = true;
         }
-        LOG_WARN("submit sync tablet seq log wait too much time", K(retry_cnt), K(wait_timeout));
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "submit sync tablet seq log wait too much time", K(retry_cnt), K(wait_timeout));
       }
     }
     if (wait_timeout) {
@@ -2655,7 +2656,8 @@ int ObTablet::start_ddl_if_need()
     table_key.version_range_.base_version_ = 0;
     table_key.version_range_.snapshot_version_ = tablet_meta_.ddl_snapshot_version_;
     const SCN &start_scn = tablet_meta_.ddl_start_scn_;
-    if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(table_key,
+    if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*this,
+                                                       table_key,
                                                        start_scn,
                                                        tablet_meta_.ddl_cluster_version_,
                                                        tablet_meta_.ddl_execution_id_,
@@ -2801,7 +2803,7 @@ int ObTablet::write_tablet_schema_version_change_clog(
           if (ObTimeUtility::fast_current_time() - start_time > CHECK_SCHEMA_VERSION_CHANGE_LOG_TIMEOUT) {
             wait_timeout = true;
           }
-          LOG_WARN("submit schema version change log wait too much time", K(retry_cnt), K(wait_timeout));
+          LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "submit schema version change log wait too much time", K(retry_cnt), K(wait_timeout));
         }
       }
       if (wait_timeout) {
@@ -3350,6 +3352,21 @@ int ObTablet::clear_memtables_on_table_store() // be careful to call this func
   }
   return ret;
 }
+int ObTablet::remove_memtables_from_data_checkpoint()
+{
+  int ret = OB_SUCCESS;
+  ObIMemtableMgr *memtable_mgr = nullptr;
 
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else if (OB_FAIL(memtable_mgr->remove_memtables_from_data_checkpoint())){
+    LOG_WARN("failed to rmeove memtables from data_checkpoint", K(ret));
+  }
+
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase

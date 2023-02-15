@@ -29,6 +29,7 @@ public:
   TO_STRING_KV(K_(is_inited));
 public:
   int init(sql::ObExecContext *exec_ctx, const uint64_t table_id, const int64_t parallel);
+  int commit();
   int finish();
   void destroy();
 private:

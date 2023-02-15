@@ -43,7 +43,7 @@ public:
   {
     void *ptr = nullptr;
     if (sz <= 0) {
-      COMMON_LOG(WARN, "invalid argument", K(sz));
+      COMMON_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", K(sz));
     } else {
       ObMemAttr attr(tenant_id_, label_);
       ptr = ob_malloc(sz, attr);

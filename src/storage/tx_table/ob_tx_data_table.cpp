@@ -485,15 +485,38 @@ int ObTxDataTable::check_tx_data_with_cache_once_(const transaction::ObTransID t
 {
   int ret = OB_SUCCESS;
 
-  ObTxDataMemtable *tx_data_memtable = nullptr;
   ObTxDataGuard tx_data_guard;
   bool find = false;
+
+  if (OB_FAIL(get_tx_data_from_cache_(tx_id, tx_data_guard, find))) {
+    STORAGE_LOG(WARN, "get memtable range failed", KR(ret));
+  } else {
+    if (find) {
+      ret = fn(*tx_data_guard.tx_data());
+    } else {
+      int64_t memtable_head = -1;
+      int64_t memtable_tail = -1;
+      if (OB_FAIL(get_memtable_mgr_()->get_memtable_range(memtable_head, memtable_tail))) {
+        STORAGE_LOG(WARN, "get memtable range failed", KR(ret));
+      } else if (memtable_head != memtables_cache_.memtable_head_ || memtable_tail != memtables_cache_.memtable_tail_) {
+        ret = OB_EAGAIN;
+      } else {
+        ret = OB_TRANS_CTX_NOT_EXIST;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTxDataTable::get_tx_data_from_cache_(const transaction::ObTransID tx_id, ObTxDataGuard &tx_data_guard, bool &find)
+{
+  int ret = OB_SUCCESS;
 
   TCRLockGuard guard(memtables_cache_.lock_);
   ObTableHdlArray &memtable_handles = memtables_cache_.memtable_handles_;
 
   for (int i = memtable_handles.count() - 1; OB_SUCC(ret) && !find && i >= 0; i--) {
-    tx_data_memtable = nullptr;
+    ObTxDataMemtable *tx_data_memtable = nullptr;
     if (OB_FAIL(memtable_handles.at(i).get_tx_data_memtable(tx_data_memtable))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "get tx data memtable from table handles fail.", KR(ret), K(tx_id), K(memtable_handles.at(i)));
@@ -518,21 +541,6 @@ int ObTxDataTable::check_tx_data_with_cache_once_(const transaction::ObTransID t
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (find) {
-      ret = fn(*tx_data_guard.tx_data());
-    } else {
-      int64_t memtable_head = -1;
-      int64_t memtable_tail = -1;
-      if (OB_FAIL(get_memtable_mgr_()->get_memtable_range(memtable_head, memtable_tail))) {
-        STORAGE_LOG(WARN, "get memtable range failed", KR(ret));
-      } else if (memtable_head != memtables_cache_.memtable_head_ || memtable_tail != memtables_cache_.memtable_tail_) {
-        ret = OB_EAGAIN;
-      } else {
-        ret = OB_TRANS_CTX_NOT_EXIST;
-      }
-    }
-  }
   return ret;
 }
 

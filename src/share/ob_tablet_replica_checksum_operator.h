@@ -116,14 +116,16 @@ public:
       const SCN &compaction_scn,
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
-  // get a batch of checksum_items, the count = @pairs.count()
-  // @compaction_scn means items' compaction_scn = compaction_scn
+  // Get a batch of checksum_items
+  // Default: checksum_items' compaction_scn = @compaction_scn
+  // If include_larger_than = true: checksum_items' compaction_scn >= @compaction_scn
   static int batch_get(
       const uint64_t tenant_id,
       const common::ObIArray<ObTabletLSPair> &pairs,
       const SCN &compaction_scn,
       common::ObISQLClient &sql_proxy,
-      common::ObIArray<ObTabletReplicaChecksumItem> &items);
+      common::ObIArray<ObTabletReplicaChecksumItem> &items,
+      const bool include_larger_than = false);
   static int batch_get(
       const uint64_t tenant_id,
       const common::ObSqlString &sql,
@@ -233,7 +235,8 @@ private:
       const common::ObIArray<ObTabletLSPair> &pairs,
       const int64_t start_idx,
       const int64_t end_idx,
-      common::ObSqlString &sql);
+      common::ObSqlString &sql,
+      const bool include_larger_than = false);
 
   static int inner_init_tablet_pair_map_(
       const ObIArray<ObTabletLSPair> &pairs,
@@ -263,7 +266,8 @@ private:
       const schema::ObTableSchema &data_table_schema,
       const schema::ObTableSchema &index_table_schema,
       const SCN &compaction_scn,
-      common::ObMySQLProxy &sql_proxy);
+      common::ObMySQLProxy &sql_proxy,
+      const int64_t expected_epoch);
 
   // get column checksum_sum from items and store result in map
   // KV of @column_ckm_sum_map is: <column_id, column_checksum_sum>
@@ -303,6 +307,13 @@ private:
       const uint64_t tenant_id,
       common::ObIArray<ObTabletLSPair> &tablet_pairs,
       bool &exist_error_status);
+
+  static int need_verify_checksum_(
+      const SCN &compaction_scn,
+      const schema::ObTableSchema &table_schema,
+      const common::ObIArray<ObTabletReplicaChecksumItem> &items,
+      bool &need_verify,
+      int64_t &ckm_tablet_cnt);
 
   static int compare_column_checksum_(
       const schema::ObTableSchema &data_table_schema,

@@ -83,7 +83,7 @@ class ObPsSessionInfo;
 class ObPsStmtInfo;
 class ObStmt;
 class ObSQLSessionInfo;
-class ObSqlPlanMgr;
+class ObPlanItemMgr;
 
 class SessionInfoKey
 {
@@ -580,8 +580,8 @@ public:
   ObPsCache *get_ps_cache();
   obmysql::ObMySQLRequestManager *get_request_manager();
   sql::ObFLTSpanMgr *get_flt_span_manager();
-  ObSqlPlanMgr *get_sql_plan_manager();
-  ObSqlPlanMgr *get_plan_table_manager();
+  ObPlanItemMgr *get_sql_plan_manager();
+  ObPlanItemMgr *get_plan_table_manager();
   void set_user_priv_set(const ObPrivSet priv_set) { user_priv_set_ = priv_set; }
   void set_db_priv_set(const ObPrivSet priv_set) { db_priv_set_ = priv_set; }
   void set_show_warnings_buf(int error_code);
@@ -700,6 +700,10 @@ public:
 
   inline void set_ob20_protocol(bool is_20protocol) { is_ob20_protocol_ = is_20protocol; }
   inline bool is_ob20_protocol() { return is_ob20_protocol_; }
+
+  inline void set_session_var_sync(bool is_session_var_sync)
+              { is_session_var_sync_ = is_session_var_sync; }
+  inline bool is_session_var_sync() { return is_session_var_sync_; }
 
   int replace_user_variable(const common::ObString &name, const ObSessionVariable &value);
   int replace_user_variable(
@@ -1032,11 +1036,10 @@ private:
   const common::ObVersionProvider *version_provider_;
   const ObSQLConfigProvider *config_provider_;
   char tenant_buff_[sizeof(share::ObTenantSpaceFetcher)];
-  share::ObTenantSpaceFetcher* with_tenant_ctx_;
   obmysql::ObMySQLRequestManager *request_manager_;
   sql::ObFLTSpanMgr *flt_span_mgr_;
-  ObSqlPlanMgr *sql_plan_manager_;
-  ObSqlPlanMgr *plan_table_manager_;
+  ObPlanItemMgr *sql_plan_manager_;
+  ObPlanItemMgr *plan_table_manager_;
   ObPlanCache *plan_cache_;
   ObPsCache *ps_cache_;
   //记录select stmt中scan出来的结果集行数，供设置sql_calc_found_row时，found_row()使用；
@@ -1104,6 +1107,8 @@ private:
   observer::ObQueryDriver *pl_query_sender_; // send query result in mysql pl
   bool pl_ps_protocol_; // send query result use this protocol
   bool is_ob20_protocol_; // mark as whether use oceanbase 2.0 protocol
+
+  bool is_session_var_sync_; //session var sync support flag.
 
   int64_t last_plan_id_; // 记录上一个计划的 plan_id，用于 show trace 中显示 sql 物理计划
 

@@ -934,7 +934,8 @@ int ObTransService::tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTx
     m.tx_id_ = tx.tx_id_;
     m.sender_ = self_;
     m.receiver_ = ctx.txn_addr_;
-    m.session_id_ = session_id;
+    m.req_sess_id_ = session_id;
+    m.tx_sess_id_ = tx.sess_id_;
     ret = rpc_->post_msg(ctx.txn_addr_, m);
     bool print_log = OB_FAIL(ret);
 #ifndef NDEBUG
@@ -949,33 +950,20 @@ int ObTransService::tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTx
   return ret;
 }
 
-int ObTransService::tx_free_route_handle_check_alive(const ObTxFreeRouteCheckAliveMsg &msg)
+int ObTransService::tx_free_route_handle_check_alive(const ObTxFreeRouteCheckAliveMsg &msg, const int retcode)
 {
   int ret = OB_SUCCESS;
-  ObTxDesc *tx = NULL;
-  if (OB_FAIL(tx_desc_mgr_.get(msg.tx_id_, tx))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_TRANS_CTX_NOT_EXIST;
-    }
-  } else if (OB_ISNULL(tx)) {
-    ret = OB_TRANS_CTX_NOT_EXIST;
-  } else if (tx->is_xa_trans() && tx->xa_start_addr_ != self_) {
-    ret = OB_TRANS_CTX_NOT_EXIST;
-  }
-  if (OB_NOT_NULL(tx)) {
-    tx_desc_mgr_.revert(*tx);
-  }
   ObTxFreeRouteCheckAliveRespMsg m;
   m.request_id_ = msg.request_id_;
   m.receiver_   = msg.sender_;
   m.sender_     = self_;
   m.tx_id_      = msg.tx_id_;
-  m.session_id_ = msg.session_id_;
-  m.ret_        = ret;
+  m.req_sess_id_ = msg.req_sess_id_;
+  m.ret_        = retcode;
   ret = rpc_->post_msg(m.receiver_, m);
 #ifndef NDEBUG
-  TRANS_LOG(INFO, "[txn free route] handle check txn alive", K(ret), K_(msg.sender),
-            K_(msg.tx_id), K_(msg.session_id), K_(msg.request_id));
+  TRANS_LOG(INFO, "[txn free route] handle check txn alive", K(retcode), K_(msg.sender),
+            K_(msg.tx_id), K_(msg.req_sess_id), K_(msg.request_id));
 #endif
   return ret;
 }

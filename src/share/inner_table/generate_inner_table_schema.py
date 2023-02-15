@@ -164,7 +164,7 @@ def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_
     else:
       set_op = 'set_timestamp({0})'.format(default_value)
   elif column_type == 'ObLongTextType':
-    set_op = 'set_lob_value(ObLongTextType, "{0}", strlen("{0}"))'.format(default_value)
+    set_op = 'set_lob_value(ObLongTextType, "{0}", static_cast<int32_t>(strlen("{0}")))'.format(default_value)
     if column_collation_type == "CS_TYPE_BINARY":
       set_op += '; {0}_default.set_collation_type(CS_TYPE_BINARY);'.format(column_name.lower())
   else:
@@ -1773,7 +1773,7 @@ def def_table_schema(**keywords):
       add_field(field, database_id)
     elif field == 'table_name':
       if keywords.has_key('index_name') :
-        add_char_field(field, table_name2index_tname(keywords['table_name'], keywords['index_name']))
+        add_char_field(field, table_name2index_tname(keywords['table_name'] + keywords['name_postfix'], keywords['index_name']))
       else:
         if keywords["name_postfix"] != '_ORA':
           add_char_field(field, table_name2tname(keywords['table_name']))
@@ -2023,12 +2023,14 @@ def generate_h_content():
   sys_view_count = 0
 
   print_class_head_h()
+  new_table_name_postfix_ids = sorted(table_name_postfix_ids, key = lambda table : table[1])
+  new_index_name_ids = sorted(index_name_ids, key = lambda index : index[1])
 
   h_f.write("\npublic:\n")
   method_line = "  static int {0}_schema(share::schema::ObTableSchema &table_schema);\n"
-  for (table_name, table_id) in table_name_postfix_ids:
+  for (table_name, table_id) in new_table_name_postfix_ids:
     h_f.write(method_line.format(table_name.replace('$', '_').lower().strip('_'), table_id))
-  for line in index_name_ids:
+  for line in new_index_name_ids:
     h_f.write(method_line.format(line[2].replace('$', '_').strip('_').lower()+'_'+line[0].lower(), line[1]))
   line = """
 private:
@@ -2050,32 +2052,40 @@ private:
   h_f.write("  NULL,};\n\n")
 
   h_f.write("const schema_create_func core_table_schema_creators [] = {\n")
-  for (table_name, table_id) in table_name_postfix_ids:
+  for (table_name, table_id) in new_table_name_postfix_ids:
     if is_core_table(table_id) and table_id != kv_core_table_id:
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       core_table_count = core_table_count + 1
   h_f.write("  NULL,};\n\n")
 
   h_f.write("const schema_create_func sys_table_schema_creators [] = {\n")
-  for (table_name, table_id) in table_name_postfix_ids:
+  for (table_name, table_id) in new_table_name_postfix_ids:
     if is_sys_table(table_id) and not is_core_table(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       sys_table_count = sys_table_count + 1
   h_f.write("  NULL,};\n\n")
 
   h_f.write("const schema_create_func virtual_table_schema_creators [] = {\n")
-  for (table_name, table_id) in table_name_postfix_ids:
-    if is_virtual_table(table_id):
+  for (table_name, table_id) in new_table_name_postfix_ids:
+    if is_mysql_virtual_table(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       virtual_table_count = virtual_table_count + 1
-  for index_l in index_name_ids:
-    if is_virtual_table(index_l[1]):
+  for index_l in new_index_name_ids:
+    if is_mysql_virtual_table(index_l[1]):
+      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
+      virtual_table_count = virtual_table_count + 1
+  for (table_name, table_id) in new_table_name_postfix_ids:
+    if is_ora_virtual_table(table_id):
+      h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
+      virtual_table_count = virtual_table_count + 1
+  for index_l in new_index_name_ids:
+    if is_ora_virtual_table(index_l[1]):
       h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
       virtual_table_count = virtual_table_count + 1
   h_f.write("  NULL,};\n\n")
 
   h_f.write("const schema_create_func sys_view_schema_creators [] = {\n")
-  for (table_name, table_id) in table_name_postfix_ids:
+  for (table_name, table_id) in new_table_name_postfix_ids:
     if is_sys_view(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       sys_view_count = sys_view_count + 1

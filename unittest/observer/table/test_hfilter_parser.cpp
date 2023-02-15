@@ -68,7 +68,7 @@ bool TestHFilterParser::is_prefix_equal(const char* tmp_file, const char* result
 void TestHFilterParser::is_equal_content(const char* tmp_file, const char* result_file)
 {
   bool is_equal = is_prefix_equal(tmp_file, result_file) & is_prefix_equal(result_file, tmp_file);
-  _OB_LOG(WARN, "result file is %s, expect file is %s, is_equal:%d", tmp_file, result_file, is_equal);
+  _OB_LOG_RET(WARN, OB_SUCCESS, "result file is %s, expect file is %s, is_equal:%d", tmp_file, result_file, is_equal);
   if (is_equal) {
     std::remove(tmp_file);
   } else {

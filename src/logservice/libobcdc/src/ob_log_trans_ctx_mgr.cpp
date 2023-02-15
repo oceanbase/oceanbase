@@ -306,7 +306,7 @@ int64_t ObLogTransCtxMgr::get_trans_count(const int trans_ctx_state) const
   if (TransCtx::is_state_valid(trans_ctx_state)) {
     ret_count = trans_count_[trans_ctx_state];
   } else {
-    LOG_ERROR("trans ctx state is invalid", K(trans_ctx_state));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans ctx state is invalid", K(trans_ctx_state));
   }
 
   return ret_count;

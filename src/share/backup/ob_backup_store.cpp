@@ -91,11 +91,9 @@ uint16_t ObBackupFormatDesc::get_data_version() const
   return FILE_VERSION;
 }
 
-bool ObBackupFormatDesc::operator ==(const ObBackupFormatDesc &desc) const
+bool ObBackupFormatDesc::is_format_equal(const ObBackupFormatDesc &desc) const
 {
-  return cluster_name_ == desc.cluster_name_
-      && tenant_name_ == desc.tenant_name_
-      && path_ == desc.path_
+  return path_ == desc.path_
       && cluster_id_ == desc.cluster_id_
       && tenant_id_ == desc.tenant_id_
       && incarnation_ == desc.incarnation_
@@ -462,7 +460,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
       } else if (format_desc.dest_type_ != dest_type_) {
         ret = OB_BACKUP_FORMAT_FILE_NOT_MATCH;
         LOG_WARN("dest_type not match", K(ret), K(dest_format), K(dest_type_));
-      } else if (!(format_desc == dest_format)) {
+      } else if (!(format_desc.is_format_equal(dest_format))) {
         ret = OB_BACKUP_FORMAT_FILE_NOT_MATCH;
         LOG_WARN("format file is not match", K(ret), K(format_desc), K(dest_format));
       } 

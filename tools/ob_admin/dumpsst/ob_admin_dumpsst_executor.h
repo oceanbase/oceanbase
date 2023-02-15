@@ -38,14 +38,16 @@ struct ObDumpMacroBlockContext final
 {
 public:
   ObDumpMacroBlockContext()
-    : first_id_(-1), second_id_(-1), micro_id_(-1)
+    : first_id_(-1), second_id_(-1), micro_id_(-1), tablet_id_(0), scn_(-1)
   {}
   ~ObDumpMacroBlockContext() = default;
   bool is_valid() const { return second_id_ >= 0; }
-  TO_STRING_KV(K(first_id_), K(second_id_), K(micro_id_));
+  TO_STRING_KV(K(first_id_), K(second_id_), K(micro_id_), K_(tablet_id), K_(scn));
   uint64_t first_id_;
   int64_t second_id_;
   int64_t micro_id_;
+  uint64_t tablet_id_;
+  int64_t scn_;
 };
 
 class ObAdminDumpsstExecutor : public ObAdminExecutor

@@ -92,7 +92,7 @@
 #define CHECK_INITED() \
 do {\
   if (OB_UNLIKELY(!is_valid())) {\
-    OCCAM_LOG(WARN, "not init", K(lbt()));\
+    OCCAM_LOG_RET(WARN, common::OB_NOT_INIT, "not init", K(lbt()));\
     return OB_NOT_INIT;\
   }\
 } while (0)

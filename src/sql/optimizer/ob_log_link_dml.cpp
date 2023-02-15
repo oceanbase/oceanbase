@@ -49,7 +49,7 @@ int ObLogLinkDml::get_plan_item_info(PlanText &plan_text,
                                      ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+  if (OB_FAIL(ObLogLink::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
   } else {
     BEGIN_BUF_PRINT;

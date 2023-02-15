@@ -481,7 +481,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_truncate_failed)
     char *log_dir = leader.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.log_dir_;
     convert_to_normal_block(log_dir, block_id, block_path, OB_MAX_FILE_NAME_LENGTH);
     EXPECT_EQ(OB_ITER_END, read_log(leader));
-    PALF_LOG(ERROR, "truncate pos", K(max_lsn));
+    PALF_LOG_RET(ERROR, OB_SUCCESS, "truncate pos", K(max_lsn));
     EXPECT_EQ(0, ftruncate(fd, max_lsn.val_));
     FileDirectoryUtils::get_file_size(block_path, file_size);
     EXPECT_EQ(file_size, max_lsn.val_);
@@ -516,7 +516,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_meta)
       log_engine->append_log_meta_(log_engine->log_meta_);
     }
     EXPECT_EQ(upper_aligned_log_tail, log_meta_storage->log_tail_);
-    PALF_LOG(ERROR, "runlin trace before restart", K(upper_aligned_log_tail), KPC(log_meta_storage));
+    PALF_LOG_RET(ERROR, OB_SUCCESS, "runlin trace before restart", K(upper_aligned_log_tail), KPC(log_meta_storage));
   }
 
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());

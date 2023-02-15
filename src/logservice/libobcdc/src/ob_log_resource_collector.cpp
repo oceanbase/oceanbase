@@ -292,7 +292,7 @@ int ObLogResourceCollector::revert_log_entry_task_(ObLogEntryTask *log_entry_tas
 
     const bool is_test_mode_on = TCONF.test_mode_on != 0;
     if (is_test_mode_on) {
-      LOG_INFO("LogEntryTask-free", "LogEntryTask", *log_entry_task, "addr", log_entry_task);
+      LOG_INFO("LogEntryTask-free", "LogEntryTask", *log_entry_task, "addr", log_entry_task, K(data_len));
     }
 
     if (is_log_entry_stored) {
@@ -569,7 +569,7 @@ int ObLogResourceCollector::handle(void *data,
             }
           } else {}
         }
-        (void)ATOMIC_AAF(&br_count_, -1);
+        ATOMIC_DEC(&br_count_);
         task = NULL;
       }
     } else {
@@ -681,7 +681,7 @@ int ObLogResourceCollector::dec_ref_cnt_and_try_to_recycle_log_entry_task_(ObLog
     ret = OB_ERR_UNEXPECTED;
   } else {
     if (TCONF.test_mode_on) {
-      LOG_INFO("revert_dml_binlog_record", KPC(log_entry_task));
+      LOG_INFO("revert_dml_binlog_record", KP(&br), K(br), KP(log_entry_task), KPC(log_entry_task));
     }
     const bool need_revert_log_entry_task = (log_entry_task->dec_row_ref_cnt() == 0);
 

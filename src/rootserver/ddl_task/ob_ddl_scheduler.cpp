@@ -417,8 +417,6 @@ int ObDDLTaskHeartBeatMananger::get_inactive_ddl_task_ids(ObArray<int64_t>& remo
   return ret;
 }
 
-ObPrepareAlterTableArgParam::ObPrepareAlterTableArgParam() : session_id_(OB_INVALID_ID) {}
-
 int ObPrepareAlterTableArgParam::init(const uint64_t session_id,
                                       const ObSQLMode &sql_mode,
                                       const ObString &ddl_stmt_str,
@@ -456,11 +454,11 @@ int ObPrepareAlterTableArgParam::set_nls_formats(const common::ObString *nls_for
   int ret = OB_SUCCESS;
   if (OB_ISNULL(nls_formats)) {
     ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("nls_formats is nullptr", K(ret));
   } else {
     char *tmp_ptr[ObNLSFormatEnum::NLS_MAX] = {};
-    common::ObArenaAllocator allocator;
     for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; ++i) {
-      if (OB_ISNULL(tmp_ptr[i] = (char *)allocator.alloc(nls_formats[i].length()))) {
+      if (OB_ISNULL(tmp_ptr[i] = (char *)allocator_.alloc(nls_formats[i].length()))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SHARE_LOG(ERROR, "failed to alloc memory!", "size", nls_formats[i].length(), K(ret));
       } else {
@@ -470,7 +468,7 @@ int ObPrepareAlterTableArgParam::set_nls_formats(const common::ObString *nls_for
     }
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
-        allocator.free(tmp_ptr[i]);
+        allocator_.free(tmp_ptr[i]);
       }
     }
   }
@@ -627,7 +625,7 @@ void ObDDLScheduler::run1()
           ObCurTraceId::set(task->get_trace_id());
           int task_ret = task->process();
           task->calc_next_schedule_ts(task_ret, task_queue_.get_task_cnt() + thread_cnt);
-          if (task->need_retry() && !has_set_stop()) {
+          if (task->need_retry() && !has_set_stop() && !ObIDDLTask::is_ddl_force_no_more_process(task_ret)) {
             if (OB_FAIL(task_queue_.add_task_to_last(task))) {
               STORAGE_LOG(ERROR, "fail to add task to last, which should not happen", K(ret), K(*task));
             }
@@ -1514,6 +1512,7 @@ int ObDDLScheduler::recover_task()
       if (OB_SUCCESS != tmp_ret) {
         ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
       }
+      ret = OB_SUCCESS; // ignore ret
     }
   }
   return ret;
@@ -1530,6 +1529,7 @@ int ObDDLScheduler::remove_inactive_ddl_task()
     if (OB_FAIL(manager_reg_heart_beat_task_.get_inactive_ddl_task_ids(remove_task_ids))){
       LOG_WARN("failed to check register time", K(ret));
     } else {
+      LOG_INFO("need remove task", K(remove_task_ids));
       for (int64_t i = 0; OB_SUCC(ret) && i < remove_task_ids.size(); i++) {
         int64_t remove_task_id = 0;
         if (OB_FAIL(remove_task_ids.at(i, remove_task_id))) {

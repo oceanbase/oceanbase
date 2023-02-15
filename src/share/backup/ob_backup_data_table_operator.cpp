@@ -1876,7 +1876,7 @@ int ObBackupLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBackupL
     LOG_WARN("[DATA_BACKUP]failed to parse string to addr", K(ret)); 
   } else if (strcmp(trace_id_str, "") != 0 && OB_FAIL(ls_attr.task_trace_id_.set(trace_id_str))) {
     LOG_WARN("[DATA_BACKUP]failed to set task trace id", K(ret), K(trace_id_str));
-  } else if (!ls_attr.dst_.set_ip_addr(server_str, port)) {
+  } else if (!ls_attr.dst_.set_ip_addr(server_str, static_cast<int32_t>(port))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to set server ip and port", K(ret), K(server_str), K(port));
   } else {

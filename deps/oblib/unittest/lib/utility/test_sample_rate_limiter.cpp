@@ -11,7 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_sample_rate_limiter.h"
+#include "lib/oblog/ob_syslog_rate_limiter.h"
 
  //using namespace ::oblib;
 using namespace oceanbase::lib;
@@ -19,21 +19,21 @@ using namespace oceanbase::common;
 
 TEST(TestSampleRateLimiter, Basic)
 {
-  ObSampleRateLimiter rl(1, 3, 1000000/*1s*/);
-  ASSERT_EQ(OB_SUCCESS, rl.try_acquire());
-  ASSERT_EQ(OB_EAGAIN, rl.try_acquire());
-  ASSERT_EQ(OB_EAGAIN, rl.try_acquire());
-  ASSERT_EQ(OB_SUCCESS, rl.try_acquire());
-  ASSERT_EQ(OB_EAGAIN, rl.try_acquire());
-  ASSERT_EQ(OB_EAGAIN, rl.try_acquire());
-  ASSERT_EQ(OB_SUCCESS, rl.try_acquire());
+  ObSyslogSampleRateLimiter rl(1, 3, 1000000/*1s*/);
+  ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_EAGAIN, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_EAGAIN, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_EAGAIN, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_EAGAIN, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
 
   sleep(1);
-  ASSERT_EQ(OB_SUCCESS, rl.try_acquire());
-  ASSERT_EQ(OB_EAGAIN, rl.try_acquire(2));
-  ASSERT_EQ(OB_SUCCESS, rl.try_acquire());
-  ASSERT_EQ(OB_EAGAIN, rl.try_acquire(2));
-  ASSERT_EQ(OB_SUCCESS, rl.try_acquire());
+  ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_EAGAIN, rl.try_acquire(2, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_EAGAIN, rl.try_acquire(2, OB_LOG_LEVEL_INFO));
+  ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
 }
 
 int main(int argc, char **argv)

@@ -249,12 +249,11 @@ bool LogGroupEntryHeader::check_integrity(const char *buf,
   bool bool_ret = false;
   if (LogGroupEntryHeader::MAGIC != magic_) {
     bool_ret = false;
-    PALF_LOG(WARN, "magic is different", K(magic_));
+    PALF_LOG_RET(WARN, OB_ERROR, "magic is different", K(magic_));
   } else if (false == check_header_checksum_()) {
-    PALF_LOG(WARN, "check header checsum failed", K(*this));
+    PALF_LOG_RET(WARN, OB_ERROR, "check header checsum failed", K(*this));
   } else if (false == check_log_checksum_(buf, buf_len, group_log_checksum)) {
-    PALF_LOG(WARN, "check data checksum failed", K(*buf), K(buf_len),
-        K(*this));
+    PALF_LOG_RET(WARN, OB_ERROR, "check data checksum failed", K(*buf), K(buf_len), K(*this));
   } else {
     bool_ret = true;
   }
@@ -380,7 +379,7 @@ bool LogGroupEntryHeader::check_log_checksum_(const char *buf,
   bool bool_ret = false;
   int64_t crc_checksum = 0;
   if (OB_ISNULL(buf) || 0 > data_len) {
-    PALF_LOG(ERROR, "Invalid argument!!!", K(buf), K(data_len), K(group_size_));
+    PALF_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "Invalid argument!!!", K(buf), K(data_len), K(group_size_));
   } else if (is_padding_log()) {
     bool_ret = true;
     PALF_LOG(INFO, "This is a padding log, no need check log checksum", K(bool_ret), K(data_len));

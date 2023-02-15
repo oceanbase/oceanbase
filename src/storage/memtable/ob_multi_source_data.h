@@ -193,19 +193,20 @@ int ObMultiSourceData::save_multi_source_data_unit_in_list(const T *const src, b
   T *dst = nullptr;
   const int64_t list_pos = get_unit_list_array_idx((int64_t)src->type());
   if (!is_callback) { // first save
-    if (unit_list_array_[list_pos].get_size() > 0
-        && OB_UNLIKELY(src->get_version() < unit_list_array_[list_pos].get_last()->get_version())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "unexpected order", K(ret), K(list_pos), K(units_[list_pos]), KPC(dst));
-    } else {
-      if (OB_FAIL(deep_copy_data_unit(src, dst, allocator_))) {
-        TRANS_LOG(WARN, "failed to deep copy unit", K(ret), K(list_pos), KPC(src));
-      } else if (!unit_list_array_[list_pos].add_last(dst)) {
-        ret = common::OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "failed to add last", K(ret), K(list_pos), K(unit_list_array_[list_pos]));
-      } else if (src->is_save_last() && src->is_sync_finish()) {
-        (void)inner_release_rest_unit_data(list_pos, src->get_version());
+    if (unit_list_array_[list_pos].get_size() > 0) {
+      const ObIMultiSourceDataUnit *last_data_unit = unit_list_array_[list_pos].get_last();
+      if (OB_UNLIKELY(last_data_unit->is_sync_finish() && src->get_version() < last_data_unit->get_version())) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "unexpected order", K(ret), K(list_pos), KPC(last_data_unit), KPC(src));
       }
+    }
+    if (FAILEDx(deep_copy_data_unit(src, dst, allocator_))) {
+      TRANS_LOG(WARN, "failed to deep copy unit", K(ret), K(list_pos), KPC(src));
+    } else if (!unit_list_array_[list_pos].add_last(dst)) {
+      ret = common::OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "failed to add last", K(ret), K(list_pos), K(unit_list_array_[list_pos]));
+    } else if (src->is_save_last() && src->is_sync_finish()) {
+      (void)inner_release_rest_unit_data(list_pos, src->get_version());
     }
   } else if (src->is_sync_finish()
       && OB_FAIL(inner_mark_unit_sync_finish(list_pos, src->get_version(), src->is_save_last()))) { // mark finish

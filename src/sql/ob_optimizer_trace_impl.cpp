@@ -408,15 +408,20 @@ int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
     target_plan = op->get_explain_plan();
   }
   if (OB_NOT_NULL(target_plan)) {
-    if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(buf_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("Failed to allocate buffer", "buffer size", buf_len, K(ret));
-    } else {
-      OPT_TRACE_TITLE("Query Plan");
-      buf_len = target_plan->to_string(buf, buf_len, EXPLAIN_EXTENDED, option);
+    ObSqlPlan sql_plan(target_plan->get_allocator());
+    sql_plan.set_session_info(target_plan->get_optimizer_context().get_session_info());
+    ObSEArray<common::ObString, 64> plan_strs;
+    if (OB_FAIL(sql_plan.store_sql_plan_for_explain(const_cast<ObLogPlan*>(target_plan),
+                                                    EXPLAIN_EXTENDED,
+                                                    option,
+                                                    plan_strs))) {
+      LOG_WARN("failed to store sql plan", K(ret));
+    }
+    OPT_TRACE_TITLE("Query Plan");
+    for (int64_t i = 0; OB_SUCC(ret) && i < plan_strs.count(); ++i) {
       if (OB_FAIL(new_line())) {
         LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FAIL(append(ObString(buf_len, buf)))) {
+      } else if (OB_FAIL(append(plan_strs.at(i)))) {
         LOG_WARN("failed to append plan", K(ret));
       }
     }

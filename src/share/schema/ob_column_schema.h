@@ -102,6 +102,7 @@ public:
   inline void set_data_type(const common::ColumnType type) { meta_type_.set_type(type); }
   inline void set_meta_type(const common::ObObjMeta type) { meta_type_ = type; }
   inline void set_accuracy(const common::ObAccuracy &accuracy) { accuracy_ = accuracy; }
+  inline void set_data_length(const int64_t length) { set_data_length(static_cast<int32_t>(length)); } //TODO(xiaofeng.lby): fix it later
   inline void set_data_length(const int32_t length) { accuracy_.set_length(length); }
   inline void set_data_precision(const int16_t precision) { accuracy_.set_precision(precision); }
   inline void set_length_semantics(const int16_t value) { accuracy_.set_length_semantics(value); }

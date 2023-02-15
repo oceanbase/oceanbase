@@ -411,7 +411,7 @@ int ObInnerSQLConnectionPool::wait()
     while (used_conn_list_.get_size() > 0) {
       const int64_t now = ObTimeUtility::current_time();
       if (now - begin > WARNNING_TIME_US) {
-        LOG_WARN("too much time used to wait connection release, may be connection leak",
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "too much time used to wait connection release, may be connection leak",
             "used_time_ms", now - begin, "used connection count", used_conn_list_.get_size());
         dump_used_conn_list();
       }
@@ -424,11 +424,11 @@ int ObInnerSQLConnectionPool::wait()
 void ObInnerSQLConnectionPool::dump_used_conn_list()
 {
   int64_t dump_size = MIN(used_conn_list_.get_size(), MAX_DUMP_SIZE);
-  LOG_WARN("====== DUMP USED CONNECTIONS' BACKTRACE INFO ====== ",
+  LOG_WARN_RET(OB_SUCCESS, "====== DUMP USED CONNECTIONS' BACKTRACE INFO ====== ",
       K(dump_size));
   DLIST_FOREACH_X(conn, used_conn_list_, (--dump_size >= 0)) {
     if (OB_ISNULL(conn)) {
-      LOG_WARN("node is null");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "node is null");
     } else {
       conn->dump_conn_bt_info();
     }

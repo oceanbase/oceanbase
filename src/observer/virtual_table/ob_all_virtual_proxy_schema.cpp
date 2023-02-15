@@ -449,6 +449,10 @@ int ObAllVirtualProxySchema::inner_open()
         } else {
           sql_res_ = sql_res;
         }
+        if (OB_FAIL(ret) && sql_res != NULL) {
+          sql_res->~ReadResult();
+          sql_res = NULL;
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(init_convert_ctx())) {
@@ -773,6 +777,7 @@ int ObAllVirtualProxySchema::inner_get_next_row_()
   if (NULL == sql_res_) {
     int64_t replica_count = 0;
     const ObTableSchema *table_schema = NULL;
+    ObString table_name;
     ObTabletID tablet_id;
     DupReplicaType dup_replica_type = DupReplicaType::NON_DUP_REPLICA;
     if (OB_UNLIKELY(next_table_idx_ < 0)) {
@@ -784,18 +789,19 @@ int ObAllVirtualProxySchema::inner_get_next_row_()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is NULL", KR(ret), K_(next_table_idx));
     } else {
+      table_name = input_table_names_.at(next_table_idx_);
       tablet_id = tablet_ids_.at(next_table_idx_);
       // we need get tenant servers, only all the following conditions are met
       // 1. tablet id was not specified_
       // 2. this is __all_dummy table
       if (!tablet_id.is_valid()
           && ObString::make_string(OB_ALL_DUMMY_TNAME) == table_schema->get_table_name_str()) {
-        if (OB_FAIL(get_next_tenant_server_(table_schema))) {
+        if (OB_FAIL(get_next_tenant_server_(table_name, table_schema))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("fail to get next tenant server", KR(ret), KPC(table_schema));
           }
         }
-      } else if (OB_FAIL(get_next_tablet_location_(table_schema, tablet_id))) {
+      } else if (OB_FAIL(get_next_tablet_location_(table_name, table_schema, tablet_id))) {
         LOG_WARN("fail to get next tablet location", KR(ret), KPC(table_schema), K(tablet_id));
       }
     }
@@ -820,6 +826,7 @@ int ObAllVirtualProxySchema::inner_get_next_row_()
 }
 
 int ObAllVirtualProxySchema::get_next_tablet_location_(
+    const common::ObString &table_name,
     const share::schema::ObTableSchema *table_schema,
     const common::ObTabletID &tablet_id)
 {
@@ -841,6 +848,7 @@ int ObAllVirtualProxySchema::get_next_tablet_location_(
       const ObLSReplicaLocation &replica = location_.get_replica_locations().at(next_replica_idx_);
       if (OB_FAIL(fill_row_(
           schema_guard_,
+          table_name,
           *table_schema,
           replica,
           tablet_id,
@@ -862,6 +870,7 @@ int ObAllVirtualProxySchema::get_next_tablet_location_(
 }
 
 int ObAllVirtualProxySchema::get_next_tenant_server_(
+    const common::ObString &table_name,
     const share::schema::ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
@@ -883,6 +892,7 @@ int ObAllVirtualProxySchema::get_next_tenant_server_(
       const ObTenantServer &server = tenant_servers_[next_server_idx_];
       if (OB_FAIL(fill_row_(
           schema_guard_,
+          table_name,
           *table_schema,
           server.get_location(),
           server.get_virtual_tablet_id(),
@@ -1089,6 +1099,7 @@ int ObAllVirtualProxySchema::get_tenant_servers_(const uint64_t tenant_id)
 
 int ObAllVirtualProxySchema::fill_row_(
     share::schema::ObSchemaGetterGuard &schema_guard,
+    const common::ObString &table_name,
     const share::schema::ObTableSchema &table_schema,
     const share::ObLSReplicaLocation &replica,
     const common::ObTabletID &tablet_id,
@@ -1098,7 +1109,6 @@ int ObAllVirtualProxySchema::fill_row_(
   ObObj *cells = NULL;
   const int64_t col_count = output_column_ids_.count();
   int64_t paxos_replica_num = OB_INVALID_COUNT;
-  const ObString table_name = table_schema.get_table_name_str();
   ObCollationType coll_type = ObCharset::get_default_collation(ObCharset::get_default_charset());
   if (OB_ISNULL(cells = cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1153,7 +1163,7 @@ int ObAllVirtualProxySchema::fill_row_(
           break;
         }
         case TABLE_NAME: {
-          cells[cell_idx].set_varchar(table_schema.get_table_name_str());
+          cells[cell_idx].set_varchar(table_name);
           cells[cell_idx].set_collation_type(coll_type);
           break;
         }
@@ -1272,6 +1282,10 @@ int ObAllVirtualProxySchema::fill_row_(
       }
 
       if (OB_SUCC(ret)) {
+        ObObj &cell = cells[cell_idx];
+        if (cell.is_string_type() && 0 == cell.get_data_length()) {
+          cell.set_null();
+        }
         cell_idx++;
       }
     }

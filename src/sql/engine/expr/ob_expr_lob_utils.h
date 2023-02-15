@@ -241,6 +241,11 @@ int ob_adjust_lob_datum(const ObObj &origin_obj,
                         ObIAllocator &allocator,
                         ObDatum &out_datum);
 
+int ob_adjust_lob_datum(const ObObj &origin_obj,
+                        const common::ObObjMeta &obj_meta,
+                        ObIAllocator &allocator,
+                        ObDatum *out_datum);
+
 int ob_adjust_lob_datum(ObDatum &datum,
                         const common::ObObjMeta &in_obj_meta,
                         const common::ObObjMeta &out_obj_meta,

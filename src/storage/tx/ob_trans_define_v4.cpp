@@ -344,6 +344,7 @@ void ObTxDesc::reset()
   state_ = State::INVL;
 
   flags_.v_ = 0;
+  flags_.SHADOW_ = true;
   state_change_flags_.reset();
 
   alloc_ts_ = -1;
@@ -672,7 +673,7 @@ inline bool ObTxDesc::acq_commit_cb_lock_if_need_()
     if (ret == OB_EAGAIN) {
       if (OB_NOT_NULL(commit_cb_)) {
         if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
-          TRANS_LOG(WARN, "use too much time wait lock", K_(tx_id));
+          TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "use too much time wait lock", K_(tx_id));
         }
         if (++cnt < 200) { PAUSE(); }
         else { ob_usleep(5000); }
@@ -707,14 +708,19 @@ inline bool ObTxDesc::acq_commit_cb_lock_if_need_()
  * shortcut and return.
  * for more detail, refer to 'acq_commit_cb_lock_if_need_' function.
  */
-void ObTxDesc::execute_commit_cb()
+bool ObTxDesc::execute_commit_cb()
 {
+  bool executed = false;
+  /*
+   * load_acquire state_ and commit_out_
+   * pair with ObTransService::handle_tx_commit_result_
+   */
+  ATOMIC_LOAD_ACQ((int*)&state_);
   if (is_tx_end() || is_xa_terminate_state_()) {
     auto tx_id = tx_id_;
     auto cb = commit_cb_;
     int ret = OB_SUCCESS;
-    bool executed = false;
-    if (OB_NOT_NULL(commit_cb_) && acq_commit_cb_lock_if_need_()) {
+     if (OB_NOT_NULL(commit_cb_) && acq_commit_cb_lock_if_need_()) {
       if (OB_NOT_NULL(commit_cb_)) {
         executed = true;
         cb = commit_cb_;
@@ -731,6 +737,7 @@ void ObTxDesc::execute_commit_cb()
     }
     TRANS_LOG(TRACE, "execute_commit_cb", KP(this), K(tx_id), KP(cb), K(executed));
   }
+  return executed;
 }
 
 ObITxCallback *ObTxDesc::cancel_commit_cb()
@@ -1278,6 +1285,7 @@ int ObTxDescMgr::add(ObTxDesc &tx_desc)
   if (OB_FAIL(ret) && tx_id.is_valid()) {
     tx_desc.reset_tx_id();
   }
+  OX(tx_desc.flags_.SHADOW_ = false);
   TRANS_LOG(TRACE, "txDescMgr.register trans", K(ret), K(tx_id), K(tx_desc));
   return ret;
 }
@@ -1307,6 +1315,7 @@ int ObTxDescMgr::add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc)
     }
     // if fail revert tx_desc.tx_id_ member
     if (OB_FAIL(ret) && !desc_tx_id.is_valid()) { tx_desc.reset_tx_id(); }
+    if (OB_SUCC(ret) && tx_desc.flags_.SHADOW_) { tx_desc.flags_.SHADOW_ = false; }
   }
   TRANS_LOG(INFO, "txDescMgr.register trans with txid", K(ret), K(tx_id),
       K(map_.alloc_cnt()));
@@ -1343,6 +1352,7 @@ int ObTxDescMgr::remove(ObTxDesc &tx)
   TRANS_LOG(TRACE, "txDescMgr.unregister trans:", K(tx_id));
   OV(inited_, OB_NOT_INIT);
   OX(map_.del(tx_id, &tx));
+  OX(tx.flags_.SHADOW_ = true);
   return ret;
 }
 

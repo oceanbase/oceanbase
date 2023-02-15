@@ -453,6 +453,8 @@ int ObModifyAutoincTask::wait_trans_end()
 int ObModifyAutoincTask::set_schema_available()
 {
   int ret = OB_SUCCESS;
+  int64_t tablet_count = 0;
+  int64_t rpc_timeout = 0;
   ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -463,7 +465,9 @@ int ObModifyAutoincTask::set_schema_available()
   } else {
     ObSArray<uint64_t> unused_ids;
     alter_table_arg_.ddl_task_type_ = share::UPDATE_AUTOINC_SCHEMA;
-    if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
+      LOG_WARN("get rpc timeout failed", K(ret));
+    } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
         execute_ddl_task(alter_table_arg_, unused_ids))) {
       LOG_WARN("alter table failed", K(ret));
     }

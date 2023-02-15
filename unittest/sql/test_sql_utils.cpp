@@ -56,7 +56,7 @@ void load_all_sql_files(const char* directory_name)
 {
   DIR *dp = NULL;
   if((dp  = opendir(directory_name)) == NULL) {
-     _OB_LOG(ERROR, "error open file, %s", directory_name);
+     _OB_LOG_RET(ERROR, OB_ERR_SYS, "error open file, %s", directory_name);
       return;
   }
   struct dirent *dirp = NULL;
@@ -293,9 +293,11 @@ void TestSqlUtils::destroy()
     delete schema_service_;
   }
   if (NULL != ps) {
+    ps->destroy();
     delete ps;
   }
   if (NULL != pc) {
+    pc->destroy();
     delete pc;
   }
   ObKVGlobalCache::get_instance().destroy();
@@ -333,7 +335,7 @@ void TestSqlUtils::do_load_sql(
     //ASSERT_FALSE(HasFatalFailure()) << "query_str: " << query_str << std::endl;
     if (!stmt) {
       // expect error case
-      _OB_LOG(WARN, "fail to resolve query_str: %s", query_str);
+      _OB_LOG_RET(WARN, OB_ERROR, "fail to resolve query_str: %s", query_str);
     } else if (OB_SUCCESS != expect_error) {
     } else {
       if (stmt->get_stmt_type() == stmt::T_CREATE_TABLE) {
@@ -877,7 +879,7 @@ void TestSqlUtils::generate_index_schema(ObCreateIndexStmt &stmt)
     OK(add_table_schema(table_schema));
     OK(schema_service_->get_schema_guard(schema_guard_, schema_version_));
   }else{
-    _OB_LOG(ERROR, "no data table found for tid=%lu", data_table_schema->get_table_id());
+    _OB_LOG_RET(ERROR, OB_ERROR, "no data table found for tid=%lu", data_table_schema->get_table_id());
   }
   _OB_LOG(DEBUG, "index_schema: %s", to_cstring(index_schema));
 }
@@ -915,7 +917,7 @@ void TestSqlUtils::is_equal_content(const char* tmp_file, const char* result_fil
   EXPECT_EQ(true, if_expected.is_open());
   std::istream_iterator<std::string> it_expected(if_expected);
   bool is_equal = std::equal(it_test, std::istream_iterator<std::string>(), it_expected);
-  _OB_LOG(WARN, "result file is %s, expect file is %s, is_equal:%d", tmp_file, result_file, is_equal);
+  _OB_LOG(INFO, "result file is %s, expect file is %s, is_equal:%d", tmp_file, result_file, is_equal);
   if (is_equal) {
     std::remove(tmp_file);
   } else if (clp.record_test_result) {

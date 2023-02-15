@@ -42,7 +42,7 @@ const char *ObLibCacheRegister::NAME_TYPES[NS_MAX] = { };
 do {                                                                 \
   [&]() {                                                            \
     if (OB_UNLIKELY(NS >= NS_MAX)) {                                 \
-      LOG_ERROR("out of the max type");                              \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max type");                              \
     } else {                                                         \
       NAME_TYPES[NS] = NS_NAME;                                      \
       LC_NS_TYPE_LABELS[NS] = LABEL;                                 \
@@ -55,7 +55,7 @@ do {                                                                 \
 do {                                                                 \
   [&]() {                                                            \
     if (OB_UNLIKELY(NS >= NS_MAX)) {                                 \
-      LOG_ERROR("out of the max type");                              \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max type");                              \
     } else {                                                         \
       LC_CN_ALLOC[NS] = ObLCNodeFactory::create<CN_CLASS>;           \
     }                                                                \
@@ -66,7 +66,7 @@ do {                                                                 \
 do {                                                                 \
   [&]() {                                                            \
     if (OB_UNLIKELY(NS >= NS_MAX)) {                                 \
-      LOG_ERROR("out of the max type");                              \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max type");                              \
     } else {                                                         \
       LC_CK_ALLOC[NS] = OBLCKeyCreator::create<CK_CLASS>;            \
     }                                                                \

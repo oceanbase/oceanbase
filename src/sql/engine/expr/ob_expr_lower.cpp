@@ -142,10 +142,10 @@ int ObExprLowerUpper::calc(ObObj &result, const ObString &text,
     ObString real_str;
     int32_t multiply = get_case_mutiply(cs_type);
     ObObjType text_type = get_result_type().get_calc_meta().get_type();
-    // not found caller of this func, need text src obj to judge whether has lob header
-    ObTextStringIter src_iter(text_type, cs_type, text, has_lob_header);
     // Need calc buff, user AreanaAllocator instead, for cannot find the caller of this function
     common::ObArenaAllocator temp_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    // not found caller of this func, need text src obj to judge whether has lob header
+    ObTextStringIter src_iter(text_type, cs_type, text, has_lob_header);
     char *buf = NULL; // res buffer
     int64_t src_byte_len = 0;
     int64_t buf_size = 0;
@@ -220,7 +220,7 @@ int32_t ObExprLower::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->casedn_multiply;
   }
@@ -245,7 +245,7 @@ int32_t ObExprUpper::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->caseup_multiply;
   }
@@ -388,11 +388,10 @@ int ObExprLowerUpper::calc_common(const ObExpr &expr, ObEvalCtx &ctx,
         str_result.assign(buf, static_cast<int32_t>(out_len));
       }
     } else { // text tc only
-      ObTextStringIter src_iter(text_meta.type_, text_meta.cs_type_, text_datum->get_string(), has_lob_header);
-      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
-
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+      ObTextStringIter src_iter(text_meta.type_, text_meta.cs_type_, text_datum->get_string(), has_lob_header);
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
 
       ObString dst;
       char *buf = NULL; // res buffer
@@ -446,7 +445,12 @@ int ObExprLowerUpper::calc_common(const ObExpr &expr, ObEvalCtx &ctx,
       }
     }
     if (OB_SUCC(ret)) {
-      expr_datum.set_string(str_result);
+      if (OB_UNLIKELY(is_oracle_mode() && str_result.length() == 0
+                      && ob_is_string_tc(expr.datum_meta_.type_))) {
+        expr_datum.set_null();
+      } else {
+        expr_datum.set_string(str_result);
+      }
     }
   }
   return ret;
@@ -537,7 +541,7 @@ int32_t ObExprNlsLower::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->casedn_multiply;
   }
@@ -579,7 +583,7 @@ int32_t ObExprNlsUpper::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->casedn_multiply;
   }

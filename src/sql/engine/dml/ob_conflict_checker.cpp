@@ -766,8 +766,7 @@ int ObConflictChecker::get_next_row_from_data_table(DASOpResultIter &result_iter
 {
   int ret = OB_SUCCESS;
   bool got_row = false;
-  const ExprFixedArray &storage_output = checker_ctdef_.das_scan_ctdef_.pd_expr_spec_.access_exprs_;
-
+  const ExprFixedArray &storage_output = checker_ctdef_.table_column_exprs_;
   while (OB_SUCC(ret) && !got_row) {
     das_scan_rtdef_.p_pd_expr_op_->clear_datum_eval_flag();
     if (OB_FAIL(result_iter.get_next_row())) {

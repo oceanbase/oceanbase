@@ -142,14 +142,14 @@ int32_t ObXATransID::to_full_xid_string(char *buffer,
 {
   int64_t count = 0;
   if (NULL == buffer || 0 >= capacity) {
-    TRANS_LOG(WARN, "invalid augumnets", KP(buffer), K(capacity));
+    TRANS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid augumnets", KP(buffer), K(capacity));
   } else if (gtrid_str_.empty()) {
-    TRANS_LOG(WARN, "xid is empty");
+    TRANS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "xid is empty");
   } else if ((count = snprintf(buffer, capacity, "%.*s%.*s",
                                gtrid_str_.length(), gtrid_str_.ptr(),
                                bqual_str_.length(), bqual_str_.ptr())) <= 0
              || count >= capacity ) {
-    TRANS_LOG(WARN, "buffer is not enough", K(count), K(capacity), K(gtrid_str_.length()),
+    TRANS_LOG_RET(WARN, OB_BUF_NOT_ENOUGH, "buffer is not enough", K(count), K(capacity), K(gtrid_str_.length()),
         K(bqual_str_.length()));
   } else {
     TRANS_LOG(DEBUG, "generate buffer success", K(count), K(capacity), K(gtrid_str_.length()),
@@ -277,7 +277,7 @@ bool ObXAFlag::is_valid(const int64_t flag, const int64_t xa_req_type)
     }
     default: {
       ret_bool = false;
-      TRANS_LOG(WARN, "invalid xa request type", K(xa_req_type), K(flag));
+      TRANS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid xa request type", K(xa_req_type), K(flag));
     }
   }
   TRANS_LOG(INFO, "check xa flag", K(ret_bool), K(xa_req_type), KPHEX(&flag, sizeof(int64_t)));
@@ -386,11 +386,11 @@ uint64_t ObXATimeoutTask::hash() const
 {
   uint64_t hv = 0;
   if (NULL == ctx_) {
-    TRANS_LOG(ERROR, "ctx is null, unexpected error", KP_(ctx));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "ctx is null, unexpected error", KP_(ctx));
   } else {
     const ObTransID &trans_id = ctx_->get_trans_id();
     if (!trans_id.is_valid()) {
-      TRANS_LOG(WARN, "ObTransID is invalid", K(trans_id));
+      TRANS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "ObTransID is invalid", K(trans_id));
     } else {
       hv = trans_id.hash();
     }
@@ -404,17 +404,17 @@ void ObXATimeoutTask::runTimerTask()
   ObXACtxMgr *xa_ctx_mgr = NULL;
 
   if (!is_inited_) {
-    TRANS_LOG(WARN, "ObTransTimeoutTask not inited");
+    TRANS_LOG_RET(WARN, OB_NOT_INIT, "ObTransTimeoutTask not inited");
   } else if (NULL == ctx_) {
-    TRANS_LOG(ERROR, "ctx is null, unexpected error", KP_(ctx));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "ctx is null, unexpected error", KP_(ctx));
     tmp_ret = OB_ERR_UNEXPECTED;
   } else {
     if (OB_SUCCESS != (tmp_ret = ctx_->handle_timeout(delay_))) {
-      TRANS_LOG(WARN, "handle timeout error", "ret", tmp_ret, "context", *ctx_);
+      TRANS_LOG_RET(WARN, tmp_ret, "handle timeout error", "ret", tmp_ret, "context", *ctx_);
     }
     //dec the ctx ref
     if (NULL == (xa_ctx_mgr = ctx_->get_xa_ctx_mgr())) {
-      TRANS_LOG(WARN, "get partition mgr error", "context", *ctx_);
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get partition mgr error", "context", *ctx_);
     } else {
       (void)xa_ctx_mgr->revert_xa_ctx(ctx_);
     }

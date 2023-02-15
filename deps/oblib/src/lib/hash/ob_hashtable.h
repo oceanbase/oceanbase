@@ -121,7 +121,7 @@ public:
   {
     _value_type *p = NULL;
     if (OB_ISNULL(node_)) {
-      HASH_WRITE_LOG(HASH_FATAL, "node is null, backtrace=%s", lbt());
+      HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "node is null, backtrace=%s", lbt());
     } else {
       p = &(node_->data);
     }
@@ -201,7 +201,7 @@ public:
   {
     _value_type *p = NULL;
     if (OB_ISNULL(node_)) {
-      HASH_WRITE_LOG(HASH_FATAL, "node is null, backtrace=%s", lbt());
+      HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "node is null, backtrace=%s", lbt());
     } else {
       p = &(node_->data);
     }
@@ -389,7 +389,7 @@ public:
   iterator &operator ++()
   {
     if (OB_ISNULL(ht_)) {
-      HASH_WRITE_LOG(HASH_FATAL, "node is null, backtrace=%s", lbt());
+      HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "node is null, backtrace=%s", lbt());
     } else if (++bucket_pos_ >= ht_->bucket_num_) {
       bucket_ = nullptr;
     } else {
@@ -492,7 +492,7 @@ public:
   {
     _value_type *p = NULL;
     if (OB_ISNULL(node_)) {
-      HASH_WRITE_LOG(HASH_FATAL, "node is null, backtrace=%s", lbt());
+      HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "node is null, backtrace=%s", lbt());
     } else {
       p = &(node_->data);
     }
@@ -512,7 +512,7 @@ public:
   iterator &operator ++()
   {
     if (OB_ISNULL(ht_)) {
-      HASH_WRITE_LOG(HASH_FATAL, "node is null, backtrace=%s", lbt());
+      HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "node is null, backtrace=%s", lbt());
     } else if (NULL != node_ && NULL != (node_ = node_->next)) {
       // do nothing
     } else {
@@ -643,7 +643,7 @@ public:
   const_iterator &operator ++()
   {
     if (OB_ISNULL(ht_)) {
-      HASH_WRITE_LOG(HASH_FATAL, "ht_ is null, backtrace=%s", lbt());
+      HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "ht_ is null, backtrace=%s", lbt());
     } else if (NULL != node_ && NULL != (node_ = node_->next)) {
       // do nothing
     } else {
@@ -894,7 +894,7 @@ public:
     int64_t bucket_pos = 0;
     //if (NULL == buckets_ || NULL == allocer_)
     if (OB_UNLIKELY(!inited(buckets_)) || OB_UNLIKELY(NULL == allocer_)) {
-      HASH_WRITE_LOG(HASH_WARNING, "hashtable not init, backtrace=%s", lbt());
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_NOT_INIT, "hashtable not init, backtrace=%s", lbt());
     } else {
       bucket = &buckets_[bucket_pos];
     }
@@ -912,7 +912,7 @@ public:
     int64_t bucket_pos = 0;
     //if (NULL == buckets_ || NULL == allocer_)
     if (OB_UNLIKELY(!inited(buckets_)) || OB_UNLIKELY(NULL == allocer_)) {
-      HASH_WRITE_LOG(HASH_WARNING, "hashtable not init, backtrace=%s", lbt());
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_NOT_INIT, "hashtable not init, backtrace=%s", lbt());
     } else {
       while (NULL == node && bucket_pos < bucket_num_) {
         node = buckets_[bucket_pos].node;
@@ -934,7 +934,7 @@ public:
     hashnode *node = NULL;
     int64_t bucket_pos = 0;
     if (OB_UNLIKELY(!inited(buckets_)) || OB_UNLIKELY(NULL == allocer_)) {
-      HASH_WRITE_LOG(HASH_WARNING, "hashtable not init, backtrace=%s", lbt());
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_NOT_INIT, "hashtable not init, backtrace=%s", lbt());
     } else {
       while (NULL == node && bucket_pos < bucket_num_) {
         node = buckets_[bucket_pos].node;

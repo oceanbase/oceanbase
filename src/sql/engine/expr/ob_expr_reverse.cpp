@@ -101,14 +101,14 @@ int calc_reverse_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
         res_datum.set_string(res_str);
       }
     } else { // text tc
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
       char *buf;
       int64_t buf_size = 0;
       int64_t total_byte_len = 0;
       const bool has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
       ObTextStringIter input_iter(expr.args_[0]->datum_meta_.type_, arg_cs_type, arg->get_string(), has_lob_header);
       ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
-      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
       if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
         LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
       } else if (OB_FAIL(input_iter.get_byte_len(total_byte_len))) {

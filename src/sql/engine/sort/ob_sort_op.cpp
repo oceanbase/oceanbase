@@ -411,8 +411,9 @@ int ObSortOp::init_prefix_sort(int64_t tenant_id,
   } else {
     read_func_ = &ObSortOp::prefix_sort_impl_next;
   }
+  int aqs_head = MY_SPEC.enable_encode_sortkey_opt_ ? sizeof(oceanbase::sql::ObSortOpImpl::AQSItem) : 0;
   prefix_sort_impl_.set_input_rows(row_count);
-  prefix_sort_impl_.set_input_width(MY_SPEC.width_);
+  prefix_sort_impl_.set_input_width(MY_SPEC.width_ + aqs_head);
   prefix_sort_impl_.set_operator_type(MY_SPEC.type_);
   prefix_sort_impl_.set_operator_id(MY_SPEC.id_);
   prefix_sort_impl_.set_io_event_observer(&io_event_observer_);
@@ -433,8 +434,9 @@ int ObSortOp::init_sort(int64_t tenant_id,
   } else {
     read_func_ = &ObSortOp::sort_impl_next;
   }
+  int aqs_head = MY_SPEC.enable_encode_sortkey_opt_ ? sizeof(oceanbase::sql::ObSortOpImpl::AQSItem) : 0;
   sort_impl_.set_input_rows(row_count);
-  sort_impl_.set_input_width(MY_SPEC.width_);
+  sort_impl_.set_input_width(MY_SPEC.width_ + aqs_head);
   sort_impl_.set_operator_type(MY_SPEC.type_);
   sort_impl_.set_operator_id(MY_SPEC.id_);
   sort_impl_.set_io_event_observer(&io_event_observer_);

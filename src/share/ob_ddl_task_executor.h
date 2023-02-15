@@ -64,6 +64,10 @@ public:
   {
     return common::OB_SERVER_OUTOF_DISK_SPACE == ret_code || common::OB_DISK_ERROR == ret_code;
   }
+  static bool is_ddl_force_no_more_process(const int ret_code)
+  {
+    return common::OB_STANDBY_READ_ONLY == ret_code;
+  }
 private:
   static bool is_timeout(const int ret_code) {
     return common::OB_TIMEOUT == ret_code || common::OB_TRANS_STMT_TIMEOUT == ret_code || common::OB_CONNECT_ERROR == ret_code

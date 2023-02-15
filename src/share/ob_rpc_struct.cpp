@@ -1607,7 +1607,7 @@ bool ObAlterTableArg::is_allow_when_upgrade() const
       for (int64_t i = 0 ; bret && i < index_arg_list_.count(); i++) {
         if (OB_ISNULL(index_arg_list_.at(i))) {
           bret = false;
-          LOG_WARN("ptr is null", K(bret));
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "ptr is null", K(bret));
         } else {
           bret = index_arg_list_.at(i)->is_allow_when_upgrade();
         }
@@ -1629,7 +1629,7 @@ bool ObAlterTableArg::is_allow_when_upgrade() const
       for(; bret && it_begin != it_end; it_begin++) {
         if (OB_ISNULL(*it_begin)) {
           bret = false;
-          LOG_WARN("*it_begin is NULL", K(bret));
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "*it_begin is NULL", K(bret));
         } else {
           alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin);
           // mysql mode, OB_ALL_MODIFY_COLUMN function is a subset of OB_ALL_CHANGE_COLUMN;
@@ -2653,10 +2653,10 @@ bool ObRenameIndexArg::is_valid() const
   int bret = true;
   if (origin_index_name_.empty()) {
     bret = false;
-    LOG_WARN("origin_index_name is empty", K_(origin_index_name));
+    LOG_WARN_RET(OB_INVALID_ERROR, "origin_index_name is empty", K_(origin_index_name));
   } else if (new_index_name_.empty()){
     bret = false;
-    LOG_WARN("new_index_name is empty", K_(origin_index_name));
+    LOG_WARN_RET(OB_INVALID_ERROR, "new_index_name is empty", K_(origin_index_name));
   }else{
     bret = ObIndexArg::is_valid();
   }
@@ -2791,14 +2791,14 @@ bool ObFlashBackTableFromRecyclebinArg::is_valid() const
   int bret = true;
   if (OB_INVALID_ID == tenant_id_) {
     bret = false;
-    LOG_WARN("tenant_id is invalid", K_(tenant_id));
+    LOG_WARN_RET(OB_INVALID_ERROR, "tenant_id is invalid", K_(tenant_id));
   } else if (origin_table_name_.empty()) {
     bret = false;
-    LOG_WARN("origin_table_name is empty", K_(origin_table_name));
+    LOG_WARN_RET(OB_INVALID_ERROR, "origin_table_name is empty", K_(origin_table_name));
   } else if ((new_db_name_.empty() && !new_table_name_.empty()) ||
       (!new_db_name_.empty() && new_table_name_.empty())) {
     bret = false;
-    LOG_WARN("new_db_name or new_table_name is invalid",
+    LOG_WARN_RET(OB_INVALID_ERROR, "new_db_name or new_table_name is invalid",
              K_(new_db_name), K_(new_table_name));
   }
   return bret;
@@ -2816,13 +2816,13 @@ bool ObFlashBackTableToScnArg::is_valid() const
   int bret = true;
   if (OB_INVALID_ID == tenant_id_) {
     bret = false;
-    LOG_WARN("tenant_id is invalid", K_(tenant_id));
+    LOG_WARN_RET(OB_INVALID_ERROR, "tenant_id is invalid", K_(tenant_id));
   } else if (OB_INVALID_ID == time_point_) {
     bret = false;
-    LOG_WARN("timepoint is invalid", K_(time_point));
+    LOG_WARN_RET(OB_INVALID_ERROR, "timepoint is invalid", K_(time_point));
   } else if (0 == tables_.count()) {
     bret = false;
-    LOG_WARN("table is empty", K_(tables));
+    LOG_WARN_RET(OB_INVALID_ERROR, "table is empty", K_(tables));
   } else if (-1 == query_end_time_) {
     bret = false;
   }
@@ -2840,14 +2840,14 @@ bool ObFlashBackIndexArg::is_valid() const
   int bret = true;
   if (OB_INVALID_ID == tenant_id_) {
     bret = false;
-    LOG_WARN("tenant_id is invalid", K_(tenant_id));
+    LOG_WARN_RET(OB_INVALID_ERROR, "tenant_id is invalid", K_(tenant_id));
   } else if (origin_table_name_.empty()) {
     bret = false;
-    LOG_WARN("origin_table_name is empty", K_(origin_table_name));
+    LOG_WARN_RET(OB_INVALID_ERROR, "origin_table_name is empty", K_(origin_table_name));
   } else if ((new_db_name_.empty() && !new_table_name_.empty()) ||
       (!new_db_name_.empty() && new_table_name_.empty())) {
     bret = false;
-    LOG_WARN("new_db_name or new_table_name is invalid",
+    LOG_WARN_RET(OB_INVALID_ERROR, "new_db_name or new_table_name is invalid",
              K_(new_db_name), K_(new_table_name));
   }
   return bret;
@@ -5235,15 +5235,15 @@ DEF_TO_STRING(ObSplitPartitionBatchArg)
 
 bool ObCheckpoint::is_valid() const
 {
-  return (ls_id_.is_valid() && cur_sync_scn_.is_valid_and_not_min());
+  return (ls_id_.is_valid() && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_max_scn_.is_valid_and_not_min());
 }
 
 bool ObCheckpoint::operator==(const obrpc::ObCheckpoint &r) const
 {
-  return ls_id_ == r.ls_id_ && cur_sync_scn_ == r.cur_sync_scn_ && is_sync_to_latest_ == r.is_sync_to_latest_;
+  return ls_id_ == r.ls_id_ && cur_sync_scn_ == r.cur_sync_scn_ && cur_restore_source_max_scn_ == r.cur_restore_source_max_scn_;
 }
 
-OB_SERIALIZE_MEMBER(ObCheckpoint, ls_id_, cur_sync_scn_, is_sync_to_latest_);
+OB_SERIALIZE_MEMBER(ObCheckpoint, ls_id_, cur_sync_scn_, cur_restore_source_max_scn_);
 
 OB_SERIALIZE_MEMBER(ObGetWRSArg, tenant_id_, scope_, need_filter_);
 OB_SERIALIZE_MEMBER(ObGetWRSResult, self_addr_, err_code_);
@@ -5391,31 +5391,32 @@ int ObGetLSSyncScnArg::assign(const ObGetLSSyncScnArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObGetLSSyncScnRes, tenant_id_, ls_id_, cur_sync_scn_, is_sync_to_latest_);
+OB_SERIALIZE_MEMBER(ObGetLSSyncScnRes, tenant_id_, ls_id_, cur_sync_scn_, cur_restore_source_max_scn_);
 
 bool ObGetLSSyncScnRes::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
          && ls_id_.is_valid()
-         && cur_sync_scn_.is_valid_and_not_min();
+         && cur_sync_scn_.is_valid_and_not_min()
+         && cur_restore_source_max_scn_.is_valid_and_not_min();
 }
 int ObGetLSSyncScnRes::init(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const share::SCN &cur_sync_scn,
-    const bool is_sync_to_latest)
+    const share::SCN &cur_restore_source_max_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   || !ls_id.is_valid()
                   || !cur_sync_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_sync_scn), K(is_sync_to_latest));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_sync_scn), K(cur_restore_source_max_scn));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     cur_sync_scn_ = cur_sync_scn;
-    is_sync_to_latest_ = is_sync_to_latest;
+    cur_restore_source_max_scn_ = cur_restore_source_max_scn;
   }
   return ret;
 }
@@ -5427,7 +5428,7 @@ int ObGetLSSyncScnRes::assign(const ObGetLSSyncScnRes &other)
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
     cur_sync_scn_ = other.cur_sync_scn_;
-    is_sync_to_latest_ = other.is_sync_to_latest_;
+    cur_restore_source_max_scn_ = other.cur_restore_source_max_scn_;
   }
   return ret;
 }
@@ -5743,7 +5744,7 @@ bool ObKeystoreDDLArg::is_valid() const
           ALTER_KEYSTORE_PASSWORD == type_ ||
           ALTER_KEYSTORE_SET_KEY == type_ ||
           ALTER_KEYSTORE_CLOSE == type_ ||
-          ALTER_KEYSTORE_OPEN);
+          ALTER_KEYSTORE_OPEN == type_ );
 }
 
 bool ObKeystoreDDLArg::is_allow_when_disable_ddl() const
@@ -6472,9 +6473,8 @@ int ObCreateLSArg::assign(const ObCreateLSArg &arg)
 {
   int ret = OB_SUCCESS;
   if (this == &arg) {
-  } else if (OB_FAIL(tenant_info_.assign(arg.tenant_info_))) {
-    LOG_WARN("failed to assign tenant info", KR(ret), K(arg));
   } else {
+    (void)tenant_info_.assign(arg.tenant_info_);
     tenant_id_ = arg.tenant_id_;
     id_ = arg.id_;
     replica_type_ = arg.replica_type_;
@@ -6504,9 +6504,8 @@ int ObCreateLSArg::init(const int64_t tenant_id,
                   || !tenant_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id), K(replica_type), K(tenant_info));
-  } else if (OB_FAIL(tenant_info_.assign(tenant_info))) {
-    LOG_WARN("failed to assign tenant info", KR(ret), K(tenant_info));
   } else {
+    (void)tenant_info_.assign(tenant_info);
     tenant_id_ = tenant_id;
     id_ = id;
     replica_type_ = replica_type;
@@ -7344,26 +7343,28 @@ int ObBatchBroadcastSchemaResult::get_ret() const
 OB_SERIALIZE_MEMBER(ObBatchBroadcastSchemaResult, ret_);
 
 ObRpcRemoteWriteDDLRedoLogArg::ObRpcRemoteWriteDDLRedoLogArg()
-  : tenant_id_(OB_INVALID_ID), ls_id_(), redo_info_()
+  : tenant_id_(OB_INVALID_ID), ls_id_(), redo_info_(), task_id_(0)
 {}
 
 int ObRpcRemoteWriteDDLRedoLogArg::init(const uint64_t tenant_id,
                                         const share::ObLSID &ls_id,
-                                        const blocksstable::ObDDLMacroBlockRedoInfo &redo_info)
+                                        const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+                                        const int64_t task_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !redo_info.is_valid())) {
+  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || task_id == 0 || !ls_id.is_valid() || !redo_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("args are not valid", K(ret), K(tenant_id), K(ls_id), K(redo_info));
+    LOG_WARN("args are not valid", K(ret), K(tenant_id), K(task_id), K(ls_id), K(redo_info));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     redo_info_ = redo_info;
+    task_id_ = task_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLRedoLogArg, tenant_id_, ls_id_, redo_info_);
+OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLRedoLogArg, tenant_id_, ls_id_, redo_info_, task_id_);
 
 ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(SCN::min_scn()),

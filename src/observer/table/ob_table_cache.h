@@ -20,7 +20,7 @@
 #include "lib/utility/utility.h"
 #include "sql/plan_cache/ob_lib_cache_register.h"
 #include "sql/plan_cache/ob_plan_cache.h"
-
+#include "ob_table_cg_service.h"
 namespace oceanbase
 {
 
@@ -93,9 +93,9 @@ public:
 
   virtual ~ObTableApiCacheObj()
   {
-      if (OB_NOT_NULL(spec_)) {
-          spec_->~ObTableApiSpec();
-      }
+    if (OB_NOT_NULL(spec_)) {
+      spec_->~ObTableApiSpec();
+    }
   }
   OB_INLINE ObTableApiSpec* get_spec() { return spec_; }
   OB_INLINE void set_spec(ObTableApiSpec* spec) { spec_ = spec; }
@@ -118,7 +118,30 @@ public:
   void reset();
   int get_expr_info(ObTableCtx *tb_ctx, ObExprFrameInfo *&exp_frame_info);
   template<int TYPE>
-  int get_spec(ObTableCtx *tb_ctx, ObTableApiSpec *&spec);
+  int get_spec(ObTableCtx *tb_ctx, ObTableApiSpec *&spec)
+  {
+    int ret = OB_SUCCESS;
+    ObTableApiCacheObj *cache_obj = nullptr;
+    ObTableApiSpec *tmp_spec = nullptr;
+    if (OB_ISNULL(cache_obj = static_cast<ObTableApiCacheObj *>(cache_guard_.get_cache_obj()))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "cache obj is null", K(ret));
+    } else if (OB_ISNULL(tmp_spec = cache_obj->get_spec())) {
+      if (OB_FAIL(ObTableSpecCgService::generate<TYPE>(cache_obj->get_allocator(),
+                                                      *tb_ctx,
+                                                      tmp_spec))) {
+        SERVER_LOG(WARN, "fail to generate spec", K(ret));
+      } else {
+        cache_obj->set_spec(tmp_spec);
+        if (OB_FAIL(lib_cache_->add_cache_obj(cache_ctx_, &cache_key_, cache_obj))) {
+          // spec生成后直接加入的lib cache
+          SERVER_LOG(WARN, "fail to add cache obj to lib cache", K(ret), K(cache_key_));
+        }
+      }
+    }
+    spec = tmp_spec;
+    return ret;
+  }
   OB_INLINE bool is_use_cache() { return is_use_cache_; }
 private:
   int create_cache_key(ObTableCtx *tb_ctx);
@@ -129,8 +152,6 @@ private:
 
 private:
   bool is_use_cache_;
-  // 使用lib cache资源都需要用到
-  observer::ObReqTimeGuard req_timeinfo_guard;
   sql::ObPlanCache *lib_cache_;
   ObTableApiCacheKey cache_key_;
   ObCacheObjGuard cache_guard_;

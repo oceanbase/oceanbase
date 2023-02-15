@@ -77,11 +77,11 @@ void ObConfigItem::init(Scope::ScopeInfo scope_info,
                         const ObParameterAttr attr)
 {
   if (OB_ISNULL(name) || OB_ISNULL(def) || OB_ISNULL(info)) {
-    OB_LOG(ERROR, "name or def or info is null", K(name), K(def), K(info));
+    OB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "name or def or info is null", K(name), K(def), K(info));
   } else {
     set_name(name);
     if (!set_value(def)) {
-      OB_LOG(ERROR, "Set config item value failed", K(name), K(def));
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Set config item value failed", K(name), K(def));
     } else {
      set_info(info);
      attr_ = attr;
@@ -273,7 +273,7 @@ bool ObConfigStrListItem::set(const char *str)
         }
       }
     } else {
-      OB_LOG(WARN, "input str is not available", K(str), K_(value_.valid), K_(value_.size), K(bret));
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "input str is not available", K(str), K_(value_.valid), K_(value_.size), K(bret));
     }
   } else {
     ObLatchRGuard wr_guard(value_.rwlock_, ObLatchIds::CONFIG_LOCK);
@@ -294,9 +294,9 @@ void ObConfigIntegralItem::init(Scope::ScopeInfo scope_info,
   ObConfigItem::init(scope_info, name, def, info, attr);
   set_range(range);
   if (OB_ISNULL(range)) {
-    OB_LOG(ERROR, "Range is NULL");
+    OB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Range is NULL");
   } else if (!parse_range(range)) {
-    OB_LOG(ERROR, "Parse check range fail", K(range));
+    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Parse check range fail", K(range));
   }
 }
 
@@ -406,9 +406,9 @@ void ObConfigDoubleItem::init(Scope::ScopeInfo scope_info,
   ObConfigItem::init(scope_info, name, def, info, attr);
   set_range(range);
   if (OB_ISNULL(range)) {
-    OB_LOG(ERROR, "Range is NULL");
+    OB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Range is NULL");
   } else if (!parse_range(range)) {
-    OB_LOG(ERROR, "Parse check range fail", K(range));
+    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Parse check range fail", K(range));
   }
 }
 
@@ -519,11 +519,11 @@ ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer *container,
 
 int64_t ObConfigCapacityItem::parse(const char *str, bool &valid) const
 {
-  int64_t ret = ObConfigCapacityParser::get(str, valid);
+  int64_t value = ObConfigCapacityParser::get(str, valid);
   if (!valid) {
-      OB_LOG(ERROR, "set capacity error", "name", name(), K(str), K(valid));
+      OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set capacity error", "name", name(), K(str), K(valid));
   }
-  return ret;
+  return value;
 }
 
 // ObConfigTimeItem
@@ -558,7 +558,7 @@ int64_t ObConfigTimeItem::parse(const char *str, bool &valid) const
 {
   int64_t value = ObConfigTimeParser::get(str, valid);
   if (!valid) {
-      OB_LOG(ERROR, "set time error", "name", name(), K(str), K(valid));
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "set time error", "name", name(), K(str), K(valid));
   }
   return value;
 }
@@ -595,7 +595,7 @@ int64_t ObConfigIntItem::parse(const char *str, bool &valid) const
 {
   int64_t value = ObConfigIntParser::get(str, valid);
   if (!valid) {
-    OB_LOG(ERROR, "set int error", "name", name(), K(str), K(valid));
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set int error", "name", name(), K(str), K(valid));
   }
   return value;
 }
@@ -665,11 +665,11 @@ bool ObConfigBoolItem::parse(const char *str, bool &valid) const
   bool value = true;
   if (OB_ISNULL(str)) {
     valid = false;
-    OB_LOG(ERROR, "Get bool config item fail, str is NULL!");
+    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Get bool config item fail, str is NULL!");
   } else {
     value = ObConfigBoolParser::get(str, valid);
     if (!valid) {
-      OB_LOG(WARN, "Get bool config item fail", K(valid), K(str));
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "Get bool config item fail", K(valid), K(str));
     }
   }
   return value;
@@ -825,7 +825,7 @@ bool ObConfigLogArchiveOptionsItem::is_valid_isolate_option(const int64_t idx)
     bret = true;
   } else {
     bret = false;
-    OB_LOG(WARN, "invalid isolated option idx", K(idx));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid isolated option idx", K(idx));
   }
   return bret;
 }
@@ -838,7 +838,7 @@ void ObConfigLogArchiveOptionsItem::process_isolated_option_(const int64_t idx)
     value_.is_mandatory_ = false;
   } else {
     value_.valid_ = false;
-    OB_LOG(WARN, "invalid isolated option idx", K(idx));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid isolated option idx", K(idx));
   }
 }
 
@@ -946,7 +946,7 @@ int ObConfigLogArchiveOptionsItem::format_option_str(const char *src, int64_t sr
     int64_t pos = 0;
     while (OB_SUCC(ret) && (source_left_len > 0)
            && (NULL != (locate_str = STRCHR(source_str, '=')))) {
-      locate = locate_str - source_str;
+      locate = static_cast<int32_t>(locate_str - source_str);
       if (OB_FAIL(databuff_printf(dest, dest_len, pos, "%.*s = ", locate, source_str))) {
         OB_LOG(WARN, "failed to databuff_print", K(ret), K(dest), K(locate), K(source_str));
       } else {
@@ -1000,7 +1000,7 @@ bool ObConfigVersionItem::set(const char *str)
   bool value_update = value_updated();
   bool valid = ObConfigIntegralItem::set(str);
   if (valid && value_update && old_value > value_) {
-    OB_LOG(ERROR, "Attention!!! data version is retrogressive", K(old_value), K_(value));
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "Attention!!! data version is retrogressive", K(old_value), K_(value));
   }
   if (old_value != value_) {
     ObTaskController::get().allow_next_syslog();
@@ -1025,7 +1025,7 @@ ObConfigVersionItem &ObConfigVersionItem::operator = (int64_t value)
   char buf[64] = {0};
   (void) snprintf(buf, sizeof(buf), "%ld", value);
   if (!set_value(buf)) {
-    OB_LOG(WARN, "obconfig version item set value failed");
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "obconfig version item set value failed");
   }
   return *this;
 }

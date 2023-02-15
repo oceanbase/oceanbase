@@ -100,7 +100,7 @@ ObVirtualCSProtocolProcessor *ObSqlSockProcessor::get_protocol_processor(ObCSPro
       break;
     }
     default: {
-      LOG_ERROR("invalid cs protocol type", K(type));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid cs protocol type", K(type));
       break;
     }
   }

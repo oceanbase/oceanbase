@@ -36,12 +36,12 @@ public:
 public:
   OB_INLINE table::ObTableLoadStatusType get_status() const
   {
-    lib::ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     return status_;
   }
   OB_INLINE int get_error_code() const
   {
-    lib::ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     return error_code_;
   }
   OB_INLINE int set_status_inited()
@@ -133,7 +133,7 @@ private:
   ObTableLoadObjectAllocator<ObTableLoadCoordinatorTrans> trans_allocator_; // 多线程安全
   uint64_t last_trans_gid_ CACHE_ALIGNED;
   uint64_t next_session_id_ CACHE_ALIGNED;
-  mutable lib::ObMutex mutex_;
+  mutable obsys::ObRWLock rwlock_;
   table::ObTableLoadStatusType status_;
   int error_code_;
   TransMap trans_map_;

@@ -783,7 +783,7 @@ void ObLogFormatter::handle_non_full_columns_(
   PartTransTask &task = dml_stmt_task.get_host();
 
   if (! skip_dirty_data_) {
-    LOG_ERROR("row data is not full recorded",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "row data is not full recorded",
         "tls_id", task.get_tls_id(),
         "commit_log_lsn", task.get_commit_log_lsn(),
         "commit_version", task.get_trans_commit_version(),
@@ -816,7 +816,7 @@ int ObLogFormatter::finish_format_(PartTransTask &part_trans_task,
           LOG_ERROR("redo_log_entry_task link_row_list fail", KR(ret), K(redo_log_entry_task));
         }
       } else {
-        LOG_DEBUG("[FORMATT]", K(tenant_id), K(stmt_num), K(redo_log_entry_task), K(part_trans_task));
+        LOG_DEBUG("[FORMATT]", K(tenant_id), K(stmt_num), KP(&redo_log_entry_task), K(redo_log_entry_task), K(part_trans_task));
         IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
 
         if (0 == row_ref_cnt) {

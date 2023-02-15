@@ -237,7 +237,7 @@ const char* ObLSStatusOperator::ls_status_to_str(const ObLSStatus &status)
   const char* str = "UNKNOWN";
 
   if (OB_UNLIKELY(OB_LS_EMPTY == status)) {
-    LOG_WARN("invalid log stream status", K(status));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid log stream status", K(status));
   } else {
     str = LS_STATUS_ARRAY[status];
   }
@@ -584,7 +584,7 @@ int ObLSStatusOperator::get_visible_member_list_str_(const ObMemberList &member_
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("size overflow", KR(ret), K(pos), K(length));
   } else {
-    visible_member_list_str.assign(member_list_str, pos);
+    visible_member_list_str.assign(member_list_str, static_cast<int32_t>(pos));
   }
   return ret;
 }
@@ -623,7 +623,7 @@ int ObLSStatusOperator::get_member_list_hex_(const ObMemberList &member_list,
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
-    hex_str.assign_ptr(hex_buf, hex_size);
+    hex_str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
   }
   return ret;
 }

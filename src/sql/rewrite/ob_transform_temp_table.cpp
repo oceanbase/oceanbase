@@ -977,6 +977,7 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *child_stmt = NULL;
+  ObSEArray<ObRawExpr*, 8> pushdown_exprs;
   if (OB_ISNULL(parent_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
@@ -997,21 +998,25 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
     } else if (parent_stmt->get_condition_size() > 0 &&
               OB_FAIL(pushdown_conditions(parent_stmt,
                                           map_info.cond_map_,
-                                          common_map_info.cond_map_))) {
+                                          common_map_info.cond_map_,
+                                          pushdown_exprs))) {
       LOG_WARN("failed to pushdown conditions", K(ret));
     } else if (!common_map_info.is_cond_equal_ ||
               !common_map_info.is_group_equal_) {
       //do nothing
       //下压group by
     } else if (parent_stmt->has_group_by() &&
-              OB_FAIL(pushdown_group_by(parent_stmt))) {
+              OB_FAIL(pushdown_group_by(parent_stmt, pushdown_exprs))) {
       LOG_WARN("failed to pushdown group by", K(ret));
       //下压having
     } else if (parent_stmt->get_having_expr_size() > 0 &&
               OB_FAIL(pushdown_having_conditions(parent_stmt,
                                                   map_info.having_map_,
-                                                  common_map_info.having_map_))) {
+                                                  common_map_info.having_map_,
+                                                  pushdown_exprs))) {
       LOG_WARN("failed to pushdown having conditions", K(ret));
+    } else if (is_mysql_mode() && !pushdown_exprs.empty() && OB_FAIL(pushdown_shared_subqueries(parent_stmt, pushdown_exprs))) {
+      LOG_WARN("failed to extract shared expr", K(ret));
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*parent_stmt))) {
@@ -1101,7 +1106,8 @@ int ObTransformTempTable::create_spj(ObSelectStmt *parent_stmt)
  */
 int ObTransformTempTable::pushdown_conditions(ObSelectStmt *parent_stmt,
                                               const ObIArray<int64_t> &cond_map,
-                                              const ObIArray<int64_t> &common_cond_map)
+                                              const ObIArray<int64_t> &common_cond_map,
+                                              ObIArray<ObRawExpr*> &pushdown_exprs)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
@@ -1168,6 +1174,8 @@ int ObTransformTempTable::pushdown_conditions(ObSelectStmt *parent_stmt,
         LOG_WARN("failed to rename pushdown filter", K(ret));
       } else if (OB_FAIL(append(subquery->get_condition_exprs(), rename_conds))) {
         LOG_WARN("failed to append exprs", K(ret));
+      } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
+        LOG_WARN("failed to append exprs", K(ret));
       }
     }
   }
@@ -1179,7 +1187,7 @@ int ObTransformTempTable::pushdown_conditions(ObSelectStmt *parent_stmt,
  * 下压所有的group by expr、rollup expr到视图中
  * 同时需要把上层stmt的所有aggr expr下压到视图中计算
  */
-int ObTransformTempTable::pushdown_group_by(ObSelectStmt *parent_stmt)
+int ObTransformTempTable::pushdown_group_by(ObSelectStmt *parent_stmt, ObIArray<ObRawExpr*> &pushdown_exprs)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
@@ -1222,6 +1230,8 @@ int ObTransformTempTable::pushdown_group_by(ObSelectStmt *parent_stmt)
     LOG_WARN("failed to rename pushdown filter", K(ret));
   } else if (OB_FAIL(append(subquery->get_group_exprs(), rename_conds))) {
     LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
+    LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FALSE_IT(pushdown_conds.reuse()) ||
              OB_FALSE_IT(rename_conds.reuse()) ||
              OB_FALSE_IT(parent_stmt->get_group_exprs().reset())) {
@@ -1237,6 +1247,8 @@ int ObTransformTempTable::pushdown_group_by(ObSelectStmt *parent_stmt)
                                                             rename_conds))) {
     LOG_WARN("failed to rename pushdown filter", K(ret));
   } else if (OB_FAIL(append(subquery->get_rollup_exprs(), rename_conds))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FALSE_IT(pushdown_conds.reuse()) ||
              OB_FALSE_IT(rename_conds.reuse()) ||
@@ -1279,6 +1291,8 @@ int ObTransformTempTable::pushdown_group_by(ObSelectStmt *parent_stmt)
         LOG_WARN("failed to create columns for view", K(ret));
       } else if (OB_FAIL(parent_stmt->replace_relation_exprs(pushdown_conds, new_column_list))) {
         LOG_WARN("failed to replace relation exprs", K(ret));
+      } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
+        LOG_WARN("failed to append exprs", K(ret));
       }
     }
   }
@@ -1291,7 +1305,8 @@ int ObTransformTempTable::pushdown_group_by(ObSelectStmt *parent_stmt)
  */
 int ObTransformTempTable::pushdown_having_conditions(ObSelectStmt *parent_stmt,
                                                     const ObIArray<int64_t> &having_map,
-                                                    const ObIArray<int64_t> &common_having_map)
+                                                    const ObIArray<int64_t> &common_having_map,
+                                                    ObIArray<ObRawExpr*> &pushdown_exprs)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
@@ -1361,6 +1376,8 @@ int ObTransformTempTable::pushdown_having_conditions(ObSelectStmt *parent_stmt,
                                                                 rename_conds))) {
         LOG_WARN("failed to rename pushdown filter", K(ret));
       } else if (OB_FAIL(append(subquery->get_having_exprs(), rename_conds))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else if (OB_FAIL(append(pushdown_exprs, pushdown_conds))) {
         LOG_WARN("failed to append exprs", K(ret));
       }
     }
@@ -2426,5 +2443,69 @@ int ObTransformTempTable::check_hint_allowed_trans(const ObSelectStmt &ref_query
   return ret;
 }
 
+int ObTransformTempTable::pushdown_shared_subqueries(ObSelectStmt *parent_stmt, ObIArray<ObRawExpr*> &candi_exprs) {
+  int ret = OB_SUCCESS;
+  TableItem *table = NULL;
+  ObSEArray<ObRawExpr*, 8> shared_exprs;
+  ObSEArray<ObRawExpr*, 8> column_exprs;
+  ObSEArray<ObRawExpr*, 8> pushdown_conds;
+  ObSEArray<ObRawExpr*, 8> rename_conds;
+  if (OB_ISNULL(parent_stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret));
+  }  else if (1 != parent_stmt->get_table_size()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect one table item in stmt", KPC(parent_stmt), K(ret));
+  } else if (OB_ISNULL(table = parent_stmt->get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null table item", K(ret));
+  } else if (!table->is_generated_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect generate table item", KPC(table), K(ret));
+  } else if (OB_ISNULL(table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null ref query", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_shared_exprs(parent_stmt, candi_exprs, shared_exprs))) {
+    LOG_WARN("fail to get shared exprs", K(ret));
+  } else {
+    //push down shared exprs which contains shared subqueries
+    ObSEArray<ObQueryRefRawExpr*, 4> set_queries;
+    ObSEArray<ObRawExpr*, 8> relation_exprs;
+    for (int64_t i = 0; OB_SUCC(ret) && i < shared_exprs.count(); ++i) {
+      if (OB_ISNULL(shared_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input expr is null", K(ret));
+      } else if (!shared_exprs.at(i)->has_flag(CNT_SUB_QUERY)) {
+        // do nothing
+      } else if (shared_exprs.at(i)->is_query_ref_expr()) {
+        ObQueryRefRawExpr *query_ref = static_cast<ObQueryRefRawExpr *>(shared_exprs.at(i));
+        if (query_ref->is_set() || query_ref->get_output_column() > 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("set queries and queries which have multi output columns can't be pushed down into select list", K(ret));
+        } else if (OB_FAIL(pushdown_conds.push_back(shared_exprs.at(i)))) {
+          LOG_WARN("failed to push back input expr", K(ret));
+        }
+      } else if (OB_FAIL(pushdown_conds.push_back(shared_exprs.at(i)))) {
+        LOG_WARN("failed to push back input expr", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObOptimizerUtil::rename_pushdown_filter(*parent_stmt, *table->ref_query_, table->table_id_, ctx_->session_info_,
+                                                                *ctx_->expr_factory_, pushdown_conds, rename_conds))) {
+      LOG_WARN("failed to rename pushdown filter", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *table, parent_stmt, rename_conds, column_exprs))) {
+      LOG_WARN("failed to create columns for view", K(ret));
+    } else {
+      parent_stmt->get_table_items().pop_back();
+      if (OB_FAIL(parent_stmt->replace_relation_exprs(pushdown_conds, column_exprs))) {
+        LOG_WARN("failed to replace inner stmt expr", K(ret));
+      } else if (OB_FAIL(parent_stmt->get_table_items().push_back(table))) {
+        LOG_WARN("failed to push back view table item", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 }//namespace sql
 }//namespace oceanbase

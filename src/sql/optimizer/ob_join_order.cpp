@@ -7836,9 +7836,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     } else if (NULL == right_path.get_strong_sharding()) {
       is_match_repart = false;
       OPT_TRACE("strong sharding of right path is null, not use partition none");
-    } else if (OB_ISNULL(right_path.get_sharding())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
     } else if (!right_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
       is_match_repart = false;
       OPT_TRACE("right path not meet repart");
@@ -7879,8 +7876,11 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_NONE)) {
     OPT_TRACE("check hash none method");
     target_part_keys.reuse();
-    if (!right_sharding->is_distributed_without_table_location_with_partitioning() ||
-        !ObShardingInfo::is_shuffled_server_list(right_path.get_server_list())) {
+    if (NULL == right_path.get_strong_sharding()) {
+      is_match_single_side_hash = false;
+      OPT_TRACE("strong sharding of right path is null, not use hash none");
+    } else if (!right_sharding->is_distributed_without_table_location_with_partitioning() ||
+               !ObShardingInfo::is_shuffled_server_list(right_path.get_server_list())) {
       is_match_single_side_hash = false;
     } else if (OB_FAIL(right_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get partition keys", K(ret));
@@ -7916,9 +7916,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     } else if (NULL == left_path.get_strong_sharding()) {
       is_match_repart = false;
       OPT_TRACE("strong sharding of left path is null, not use none partition");
-    } else if (OB_ISNULL(left_path.get_sharding())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
     } else if (!left_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
       is_match_repart = false;
       OPT_TRACE("left path not meet repart");
@@ -7952,8 +7949,11 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_HASH)) {
     OPT_TRACE("check none hash method");
     target_part_keys.reuse();
-    if (!left_sharding->is_distributed_without_table_location_with_partitioning() ||
-        !ObShardingInfo::is_shuffled_server_list(left_path.get_server_list())) {
+    if (NULL == left_path.get_strong_sharding()) {
+      is_match_single_side_hash = false;
+      OPT_TRACE("strong sharding of left path is null, not use none hash");
+    } else if (!left_sharding->is_distributed_without_table_location_with_partitioning() ||
+               !ObShardingInfo::is_shuffled_server_list(left_path.get_server_list())) {
       is_match_single_side_hash = false;
     } else if (OB_FAIL(left_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get all partition keys", K(ret));
@@ -9474,21 +9474,21 @@ public:
         } else if (OB_ISNULL(ref_expr = expr->get_ref_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null expr", K(ret));
-        } else if (OB_UNLIKELY(!ref_expr->is_column_ref_expr())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected expr type", KPC(ref_expr), K(ret));
         } else if (ref_expr->get_relation_ids().is_subset(*left_table_set_)) {
           if (OB_FAIL(nl_params_.push_back(expr))) {
             LOG_WARN("failed to push back nl param", K(ret));
           } else {
             new_query_ref->set_has_nl_param(true);
           }
+        } else if (OB_UNLIKELY(ref_expr->get_relation_ids().overlap(*left_table_set_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected expr", K(ret), K(*ref_expr));
         } else if (OB_FAIL(new_query_ref->get_exec_params().push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
       }
       new_expr = new_query_ref;
-    } else if (old_expr == root_expr_ || copier_->is_existed(old_expr)) {
+    } else if (copier_->is_existed(old_expr)) {
       // do nothing
     } else if (old_expr->is_column_ref_expr() &&
                old_expr->get_relation_ids().is_subset(*left_table_set_)) {
@@ -9863,25 +9863,11 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
       }
       OPT_TRACE("candi distribute methods:");
       int64_t distributed_methods = path_info.distributed_methods_;
-      const ObString dist_algo_str[] =
-      {
-        "BASIC",
-        "PULL TO LOCAL",
-        "HASH HASH",
-        "BROADCAST NONE",
-        "NONE BROADCAST",
-        "BC2HOST NONE",
-        "PARTITION NONE",
-        "NONE PARTITION",
-        "PARTITION WISE",
-        "UNKNOWN ALGO",
-        "RANDOM"
-      };
-      for (int idx = 0; idx < sizeof(dist_algo_str) / sizeof(ObString); ++idx) {
-        if (distributed_methods & 1) {
-          OPT_TRACE(dist_algo_str[idx]);
+      for (int64_t k = 1; k < DistAlgo::DIST_MAX_JOIN_METHOD; k = k << 1) {
+        if (distributed_methods & k) {
+          DistAlgo dist_algo = get_dist_algo(k);
+          OPT_TRACE(ob_dist_algo_str(dist_algo));
         }
-        distributed_methods >>= 1;
       }
     }
   }
@@ -10737,12 +10723,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
       }
 
       // 2. try to estimate the whole memtable
-      if (OB_SUCC(ret) &&
-          table_meta_info_.table_row_count_ <= 0 &&
-          !table_meta_info_.has_opt_stat_) {
-        // a newly created which only has memtable data, and do not have any stats
-        // we use default rowcount here, and try to refine the value by estimating the memtable.
-        table_meta_info_.is_only_memtable_data_ = true;
+      if (OB_SUCC(ret) && table_meta_info_.table_row_count_ <= 0) {
         if (origin_part_cnt > 1) {
           // do nothing
         } else if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(

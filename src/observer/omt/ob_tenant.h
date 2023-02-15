@@ -66,7 +66,8 @@ public:
       group_id_(0),
       cgroup_ctrl_(nullptr),
       is_inited_(false),
-      concurrency_(0)
+      concurrency_(0),
+      active_threads_(0)
   {}
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_group_id(uint64_t group_id) { group_id_ = group_id; }
@@ -76,7 +77,15 @@ public:
   void set_px_thread_name();
 private:
   void handle(common::ObLink *task);
-
+  void try_recycle(int64_t idle_time);
+  void disable_recycle()
+  {
+    recycle_lock_.lock();
+  }
+  void enable_recycle()
+  {
+    IGNORE_RETURN recycle_lock_.unlock();
+  }
 private:
   uint64_t tenant_id_;
   uint64_t group_id_;
@@ -84,6 +93,8 @@ private:
 	common::ObPriorityQueue2<0, 1> queue_;
   bool is_inited_;
   int64_t concurrency_;
+  int64_t active_threads_;
+  mutable common::ObSpinLock recycle_lock_;
 };
 
 class ObPxPool::Task : public common::ObLink
@@ -297,6 +308,7 @@ public:
   share::ObCgroupCtrl *get_cgroup_ctrl() { return cgroup_ctrl_; }
 
   int init();
+  void update_queue_size();
   int acquire_more_worker(int64_t num, int64_t &succ_num);
   void calibrate_token_count();
   void check_worker_count();
@@ -476,6 +488,7 @@ public:
   int recv_large_request(rpc::ObRequest &req);
   int push_retry_queue(rpc::ObRequest &req, const uint64_t idx);
   void handle_retry_req();
+  void update_queue_size();
 
   void calibrate_token_count();
   void calibrate_group_token_count();

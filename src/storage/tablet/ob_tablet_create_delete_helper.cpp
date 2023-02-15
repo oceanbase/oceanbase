@@ -918,7 +918,7 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
     // If tx log ts equals SCN::max_scn(), it means redo callback has not been called.
     // Thus, we should handle this situation
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log ts is smaller than tx log ts", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
+    LOG_WARN("log ts is no bigger than tx log ts", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
   } else if (OB_UNLIKELY(trans_flags.tx_id_ != tx_data.tx_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx id does not equal", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
@@ -1240,7 +1240,7 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
                          && trans_flags.scn_ != SCN::invalid_scn()
                          && trans_flags.scn_ <= tx_data.tx_scn_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log ts is smaller than tx log ts", K(ret), K(key), K(trans_flags), K(tx_data));
+    LOG_WARN("log ts is no bigger than tx log ts", K(ret), K(key), K(trans_flags), K(tx_data));
   } else if (OB_UNLIKELY(trans_flags.tx_id_ != tx_data.tx_id_)) {
     is_valid = false;
     LOG_INFO("tx id does not equal", K(ret), K(key), K(trans_flags), K(tx_data));
@@ -2323,6 +2323,7 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.root_block_addr_.set_none_addr();
     param.data_block_macro_meta_addr_.set_none_addr();
     param.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    param.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
     param.data_index_tree_height_ = 0;
     param.index_blocks_cnt_ = 0;
     param.data_blocks_cnt_ = 0;

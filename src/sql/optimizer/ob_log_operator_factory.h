@@ -102,6 +102,10 @@ enum SetAlgo
   HASH_SET
 };
 
+/********
+ * When modifying DistAlgo, the function ob_dist_algo_str
+ * needs to be modified synchronously ！！！
+ ************/
 enum DistAlgo
 {
   DIST_INVALID_METHOD = 0,
@@ -132,15 +136,21 @@ inline const ObString &ob_dist_algo_str(DistAlgo algo)
     "UNKNOWN ALGO",
     "BASIC",
     "PULL TO LOCAL",
+    "HASH NONE",
+    "NONE HASH",
     "HASH HASH",
     "BROADCAST NONE",
     "NONE BROADCAST",
     "BC2HOST NONE",
     "PARTITION NONE",
     "NONE PARTITION",
+    "NONE ALL",
+    "ALL NONE",
     "PARTITION WISE",
+    "EXTEND PARTITION WISE",
     "UNKNOWN ALGO",
-    "RANDOM"
+    "SET RANDOM",
+    "SET PARTITION WISE"
   };
   int64_t idx = 0;
   int64_t value = algo;
@@ -148,7 +158,7 @@ inline const ObString &ob_dist_algo_str(DistAlgo algo)
     value >>= 1;
     ++idx;
   }
-  if (OB_LIKELY(idx >= 0) && OB_LIKELY(idx <= 11)) {
+  if (OB_LIKELY(idx >= 0) && OB_LIKELY(idx <= sizeof(dist_algo_str) / sizeof(ObString))) {
     return dist_algo_str[idx];
   } else {
     return dist_algo_str[0];

@@ -12,7 +12,6 @@
  * OBCDC Instance
  */
 
-#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_log_instance.h"
@@ -113,7 +112,7 @@ ObLogInstance *ObLogInstance::get_instance()
 ObLogInstance &ObLogInstance::get_ref_instance()
 {
   if (NULL == instance_) {
-    LOG_ERROR("ObLogInstance is NULL", K(instance_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObLogInstance is NULL", K(instance_));
   }
   return *instance_;
 }
@@ -405,12 +404,14 @@ int ObLogInstance::init_logger_()
     LOG_ERROR("FileDirectoryUtils create_full_path fail", KR(ret), K(log_dir));
   } else {
     const int64_t max_log_file_count = TCONF.max_log_file_count;
+    const bool enable_log_limit = (1 == TCONF.enable_log_limit);
     easy_log_level = EASY_LOG_INFO;
     OB_LOGGER.set_max_file_size(MAX_LOG_FILE_SIZE);
     OB_LOGGER.set_max_file_index(max_log_file_count);
     OB_LOGGER.set_file_name(log_file, disable_redirect_log_, false);
     OB_LOGGER.set_log_level("INFO");
     OB_LOGGER.disable_thread_log_level();
+    OB_LOGGER.set_enable_log_limit(enable_log_limit);
 
     if (! disable_redirect_log_) {
       // Open the stderr log file
@@ -793,33 +794,35 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     config_url = TCONF.cluster_url.str();
   }
 
-  // TODO
-  INIT(rs_server_provider_, ObLogSQLServerProvider, config_url, rs_list);
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObMemoryDump::get_instance().init())) {
       LOG_ERROR("init memory dump fail", K(ret));
     }
   }
 
-  // init ObLogMysqlProxy
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(mysql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-        rs_sql_conn_timeout_us, rs_sql_query_timeout_us, enable_ssl_client_authentication, rs_server_provider_))) {
-      LOG_ERROR("mysql_proxy_ init fail", KR(ret), K(rs_server_provider_),
-          K(cluster_user), K(cluster_password), K(cluster_db_name), K(rs_sql_conn_timeout_us),
-          K(rs_sql_query_timeout_us), K(enable_ssl_client_authentication));
+  if (! is_online_schema_not_avaliable()) {
+    // init ObLogSQLServerProvider base on config_url or rs_list
+    INIT(rs_server_provider_, ObLogSQLServerProvider, config_url, rs_list);
+
+    // init ObLogMysqlProxy
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(mysql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
+              rs_sql_conn_timeout_us, rs_sql_query_timeout_us, enable_ssl_client_authentication, rs_server_provider_))) {
+        LOG_ERROR("mysql_proxy_ init fail", KR(ret), K(rs_server_provider_),
+            K(cluster_user), K(cluster_password), K(cluster_db_name), K(rs_sql_conn_timeout_us),
+            K(rs_sql_query_timeout_us), K(enable_ssl_client_authentication));
+      }
     }
   }
 
   // init ObCompatModeGetter
   if (OB_SUCC(ret)) {
-    if (is_integrated_fetching_mode(fetching_mode_)) {
-      if (OB_FAIL(share::ObCompatModeGetter::instance().init(&(mysql_proxy_.get_ob_mysql_proxy())))) {
+    if (is_online_schema_not_avaliable()) {
+      if (OB_FAIL(share::ObCompatModeGetter::instance().init_for_obcdc())) {
         LOG_ERROR("compat_mode_getter init fail", KR(ret));
       }
-    } else if (is_direct_fetching_mode(fetching_mode_)) {
-      if (OB_FAIL(share::ObCompatModeGetter::instance().init_for_obcdc())) {
+    } else {
+      if (OB_FAIL(share::ObCompatModeGetter::instance().init(&(mysql_proxy_.get_ob_mysql_proxy())))) {
         LOG_ERROR("compat_mode_getter init fail", KR(ret));
       }
     }
@@ -840,21 +843,22 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(trans_ctx_mgr_, ObLogTransCtxMgr, max_cached_trans_ctx_count, TCONF.sort_trans_participants);
 
-  // TODO
-  INIT(systable_helper_, ObLogSysTableHelper, *rs_server_provider_,
-      TCONF.access_systable_helper_thread_num, TCONF.cluster_user,
-      TCONF.cluster_password, TCONF.cluster_db_name);
+  if (! is_online_schema_not_avaliable()) {
+    INIT(systable_helper_, ObLogSysTableHelper, *rs_server_provider_,
+        TCONF.access_systable_helper_thread_num, TCONF.cluster_user,
+        TCONF.cluster_password, TCONF.cluster_db_name);
 
-  INIT(tenant_server_provider_, ObCDCTenantSQLServerProvider, *systable_helper_);
+    INIT(tenant_server_provider_, ObCDCTenantSQLServerProvider, *systable_helper_);
 
-  // init ObLogTenantSQLProxy
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(tenant_sql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-        tenant_sql_conn_timeout_us, tenant_sql_query_timeout_us, enable_ssl_client_authentication,
-        tenant_server_provider_, true/*is_tenant_server_provider*/))) {
-      LOG_ERROR("tenant_sql_proxy_ init fail", KR(ret), K(tenant_server_provider_),
-          K(cluster_user), K(cluster_password), K(cluster_db_name), K(tenant_sql_conn_timeout_us),
-          K(tenant_sql_query_timeout_us), K(enable_ssl_client_authentication));
+    // init ObLogTenantSQLProxy
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tenant_sql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
+              tenant_sql_conn_timeout_us, tenant_sql_query_timeout_us, enable_ssl_client_authentication,
+              tenant_server_provider_, true/*is_tenant_server_provider*/))) {
+        LOG_ERROR("tenant_sql_proxy_ init fail", KR(ret), K(tenant_server_provider_),
+            K(cluster_user), K(cluster_password), K(cluster_db_name), K(tenant_sql_conn_timeout_us),
+            K(tenant_sql_query_timeout_us), K(enable_ssl_client_authentication));
+      }
     }
   }
 
@@ -992,14 +996,13 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   }
 
   INIT(fetcher_, ObLogFetcher, false/*is_load_data_dict_baseline_data*/, fetching_mode, archive_dest,
-      &dispatcher_, sys_ls_handler_, *systable_helper_, &trans_task_pool_, log_entry_task_pool_,
+      &dispatcher_, sys_ls_handler_, &trans_task_pool_, log_entry_task_pool_,
       &mysql_proxy_.get_ob_mysql_proxy(), err_handler, cluster_info.cluster_id_, TCONF, start_seq);
 
   if (OB_SUCC(ret)) {
     if (is_data_dict_refresh_mode(refresh_mode)) {
       if (OB_FAIL(ObLogMetaDataService::get_instance().init(start_tstamp_ns, fetching_mode, archive_dest,
-              sys_ls_handler_, *systable_helper_,
-              &mysql_proxy_.get_ob_mysql_proxy(), err_handler,
+              sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler,
               cluster_info.cluster_id_, TCONF, start_seq))) {
         LOG_ERROR("ObLogMetaDataService init failed", KR(ret), K(start_tstamp_ns));
       }
@@ -1014,7 +1017,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   }
 
   if (OB_SUCC(ret)) {
-    if (is_direct_fetching_mode(fetching_mode_)) {
+    if (is_online_schema_not_avaliable()) {
       if (OB_FAIL(set_all_tenant_compat_mode_())) {
         LOG_ERROR("set_all_tenant_compat_mode_ failed", KR(ret));
       }
@@ -1136,12 +1139,27 @@ int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
   // Add all tables for all tenants
   // Beforehand, make sure all callbacks are registered
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(tenant_mgr_->add_all_tenants(start_tstamp_ns,
-        sys_schema_version,
-        GET_SCHEMA_TIMEOUT_ON_START_UP))) {
-      LOG_ERROR("add_all_tenants fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
+    if (is_online_schema_not_avaliable()) {
+      bool add_tenant_succ = false;
+      const char *tenant_name = nullptr;
+
+      if (OB_FAIL(tenant_mgr_->add_tenant(
+              start_tstamp_ns,
+              sys_schema_version,
+              tenant_name,
+              GET_SCHEMA_TIMEOUT_ON_START_UP,
+              add_tenant_succ))) {
+        LOG_ERROR("add_tenant fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
+      }
+    } else {
+      if (OB_FAIL(tenant_mgr_->add_all_tenants(start_tstamp_ns,
+              sys_schema_version,
+              GET_SCHEMA_TIMEOUT_ON_START_UP))) {
+        LOG_ERROR("add_all_tenants fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
+      }
     }
   }
+
   return ret;
 }
 
@@ -1170,10 +1188,12 @@ void ObLogInstance::destroy_components_()
   if (is_online_refresh_mode(refresh_mode_)) {
     DESTROY(schema_getter_, ObLogSchemaGetter);
   }
-  tenant_sql_proxy_.destroy();
-  DESTROY(tenant_server_provider_, ObCDCTenantSQLServerProvider);
-  mysql_proxy_.destroy();
-  DESTROY(rs_server_provider_, ObLogSQLServerProvider);
+  if (! is_online_schema_not_avaliable()) {
+    tenant_sql_proxy_.destroy();
+    DESTROY(tenant_server_provider_, ObCDCTenantSQLServerProvider);
+    mysql_proxy_.destroy();
+    DESTROY(rs_server_provider_, ObLogSQLServerProvider);
+  }
   DESTROY(resource_collector_, ObLogResourceCollector);
   DESTROY(meta_manager_, ObLogMetaManager);
   DESTROY(trans_ctx_mgr_, ObLogTransCtxMgr);
@@ -1796,7 +1816,7 @@ void ObLogInstance::handle_error(const int err_no, const char *fmt, ...)
         err_cb_(err);
         LOG_INFO("ERROR_CALLBACK end", KP(err_cb_));
       } else {
-        LOG_ERROR("No ERROR CALLBACK function available, abort now");
+        LOG_ERROR_RET(OB_ERROR, "No ERROR CALLBACK function available, abort now");
       }
 
       // notify other module to stop
@@ -1826,7 +1846,7 @@ void ObLogInstance::write_pid_file_()
 
   pid_file_fd = open(pid_file, O_RDWR | O_CREAT, 0600);
   if (OB_UNLIKELY(pid_file_fd < 0)) {
-    LOG_ERROR("open pid file fail", K(pid_file), K(pid_file_fd), K(errno), KERRMSG);
+    LOG_ERROR_RET(OB_ERR_SYS, "open pid file fail", K(pid_file), K(pid_file_fd), K(errno), KERRMSG);
   } else {
     char buf[32] = {};
     (void)snprintf(buf, sizeof(buf), "%d\n", getpid());
@@ -1835,7 +1855,7 @@ void ObLogInstance::write_pid_file_()
     ssize_t len = strlen(buf);
     ssize_t nwrite = write(pid_file_fd, buf, len);
     if (OB_UNLIKELY(len != nwrite)) {
-      LOG_ERROR("write pid file fail", K(pid_file), K(pid_file_fd),
+      LOG_ERROR_RET(OB_ERR_SYS, "write pid file fail", K(pid_file), K(pid_file_fd),
           K(buf), K(len), K(errno), KERRMSG);
     }
 
@@ -2054,7 +2074,7 @@ void ObLogInstance::wait_threads_stop_()
   if (0 != timer_tid_) {
     int pthread_ret = pthread_join(timer_tid_, NULL);
     if (0 != pthread_ret) {
-      LOG_ERROR("join timer thread fail", K(timer_tid_), K(pthread_ret),
+      LOG_ERROR_RET(OB_ERR_SYS, "join timer thread fail", K(timer_tid_), K(pthread_ret),
           KERRNOMSG(pthread_ret));
     } else {
       LOG_INFO("stop timer thread succ", K(timer_tid_));
@@ -2066,7 +2086,7 @@ void ObLogInstance::wait_threads_stop_()
   if (0 != sql_tid_) {
     int pthread_ret = pthread_join(sql_tid_, NULL);
     if (0 != pthread_ret) {
-      LOG_ERROR("join sql thread fail", K(sql_tid_), K(pthread_ret),
+      LOG_ERROR_RET(OB_ERR_SYS, "join sql thread fail", K(sql_tid_), K(pthread_ret),
           KERRNOMSG(pthread_ret));
     } else {
       LOG_INFO("stop sql thread succ", K(sql_tid_));
@@ -2078,7 +2098,7 @@ void ObLogInstance::wait_threads_stop_()
   if (0 != flow_control_tid_) {
     int pthread_ret = pthread_join(flow_control_tid_, NULL);
     if (0 != pthread_ret) {
-      LOG_ERROR("join flow control thread fail", K(flow_control_tid_), K(pthread_ret),
+      LOG_ERROR_RET(OB_ERR_SYS, "join flow control thread fail", K(flow_control_tid_), K(pthread_ret),
           KERRNOMSG(pthread_ret));
     } else {
       LOG_INFO("stop flow control thread succ", K(flow_control_tid_));
@@ -2100,9 +2120,11 @@ void ObLogInstance::reload_config_()
     LOG_ERROR("load_from_file fail", KR(ret), K(default_config_fpath));
   } else {
     const int64_t max_log_file_count = config.max_log_file_count;
+    const bool enable_log_limit = (1 == config.enable_log_limit);
     LOG_INFO("reset log config", "log_level", config.log_level.str(), K(max_log_file_count));
     OB_LOGGER.set_mod_log_levels(config.log_level.str());
     OB_LOGGER.set_max_file_index(max_log_file_count);
+    OB_LOGGER.set_enable_log_limit(enable_log_limit);
 
     ATOMIC_STORE(&log_clean_cycle_time_us_, config.log_clean_cycle_time_in_hours * _HOUR_);
 
@@ -2158,7 +2180,7 @@ void ObLogInstance::print_tenant_memory_usage_()
   lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
 
   if (OB_ISNULL(mallocator)) {
-    LOG_ERROR("mallocator is NULL, can not print_tenant_memory_usage");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "mallocator is NULL, can not print_tenant_memory_usage");
   } else {
     mallocator->print_tenant_memory_usage(OB_SYS_TENANT_ID);
     mallocator->print_tenant_ctx_memory_usage(OB_SYS_TENANT_ID);
@@ -2548,7 +2570,7 @@ int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
 void ObLogInstance::do_drc_consume_tps_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->do_drc_consume_tps_stat();
   }
@@ -2557,7 +2579,7 @@ void ObLogInstance::do_drc_consume_tps_stat_()
 void ObLogInstance::do_drc_consume_rps_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->do_drc_consume_rps_stat();
   }
@@ -2566,7 +2588,7 @@ void ObLogInstance::do_drc_consume_rps_stat_()
 void ObLogInstance::do_drc_release_tps_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->do_drc_release_tps_stat();
   }
@@ -2575,7 +2597,7 @@ void ObLogInstance::do_drc_release_tps_stat_()
 void ObLogInstance::do_drc_release_rps_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->do_drc_release_rps_stat();
   }
@@ -2601,7 +2623,7 @@ void ObLogInstance::do_stat_for_part_trans_task_count_(int record_type,
 void ObLogInstance::print_trans_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->print_stat_info();
   }
@@ -2613,8 +2635,8 @@ int ObLogInstance::init_ob_trace_id_(const char *ob_trace_id_ptr)
   int64_t pos = 0;
 
   if (OB_ISNULL(ob_trace_id_ptr)) {
-    LOG_ERROR("ob_trace_id_ptr is null", K(ob_trace_id_ptr));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ob_trace_id_ptr is null", K(ob_trace_id_ptr));
   } else if (OB_FAIL(databuff_printf(ob_trace_id_str_, sizeof(ob_trace_id_str_), pos, "%s",
           ob_trace_id_ptr))) {
     LOG_ERROR("databuff_printf ob_trace_id_str_ fail", K(ob_trace_id_str_), K(pos), K(ob_trace_id_ptr));

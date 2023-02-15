@@ -243,6 +243,8 @@ private:
                             ObRawExpr *right_expr,
                             bool &is_valid);
 
+  int check_cmp_metas_for_general_preds(ObRawExpr *left_pexr, ObRawExpr *pred,  bool &type_safe);
+
 private:
   ObObjMeta cmp_type_; // the compare meta used by all exprs in the graph
 

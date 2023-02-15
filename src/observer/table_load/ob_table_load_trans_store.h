@@ -50,7 +50,6 @@ public:
 
 class ObTableLoadTransStoreWriter
 {
-  static const int64_t RPC_TIMEOUT_US = 20LL * 1000 * 1000; // 20s
 public:
   ObTableLoadTransStoreWriter(ObTableLoadTransStore *trans_store);
   ~ObTableLoadTransStoreWriter();
@@ -82,7 +81,8 @@ private:
                             const ObObjTypeClass &tc,
                             int32_t session_id);
   int handle_identity_column(const share::schema::ObColumnSchemaV2 *column_schema,
-                             blocksstable::ObStorageDatum &datum);
+                             blocksstable::ObStorageDatum &datum,
+                             common::ObArenaAllocator &cast_allocator);
   int write_row_to_table_store(storage::ObDirectLoadTableStore &table_store,
                                const common::ObTabletID &tablet_id,
                                const blocksstable::ObDatumRow &datum_row);
@@ -108,13 +108,10 @@ private:
     ObDataTypeCastParams cast_params_;
     storage::ObDirectLoadTableStore table_store_;
     uint64_t last_receive_sequence_no_;
-    char *extra_buf_;
-    int64_t extra_buf_size_;
   };
   SessionContext *session_ctx_array_;
   int64_t ref_count_ CACHE_ALIGNED;
   bool is_flush_;
-  share::ObSequenceValue seq_value_;
   bool is_inited_;
 };
 

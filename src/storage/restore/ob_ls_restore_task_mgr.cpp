@@ -73,10 +73,12 @@ void ObLSRestoreTaskMgr::destroy()
   schedule_tablet_set_.destroy();
 }
 
-int ObLSRestoreTaskMgr::pop_need_restore_tablets(ObIArray<ObTabletID> &tablet_need_restore)
+int ObLSRestoreTaskMgr::pop_need_restore_tablets(
+    storage::ObLS &ls, ObIArray<ObTabletID> &tablet_need_restore)
 {
   int ret = OB_SUCCESS;
   tablet_need_restore.reset();
+  ObArray<ObTabletID> need_remove_tablet;
   lib::ObMutexGuard guard(mtx_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -86,13 +88,32 @@ int ObLSRestoreTaskMgr::pop_need_restore_tablets(ObIArray<ObTabletID> &tablet_ne
   } else {
     TabletSet::iterator iter = wait_tablet_set_.begin();
     while (OB_SUCC(ret) && iter != wait_tablet_set_.end()) {
-      if (OB_FAIL(tablet_need_restore.push_back(iter->first))) {
+      bool is_deleted = false;
+      bool is_restored = false;
+      if (OB_FAIL(check_tablet_deleted_or_restored_(ls, iter->first, is_deleted, is_restored))) {
+        LOG_WARN("failed to check tablet deleted or restored", K(ret));
+      } else if (is_deleted || is_restored) {
+        if (OB_FAIL(need_remove_tablet.push_back(iter->first))) {
+          LOG_WARN("failed to push back tablet", K(ret));
+        } else {
+          ++iter;
+        }
+      } else if (OB_FAIL(tablet_need_restore.push_back(iter->first))) {
         LOG_WARN("fail to push backup tablet", K(ret));
       } else if (tablet_need_restore.count() >= OB_LS_RESOTRE_TABLET_DAG_NET_BATCH_NUM) {
         break;
       } else {
         ++iter;
       }
+    }
+
+    if(!need_remove_tablet.empty()) {
+      ARRAY_FOREACH(need_remove_tablet, i) {
+        if (OB_FAIL(wait_tablet_set_.erase_refactored(need_remove_tablet.at(i)))) {
+          LOG_WARN("failed to erase from set", K(ret));
+        }
+      }
+      LOG_INFO("tablets may be deleted or restored and removed from wait set.", K(ls), K(need_remove_tablet));
     }
     if (OB_SUCC(ret)) {
       LOG_INFO("succeed pop need restore tablets", K(tablet_need_restore));
@@ -242,7 +263,7 @@ int ObLSRestoreTaskMgr::cancel_task()
         if (OB_FAIL(check_task_exist_(iter->first, is_exist))) {
           LOG_WARN("fail to check task exist", K(ret), "taks_id", iter->first);
         } else if (is_exist && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-          LOG_WARN("cancel dag next task cost too much time", K(ret), "task_id", iter->first,
+          LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "cancel dag next task cost too much time", K(ret), "task_id", iter->first,
               "cost_time", ObTimeUtil::current_time() - start_ts);
         }
       } while (is_exist && OB_SUCC(ret));

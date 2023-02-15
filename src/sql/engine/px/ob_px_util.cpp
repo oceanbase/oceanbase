@@ -309,7 +309,6 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
         sqc.set_qc_id(dfo.get_qc_id());
         sqc.set_interrupt_id(dfo.get_interrupt_id());
         sqc.set_fulltree(dfo.is_fulltree());
-        sqc.set_rpc_worker(dfo.is_rpc_worker());
         sqc.set_qc_server_id(dfo.get_qc_server_id());
         sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
         sqc.set_ignore_vtable_error(dfo.is_ignore_vtable_error());
@@ -410,7 +409,6 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
         sqc.set_qc_id(child.get_qc_id());
         sqc.set_interrupt_id(child.get_interrupt_id());
         sqc.set_fulltree(child.is_fulltree());
-        sqc.set_rpc_worker(child.is_rpc_worker());
         sqc.set_qc_server_id(child.get_qc_server_id());
         sqc.set_parent_dfo_id(child.get_parent_dfo_id());
         if (OB_FAIL(child.add_sqc(sqc))) {
@@ -487,7 +485,6 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
         sqc.set_qc_id(parent.get_qc_id());
         sqc.set_interrupt_id(parent.get_interrupt_id());
         sqc.set_fulltree(parent.is_fulltree());
-        sqc.set_rpc_worker(parent.is_rpc_worker());
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
         if (OB_FAIL(parent.add_sqc(sqc))) {
@@ -569,7 +566,6 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
         sqc.set_qc_id(parent.get_qc_id());
         sqc.set_interrupt_id(parent.get_interrupt_id());
         sqc.set_fulltree(parent.is_fulltree());
-        sqc.set_rpc_worker(parent.is_rpc_worker());
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
         if (OB_FAIL(parent.add_sqc(sqc))) {
@@ -602,7 +598,6 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
       sqc.set_qc_id(dfo.get_qc_id());
       sqc.set_interrupt_id(dfo.get_interrupt_id());
       sqc.set_fulltree(dfo.is_fulltree());
-      sqc.set_rpc_worker(dfo.is_rpc_worker());
       sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
       sqc.set_qc_server_id(dfo.get_qc_server_id());
       if (OB_FAIL(dfo.add_sqc(sqc))) {

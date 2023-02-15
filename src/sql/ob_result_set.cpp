@@ -25,7 +25,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ob_cmd.h"
 #include "sql/engine/px/ob_px_admission.h"
-#include "sql/engine/cmd/ob_table_direct_insert_trans.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 #include "sql/executor/ob_executor.h"
 #include "sql/executor/ob_cmd_executor.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
@@ -209,6 +209,12 @@ int ObResultSet::open_result()
       }
     } else if (OB_FAIL(drive_dml_query())) {
       LOG_WARN("fail to drive dml query", K(ret));
+    } else if ((stmt::T_INSERT == get_stmt_type())
+        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
+      // for insert /*+ append */ into select clause
+      if (OB_FAIL(ObTableDirectInsertService::commit_direct_insert(get_exec_context(), *physical_plan_))) {
+        LOG_WARN("fail to commit direct insert", KR(ret));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -423,7 +429,7 @@ bool ObResultSet::transaction_set_violation_and_retry(int &err, int64_t &retry_t
     // bug#6361189  pass err to force rollback stmt in do_close_plan()
     if (OB_TRANSACTION_SET_VIOLATION == err && 0 == retry_times && !is_isolation_RR_or_SE) {
       // TSC错误重试时，只在第一次打印WARN日志
-      LOG_WARN("transaction set consistency violation, will retry");
+      LOG_WARN_RET(err, "transaction set consistency violation, will retry");
     }
     int ret = do_close_plan(err, get_exec_context());
     ObPhysicalPlanCtx *plan_ctx = get_exec_context().get_physical_plan_ctx();
@@ -475,8 +481,10 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
   }
 
   // for insert /*+ append */ into select clause
-  if (OB_SUCC(ret) && (stmt::T_INSERT == get_stmt_type())) {
-    if (OB_FAIL(ObTableDirectInsertTrans::try_start_direct_insert(ctx, *physical_plan_))) {
+  if (OB_SUCC(ret)
+      && (stmt::T_INSERT == get_stmt_type())
+      && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
+    if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
       LOG_WARN("fail to start direct insert", KR(ret));
     }
   }
@@ -713,10 +721,11 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
     // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
     if ((OB_SUCCESS == close_ret)
         && (OB_SUCCESS == errcode || OB_ITER_END == errcode)
-        && (stmt::T_INSERT == get_stmt_type())) {
+        && (stmt::T_INSERT == get_stmt_type())
+        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
       // for insert /*+ append */ into select clause
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ObTableDirectInsertTrans::try_finish_direct_insert(ctx, *physical_plan_))) {
+      if (OB_TMP_FAIL(ObTableDirectInsertService::finish_direct_insert(ctx, *physical_plan_))) {
         errcode_ = tmp_ret; // record error code
         errcode = tmp_ret;
         LOG_WARN("fail to finish direct insert", KR(tmp_ret));
@@ -1048,7 +1057,7 @@ void ObResultSet::refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool 
     int err2 = ObTaskExecutorCtxUtil::refresh_location_cache(task_exec_ctx,
                                                              is_nonblock);
     if (OB_SUCCESS != err2) {
-      LOG_WARN("fail to refresh location cache", K(err2), K(is_nonblock), K(err));
+      LOG_WARN_RET(err2, "fail to refresh location cache", K(err2), K(is_nonblock), K(err));
     }
     LOG_TRACE("partition change or not master or no response, refresh location cache", K(err));
   }

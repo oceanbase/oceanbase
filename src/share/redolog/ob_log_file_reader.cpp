@@ -46,7 +46,7 @@ uint64_t ObLogReadFdKey::hash() const
 {
   uint64_t hash_val = 0;
   if (is_valid()) {
-    hash_val = common::murmurhash(&path_, STRLEN(path_), hash_val);
+    hash_val = common::murmurhash(&path_, static_cast<int32_t>(STRLEN(path_)), hash_val);
   }
   return hash_val;
 }

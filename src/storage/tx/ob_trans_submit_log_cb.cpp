@@ -136,7 +136,7 @@ void ObTxLogCb::check_warn_() const
 {
   const int64_t used_time = ObClockGenerator::getRealClock() - get_submit_ts();
   if (used_time >= ObServerConfig::get_instance().clog_sync_time_warn_threshold) {
-    TRANS_LOG(WARN, "transaction log sync use too much time", K(*this), K(used_time));
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "transaction log sync use too much time", K(*this), K(used_time));
   }
 }
 

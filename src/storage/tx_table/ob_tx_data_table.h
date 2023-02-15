@@ -254,6 +254,7 @@ private:
 
   int check_tx_data_in_memtable_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
   int check_tx_data_with_cache_once_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
+  int get_tx_data_from_cache_(const transaction::ObTransID tx_id, ObTxDataGuard &tx_data_guard, bool &find);
 
   int check_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
 

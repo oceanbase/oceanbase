@@ -1625,6 +1625,7 @@ int ObTableLockService::get_ls_leader_(
 int ObTableLockService::start_tx_(ObTableLockCtx &ctx)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTxParam &tx_param = ctx.tx_param_;
   tx_param.access_mode_ = ObTxAccessMode::RW;
   tx_param.isolation_ = ObTxIsolationLevel::RC;
@@ -1647,8 +1648,8 @@ int ObTableLockService::start_tx_(ObTableLockCtx &ctx)
     }
     // start tx failed, release the txDesc I just created.
     if (OB_FAIL(ret)) {
-      if (OB_FAIL(txs->release_tx(*ctx.tx_desc_))) {
-        LOG_ERROR("release tx failed", K(ret), KPC(ctx.tx_desc_));
+      if (OB_TMP_FAIL(txs->release_tx(*ctx.tx_desc_))) {
+        LOG_ERROR("release tx failed", K(tmp_ret), KPC(ctx.tx_desc_));
       }
     }
   }

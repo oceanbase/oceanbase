@@ -678,7 +678,7 @@ struct ObMemLobCommon
                 && (type_ > INVALID_LOB && type_ <= TEMP_DELTA_LOB)
                 && ((is_simple_ & has_extern_) != 1);
     if (!bret) {
-      COMMON_LOG(WARN, "Invalid lob locator v2!",
+      COMMON_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "Invalid lob locator v2!",
         K(lob_common_), K(version_), K(type_), K(is_simple_), K(has_extern_), K(lbt()));
     }
     return bret;
@@ -747,7 +747,7 @@ struct ObMemLobExternHeader
     rowkey_size_(rowkey_size), payload_offset_(0), payload_size_(0)
   {}
 
-  ObMemLobExternHeader(uint64_t table_id, uint64_t column_idx, uint16_t rowkey_size,
+  ObMemLobExternHeader(uint64_t table_id, uint32_t column_idx, uint16_t rowkey_size,
                        uint32_t payload_offset, uint32_t payload_size) :
     reserved_(0), table_id_(table_id), column_idx_(column_idx), flags_(),
     rowkey_size_(rowkey_size),
@@ -864,7 +864,7 @@ public:
   {
     // Notice: should be called only when ptr_ is from ObLobType data
     ObLobLocator *loc_v1 = reinterpret_cast<ObLobLocator *>(ptr_);
-    return loc_v1->is_valid();
+    return size_ >= sizeof(ObLobLocator) && loc_v1->is_valid();
   }
 
   OB_INLINE bool is_lob_disk_locator() const
@@ -892,7 +892,7 @@ public:
         bret = false;
       }
       if (!bret) {
-        COMMON_LOG(WARN, "Invalid lob locator!", KP(ptr_), K(size_));
+        COMMON_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "Invalid lob locator!", KP(ptr_), K(size_));
         if (OB_NOT_NULL(loc) && is_assert) {
           OB_ASSERT(0);
         }
@@ -1149,6 +1149,9 @@ public:
     } else {
       meta_.set_collation_level(meta.get_collation_level());
     }
+    if (meta.has_lob_header() && oceanbase::is_lob_storage(get_type())) {
+      set_has_lob_header();
+    }
   }
 
   OB_INLINE void copy_value_to(ObObj &obj, bool &has_null) const {
@@ -1197,7 +1200,7 @@ public:
   OB_INLINE void set_type(const ObObjType &type)
   {
     if (OB_UNLIKELY(ObNullType > type || ObMaxType < type)) {
-      COMMON_LOG(ERROR, "invalid type", K(type));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid type", K(type));
       meta_.set_type(ObUnknownType);
     } else {
       meta_.set_type(type);

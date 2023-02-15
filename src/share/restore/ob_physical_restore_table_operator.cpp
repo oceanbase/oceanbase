@@ -259,6 +259,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, compat_mode);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, compatible);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, passwd_array);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, concurrency);
 
      // source_cluster_version
      if (OB_SUCC(ret)) {
@@ -483,6 +484,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_STR_VALUE(passwd_array, job);
     RETRIEVE_INT_VALUE(compatible, job);
     RETRIEVE_STR_VALUE(kms_info, job);
+    RETRIEVE_INT_VALUE(concurrency, job);
 
     if (OB_SUCC(ret)) {
       if (name == "kms_encrypt") {

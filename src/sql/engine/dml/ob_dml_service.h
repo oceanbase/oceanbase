@@ -50,6 +50,11 @@ public:
   static int create_rowkey_check_hashset(int64_t estimate_row,
                                            ObExecContext *root_ctx,
                                            SeRowkeyDistCtx *&rowkey_dist_ctx);
+
+  static int check_lob_column_changed(ObEvalCtx &eval_ctx,
+              const ObExpr& old_expr, ObDatum& old_datum,
+              const ObExpr& new_expr, ObDatum& new_datum,
+              int64_t& result);
   static int check_row_whether_changed(const ObUpdCtDef &upd_ctdef, ObUpdRtDef &upd_rtdef, ObEvalCtx &eval_ctx);
   static int filter_row_for_check_cst(const ExprFixedArray &cst_exprs,
                                       ObEvalCtx &eval_ctx,

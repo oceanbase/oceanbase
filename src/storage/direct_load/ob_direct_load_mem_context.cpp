@@ -115,6 +115,7 @@ ObDirectLoadMemContext::~ObDirectLoadMemContext()
 int ObDirectLoadMemContext::init()
 {
   int ret = OB_SUCCESS;
+  allocator_.set_tenant_id(MTL_ID());
   if (OB_FAIL(mem_dump_queue_.init(1024))) {
     STORAGE_LOG(WARN, "fail to init mem dump queue", KR(ret));
   }

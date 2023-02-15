@@ -223,7 +223,7 @@ public:
         ObMemAttr attr(tenant_id_, ObModIds::OB_SERVER_OBJECT_POOL);
         char *p = static_cast<char*>(ob_malloc(item_size_, attr));
         if (NULL == p) {
-          COMMON_LOG(ERROR, "allocate memory failed", K(typeid(T).name()), K(item_size_));
+          COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed", K(typeid(T).name()), K(item_size_));
         } else {
           Meta *cmeta = reinterpret_cast<Meta*>(p);
           cmeta->next = NULL;
@@ -241,9 +241,9 @@ public:
 
   void return_object(T* x) {
     if (NULL == x) {
-      COMMON_LOG(ERROR, "allocate memory failed", K(typeid(T).name()), K(item_size_), K(get_itid()));
+      COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed", K(typeid(T).name()), K(item_size_), K(get_itid()));
     } else if (OB_UNLIKELY(!is_inited_)){
-      COMMON_LOG(ERROR, "unexpected return", K(typeid(T).name()), K(item_size_), K(get_itid()));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected return", K(typeid(T).name()), K(item_size_), K(get_itid()));
     } else {
       Meta *cmeta = PTR_OBJ2META(x);
       int64_t aid = cmeta->arena_id;
@@ -284,14 +284,14 @@ public:
    */
   ObServerObjectPool(const int64_t tenant_id, const bool regist, const bool is_mini_mode)
     : tenant_id_(tenant_id), regist_(regist), is_mini_mode_(is_mini_mode), arena_num_(0),
-      arena_(NULL), is_inited_(false)
+      arena_(NULL), cnt_per_arena_(0), item_size_(0), buf_(nullptr), is_inited_(false)
   {}
 
   int init()
   {
     int ret = OB_SUCCESS;
     const bool is_mini = (lib::is_mini_mode() || is_mini_mode_);
-    arena_num_ = is_mini ? get_cpu_count()/2 : get_cpu_count();
+    arena_num_ = static_cast<int32_t>(is_mini ? get_cpu_count()/2 : get_cpu_count());
     //If the assignment logic of buf_ below is not reached, buf_ will not be initialized
     buf_ = NULL;
     cnt_per_arena_ = is_mini ? 16 : 128;
@@ -379,7 +379,7 @@ public:
         is_inited_ = false;
       }
       if (has_unfree) {
-        COMMON_LOG(ERROR, "server object leak", K(tenant_id_), K(typeid(T).name()));
+        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "server object leak", K(tenant_id_), K(typeid(T).name()));
       }
     }
   }
@@ -398,7 +398,7 @@ private:
   const int64_t tenant_id_;
   const bool regist_;
   const bool is_mini_mode_;
-  int arena_num_;
+  int32_t arena_num_;
   ObPoolArenaHead *arena_;
   int64_t cnt_per_arena_;
   int64_t item_size_;

@@ -206,6 +206,7 @@ private:
   int xa_start_join_(const ObXATransID &xid,
                      const int64_t flags,
                      const int64_t timeout_seconds,
+                     const uint32_t session_id,
                      ObTxDesc *&tx_desc);
   int one_phase_xa_commit_(const ObXATransID &xid,
                            const int64_t timeout_us,

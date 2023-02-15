@@ -66,7 +66,6 @@ int ObLogMetaDataFetcher::init(
     const share::ObBackupPathString &archive_dest,
     IObLogFetcherDispatcher *fetcher_dispatcher,
     IObLogSysLsTaskHandler *sys_ls_handler,
-    ObLogSysTableHelper &systable_helper,
     ObISQLClient *proxy,
     IObLogErrHandler *err_handler,
     const int64_t cluster_id,
@@ -95,7 +94,7 @@ int ObLogMetaDataFetcher::init(
   } else {
     INIT(log_fetcher_, ObLogFetcher, true/*is_loading_data_dict_baseline_data*/,
         fetching_mode, archive_dest, fetcher_dispatcher,
-        sys_ls_handler, systable_helper, &trans_task_pool_, &log_entry_task_pool_, proxy, err_handler,
+        sys_ls_handler, &trans_task_pool_, &log_entry_task_pool_, proxy, err_handler,
         cluster_id, cfg, start_seq);
 
     is_inited_ = true;

@@ -87,7 +87,7 @@ int ObPhyOperatorMonitorInfo::assign(const ObPhyOperatorMonitorInfo &other)
 void ObPhyOperatorMonitorInfo::operator=(const ObPhyOperatorMonitorInfo &other)
 {
   if (OB_SUCCESS != assign(other)) {
-    LOG_ERROR("fail to assign", K(&other));
+    LOG_ERROR_RET(OB_ERROR, "fail to assign", K(&other));
   }
 }
 
@@ -152,7 +152,7 @@ int64_t ObPhyOperatorMonitorInfo::print_info(char* buf, int64_t buf_len) const
       J_OBJ_START();
       if (is_timestamp(i)) {
         if (OB_SUCCESS != ObTimeUtility2::usec_to_str(info_array_[i], timebuf, time_buf_len, time_buf_pos)) {
-          LOG_WARN("fail to print time as str", K(i));
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(i));
           J_KV(OB_OPERATOR_MONITOR_INFOS[i].info_name_, info_array_[i]);
         } else {
           timebuf[time_buf_pos] = '\0';
@@ -173,7 +173,7 @@ void ObPhyOperatorMonitorInfo::set_value(ObOperatorMonitorInfoIds index, int64_t
   if (index >= 0 && index < OB_MAX_INFORMATION_COUNT) {
     info_array_[index] = value;
   } else {
-    LOG_WARN("invalid index", K(index), K(value));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid index", K(index), K(value));
   }
 
 }
@@ -183,7 +183,7 @@ void ObPhyOperatorMonitorInfo::increase_value(ObOperatorMonitorInfoIds index)
   if (index >= 0 && index < OB_MAX_INFORMATION_COUNT) {
     info_array_[index]++;
   } else {
-    LOG_WARN("invalid index", K(index));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid index", K(index));
   }
 }
 
@@ -192,7 +192,7 @@ void ObPhyOperatorMonitorInfo::get_value(ObOperatorMonitorInfoIds index, int64_t
   if (index >= 0 && index < OB_MAX_INFORMATION_COUNT) {
     value = info_array_[index];
   } else {
-    LOG_WARN("invalid index", K(index));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid index", K(index));
   }
 }
 

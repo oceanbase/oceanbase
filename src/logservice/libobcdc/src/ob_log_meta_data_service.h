@@ -15,6 +15,7 @@
 #include "lib/mysqlclient/ob_isql_client.h"  // ObISQLClient
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"  // ObConcurrentFIFOAllocator
 #include "share/backup/ob_backup_struct.h"  // ObBackupPathString
+#include "logservice/data_dictionary/ob_data_dict_meta_info.h" // ObDataDictMetaInfo
 #include "ob_log_fetching_mode.h"           // ClientFetchingMode
 #include "ob_log_config.h"
 #include "ob_log_task_pool.h"
@@ -47,7 +48,6 @@ public:
       const ClientFetchingMode fetching_mode,
       const share::ObBackupPathString &archive_dest,
       IObLogSysLsTaskHandler *sys_ls_handler,
-      ObLogSysTableHelper &systable_helper,
       common::ObISQLClient *proxy,
       IObLogErrHandler *err_handler,
       const int64_t cluster_id,
@@ -91,6 +91,10 @@ public:
       const uint64_t tenant_id,
       ObDictTenantInfoGuard &guard);
 
+  int get_tenant_id_in_archive(
+      const int64_t start_timestamp_ns,
+      uint64_t &tenant_id);
+
 private:
   int get_data_dict_in_log_info_(
       const uint64_t tenant_id,
@@ -100,6 +104,10 @@ private:
   int get_data_dict_in_log_info_in_archive_(
       const int64_t start_timestamp_ns,
       DataDictionaryInLogInfo &data_dict_in_log_info);
+
+  int read_meta_info_in_archive_log_(
+      const int64_t start_timestamp_ns,
+      datadict::ObDataDictMetaInfo &data_dict_meta_info);
 
 private:
   bool is_inited_;

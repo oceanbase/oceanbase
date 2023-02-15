@@ -209,7 +209,7 @@ public:
   void set_for_replay(const bool for_replay);
   bool is_for_replay() const { return ATOMIC_LOAD(&for_replay_); }
   int remove_callbacks_for_fast_commit(bool &has_remove);
-  int remove_callback_for_uncommited_txn(memtable::ObIMemtable *memtable);
+  int remove_callback_for_uncommited_txn(memtable::ObIMemtable *memtable, const share::SCN max_applied_scn);
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
   void acquire_callback_list();
   void revert_callback_list();

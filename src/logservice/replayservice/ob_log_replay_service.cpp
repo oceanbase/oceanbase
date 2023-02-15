@@ -199,7 +199,7 @@ int ObLogReplayService::init(PalfEnv *palf_env,
   } else if (OB_FAIL(replay_stat_.init(this))) {
     CLOG_LOG(WARN, "replay_stat_ init error", K(ret));
   } else {
-    replayable_point_.reset();
+    replayable_point_ = SCN::min_scn();
     pending_replay_log_size_ = 0;
     is_inited_ = true;
   }
@@ -473,7 +473,7 @@ int ObLogReplayService::is_enabled(const share::ObLSID &id, bool &is_enabled)
   return ret;
 }
 
-int ObLogReplayService::set_submit_log_pending(const share::ObLSID &id)
+int ObLogReplayService::block_submit_log(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
   ObReplayStatus *replay_status = NULL;
@@ -487,12 +487,12 @@ int ObLogReplayService::set_submit_log_pending(const share::ObLSID &id)
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "replay status is not exist", K(ret), K(id));
   } else {
-    replay_status->set_pending();
+    replay_status->block_submit();
   }
   return ret;
 }
 
-int ObLogReplayService::erase_submit_log_pending(const share::ObLSID &id)
+int ObLogReplayService::unblock_submit_log(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
   ObReplayStatus *replay_status = NULL;
@@ -506,7 +506,7 @@ int ObLogReplayService::erase_submit_log_pending(const share::ObLSID &id)
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "replay status is not exist", K(ret), K(id));
   } else {
-    replay_status->erase_pending();
+    replay_status->unblock_submit();
   }
   return ret;
 }
@@ -724,7 +724,7 @@ void ObLogReplayService::dec_pending_task_size(const int64_t log_size)
 {
   int64_t nv = ATOMIC_SAF(&pending_replay_log_size_, log_size);
   if (nv < 0) {
-    CLOG_LOG(ERROR, "dec_pending_task_size less than 0", K(nv));
+    CLOG_LOG_RET(ERROR, OB_ERROR, "dec_pending_task_size less than 0", K(nv));
   }
 }
 
@@ -773,7 +773,8 @@ void ObLogReplayService::process_replay_ret_code_(const int ret_code,
     if (replay_status.is_fatal_error(ret_code)) {
       replay_status.set_err_info(replay_task.lsn_, replay_task.scn_, replay_task.log_type_,
                                  replay_task.replay_hint_, false, cur_ts, ret_code);
-      CLOG_LOG(ERROR, "replay task encountered fatal error", K(replay_status), K(replay_task), K(ret_code));
+      LOG_DBA_ERROR(OB_LOG_REPLAY_ERROR, "msg", "replay task encountered fatal error", "ret", ret_code,
+                    K(replay_status), K(replay_task));
     } else {/*do nothing*/}
 
     if (OB_SUCCESS == task_queue.get_err_info_ret_code()) {
@@ -807,7 +808,7 @@ int ObLogReplayService::pre_check_(ObReplayStatus &replay_status,
     }
     // Check the waiting time of the task in the global queue
     if (OB_SUCC(ret) && (cur_time - enqueue_ts > TASK_QUEUE_WAIT_IN_GLOBAL_QUEUE_TIME_THRESHOLD)) {
-      CLOG_LOG(WARN, "task queue has waited too much time in global queue, please check single replay task error",
+      CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "task queue has waited too much time in global queue, please check single replay task error",
                K(replay_status), K(task), K(ret));
     }
     //unlock
@@ -1362,7 +1363,7 @@ void ObLogReplayService::on_replay_error_(ObLogReplayTask &replay_task, int ret_
   const int64_t error_moment = ObTimeUtility::fast_current_time();
   while (is_inited_) {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      CLOG_LOG(ERROR, "REPLAY_ERROR", K(ret_code), K(replay_task), K(error_moment));
+      CLOG_LOG_RET(ERROR, ret_code, "REPLAY_ERROR", K(ret_code), K(replay_task), K(error_moment));
     }
     ob_usleep(1 * 1000 * 1000); // sleep 1s
   }
@@ -1373,7 +1374,7 @@ void ObLogReplayService::on_replay_error_()
   const int64_t error_moment = ObTimeUtility::fast_current_time();
   while (is_inited_) {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      CLOG_LOG(ERROR, "REPLAY_ERROR", K(error_moment));
+      CLOG_LOG_RET(ERROR, OB_ERROR, "REPLAY_ERROR", K(error_moment));
     }
     ob_usleep(1 * 1000 * 1000); // sleep 1s
   }

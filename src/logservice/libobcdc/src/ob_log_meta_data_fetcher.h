@@ -25,7 +25,6 @@ namespace libobcdc
 {
 class IObLogFetcher;
 class IObLogSysLsTaskHandler;
-class ObLogSysTableHelper;
 class IObLogErrHandler;
 class PartTransTask;
 
@@ -40,7 +39,6 @@ public:
       const share::ObBackupPathString &archive_dest,
       IObLogFetcherDispatcher *dispatcher,
       IObLogSysLsTaskHandler *sys_ls_handler,
-      ObLogSysTableHelper &systable_helper,
       common::ObISQLClient *proxy,
       IObLogErrHandler *err_handler,
       const int64_t cluster_id,

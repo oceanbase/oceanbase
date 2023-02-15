@@ -75,7 +75,7 @@ int ObLabelSePolicyMgr::init()
 void ObLabelSePolicyMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("label security policy manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "label security policy manger not init");
   } else {
     schema_infos_.clear();
     policy_name_map_.clear();
@@ -516,7 +516,7 @@ int ObLabelSeCompMgr::init()
 void ObLabelSeCompMgr::reset()
 {
   if (!is_inited_) {
-    LOG_ERROR("schema mgr not inited");
+    LOG_ERROR_RET(OB_NOT_INIT, "schema mgr not inited");
   } else {
     schema_infos_.clear();
     long_name_map_.clear();
@@ -1095,7 +1095,7 @@ int ObLabelSeLabelMgr::init()
 void ObLabelSeLabelMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("label security policy manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "label security policy manger not init");
   } else {
     schema_infos_.clear();
     label_map_.clear();
@@ -1601,7 +1601,7 @@ int ObLabelSeUserLevelMgr::init()
 void ObLabelSeUserLevelMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("label security policy manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "label security policy manger not init");
   } else {
     schema_infos_.clear();
     user_level_map_.clear();

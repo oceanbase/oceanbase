@@ -41,7 +41,7 @@ const char *ObLogGranuleIterator::get_name() const
   int tmp_ret = OB_SUCCESS;
   int64_t index = 0;
   if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = is_partition_gi(is_part_gi)))) {
-    LOG_ERROR("failed to check is partition gi", K(tmp_ret));
+    LOG_ERROR_RET(tmp_ret, "failed to check is partition gi", K(tmp_ret));
     index = 1;
   } else if (is_part_gi) {
     index = 1;
@@ -141,7 +141,24 @@ int ObLogGranuleIterator::set_range_order()
     } else {
       add_flag(GI_DESC_ORDER);
     }
-    LOG_TRACE("partition/block order", K(is_asc_order), K(gi_attri_flag_));
+    LOG_TRACE("partition order", K(is_asc_order), K(gi_attri_flag_), K(ret));
+  } else if (affinitize()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null operator", K(child), K(ret));
+    } else if (child->get_op_ordering().count() <= 0) {
+      //do nothing
+    } else {
+      common::ObIArray<OrderItem> &child_ordering = child->get_op_ordering();
+      bool is_asc_order = is_ascending_direction(child_ordering.at(0).order_type_);
+      if (is_asc_order) {
+        add_flag(GI_ASC_ORDER);
+      } else {
+        add_flag(GI_DESC_ORDER);
+      }
+      LOG_TRACE("affinitize partition order", K(is_asc_order), K(gi_attri_flag_), K(ret));
+    }
   }
   return ret;
 }

@@ -40,7 +40,7 @@ public:
     obrpc::ObRpcResultCode &rcode = LogRpcProxyV2::AsyncCB<pcode>::rcode_;
 
     if (common::OB_SUCCESS != rcode.rcode_) {
-      PALF_LOG(WARN, "there is an rpc error in logservice",
+      PALF_LOG_RET(WARN, rcode.rcode_, "there is an rpc error in logservice",
           K(rcode), K(dst), K(pcode));
     } else {
       // do nothing

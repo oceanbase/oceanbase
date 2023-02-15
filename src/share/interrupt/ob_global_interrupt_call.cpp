@@ -71,7 +71,7 @@ void ObInterruptChecker::clear_status()
 void ObInterruptChecker::clear_interrupt_status()
 {
   if (ref_count_ > 0) {
-    LIB_LOG(ERROR, "invlid interrupt ref count");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invlid interrupt ref count");
   }
   interrupted_ = false;
 }

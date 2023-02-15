@@ -37,7 +37,7 @@ ObCDCFactory::ObCDCFactory()
   CURLcode curl_code = curl_global_init(CURL_GLOBAL_ALL);
 
   if (OB_UNLIKELY(CURLE_OK != curl_code)) {
-    OBLOG_LOG(ERROR, "curl_global_init fail", K(curl_code));
+    OBLOG_LOG_RET(ERROR, OB_ERR_SYS, "curl_global_init fail", K(curl_code));
   }
 
   setlocale(LC_ALL, "");

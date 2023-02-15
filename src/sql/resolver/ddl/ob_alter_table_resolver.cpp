@@ -4435,7 +4435,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
   int ret = OB_SUCCESS;
   // 1. to get all check table schemas, including main table schema and its' index schemas.
   bool is_same = false;
-  ObSArray<ObTableSchema> check_table_schemas;
+  ObSArray<const ObTableSchema *> check_table_schemas;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
   if (OB_ISNULL(schema_guard)) {
@@ -4445,7 +4445,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
                                                                dst_col_schema,
                                                                is_same))) {
     LOG_WARN("check same type alter failed", K(ret));
-  } else if (table_schema.is_partitioned_table() && OB_FAIL(check_table_schemas.push_back(table_schema))) {
+  } else if (table_schema.is_partitioned_table() && OB_FAIL(check_table_schemas.push_back(&table_schema))) {
     LOG_WARN("push back schema failed", K(ret));
   } else if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get simple index infos failed", K(ret), K(table_schema));
@@ -4459,7 +4459,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null index schema", K(ret), K(simple_index_infos.at(i)));
-      } else if (index_schema->is_partitioned_table() && OB_FAIL(check_table_schemas.push_back(*index_schema))) {
+      } else if (index_schema->is_partitioned_table() && OB_FAIL(check_table_schemas.push_back(index_schema))) {
         LOG_WARN("push back related index schema failed", K(ret));
       }
     }
@@ -4469,7 +4469,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
   if (OB_SUCC(ret)) {
     const ObString &alter_column_name = src_col_schema.get_column_name_str();
     for (int64_t i = 0; OB_SUCC(ret) && i < check_table_schemas.count(); i++) {
-      const ObTableSchema &cur_table_schema = check_table_schemas.at(i);
+      const ObTableSchema &cur_table_schema = *check_table_schemas.at(i);
       const ObColumnSchemaV2 *column_schema = nullptr;
       if (OB_ISNULL(column_schema = cur_table_schema.get_column_schema(alter_column_name))) {
         // do nothing, bacause the column does not exist in the schema.
@@ -4676,6 +4676,10 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
             && alter_column_schema.get_cur_default_value().is_null()) {
           ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
           LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
+        } else if (0 != origin_col_schema->get_rowkey_position()
+            && alter_column_schema.is_set_nullable_) {
+          ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
+          LOG_WARN("can't set primary key nullable", K(ret));
         } else if (ObGeometryType == origin_col_schema->get_data_type()
                    && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
           ret = OB_NOT_SUPPORTED;
@@ -4934,6 +4938,10 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
               && alter_column_schema.get_cur_default_value().is_null()) {
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
+          } else if (0 != origin_col_schema->get_rowkey_position()
+              && alter_column_schema.is_set_nullable_) {
+            ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
+            LOG_WARN("can't set primary key nullable", K(ret));
           } else if (ObGeometryType == origin_col_schema->get_data_type()
                      && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
             ret = OB_NOT_SUPPORTED;

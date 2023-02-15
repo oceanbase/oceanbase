@@ -443,7 +443,7 @@ int64_t ObLimit::to_string_kv(char *buf, const int64_t buf_len) const
 int ObLimit::add_filter(ObSqlExpression *expr)
 {
   UNUSED(expr);
-  LOG_ERROR("limit operator should have no filter expr");
+  LOG_ERROR_RET(OB_NOT_SUPPORTED, "limit operator should have no filter expr");
   return OB_NOT_SUPPORTED;
 }
 

@@ -256,11 +256,12 @@ constexpr int OB_GTI_NOT_READY = -4383;
 constexpr int OB_STACK_OVERFLOW = -4385;
 constexpr int OB_NOT_ALLOW_REMOVING_LEADER = -4386;
 constexpr int OB_NEED_SWITCH_CONSUMER_GROUP = -4387;
-constexpr int OB_UNEXPECT_INTERNAL_ERROR = -4388;
-constexpr int OB_ERR_TOO_MUCH_TIME = -4389;
 constexpr int OB_ERR_REMOTE_SCHEMA_NOT_FULL = -4390;
 constexpr int OB_DDL_SSTABLE_RANGE_CROSS = -4391;
 constexpr int OB_DISK_CORRUPTED = -4392;
+constexpr int OB_ERR_OBSERVER_START = -4393;
+constexpr int OB_ERR_OBSERVER_STOP = -4394;
+constexpr int OB_ERR_OBSERVICE_START = -4395;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -438,6 +439,10 @@ constexpr int OB_PACKET_STATUS_UNKNOWN = -4746;
 constexpr int OB_ARBITRATION_SERVICE_NOT_EXIST = -4747;
 constexpr int OB_ARBITRATION_SERVICE_ALREADY_EXIST = -4748;
 constexpr int OB_WAIT_DEGRATION_TIMEOUT = -4751;
+constexpr int OB_ERR_ROOTSERVICE_START = -4752;
+constexpr int OB_ERR_ROOTSERVICE_STOP = -4753;
+constexpr int OB_ERR_ROOT_INSPECTION = -4754;
+constexpr int OB_ERR_ROOTSERVICE_THREAD_HUNG = -4755;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -772,6 +777,8 @@ constexpr int OB_ERR_RESERVED_SYNTAX = -5405;
 constexpr int OB_ERR_INVALID_PARAM_TO_PROCEDURE = -5406;
 constexpr int OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT = -5407;
 constexpr int OB_ERR_CTE_MAX_RECURSION_DEPTH = -5408;
+constexpr int OB_DUPLICATE_OBJECT_NAME_EXIST = -5409;
+constexpr int OB_ERR_REFRESH_SCHEMA_TOO_LONG = -5410;
 constexpr int OB_SQL_RETRY_SPM = -5434;
 constexpr int OB_OUTLINE_NOT_REPRODUCIBLE = -5435;
 constexpr int OB_EER_WINDOW_NO_CHILD_PARTITIONING = -5438;
@@ -1293,6 +1300,8 @@ constexpr int OB_OBJ_UNLOCK_CONFLICT = -6276;
 constexpr int OB_SCN_OUT_OF_BOUND = -6277;
 constexpr int OB_TRANS_IDLE_TIMEOUT = -6278;
 constexpr int OB_TRANS_FREE_ROUTE_NOT_SUPPORTED = -6279;
+constexpr int OB_TRANS_LIVE_TOO_MUCH_TIME = -6280;
+constexpr int OB_TRANS_COMMIT_TOO_MUCH_TIME = -6281;
 constexpr int OB_LOG_ID_NOT_FOUND = -6301;
 constexpr int OB_LSR_THREAD_STOPPED = -6302;
 constexpr int OB_NO_LOG = -6303;
@@ -1315,6 +1324,7 @@ constexpr int OB_LOG_NEED_REBUILD = -6319;
 constexpr int OB_TOO_MANY_LOG_TASK = -6320;
 constexpr int OB_INVALID_BATCH_SIZE = -6321;
 constexpr int OB_CLOG_SLIDE_TIMEOUT = -6322;
+constexpr int OB_LOG_REPLAY_ERROR = -6323;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1421,6 +1431,7 @@ constexpr int OB_BACKUP_FORMAT_FILE_NOT_EXIST = -9080;
 constexpr int OB_BACKUP_FORMAT_FILE_NOT_MATCH = -9081;
 constexpr int OB_BACKUP_MAJOR_NOT_COVER_MINOR = -9085;
 constexpr int OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT = -9086;
+constexpr int OB_CLOG_RECYCLE_BEFORE_ARCHIVE = -9087;
 constexpr int OB_ESI_SESSION_NOT_EXIST = -9090;
 constexpr int OB_ALREADY_IN_ARCHIVE_MODE = -9091;
 constexpr int OB_ALREADY_IN_NOARCHIVE_MODE = -9092;
@@ -1848,6 +1859,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MACRO_BLOCK_TYPE__USER_ERROR_MSG "the macro block type does not exist"
 #define OB_INVALID_DATE_FORMAT_END__USER_ERROR_MSG "Incorrect value"
 #define OB_PG_IS_REMOVED__USER_ERROR_MSG "partition group is removed"
+#define OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME__USER_ERROR_MSG "ddl task executes too much time"
 #define OB_HASH_EXIST__USER_ERROR_MSG "%s"
 #define OB_HASH_NOT_EXIST__USER_ERROR_MSG "%s"
 #define OB_HASH_GET_TIMEOUT__USER_ERROR_MSG "hash map/set get timeout"
@@ -2036,6 +2048,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_REMOTE_SCHEMA_NOT_FULL__USER_ERROR_MSG "Schema of remote server is not refreshed yet"
 #define OB_DDL_SSTABLE_RANGE_CROSS__USER_ERROR_MSG "ddl sstable version range cross"
 #define OB_DISK_CORRUPTED__USER_ERROR_MSG "disk is corrupted"
+#define OB_ERR_OBSERVER_START__USER_ERROR_MSG "observer start process failure"
+#define OB_ERR_OBSERVER_STOP__USER_ERROR_MSG "observer stop process failure"
+#define OB_ERR_OBSERVICE_START__USER_ERROR_MSG "observice start process has failure"
+#define OB_ERR_THREAD_PANIC__USER_ERROR_MSG "Worker thread pannic, thread may be terminated or hung"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -2216,6 +2232,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ARBITRATION_SERVICE_NOT_EXIST__USER_ERROR_MSG "arbitration service does not exist"
 #define OB_ARBITRATION_SERVICE_ALREADY_EXIST__USER_ERROR_MSG "arbitration service already exist"
 #define OB_WAIT_DEGRATION_TIMEOUT__USER_ERROR_MSG "wait degration finished timeout"
+#define OB_ERR_ROOTSERVICE_START__USER_ERROR_MSG "rootservice start process has failure"
+#define OB_ERR_ROOTSERVICE_STOP__USER_ERROR_MSG "rootservice stop process has failure"
+#define OB_ERR_ROOT_INSPECTION__USER_ERROR_MSG "root inspection is not passed"
+#define OB_ERR_ROOTSERVICE_THREAD_HUNG__USER_ERROR_MSG "rootservice backgroud thread may be hung"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -2584,6 +2604,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_PARAM_TO_PROCEDURE__USER_ERROR_MSG "Incorrect parameters to procedure \'%.*s\'"
 #define OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT__USER_ERROR_MSG "Incorrect parameters in the call to native function '%.*s'"
 #define OB_ERR_CTE_MAX_RECURSION_DEPTH__USER_ERROR_MSG "Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value."
+#define OB_DUPLICATE_OBJECT_NAME_EXIST__USER_ERROR_MSG "Duplicate object name exists, schema refreshing may be hung"
+#define OB_ERR_REFRESH_SCHEMA_TOO_LONG__USER_ERROR_MSG "Refresh schema failed continuously, ddl may be hung"
 #define OB_ERR_INVALID_JSON_TEXT__USER_ERROR_MSG "Invalid JSON text."
 #define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__USER_ERROR_MSG "Invalid JSON text in argument."
 #define OB_ERR_INVALID_JSON_BINARY_DATA__USER_ERROR_MSG "The JSON binary value contains invalid data."
@@ -3196,6 +3218,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SCN_OUT_OF_BOUND__USER_ERROR_MSG "scn is out of bounds of memtable"
 #define OB_TRANS_IDLE_TIMEOUT__USER_ERROR_MSG "Transaction idle timeout occurred, please rollback the transaction, set the variable ob_trx_idle_timeout to a larger value and then restart the transaction"
 #define OB_TRANS_FREE_ROUTE_NOT_SUPPORTED__USER_ERROR_MSG "Query is not supported to be executed on txn temporary node"
+#define OB_TRANS_LIVE_TOO_MUCH_TIME__USER_ERROR_MSG "Transaction cost too much without commit or rollback"
+#define OB_TRANS_COMMIT_TOO_MUCH_TIME__USER_ERROR_MSG "Transaction commit cost too much"
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
 #define OB_NO_LOG__USER_ERROR_MSG "no log ever scanned"
@@ -3218,6 +3242,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TOO_MANY_LOG_TASK__USER_ERROR_MSG "too many log tasks"
 #define OB_INVALID_BATCH_SIZE__USER_ERROR_MSG "ob invalid batch size"
 #define OB_CLOG_SLIDE_TIMEOUT__USER_ERROR_MSG "ob clog slide timeout"
+#define OB_LOG_REPLAY_ERROR__USER_ERROR_MSG "log replay error"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -3431,6 +3456,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__USER_ERROR_MSG "the contents of pwrite are inconsistent"
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__USER_ERROR_MSG "backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__USER_ERROR_MSG "backup advance checkpoint by flush timeout"
+#define OB_CLOG_RECYCLE_BEFORE_ARCHIVE__USER_ERROR_MSG "observer clog is recycled before archive"
 #define OB_ESI_SESSION_NOT_EXIST__USER_ERROR_MSG "obesi process session not exist"
 #define OB_ALREADY_IN_ARCHIVE_MODE__USER_ERROR_MSG "Already in ARCHIVELOG mode"
 #define OB_ALREADY_IN_NOARCHIVE_MODE__USER_ERROR_MSG "Already in NOARCHIVELOG mode"
@@ -3859,6 +3885,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MACRO_BLOCK_TYPE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4189, the macro block type does not exist"
 #define OB_INVALID_DATE_FORMAT_END__ORA_USER_ERROR_MSG "ORA-01830: date format picture ends before converting entire input string"
 #define OB_PG_IS_REMOVED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4191, partition group is removed"
+#define OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4192, ddl task executes too much time"
 #define OB_HASH_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4200, %s"
 #define OB_HASH_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4201, %s"
 #define OB_HASH_GET_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4204, hash map/set get timeout"
@@ -4047,6 +4074,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_REMOTE_SCHEMA_NOT_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4390, Schema of remote server is not refreshed yet"
 #define OB_DDL_SSTABLE_RANGE_CROSS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4391, ddl sstable version range cross"
 #define OB_DISK_CORRUPTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4392, disk is corrupted"
+#define OB_ERR_OBSERVER_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4393, observer start process failure"
+#define OB_ERR_OBSERVER_STOP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4394, observer stop process failure"
+#define OB_ERR_OBSERVICE_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4395, observice start process has failure"
+#define OB_ERR_THREAD_PANIC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4396, Worker thread pannic, thread may be terminated or hung"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"
@@ -4227,6 +4258,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ARBITRATION_SERVICE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4747, arbitration service does not exist"
 #define OB_ARBITRATION_SERVICE_ALREADY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4748, arbitration service already exist"
 #define OB_WAIT_DEGRATION_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4751, wait degration finished timeout"
+#define OB_ERR_ROOTSERVICE_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4752, rootservice start process has failure"
+#define OB_ERR_ROOTSERVICE_STOP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4753, rootservice stop process has failure"
+#define OB_ERR_ROOT_INSPECTION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4754, root inspection is not passed"
+#define OB_ERR_ROOTSERVICE_THREAD_HUNG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4755, rootservice backgroud thread may be hung"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -4595,6 +4630,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_PARAM_TO_PROCEDURE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5406, Incorrect parameters to procedure \'%.*s\'"
 #define OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5407, Incorrect parameters in the call to native function '%.*s'"
 #define OB_ERR_CTE_MAX_RECURSION_DEPTH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5408, Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value."
+#define OB_DUPLICATE_OBJECT_NAME_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5409, Duplicate object name exists, schema refreshing may be hung"
+#define OB_ERR_REFRESH_SCHEMA_TOO_LONG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5410, Refresh schema failed continuously, ddl may be hung"
 #define OB_ERR_INVALID_JSON_TEXT__ORA_USER_ERROR_MSG "ORA-40441: JSON syntax error."
 #define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__ORA_USER_ERROR_MSG "ORA-40441: JSON syntax error"
 #define OB_ERR_INVALID_JSON_BINARY_DATA__ORA_USER_ERROR_MSG "ORA-40783: invalid binary JSON data\nstring"
@@ -5206,7 +5243,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJ_UNLOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6276, there is an unlock operation doing, unlock conflict."
 #define OB_SCN_OUT_OF_BOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6277, scn is out of bounds of memtable"
 #define OB_TRANS_IDLE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-24761: transaction rolled back: transaction idle timeout"
-#define OB_TRANS_FREE_ROUTE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6279, Query is not supported to be executed on txn temporary node"
+#define OB_TRANS_FREE_ROUTE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-06279: Query is not supported to be executed on txn temporary node"
+#define OB_TRANS_LIVE_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6280, Transaction cost too much without commit or rollback"
+#define OB_TRANS_COMMIT_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6281, Transaction commit cost too much"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LSR_THREAD_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6302, log scan runnable thread stop"
 #define OB_NO_LOG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6303, no log ever scanned"
@@ -5229,6 +5268,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TOO_MANY_LOG_TASK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6320, too many log tasks"
 #define OB_INVALID_BATCH_SIZE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6321, ob invalid batch size"
 #define OB_CLOG_SLIDE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6322, ob clog slide timeout"
+#define OB_LOG_REPLAY_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6323, log replay error"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -5442,6 +5482,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9084, the contents of pwrite are inconsistent"
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9085, backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9086, backup advance checkpoint by flush timeout"
+#define OB_CLOG_RECYCLE_BEFORE_ARCHIVE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9087, observer clog is recycled before archive"
 #define OB_ESI_SESSION_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9090, obesi process session not exist"
 #define OB_ALREADY_IN_ARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9091, Already in ARCHIVELOG mode"
 #define OB_ALREADY_IN_NOARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode"
@@ -5705,6 +5746,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
+extern int g_all_ob_errnos[2022];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

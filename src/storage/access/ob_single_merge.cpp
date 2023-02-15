@@ -52,6 +52,8 @@ int ObSingleMerge::open(const ObDatumRowkey &rowkey)
       } else {
         full_row_.count_ = access_param_->get_max_out_col_cnt();
       }
+    } else if (OB_FAIL(full_row_.reserve(access_param_->get_max_out_col_cnt()))) {
+      STORAGE_LOG(WARN, "Failed to reserve full row", K(ret));
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(fuse_row_cache_fetcher_.init(access_param_->iter_param_.tablet_id_, access_param_->iter_param_.get_read_info(), tablet_meta.clog_checkpoint_scn_.get_val_for_tx()))) {
@@ -330,22 +332,24 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
       }
     }
 #ifdef ENABLE_DEBUG_LOG
+    /*
     if (OB_SUCC(ret)) {
       access_ctx_->defensive_check_record_.query_flag_ = access_ctx_->query_flag_;
       transaction::ObTransService *trx = MTL(transaction::ObTransService *);
       bool trx_id_valid = (NULL != access_ctx_->store_ctx_
-                          && access_ctx_->store_ctx_->mvcc_acc_ctx_.snapshot_.is_valid());
+                          && access_ctx_->store_ctx_->mvcc_acc_ctx_.snapshot_.tx_id_.is_valid());
       if (OB_NOT_NULL(trx)
           && trx_id_valid
           && NULL != trx->get_defensive_check_mgr()) {
         (void)trx->get_defensive_check_mgr()->put(tablet_meta.tablet_id_,
-                                                  access_ctx_->store_ctx_->mvcc_acc_ctx_.tx_id_,
+                                                  access_ctx_->store_ctx_->mvcc_acc_ctx_.snapshot_.tx_id_,
                                                   row,
                                                   *rowkey_,
                                                   access_ctx_->defensive_check_record_);
       }
     }
     access_ctx_->defensive_check_record_.reset();
+    */
 #endif
     rowkey_ = NULL;
   } else {

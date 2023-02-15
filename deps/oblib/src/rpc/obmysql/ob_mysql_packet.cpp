@@ -152,7 +152,7 @@ int ObMySQLPacket::encode(char *buffer, int64_t length, int64_t &pos, int64_t &p
 
 int64_t ObMySQLPacket::get_serialize_size() const
 {
-  BACKTRACE(ERROR, 1, "not a serializiable packet");
+  BACKTRACE_RET(ERROR, OB_ERROR, 1, "not a serializiable packet");
   return -1;
 }
 

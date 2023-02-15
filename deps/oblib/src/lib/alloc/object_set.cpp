@@ -31,7 +31,7 @@ const static int BT_BUF_LEN = 256;
 
 void __attribute__((weak)) has_unfree_callback(char *info)
 {
-  _OB_LOG(ERROR, "HAS UNFREE PTR!!! %s", info);
+  _OB_LOG_RET(ERROR, OB_ERROR, "HAS UNFREE PTR!!! %s", info);
 }
 
 ObjectSet::ObjectSet(__MemoryContext__ *mem_context, const uint32_t ablock_size)

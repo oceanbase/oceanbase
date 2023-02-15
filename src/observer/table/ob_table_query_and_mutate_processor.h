@@ -50,7 +50,7 @@ private:
   class ColumnIdxComparator;
   int sort_qualifier(common::ObIArray<ColumnIdx> &columns,
                      const table::ObTableBatchOperation &increment);
-  int init_scan_tb_ctx();
+  int init_scan_tb_ctx(table::ObTableApiCacheGuard &cache_guard);
   int init_tb_ctx(table::ObTableCtx &ctx,
                   table::ObTableOperationType::Type op_type,
                   const table::ObITableEntity &entity);
@@ -63,10 +63,10 @@ private:
                      const ObObj &cq,
                      const ObObj &ts,
                      const ObObj &value);
-  int get_old_row(ObNewRow *&row);
+  int get_old_row(table::ObTableApiSpec &scan_spec, ObNewRow *&row);
   int execute_htable_delete();
   int execute_htable_put();
-  int execute_htable_increment();
+  int execute_htable_increment(table::ObTableApiSpec &scan_spec);
   int execute_htable_insert(const table::ObITableEntity &new_entity);
   int execute_htable_put(const table::ObITableEntity &new_entity);
   int generate_query_result(table::ObTableApiScanRowIterator &row_iter,
@@ -84,7 +84,6 @@ private:
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
 
   table::ObTableQueryResult one_result_;
-  table::ObTableApiCacheGuard cache_guard_;
 };
 } // end namespace observer
 } // end namespace oceanbase

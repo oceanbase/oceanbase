@@ -155,7 +155,7 @@ public:
   }
   virtual void get_queue_num(int64_t &num)
   {
-    OB_LOG(ERROR, "unexpected invoke");
+    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected invoke");
     num = 0;
   }
   virtual int push_task(const common::IObDedupTask &task)
@@ -315,7 +315,7 @@ public:
 private:
   char buf_[sizeof(MyReentrantThread)];
   MyReentrantThread *th_ = nullptr;
-  int thread_cnt_;
+  int64_t thread_cnt_;
 
 };
 class MyThreadPool : public lib::ThreadPool
@@ -401,7 +401,7 @@ public:
 private:
   char buf_[sizeof(MyThreadPool)];
   MyThreadPool *th_ = nullptr;
-  int thread_cnt_;
+  int64_t thread_cnt_;
 };
 
 class MySimpleThreadPool : public common::ObSimpleThreadPool
@@ -619,7 +619,7 @@ public:
 private:
   char buf_[sizeof(common::ObDedupQueue)];
   common::ObDedupQueue *qth_ = nullptr;
-  int32_t thread_num_;
+  int64_t thread_num_;
   const int64_t queue_size_;
   const int64_t task_map_size_;
   const int64_t total_mem_limit_;
@@ -797,7 +797,7 @@ public:
 private:
   char buf_[sizeof(share::ObAsyncTaskQueue)];
   share::ObAsyncTaskQueue *qth_ = nullptr;
-  int thread_cnt_;
+  int64_t thread_cnt_;
   int64_t queue_size_;
 };
 
@@ -890,7 +890,7 @@ public:
 private:
   char buf_[sizeof(TimerType) * MAX_CNT];
   TimerType *timers_[MAX_CNT] = {nullptr};
-  const int cnt_ = 0;
+  const int64_t cnt_ = 0;
   bool is_inited_ = false;
 };
 
@@ -1124,6 +1124,7 @@ public:
 
 #define TG_REENTRANT_LOGICAL_STOP(tg_id)                                                                \
   ({                                                                                                    \
+    int ret = OB_SUCCESS;                                                                               \
     enum TGType tg_type = TGType::INVALID;                                                              \
     ITG* tg = TG_MGR.tgs_[tg_id];                                                                       \
     if (nullptr != tg) {                                                                                \
@@ -1133,12 +1134,14 @@ public:
       TG<TGType::REENTRANT_THREAD_POOL>* tmp_tg = static_cast<TG<TGType::REENTRANT_THREAD_POOL>*>(tg); \
       tmp_tg->logical_stop();                                                                           \
     } else {                                                                                            \
+      ret = common::OB_ERR_UNEXPECTED;                                                                  \
       OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
     }                                                                                                   \
   })
 
 #define TG_REENTRANT_LOGICAL_WAIT(tg_id)                                                                \
   ({                                                                                                    \
+    int ret = OB_SUCCESS;                                                                               \
     enum TGType tg_type = TGType::INVALID;                                                              \
     ITG* tg = TG_MGR.tgs_[tg_id];                                                                       \
     if (nullptr != tg) {                                                                                \
@@ -1148,6 +1151,7 @@ public:
       TG<TGType::REENTRANT_THREAD_POOL>* tmp_tg = static_cast<TG<TGType::REENTRANT_THREAD_POOL>*>(tg); \
       tmp_tg->logical_wait();                                                                           \
     } else {                                                                                            \
+      ret = common::OB_ERR_UNEXPECTED;                                                                  \
       OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
     }                                                                                                   \
   }) 

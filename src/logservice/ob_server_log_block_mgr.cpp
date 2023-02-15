@@ -119,7 +119,7 @@ int ObServerLogBlockMgr::init(const char *log_disk_base_path)
 
 void ObServerLogBlockMgr::destroy()
 {
-  CLOG_LOG(WARN, "ObServerLogBlockMgr  destroy", KPC(this));
+  CLOG_LOG_RET(WARN, OB_SUCCESS, "ObServerLogBlockMgr  destroy", KPC(this));
   is_inited_ = false;
   min_log_disk_size_for_all_tenants_ = 0;
   max_block_id_ = 0;
@@ -301,11 +301,13 @@ int ObServerLogBlockMgr::create_tenant(const int64_t log_disk_size)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(resize_lock_);
-  if ((min_log_disk_size_for_all_tenants_ += log_disk_size) > get_total_size_guarded_by_lock_()) {
+  int64_t tmp_log_disk_size = min_log_disk_size_for_all_tenants_;
+  if ((tmp_log_disk_size += log_disk_size) > get_total_size_guarded_by_lock_()) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
     CLOG_LOG(ERROR, "ObServerLogBlockMGR can not hold any new tenants",
         K(ret), KPC(this), K(log_disk_size));
   } else {
+    min_log_disk_size_for_all_tenants_ = tmp_log_disk_size;
     CLOG_LOG(INFO, "ObServerLogBlockMGR create_tenant success", KPC(this), K(log_disk_size));
   }
   return ret;
@@ -324,14 +326,15 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size, const in
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(resize_lock_);
-  min_log_disk_size_for_all_tenants_ -= old_log_disk_size;
-  if (old_log_disk_size == new_log_disk_size) {
-  } else if ((min_log_disk_size_for_all_tenants_+=new_log_disk_size) > get_total_size_guarded_by_lock_()) {
+  int64_t tmp_log_disk_size = min_log_disk_size_for_all_tenants_;
+  tmp_log_disk_size -= old_log_disk_size;
+  if ((tmp_log_disk_size +=new_log_disk_size) > get_total_size_guarded_by_lock_()) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
     CLOG_LOG(ERROR, "ObServerLogBlockMGR can not hold any new tenants",
         K(ret), KPC(this),  K(old_log_disk_size), K(new_log_disk_size));
   } else {
-    CLOG_LOG(INFO, "ObServerLogBlockMGR update_tenant success", K(ret), KPC(this), K(old_log_disk_size), K(new_log_disk_size));
+    min_log_disk_size_for_all_tenants_ = tmp_log_disk_size;
+    CLOG_LOG(INFO, "ObServerLogBlockMGR update_tenant success", KPC(this), K(old_log_disk_size), K(new_log_disk_size));
   }
   return ret;
 }
@@ -346,15 +349,17 @@ void ObServerLogBlockMgr::abort_update_tenant(const int64_t old_log_disk_size, c
   CLOG_LOG(INFO, "ObServerLogBlockMGR abort_update_tenant success", KPC(this), K(old_log_disk_size), K(new_log_disk_size));
 }
 
-int ObServerLogBlockMgr::remove_tenant()
+int ObServerLogBlockMgr::remove_tenant(const int64_t log_disk_size)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(resize_lock_);
-  min_log_disk_size_for_all_tenants_ = 0;
-  if (OB_FAIL(get_tenants_log_disk_size_func_(min_log_disk_size_for_all_tenants_))) {
-    CLOG_LOG(ERROR, "get_tenants_log_disk_size_func_ failed", K(ret), KPC(this));
+  if (min_log_disk_size_for_all_tenants_ - log_disk_size < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "unexpected error, min_log_disk_size_for_all_tenants_ is small than zero",
+        K(ret), KPC(this), K(log_disk_size));
   } else {
-    CLOG_LOG(INFO, "remove_tenant success", K(ret), KPC(this));
+    min_log_disk_size_for_all_tenants_ -= log_disk_size;
+    CLOG_LOG(INFO, "remove tenant from ObServerLogBlockMGR success", KPC(this), K(log_disk_size));
   }
   return ret;
 }

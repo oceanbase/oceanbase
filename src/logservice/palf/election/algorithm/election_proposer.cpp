@@ -663,21 +663,21 @@ void ElectionProposer::on_change_leader(const ElectionChangeLeaderMsg &change_le
     if (change_leader_msg.get_ballot_number() == ballot_number_) {
       accept = true;
     } else {
-      LOG_CHANGE_LEADER(WARN, "change leader to self msg's ballot number not expected");
+      LOG_CHANGE_LEADER_RET(WARN, OB_ERR_UNEXPECTED, "change leader to self msg's ballot number not expected");
     }
   } else {// 别人切给自己的
     if (change_leader_msg.get_ballot_number() > ballot_number_) {
       accept = true;
     } else {
-      LOG_CHANGE_LEADER(WARN, "change leader msg's ballot number is too small");
+      LOG_CHANGE_LEADER_RET(WARN, OB_ERR_UNEXPECTED, "change leader msg's ballot number is too small");
     }
   }
   if (!accept) {
-    LOG_CHANGE_LEADER(WARN, "change leader msg not accepted");
+    LOG_CHANGE_LEADER_RET(WARN, OB_ERR_UNEXPECTED, "change leader msg not accepted");
   } else if (change_leader_msg.get_membership_version() > memberlist_with_states_.
                                                      get_member_list().
                                                      get_membership_version()) {
-    LOG_CHANGE_LEADER(WARN, "change leader msg's membership version is larger than self");
+    LOG_CHANGE_LEADER_RET(WARN, OB_ERR_UNEXPECTED, "change leader msg's membership version is larger than self");
   } else {
     advance_ballot_number_and_reset_related_states_(change_leader_msg.get_ballot_number(),
                                                     "receive change leader message");

@@ -23,10 +23,10 @@ void* ObEasyRpcRequestOperator::alloc_response_buffer(ObRequest* req, int64_t si
   void* buf = NULL;
   easy_request_t* ez_req = NULL;
   if (OB_ISNULL(req) || OB_ISNULL(ez_req = req->get_ez_req())) {
-    RPC_LOG(ERROR, "request is invalid", KP(req));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "request is invalid", KP(req));
   } else if (OB_ISNULL(ez_req->ms)
              || OB_ISNULL(ez_req->ms->pool)) {
-    RPC_LOG(ERROR, "request is invalid", K(req));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "request is invalid", K(req));
   } else {
     buf = easy_pool_alloc(
         ez_req->ms->pool, static_cast<uint32_t>(size));
@@ -39,7 +39,7 @@ void ObEasyRpcRequestOperator::response_result(ObRequest* req, obrpc::ObRpcPacke
   //just set request retcode, wakeup in ObSingleServer::handlePacketQueue()
   easy_request_t* ez_req = NULL;
   if (OB_ISNULL(req) || OB_ISNULL(ez_req = req->get_ez_req())) {
-    RPC_LOG(ERROR, "reqest is NULL or request has wokenup");
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "reqest is NULL or request has wokenup");
   } else {
     ez_req->opacket = pkt;
     ez_req->retcode = EASY_OK;
@@ -55,11 +55,11 @@ ObAddr ObEasyRpcRequestOperator::get_peer(const ObRequest* req)
   easy_request_t* ez_req = req->ez_req_;
   if (OB_ISNULL(ez_req) || OB_ISNULL(ez_req->ms)
       || OB_ISNULL(ez_req->ms->c)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req));
   } else {
     easy_addr_t &ez = ez_req->ms->c->addr;
     if (!ez2ob_addr(addr, ez)) {
-      RPC_LOG(ERROR, "fail to convert easy_addr to ob_addr", K(ez_req));
+      RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "fail to convert easy_addr to ob_addr", K(ez_req));
     } // otherwise leave addr be zeros
   }
   return addr;

@@ -251,6 +251,15 @@ int ObDRTaskQueue::push_task_in_schedule_list(
       FLOG_INFO("[DRTASK_NOTICE] finish add task into schedule list", KPC(new_task));
     }
   }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(new_task)) {
+      remove_task_from_map_and_free_it_(new_task);
+    } else if (OB_NOT_NULL(raw_ptr)) {
+      task_alloc_.free(raw_ptr);
+      raw_ptr = nullptr;
+    }
+  }
   return ret;
 }
 
@@ -698,7 +707,7 @@ void ObDRTaskMgr::run3()
 {
   FLOG_INFO("Disaster recovery task mgr start");
   if (OB_UNLIKELY(!inited_ || stopped_)) {
-    LOG_WARN("ObDRTaskMgr not init", K(inited_), K_(stopped));
+    LOG_WARN_RET(OB_NOT_INIT, "ObDRTaskMgr not init", K(inited_), K_(stopped));
   } else {
     int64_t last_dump_ts = ObTimeUtility::current_time();
     int64_t last_check_task_in_progress_ts = ObTimeUtility::current_time();

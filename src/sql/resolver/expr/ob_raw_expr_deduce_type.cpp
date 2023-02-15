@@ -1941,8 +1941,8 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                         || ob_is_lob_locator(param_expr->get_data_type())
                         || ob_is_json(param_expr->get_data_type()))
                     && (T_FUN_ORA_JSON_OBJECTAGG != expr.get_expr_type()
-                        && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type()
-                        && T_FUN_COUNT != expr.get_expr_type()))
+                        && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type()))
+                && !(T_FUN_COUNT == expr.get_expr_type() && ob_is_json(param_expr->get_data_type()))
                 && T_FUN_MEDIAN != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_CONT != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_DISC != expr.get_expr_type()
@@ -2441,9 +2441,13 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
         }
       }
     } else {
-      expr.set_result_type(func_params.at(0)->get_result_type());
+      ObExprResType res_type = func_params.at(0)->get_result_type();
+      res_type.unset_result_flag(NOT_NULL_FLAG);
+      //set calc type for explain stmts and cases that the param0 is paramlized
+      res_type.set_calc_meta(res_type.get_obj_meta());
+      res_type.set_calc_accuracy(res_type.get_accuracy());
+      expr.set_result_type(res_type);
       expr.set_enum_set_values(func_params.at(0)->get_enum_set_values());
-      expr.unset_result_flag(NOT_NULL_FLAG);
     }
     // lead和lag函数的第三个参数，应当转换为第一个参数的类型，加cast，这里不能在执行层转。
     // bug: https://work.aone.alibaba-inc.com/issue/24115140

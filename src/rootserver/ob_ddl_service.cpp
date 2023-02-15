@@ -1976,7 +1976,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -2035,7 +2035,7 @@ int ObDDLService::create_table_in_trans(
     if (OB_ISNULL(sql_trans) && trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -4161,7 +4161,7 @@ int ObDDLService::delete_column_from_schema(obrpc::ObAlterTableArg &alter_table_
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -4480,7 +4480,7 @@ int ObDDLService::remap_index_tablets_and_take_effect(
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -4573,7 +4573,7 @@ int ObDDLService::update_autoinc_schema(obrpc::ObAlterTableArg &alter_table_arg)
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -6965,6 +6965,7 @@ int ObDDLService::fill_new_column_attributes(
     if (!is_oracle_mode() || alter_column_schema.is_set_default_) {
       new_column_schema.set_cur_default_value(alter_column_schema.get_cur_default_value());
     }
+    new_column_schema.set_zero_fill(alter_column_schema.is_zero_fill());
     new_column_schema.set_is_hidden(alter_column_schema.is_hidden());
     new_column_schema.set_nullable(alter_column_schema.is_nullable());
     new_column_schema.set_autoincrement(alter_column_schema.is_autoincrement());
@@ -10909,7 +10910,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN_RET(temp_ret, "trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -11034,7 +11035,7 @@ int ObDDLService::create_hidden_table(
           if (trans.is_started()) {
             int temp_ret = OB_SUCCESS;
             if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-              LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+              LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
               ret = (OB_SUCC(ret)) ? temp_ret : ret;
             }
           }
@@ -12597,7 +12598,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -12983,7 +12984,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -13204,7 +13205,7 @@ int ObDDLService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLAr
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -14014,6 +14015,9 @@ int ObDDLService::check_index_table_need_rebuild(const share::schema::ObTableSch
   need_rebuild = true;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
+  } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR == index_table_schema.get_index_status()) {
+    need_rebuild = false;
+    LOG_INFO("skip error index", K(index_table_schema.get_table_id()));
   } else if (is_oracle_mode) {
     // For Oracle mode, index is invalid if its' any rowkey/storing column specified by user is dropped;
     ObSArray<uint64_t> check_columns_id;
@@ -14236,7 +14240,7 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -14508,7 +14512,7 @@ int ObDDLService::rebuild_hidden_table_constraints_in_trans(
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -15068,7 +15072,7 @@ int ObDDLService::rebuild_hidden_table_foreign_key(ObAlterTableArg &alter_table_
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -15447,7 +15451,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -15587,7 +15591,7 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -15693,7 +15697,7 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -15812,7 +15816,7 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -16149,7 +16153,8 @@ int ObDDLService::generate_table_schemas(const ObIArray<const ObTableSchema*> &o
 
 int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema*> &orig_table_schemas,
                                               ObDDLSQLTransaction &trans,
-                                              const ObString *ddl_stmt_str)
+                                              const ObString *ddl_stmt_str,
+                                              obrpc::ObDDLRes &ddl_res)
 {
   int ret = OB_SUCCESS;
   ObString table_name;
@@ -16261,6 +16266,13 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     if (FAILEDx(trans.serialize_inc_schemas(first_schema_version - 1))) {
       LOG_WARN("fail to serialize inc schemas", KR(ret), K(tenant_id), "start_schema_version", first_schema_version - 1);
     }
+
+    if (OB_SUCC(ret)) {
+      ddl_res.tenant_id_ = tenant_id;
+      ddl_res.schema_id_ = new_table_schemas.at(0)->get_table_id();
+      ddl_res.task_id_ = boundary_schema_version;
+    }
+
   } // else
 
 
@@ -16285,21 +16297,16 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
   // For table has auto_increment
   // Sequence will not start from 1 when table not refresh newest schema
   //To protect sequence value, we should synchronous refresh schema when we finish truncate table
-  if (OB_SUCC(ret)) {
-    uint64_t column_id = orig_table_schemas.at(0)->get_autoinc_column_id();
-    if (0 != column_id) {
-      if (OB_FAIL(publish_schema(tenant_id))) {
-        LOG_WARN("publish_schema failed", KR(ret), K(table_name), K(tenant_id));
-      }
-    }
-  }
-  int64_t finish_truncate_in_trans = ObTimeUtility::current_time();
+  //if (OB_SUCC(ret)) {
+  //  if (OB_FAIL(publish_schema(tenant_id))) {
+  //    LOG_WARN("publish_schema failed", KR(ret), K(table_name), K(tenant_id));
+  //  }
+  //}
   LOG_INFO("truncate cost after truncate_in_trans finish", KR(ret), K(task_id),
-           "cost", finish_truncate_in_trans - start_time,
+           "trans_cost", trans_end - start_time,
            "fetch_schema_cost", before_wait_task - before_fetch_schema,
            "wait_task_cost", wait_task - before_wait_task,
-           "trans_end_cost", trans_end - wait_task,
-           "publish_schema_cost", finish_truncate_in_trans - trans_end);
+           "trans_end_cost", trans_end - wait_task);
 
   return ret;
 }
@@ -16498,7 +16505,7 @@ int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_
 }
 
 int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
-                                     const obrpc::ObDDLRes &ddl_res,
+                                     obrpc::ObDDLRes &ddl_res,
                                      const SCN &frozen_version)
 {
   int ret = OB_SUCCESS;
@@ -16580,7 +16587,7 @@ int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
     int64_t after_get_schema =  ObTimeUtility::current_time();
     LOG_INFO("truncate cost after get schema and check legal",
             KR(ret), "cost_ts", after_get_schema - after_table_lock);
-    if (FAILEDx(new_truncate_table_in_trans(table_schema_array, trans, &arg.ddl_stmt_str_))) {
+    if (FAILEDx(new_truncate_table_in_trans(table_schema_array, trans, &arg.ddl_stmt_str_, ddl_res))) {
       LOG_WARN("truncate table in trans failed",
               KR(ret), K(arg.table_name_), K(table_id), K(orig_table_schema.get_schema_version()));
     }
@@ -17533,7 +17540,7 @@ int ObDDLService::drop_table_in_trans(
     if (OB_ISNULL(sql_trans) && trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -17734,7 +17741,7 @@ int ObDDLService::flashback_table_from_recyclebin_in_trans(const ObTableSchema &
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -18237,7 +18244,7 @@ int ObDDLService::flashback_index_in_trans(share::schema::ObSchemaGetterGuard &s
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -18309,7 +18316,7 @@ int ObDDLService::purge_index(const obrpc::ObPurgeIndexArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -18388,7 +18395,7 @@ int ObDDLService::purge_table(
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -18430,7 +18437,7 @@ int ObDDLService::flashback_database_in_trans(const ObDatabaseSchema &db_schema,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -18534,7 +18541,7 @@ int ObDDLService::purge_database(
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -18685,7 +18692,7 @@ int ObDDLService::purge_recyclebin_except_tenant(
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -19535,7 +19542,7 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
         if (trans.is_started()) {
           int temp_ret = OB_SUCCESS;
           if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-            LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(ret), K(temp_ret));
+            LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(ret), K(temp_ret));
             ret = OB_SUCC(ret) ? temp_ret : ret;
           }
         }
@@ -19613,7 +19620,7 @@ int ObDDLService::rebuild_index_in_trans(
   if (OB_ISNULL(sql_trans) && trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -19662,6 +19669,9 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
     int64_t refreshed_schema_version = 0;
     if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+    } else if (is_available_index_status(new_status) && !table->is_unavailable_index()) {
+      ret = OB_EAGAIN;
+      LOG_WARN("set index status to available, but previous status is not unavailable, which is not expected behavior", KR(ret), KPC(table), K(new_status));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else if (OB_FAIL(ddl_operator.update_index_status(
@@ -19867,7 +19877,7 @@ int ObDDLService::alter_system_table_column_(
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(tmp_ret));
+        LOG_WARN_RET(tmp_ret, "trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
         ret = (OB_SUCC(ret)) ? tmp_ret : ret;
       }
     }
@@ -19886,19 +19896,24 @@ int ObDDLService::add_table_schema(
     share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
   } else if (OB_FAIL(create_table_in_trans(table_schema, NULL, NULL, schema_guard))) {
     LOG_WARN("create_table_in_trans failed", KR(ret), K(table_schema));
   }
-  LOG_INFO("[UPGRADE] add inner table", KR(ret), "tenant_id", table_schema.get_tenant_id(),
-           "table_id", table_schema.get_table_id(), "table_name", table_schema.get_table_name());
+  LOG_INFO("[UPGRADE] add inner table", KR(ret),
+           "tenant_id", table_schema.get_tenant_id(),
+           "table_id", table_schema.get_table_id(),
+           "table_name", table_schema.get_table_name(),
+           "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 
 int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
   ObString *stmt = NULL;
   ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -19927,8 +19942,10 @@ int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_sch
                                          NULL, NULL, NULL))) {
     LOG_WARN("drop table in transaction failed", KR(ret), K(tenant_id), K(table_id));
   }
-  LOG_INFO("[UPGRADE] drop inner table", KR(ret), K(tenant_id), K(table_id),
-           "table_name", table_schema.get_table_name());
+  LOG_INFO("[UPGRADE] drop inner table", KR(ret),
+           K(tenant_id), K(table_id),
+           "table_name", table_schema.get_table_name(),
+           "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 
@@ -20000,10 +20017,10 @@ int ObDDLService::create_sys_tenant(
       }
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
-        LOG_INFO("end create tenant", "is_commit", OB_SUCC(ret), K(ret));
+        LOG_INFO("end create tenant", "is_commit", OB_SUCCESS == ret, K(ret));
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         }
       }
     }
@@ -21251,10 +21268,10 @@ int ObDDLService::create_tenant_end(const uint64_t tenant_id)
     }
     int temp_ret = OB_SUCCESS;
     if (trans.is_started()) {
-      LOG_INFO("end create tenant", "is_commit", OB_SUCC(ret), K(ret));
+      LOG_INFO("end create tenant", "is_commit", OB_SUCCESS == ret, K(ret));
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       }
     }
     if (tenant_trans.is_started()) {
@@ -21374,7 +21391,7 @@ int ObDDLService::commit_alter_tenant_locality(
         }
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", K(temp_ret), "is_commit", OB_SUCC(ret));
+          LOG_WARN("trans end failed", K(temp_ret), "is_commit", OB_SUCCESS == ret);
           ret = (OB_SUCCESS == ret ? temp_ret : ret);
         } else {} // ok
 
@@ -22371,7 +22388,7 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
         if (trans.is_started()) {
           int temp_ret = OB_SUCCESS;
           if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-            LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+            LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
             ret = (OB_SUCC(ret)) ? temp_ret : ret;
           }
         }
@@ -22449,7 +22466,7 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -22517,7 +22534,7 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -22907,7 +22924,7 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -23139,7 +23156,7 @@ int ObDDLService::flashback_tenant_in_trans(const share::schema::ObTenantSchema 
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -23220,7 +23237,7 @@ int ObDDLService::purge_tenant(
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -23273,7 +23290,7 @@ int ObDDLService::lock_tenant(const ObString &tenant_name, const bool is_lock)
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -23379,7 +23396,7 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -23481,7 +23498,7 @@ int ObDDLService::modify_system_variable(const ObModifySysVarArg &arg)
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -23591,7 +23608,7 @@ int ObDDLService::create_database(const bool if_not_exist,
           if (trans.is_started()) {
             int temp_ret = OB_SUCCESS;
             if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-              LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+              LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
               ret = (OB_SUCC(ret)) ? temp_ret : ret;
             }
           }
@@ -23711,7 +23728,7 @@ int ObDDLService::alter_database(const ObAlterDatabaseArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -23840,7 +23857,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -23915,7 +23932,7 @@ int ObDDLService::create_tablegroup(const bool if_not_exist,
         if (trans.is_started()) {
           int temp_ret = OB_SUCCESS;
           if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-            LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+            LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
             ret = (OB_SUCC(ret)) ? temp_ret : ret;
           }
         }
@@ -23990,7 +24007,7 @@ int ObDDLService::drop_tablegroup(const ObDropTablegroupArg &arg)
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -24079,7 +24096,7 @@ int ObDDLService::alter_tablegroup(const ObAlterTablegroupArg &arg)
     // however, end the trans
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -24125,6 +24142,10 @@ int ObDDLService::refresh_schema(uint64_t tenant_id)
         if (refresh_count > 2) {
           LOG_ERROR("refresh schema failed", K(refresh_count), "refresh_schema_interval",
               static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US), K(ret));
+          if (REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000L)) { // 10 min
+            LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
+                          "msg", "refresh schema failed", KR(ret), K(refresh_count));
+          }
         } else {
           LOG_WARN("refresh schema failed", K(refresh_count), "refresh_schema_interval",
               static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US), K(ret));
@@ -25044,7 +25065,7 @@ int ObDDLService::drop_user_in_trans(const uint64_t tenant_id,
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -25132,7 +25153,7 @@ int ObDDLService::alter_role_in_trans(const uint64_t tenant_id,
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(tmp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
         ret = (OB_SUCC(ret)) ? tmp_ret : ret;
       }
     }
@@ -25237,7 +25258,7 @@ int ObDDLService::rename_user_in_trans(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -25347,7 +25368,7 @@ int ObDDLService::set_passwd_in_trans(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -25398,7 +25419,7 @@ int ObDDLService::set_max_connection_in_trans(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -25443,7 +25464,7 @@ int ObDDLService::alter_user_require_in_trans(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -25529,7 +25550,7 @@ int ObDDLService::grant_sys_priv_to_ur(
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -25824,7 +25845,7 @@ int ObDDLService::grant(const ObGrantArg &arg)
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -26027,7 +26048,7 @@ int ObDDLService::revoke(const ObRevokeUserArg &arg)
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -26168,7 +26189,7 @@ int ObDDLService::revoke_all(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -26212,7 +26233,7 @@ int ObDDLService::grant_revoke_user(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -26397,7 +26418,7 @@ int ObDDLService::alter_user_default_role(const ObAlterUserProfileArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -26467,7 +26488,7 @@ int ObDDLService::alter_user_profile(const ObAlterUserProfileArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -26553,7 +26574,7 @@ int ObDDLService::lock_user_in_trans(const uint64_t tenant_id,
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -26632,7 +26653,7 @@ int ObDDLService::grant_database(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -26683,7 +26704,7 @@ int ObDDLService::revoke_database(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -26771,7 +26792,7 @@ int ObDDLService::revoke_syspriv(
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -26892,7 +26913,7 @@ int ObDDLService::grant_table(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -26952,7 +26973,7 @@ int ObDDLService::grant_table(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -27008,7 +27029,7 @@ int ObDDLService::revoke_table(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -27142,7 +27163,7 @@ int ObDDLService::create_outline(share::schema::ObOutlineInfo &outline_info,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -27256,7 +27277,7 @@ int ObDDLService::alter_outline_in_trans(const obrpc::ObAlterOutlineArg &arg)
           if (trans.is_started()) {
             int temp_ret = OB_SUCCESS;
             if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-              LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+              LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
               ret = (OB_SUCC(ret)) ? temp_ret : ret;
             }
           }
@@ -27371,7 +27392,7 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg &arg)
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -27429,7 +27450,7 @@ int ObDDLService::create_routine(ObRoutineInfo &routine_info,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -27508,7 +27529,7 @@ int ObDDLService::drop_routine(const ObRoutineInfo &routine_info,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -27570,7 +27591,7 @@ int ObDDLService::create_udt(ObUDTTypeInfo &udt_info,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -27609,7 +27630,7 @@ int ObDDLService::drop_udt(const ObUDTTypeInfo &udt_info,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -27655,7 +27676,7 @@ int ObDDLService::create_dblink(const obrpc::ObCreateDbLinkArg &arg, const ObStr
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("failed to end trans", K(tmp_ret), "is_commit", OB_SUCC(ret));
+        LOG_WARN("failed to end trans", K(tmp_ret), "is_commit", OB_SUCCESS == ret);
         ret = (OB_SUCC(ret)) ? tmp_ret : ret;
       }
     }
@@ -27702,7 +27723,7 @@ int ObDDLService::drop_dblink(const obrpc::ObDropDbLinkArg &arg, const ObString 
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("failed to end trans", K(temp_ret), "is_commit", OB_SUCC(ret));
+        LOG_WARN("failed to end trans", K(temp_ret), "is_commit", OB_SUCCESS == ret);
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -27802,7 +27823,7 @@ int ObDDLService::create_synonym(share::schema::ObSynonymInfo &synonym_info,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -27885,7 +27906,7 @@ int ObDDLService::drop_synonym(const obrpc::ObDropSynonymArg &arg)
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -27934,7 +27955,7 @@ int ObDDLService::create_package(ObSchemaGetterGuard &schema_guard,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -27974,7 +27995,7 @@ int ObDDLService::alter_package(ObSchemaGetterGuard &schema_guard,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -28018,7 +28039,7 @@ int ObDDLService::drop_package(const ObPackageInfo &package_info,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -28111,7 +28132,7 @@ int ObDDLService::create_trigger_in_trans(ObTriggerInfo &trigger_info,
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -28192,7 +28213,7 @@ int ObDDLService::drop_trigger_in_trans(const ObTriggerInfo &trigger_info,
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -28249,7 +28270,7 @@ int ObDDLService::alter_trigger(const ObAlterTriggerArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -28468,7 +28489,7 @@ int ObDDLService::do_sequence_ddl(const obrpc::ObSequenceDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -28562,7 +28583,7 @@ int ObDDLService::do_context_ddl(const obrpc::ObContextDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -28710,7 +28731,7 @@ int ObDDLService::handle_label_se_policy_ddl(const ObLabelSePolicyDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -28756,7 +28777,7 @@ int ObDDLService::handle_label_se_component_ddl(const ObLabelSeComponentDDLArg &
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -28803,7 +28824,7 @@ int ObDDLService::handle_label_se_label_ddl(const ObLabelSeLabelDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -28849,7 +28870,7 @@ int ObDDLService::handle_label_se_user_level_ddl(const ObLabelSeUserLevelDDLArg 
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -29044,7 +29065,7 @@ int ObDDLService::create_user_in_trans(share::schema::ObUserInfo &user_info,
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -29750,7 +29771,7 @@ int ObDDLService::drop_index_to_recyclebin(const ObTableSchema &table_schema) {
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -30103,7 +30124,7 @@ int ObDDLService::create_user_defined_function(share::schema::ObUDF &udf_info,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -30169,7 +30190,7 @@ int ObDDLService::drop_user_defined_function(const obrpc::ObDropUserDefinedFunct
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
@@ -30907,7 +30928,7 @@ int ObDDLService::do_schema_revise(const obrpc::ObSchemaReviseArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -30994,7 +31015,7 @@ int ObDDLService::do_keystore_ddl(const obrpc::ObKeystoreDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -31248,7 +31269,7 @@ int ObDDLService::do_tablespace_ddl(const obrpc::ObTablespaceDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -31316,7 +31337,7 @@ int ObDDLService::handle_profile_ddl(const ObProfileDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -31397,7 +31418,7 @@ int ObDDLService::create_directory(const obrpc::ObCreateDirectoryArg &arg, const
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -31466,7 +31487,7 @@ int ObDDLService::drop_directory(const obrpc::ObDropDirectoryArg &arg, const ObS
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -31536,7 +31557,7 @@ int ObDDLService::force_set_locality(
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -31744,13 +31765,19 @@ int ObDDLService::adjust_trigger_action_order(share::schema::ObSchemaGetterGuard
         }
         if (OB_FAIL(ret)) {
         } else if (is_oracle_mode) {
-          if (NULL != ref_trg_info) {
-            uint64_t ref_db_id = OB_INVALID_ID;
-            OZ (schema_guard.get_database_id(tenant_id, trigger_info.get_ref_trg_db_name(), ref_db_id));
-            OZ (schema_guard.get_trigger_info(tenant_id, ref_db_id, trigger_info.get_ref_trg_name(), ref_trg_info));
-            if (OB_SUCC(ret) && trigger_info.is_order_follows()) {
-              action_order = ref_trg_info->get_action_order() + 1;
+          OZ (recursive_check_trigger_ref_cyclic(schema_guard, trigger_info, trg_list,
+                                                 trigger_info.get_trigger_name(), trigger_info.get_ref_trg_name()));
+          if (OB_SUCC(ret)) {
+            if (NULL != ref_trg_info) {
+              uint64_t ref_db_id = OB_INVALID_ID;
+              OZ (schema_guard.get_database_id(tenant_id, trigger_info.get_ref_trg_db_name(), ref_db_id));
+              OZ (schema_guard.get_trigger_info(tenant_id, ref_db_id, trigger_info.get_ref_trg_name(), ref_trg_info));
+              if (OB_SUCC(ret) && trigger_info.is_order_follows()) {
+                action_order = ref_trg_info->get_action_order() + 1;
+                }
             }
+            OZ (recursive_alter_ref_trigger(schema_guard, trans, ddl_operator, trigger_info,
+                                            trg_list, trigger_info.get_trigger_name(), action_order));
           }
         } else {
           if (NULL == ref_trg_info) {
@@ -31801,9 +31828,68 @@ int ObDDLService::adjust_trigger_action_order(share::schema::ObSchemaGetterGuard
       }
     }
   }
+#undef ALTER_OLD_TRIGGER
   return ret;
 }
 
+int ObDDLService::recursive_alter_ref_trigger(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              ObDDLSQLTransaction &trans,
+                                              ObDDLOperator &ddl_operator,
+                                              const ObTriggerInfo &ref_trigger_info,
+                                              const common::ObIArray<uint64_t> &trigger_list,
+                                              const ObString &trigger_name,
+                                              int64_t action_order)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_id = ref_trigger_info.get_tenant_id();
+  const ObTriggerInfo *trg_info = NULL;
+  int64_t new_action_order = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < trigger_list.count(); i++) {
+    OZ (schema_guard.get_trigger_info(tenant_id, trigger_list.at(i), trg_info));
+    OV (OB_NOT_NULL(trg_info));
+    if (0 != trg_info->get_trigger_name().case_compare(trigger_name)) {
+      if (OB_SUCC(ret) && 0 == trg_info->get_ref_trg_name().case_compare(ref_trigger_info.get_trigger_name())) {
+        ObTriggerInfo copy_trg_info;
+        OX (new_action_order = action_order + 1);
+        OZ (copy_trg_info.assign(*trg_info));
+        OX (copy_trg_info.set_action_order(new_action_order));
+        OZ (ddl_operator.alter_trigger(copy_trg_info, trans, NULL, false/*is_update_table_schema_version*/));
+        OZ (SMART_CALL(recursive_alter_ref_trigger(schema_guard, trans, ddl_operator,
+                                                   *trg_info, trigger_list, trigger_name, new_action_order)));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::recursive_check_trigger_ref_cyclic(share::schema::ObSchemaGetterGuard &schema_guard,
+                                                     const ObTriggerInfo &ref_trigger_info,
+                                                     const common::ObIArray<uint64_t> &trigger_list,
+                                                     const ObString &create_trigger_name,
+                                                     const ObString &generate_cyclic_name)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ref_trigger_info.get_tenant_id();
+  const ObTriggerInfo *trg_info = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < trigger_list.count(); i++) {
+    OZ (schema_guard.get_trigger_info(tenant_id, trigger_list.at(i), trg_info));
+    OV (OB_NOT_NULL(trg_info));
+    if (OB_SUCC(ret)) {
+      if (0 != trg_info->get_trigger_name().case_compare(create_trigger_name)) {
+        if (0 == trg_info->get_ref_trg_name().case_compare(ref_trigger_info.get_trigger_name())) {
+          if (0 == trg_info->get_trigger_name().case_compare(generate_cyclic_name)) {
+            ret = OB_ERR_REF_CYCLIC_IN_TRG;
+            LOG_WARN("ORA-25023: cyclic trigger dependency is not allowed", K(ret),
+                     K(generate_cyclic_name), KPC(trg_info));
+          }
+          OZ (SMART_CALL(recursive_check_trigger_ref_cyclic(schema_guard, *trg_info, trigger_list,
+                                                            create_trigger_name, generate_cyclic_name)));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObDDLService::handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg)
 {
@@ -31919,7 +32005,7 @@ int ObDDLService::handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -32025,7 +32111,7 @@ int ObDDLService::handle_rls_group_ddl(const obrpc::ObRlsGroupDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -32125,7 +32211,7 @@ int ObDDLService::handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg)
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
@@ -32195,7 +32281,7 @@ int ObDDLService::recompile_all_views_batch(const uint64_t tenant_id, const ObIA
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }
@@ -32250,7 +32336,7 @@ int ObDDLService::try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
         }
       }

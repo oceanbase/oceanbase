@@ -87,7 +87,7 @@ public:
     } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
       static_cast<common::SpinRWLock *>(lock_)->unlock();
     } else {
-      STORAGE_LOG(ERROR, "unexpected lock_type", K_(lock_type));
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected lock_type", K_(lock_type));
     }
   }
 
@@ -132,7 +132,7 @@ public:
     } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
       static_cast<common::SpinRWLock *>(lock_)->unlock();
     } else {
-      STORAGE_LOG(ERROR, "unexpected lock_type", K_(lock_type));
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected lock_type", K_(lock_type));
     }
   }
 
@@ -148,7 +148,7 @@ public:
       : lock_(const_cast<MemtableMgrLock&>(lock)), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock()))) {
-      COMMON_LOG(WARN, "Fail to read lock, ", K_(ret));
+      COMMON_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
     }
   }
   ~MemMgrRLockGuard()
@@ -172,7 +172,7 @@ public:
       : lock_(const_cast<MemtableMgrLock &>(lock)), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
-      COMMON_LOG(WARN, "Fail to write lock, ", K_(ret));
+      COMMON_LOG_RET(WARN, ret_, "Fail to write lock, ", K_(ret));
     }
   }
   ~MemMgrWLockGuard()
@@ -294,7 +294,7 @@ public:
   { // do nothing
     return OB_NOT_SUPPORTED;
   }
-
+  virtual int remove_memtables_from_data_checkpoint() { return OB_SUCCESS; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   static int64_t get_memtable_idx(const int64_t pos) { return pos & (MAX_MEMSTORE_CNT - 1); }

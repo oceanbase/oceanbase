@@ -209,11 +209,21 @@ public:
 class ObTableQueryResultIterator
 {
 public:
-  ObTableQueryResultIterator() {}
+  ObTableQueryResultIterator(const ObTableQuery *query = nullptr)
+      : query_(query),
+        is_query_sync_(false)
+  {
+  }
   virtual ~ObTableQueryResultIterator() {}
   virtual int get_next_result(ObTableQueryResult *&one_result) = 0;
   virtual bool has_more_result() const = 0;
   virtual void set_one_result(ObTableQueryResult *result){ UNUSED(result); }
+  virtual ObTableQueryResult *get_one_result() { return nullptr; }
+  virtual void set_query(const ObTableQuery *query) { query_ = query; };
+  virtual void set_query_sync() { is_query_sync_ = true; }
+protected:
+  const ObTableQuery *query_;
+  bool is_query_sync_;
 };
 
 class ObTableQueryAndMutateRequest final

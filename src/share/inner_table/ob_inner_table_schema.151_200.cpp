@@ -2901,7 +2901,7 @@ int ObInnerTableSchema::all_restore_job_schema(ObTableSchema &table_schema)
 
   if (OB_SUCC(ret)) {
     ObObj value_default;
-    value_default.set_lob_value(ObLongTextType, "", strlen(""));
+    value_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
     ADD_COLUMN_SCHEMA_T("value", //column_name
       ++column_id, //column_id
       0, //rowkey_id

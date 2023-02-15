@@ -16,6 +16,7 @@
 #include "palf_env_impl.h"
 #include "palf_handle_impl.h"
 #include "rpc/frame/ob_req_transport.h"
+#include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "palf_handle.h"
 #include "palf_options.h"
@@ -52,7 +53,8 @@ int PalfEnv::create_palf_env(
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(FileDirectoryUtils::delete_tmp_file_or_directory_at(base_dir))) {
     CLOG_LOG(WARN, "delete_tmp_file_or_directory_at failed", K(ret), K(base_dir));
-  } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, transport,
+  } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, obrpc::ObRpcNetHandler::CLUSTER_ID,
+                                                   MTL_ID(), transport,
                                                    log_alloc_mgr, log_block_pool))) {
     PALF_LOG(WARN, "PalfEnvImpl init failed", K(ret), K(base_dir));
   } else if (OB_FAIL(palf_env->start_())) {
@@ -70,7 +72,7 @@ int PalfEnv::create_palf_env(
 void PalfEnv::destroy_palf_env(PalfEnv *&palf_env)
 {
   MTL_DELETE(PalfEnv, "palf_env", palf_env);
-  PALF_LOG(WARN, "destroy_palf_env success", K(palf_env));
+  PALF_LOG_RET(WARN, OB_SUCCESS, "destroy_palf_env success", K(palf_env));
 }
 
 int PalfEnv::start_()
@@ -176,6 +178,12 @@ int PalfEnv::for_each(const ObFunction<int(const PalfHandle &)> &func)
 int PalfEnv::get_io_start_time(int64_t &last_working_time)
 {
   return palf_env_impl_.get_io_start_time(last_working_time);
+}
+
+// should be removed in version 4.2.0.0
+int PalfEnv::update_replayable_point(const SCN &replayable_scn)
+{
+  return palf_env_impl_.update_replayable_point(replayable_scn);
 }
 
 } // end namespace palf

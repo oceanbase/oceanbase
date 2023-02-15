@@ -37,7 +37,7 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
 }
 #define OBJ_TYPE_CLASS_CHECK(obj, tc)\
   if (OB_UNLIKELY(obj.get_type_class() != tc)) { \
-    LOG_ERROR("unexpected error. mismatch function for comparison", K(obj), K(tc));\
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "unexpected error. mismatch function for comparison", K(obj), K(tc));\
     right_to_die_or_duty_to_live();\
   }
 
@@ -720,7 +720,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -743,7 +743,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -765,7 +765,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     OBJ_TYPE_CLASS_CHECK(obj2, ObRawTC); \
     if (CS_TYPE_BINARY != obj1.get_collation_type() \
         || CS_TYPE_BINARY != obj2.get_collation_type()) { \
-      LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(cmp_ctx.cmp_cs_type_)); \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(cmp_ctx.cmp_cs_type_)); \
     } else { \
       ret = static_cast<int>(ObCharset::strcmpsp(CS_TYPE_BINARY, obj1.v_.string_, obj1.val_len_, \
                                                  obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0); \
@@ -784,7 +784,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     OBJ_TYPE_CLASS_CHECK(obj2, ObRawTC);\
     if (CS_TYPE_BINARY != obj1.get_collation_type() \
         || CS_TYPE_BINARY != obj2.get_collation_type()) { \
-      LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(cmp_ctx.cmp_cs_type_)); \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(cmp_ctx.cmp_cs_type_)); \
     } else { \
       ret = INT_TO_CR(ObCharset::strcmpsp(CS_TYPE_BINARY, obj1.v_.string_, obj1.val_len_, \
                                           obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))); \
@@ -811,7 +811,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -846,7 +846,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -902,7 +902,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -941,7 +941,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -983,7 +983,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int64_t v2 = obj2.get_datetime();                                   \
     if (obj1.get_type() != obj2.get_type()) {                           \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {             \
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2));         \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2));         \
         ret = CR_OB_ERROR;                                              \
       } else {                                                          \
         /*same tc while not same type*/                                 \
@@ -1015,7 +1015,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int64_t v2 = obj2.get_datetime();\
     if (obj1.get_type() != obj2.get_type()) { \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) { \
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else { \
         /*same tc while not same type*/ \
@@ -1059,7 +1059,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     ObOTimestampData v2 = obj2.get_otimestamp_value();\
     if (!obj2.is_timestamp_nano()) { \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         v1.time_us_ -= cmp_ctx.tz_off_;\
@@ -1083,7 +1083,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     ObOTimestampData v2 = obj2.get_otimestamp_value(); \
     if (!obj2.is_timestamp_nano()) { \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         v1.time_us_ -= cmp_ctx.tz_off_;\
@@ -1115,7 +1115,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     v2.time_us_ = obj2.get_datetime();\
     if (!obj1.is_timestamp_nano()) {\
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         v2.time_us_ -= cmp_ctx.tz_off_;\
@@ -1139,7 +1139,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     v2.time_us_ = obj2.get_datetime();\
     if (!obj1.is_timestamp_nano()) {\
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         v2.time_us_ -= cmp_ctx.tz_off_;\
@@ -1168,7 +1168,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     ObOTimestampData v2 = obj2.get_otimestamp_value(); \
     if (obj1.is_timestamp_nano() != obj2.is_timestamp_nano()) { \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         if (obj1.is_timestamp_nano()) {\
@@ -1195,7 +1195,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     ObOTimestampData v2 = obj2.get_otimestamp_value();\
     if (obj1.is_timestamp_nano() != obj2.is_timestamp_nano()) {\
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else if (obj1.is_timestamp_nano()) {\
         v1.time_us_ -= cmp_ctx.tz_off_;\
@@ -1225,7 +1225,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     OBJ_TYPE_CLASS_CHECK(obj2, ObIntervalTC); \
     ObCmpRes ret = CR_FALSE;\
     if (obj1.get_type() != obj2.get_type()) { \
-      LOG_ERROR("different interval type can not compare", K(obj1), K(obj2)); \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "different interval type can not compare", K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
     } else if (obj1.is_interval_ym()) { \
       ret = obj1.get_interval_ym() op_str obj2.get_interval_ym() ? CR_TRUE : CR_FALSE; \
@@ -1247,7 +1247,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     OBJ_TYPE_CLASS_CHECK(obj2, ObIntervalTC); \
     ObCmpRes ret = CR_FALSE; \
     if (obj1.get_type() != obj2.get_type()) { \
-      LOG_ERROR("different interval type can not compare", K(obj1), K(obj2)); \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "different interval type can not compare", K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
     } else if (obj1.is_interval_ym()) { \
       ObIntervalYMValue v1 = obj1.get_interval_ym(); \
@@ -1282,7 +1282,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -1323,20 +1323,36 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int cmp_ret = CR_OB_ERROR;                                                                  \
     int ret = OB_SUCCESS;                                                                       \
     int result = 0;                                                                             \
-    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                           \
-    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                           \
-    ObIJsonBase *j_base1 = &j_bin1;                                                             \
-    ObIJsonBase *j_base2 = &j_bin2;                                                             \
-    if (OB_FAIL(j_bin1.reset_iter())) {                                                         \
-      LOG_WARN("fail to reset json bin1 iter", K(ret), K(obj1.val_len_));                       \
-    } else if (OB_FAIL(j_bin2.reset_iter())) {                                                  \
-      LOG_WARN("fail to reset json bin2 iter", K(ret), K(obj2.val_len_));                       \
-    } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                   \
-      LOG_WARN("fail to compare json", K(ret), K(obj1.val_len_), K(obj1.val_len_));             \
+    ObString data_str1;                                                                         \
+    ObString data_str2;                                                                         \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) {                                         \
+      LOG_ERROR("not support outrow json lobs", K(obj1), K(obj2));                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) {                                           \
+      LOG_ERROR("invalid json lob object1",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) {                                           \
+      LOG_ERROR("invalid json lob object2",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
     } else {                                                                                    \
-      cmp_ret = result op_str 0;                                                                \
+      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length());                                    \
+      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length());                                    \
+      ObIJsonBase *j_base1 = &j_bin1;                                                           \
+      ObIJsonBase *j_base2 = &j_bin2;                                                           \
+      if (OB_FAIL(j_bin1.reset_iter())) {                                                       \
+        LOG_WARN("fail to reset json bin1 iter", K(ret), K(data_str1.length()));                \
+      } else if (OB_FAIL(j_bin2.reset_iter())) {                                                \
+        LOG_WARN("fail to reset json bin2 iter", K(ret), K(data_str2.length()));                \
+      } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                 \
+        LOG_WARN("fail to compare json", K(ret), K(data_str1.length()), K(data_str2.length())); \
+      } else {                                                                                  \
+        cmp_ret = result op_str 0;                                                              \
+      }                                                                                         \
     }                                                                                           \
-                                                                                                \
     return cmp_ret;                                                                             \
   }
 
@@ -1351,18 +1367,35 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     UNUSED(cmp_ctx);                                                                            \
     int ret = OB_SUCCESS;                                                                       \
     int result = CR_OB_ERROR;                                                                   \
-    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                           \
-    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                           \
-    ObIJsonBase *j_base1 = &j_bin1;                                                             \
-    ObIJsonBase *j_base2 = &j_bin2;                                                             \
-    if (OB_FAIL(j_bin1.reset_iter())) {                                                         \
-      LOG_WARN("fail to reset json bin1 iter", K(ret), K(obj1.val_len_));                       \
-    } else if (OB_FAIL(j_bin2.reset_iter())) {                                                  \
-      LOG_WARN("fail to reset json bin2 iter", K(ret), K(obj2.val_len_));                       \
-    } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                   \
-      LOG_WARN("fail to compare json", K(ret), K(obj1.val_len_), K(obj1.val_len_));             \
+    ObString data_str1;                                                                         \
+    ObString data_str2;                                                                         \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) {                                         \
+      LOG_ERROR("not support outrow json lobs", K(obj1), K(obj2));                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) {                                           \
+      LOG_ERROR("invalid json lob object1",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) {                                           \
+      LOG_ERROR("invalid json lob object2",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
     } else {                                                                                    \
-      result = INT_TO_CR(result);                                                               \
+      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length());                                    \
+      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length());                                    \
+      ObIJsonBase *j_base1 = &j_bin1;                                                           \
+      ObIJsonBase *j_base2 = &j_bin2;                                                           \
+      if (OB_FAIL(j_bin1.reset_iter())) {                                                       \
+        LOG_WARN("fail to reset json bin1 iter", K(ret), K(data_str1.length()));                \
+      } else if (OB_FAIL(j_bin2.reset_iter())) {                                                \
+        LOG_WARN("fail to reset json bin2 iter", K(ret), K(data_str2.length()));                \
+      } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                 \
+        LOG_WARN("fail to compare json", K(ret), K(data_str1.length()), K(data_str2.length())); \
+      } else {                                                                                  \
+        result = INT_TO_CR(result);                                                             \
+      }                                                                                         \
     }                                                                                           \
                                                                                                 \
     return result;                                                                              \
@@ -1444,7 +1477,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (OB_UNLIKELY(obj1.get_type() != obj2.get_type()) ||                     \
         OB_UNLIKELY(!obj1.is_urowid())) {                                      \
       ret = CR_OB_ERROR;                                                       \
-      LOG_ERROR("only support urowid for now", K(ret));                        \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "only support urowid for now", K(ret));                        \
     } else {                                                                   \
       ret =                                                                    \
           static_cast<ObCmpRes>(obj1.get_urowid().compare(obj2.get_urowid())); \
@@ -1463,7 +1496,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (OB_UNLIKELY(obj1.get_type() != obj2.get_type()) ||                   \
         OB_UNLIKELY(!obj1.is_urowid())) {                                    \
       ret = CR_OB_ERROR;                                                     \
-      LOG_ERROR("only support urowid for now", K(ret));                      \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "only support urowid for now", K(ret));                      \
     } else {                                                                 \
       ret = obj1.get_urowid() op_str obj2.get_urowid() ? CR_TRUE : CR_FALSE; \
     }                                                                        \
@@ -1660,7 +1693,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -3729,7 +3762,7 @@ bool ObObjCmpFuncs::compare_oper_nullsafe(const ObObj &obj1,
   if (OB_UNLIKELY(ob_is_invalid_obj_type(type1)
                   || ob_is_invalid_obj_type(type2)
                   || ob_is_invalid_cmp_op_bool(cmp_op))) {
-    LOG_ERROR("invalid obj1 or obj2 or cmp_op", K(obj1), K(obj2), K(cmp_op));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid obj1 or obj2 or cmp_op", K(obj1), K(obj2), K(cmp_op));
     right_to_die_or_duty_to_live();
   } else {
     obj_cmp_func cmp_op_func = NULL;
@@ -3737,12 +3770,12 @@ bool ObObjCmpFuncs::compare_oper_nullsafe(const ObObj &obj1,
                                                   obj2.get_meta(),
                                                   cmp_op,
                                                   cmp_op_func))) {
-      LOG_ERROR("obj1 and obj2 can't compare", K(obj1), K(obj2), K(cmp_op));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "obj1 and obj2 can't compare", K(obj1), K(obj2), K(cmp_op));
       right_to_die_or_duty_to_live();
     } else {
       ObCompareCtx cmp_ctx(ObMaxType, cs_type, true, INVALID_TZ_OFF, default_null_pos());
       if (OB_UNLIKELY(CR_OB_ERROR == (cmp = cmp_op_func(obj1, obj2, cmp_ctx)))) {
-        LOG_ERROR("failed to compare obj1 and obj2", K(obj1), K(obj2), K(cmp_op));
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "failed to compare obj1 and obj2", K(obj1), K(obj2), K(cmp_op));
         right_to_die_or_duty_to_live();
       }
     }
@@ -3785,12 +3818,12 @@ int ObObjCmpFuncs::compare_nullsafe(const ObObj &obj1,
                                                 obj2.get_meta(),
                                                 CO_CMP,
                                                 cmp_func))) {
-    LOG_ERROR("obj1 and obj2 can't compare", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "obj1 and obj2 can't compare", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
     right_to_die_or_duty_to_live();
   } else {
     ObCompareCtx cmp_ctx(ObMaxType, cs_type, true, INVALID_TZ_OFF, lib::is_oracle_mode() ? NULL_LAST : NULL_FIRST);
     if (OB_UNLIKELY(CR_OB_ERROR == (cmp = cmp_func(obj1, obj2, cmp_ctx)))) {
-      LOG_ERROR("failed to compare obj1 and obj2", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "failed to compare obj1 and obj2", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
       right_to_die_or_duty_to_live();
     }
   }
@@ -3842,7 +3875,7 @@ int ObObjCmpFuncs::compare_nullsafe(const ObObj &obj1,
   // because this function is so fundamental and performance related.
   if (ob_is_invalid_obj_type(type1)
                   || ob_is_invalid_obj_type(type2)) {
-    LOG_ERROR("invalid obj1 or obj2", K(obj1), K(obj2));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid obj1 or obj2", K(obj1), K(obj2));
     right_to_die_or_duty_to_live();
   } else {
     obj_cmp_func cmp_func = NULL;
@@ -3850,10 +3883,10 @@ int ObObjCmpFuncs::compare_nullsafe(const ObObj &obj1,
                                                   obj2.get_meta(),
                                                   CO_CMP,
                                                   cmp_func))) {
-      LOG_ERROR("obj1 and obj2 can't compare", K(obj1), K(obj2));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "obj1 and obj2 can't compare", K(obj1), K(obj2));
       right_to_die_or_duty_to_live();
     } else if (OB_UNLIKELY(CR_OB_ERROR == (cmp = cmp_func(obj1, obj2, cmp_ctx)))) {
-      LOG_ERROR("failed to compare obj1 and obj2", K(obj1), K(obj2));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "failed to compare obj1 and obj2", K(obj1), K(obj2));
       right_to_die_or_duty_to_live();
     } else {
       // do nothing

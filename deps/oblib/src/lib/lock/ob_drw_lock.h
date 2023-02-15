@@ -38,14 +38,14 @@ public:
     [[nodiscard]] explicit RDLockGuard(DRWLock &rwlock): rwlock_(rwlock), ret_(OB_SUCCESS)
     {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.rdlock()))) {
-        COMMON_LOG(WARN, "Fail to read lock, ", K_(ret));
+        COMMON_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
       }
     }
     ~RDLockGuard()
     {
       if (OB_LIKELY(OB_SUCCESS == ret_)) {
         if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.rdunlock()))) {
-          COMMON_LOG(WARN, "Fail to read unlock, ", K_(ret));
+          COMMON_LOG_RET(WARN, ret_, "Fail to read unlock, ", K_(ret));
         }
       }
     }
@@ -62,14 +62,14 @@ public:
     [[nodiscard]] explicit WRLockGuard(DRWLock &rwlock): rwlock_(rwlock), ret_(OB_SUCCESS)
     {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrlock()))) {
-        COMMON_LOG(WARN, "Fail to write lock, ", K_(ret));
+        COMMON_LOG_RET(WARN, ret_, "Fail to write lock, ", K_(ret));
       }
     }
     ~WRLockGuard()
     {
       if (OB_LIKELY(OB_SUCCESS == ret_)) {
         if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrunlock()))) {
-          COMMON_LOG(WARN, "Fail to write unlock, ", K_(ret));
+          COMMON_LOG_RET(WARN, ret_, "Fail to write unlock, ", K_(ret));
         }
       }
     }
@@ -87,16 +87,16 @@ public:
     {
       while(OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrlock(timeout)))) {
         if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-          COMMON_LOG(WARN, "Fail to write lock for 10s, ", K_(ret));
+          COMMON_LOG_RET(WARN, ret_, "Fail to write lock for 10s, ", K_(ret));
         }
-        ob_usleep(timeout);
+        ob_usleep(static_cast<uint32_t>(timeout));
       }
     }
     ~WRLockGuardRetryTimeout()
     {
       if (OB_LIKELY(OB_SUCCESS == ret_)) {
         if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrunlock()))) {
-          COMMON_LOG(WARN, "Fail to write unlock, ", K_(ret));
+          COMMON_LOG_RET(WARN, ret_, "Fail to write unlock, ", K_(ret));
         }
       }
     }

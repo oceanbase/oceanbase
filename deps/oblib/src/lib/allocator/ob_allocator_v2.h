@@ -99,7 +99,7 @@ private:
       if (OB_NOT_NULL(ta)) {
         ta->get_block_mgr().free_block(block);
       } else {
-        OB_LOG(ERROR, "tenant ctx allocator is null", K(tenant_id_), K(ctx_id_));
+        OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "tenant ctx allocator is null", K(tenant_id_), K(ctx_id_));
       }
     }
     virtual int64_t sync_wash(int64_t wash_size) override

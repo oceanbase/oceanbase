@@ -218,9 +218,9 @@ void ObGlobalHint::merge_log_level_hint(const ObString &log_level)
     // do nothing
   } else if (0 == log_level.case_compare("disabled")) {
     //allowed for variables
-    LOG_WARN("Log level parse check error", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "Log level parse check error", K(tmp_ret));
   } else if (OB_UNLIKELY(tmp_ret = OB_LOGGER.parse_check(log_level.ptr(), log_level.length()))) {
-    LOG_WARN("Log level parse check error", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "Log level parse check error", K(tmp_ret));
   } else {
     log_level_.assign_ptr(log_level.ptr(), log_level.length());
   }

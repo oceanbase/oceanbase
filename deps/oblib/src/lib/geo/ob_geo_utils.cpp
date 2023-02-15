@@ -137,7 +137,7 @@ ObGeoType ObGeoTypeUtil::get_geo_type_by_name(ObString &name)
   } else if (0 == name.case_compare("geometrycollection")) {
     geo_type = ObGeoType::GEOMETRYCOLLECTION;
   } else {
-    LOG_WARN("get type by name failed", K(geo_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "get type by name failed", K(geo_type));
   }
 
   return geo_type;
@@ -176,7 +176,7 @@ const char *ObGeoTypeUtil::get_geo_name_by_type(ObGeoType type)
       break;
     }
     default:{
-      LOG_WARN("unknown geometry type", K(type));
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "unknown geometry type", K(type));
       break;
     }
   }

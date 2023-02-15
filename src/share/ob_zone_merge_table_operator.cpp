@@ -32,13 +32,14 @@ using namespace oceanbase::common::sqlclient;
 int ObZoneMergeTableOperator::load_zone_merge_info(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    ObZoneMergeInfo &info)
+    ObZoneMergeInfo &info,
+    const bool print_sql)
 {
   int ret = OB_SUCCESS;
   ObArray<ObZoneMergeInfo> infos;
   if (OB_FAIL(infos.push_back(info))) {
     LOG_WARN("fail to push back zone merge info", KR(ret), K(info));
-  } else if (OB_FAIL(load_zone_merge_infos(sql_client, tenant_id, infos))) {
+  } else if (OB_FAIL(load_zone_merge_infos(sql_client, tenant_id, infos, print_sql))) {
     LOG_WARN("fail to load zone merge infos", KR(ret), K(info));
   } else if (OB_UNLIKELY(infos.count() != 1)) {
     ret = OB_ERR_UNEXPECTED;
@@ -52,9 +53,10 @@ int ObZoneMergeTableOperator::load_zone_merge_info(
 int ObZoneMergeTableOperator::load_zone_merge_infos(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    ObIArray<ObZoneMergeInfo> &infos)
+    ObIArray<ObZoneMergeInfo> &infos,
+    const bool print_sql)
 {
-  return inner_load_zone_merge_infos_(sql_client, tenant_id, infos);
+  return inner_load_zone_merge_infos_(sql_client, tenant_id, infos, print_sql);
 }
 
 int ObZoneMergeTableOperator::insert_zone_merge_info(
@@ -110,6 +112,14 @@ int ObZoneMergeTableOperator::update_partial_zone_merge_info(
             if (it->is_scn_) {
               if (OB_FAIL(dml.add_uint64_column(it->name_, it->get_scn_val()))) {
                 LOG_WARN("fail to add scn column", KR(ret), K(tenant_id), K(info), K(*it));
+              } else if (dml.get_extra_condition().empty()) {
+                if (OB_FAIL(dml.get_extra_condition().assign_fmt("%s < %ld", it->name_, it->get_scn_val()))) {
+                  LOG_WARN("fail to assign extra_condition", KR(ret), K(tenant_id));
+                }
+              } else {
+                if (OB_FAIL(dml.get_extra_condition().append_fmt(" AND %s < %ld", it->name_, it->get_scn_val()))) {
+                  LOG_WARN("fail to assign extra_condition", KR(ret), K(tenant_id));
+                }
               }
             } else {
               if (OB_FAIL(dml.add_uint64_column(it->name_, it->value_))) {
@@ -128,6 +138,10 @@ int ObZoneMergeTableOperator::update_partial_zone_merge_info(
         } else if (!(is_single_row(affected_rows) || is_zero_row(affected_rows))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("unexpected affected rows", KR(ret), K(affected_rows), K(meta_tenant_id), K(info));
+        } else if (is_zero_row(affected_rows)) {
+          if (OB_FAIL(check_scn_revert(sql_client, tenant_id, info))) {
+            LOG_WARN("fail to check scn revert", KR(ret), K(tenant_id));
+          }
         }
       } else {
         ret = OB_INVALID_ARGUMENT;
@@ -321,7 +335,8 @@ int ObZoneMergeTableOperator::get_zone_list(
 int ObZoneMergeTableOperator::inner_load_zone_merge_infos_(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    ObIArray<ObZoneMergeInfo> &infos)
+    ObIArray<ObZoneMergeInfo> &infos,
+    const bool print_sql)
 {
   int ret = OB_SUCCESS;
 
@@ -376,6 +391,9 @@ int ObZoneMergeTableOperator::inner_load_zone_merge_infos_(
           ret = OB_SUCCESS;
         }
       }
+    }
+    if (print_sql) {
+      LOG_INFO("finish load_zone_merge_info", KR(ret), K(tenant_id), K(sql));
     }
   }
   return ret;
@@ -445,6 +463,61 @@ int ObZoneMergeTableOperator::construct_zone_merge_info_(
     }
   }
   
+  return ret;
+}
+
+int ObZoneMergeTableOperator::check_scn_revert(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const share::ObZoneMergeInfo &info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(info));
+  } else {
+    HEAP_VAR(ObZoneMergeInfo, zone_merge_info) {
+      zone_merge_info.tenant_id_ = tenant_id;
+      zone_merge_info.zone_ = info.zone_;
+      if (OB_FAIL(ObZoneMergeTableOperator::load_zone_merge_info(sql_client, tenant_id,
+                                                                 zone_merge_info))) {
+        LOG_WARN("fail to load zone merge info", KR(ret), K(tenant_id));
+      } else {
+        const ObMergeInfoItem *it = info.list_.get_first();
+        while (OB_SUCC(ret) && (it != info.list_.get_header())) {
+          if (NULL == it) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("null item", KR(ret), KP(it), K(tenant_id), K(info));
+          } else {
+            if (it->need_update_ && it->is_scn_) {
+              if (0 == STRCMP(it->name_, "frozen_scn")) {
+                if (it->get_scn() < zone_merge_info.frozen_scn_.get_scn()) {
+                  LOG_ERROR("frozen_scn revert", K(tenant_id), "origin_frozen_scn", it->get_scn(),
+                    "new_frozen_scn", zone_merge_info.frozen_scn_.get_scn());
+                }
+              } else if (0 == STRCMP(it->name_, "broadcast_scn")) {
+                if (it->get_scn() < zone_merge_info.broadcast_scn_.get_scn()) {
+                  LOG_ERROR("broadcast_scn revert", K(tenant_id), "origin_broadcast_scn",
+                    it->get_scn(), "new_broadcast_scn", zone_merge_info.broadcast_scn_.get_scn());
+                }
+              } else if (0 == STRCMP(it->name_, "last_merged_scn")) {
+                if (it->get_scn() < zone_merge_info.last_merged_scn_.get_scn()) {
+                  LOG_ERROR("last_merged_scn revert", K(tenant_id), "origin_last_merged_scn",
+                    it->get_scn(), "new_last_merged_scn", zone_merge_info.last_merged_scn_.get_scn());
+                }
+              } else if (0 == STRCMP(it->name_, "all_merged_scn")) {
+                if (it->get_scn() < zone_merge_info.all_merged_scn_.get_scn()) {
+                  LOG_ERROR("all_merged_scn revert", K(tenant_id), "origin_all_merged_scn",
+                    it->get_scn(), "new_all_merged_scn", zone_merge_info.all_merged_scn_.get_scn());
+                }
+              }
+            }
+            it = it->get_next();
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 

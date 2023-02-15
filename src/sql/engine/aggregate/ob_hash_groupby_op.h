@@ -363,6 +363,7 @@ private:
   int insert_distinct_data();
   int finish_insert_distinct_data();
   int init_distinct_info(bool is_part);
+  void reset_distinct_info();
 
   int batch_insert_distinct_data(const ObBatchRows &child_brs);
   int batch_insert_all_distinct_data(const int64_t batch_size);

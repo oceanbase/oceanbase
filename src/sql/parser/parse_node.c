@@ -505,17 +505,24 @@ void ob_parse_binary(const char *src, int64_t len, char *dest)
   if (OB_UNLIKELY(NULL == src || len <= 0 || NULL == dest)) {
     //do nothing
   } else {
+    bool is_odd = false;
     if (len > 0 && len % 2 != 0)
     {
       *dest = char_int(src[0]);
       ++src;
       ++dest;
+      is_odd = true;
     }
-    const char *end = src + len -1;
-    for (; src <= end; src += 2)
-    {
-      *dest = (char)(16*char_int(src[0]) + char_int(src[1]));
-      ++dest;
+    if (len == 1) {
+      //do nothing.
+    } else {
+      //for odd number, we have copy the first char,  so we should minus 2;
+      const char *end = src + len - (is_odd ? 2 : 1);
+      for (; src <= end; src += 2)
+      {
+        *dest = (char)(16*char_int(src[0]) + char_int(src[1]));
+        ++dest;
+      }
     }
   }
 }

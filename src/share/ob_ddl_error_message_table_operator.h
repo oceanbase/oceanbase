@@ -56,7 +56,7 @@ public:
   static int extract_index_key(const share::schema::ObTableSchema &index_schema, const common::ObStoreRowkey &index_key,
     char *buffer, const int64_t buffer_len);
   static int load_ddl_user_error(const uint64_t tenant_id, const int64_t task_id, const uint64_t table_id, 
-      const int64_t schema_version, common::ObMySQLProxy &sql_proxy, ObBuildDDLErrorMessage &error_message);
+      common::ObMySQLProxy &sql_proxy, ObBuildDDLErrorMessage &error_message);
   static int get_ddl_error_message(const uint64_t tenant_id, const int64_t task_id, const int64_t target_object_id,
       const common::ObAddr &addr, const bool is_ddl_retry_task, common::ObMySQLProxy &sql_proxy, ObBuildDDLErrorMessage &error_message, 
       int64_t &forward_user_msg_len);

@@ -58,6 +58,7 @@ struct ObDasAggregatedTasks
   bool has_failed_tasks() const { return failed_tasks_.get_size() > 0; };
   int failed_tasks_can_retry() const;
   bool has_unstart_tasks() const;
+  bool has_unstart_high_priority_tasks() const;
   int32_t get_unstart_task_size() const;
   TO_STRING_KV(K_(server), K(high_priority_tasks_.get_size()), K(tasks_.get_size()), K(failed_tasks_.get_size()), K(success_tasks_.get_size()));
   common::ObAddr server_;

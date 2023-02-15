@@ -44,10 +44,10 @@ OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRespMsg, ObTxMsg, prepare_version_, prep
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPreCommitReqMsg, ObTxMsg, commit_version_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPreCommitRespMsg, ObTxMsg, commit_version_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcCommitReqMsg, ObTxMsg, commit_version_, prepare_info_array_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcCommitRespMsg, ObTxMsg, commit_version_);
+OB_SERIALIZE_MEMBER_INHERIT(Ob2pcCommitRespMsg, ObTxMsg, commit_version_, commit_log_scn_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcAbortReqMsg, ObTxMsg, upstream_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcAbortRespMsg, ObTxMsg);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcClearReqMsg, ObTxMsg);
+OB_SERIALIZE_MEMBER_INHERIT(Ob2pcClearReqMsg, ObTxMsg, max_commit_log_scn_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcClearRespMsg, ObTxMsg);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRedoReqMsg, ObTxMsg, xid_, upstream_, app_trace_info_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRedoRespMsg, ObTxMsg);
@@ -288,12 +288,15 @@ bool Ob2pcCommitReqMsg::is_valid() const
   return ret;
 }
 
-bool Ob2pcCommitRespMsg::is_valid() const
-{
+bool Ob2pcCommitRespMsg::is_valid() const {
   bool ret = false;
-  if (ObTxMsg::is_valid() && type_ == TX_2PC_COMMIT_RESP
-      && commit_version_.is_valid()) {
+  if (ObTxMsg::is_valid() && type_ == TX_2PC_COMMIT_RESP &&
+      commit_version_.is_valid()) {
     ret = true;
+  }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0 &&
+      !commit_log_scn_.is_valid()) {
+    ret = false;
   }
   return ret;
 }
@@ -316,11 +319,14 @@ bool Ob2pcAbortRespMsg::is_valid() const
   return ret;
 }
 
-bool Ob2pcClearReqMsg::is_valid() const
-{
+bool Ob2pcClearReqMsg::is_valid() const {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == TX_2PC_CLEAR_REQ) {
     ret = true;
+  }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0 &&
+      !max_commit_log_scn_.is_valid()) {
+    ret = false;
   }
   return ret;
 }

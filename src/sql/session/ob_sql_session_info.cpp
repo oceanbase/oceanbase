@@ -127,7 +127,6 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       trans_type_(transaction::ObTxClass::USER),
       version_provider_(NULL),
       config_provider_(NULL),
-      with_tenant_ctx_(NULL),
       request_manager_(NULL),
       flt_span_mgr_(NULL),
       sql_plan_manager_(NULL),
@@ -151,6 +150,7 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       pl_query_sender_(NULL),
       pl_ps_protocol_(false),
       is_ob20_protocol_(false),
+      is_session_var_sync_(false),
       last_plan_id_(0),
       pl_sync_pkg_vars_(NULL),
       inner_conn_(NULL),
@@ -236,8 +236,14 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
 
 void ObSQLSessionInfo::destroy_session_plan_mgr()
 {
+  int ret = OB_SUCCESS;
   if (NULL != plan_table_manager_) {
-    ObSqlPlanMgr::mtl_destroy(plan_table_manager_);
+    MTL_SWITCH(get_priv_tenant_id()) {
+      ObSqlPlanMgr *sql_plan_mgr = MTL(ObSqlPlanMgr*);
+      if (sql_plan_mgr != NULL) {
+        sql_plan_mgr->destroy_plan_table_manager(plan_table_manager_);
+      }
+    }
   }
 }
 
@@ -278,10 +284,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     config_provider_ = NULL;
     request_manager_ = NULL;
     flt_span_mgr_ = NULL;
-    if (NULL != with_tenant_ctx_) {
-      with_tenant_ctx_->~ObTenantSpaceFetcher();
-      with_tenant_ctx_ = NULL;
-    }
     MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
     ps_cache_ = NULL;
     found_rows_ = 1;
@@ -339,6 +341,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     auto_flush_trace_ = false;
     coninfo_set_by_sess_ = false;
     is_ob20_protocol_ = false;
+    is_session_var_sync_ = false;
     int temp_ret = OB_SUCCESS;
     dblink_context_.reset();
     sql_req_level_ = 0;
@@ -758,23 +761,8 @@ ObMySQLRequestManager* ObSQLSessionInfo::get_request_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == request_manager_) {
-    uint64_t t_id = get_priv_tenant_id();
-    with_tenant_ctx_ = new(tenant_buff_) share::ObTenantSpaceFetcher(t_id);
-    if (OB_FAIL(with_tenant_ctx_->get_ret())) {
-      if (OB_TENANT_NOT_IN_SERVER == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        SERVER_LOG(WARN, "failed to switch tenant context", K(t_id), K(ret));
-      }
-    } else if (NULL == with_tenant_ctx_){
-      request_manager_ = NULL;
-    } else {
-      ObTenantBase* tenant = with_tenant_ctx_->entity().get_tenant();
-      if (NULL == tenant) {
-        request_manager_ = NULL;
-      } else {
-        request_manager_ = tenant->get<obmysql::ObMySQLRequestManager*>();
-      }
+    MTL_SWITCH(get_priv_tenant_id()) {
+      request_manager_ = MTL(obmysql::ObMySQLRequestManager*);
     }
   }
 
@@ -785,61 +773,37 @@ sql::ObFLTSpanMgr* ObSQLSessionInfo::get_flt_span_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == flt_span_mgr_) {
-    uint64_t t_id = get_priv_tenant_id();
-    with_tenant_ctx_ = new(tenant_buff_) share::ObTenantSpaceFetcher(t_id);
-    if (OB_FAIL(with_tenant_ctx_->get_ret())) {
-      if (OB_TENANT_NOT_IN_SERVER == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        SERVER_LOG(WARN, "failed to switch tenant context", K(t_id), K(ret));
-      }
-    } else if (NULL == with_tenant_ctx_){
-      flt_span_mgr_ = NULL;
-    } else {
-      ObTenantBase* tenant = with_tenant_ctx_->entity().get_tenant();
-      if (NULL == tenant) {
-        flt_span_mgr_ = NULL;
-      } else {
-        flt_span_mgr_ = tenant->get<sql::ObFLTSpanMgr*>();
-      }
+    MTL_SWITCH(get_priv_tenant_id()) {
+      flt_span_mgr_ = MTL(sql::ObFLTSpanMgr*);
     }
   }
   return flt_span_mgr_;
 }
 
-ObSqlPlanMgr* ObSQLSessionInfo::get_sql_plan_manager()
+ObPlanItemMgr* ObSQLSessionInfo::get_sql_plan_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == sql_plan_manager_) {
-    uint64_t t_id = get_priv_tenant_id();
-    with_tenant_ctx_ = new(tenant_buff_) share::ObTenantSpaceFetcher(t_id);
-    if (OB_FAIL(with_tenant_ctx_->get_ret())) {
-      if (OB_TENANT_NOT_IN_SERVER == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        SERVER_LOG(WARN, "failed to switch tenant context", K(t_id), K(ret));
-      }
-    } else if (NULL == with_tenant_ctx_){
-      sql_plan_manager_ = NULL;
-    } else {
-      ObTenantBase* tenant = with_tenant_ctx_->entity().get_tenant();
-      if (NULL == tenant) {
-        sql_plan_manager_ = NULL;
-      } else {
-        sql_plan_manager_ = tenant->get<ObSqlPlanMgr*>();
+    MTL_SWITCH(get_priv_tenant_id()) {
+      ObSqlPlanMgr* sql_plan_mgr = MTL(ObSqlPlanMgr*);
+      if (sql_plan_mgr != NULL) {
+        sql_plan_manager_ = sql_plan_mgr->get_plan_item_mgr();
       }
     }
   }
   return sql_plan_manager_;
 }
 
-ObSqlPlanMgr* ObSQLSessionInfo::get_plan_table_manager()
+ObPlanItemMgr* ObSQLSessionInfo::get_plan_table_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == plan_table_manager_) {
-    if (OB_FAIL(ObSqlPlanMgr::init_plan_manager(get_effective_tenant_id(),
-                                                plan_table_manager_))) {
-      LOG_WARN("failed to init plan manager", K(ret));
+    MTL_SWITCH(get_priv_tenant_id()) {
+      ObSqlPlanMgr* sql_plan_mgr = MTL(ObSqlPlanMgr*);
+      if (NULL != sql_plan_mgr &&
+          OB_FAIL(sql_plan_mgr->init_plan_table_manager(plan_table_manager_))) {
+        LOG_WARN("failed to init plan table manager", K(ret));
+      }
     }
   }
   return plan_table_manager_;
@@ -893,16 +857,18 @@ ObPlanCache *ObSQLSessionInfo::get_plan_cache()
     //release old plancache and get new
     ObPCMemPctConf pc_mem_conf;
     if (OB_SUCCESS != get_pc_mem_conf(pc_mem_conf)) {
-      LOG_ERROR("fail to get pc mem conf");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fail to get pc mem conf");
       plan_cache_ = NULL;
     } else {
       plan_cache_ = MTL(ObPlanCache*);
       if (OB_ISNULL(plan_cache_)) {
-        LOG_WARN("failed to get plan cache");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to get plan cache");
       } else if (MTL_ID() != get_effective_tenant_id()) {
-        LOG_ERROR("unmatched tenant_id", K(MTL_ID()), K(get_effective_tenant_id()));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unmatched tenant_id", K(MTL_ID()), K(get_effective_tenant_id()));
+      } else if (plan_cache_->is_inited()) {
+        // skip update mem conf
       } else if (OB_SUCCESS != plan_cache_->set_mem_conf(pc_mem_conf)) {
-        LOG_ERROR("fail to set plan cache memory conf");
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fail to set plan cache memory conf");
       }
     }
   }
@@ -1221,7 +1187,7 @@ ObPLCursorInfo *ObSQLSessionInfo::get_cursor(int64_t cursor_id)
 {
   ObPLCursorInfo *cursor = NULL;
   if (OB_SUCCESS != pl_cursor_cache_.pl_cursor_map_.get_refactored(cursor_id, cursor)) {
-    LOG_WARN("get cursor info failed", K(cursor_id), K(get_sessid()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cursor info failed", K(cursor_id), K(get_sessid()));
   }
   return cursor;
 }
@@ -1446,7 +1412,7 @@ ObTraceEventRecorder* ObSQLSessionInfo::get_trace_buf()
   if (NULL == trace_recorder_) {
     void *ptr = name_pool_.alloc(sizeof(ObTraceEventRecorder));
     if (NULL == ptr) {
-      LOG_WARN("fail to alloc trace recorder");
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc trace recorder");
     } else {
       trace_recorder_ = new (ptr) ObTraceEventRecorder(false, ObLatchIds::SESSION_TRACE_RECORDER_LOCK);
     }
@@ -1716,7 +1682,7 @@ void ObSQLSessionInfo::update_alive_time_stat()
 void ObSQLSessionInfo::set_session_type_with_flag()
 {
   if (OB_UNLIKELY(INVALID_TYPE == session_type_)) {
-    LOG_WARN("session type is not init, only happen when old server send rpc to new server");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "session type is not init, only happen when old server send rpc to new server");
     session_type_ = inner_flag_ ? INNER_SESSION : USER_SESSION;
   }
 }
@@ -2351,7 +2317,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&sort_area_size_, tenant_config->_sort_area_size);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
-        LOG_WARN("fail get tenant_config", "ret", tmp_ret,
+        LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,
                                            K(session_->get_priv_tenant_id()),
                                            K(effective_tenant_id),
                                            K(lbt()));
@@ -2406,7 +2372,7 @@ void* ObSQLSessionInfo::get_piece_cache(bool need_init) {
                             get_effective_tenant_id())) {
         get_session_allocator().free(piece_cache_);
         piece_cache_ = NULL;
-        LOG_WARN("init piece cache fail");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "init piece cache fail");
       }
     }
   }
@@ -2637,7 +2603,9 @@ int ObSysVarEncoder::serialize(ObSQLSessionInfo &sess, char *buf,
     LOG_WARN("failed to serialize sys var delta", K(ret), K(sys_var_delta_ids.count()),
                                       KPHEX(buf+pos, length-pos), K(length-pos), K(pos));
   } else {
-    LOG_DEBUG("success serialize sys var delta", K(ret), K(sys_var_delta_ids.count()), K(pos));
+    LOG_TRACE("success serialize sys var delta", K(ret), K(sys_var_delta_ids),
+              "inc sys var ids", sess.sys_var_inc_info_.get_all_sys_var_ids(),
+              K(sess.get_sessid()), K(sess.get_proxy_sessid()));
   }
   return ret;
 }
@@ -2964,9 +2932,9 @@ int64_t ObSQLSessionInfo::get_xa_end_timeout_seconds() const
     if (NULL != xa_timeout_value) {
       int64_t tmp_val = 0;
       if (OB_SUCCESS != (tmp_ret = xa_timeout_value->get_number().cast_to_int64(tmp_val))) {
-        LOG_WARN("failed to get xa timeout", K(tmp_ret), K(tmp_val));
+        LOG_WARN_RET(tmp_ret, "failed to get xa timeout", K(tmp_ret), K(tmp_val));
       } else if (0 >= tmp_val) {
-        LOG_WARN("invalid xa timeout", K(tmp_val));
+        LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid xa timeout", K(tmp_val));
       } else {
         ret_val = tmp_val;
         LOG_INFO("get xa timeout from user variable", K(ret_val), "session_id", get_sessid());

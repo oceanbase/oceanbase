@@ -116,7 +116,7 @@ TEST_F(TestSSTableRowExister, single_exist)
 int main(int argc, char **argv)
 {
   system("rm -f test_sstable_row_exister.log*");
-  OB_LOGGER.set_file_name("test_sstable_row_exister.log", true, true);
+  OB_LOGGER.set_file_name("test_sstable_row_exister.log", false, true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

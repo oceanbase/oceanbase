@@ -36,7 +36,7 @@ int64_t ObSimpleBatch::get_serialize_size(void) const
   if (T_NONE == type_) {
     /*do nothing*/
   } else if (OB_ISNULL(range_)) {
-    LOG_ERROR("NULL data on calc size", K(range_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "NULL data on calc size", K(range_));
   } else if (T_SCAN == type_) {
     len += range_->get_serialize_size();
   } else if (T_MULTI_SCAN == type_) {

@@ -263,6 +263,8 @@ int ObPrimaryStandbyService::do_recover_tenant(const obrpc::ObRecoverTenantArg &
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   common::ObMySQLTransaction trans;
   const ObSimpleTenantSchema *tenant_schema = nullptr;
+  ObLSRecoveryStatOperator ls_recovery_operator;
+  ObLSRecoveryStat sys_ls_recovery;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
   } else if (!arg.is_valid()) {
@@ -293,15 +295,20 @@ int ObPrimaryStandbyService::do_recover_tenant(const obrpc::ObRecoverTenantArg &
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("tenant switchover_status is not NORMAL", K(tenant_info));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant switchover_status is not NORMAL, recover is");
+  } else if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, share::SYS_LS,
+                     true /*for_update*/, sys_ls_recovery, trans))) {
+    LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id));
   } else if (obrpc::ObRecoverTenantArg::RecoverType::UNTIL == arg.get_type()
-              && (arg.get_recovery_until_scn() < tenant_info.get_sync_scn())) {
+              && (arg.get_recovery_until_scn() < tenant_info.get_sync_scn()
+                  || arg.get_recovery_until_scn() < sys_ls_recovery.get_sync_scn())) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("recover before sync_scn is not allow", KR(ret), K(tenant_info), K(tenant_id), K(arg));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover before sync_scn is");
+    LOG_WARN("recover before tenant sync_scn or SYS LS sync_scn is not allow", KR(ret), K(tenant_info),
+             K(tenant_id), K(arg), K(sys_ls_recovery));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover before tenant sync_scn or SYS LS sync_scn is");
   } else if (tenant_schema->is_normal()) {
     ObLogRestoreSourceMgr restore_source_mgr;
     const SCN &recovery_until_scn = obrpc::ObRecoverTenantArg::RecoverType::UNTIL == arg.get_type() ?
-                                        arg.get_recovery_until_scn() : tenant_info.get_sync_scn();
+          arg.get_recovery_until_scn() : SCN::max(tenant_info.get_sync_scn(), sys_ls_recovery.get_sync_scn());
     if (tenant_info.get_recovery_until_scn() == recovery_until_scn) {
       LOG_WARN("recovery_until_scn is same with original", KR(ret), K(tenant_info), K(tenant_id), K(arg));
     } else if (OB_FAIL(restore_source_mgr.init(tenant_id, &trans))) {
@@ -415,7 +422,7 @@ int ObPrimaryStandbyService::switch_to_standby(
           ObTenantRoleTransitionService role_transition_service(tenant_id, sql_proxy_, GCTX.srv_rpc_proxy_, switch_optype);
 
           (void)role_transition_service.set_switchover_epoch(tenant_info.get_switchover_epoch());
-          if (OB_FAIL(role_transition_service.do_switch_access_mode_to_raw_rw(tenant_info, STANDBY_TENANT_ROLE))) {
+          if (OB_FAIL(role_transition_service.do_switch_access_mode_to_raw_rw(tenant_info))) {
             LOG_WARN("failed to do_switch_access_mode", KR(ret), K(tenant_id), K(tenant_info));
           } else if (OB_FAIL(role_transition_service.switchover_update_tenant_status(tenant_id,
                                                      false /* switch_to_standby */,
@@ -497,7 +504,7 @@ int ObPrimaryStandbyService::update_tenant_status_before_sw_to_standby_(
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), KR(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, KR(temp_ret));
       ret = OB_SUCC(ret) ? temp_ret : ret;
     }
   }
@@ -522,6 +529,7 @@ int ObPrimaryStandbyService::switch_to_standby_prepare_ls_status_(
   share::ObLSAttrOperator ls_operator(tenant_id, sql_proxy_);
   share::schema::ObSchemaGetterGuard schema_guard;
   const share::schema::ObTenantSchema *tenant_schema = NULL;
+  int64_t new_switchover_epoch = OB_INVALID_VERSION;
 
   if (!is_user_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -531,6 +539,10 @@ int ObPrimaryStandbyService::switch_to_standby_prepare_ls_status_(
     LOG_WARN("schema_service_ is NULL", KR(ret));
   } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
+  } else if (OB_UNLIKELY(!status.is_prepare_switching_to_standby_status())) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("switchover status not match, switchover to standby not allow", KR(ret), K(status));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "switchover status not match, switchover to standby");
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
@@ -548,18 +560,20 @@ int ObPrimaryStandbyService::switch_to_standby_prepare_ls_status_(
     if (OB_FAIL(tenant_stat.process_ls_status_missmatch(true/* lock_sys_ls */,
                                    share::PREP_SWITCHING_TO_STANDBY_SWITCHOVER_STATUS))) {
       LOG_WARN("failed to process_ls_status_missmatch", KR(ret));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_switchover_status(
-           tenant_id, sql_proxy_, switchover_epoch,
-           status, share::SWITCHING_TO_STANDBY_SWITCHOVER_STATUS))) {
-      LOG_WARN("failed to update tenant switchover status", KR(ret), K(tenant_id),
-               K(switchover_epoch), K(status));
+    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
+                    tenant_id, sql_proxy_, switchover_epoch,
+                    share::STANDBY_TENANT_ROLE, status,
+                    share::SWITCHING_TO_STANDBY_SWITCHOVER_STATUS, new_switchover_epoch))) {
+      LOG_WARN("failed to update tenant role", KR(ret), K(tenant_id), K(switchover_epoch));
     } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
                        tenant_id, sql_proxy_, false, new_tenant_info))) {
       LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
-    } else if (OB_UNLIKELY(new_tenant_info.get_switchover_epoch() != switchover_epoch)) {
+    } else if (OB_UNLIKELY(new_tenant_info.get_switchover_epoch() != new_switchover_epoch)) {
       ret = OB_NEED_RETRY;
       LOG_WARN("switchover is concurrency", KR(ret), K(switchover_epoch), K(new_tenant_info));
     }
+
+    DEBUG_SYNC(SWITCHING_TO_STANDBY);
   }
 
   return ret;

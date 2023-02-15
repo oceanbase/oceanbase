@@ -93,7 +93,7 @@ void hook_sigsegv_msg(int sig, siginfo_t *si, void *context)
     // thread_name
     char tname[16];
     prctl(PR_GET_NAME, tname);
-    _OB_LOG(ERROR, "CRASH ERROR!!! sig=%d, sig_code=%d, sig_addr=%p, tid=%ld, tname=%s",
+    _OB_LOG_RET(ERROR, OB_ERROR, "CRASH ERROR!!! sig=%d, sig_code=%d, sig_addr=%p, tid=%ld, tname=%s",
             sig, si->si_code, si->si_addr, GETTID(), tname);
   }
 }

@@ -47,13 +47,13 @@ int ObRpcHandler::process(easy_request_t *r)
   ObTimeGuard timeguard("ObRpcHandler::process", OB_EASY_HANDLER_COST_TIME);
   if (OB_ISNULL(r) || OB_ISNULL(r->ipacket)) {
     eret = EASY_ERROR;
-    LOG_ERROR("request is empty", K(eret), K(r));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "request is empty", K(eret), K(r));
   } else if (OB_ISNULL(r->ms) || OB_ISNULL(r->ms->pool)) {
     eret = EASY_ERROR;
-    LOG_ERROR("Easy message session(ms) or ms->pool is NULL", K(eret), "ms", r->ms);
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "Easy message session(ms) or ms->pool is NULL", K(eret), "ms", r->ms);
   } else if (OB_ISNULL(r->ms->c) || OB_ISNULL(r->ms->c->pool)) {
     eret = EASY_ERROR;
-    LOG_ERROR("Easy ms connect(c) or (c->pool)is NULL", K(eret), "connect", r->ms->c);
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "Easy ms connect(c) or (c->pool)is NULL", K(eret), "connect", r->ms->c);
   } else {
     // TODO: fufeng, check copy new request is necessary.
     timeguard.click();
@@ -61,7 +61,7 @@ int ObRpcHandler::process(easy_request_t *r)
     timeguard.click();
     if (OB_UNLIKELY(NULL == buf)) {
       eret = EASY_ERROR;
-      LOG_WARN("alloc easy memory fail", K(eret));
+      LOG_WARN_RET(common::OB_ALLOCATE_MEMORY_FAILED, "alloc easy memory fail", K(eret));
     } else {
       ObRpcRequest *req = new (buf) ObRpcRequest(ObRpcRequest::OB_RPC);
       const ObRpcPacket *pkt = reinterpret_cast<ObRpcPacket*>(r->ipacket);
@@ -84,7 +84,7 @@ int ObRpcHandler::process(easy_request_t *r)
         easy_atomic_dec(&r->ms->c->pool->ref);
         easy_atomic_dec(&r->ms->pool->ref);
         if (OB_QUEUE_OVERFLOW == eret) {
-          LOG_WARN("deliver request fail", K(eret), K(*req));
+          LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "deliver request fail", K(eret), K(*req));
         }
         eret = EASY_OK;
       }

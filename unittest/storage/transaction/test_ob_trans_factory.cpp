@@ -107,7 +107,7 @@ TEST_F(TestObTransFactory, init_reset)
   uint64_t tenant_id = 1001;
   ls_tx_ctx_mgr = ObLSTxCtxMgrFactory::alloc(tenant_id);
   if (NULL == ls_tx_ctx_mgr) {
-    TRANS_LOG(WARN, "ObLSTxCtxMgr memory alloc error");
+    TRANS_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "ObLSTxCtxMgr memory alloc error");
   } else {
     EXPECT_EQ(1, ObLSTxCtxMgrFactory::get_alloc_count());
   }
@@ -120,7 +120,7 @@ TEST_F(TestObTransFactory, init_reset)
   // alloc for ClogBuf object
   clog_buf = ClogBufFactory::alloc();
   if (NULL == clog_buf) {
-    TRANS_LOG(WARN, "ClogBuf memory alloc error");
+    TRANS_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "ClogBuf memory alloc error");
   } else {
     EXPECT_EQ(1, ClogBufFactory::get_alloc_count());
   }
@@ -134,7 +134,7 @@ TEST_F(TestObTransFactory, init_reset)
   // alloc for TransRpcTask object
   trans_rpc_task = TransRpcTaskFactory::alloc();
   if (NULL == trans_rpc_task) {
-    TRANS_LOG(WARN, "TransRpcTaskFactory memory alloc error");
+    TRANS_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "TransRpcTaskFactory memory alloc error");
   } else {
     EXPECT_EQ(1, TransRpcTaskFactory::get_alloc_count());
   }
@@ -148,7 +148,7 @@ TEST_F(TestObTransFactory, init_reset)
   // alloc for MutatorBuf object
   mutator_buf = MutatorBufFactory::alloc();
   if (NULL == mutator_buf) {
-    TRANS_LOG(WARN, "MutatorBufFactory memory alloc error");
+    TRANS_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "MutatorBufFactory memory alloc error");
   } else {
     EXPECT_EQ(1, MutatorBufFactory::get_alloc_count());
   }

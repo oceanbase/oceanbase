@@ -51,7 +51,7 @@ void *ObMemtableCtx::callback_alloc(const int64_t size)
 {
   void* ret = NULL;
   if (OB_ISNULL(ret = std::malloc(size))) {
-    TRANS_LOG(ERROR, "callback alloc error, no memory", K(size), K(*this));
+    TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback alloc error, no memory", K(size), K(*this));
   } else {
     ATOMIC_FAA(&callback_mem_used_, size);
     ATOMIC_INC(&callback_alloc_count_);
@@ -62,7 +62,7 @@ void *ObMemtableCtx::callback_alloc(const int64_t size)
 void ObMemtableCtx::callback_free(ObITransCallback *cb)
 {
   if (OB_ISNULL(cb)) {
-    TRANS_LOG(ERROR, "cb is null, unexpected error", KP(cb), K(*this));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
   } else {
     ATOMIC_INC(&callback_free_count_);
     std::free(cb);
@@ -3013,6 +3013,52 @@ TEST_F(TestMemtableV2, test_seq_set_violation)
                                                                read_info_,
                                                                columns_,
                                                                write_row)));
+  memtable->destroy();
+}
+
+TEST_F(TestMemtableV2, test_parallel_lock_with_same_txn)
+{
+  int ret = OB_SUCCESS;
+  ObMemtable *memtable = create_memtable();
+
+  TRANS_LOG(INFO, "######## CASE1: lock row into memtable parallelly");
+  ObDatumRowkey rowkey;
+  ObStoreRow write_row;
+  EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
+                                 2, /*value*/
+                                 rowkey,
+                                 write_row));
+
+  ObTransID write_tx_id = ObTransID(1);
+  ObStoreCtx *wtx = start_tx(write_tx_id);
+  share::SCN scn_1000;
+  scn_1000.convert_for_tx(1000);
+
+  // Step1: prepare the global sequence
+  ObSequence::inc();
+  int64_t read_seq_no = ObSequence::get_max_seq_no();
+
+  // Step2: init the mvcc acc ctx
+  wtx->mvcc_acc_ctx_.type_ = ObMvccAccessCtx::T::WRITE;
+  wtx->mvcc_acc_ctx_.snapshot_.tx_id_ = wtx->mvcc_acc_ctx_.tx_id_;
+  wtx->mvcc_acc_ctx_.snapshot_.version_ = scn_1000;
+  wtx->mvcc_acc_ctx_.snapshot_.scn_ = read_seq_no;
+  const int64_t abs_expire_time = 10000000000 + ::oceanbase::common::ObTimeUtility::current_time();
+  wtx->mvcc_acc_ctx_.abs_lock_timeout_ = abs_expire_time;
+  wtx->mvcc_acc_ctx_.tx_scn_ = ObSequence::inc_and_get_max_seq_no();
+
+  // Step3: lock for the first time
+  EXPECT_EQ(OB_SUCCESS, (ret = memtable->lock(*wtx,
+                                              tablet_id_.id(),
+                                              read_info_,
+                                              rowkey)));
+
+  // Step4: lock for the second time
+  wtx->mvcc_acc_ctx_.tx_scn_ = ObSequence::inc_and_get_max_seq_no();
+  EXPECT_EQ(OB_SUCCESS, (ret = memtable->lock(*wtx,
+                                              tablet_id_.id(),
+                                              read_info_,
+                                              rowkey)));
   memtable->destroy();
 }
 

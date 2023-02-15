@@ -40,6 +40,8 @@ public:
   int begin();
   int finish();
   int commit(sql::ObExecContext &ctx, table::ObTableLoadResultInfo &result_info);
+  int px_commit_data(sql::ObExecContext &ctx);
+  int px_commit_ddl();
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
 private:
   int pre_begin_peers();

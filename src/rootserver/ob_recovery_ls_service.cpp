@@ -26,6 +26,7 @@
 #include "observer/ob_server_struct.h"              //GCTX
 #include "rootserver/ob_primary_ls_service.h"       //ObTenantLSInfo
 #include "rootserver/ob_tenant_recovery_reportor.h" //ObTenantRecoveryReportor
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/ls/ob_ls_life_manager.h"            //ObLSLifeManger
 #include "share/ls/ob_ls_operator.h"                //ObLSAttr
 #include "share/ls/ob_ls_recovery_stat_operator.h"  //ObLSRecoveryLSStatOperator
@@ -100,16 +101,16 @@ void ObRecoveryLSService::do_work()
     while (!has_set_stop()) {
       ObCurTraceId::init(GCONF.self_addr_);
       uint64_t thread_idx = get_thread_idx();
-      ObTenantRecoveryReportor *tenant_report = MTL(ObTenantRecoveryReportor*);
+      ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
       ObAllTenantInfo tenant_info;
       //two thread for seed log and recovery_ls_manager 
       if (!is_user_tenant(tenant_id_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls recovery thread must run on user tenant", KR(ret), K(tenant_id_));
-      } else if (OB_ISNULL(tenant_report)) {
+      } else if (OB_ISNULL(tenant_info_loader)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tenant report is null", KR(ret), K(tenant_id_));
-      } else if (OB_FAIL(tenant_report->get_tenant_info(tenant_info))) {
+      } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
         LOG_WARN("failed to get tenant info", KR(ret));
       } else if (OB_FAIL(check_can_do_recovery_(tenant_info))) {
         LOG_WARN("failed to check do recovery", KR(ret), K(tenant_info));
@@ -612,7 +613,7 @@ int ObRecoveryLSService::check_valid_to_operator_ls_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("syns scn is invalid", KR(ret), K(sync_scn), K(ls_attr));
   } else if (share::is_ls_tenant_drop_pre_op(ls_attr.get_ls_operatin_type())) {
-    ret = OB_ITER_END;
+    ret = OB_ITER_STOP;
     LOG_WARN("can not process ls operator after tenant dropping", K(ls_attr));
   } else if (share::is_ls_tenant_drop_op(ls_attr.get_ls_operatin_type())) {
     ret = OB_ERR_UNEXPECTED;

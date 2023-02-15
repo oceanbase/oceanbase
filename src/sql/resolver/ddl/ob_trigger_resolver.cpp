@@ -1035,6 +1035,7 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
                   (ObPLPackageAST, package_body_ast, allocator)) {
       ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
       const ObString &pkg_name = trigger_info.get_package_body_info().get_package_name();
+      ObString source;
       ObPLCompiler compiler(allocator, *session_info, schema_guard, package_guard, *sql_proxy);
       const ObPackageInfo &package_spec_info = trigger_info.get_package_spec_info();
       OZ (package_spec_ast.init(db_name,
@@ -1044,7 +1045,10 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
                                 package_spec_info.get_package_id(),
                                 package_spec_info.get_schema_version(),
                                 NULL));
-      OZ (compiler.analyze_package(trigger_info.get_package_spec_source(), NULL, package_spec_ast, true));
+      OZ (ObTriggerInfo::gen_package_source(trigger_info.get_tenant_id(),
+                                            trigger_info.get_trigger_spec_package_id(trigger_info.get_trigger_id()),
+                                            source, true, schema_guard, allocator));
+      OZ (compiler.analyze_package(source, NULL, package_spec_ast, true));
       OZ (package_body_ast.init(db_name,
                                 pkg_name,
                                 PL_PACKAGE_BODY,
@@ -1052,7 +1056,10 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
                                 trigger_info.get_package_body_info().get_package_id(),
                                 trigger_info.get_package_body_info().get_schema_version(),
                                 &package_spec_ast));
-      OZ (compiler.analyze_package(trigger_info.get_package_body_source(),
+      OZ (ObTriggerInfo::gen_package_source(trigger_info.get_tenant_id(),
+                                            trigger_info.get_trigger_body_package_id(trigger_info.get_trigger_id()),
+                                            source, false, schema_guard, allocator));
+      OZ (compiler.analyze_package(source,
                                    &(package_spec_ast.get_body()->get_namespace()),
                                    package_body_ast,
                                    true));

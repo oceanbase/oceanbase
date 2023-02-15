@@ -90,7 +90,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
     common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
     ObArray<int64_t> idxs;
     const int64_t current_time = ObTimeUtility::current_time();
-    const int64_t rpc_timeout = ObDDLUtil::get_ddl_rpc_timeout();
+    int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
     const bool force_renew = true;
     bool is_cache_hit = false;
     const int64_t expire_renew_time = force_renew ? INT64_MAX : 0;
@@ -127,7 +127,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
             LOG_WARN("get leader failed", K(ret), K(tenant_id_), K(ls_id));
           } else if (FALSE_IT(arg.ls_id_ = ls_id)) {
           } else if (OB_FAIL(proxy.call(leader_addr, rpc_timeout, tenant_id_, arg))) {
-            LOG_WARN("fail to send rpc", K(ret));
+            LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
           } else if (OB_FAIL(idxs.push_back(i))) {
             LOG_WARN("fail to push back idx", K(ret));
           } else {

@@ -84,7 +84,7 @@ int TransDispatchCtx::reblance_budget(
 
       if (total_count <= 0) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("trans not dispatch finish but no more part to dispatch", KR(ret), K_(dispatched_part_count), K_(total_part_count));
+        LOG_ERROR("trans not dispatch finish but no more part to dispatch", KR(ret), K_(dispatched_part_count), K_(total_part_count), K(total_count));
       } else {
         // currenttly all part equal share budget, high_priority_part_budget_arr_ is not used
         // TODO: use sort feedback info to reblance budget!!
@@ -111,7 +111,26 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
 {
   for(int64_t i = 0; i < normal_priority_part_budget_arr_.count(); i++) {
     PartTransDispatchBudget &budget = normal_priority_part_budget_arr_[i];
-    budget.reset_budget(average_budget);
+    PartTransTask *part_trans_task = budget.part_trans_task_;
+
+    if (average_budget <= 0
+        && OB_NOT_NULL(part_trans_task)
+        && part_trans_task->is_dispatched_redo_be_sorted()) {
+      const int64_t extra_redo_dispatch_size = TCONF.extra_redo_dispatch_memory_size;
+
+      if (REACH_TIME_INTERVAL(1 * _SEC_)) {
+        LOG_INFO("[NOTICE][REDO_DISPATCH] budget usedup but dispatched_redo all sorted, use extra_redo budget",
+            K(budget),
+            K(average_budget),
+            "extra_redo_dispatch_size", SIZE_TO_STR(extra_redo_dispatch_size),
+            "part_trans_task", part_trans_task->get_part_trans_info(),
+            "redo_sorted_progress", part_trans_task->get_sorted_redo_list().sorted_progress_);
+      }
+
+      budget.reset_budget(extra_redo_dispatch_size);
+    } else {
+      budget.reset_budget(average_budget);
+    }
   }
 }
 

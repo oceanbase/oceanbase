@@ -2976,12 +2976,12 @@ bool ObSchemaMgr::check_schema_meta_consistent()
   // Check the number of foreign keys here, if not, you need to rebuild
   if (!is_consistent_) {
     // false == is_consistent, do nothing
-    LOG_WARN("fk or cst info is not consistent");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "fk or cst info is not consistent");
   }
 
   if (database_infos_.count() != database_name_map_.item_count()) {
     is_consistent_ = false;
-    LOG_WARN("database info is not consistent",
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "database info is not consistent",
              "database_infos_count", database_infos_.count(),
              "database_name_map_item_count", database_name_map_.item_count());
   }
@@ -2995,7 +2995,7 @@ bool ObSchemaMgr::check_schema_meta_consistent()
          lob_piece_infos_.count() +
          hidden_table_name_map_.item_count())) {
     is_consistent_ = false;
-    LOG_WARN("schema meta is not consistent, need rebuild",
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "schema meta is not consistent, need rebuild",
              "schema_mgr version", get_schema_version(),
              "table_infos_count", table_infos_.count(),
              "table_id_map_item_count", table_id_map_.item_count(),
@@ -3041,8 +3041,17 @@ int ObSchemaMgr::rebuild_schema_meta_if_not_consistent()
     }
     // Check whether db and table are consistent
     if (!check_schema_meta_consistent()) {
-      ret = OB_ERROR;
-      LOG_ERROR("schema meta is still not consistent after rebuild, need fixing", K(ret));
+      ret = OB_DUPLICATE_OBJECT_NAME_EXIST;
+      LOG_ERROR("schema meta is still not consistent after rebuild, need fixing", KR(ret), K_(tenant_id));
+      LOG_DBA_ERROR(OB_DUPLICATE_OBJECT_NAME_EXIST,
+                    "msg", "duplicate table/database/foreign key/constraint exist", K_(tenant_id),
+                    "db_cnt", database_infos_.count(), "db_name_cnt", database_name_map_.item_count(),
+                    "table_cnt", table_infos_.count(), "table_id_cnt", table_id_map_.item_count(),
+                    "table_name_cnt", table_name_map_.item_count(), "index_name_cnt", index_name_map_.item_count(),
+                    "aux_vp_name_cnt", aux_vp_name_map_.item_count(), "lob_meta_cnt", lob_meta_infos_.count(),
+                    "log_piece_cnt", lob_piece_infos_.count(), "hidden_table_cnt", hidden_table_name_map_.item_count(),
+                    "fk_cnt", fk_cnt, "fk_name_cnt", foreign_key_name_map_.item_count(),
+                    "cst_cnt", cst_cnt, "cst_name_cnt", constraint_name_map_.item_count());
       right_to_die_or_duty_to_live();
     }
   }
@@ -3347,7 +3356,7 @@ uint64_t ObSchemaMgr::extract_data_table_id_from_index_name(const ObString &inde
   ObString data_table_id_str;
   uint64_t data_table_id = OB_INVALID_ID;
   if (!index_name.prefix_match(OB_INDEX_PREFIX)) {
-    LOG_WARN("index table name not in valid format", K(index_name));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(index_name));
   } else {
     pos = strlen(OB_INDEX_PREFIX);
     while (NULL != index_name.ptr() &&
@@ -3356,9 +3365,9 @@ uint64_t ObSchemaMgr::extract_data_table_id_from_index_name(const ObString &inde
       ++pos;
     }
     if (pos + 1 >= index_name.length()) {
-      LOG_WARN("index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
     } else if ('_' != *(index_name.ptr() + pos)) {
-      LOG_WARN("index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
     } else {
       data_table_id_str.assign_ptr(
           index_name.ptr() + strlen(OB_INDEX_PREFIX),

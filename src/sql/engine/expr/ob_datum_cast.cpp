@@ -366,7 +366,7 @@ int ObDatumHexUtils::rawtohex(const ObExpr &expr, const ObString &in_str,
         ObScale res_scale = -1;
         char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
         MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
-        int64_t length = ob_gcvt_opt(in_val, OB_GCVT_ARG_FLOAT, sizeof(buf) - 1,
+        int64_t length = ob_gcvt_opt(in_val, OB_GCVT_ARG_FLOAT, static_cast<int32_t>(sizeof(buf) - 1),
                                      buf, NULL, TRUE, TRUE);
         ObString float_str(sizeof(buf), static_cast<int32_t>(length), buf);
         number::ObNumber nmb;
@@ -384,7 +384,7 @@ int ObDatumHexUtils::rawtohex(const ObExpr &expr, const ObString &in_str,
         ObScale res_scale = -1;
         char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
         MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
-        int64_t length = ob_gcvt_opt(in_val, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1,
+        int64_t length = ob_gcvt_opt(in_val, OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1),
                                      buf, NULL, TRUE, TRUE);
         ObString double_str(sizeof(buf), static_cast<int32_t>(length), buf);
         number::ObNumber nmb;
@@ -1880,7 +1880,7 @@ static int common_floating_number(const IN_TYPE in_val,
   MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
   int64_t length = 0;
   if (lib::is_oracle_mode() || OB_GCVT_ARG_DOUBLE == arg_type) {
-    length = ob_gcvt_opt(in_val, arg_type, sizeof(buf) - 1,
+    length = ob_gcvt_opt(in_val, arg_type, static_cast<int32_t>(sizeof(buf) - 1),
                          buf, NULL, lib::is_oracle_mode(), TRUE);
   } else {
     length = ob_gcvt(in_val, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL);
@@ -1939,7 +1939,7 @@ static int common_floating_string(const ObExpr &expr,
     if (0 <= scale) {
       length = ob_fcvt(in_val, scale, sizeof(buf) - 1, buf, NULL);
     } else {
-      length = ob_gcvt_opt(in_val, arg_type, sizeof(buf) - 1,
+      length = ob_gcvt_opt(in_val, arg_type, static_cast<int32_t>(sizeof(buf) - 1),
                            buf, NULL, lib::is_oracle_mode(), TRUE);
     }
   }
@@ -7682,6 +7682,7 @@ int get_accuracy_from_parse_node(const ObExpr &expr, ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObDatum *dst_type_dat = NULL;
+  ObExprResType dst_type;
   if (OB_UNLIKELY(2 != expr.arg_cnt_) || OB_ISNULL(expr.args_) ||
       OB_ISNULL(expr.args_[1])) {
     ret = OB_ERR_UNEXPECTED;
@@ -7689,9 +7690,28 @@ int get_accuracy_from_parse_node(const ObExpr &expr, ObEvalCtx &ctx,
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, dst_type_dat))) {
     LOG_WARN("eval dst type datum failed", K(ret));
   } else {
+    int64_t maxblen = ObCharset::CharConvertFactorNum;
     ParseNode node;
     node.value_ = dst_type_dat->get_int();
-    dest_type = static_cast<ObObjType>(node.int16_values_[0]);
+    ObObjType obj_type = static_cast<ObObjType>(node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+    dst_type.set_collation_type(static_cast<ObCollationType>(node.int16_values_[OB_NODE_CAST_COLL_IDX]));
+    dst_type.set_type(obj_type);
+    int64_t text_length = node.int32_values_[1];
+    if (lib::is_mysql_mode() && !dst_type.is_binary() && !dst_type.is_varbinary()) {
+      dst_type.set_full_length(node.int32_values_[OB_NODE_CAST_C_LEN_IDX], expr.datum_meta_.length_semantics_);
+      if (dst_type.get_length() > OB_MAX_CAST_CHAR_VARCHAR_LENGTH && dst_type.get_length() <= OB_MAX_CAST_CHAR_TEXT_LENGTH) {
+        dst_type.set_type(ObTextType);
+        dst_type.set_length(OB_MAX_CAST_CHAR_TEXT_LENGTH);
+      } else if (dst_type.get_length() > OB_MAX_CAST_CHAR_TEXT_LENGTH && dst_type.get_length() <= OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH) {
+        dst_type.set_type(ObMediumTextType);
+        dst_type.set_length(OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH);
+      } else if (dst_type.get_length() > OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH) {
+        dst_type.set_type(ObLongTextType);
+        dst_type.set_length(OB_MAX_LONGTEXT_LENGTH / maxblen);
+      }
+      text_length = dst_type.get_length();
+    }
+    dest_type = dst_type.get_type();
     ObObjTypeClass dest_tc = ob_obj_type_class(dest_type);
     if (ObStringTC == dest_tc) {
       // parser will abort all negative number
@@ -7701,8 +7721,8 @@ int get_accuracy_from_parse_node(const ObExpr &expr, ObEvalCtx &ctx,
     } else if (ObRawTC == dest_tc) {
       accuracy.set_length(node.int32_values_[1]);
     } else if(ObTextTC == dest_tc || ObJsonTC == dest_tc) {
-      accuracy.set_length(node.int32_values_[1] < 0 ?
-          ObAccuracy::DDL_DEFAULT_ACCURACY[dest_type].get_length() : node.int32_values_[1]);
+      accuracy.set_length(text_length < 0 ?
+          ObAccuracy::DDL_DEFAULT_ACCURACY[dest_type].get_length() : text_length);
     } else if (ObIntervalTC == dest_tc) {
       if (OB_UNLIKELY(!ObIntervalScaleUtil::scale_check(node.int16_values_[3]) ||
                       !ObIntervalScaleUtil::scale_check(node.int16_values_[2]))) {

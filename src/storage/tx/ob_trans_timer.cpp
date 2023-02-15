@@ -66,11 +66,11 @@ uint64_t ObTransTimeoutTask::hash() const
 {
   uint64_t hv = 0;
   if (NULL == ctx_) {
-    TRANS_LOG(ERROR, "ctx is null, unexpected error", KP_(ctx));
+    TRANS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "ctx is null, unexpected error", KP_(ctx));
   } else {
     const ObTransID &trans_id = ctx_->get_trans_id();
     if (!trans_id.is_valid()) {
-      TRANS_LOG(WARN, "ObTransID is invalid", K(trans_id));
+      TRANS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "ObTransID is invalid", K(trans_id));
     } else {
       hv = trans_id.hash();
     }
@@ -84,16 +84,16 @@ void ObTransTimeoutTask::runTimerTask()
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
 
   if (!is_inited_) {
-    TRANS_LOG(WARN, "ObTransTimeoutTask not inited");
+    TRANS_LOG_RET(WARN, OB_NOT_INIT, "ObTransTimeoutTask not inited");
   } else if (NULL == ctx_) {
-    TRANS_LOG(ERROR, "ctx is null, unexpected error", KP_(ctx));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "ctx is null, unexpected error", KP_(ctx));
     tmp_ret = OB_ERR_UNEXPECTED;
   } else {
     if (OB_SUCCESS != (tmp_ret = ctx_->handle_timeout(delay_))) {
-      TRANS_LOG(WARN, "handle timeout error", "ret", tmp_ret, "context", *ctx_);
+      TRANS_LOG_RET(WARN, tmp_ret, "handle timeout error", "ret", tmp_ret, "context", *ctx_);
     }
     if (NULL == (ls_tx_ctx_mgr = ctx_->get_ls_tx_ctx_mgr())) {
-      TRANS_LOG(WARN, "get partition mgr error", "context", *ctx_);
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get partition mgr error", "context", *ctx_);
     } else {
       (void)ls_tx_ctx_mgr->revert_tx_ctx(ctx_);
     }
@@ -132,11 +132,11 @@ uint64_t ObTxTimeoutTask::hash() const
 {
   uint64_t hv = 0;
   if (NULL == tx_desc_) {
-    TRANS_LOG(ERROR, "tx_desc is null, unexpected error", KP_(tx_desc));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "tx_desc is null, unexpected error", KP_(tx_desc));
   } else {
     const ObTransID &trans_id = tx_desc_->tid();
     if (!trans_id.is_valid()) {
-      TRANS_LOG(WARN, "ObTransID is invalid", K(trans_id));
+      TRANS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "ObTransID is invalid", K(trans_id));
     } else {
       hv = trans_id.hash();
     }
@@ -158,7 +158,8 @@ void ObTxTimeoutTask::runTimerTask()
     // because the handle_tx_commit_timeout may cause tx terminate
     // its execution and release all resource include current object
     // it is unsafe to use any member field after call handle func.
-    DEFER_C({ txs_->release_tx_ref(*tx_desc_); });
+    auto txs = txs_; auto tx_desc = tx_desc_;
+    DEFER({ txs->release_tx_ref(*tx_desc); });
     if (tx_desc_->is_xa_trans()) {
       if (OB_FAIL(txs_->handle_timeout_for_xa(*tx_desc_, delay_))) {
         TRANS_LOG(WARN, "fail to handle timeout", K(ret), KPC_(tx_desc));
@@ -257,9 +258,9 @@ void ObTransTimer::destroy()
   if (is_inited_) {
     if (is_running_) {
       if (OB_SUCCESS != (tmp_ret = stop())) {
-        TRANS_LOG(WARN, "ObTransTimer stop error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "ObTransTimer stop error", K(tmp_ret));
       } else if (OB_SUCCESS != (tmp_ret = wait())) {
-        TRANS_LOG(WARN, "ObTransTimer wait error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "ObTransTimer wait error", K(tmp_ret));
       } else {
         // do nothing
       }

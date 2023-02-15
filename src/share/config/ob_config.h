@@ -221,7 +221,7 @@ public:
   ObConfigIntListItem &operator=(const char *str)
   {
     if (!set_value(str)) {
-      OB_LOG(WARN, "obconfig int list item set value failed");
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obconfig int list item set value failed");
     }
     return *this;
   }
@@ -289,7 +289,7 @@ public:
   ObConfigStrListItem &operator=(const char *str)
   {
     if (!set_value(str)) {
-      OB_LOG(WARN, "obconfig str list item set value failed");
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obconfig str list item set value failed");
     }
     return *this;
   }
@@ -474,7 +474,7 @@ inline ObConfigDoubleItem &ObConfigDoubleItem::operator = (double value)
   char buf[2L<<10];
   (void) snprintf(buf, sizeof(buf), "%f", value);
   if (!set_value(buf)) {
-    OB_LOG(WARN, "obconfig double item set value failed");
+    OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obconfig double item set value failed");
   }
   return *this;
 }
@@ -521,7 +521,7 @@ inline ObConfigCapacityItem &ObConfigCapacityItem::operator = (int64_t value)
   char buf[2L<<10];
   (void) snprintf(buf, sizeof(buf), "%ldB", value);
   if (!set_value(buf)) {
-    OB_LOG(WARN, "obconfig capacity item set value failed");
+    OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obconfig capacity item set value failed");
   }
   return *this;
 }
@@ -553,7 +553,7 @@ inline ObConfigTimeItem &ObConfigTimeItem::operator = (int64_t value){
   char buf[2L<<10];
   (void) snprintf(buf, sizeof(buf), "%ldus", value);
   if (!set_value(buf)) {
-    OB_LOG(WARN, "obconfig time item set value failed");
+    OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obconfig time item set value failed");
   }
   return *this;
 }
@@ -589,7 +589,7 @@ inline ObConfigIntItem &ObConfigIntItem::operator = (int64_t value)
   char buf[64];
   (void) snprintf(buf, sizeof(buf), "%ld", value);
   if (!set_value(buf)) {
-    OB_LOG(WARN, "obconfig int item set value failed");
+    OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obconfig int item set value failed");
   }
   return *this;
 }
@@ -721,7 +721,7 @@ public:
   ObConfigLogArchiveOptionsItem &operator=(const char *str)
   {
     if (!set_value(str)) {
-      OB_LOG(WARN, "obconfig log archive options item set value failed");
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obconfig log archive options item set value failed");
     }
     return *this;
   }

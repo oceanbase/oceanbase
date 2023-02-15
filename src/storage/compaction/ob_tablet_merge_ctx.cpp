@@ -203,6 +203,7 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObTabletMergeCtx &ctx,
     param.index_type_ = ctx.get_schema()->get_index_type();
     param.rowkey_column_cnt_ = ctx.get_schema()->get_rowkey_column_num()
         + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    param.latest_row_store_type_ = ctx.get_schema()->get_row_store_type();
     if (is_minor_merge_type(ctx.param_.merge_type_)) {
       param.recycle_version_ = ctx.sstable_version_range_.base_version_;
     } else {
@@ -468,7 +469,7 @@ void ObCompactionTimeGuard::add_time_guard(const ObCompactionTimeGuard &other)
     if (line_array_[i] == other.line_array_[i]) {
       click_poinsts_[i] += other.click_poinsts_[i];
     } else {
-      LOG_WARN("failed to add_time_guard", KPC(this), K(other));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to add_time_guard", KPC(this), K(other));
       break;
     }
   }
@@ -957,7 +958,8 @@ int ObTabletMergeCtx::cal_major_merge_param(const ObGetMergeTablesResult &get_me
     const ObSSTableBasicMeta &base_meta = base_table->get_meta().get_basic_meta();
     if (base_table->get_meta().get_column_count() != get_schema()->get_column_count()
         || base_meta.compressor_type_ != get_schema()->get_compressor_type()
-        || base_meta.row_store_type_ != get_schema()->row_store_type_) {
+        || (ObRowStoreType::DUMMY_ROW_STORE != base_meta.latest_row_store_type_
+          && base_meta.latest_row_store_type_ != get_schema()->row_store_type_)) {
       is_schema_changed = true;
     }
 
@@ -1349,7 +1351,7 @@ void ObTabletMergeCtx::collect_running_info()
   }
 
   if (OB_TMP_FAIL(MTL(storage::ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(sstable_merge_info))) {
-    LOG_WARN("failed to add sstable merge info ", K(tmp_ret), K(sstable_merge_info));
+    LOG_WARN_RET(tmp_ret, "failed to add sstable merge info ", K(tmp_ret), K(sstable_merge_info));
   }
 }
 

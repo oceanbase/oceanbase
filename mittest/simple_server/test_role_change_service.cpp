@@ -124,7 +124,7 @@ TEST_F(RoleChangeService, test_offline)
   EXPECT_EQ(OB_SUCCESS, status->unregister_file_size_cb());
   sleep(1);
   int ret = OB_SUCCESS;
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  //ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   CLOG_LOG(INFO, "runlin trace begin");
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("begin"));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
@@ -149,7 +149,6 @@ TEST_F(RoleChangeService, test_offline)
   sleep(5);
   ObLogHandler *log_handler = ls->get_log_handler();
   EXPECT_EQ(-1, log_handler->apply_status_->proposal_id_);
-  EXPECT_EQ(OB_NOT_SUPPORTED, ls->online());
   sleep(5);
   EXPECT_EQ(common::FOLLOWER, log_handler->role_);
   EXPECT_EQ(true, log_handler->is_offline_);

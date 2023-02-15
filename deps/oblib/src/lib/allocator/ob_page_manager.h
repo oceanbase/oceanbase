@@ -208,7 +208,7 @@ inline ABlock *ObPageManager::alloc_block(uint64_t size, const ObMemAttr &attr)
 inline void ObPageManager::free_block(ABlock *block)
 {
   if (OB_UNLIKELY(get_itid() != itid_)) {
-    _OB_LOG(ERROR, "cross thread not supported, pm_tid: %ld, cur_tid: %ld", itid_, get_itid());
+    _OB_LOG_RET(ERROR, OB_ERROR, "cross thread not supported, pm_tid: %ld, cur_tid: %ld", itid_, get_itid());
   } else if (OB_LIKELY(block != nullptr)) {
     abort_unless(block);
     abort_unless(block->is_valid());

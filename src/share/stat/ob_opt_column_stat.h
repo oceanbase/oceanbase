@@ -72,7 +72,7 @@ class ObHistogram
 public:
   friend class ObOptColumnStat;
 
-  typedef ObArray<ObHistBucket> Buckets;
+  typedef ObArrayWrap<ObHistBucket> Buckets;
   enum class BoundType {
     LOWER,
     UPPER,
@@ -94,6 +94,7 @@ public:
   void reset();
 
   int deep_copy(const ObHistogram &src, char *buf, const int64_t buf_len, int64_t &pos);
+  int assign(const ObHistogram &other);
   int64_t deep_copy_size() const;
 
   bool is_valid() const
@@ -126,6 +127,10 @@ public:
   void set_pop_frequency(int64_t pop_freq) { pop_freq_ = pop_freq; }
   int64_t get_pop_count() const { return pop_count_; }
   void set_pop_count(int64_t pop_count) { pop_count_ = pop_count; }
+
+  int prepare_allocate_buckets(ObIAllocator &allocator, const int64_t bucket_size);
+  int add_bucket(const ObHistBucket &bucket);
+  int assign_buckets(const ObIArray<ObHistBucket> &buckets);
 
   void calc_density(ObHistType hist_type,
                     const int64_t row_count,
@@ -259,8 +264,6 @@ public:
 
   const ObHistogram &get_histogram() const { return histogram_; }
   ObHistogram &get_histogram() { return histogram_; }
-
-  int add_bucket(int64_t repeat_count, const ObObj &value, int64_t num_elements);
   int64_t get_bucket_num() const { return histogram_.get_bucket_cnt(); }
 
   virtual int64_t size() const override;

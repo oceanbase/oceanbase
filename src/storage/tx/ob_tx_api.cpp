@@ -161,6 +161,8 @@ int ObTransService::release_tx(ObTxDesc &tx)
 int ObTransService::reuse_tx(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
+  int spin_cnt = 0;
+  int final_ref_cnt = 0;
   ObTransID orig_tx_id = tx.tx_id_;
   if (tx.is_in_tx() && !tx.is_tx_end()) {
     ret = OB_ERR_UNEXPECTED;
@@ -168,15 +170,18 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
   } else if (OB_FAIL(finalize_tx_(tx))) {
     TRANS_LOG(WARN, "finalize tx fail", K(ret), K(tx.tx_id_));
   } else {
-    int cnt = 0;
-    int final_ref_cnt = tx.commit_cb_lock_.self_locked() ? 2 : 1;
+    final_ref_cnt = tx.commit_cb_lock_.self_locked() ? 2 : 1;
     while (tx.get_ref() > final_ref_cnt) {
       PAUSE();
-      if (++cnt > 100) { ob_usleep(500); }
-      if (cnt > 2000 && TC_REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
+      if (++spin_cnt > 2000) {
         TRANS_LOG(WARN, "blocking to wait tx referent quiescent cost too much time",
-                  "tx_id", orig_tx_id, KP(&tx), K(final_ref_cnt), K(tx.get_ref()));
+                  "tx_id", orig_tx_id, KP(&tx), K(final_ref_cnt), K(spin_cnt), K(tx.get_ref()));
         tx.print_trace();
+        usleep(2000000); // 2s
+      } else if (spin_cnt > 200) {
+        usleep(2000);    // 2ms
+      } else if (spin_cnt > 100) {
+        usleep(200);     // 200us
       }
     }
     // it is safe to operate tx without lock when not shared
@@ -189,6 +194,9 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
   REC_TRANS_TRACE_EXT(&tlog, reuse, OB_Y(ret),
                       OB_ID(addr), (void*)&tx,
                       OB_ID(txid), orig_tx_id,
+                      OB_ID(tag1), spin_cnt,
+                      OB_ID(tag2), final_ref_cnt,
+                      OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
 }
@@ -829,7 +837,7 @@ int ObTransService::create_implicit_savepoint(ObTxDesc &tx,
   } else if (tx.state_ >= ObTxDesc::State::IN_TERMINATE) {
     ret = OB_TRANS_INVALID_STATE;
     TRANS_LOG(WARN, "create implicit savepoint but tx terminated", K(ret), K(tx));
-  } else if (tx.flags_.SHADOW_) {
+  } else if (tx.flags_.SHADOW_ && tx.get_tx_id().is_valid()) {
     ret = create_local_implicit_savepoint_(tx, savepoint);
   } else {
     ret = create_global_implicit_savepoint_(tx, tx_param, savepoint, release);
@@ -1637,7 +1645,7 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
     }
     if (tx.active_ts_ > 0) { // skip txn has not active
       if (tx.finish_ts_ <= 0) {
-        TRANS_LOG(WARN, "tx finish ts is unset", K(tx));
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx finish ts is unset", K(tx));
       } else if (tx.finish_ts_ > tx.active_ts_) {
         TX_STAT_TIME_USED(tx.finish_ts_ - tx.active_ts_);
       }

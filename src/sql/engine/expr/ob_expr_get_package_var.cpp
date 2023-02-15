@@ -130,18 +130,18 @@ int ObExprGetPackageVar::eval_get_package_var(const ObExpr &expr,
   } else if (package_id->is_null()
              || var_idx->is_null()
              || result_type->is_null()
-             || spec_version->is_null()
-             || body_version->is_null()) {
+             || spec_version->is_null()) {
     res.set_null();
   } else {
     ObObj res_obj;
     OZ(calc(res_obj,
             package_id->get_uint(),
             spec_version->get_int(),
-            body_version->get_int(),
+            body_version->is_null() ? OB_INVALID_VERSION : body_version->get_int(),
             var_idx->get_int(),
             &ctx.exec_ctx_,
-            ctx.exec_ctx_.get_my_session()));
+            ctx.exec_ctx_.get_my_session()),
+            KPC(package_id), KPC(spec_version), KPC(body_version), KPC(var_idx));
     if (OB_SUCC(ret)) {
       if (ob_is_string_tc(res_obj.get_type())) {
         ObString res_str;

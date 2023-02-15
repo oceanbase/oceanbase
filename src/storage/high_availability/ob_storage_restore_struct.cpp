@@ -123,7 +123,7 @@ const char *ObTabletRestoreAction::get_action_str(const ACTION &action)
   };
   STATIC_ASSERT(MAX == ARRAYSIZEOF(action_strs), "action count mismatch");
   if (action < 0 || action >= MAX) {
-    LOG_ERROR("invalid action", K(action));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid action", K(action));
   } else {
     str = action_strs[action];
   }
@@ -140,7 +140,7 @@ bool ObTabletRestoreAction::is_restore_minor(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_MINOR != action) {
     bool_ret = false;
   } else {
@@ -154,7 +154,7 @@ bool ObTabletRestoreAction::is_restore_major(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_MAJOR != action) {
     bool_ret = false;
   } else {
@@ -168,7 +168,7 @@ bool ObTabletRestoreAction::is_restore_none(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_NONE != action) {
     bool_ret = false;
   } else {
@@ -182,7 +182,7 @@ bool ObTabletRestoreAction::is_restore_all(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_ALL != action) {
     bool_ret = false;
   } else {
@@ -196,7 +196,7 @@ bool ObTabletRestoreAction::is_restore_tablet_meta(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_TABLET_META != action) {
     bool_ret = false;
   } else {

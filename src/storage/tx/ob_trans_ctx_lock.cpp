@@ -87,7 +87,7 @@ void CtxLock::unlock()
   const int64_t lock_ts = ObClockGenerator::getClock() - lock_start_ts_;
   if (lock_start_ts_ > 0 && lock_ts > WARN_LOCK_TS) {
     lock_start_ts_ = 0;
-    TRANS_LOG(WARN, "ctx lock too much time", K(arg.trans_id_), K(lock_ts), K(lbt()));
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ctx lock too much time", K(arg.trans_id_), K(lock_ts), K(lbt()));
   }
   after_unlock(arg);
 }

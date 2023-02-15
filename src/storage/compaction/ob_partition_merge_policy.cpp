@@ -103,6 +103,12 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
   } else if (base_table->get_snapshot_version() >= param.merge_version_) {
     ret = OB_NO_NEED_MERGE;
     LOG_INFO("medium merge already finished", K(ret), KPC(base_table), K(result));
+  } else if (OB_UNLIKELY(tablet.get_snapshot_version() < param.merge_version_)) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("tablet is not ready to schedule medium merge", K(ret), K(tablet), K(param));
+  } else if (OB_UNLIKELY(tablet.get_multi_version_start() > param.merge_version_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet haven't kept medium snapshot", K(ret), K(tablet), K(param));
   } else {
     const ObSSTableArray &minor_tables = table_store.get_minor_sstables();
     bool start_add_table_flag = false;
@@ -1432,7 +1438,10 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
     if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_ineffecient_read(tablet_stat, tablet, reason))) {
       LOG_WARN("failed to check ineffecient read", K(tmp_ret), K(ls_id), K(tablet_id));
     }
-    LOG_INFO("DanLing Check tablet adaptive merge reason", K(reason), K(tablet_stat)); // TODO tmp log, remove later
+
+    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000 /*10s*/)) {
+      LOG_INFO("Check tablet adaptive merge reason", K(reason), K(tablet_stat)); // TODO tmp log, remove later
+    }
   }
   return ret;
 }

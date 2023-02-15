@@ -334,7 +334,12 @@ function deploy_cluster {
     done
   fi
   get_init_sql
+  if [[ "$NEED_FAST_REBOOT" == "1" ]]
+  then
+  obd test mysqltest "$deploy_name" $INIT_FLIES --init-only $CLIENT_BIN_ARGS --fast-reboot
+  else
   obd test mysqltest "$deploy_name" $INIT_FLIES --init-only $CLIENT_BIN_ARGS
+  fi
 }
 
 function get_init_sql {
@@ -485,6 +490,11 @@ function tpcds {
   obd test tpcds $deploy_name $OBCLIENT_BIN_ARGS $extra_args
 }
 
+function graph {
+  get_deploy_name
+  obd tool graph $deploy_name $extra_args
+}
+
 
 function help_info {
   echo """
@@ -518,6 +528,7 @@ sql [-n DEPLOY_NAME]                     Connect to target server by root@sys, u
 sys [-n DEPLOY_NAME]                     Connect to target server by root@sys, use '--help' for more details.
 mysql [-n DEPLOY_NAME]                   Connect to target server by root@mysql, use '--help' for more details.
 oracle [-n DEPLOY_NAME]                  Connect to target server by SYS@oracle, use '--help' for more details.
+graph [-n DEPLOY_NAME]
 
 Options:
 -V, --version                            Show version of obd.
@@ -553,6 +564,7 @@ function main() {
       --ip ) IPADDRESS="$2"; shift 2 ;;
       --disable-reboot ) DISABLE_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
       --reboot ) NEED_REBOOT="1"; shift ;;
+      --fast-reboot ) NEED_FAST_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
       --cp ) EXEC_CP="1"; shift ;;
       --skip-copy ) SKIP_COPY="1"; shift ;;
       --mini) MINI="1"; shift ;;
@@ -569,6 +581,7 @@ function main() {
   if [[ ! -f $DEPLOY_PATH/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)
+  obd env set OBD_LOCK_MODE 1
   fi
   if [[  "$(grep '"OBD_DEPLOY_BASE_DIR":' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
   then
@@ -664,6 +677,9 @@ function main() {
     ;;
     tpcds)
     tpcds
+    ;;
+    graph)
+    graph
     ;;
     *)
     help_info

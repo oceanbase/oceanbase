@@ -302,6 +302,8 @@ int ObTableBatchExecuteP::htable_put()
   ObTableApiSpec *spec = nullptr;
   int64_t affected_rows = 0;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  ObTableApiCacheGuard cache_guard;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
@@ -317,7 +319,7 @@ int ObTableBatchExecuteP::htable_put()
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT_UP>(tb_ctx_,
-                                                                                    cache_guard_,
+                                                                                    cache_guard,
                                                                                     spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
@@ -359,6 +361,8 @@ int ObTableBatchExecuteP::multi_get()
   int ret = OB_SUCCESS;
   ObTableApiSpec *spec = nullptr;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  ObTableApiCacheGuard cache_guard;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
@@ -371,8 +375,8 @@ int ObTableBatchExecuteP::multi_get()
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_SCAN>(tb_ctx_,
-                                                                                  cache_guard_,
-                                                                                  spec))) {
+                                                                               cache_guard,
+                                                                               spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
     const ObTableSchema *table_schema = tb_ctx_.get_table_schema();
@@ -420,6 +424,8 @@ int ObTableBatchExecuteP::multi_delete()
   int ret = OB_SUCCESS;
   ObTableApiSpec *spec = nullptr;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  ObTableApiCacheGuard cache_guard;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
@@ -434,7 +440,7 @@ int ObTableBatchExecuteP::multi_delete()
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
-  } else if (ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx_, cache_guard_, spec)) {
+  } else if (ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx_, cache_guard, spec)) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_operation.count(); ++i) {
@@ -471,6 +477,8 @@ int ObTableBatchExecuteP::htable_delete()
   int64_t affected_rows = 0;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   tb_ctx_.set_batch_operation(&batch_operation);
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  ObTableApiCacheGuard cache_guard;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
@@ -485,7 +493,9 @@ int ObTableBatchExecuteP::htable_delete()
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
-  } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx_, cache_guard_, spec))) {
+  } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx_,
+                                                                                 cache_guard,
+                                                                                 spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to create executor", K(ret));
@@ -535,6 +545,8 @@ int ObTableBatchExecuteP::multi_insert()
   int ret = OB_SUCCESS;
   ObTableApiSpec *spec = nullptr;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  ObTableApiCacheGuard cache_guard;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
@@ -549,7 +561,9 @@ int ObTableBatchExecuteP::multi_insert()
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
-  } else if (ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT>(tb_ctx_, cache_guard_, spec)) {
+  } else if (ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT>(tb_ctx_,
+                                                                         cache_guard,
+                                                                         spec)) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_operation.count(); ++i) {
@@ -582,6 +596,8 @@ int ObTableBatchExecuteP::multi_replace()
   int ret = OB_SUCCESS;
   ObTableApiSpec *spec = nullptr;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  ObTableApiCacheGuard cache_guard;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
@@ -596,7 +612,9 @@ int ObTableBatchExecuteP::multi_replace()
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
-  } else if (ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_REPLACE>(tb_ctx_, cache_guard_, spec)) {
+  } else if (ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_REPLACE>(tb_ctx_,
+                                                                          cache_guard,
+                                                                          spec)) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_operation.count(); ++i) {
@@ -914,6 +932,7 @@ int ObTableBatchExecuteP::execute_htable_delete(const ObTableBatchOperation &bat
   SMART_VAR(ObTableCtx, tb_ctx, allocator_) {
     ObTableApiSpec *spec = nullptr;
     ObTableApiExecutor *executor = nullptr;
+    observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
     ObTableApiCacheGuard cache_guard;
     int64_t affected_rows = 0;
     tb_ctx.set_batch_operation(&batch_operation);

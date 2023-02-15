@@ -41,6 +41,7 @@ ObMacroBlockReader::ObMacroBlockReader()
      allocator_(ObModIds::OB_CS_SSTABLE_READER),
      encryption_(nullptr)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObMacroBlockReader::~ObMacroBlockReader()
@@ -458,14 +459,14 @@ void ObSSTableDataBlockReader::reset()
   is_inited_ = false;
 }
 
-int ObSSTableDataBlockReader::dump()
+int ObSSTableDataBlockReader::dump(const uint64_t tablet_id, const int64_t scn)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSSTableDataBlockReader is not inited", K(ret));
-  } else {
+  } else if (check_need_print(tablet_id, scn)) {
     ObSSTablePrinter::print_common_header(&common_header_);
     switch (common_header_.get_type()) {
     case ObMacroBlockCommonHeader::SSTableData:
@@ -502,6 +503,19 @@ int ObSSTableDataBlockReader::dump()
     }
   }
   return ret;
+}
+
+bool ObSSTableDataBlockReader::check_need_print(const uint64_t tablet_id, const int64_t scn)
+{
+  bool need_print = true;
+  if (ObMacroBlockCommonHeader::SSTableData == common_header_.get_type()) {
+    if ((0 != tablet_id && tablet_id != macro_header_.fixed_header_.tablet_id_)
+        || (-1 != scn && scn != macro_header_.fixed_header_.logical_version_)) {
+      // tablet id or logical version doesn't match, skip print
+      need_print = false;
+    }
+  }
+  return need_print;
 }
 
 int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block)

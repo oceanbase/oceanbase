@@ -685,6 +685,13 @@ int ObTableScanOp::prepare_pushdown_limit_param()
     need_final_limit_ = true;
     tsc_rtdef_.scan_rtdef_.limit_param_.offset_ = 0;
     tsc_rtdef_.scan_rtdef_.limit_param_.limit_ = -1;
+
+    if (nullptr != MY_CTDEF.lookup_ctdef_) {
+      OB_ASSERT(nullptr != tsc_rtdef_.lookup_rtdef_);
+      tsc_rtdef_.lookup_rtdef_->limit_param_.offset_ = 0;
+      tsc_rtdef_.lookup_rtdef_->limit_param_.limit_  = -1;
+    }
+
   } else if (tsc_rtdef_.has_lookup_limit() || das_ref_.get_das_task_cnt() > 1) {
     //for index back, need to final limit output rows in TableScan operator,
     //please see me for the reason: https://work.aone.alibaba-inc.com/issue/43232745
@@ -1418,10 +1425,10 @@ int ObTableScanOp::fill_storage_feedback_info()
 int ObTableScanOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(ret) && MY_SPEC.is_global_index_back()) {
-    if (OB_FAIL(ObOperator::inner_rescan())) {
-      LOG_WARN("failed to exec inner rescan",K(ret));
-    } else if (OB_ISNULL(global_index_lookup_op_)) {
+  if (OB_FAIL(ObOperator::inner_rescan())) {
+    LOG_WARN("failed to exec inner rescan");
+  } else if (MY_SPEC.is_global_index_back()) {
+    if (OB_ISNULL(global_index_lookup_op_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments",K(ret));
     } else {
@@ -1447,9 +1454,7 @@ int ObTableScanOp::inner_rescan_for_tsc()
   MY_INPUT.key_ranges_.reuse();
   MY_INPUT.ss_key_ranges_.reuse();
   MY_INPUT.mbr_filters_.reuse();
-  if (OB_FAIL(ObOperator::inner_rescan())) {
-    LOG_WARN("rescan operator failed", K(ret));
-  } else if (OB_FAIL(build_bnlj_params())) {
+  if (OB_FAIL(build_bnlj_params())) {
     // At start of each round of batch rescan, NLJ will fill param_store with
     // batch parameters. After each right operator rescan, NLJ will fill
     // param_store with current rescan's parameters.

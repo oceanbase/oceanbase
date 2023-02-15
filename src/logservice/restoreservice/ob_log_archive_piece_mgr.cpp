@@ -471,7 +471,7 @@ int ObLogArchivePieceContext::get_piece_(const SCN &scn,
     }
 
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
-      CLOG_LOG(WARN, "get piece cost too much time", K(scn), K(lsn), KPC(this));
+      CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "get piece cost too much time", K(scn), K(lsn), KPC(this));
     }
   }
   return ret;
@@ -512,7 +512,9 @@ int ObLogArchivePieceContext::switch_round_if_need_(const SCN &scn, const palf::
 void ObLogArchivePieceContext::check_if_switch_round_(const palf::LSN &lsn, RoundOp &op)
 {
   op = RoundOp::NONE;
-  if (min_round_id_ == 0 || max_round_id_ == 0 || is_max_round_done_(lsn) /* 当前读取到最大round的最大值, 并且round已经STOP*/) {
+  if (min_round_id_ == 0 || max_round_id_ == 0
+      || round_context_.round_id_ > max_round_id_
+      || is_max_round_done_(lsn) /* 当前读取到最大round的最大值, 并且round已经STOP*/) {
     op = RoundOp::LOAD_RANGE;
   } else if (! locate_round_) {
     op = RoundOp::LOCATE;

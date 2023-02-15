@@ -89,6 +89,43 @@ int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
         LOG_WARN("fail to push back ls tablet id", KR(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      is_multiple_mode_ = (!ctx_->schema_.is_heap_table_ && ctx_->param_.need_sort_) ||
+                          ls_partition_ids_.count() > ObDirectLoadTableStore::MAX_BUCKET_CNT;
+      table_data_desc_.rowkey_column_num_ =
+        (!ctx_->schema_.is_heap_table_ ? ctx_->schema_.rowkey_column_count_ : 0);
+      table_data_desc_.column_count_ = ctx_->param_.column_count_;
+      table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::DEFAULT_DATA_BLOCK_SIZE;
+      table_data_desc_.sstable_index_block_size_ =
+        ObDirectLoadSSTableIndexBlock::DEFAULT_INDEX_BLOCK_SIZE;
+      table_data_desc_.sstable_data_block_size_ =
+        ObDirectLoadSSTableDataBlock::DEFAULT_DATA_BLOCK_SIZE;
+      table_data_desc_.extra_buf_size_ = ObDirectLoadTableDataDesc::DEFAULT_EXTRA_BUF_SIZE;
+      table_data_desc_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+      table_data_desc_.is_heap_table_ = ctx_->schema_.is_heap_table_;
+
+      int64_t wa_mem_limit = 0;
+      if (OB_FAIL(get_wa_memory_limit(wa_mem_limit))) {
+        LOG_WARN("failed to get work area memory limit", KR(ret), K(ctx_->param_.tenant_id_));
+      } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
+      } else {
+        table_data_desc_.merge_count_per_round_ = min(wa_mem_limit
+                                                  / table_data_desc_.sstable_data_block_size_
+                                                  / ctx_->param_.session_count_, ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
+
+        table_data_desc_.max_mem_chunk_count_ = 128;
+        int64_t mem_chunk_size = wa_mem_limit / table_data_desc_.max_mem_chunk_count_;
+        if (mem_chunk_size <= ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT) {
+          mem_chunk_size = ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
+          table_data_desc_.max_mem_chunk_count_ = wa_mem_limit / mem_chunk_size;
+        }
+        table_data_desc_.mem_chunk_size_ = mem_chunk_size;
+        table_data_desc_.heap_table_mem_chunk_size_ = wa_mem_limit / ctx_->param_.session_count_;
+        LOG_INFO("table_data_desc init end", K(table_data_desc_));
+      }
+    }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(insert_table_param.ls_partition_ids_.assign(target_ls_partition_ids_))) {
       LOG_WARN("fail to assign ls tablet ids", KR(ret));
@@ -162,8 +199,6 @@ int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
       LOG_WARN("fail to init sequence", KR(ret));
     }
     if (OB_SUCC(ret)) {
-      is_multiple_mode_ = (!ctx_->schema_.is_heap_table_ && ctx_->param_.need_sort_) ||
-                          ls_partition_ids_.count() > ObDirectLoadTableStore::MAX_BUCKET_CNT;
       if (!is_multiple_mode_ && ctx_->schema_.is_heap_table_) {
         is_fast_heap_table_ = true;
         if (OB_ISNULL(fast_heap_table_ctx_ =
@@ -176,41 +211,6 @@ int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
                                                       ctx_->param_.session_count_))) {
           LOG_WARN("fail to init fast heap table ctx", KR(ret));
         }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      table_data_desc_.rowkey_column_num_ =
-        (!ctx_->schema_.is_heap_table_ ? ctx_->schema_.rowkey_column_count_ : 0);
-      table_data_desc_.column_count_ = ctx_->param_.column_count_;
-      table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::DEFAULT_DATA_BLOCK_SIZE;
-      table_data_desc_.sstable_index_block_size_ =
-        ObDirectLoadSSTableIndexBlock::DEFAULT_INDEX_BLOCK_SIZE;
-      table_data_desc_.sstable_data_block_size_ =
-        ObDirectLoadSSTableDataBlock::DEFAULT_DATA_BLOCK_SIZE;
-      table_data_desc_.extra_buf_size_ = ObDirectLoadTableDataDesc::DEFAULT_EXTRA_BUF_SIZE;
-      table_data_desc_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-      table_data_desc_.is_heap_table_ = ctx_->schema_.is_heap_table_;
-
-      int64_t wa_mem_limit = 0;
-      if (OB_FAIL(get_wa_memory_limit(wa_mem_limit))) {
-        LOG_WARN("failed to get work area memory limit", KR(ret), K(ctx_->param_.tenant_id_));
-      } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
-      } else {
-        table_data_desc_.merge_count_per_round_ = min(wa_mem_limit
-                                                  / table_data_desc_.sstable_data_block_size_
-                                                  / ctx_->param_.session_count_, ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
-
-        table_data_desc_.max_mem_chunk_count_ = 128;
-        int64_t mem_chunk_size = wa_mem_limit / table_data_desc_.max_mem_chunk_count_;
-        if (mem_chunk_size <= ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT) {
-          mem_chunk_size = ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
-          table_data_desc_.max_mem_chunk_count_ = wa_mem_limit / mem_chunk_size;
-        }
-        table_data_desc_.mem_chunk_size_ = mem_chunk_size;
-        table_data_desc_.heap_table_mem_chunk_size_ = wa_mem_limit / ctx_->param_.session_count_;
-        LOG_INFO("table_data_desc init end", K(table_data_desc_));
       }
     }
     if (OB_SUCC(ret)) {
@@ -300,7 +300,7 @@ int ObTableLoadStoreCtx::advance_status(ObTableLoadStatusType status)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(status));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObWLockGuard guard(rwlock_);
     if (OB_UNLIKELY(ObTableLoadStatusType::ERROR == status_)) {
       ret = error_code_;
       LOG_WARN("store has error", KR(ret));
@@ -331,7 +331,7 @@ int ObTableLoadStoreCtx::set_status_error(int error_code)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(error_code));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObWLockGuard guard(rwlock_);
     if (OB_UNLIKELY(status_ == ObTableLoadStatusType::ABORT)) {
       ret = OB_TRANS_KILLED;
     } else if (status_ != ObTableLoadStatusType::ERROR) {
@@ -351,7 +351,7 @@ int ObTableLoadStoreCtx::set_status_abort()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObWLockGuard guard(rwlock_);
     if (OB_UNLIKELY(status_ != ObTableLoadStatusType::ABORT)) {
       status_ = ObTableLoadStatusType::ABORT;
       table_load_status_to_string(status_, ctx_->job_stat_->store.status_);
@@ -383,7 +383,7 @@ int ObTableLoadStoreCtx::check_status(ObTableLoadStatusType status) const
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     ret = check_status_unlock(status);
   }
   return ret;
@@ -617,6 +617,14 @@ int ObTableLoadStoreCtx::init_session_ctx_array()
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->autoinc_param_ = autoinc_param;
+      if (is_multiple_mode_) {
+        session_ctx->extra_buf_size_ = table_data_desc_.extra_buf_size_;
+        if (OB_ISNULL(session_ctx->extra_buf_ =
+                        static_cast<char *>(allocator_.alloc(session_ctx->extra_buf_size_)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory", KR(ret));
+        }
+      }
     }
   }
   return ret;
@@ -630,7 +638,7 @@ int ObTableLoadStoreCtx::start_trans(const ObTableLoadTransId &trans_id,
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObWLockGuard guard(rwlock_);
     if (OB_FAIL(check_status_unlock(ObTableLoadStatusType::LOADING))) {
       LOG_WARN("fail to check status", KR(ret), K_(status));
     } else {
@@ -676,7 +684,7 @@ int ObTableLoadStoreCtx::commit_trans(ObTableLoadStoreTrans *trans)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(trans));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObWLockGuard guard(rwlock_);
     const ObTableLoadSegmentID &segment_id = trans->get_trans_id().segment_id_;
     SegmentCtx *segment_ctx = nullptr;
     ObTableLoadTransStore *trans_store = nullptr;
@@ -721,7 +729,7 @@ int ObTableLoadStoreCtx::abort_trans(ObTableLoadStoreTrans *trans)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(trans));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObWLockGuard guard(rwlock_);
     const ObTableLoadSegmentID &segment_id = trans->get_trans_id().segment_id_;
     SegmentCtx *segment_ctx = nullptr;
     if (OB_FAIL(segment_ctx_map_.get(segment_id, segment_ctx))) {
@@ -759,7 +767,7 @@ void ObTableLoadStoreCtx::put_trans(ObTableLoadStoreTrans *trans)
       ObTableLoadTransStatusType trans_status = trans_ctx->get_trans_status();
       OB_ASSERT(ObTableLoadTransStatusType::COMMIT == trans_status ||
                 ObTableLoadTransStatusType::ABORT == trans_status);
-      ObMutexGuard guard(mutex_);
+      obsys::ObWLockGuard guard(rwlock_);
       if (OB_FAIL(trans_map_.erase_refactored(trans->get_trans_id()))) {
         LOG_WARN("fail to erase_refactored", KR(ret));
       } else {
@@ -782,7 +790,7 @@ int ObTableLoadStoreCtx::get_trans(const ObTableLoadTransId &trans_id,
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     if (OB_FAIL(trans_map_.get_refactored(trans_id, trans))) {
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("fail to get_refactored", KR(ret), K(trans_id));
@@ -804,7 +812,7 @@ int ObTableLoadStoreCtx::get_trans_ctx(const ObTableLoadTransId &trans_id,
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     if (OB_FAIL(trans_ctx_map_.get_refactored(trans_id, trans_ctx))) {
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("fail to get trans ctx", KR(ret), K(trans_id));
@@ -825,7 +833,7 @@ int ObTableLoadStoreCtx::get_active_trans_ids(
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     for (TransMap::const_iterator trans_iter = trans_map_.begin();
          OB_SUCC(ret) && trans_iter != trans_map_.end(); ++trans_iter) {
       if (OB_FAIL(trans_id_array.push_back(trans_iter->first))) {
@@ -844,7 +852,7 @@ int ObTableLoadStoreCtx::get_committed_trans_ids(
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     if (OB_FAIL(trans_id_array.create(committed_trans_store_array_.count(), allocator))) {
       LOG_WARN("fail to create trans id array", KR(ret));
     } else {
@@ -865,7 +873,7 @@ int ObTableLoadStoreCtx::get_committed_trans_stores(
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     if (OB_FAIL(trans_store_array.assign(committed_trans_store_array_))) {
       LOG_WARN("fail to assign trans store array", KR(ret));
     }
@@ -880,7 +888,7 @@ int ObTableLoadStoreCtx::check_exist_trans(bool &exist) const
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     exist = !trans_map_.empty();
   }
   return ret;
@@ -888,7 +896,7 @@ int ObTableLoadStoreCtx::check_exist_trans(bool &exist) const
 
 void ObTableLoadStoreCtx::clear_committed_trans_stores()
 {
-  ObMutexGuard guard(mutex_);
+  obsys::ObWLockGuard guard(rwlock_);
   for (int64_t i = 0; i < committed_trans_store_array_.count(); ++i) {
     ObTableLoadTransStore *trans_store = committed_trans_store_array_.at(i);
     ObTableLoadTransCtx *trans_ctx = trans_store->trans_ctx_;

@@ -159,7 +159,7 @@ void LogStateMgr::update_role_and_state_(const common::ObRole &new_role, const O
     // update success
   } else {
     // 更新role/state时会加palf_handle的写锁，因此预期不应该失败
-    PALF_LOG(ERROR, "update_role_and_state_ failed", K_(palf_id), K(old_val), K(new_val));
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "update_role_and_state_ failed", K_(palf_id), K(old_val), K(new_val));
   }
 }
 
@@ -734,9 +734,9 @@ bool LogStateMgr::is_pending_log_clear_() const
   int tmp_ret = OB_SUCCESS;
   LSN last_slide_end_lsn;
   if (!pending_end_lsn_.is_valid()) {
-    PALF_LOG(ERROR, "pending_end_lsn_ is invalid", K_(pending_end_lsn), K_(palf_id));
+    PALF_LOG_RET(ERROR, OB_INVALID_ERROR, "pending_end_lsn_ is invalid", K_(pending_end_lsn), K_(palf_id));
   } else if (OB_SUCCESS != (tmp_ret = sw_->get_last_slide_end_lsn(last_slide_end_lsn))) {
-    PALF_LOG(WARN, "get_last_slide_end_lsn failed", K(tmp_ret), K_(palf_id));
+    PALF_LOG_RET(WARN, tmp_ret, "get_last_slide_end_lsn failed", K(tmp_ret), K_(palf_id));
   } else if (last_slide_end_lsn >= pending_end_lsn_) {
     bool_ret = true;
   } else {
@@ -814,7 +814,7 @@ bool LogStateMgr::is_reconfirm_timeout_()
     bool_ret = is_sw_timeout;
     if (bool_ret) {
       if (palf_reach_time_interval(1 * 1000 * 1000, check_reconfirm_timeout_time_)) {
-        PALF_LOG(ERROR, "leader reconfirm timeout", K_(palf_id), K(start_id), K(is_sw_timeout));
+        PALF_LOG_RET(ERROR, OB_TIMEOUT, "leader reconfirm timeout", K_(palf_id), K(start_id), K(is_sw_timeout));
         (void) sw_->report_log_task_trace(start_id);
       }
     } else if (palf_reach_time_interval(100 * 1000, check_reconfirm_timeout_time_)) {
@@ -840,7 +840,8 @@ bool LogStateMgr::is_reconfirm_state_changed_(int &ret)
     PALF_LOG(TRACE, "is_reconfirm_state_changed_", K(bool_ret));
     bool_ret = true;
   } else {
-    PALF_LOG(ERROR, "reconfirm failed", K(ret), K_(palf_id));
+    // election leader may has changed, so ret is maybe OB_NOT_MASTER.
+    PALF_LOG(WARN, "reconfirm failed", K_(palf_id));
     bool_ret = true;
   }
   return bool_ret;
@@ -881,7 +882,7 @@ bool LogStateMgr::check_leader_log_sync_state_()
     // sw is not empty, check log sync state
     if (now_us - last_check_start_id_time_us_ > PALF_LEADER_ACTIVE_SYNC_TIMEOUT_US) {
       if (palf_reach_time_interval(10 * 1000 * 1000, log_sync_timeout_warn_time_)) {
-        PALF_LOG(ERROR, "log sync timeout on leader", K_(palf_id), K_(self), K(now_us), K(last_check_start_id_time_us_), K(start_id));
+        PALF_LOG_RET(ERROR, OB_TIMEOUT, "log sync timeout on leader", K_(palf_id), K_(self), K(now_us), K(last_check_start_id_time_us_), K(start_id));
         (void) sw_->report_log_task_trace(start_id);
       }
     }

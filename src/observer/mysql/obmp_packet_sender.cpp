@@ -697,7 +697,7 @@ ObSMConnection* ObMPPacketSender::get_conn() const
 {
   ObSMConnection *conn = NULL;
   if (OB_ISNULL(req_)) {
-    LOG_ERROR("request is null");
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "request is null");
   } else if (conn_valid_) {
     conn = reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(req_));
   } else {
@@ -720,7 +720,7 @@ int ObMPPacketSender::update_last_pkt_pos()
 
 void ObMPPacketSender::force_disconnect()
 {
-  LOG_WARN("force disconnect", K(lbt()));
+  LOG_WARN_RET(OB_ERROR, "force disconnect", K(lbt()));
   ObMPPacketSender::disconnect();
 }
 
@@ -731,21 +731,21 @@ void ObMPPacketSender::disconnect()
     } else {
       ObSMConnection *conn = reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(req_));
       if (conn != NULL) {
-        LOG_WARN("server close connection",
+        LOG_WARN_RET(OB_SUCCESS, "server close connection",
                  "sessid", conn->sessid_,
                  "proxy_sessid", conn->proxy_sessid_,
                  "stack", lbt());
         sql::ObSQLSessionInfo *session = NULL;
         get_session(session);
         if (OB_ISNULL(session)) {
-          LOG_WARN("session is null");
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "session is null");
         } else {
           // set SERVER_FORCE_DISCONNECT state.
           session->set_disconnect_state(SERVER_FORCE_DISCONNECT);
           revert_session(session);
         }
       } else {
-        LOG_WARN("connection is null");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "connection is null");
       }
 
       SQL_REQ_OP.disconnect_sql_conn(req_);

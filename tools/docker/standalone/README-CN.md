@@ -18,7 +18,7 @@ OceanBase 提供了一个独立部署的测试镜像[oceanbase-ce](https://hub.d
 
 在部署 oceanbase-ce 镜像之前，您需要确认以下信息：
 
-- 确保您的机器至少提供 2 核 10GB 以上的资源。
+- 确保您的机器至少提供 2 核 8GB 以上的资源。
 - 您的机器已经安装以下程序：
 
     应用程序 | 推荐版本 | 参考文档
@@ -31,10 +31,10 @@ OceanBase 提供了一个独立部署的测试镜像[oceanbase-ce](https://hub.d
 运行以下命令，启动 OceanBase 的实例：
 
 ```bash
-# 根据当前容器情况部署最大规格的实例
+# 部署最小规格实例
 docker run -p 2881:2881 --name oceanbase-ce -d oceanbase/oceanbase-ce
 
-# 部署最小规格实例
+# 根据当前容器情况部署最大规格的实例
 docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=0 -d oceanbase/oceanbase-ce
 ```
 

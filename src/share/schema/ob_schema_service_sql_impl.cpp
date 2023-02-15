@@ -8463,6 +8463,7 @@ int ObSchemaServiceSQLImpl::fetch_link_table_info(uint64_t tenant_id,
               next_sql_req_level == 1 &&
               (ObNCharType == column_schema.get_data_type() || ObNVarchar2Type == column_schema.get_data_type())) {
             if (DBLINK_DRV_OB == link_type &&
+                sql::DblinkGetConnType::TEMP_CONN != conn_type &&
                 OB_FAIL(fetch_desc_table(dblink_id,
                                         link_type,
                                         database_name,

@@ -158,7 +158,7 @@ AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr
 void ObTenantMemoryMgr::free_chunk(AChunk *chunk, const ObMemAttr &attr)
 {
   if (tenant_id_ != attr.tenant_id_) {
-    LOG_ERROR("tenant_id not match", K_(tenant_id), K(attr));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tenant_id not match", K_(tenant_id), K(attr));
   } else if (NULL != chunk) {
     bool reach_ctx_limit = false;
     const int64_t hold_size = static_cast<int64_t>(chunk->hold());
@@ -310,7 +310,7 @@ bool ObTenantMemoryMgr::update_ctx_hold(const uint64_t ctx_id, const int64_t siz
       afc.ctx_limit_ = limit;
     }
   } else {
-    LOG_ERROR("invalid ctx_id", K(ctx_id));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid ctx_id", K(ctx_id));
   }
   return updated;
 }
@@ -564,7 +564,7 @@ void ObResourceMgr::dec_ref(ObTenantResourceMgr *tenant_resource_mgr)
         }
       }
     } else if (ref_cnt < 0) {
-      LOG_ERROR("ref_cnt negative", K(ref_cnt));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ref_cnt negative", K(ref_cnt));
     }
   }
 }

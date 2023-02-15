@@ -486,6 +486,7 @@ int LogRequestHandler::handle_sync_request<LogGetStatReq, LogGetStatResp>(
       CLOG_LOG(INFO, "i am not leader", K(ret), K(palf_id), K(req), K(role), K(is_pending_state));
     } else {
       resp.max_scn_ = guard.get_palf_handle_impl()->get_max_scn();
+      resp.end_lsn_ = guard.get_palf_handle_impl()->get_end_lsn();
       CLOG_LOG(TRACE, "get_leader_max_scn success", K(ret), K(palf_id), K(server), K(req), K(resp));
     }
   }

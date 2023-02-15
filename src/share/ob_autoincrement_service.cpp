@@ -53,6 +53,11 @@ namespace share
 #define UINT24_MAX    (16777215U)
 #endif
 
+static bool is_rpc_error(int error_code)
+{
+  return (is_timeout_err(error_code) || is_server_down_error(error_code));
+}
+
 int CacheNode::combine_cache_node(CacheNode &new_node)
 {
   int ret = OB_SUCCESS;
@@ -625,7 +630,7 @@ int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
                               .by(tenant_id)
                               .timeout(sync_timeout)
                               .clear_autoinc_cache(arg))) {
-          if (is_timeout_err(ret) || is_server_down_error(ret) || autoinc_is_order) {
+          if (is_rpc_error(ret) || autoinc_is_order) {
             // ignore time out and clear ordered auto increment cache error, go on
             LOG_WARN("rpc call time out, ignore the error", "server", iter->first,
                      K(tenant_id), K(table_id), K(autoinc_is_order), K(ret));
@@ -1187,7 +1192,7 @@ int ObAutoincrementService::sync_value_to_other_servers(
         if (OB_FAIL(srv_proxy_->to(iter->first)
                                .timeout(sync_us)
                                .refresh_sync_value(arg))) {
-          if (OB_TIMEOUT == ret) {
+          if (is_rpc_error(ret)) {
             LOG_WARN("sync rpc call time out", "server", iter->first, K(sync_us), K(param), K(ret));
             if (!THIS_WORKER.is_timeout()) {
               // reach SYNC_TIMEOUT, go on
@@ -1280,10 +1285,15 @@ int ObAutoincrementService::sync_auto_increment_all(const uint64_t tenant_id,
           if (OB_FAIL(srv_proxy_->to(iter->first)
                                 .timeout(sync_timeout)
                                 .refresh_sync_value(arg))) {
-            if (OB_TIMEOUT == ret) {
+            if (is_rpc_error(ret)) {
               // ignore time out, go on
               LOG_WARN("rpc call time out", "server", iter->first, K(ret));
-              ret = OB_SUCCESS;
+              if (!THIS_WORKER.is_timeout()) {
+                // reach SYNC_TIMEOUT, go on
+                // ignore time out
+                ret = OB_SUCCESS;
+                break;
+              }
             } else {
               LOG_WARN("failed to send rpc call", K(ret));
             }

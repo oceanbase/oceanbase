@@ -48,15 +48,12 @@ class ObFailureDetector
   friend class ObLeaderCoordinator;
 public:
   ObFailureDetector();
-  /**
-   * @description: 初始化timer，提交一detect_recover()和detect_connection_status()任务
-   * @param {*}
-   * @return {*}
-   * @Date: 2022-01-04 15:27:39
-   */
-  int init(ObLeaderCoordinator *coordinator);
+  ~ObFailureDetector();
   void destroy();
   static int mtl_init(ObFailureDetector *&p_failure_detector);
+  static int mtl_start(ObFailureDetector *&p_failure_detector);
+  static void mtl_stop(ObFailureDetector *&p_failure_detector);
+  static void mtl_wait(ObFailureDetector *&p_failure_detector);
   /**
    * @description: 设置一个不可自动恢复的failure，需要由注册的模块手动调用remove_failure_event()接口恢复failure，否则将持续存在
    * @param {FailureEvent} event failure事件，定义在failure_event.h中
@@ -94,27 +91,25 @@ public:
    * @return {*}
    */
   void detect_failure();
-  /**
-   * @description: 定期探测与租户下的其他副本的网络连接是否正常
-   * @param {*}
-   * @return {*}
-   * @Date: 2022-01-04 21:12:16
-   */
-  void detect_connection_status();
   bool is_clog_disk_has_fatal_error();
   bool is_data_disk_has_fatal_error();
 private:
+  bool check_is_running_() const { return is_running_; }
   int insert_event_to_table_(const FailureEvent &event, const ObFunction<bool()> &recover_operation, ObString info);
   void detect_palf_hang_failure_();
-  void detect_slog_writter_hang_failure_();
+  void detect_slog_writer_hang_failure_();
   void detect_sstable_io_failure_();
   void detect_palf_disk_full_();
 private:
-  // default time threshold for clog disk io hang detection is 5s
-  // TODO: this value should be a configuration
-  static const int64_t IO_HANG_TIME_THRESHOLD_US = 5 * 1000 * 1000;
-  common::ObArray<FailureEvent> event_;
-  common::ObArray<ObFunction<bool()>> recover_detect_operation_;
+  struct FailureEventWithRecoverOp {
+    int init(const FailureEvent &event, const ObFunction<bool()> &recover_detect_operation);
+    int assign(const FailureEventWithRecoverOp &);
+    FailureEvent event_;
+    ObFunction<bool()> recover_detect_operation_;
+    TO_STRING_KV(K_(event));
+  };
+  bool is_running_;
+  common::ObArray<FailureEventWithRecoverOp> events_with_ops_;
   common::ObArray<common::ObAddr> tenant_server_list_;
   common::ObOccamTimerTaskRAIIHandle failure_task_handle_;
   common::ObOccamTimerTaskRAIIHandle recovery_task_handle_;

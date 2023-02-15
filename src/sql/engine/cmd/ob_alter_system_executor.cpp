@@ -1772,6 +1772,9 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
         SQL_PC_LOG(WARN, "fail to set plan cache memory conf", K(ret));
       } else if (OB_FAIL(ps->set_mem_conf(pc_mem_conf))) {
         SQL_PC_LOG(WARN, "fail to set plan cache memory conf", K(ret));
+      } else if (!ps->is_inited() &&
+                  OB_FAIL(ps->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, effective_tenant_id))) {
+        LOG_WARN("failed to init ps cache");
       } else {
         session_info->set_database_id(OB_SYS_DATABASE_ID);
         session_info->set_plan_cache(pc);
@@ -1822,10 +1825,23 @@ int ObSwitchTenantExecutor::execute(ObExecContext &ctx, ObSwitchTenantStmt &stmt
     ObSwitchTenantArg &arg = stmt.get_arg();
     arg.set_stmt_str(first_stmt);
 
+    //left 200ms to return result
+    const int64_t remain_timeout_interval_us = THIS_WORKER.get_timeout_remain();
+    const int64_t execute_timeout_interval_us = remain_timeout_interval_us - 200 * 1000; // left 200ms to return result
+    const int64_t original_timeout_abs_us = THIS_WORKER.get_timeout_ts();
+    if (0 < execute_timeout_interval_us) {
+      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + execute_timeout_interval_us);
+    }
+
     // TODO support specify ALL
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.switch_tenant(arg))) {
       LOG_WARN("failed to switch_tenant", KR(ret), K(arg));
+    }
+
+    //set timeout back
+    if (0 < execute_timeout_interval_us) {
+      THIS_WORKER.set_timeout_ts(original_timeout_abs_us);
     }
   }
   return ret;

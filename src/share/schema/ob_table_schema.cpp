@@ -1500,7 +1500,7 @@ bool ObTableSchema::is_valid() const
 
   if (!ObSimpleTableSchemaV2::is_valid()) {
     valid_ret = false;
-    LOG_WARN("schema is invalid", K_(error_ret));
+    LOG_WARN_RET(OB_INVALID_ERROR, "schema is invalid", K_(error_ret));
   }
 
   if (!valid_ret || is_view_table()) {
@@ -1509,17 +1509,17 @@ bool ObTableSchema::is_valid() const
   } else {
     if (is_virtual_table(table_id_) && 0 > rowkey_column_num_) {
       valid_ret = false;
-      LOG_WARN("invalid rowkey_column_num:", K_(table_name), K_(rowkey_column_num));
+      LOG_WARN_RET(OB_INVALID_ERROR, "invalid rowkey_column_num:", K_(table_name), K_(rowkey_column_num));
       //TODO:(xiyu) confirm to delte it
     } else if (!is_virtual_table(table_id_) && 1 > rowkey_column_num_ && OB_INVALID_ID == dblink_id_) {
       valid_ret = false;
-      LOG_WARN("no primary key specified:", K_(table_name));
+      LOG_WARN_RET(OB_INVALID_ERROR, "no primary key specified:", K_(table_name));
     } else if (index_column_num_ < 0 || index_column_num_ > OB_MAX_ROWKEY_COLUMN_NUMBER) {
       valid_ret = false;
-      LOG_WARN("invalid index_column_num", K_(table_name), K_(index_column_num));
+      LOG_WARN_RET(OB_INVALID_ERROR, "invalid index_column_num", K_(table_name), K_(index_column_num));
     } else if (part_key_column_num_ > OB_MAX_PARTITION_KEY_COLUMN_NUMBER) {
       valid_ret = false;
-      LOG_WARN("partition key column num invalid", K_(table_name),
+      LOG_WARN_RET(OB_INVALID_ERROR, "partition key column num invalid", K_(table_name),
           K_(part_key_column_num), K(OB_MAX_PARTITION_KEY_COLUMN_NUMBER));
     } else {
       int64_t def_rowkey_col = 0;
@@ -1532,18 +1532,18 @@ bool ObTableSchema::is_valid() const
 
       if (NULL == column_array_) {
         valid_ret = false;
-        LOG_WARN("The column_array is NULL.");
+        LOG_WARN_RET(OB_INVALID_ERROR, "The column_array is NULL.");
       }
       for (int64_t i = 0; valid_ret && i < column_cnt_; ++i) {
         if (NULL == (column = column_array_[i])) {
           valid_ret = false;
-          LOG_WARN("The column is NULL.");
+          LOG_WARN_RET(OB_INVALID_ERROR, "The column is NULL.");
         } else {
           if (column->get_rowkey_position() > 0) {
             ++def_rowkey_col;
             if (column->get_column_id() > max_used_column_id_) {
               valid_ret = false;
-              LOG_WARN("column id is greater than max_used_column_id, ",
+              LOG_WARN_RET(OB_INVALID_ERROR, "column id is greater than max_used_column_id, ",
                         "column_name", column->get_column_name(),
                         "column_id", column->get_column_id(),
                         K_(max_used_column_id));
@@ -1554,7 +1554,7 @@ bool ObTableSchema::is_valid() const
             ++def_index_col;
             if (column->get_column_id() > max_used_column_id_) {
               valid_ret = false;
-              LOG_WARN("column id is greater than max_used_column_id, ",
+              LOG_WARN_RET(OB_INVALID_ERROR, "column id is greater than max_used_column_id, ",
                        "column_name", column->get_column_name(),
                        "column_id", column->get_column_id(),
                        K_(max_used_column_id));
@@ -1577,7 +1577,7 @@ bool ObTableSchema::is_valid() const
           } else {
             if (ObVarcharType == column->get_data_type()) {
               if (OB_MAX_VARCHAR_LENGTH < column->get_data_length()) {
-                LOG_WARN("length of varchar column is larger than the max allowed length, ",
+                LOG_WARN_RET(OB_INVALID_ERROR, "length of varchar column is larger than the max allowed length, ",
                     "data_length", column->get_data_length(),
                     "column_name", column->get_column_name(),
                     K(OB_MAX_VARCHAR_LENGTH));
@@ -1596,7 +1596,7 @@ bool ObTableSchema::is_valid() const
               ObLength max_length = 0;
               max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
               if (max_length < column->get_data_length()) {
-                LOG_WARN("length of text/blob column is larger than the max allowed length, ",
+                LOG_WARN_RET(OB_INVALID_ERROR, "length of text/blob column is larger than the max allowed length, ",
                     "data_length", column->get_data_length(), "column_name",
                     column->get_column_name(), K(max_length));
                 valid_ret = false;
@@ -1618,14 +1618,14 @@ bool ObTableSchema::is_valid() const
         const int64_t max_row_length = is_sys_table() || is_vir_table() ? INT64_MAX : OB_MAX_USER_ROW_LENGTH;
         const int64_t max_rowkey_length = is_sys_table() || is_vir_table() ? OB_MAX_ROW_KEY_LENGTH : OB_MAX_USER_ROW_KEY_LENGTH;
         if (max_row_length < varchar_col_total_length) {
-          LOG_WARN("total length of varchar columns is larger than the max allowed length",
+          LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar columns is larger than the max allowed length",
                    K(varchar_col_total_length), K(max_row_length));
           const ObString &col_name = column->get_column_name_str();
           LOG_USER_ERROR(OB_ERR_VARCHAR_TOO_LONG,
                          static_cast<int>(varchar_col_total_length), max_rowkey_length, col_name.ptr());
           valid_ret = false;
         } else if (max_rowkey_length < rowkey_varchar_col_length) {
-          LOG_WARN("total length of varchar primary key columns is larger than the max allowed length",
+          LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar primary key columns is larger than the max allowed length",
                    K(rowkey_varchar_col_length), K(max_rowkey_length));
           LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, max_rowkey_length);
           valid_ret = false;
@@ -1634,21 +1634,21 @@ bool ObTableSchema::is_valid() const
       if (valid_ret) {
         if (def_rowkey_col != rowkey_column_num_) {
           valid_ret = false;
-          LOG_WARN("rowkey_column_num not equal with defined_num",
+          LOG_WARN_RET(OB_INVALID_ERROR, "rowkey_column_num not equal with defined_num",
                    K_(rowkey_column_num), K(def_rowkey_col), K_(table_name));
         }
       }
       if (valid_ret) {
         if (def_index_col != index_column_num_) {
           valid_ret = false;
-          LOG_WARN("index_column_num not equal with defined_num",
+          LOG_WARN_RET(OB_INVALID_ERROR, "index_column_num not equal with defined_num",
                    K_(index_column_num), K(def_index_col), K_(table_name));
         }
       }
       if (valid_ret) {
         if (def_part_key_col != part_key_column_num_ || def_subpart_key_col != subpart_key_column_num_) {
           valid_ret = false;
-          LOG_WARN("partition key column num not equal with the defined num",
+          LOG_WARN_RET(OB_INVALID_ERROR, "partition key column num not equal with the defined num",
                    K_(part_key_column_num), K(def_part_key_col), K_(table_name));
         }
       }
@@ -2544,7 +2544,7 @@ const ObColumnSchemaV2 *ObTableSchema::get_column_schema(const char *column_name
 {
   const ObColumnSchemaV2 *column = NULL;
   if (NULL == column_name || '\0' == column_name[0]) {
-    LOG_WARN("invalid column name, ", K(column_name));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid column name, ", K(column_name));
   } else {
     column = get_column_schema(ObString::make_string(column_name));
   }
@@ -2555,7 +2555,7 @@ ObColumnSchemaV2 *ObTableSchema::get_column_schema(const char *column_name)
 {
   ObColumnSchemaV2 *column = NULL;
   if (NULL == column_name || '\0' == column_name[0]) {
-    LOG_WARN("invalid column name, ", K(column_name));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid column name, ", K(column_name));
   } else {
     column = get_column_schema(ObString::make_string(column_name));
   }
@@ -3736,7 +3736,7 @@ int ObTableSchema::convert_char_to_byte_semantics(const ObColumnSchemaV2 *col_sc
       LOG_WARN("mbmaxlen is less than 0", K(ret), K(mbmaxlen));
     } else {
       if (!is_oracle_byte_length(is_oracle_mode, col_schema->get_length_semantics())) {
-        col_byte_len = col_byte_len * mbmaxlen;
+        col_byte_len = static_cast<int32_t>(col_byte_len * mbmaxlen);
       }
     }
   }
@@ -4524,9 +4524,9 @@ int ObTableSchema::check_column_can_be_altered_online(
             int32_t src_col_byte_len = src_schema->get_data_length();
             int32_t dst_col_byte_len = dst_schema->get_data_length();
             if (!is_oracle_byte_length(is_oracle_mode, src_schema->get_length_semantics())) {
-              src_col_byte_len = src_col_byte_len * mbmaxlen;
+              src_col_byte_len = static_cast<int32_t>(src_col_byte_len * mbmaxlen);
             } else {
-              dst_col_byte_len = dst_col_byte_len * mbmaxlen;
+              dst_col_byte_len = static_cast<int32_t>(dst_col_byte_len * mbmaxlen);
             }
             if (src_col_byte_len > dst_col_byte_len) {
               ret = OB_ERR_DECREASE_COLUMN_LENGTH;
@@ -4863,7 +4863,7 @@ int ObTableSchema::get_vp_column_ids(common::ObIArray<ObColDesc> &column_ids) co
       } else if (it->is_primary_vp_column() || it->is_aux_vp_column()) {
         // The same VP table will not have a primary VP column and a secondary VP column at the same time
         // Therefore, the type of VP table is not judged here.
-        col_desc.col_id_ = it->get_column_id();
+        col_desc.col_id_ = static_cast<int32_t>(it->get_column_id());
         col_desc.col_type_ = it->get_meta_type();
         //for non-rowkey, col_desc.col_order_ is not meaningful
         if (OB_FAIL(column_ids.push_back(col_desc))) {
@@ -4899,7 +4899,7 @@ int ObTableSchema::get_vp_column_ids_with_rowkey(common::ObIArray<ObColDesc> &co
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The rowkey column is NULL, ", K(i));
       } else {
-        col_desc.col_id_ = rowkey_column->column_id_;
+        col_desc.col_id_ = static_cast<int32_t>(rowkey_column->column_id_);
         col_desc.col_type_ = rowkey_column->type_;
         col_desc.col_order_ = rowkey_column->order_;
         if (OB_FAIL(column_ids.push_back(col_desc))) {
@@ -4917,7 +4917,7 @@ int ObTableSchema::get_vp_column_ids_with_rowkey(common::ObIArray<ObColDesc> &co
           && (!no_virtual || !(it->is_virtual_generated_column()))) {
         // This column is a VP column, if it is also a primary key column, skip it,
         // because the first step has been added
-        col_desc.col_id_ = it->get_column_id();
+        col_desc.col_id_ = static_cast<int32_t>(it->get_column_id());
         col_desc.col_type_ = it->get_meta_type();
         //for non-rowkey, col_desc.col_order_ is not meaningful
         if (OB_FAIL(column_ids.push_back(col_desc))) {
@@ -5107,7 +5107,7 @@ int ObTableSchema::get_rowkey_column_ids(common::ObIArray<ObColDesc> &column_ids
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The rowkey column is NULL, ", K(i));
       } else {
-        col_desc.col_id_ = rowkey_column->column_id_;
+        col_desc.col_id_ = static_cast<int32_t>(rowkey_column->column_id_);
         col_desc.col_type_ = rowkey_column->type_;
         col_desc.col_order_ = rowkey_column->order_;
         if (OB_FAIL(column_ids.push_back(col_desc))) {
@@ -5184,7 +5184,7 @@ int ObTableSchema::get_column_ids_without_rowkey(
         LOG_WARN("The column is NULL, ", K(i));
       } else if (!column_array_[i]->is_rowkey_column()
           && !(no_virtual && column_array_[i]->is_virtual_generated_column())) {
-        col_desc.col_id_ = column_array_[i]->get_column_id();
+        col_desc.col_id_ = static_cast<int32_t>(column_array_[i]->get_column_id());
         col_desc.col_type_ = column_array_[i]->get_meta_type();
         //for non-rowkey, col_desc.col_order_ is not meaningful
         if (OB_FAIL(column_ids.push_back(col_desc))) {

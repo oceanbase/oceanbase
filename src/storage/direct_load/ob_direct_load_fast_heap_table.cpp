@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -90,12 +91,15 @@ int ObDirectLoadFastHeapTable::init(const ObDirectLoadFastHeapTableCreateParam &
   } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param));
-  } else if (OB_FAIL(copy_col_stat(param))){
-    LOG_WARN("fail to inner init", KR(ret), K(param));
   } else {
     meta_.tablet_id_ = param.tablet_id_;
     meta_.row_count_ = param.row_count_;
-    is_inited_ = true;
+    allocator_.set_tenant_id(MTL_ID());
+    if (OB_FAIL(copy_col_stat(param))){
+      LOG_WARN("fail to inner init", KR(ret), K(param));
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }

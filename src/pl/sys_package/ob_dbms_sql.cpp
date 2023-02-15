@@ -155,7 +155,7 @@ const ObObjParam *ObDbmsInfo::get_bind_param(const ObString &param_name) const
         }
       } else { /*do nothing*/ }
     } else {
-      LOG_ERROR("BUG!!!: param name is not start with colon", K(param_name));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "BUG!!!: param name is not start with colon", K(param_name));
     }
   }
   return param_value;

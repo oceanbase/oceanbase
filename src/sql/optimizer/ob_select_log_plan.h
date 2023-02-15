@@ -334,6 +334,7 @@ private:
                                      ObIArray<CandidatePlan> &left_candidates,
                                      ObIArray<CandidatePlan> &right_candidates,
                                      const bool ignore_hint,
+                                     const bool can_ignore_merge_plan,
                                      const bool no_hash_plans,
                                      ObIArray<CandidatePlan> &merge_set_plans);
 
@@ -346,7 +347,8 @@ private:
                                 ObIArray<OrderItem> &best_order_items,
                                 ObLogicalOperator *&best_plan,
                                 bool &best_need_sort,
-                                int64_t &best_prefix_pos);
+                                int64_t &best_prefix_pos,
+                                const bool can_ignore_merge_plan);
   /**
    * @brief create_merge_set
    * create merge-based set operation
@@ -503,7 +505,8 @@ private:
                                     const ObIArray<double> &sort_key_ndvs,
                                     const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
                                     common::ObIArray<int64_t> &split,
-                                    common::ObIArray<WinDistAlgo> &methods);
+                                    common::ObIArray<WinDistAlgo> &methods,
+                                    bool &has_non_parallel_wf);
 
   // Generate sort keys for window function
   // @param[out] order_item generated sort keys
@@ -528,6 +531,13 @@ private:
                                       int64_t &pby_prefix,
                                       int64_t &pby_oby_prefix);
 
+  int get_partition_count(const ObSEArray<std::pair<int64_t, int64_t>, 8> pby_oby_prefixes,
+                          const int64_t start,
+                          const int64_t end,
+                          const ObIArray<ObRawExpr*> &partition_exprs,
+                          const int64_t prefix_pos,
+                          int64_t &part_cnt);
+
   /**
    * @brief set_default_sort_directions
    * 确定窗口函数partition表达式的排序方向
@@ -544,15 +554,19 @@ private:
   int create_merge_window_function_plan(ObLogicalOperator *&top,
                                         const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
                                         const ObIArray<OrderItem> &sort_keys,
+                                        const ObIArray<ObRawExpr*> &partition_exprs,
                                         WinDistAlgo dist_method,
                                         const bool is_pushdown,
                                         ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
-                                        const ObIArray<bool> &pushdown_info);
+                                        const ObIArray<bool> &pushdown_info,
+                                        bool need_sort,
+                                        int64_t prefix_pos,
+                                        int64_t part_cnt);
 
   int create_hash_window_function_plan(ObLogicalOperator *&top,
-                                       ObIArray<ObWinFunRawExpr*> &adjusted_winfunc_exprs,
+                                       const ObIArray<ObWinFunRawExpr*> &adjusted_winfunc_exprs,
                                        const ObIArray<OrderItem> &sort_keys,
-                                       ObIArray<ObRawExpr*> &partition_exprs,
+                                       const ObIArray<ObRawExpr*> &partition_exprs,
                                        const int64_t part_cnt,
                                        const bool is_pushdown,
                                        ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
@@ -570,10 +584,10 @@ private:
 
   int check_wf_pushdown_supported(ObWinFunRawExpr *win_expr, bool &supported);
 
-  // partition_exprs for push_down window_function op is the exprs of the smallest partition
-  int get_pushdown_window_function_partition_exprs(
-      const ObIArray<ObWinFunRawExpr *> &win_exprs,
-      ObIArray<ObRawExpr*> &partition_exprs);
+  int get_pushdown_window_function_exchange_info(const ObIArray<ObWinFunRawExpr *> &win_exprs,
+                                                 const EqualSets & equal_sets,
+                                                 ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
+                                                 ObExchangeInfo &exch_info);
 
   int get_window_function_partition_exprs(const ObIArray<ObWinFunRawExpr *> &win_exprs,
                                           ObIArray<ObRawExpr*> &partition_exprs);

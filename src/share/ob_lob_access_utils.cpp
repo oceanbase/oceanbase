@@ -204,7 +204,7 @@ int ObTextStringIter::get_outrow_lob_full_data()
         COMMON_LOG(WARN,"Lob: unable to read full data over 512M lob.", K(ret), K(param));
       } else {
         ctx_->total_byte_len_ = param.byte_size_;
-        ctx_->buff_byte_len_ = param.byte_size_;
+        ctx_->buff_byte_len_ = static_cast<uint32_t>(param.byte_size_);//TODO(gehao.wh): check convert from 64 to 32
         ctx_->buff_ = static_cast<char *>(ctx_->alloc_->alloc(ctx_->buff_byte_len_));
         ObString output_data;
 
@@ -286,7 +286,7 @@ int ObTextStringIter::get_current_block(ObString &str)
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Lob: iter not accessed", K(ret));
   } else {
-    str.assign(ctx_->buff_, ctx_->content_byte_len_);
+    str.assign(ctx_->buff_, static_cast<int32_t>(ctx_->content_byte_len_));
   }
   return ret;
 }
@@ -392,7 +392,7 @@ int ObTextStringIter::get_first_block(ObString &str)
           COMMON_LOG(INFO,"Lob: buffer size changed due to configurations",
             K(ctx_->buff_byte_len_), K(ctx_->reserved_byte_len_),
             K(ctx_->reserved_len_), K(max_reserved_byte));
-          ctx_->buff_byte_len_ = max_reserved_byte;
+          ctx_->buff_byte_len_ = static_cast<uint32_t>(max_reserved_byte);
         }
       }
 
@@ -422,9 +422,9 @@ int ObTextStringIter::get_first_block(ObString &str)
         } else {
           ctx_->content_byte_len_ = output_data.length();
           // ToDo: @gehao get char len directly from lob mngr ?
-          ctx_->content_len_ = ObCharset::strlen_char(cs_type_,
+          ctx_->content_len_ = static_cast<uint32_t>(ObCharset::strlen_char(cs_type_,
                                                     output_data.ptr(),
-                                                    static_cast<int64_t>(output_data.length()));
+                                                    static_cast<int64_t>(output_data.length())));
           ctx_->last_accessed_byte_len_ = 0;
           ctx_->last_accessed_len_ = 0;
           ctx_->accessed_byte_len_ = ctx_->content_byte_len_;
@@ -461,13 +461,13 @@ int ObTextStringIter::reserve_data()
     } else if (!ctx_->is_backward_) {
       uint32 reserved_char_start = ctx_->content_len_ - ctx_->reserved_len_;
       uint32 reserved_char_pos =
-        ObCharset::charpos(cs_type_, ctx_->buff_, ctx_->content_byte_len_, reserved_char_start);
+        static_cast<uint32_t>(ObCharset::charpos(cs_type_, ctx_->buff_, ctx_->content_byte_len_, reserved_char_start));
       ctx_->reserved_byte_len_ = ctx_->content_byte_len_ - reserved_char_pos;
       MEMMOVE(ctx_->buff_, ctx_->buff_ + reserved_char_pos, ctx_->reserved_byte_len_);
     } else if (ctx_->is_backward_) {
       uint32 reserved_char_end = ctx_->reserved_len_ + 1;
       uint32 reserved_char_end_pos =
-        ObCharset::charpos(cs_type_, ctx_->buff_, ctx_->content_byte_len_, reserved_char_end);
+        static_cast<uint32_t>(ObCharset::charpos(cs_type_, ctx_->buff_, ctx_->content_byte_len_, reserved_char_end));
       ctx_->reserved_byte_len_ = reserved_char_end_pos;
       MEMMOVE(ctx_->buff_ + ctx_->content_byte_len_ - ctx_->reserved_byte_len_,
               ctx_->buff_,
@@ -535,9 +535,9 @@ int ObTextStringIter::get_next_block_inner(ObString &str)
     } else {
       ctx_->content_byte_len_ = ctx_->reserved_byte_len_ + output_data.length();
       // ToDo: @gehao get directly from lob mngr ?
-      uint32 cur_out_len = ObCharset::strlen_char(cs_type_,
+      uint32 cur_out_len = static_cast<uint32_t>(ObCharset::strlen_char(cs_type_,
                                                   output_data.ptr(),
-                                                  static_cast<int64_t>(output_data.length()));
+                                                  static_cast<int64_t>(output_data.length())));
       ctx_->content_len_ = ctx_->reserved_len_ + cur_out_len;
       ctx_->last_accessed_byte_len_ = ctx_->accessed_byte_len_;
       ctx_->last_accessed_len_ = ctx_->accessed_len_;
@@ -652,7 +652,7 @@ void ObTextStringIter::set_forward()
 
 uint64_t ObTextStringIter::get_start_offset()
 {
-  uint32_t start_offset = 0;
+  uint64_t start_offset = 0;
   if (!is_init_ || !is_outrow_ || !has_lob_header_
       || state_ <= TEXTSTRING_ITER_INIT || OB_ISNULL(ctx_)) {
   } else {
@@ -892,8 +892,8 @@ int ObTextStringIter::append_outrow_lob_fulldata(ObObj &obj,
         COMMON_LOG(WARN,"Lob: invalid mem locator", K(*mem_loc), K(pos));
       } else {
         ObMemLobExternHeader *mem_loc_extern = reinterpret_cast<ObMemLobExternHeader *>(mem_loc->data_);
-        mem_loc_extern->payload_offset_ = pos - sizeof(ObLobLocator);
-        mem_loc_extern->payload_size_ = lob_data_byte_len;
+        mem_loc_extern->payload_offset_ = static_cast<uint32_t>(pos - sizeof(ObLobLocator));
+        mem_loc_extern->payload_size_ = static_cast<uint32_t>(lob_data_byte_len);
 
         // copy inrow data
         ObTextStringIterState state;
@@ -909,7 +909,7 @@ int ObTextStringIter::append_outrow_lob_fulldata(ObObj &obj,
             pos += src_block_data.length();
           }
           OB_ASSERT(pos == res_byte_len);
-          obj.set_lob_value(obj.get_type(), buff, res_byte_len);
+          obj.set_lob_value(obj.get_type(), buff, static_cast<int32_t>(res_byte_len));
           obj.set_has_lob_header(); // must has lob header
         }
       }
@@ -990,8 +990,9 @@ int ObTextStringIter::convert_outrow_lob_to_inrow_templob(const ObObj &in_obj,
 
 // ----- implementations of ObTextStringResult -----
 
-void ObTextStringResult::calc_buffer_len(int64_t res_len)
+int ObTextStringResult::calc_buffer_len(int64_t res_len)
 {
+  int ret = OB_SUCCESS;
   if (!(is_lob_storage(type_))) { // tinytext no has lob header
     buff_len_ = res_len;
   } else {
@@ -1002,12 +1003,14 @@ void ObTextStringResult::calc_buffer_len(int64_t res_len)
       bool has_extern = lib::is_oracle_mode(); // even oracle may not need extern for temp data
       ObMemLobExternFlags extern_flags(has_extern);
       res_len += sizeof(ObLobCommon);
-      buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, res_len, false);
+      buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), false);
     } else {
-      LOG_WARN("Lob: out row temp lob not implemented",
-        K(OB_NOT_IMPLEMENT), K(this), K(pos_), K(buff_len_));
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("Lob: out row temp lob not implemented, not support length bigger than 512M",
+        K(ret), K(this), K(pos_), K(buff_len_), K(res_len));
     }
   }
+  return ret;
 }
 
 int ObTextStringResult::fill_temp_lob_header(const int64_t res_len)
@@ -1019,7 +1022,7 @@ int ObTextStringResult::fill_temp_lob_header(const int64_t res_len)
     LOG_WARN("Lob: allocate memory for lob result failed", K(type_), K(buff_len_), K(ret));
   } else if (!(is_lob_storage(type_))) { // do nothing
   } else if (res_len <= OB_MAX_LONGTEXT_LENGTH - MAX_TMP_LOB_HEADER_LEN) {
-    ObLobLocatorV2 locator(buffer_, buff_len_, has_lob_header_);
+    ObLobLocatorV2 locator(buffer_, static_cast<uint32_t>(buff_len_), has_lob_header_);
     // temp lob in oracle mode not need extern neither, for it does not have rowkey
     // However we mock extern failed in case of return it to old client
     ObMemLobExternFlags extern_flags(lib::is_oracle_mode());
@@ -1030,7 +1033,7 @@ int ObTextStringResult::fill_temp_lob_header(const int64_t res_len)
                              extern_flags,
                              rowkey_str,
                              &lob_common,
-                             res_len + sizeof(ObLobCommon),
+                             static_cast<uint32_t>(res_len + sizeof(ObLobCommon)),
                              false))) {
       LOG_WARN("Lob: fill temp lob locator failed", K(type_), K(ret));
     } else if (OB_FAIL((locator.set_payload_data(&lob_common, empty_str)))) {
@@ -1053,7 +1056,8 @@ int ObTextStringResult::init(int64_t res_len, ObIAllocator *allocator)
   } else if (!(ob_is_string_or_lob_type(type_) || ob_is_json(type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Lob: unexpected expr result type for textstring result", K(ret), K(type_));
-  } else if (FALSE_IT(calc_buffer_len(res_len))) {
+  } else if (OB_FAIL(calc_buffer_len(res_len))) {
+    LOG_WARN("fail to calc buffer len", K(ret), K(res_len));
   } else if (buff_len_ == 0) {
     OB_ASSERT(has_lob_header_ == false); // empty result without header
   } else {

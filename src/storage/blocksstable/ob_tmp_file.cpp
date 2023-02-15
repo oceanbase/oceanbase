@@ -1147,7 +1147,7 @@ void ObTmpFileHandle::reset()
   if (NULL != ptr_) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = ObTmpFileManager::get_instance().dec_handle_ref(*this))) {
-      STORAGE_LOG(WARN, "fail to decrease handle reference count", K(tmp_ret));
+      STORAGE_LOG_RET(WARN, tmp_ret, "fail to decrease handle reference count", K(tmp_ret));
     } else {
       ptr_ = nullptr;
     }
@@ -1250,7 +1250,7 @@ int ObTmpFileManager::get_next_fd(int64_t &next_fd)
     }
   } else {
     ret = OB_FILE_ALREADY_EXIST;
-    STORAGE_LOG(WARN, "too much file", K(ret));
+    STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "too much file", K(ret));
   }
   return ret;
 }

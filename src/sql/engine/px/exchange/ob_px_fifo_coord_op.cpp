@@ -147,11 +147,13 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
       clear_dynamic_const_parent_flag();
       metric_.mark_interval_start();
       if (!is_vectorized()) {
-        ret = row_reader_.get_next_row(MY_SPEC.child_exprs_, eval_ctx_);
+        ret = row_reader_.get_next_row(MY_SPEC.child_exprs_,
+                                       MY_SPEC.dynamic_const_exprs_,
+                                       eval_ctx_);
       } else {
         int64_t read_rows = 0;
-        ret = row_reader_.get_next_batch(MY_SPEC.child_exprs_, eval_ctx_,
-                                         row_cnt, read_rows, stored_rows_);
+        ret = row_reader_.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
+                                         eval_ctx_,  row_cnt, read_rows, stored_rows_);
         brs_.size_ = read_rows;
       }
       metric_.mark_interval_end(&time_recorder_);

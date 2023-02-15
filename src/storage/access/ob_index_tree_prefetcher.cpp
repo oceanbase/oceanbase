@@ -29,6 +29,7 @@ void ObIndexTreePrefetcher::reset()
 {
   is_inited_ = false;
   is_rescan_ = false;
+  rescan_cnt_ = 0;
   data_version_ = 0;
   sstable_ = nullptr;
   data_block_cache_ = nullptr;
@@ -107,6 +108,14 @@ int ObIndexTreePrefetcher::switch_context(
       micro_block_handle_mgr_.reset();
       if (OB_FAIL(micro_block_handle_mgr_.init(true, false, *access_ctx.stmt_allocator_))) {
         LOG_WARN("failed to init block handle mgr", K(ret));
+      }
+    } else {
+      rescan_cnt_++;
+      if (rescan_cnt_ >= MAX_RESCAN_HOLD_LIMIT) {
+        rescan_cnt_ = 0;
+        if (OB_FAIL(micro_block_handle_mgr_.reset_handle_cache())) {
+          STORAGE_LOG(WARN, "failed to reset handle cache", K(ret));
+        }
       }
     }
   }
@@ -483,6 +492,14 @@ int ObIndexTreeMultiPrefetcher::switch_context(
       if (OB_FAIL(micro_block_handle_mgr_.init(true, false, *access_ctx.stmt_allocator_))) {
         LOG_WARN("failed to init block handle mgr", K(ret));
       }
+    } else {
+      rescan_cnt_++;
+      if (rescan_cnt_ >= MAX_RESCAN_HOLD_LIMIT) {
+        rescan_cnt_ = 0;
+        if (OB_FAIL(micro_block_handle_mgr_.reset_handle_cache())) {
+          STORAGE_LOG(WARN, "failed to reset handle cache", K(ret));
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       if (index_scanner_.is_valid()) {
@@ -657,6 +674,7 @@ void ObIndexTreeMultiPassPrefetcher::reset()
   can_blockscan_ = false;
   is_prefetch_end_ = false;
   is_row_lock_checked_ = false;
+  need_check_prefetch_depth_ = false;
   cur_range_fetch_idx_ = 0;
   cur_range_prefetch_idx_ = 0;
   max_range_prefetching_cnt_ = 0;
@@ -682,6 +700,7 @@ void ObIndexTreeMultiPassPrefetcher::reuse()
   clean_blockscan_check_info();
   is_prefetch_end_ = false;
   is_row_lock_checked_ = false;
+  need_check_prefetch_depth_ = false;
   cur_range_fetch_idx_ = 0;
   cur_range_prefetch_idx_ = 0;
   cur_micro_data_fetch_idx_ = -1;
@@ -799,6 +818,12 @@ int ObIndexTreeMultiPassPrefetcher::init_basic_info(
   cur_level_ = 0;
   iter_type_ = iter_type;
   index_tree_height_ = sstable_->get_meta().get_index_tree_height();
+  need_check_prefetch_depth_ =
+      (ObStoreRowIterator::IteratorScan == iter_type || ObStoreRowIterator::IteratorMultiScan == iter_type) &&
+      iter_param_->limit_prefetch_ &&
+      nullptr != access_ctx_->limit_param_ &&
+      access_ctx_->limit_param_->limit_ >= 0 &&
+      access_ctx_->limit_param_->limit_ < 4096;
   switch (iter_type) {
     case ObStoreRowIterator::IteratorMultiGet: {
       rowkeys_ = static_cast<const common::ObIArray<blocksstable::ObDatumRowkey> *> (query_range);
@@ -965,6 +990,7 @@ int ObIndexTreeMultiPassPrefetcher::try_add_query_range(ObIndexTreeLevelHandle &
   return ret;
 }
 
+static int32_t OB_SSTABLE_MICRO_AVG_COUNT = 100;
 int ObIndexTreeMultiPassPrefetcher::prefetch_micro_data()
 {
   int ret = OB_SUCCESS;
@@ -978,9 +1004,15 @@ int ObIndexTreeMultiPassPrefetcher::prefetch_micro_data()
   } else {
     int64_t prefetched_cnt = 0;
     int64_t prefetch_micro_idx = 0;
-    prefetch_depth_ = min(max_micro_handle_cnt_, 2 * prefetch_depth_);
+    prefetch_depth_ = MIN(max_micro_handle_cnt_, 2 * prefetch_depth_);
+    if (need_check_prefetch_depth_) {
+      int64_t prefetch_micro_cnt = MAX(1,
+          (access_ctx_->limit_param_->offset_ + access_ctx_->limit_param_->limit_ - access_ctx_->out_cnt_ + \
+          OB_SSTABLE_MICRO_AVG_COUNT - 1) / OB_SSTABLE_MICRO_AVG_COUNT);
+      prefetch_depth_ = MIN(prefetch_depth_, prefetch_micro_cnt);
+    }
     int64_t prefetch_depth = min(static_cast<int64_t>(prefetch_depth_),
-                                   max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_));
+                                 max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_));
     while (OB_SUCC(ret) && prefetched_cnt < prefetch_depth) {
       if (OB_FAIL(drill_down())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {

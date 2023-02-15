@@ -135,7 +135,9 @@ public:
   // @brief Before the standby tenant switchover to primary, check if all primary logs are restored in the standby
   // 1. for standby based on archive, check the max archived log is restored in the standby
   // 2. for standby based on net service, check the max log in primary is restored in the standby
-  bool check_restore_to_newest();
+  // @param[out] end_scn, the end_scn of palf
+  // @param[out] archive_scn, the max scn in archive logs
+  int check_restore_to_newest(share::SCN &end_scn, share::SCN &archive_scn);
   // @brief Remote Fetch Log Workers fetch log from remote source in parallel, but raw write to palf in series
   // This interface to to sort and cache logs
   // @ret_code  OB_NOT_MASTER   the restore_handler is not master

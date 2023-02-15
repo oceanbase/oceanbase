@@ -649,8 +649,11 @@ int ObDmlCgService::convert_data_table_rowkey_info(ObLogDelUpd &op,
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
     ObRawExpr *expr = rowkey_exprs.at(i);
     if (!expr->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr type is not column_ref expr", K(ret), KPC(expr));
+      // do nothing.
+      // For a 4.x partition table without a primary key, there is no redundant partition key in the primary key,
+      // so its unique_key is a hidden auto-increment column + partition key. For replace and insert_up scenarios,
+      // here will be no primary key conflicts when writing the primary table , so the main table does not need to bring back unique_key
+      // (self-increment column + partition construction)
     } else {
       ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(expr);
       uint64_t base_cid = OB_INVALID_ID;
@@ -731,7 +734,6 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
                                                     ObConflictCheckerCtdef &conflict_checker_ctdef)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 16> table_column_exprs;
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
 
   if (OB_FAIL(get_table_unique_key_exprs(op, index_dml_info, rowkey_exprs))) {
@@ -745,9 +747,7 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
   } else if (OB_FAIL(cg_.generate_rt_exprs(rowkey_exprs,
                                            conflict_checker_ctdef.data_table_rowkey_expr_))) {
     LOG_WARN("fail to generate data_table rowkey_expr", K(ret), K(rowkey_exprs));
-  } else if (OB_FAIL(convert_old_row_exprs(index_dml_info.column_exprs_, table_column_exprs))) {
-      LOG_WARN("convert old row exprs failed", K(ret));
-  } else if (OB_FAIL(cg_.generate_rt_exprs(table_column_exprs,
+  } else if (OB_FAIL(cg_.generate_rt_exprs(index_dml_info.column_old_values_exprs_,
                                            conflict_checker_ctdef.table_column_exprs_))) {
     LOG_WARN("fail to generate table columns rt exprs ", K(ret));
   } else {
@@ -873,6 +873,24 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
   return ret;
 }
 
+int ObDmlCgService::generate_access_exprs(const common::ObIArray<ObColumnRefRawExpr*> &columns,
+                               common::ObIArray<ObRawExpr*> &access_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
+    ObRawExpr *expr = columns.at(i);
+    if (expr->is_column_ref_expr() &&
+      static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column()) {
+      // do nothing.
+    } else {
+      if (OB_FAIL(add_var_to_array_no_dup(access_exprs, expr))) {
+        LOG_WARN("failed to add param expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
                                         const IndexDMLInfo &index_dml_info,
                                         ObDASScanCtDef &scan_ctdef)
@@ -896,8 +914,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
   } else if (OB_FAIL(schema_guard->get_schema_guard()->get_schema_version(
       TABLE_SCHEMA, tenant_id, ref_table_id, scan_ctdef.schema_version_))) {
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K(ref_table_id));
-  } else if (FALSE_IT(access_exprs.assign(index_dml_info.column_old_values_exprs_))) {
-    // do nothing
+  } else if (OB_FAIL(generate_access_exprs(index_dml_info.column_exprs_, access_exprs))) {
+    LOG_WARN("fail to generate access exprs ", K(ret));
   } else if (OB_FAIL(cg_.generate_rt_exprs(access_exprs,
                                            scan_ctdef.pd_expr_spec_.access_exprs_))) {
     LOG_WARN("fail to generate rt exprs ", K(ret));
@@ -910,6 +928,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
       if (OB_ISNULL(item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column item", K(i), K(item));
+      } else if (item->is_virtual_generated_column()) {
+        // do nothing.
       } else if (OB_FAIL(get_column_ref_base_cid(op, item, base_cid))) {
         LOG_WARN("get base column id failed", K(ret), K(item));
       } else if (OB_FAIL(scan_ctdef.access_column_ids_.push_back(base_cid))) {
@@ -923,7 +943,7 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
     if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_))) {
       LOG_WARN("convert table param failed", K(ret));
     } else if (OB_FAIL(cg_.generate_calc_exprs(dep_exprs,
-                                               access_exprs,
+                                               index_dml_info.column_old_values_exprs_,
                                                scan_ctdef.pd_expr_spec_.calc_exprs_,
                                                op.get_type(),
                                                false))) {
@@ -1783,7 +1803,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       } else if (trigger_info->is_enable()) {
         // if disable trigger, use the previous plan cache, whether trigger is enable ???
         need_fire = trigger_info->has_event(dml_event);
-        if (OB_SUCC(ret) && need_fire && !trigger_info->get_ref_trg_name().empty()) {
+        if (OB_SUCC(ret) && need_fire && !trigger_info->get_ref_trg_name().empty() && lib::is_oracle_mode()) {
           const ObTriggerInfo *ref_trigger_info = NULL;
           uint64_t ref_db_id = OB_INVALID_ID;
           OZ (schema_guard->get_database_id(tenant_id, trigger_info->get_ref_trg_db_name(), ref_db_id));
@@ -1793,9 +1813,26 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
             ret = OB_ERR_TRIGGER_NOT_EXIST;
             LOG_WARN("ref_trigger_info is NULL", K(trigger_info->get_ref_trg_db_name()),
                      K(trigger_info->get_ref_trg_name()), K(ret));
-            if (lib::is_oracle_mode()) {
-              LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trigger_info->get_ref_trg_name().length(),
-                                    trigger_info->get_ref_trg_name().ptr());
+            LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trigger_info->get_ref_trg_name().length(),
+                                  trigger_info->get_ref_trg_name().ptr());
+          }
+          if (OB_SUCC(ret)) {
+            if (trigger_info->is_simple_dml_type() && !ref_trigger_info->is_compound_dml_type()) {
+              if (!(trigger_info->is_row_level_before_trigger() && ref_trigger_info->is_row_level_before_trigger())
+                  && !(trigger_info->is_row_level_after_trigger() && ref_trigger_info->is_row_level_after_trigger())
+                  && !(trigger_info->is_stmt_level_before_trigger() && ref_trigger_info->is_stmt_level_before_trigger())
+                  && !(trigger_info->is_stmt_level_after_trigger()
+                       && ref_trigger_info->is_stmt_level_after_trigger())) {
+                ret = OB_ERR_RECOMPILATION_OBJECT;
+                LOG_WARN("errors during recompilation/revalidation of trigger",
+                          KPC(trigger_info), KPC(ref_trigger_info), K(ret));
+                // ref_trg_db_name and trigger_info's database_name are the same
+                LOG_ORACLE_USER_ERROR(OB_ERR_RECOMPILATION_OBJECT,
+                                      trigger_info->get_ref_trg_db_name().length(),
+                                      trigger_info->get_ref_trg_db_name().ptr(),
+                                      trigger_info->get_trigger_name().length(),
+                                      trigger_info->get_trigger_name().ptr());
+              }
             }
           }
         }

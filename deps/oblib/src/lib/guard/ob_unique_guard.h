@@ -224,9 +224,9 @@ public:
         allocator_->free(data_);
       }
     } else if (!OB_ISNULL(data_)) {
-      OCCAM_LOG(ERROR, "should never go here", K(*this));
+      OCCAM_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "should never go here", K(*this));
     } else if (!OB_ISNULL(allocator_)) {
-      OCCAM_LOG(ERROR, "should never go here", K(*this));
+      OCCAM_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "should never go here", K(*this));
     } else {}// it'ok that both data_ and allocator_ are nullptr, ObUniqueGuard has been reset
     data_ = nullptr;
     deleter_ = nullptr;

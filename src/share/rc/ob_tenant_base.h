@@ -44,7 +44,6 @@ namespace sql {
   class ObDASIDService;
   class ObFLTSpanMgr;
   class ObSqlPlanMgr;
-  class ObPlanRealInfoMgr;
   class ObUDRMgr;
   class ObPlanCache;
   class ObPsCache;
@@ -123,6 +122,7 @@ namespace rootserver
   class ObPrimaryMajorFreezeService;
   class ObRestoreMajorFreezeService;
   class ObTenantRecoveryReportor;
+  class ObTenantInfoLoader;
   class ObPrimaryLSService;
   class ObRestoreService;
   class ObRecoveryLSService;
@@ -194,6 +194,7 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       observer::ObTenantMetaChecker*,                \
       storage::ObStorageHAHandlerService*,           \
       rootserver::ObTenantRecoveryReportor*,         \
+      rootserver::ObTenantInfoLoader*,         \
       rootserver::ObPrimaryLSService*,               \
       rootserver::ObRecoveryLSService*,              \
       rootserver::ObRestoreService*,                 \
@@ -207,9 +208,9 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       transaction::ObStandbyTimestampService*,       \
       transaction::ObTimestampAccess*,               \
       transaction::ObTransIDService*,                \
+      sql::ObPlanBaselineMgr*,                       \
       sql::ObPsCache*,                               \
       sql::ObPlanCache*,                             \
-      sql::ObPlanBaselineMgr*,                  \
       sql::dtl::ObTenantDfc*,                        \
       omt::ObPxPools*,                               \
       lib::Worker::CompatMode,                       \
@@ -238,7 +239,6 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       sql::ObUDRMgr*,                        \
       sql::ObFLTSpanMgr*,                            \
       sql::ObSqlPlanMgr*,                            \
-      sql::ObPlanRealInfoMgr*,                       \
       ObTestModule*,                                 \
       oceanbase::common::sqlclient::ObTenantOciEnvs* \
   )
@@ -369,9 +369,9 @@ public:
   int update_thread_cnt(double tenant_unit_cpu);
   int64_t update_memory_size(int64_t memory_size)
   {
-    int orig_size_ = memory_size_;
+    int64_t orig_size = memory_size_;
     memory_size_ = memory_size;
-    return orig_size_;
+    return orig_size;
   }
   int64_t get_memory_size() { return memory_size_; }
   bool update_mini_mode(bool mini_mode)

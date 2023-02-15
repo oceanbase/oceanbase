@@ -1817,7 +1817,7 @@ public:
     if (common::OB_SUCCESS != ret_) {
       // failed before
     } else if (common::OB_SUCCESS != (ret_ = common::ObRowUtil::compare_row(left, right, cmp))) {
-      SHARE_SCHEMA_LOG(ERROR, "l or r is invalid", K(ret_));
+      SHARE_SCHEMA_LOG_RET(ERROR, ret_, "l or r is invalid", K(ret_));
     } else {
       bool_ret = (cmp < 0);
     }
@@ -2278,7 +2278,6 @@ public:
   int try_init_partition_idx();
 
   int serialize_partitions(char *buf, const int64_t data_len, int64_t &pos) const;
-  int get_def_subpartitions_serialize_len();
   int serialize_def_subpartitions(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_partitions(const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_def_subpartitions(const char *buf, const int64_t data_len, int64_t &pos);
@@ -3877,7 +3876,7 @@ public:
   inline int set_x509_issuer(const common::ObString &x509_issuer) { return deep_copy_str(x509_issuer, x509_issuer_); }
   inline int set_x509_subject(const char *x509_subject) { return deep_copy_str(x509_subject, x509_subject_); }
   inline int set_x509_subject(const common::ObString &x509_subject) { return deep_copy_str(x509_subject, x509_subject_); }
-  inline void set_type(const uint64_t type) { type_ = type; }
+  inline void set_type(const int32_t type) { type_ = type; }
   inline void set_profile_id(const uint64_t profile_id) { profile_id_ = profile_id; }
   inline void set_password_last_changed(int64_t ts) { password_last_changed_timestamp_ = ts; }
   inline void set_max_connections(uint64_t max_connections) { max_connections_ = max_connections; }
@@ -3906,8 +3905,7 @@ public:
   inline uint64_t get_max_user_connections() const { return max_user_connections_; }
   // role
   inline bool is_role() const { return OB_ROLE == type_; }
-  inline int get_grantee_count() const { return grantee_id_array_.count(); }
-  inline int get_role_count() const { return role_id_array_.count(); }
+  inline int64_t get_role_count() const { return role_id_array_.count(); }
   const common::ObSEArray<uint64_t, 8>& get_grantee_id_array() const { return grantee_id_array_; }
   const common::ObSEArray<uint64_t, 8>& get_role_id_array() const { return role_id_array_; }
   const common::ObSEArray<uint64_t, 8>& get_role_id_option_array() const { return role_id_option_array_; }

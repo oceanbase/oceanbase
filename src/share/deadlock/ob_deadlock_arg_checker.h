@@ -82,21 +82,21 @@ do {\
 #define CHECK_INIT()\
 do {\
 if (is_inited_ != true) {\
-  DETECT_LOG(WARN, "not init yet", K_(is_inited));\
+  DETECT_LOG_RET(WARN, OB_NOT_INIT, "not init yet", K_(is_inited));\
   return OB_NOT_INIT;\
 }} while(0)
 
 #define CHECK_START()\
 do {\
 if (is_running_ != true) {\
-  DETECT_LOG(WARN, "not running", K_(is_running));\
+  DETECT_LOG_RET(WARN, OB_NOT_RUNNING, "not running", K_(is_running));\
   return OB_NOT_RUNNING;\
 }} while(0)
 
 #define CHECK_ENABLED()\
 do {\
 if (!is_deadlock_enabled()) {\
-  DETECT_LOG(WARN, "deadlock not enabled", K(is_deadlock_enabled()));\
+  DETECT_LOG_RET(WARN, OB_NOT_RUNNING, "deadlock not enabled", K(is_deadlock_enabled()));\
   return OB_NOT_RUNNING;\
 }} while(0)
 

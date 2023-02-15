@@ -455,7 +455,7 @@ bool ObBootstrap::TableIdCompare::operator() (const ObTableSchema* left, const O
 
   if (OB_ISNULL(left) || OB_ISNULL(right)) {
     ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K_(ret), KP(left), KP(right));
+    LOG_WARN_RET(ret_, "invalid argument", K_(ret), KP(left), KP(right));
   } else {
     bool left_is_sys_index = left->is_index_table() && is_sys_table(left->get_table_id());
     bool right_is_sys_index = right->is_index_table() && is_sys_table(right->get_table_id());

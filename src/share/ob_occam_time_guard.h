@@ -90,14 +90,14 @@ private:
                 if (cur_ts > allow_print_ts) {
                   int64_t next_allow_print_ts = point.timeout_ts_ + 30_s;
                   next_print_ts_[idx] = next_allow_print_ts;// only this thread read it, so no need atomic write
-                  OCCAM_LOG(WARN, "thread maybe hung!", K(point), K(idx), KTIMERANGE(next_allow_print_ts, HOUR, MSECOND));
+                  OCCAM_LOG_RET(WARN, OB_ERR_UNEXPECTED, "thread maybe hung!", K(point), K(idx), KTIMERANGE(next_allow_print_ts, HOUR, MSECOND));
                 } else {
                   OCCAM_LOG(DEBUG, "this thread has been repoted hung, wait for next print time",
                                 K(point), K(idx), KTIME(allow_print_ts));
                 }
               }
             }
-            ob_usleep(500_ms);
+            ob_usleep(static_cast<uint32_t>(500_ms));
           } else {
             OCCAM_LOG(INFO, "thread hung detect thread is stopped");
             break;
@@ -246,7 +246,7 @@ public:
       if (n >= buffer_size) {
         snprintf(&strbuffer[buffer_size - 6], 6, "..., ");
       }
-      ::oceanbase::common::OB_PRINT(log_mod_, OB_LOG_LEVEL_DIRECT(WARN), strbuffer, LOG_KVS(K(*this)));
+      ::oceanbase::common::OB_PRINT(log_mod_, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(WARN), OB_SUCCESS, strbuffer, LOG_KVS(K(*this)));
     }
   }
   bool is_timeout()
@@ -263,7 +263,7 @@ public:
     if (OB_LIKELY(idx_ < CAPACITY)) {
       int64_t now = common::ObTimeUtility::fast_current_time();
       line_array_[idx_] = static_cast<uint16_t>(line);
-      click_poinsts_[idx_] = now - last_click_ts_;
+      click_poinsts_[idx_] = static_cast<uint32_t>(now - last_click_ts_);
       last_click_ts_ = now;
       ++idx_;
     }
@@ -378,7 +378,7 @@ public:
       MEM_BARRIER();
       ++g_point.version_;
     } else {
-      OCCAM_LOG(WARN, "this time guard will not detect thread hung, cause global slot is not enough",
+      OCCAM_LOG_RET(WARN, OB_ERR_UNEXPECTED, "this time guard will not detect thread hung, cause global slot is not enough",
                    K(file), K(func), K(line), K(lbt()));
     }
   }
@@ -435,7 +435,7 @@ struct TimeGuardFactory
                                      const int64_t line,
                                      const char *mod) {
     UNUSED(line);
-    return ObOccamTimeGuard(threshold1, file, func, mod);
+    return ObOccamTimeGuard(static_cast<uint32_t>(threshold1), file, func, mod);
   }
   static ObOccamTimeGuardDetectHung make_guard(const int64_t threshold1,
                                                const int64_t threshold2,
@@ -443,7 +443,8 @@ struct TimeGuardFactory
                                                const char *func,
                                                const int64_t line,
                                                const char *mod) {
-    return ObOccamTimeGuardDetectHung(threshold1, threshold2, file, func, mod, line);
+    return ObOccamTimeGuardDetectHung(static_cast<uint32_t>(threshold1),
+        static_cast<uint32_t>(threshold2), file, func, mod, line);
   }
 };
 

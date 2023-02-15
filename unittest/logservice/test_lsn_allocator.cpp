@@ -314,7 +314,7 @@ public:
     log_size_ = log_size_array[th_idx % LOG_LOG_CNT];
     th_idx_ = th_idx;
     if (0 != pthread_create(&thread_, NULL, routine, this)){
-      PALF_LOG(ERROR, "create thread fail", K(thread_));
+      PALF_LOG_RET(ERROR, OB_ERR_SYS, "create thread fail", K(thread_));
     } else {
       PALF_LOG(INFO, "create thread success", K(thread_), K(th_idx_), K(log_size_));
     }

@@ -75,7 +75,7 @@ bool ObLSLocationUpdateTask::operator ==(const ObLSLocationUpdateTask &other) co
 {
   bool equal = false;
   if (!is_valid() || !other.is_valid()) {
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (this == &other) { // same pointer
     equal = true;
   } else {
@@ -153,7 +153,7 @@ bool ObTabletLSUpdateTask::operator ==(const ObTabletLSUpdateTask &other) const
 {
   bool equal = false;
   if (!is_valid() || !other.is_valid()) {
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (this == &other) { // same pointer
     equal = true;
   } else {
@@ -284,7 +284,7 @@ bool ObVTableLocUpdateTask::operator ==(const ObVTableLocUpdateTask &other) cons
 {
   bool equal = false;
   if (!is_valid() || !other.is_valid()) {
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (this == &other) { // same pointer
     equal = true;
   } else {

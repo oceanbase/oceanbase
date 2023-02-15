@@ -140,7 +140,7 @@ inline bool ObSegmentBitSet<N, BlockAllocatorT>::has_member(int64_t index) const
 {
   bool bool_ret = false;
   if (OB_UNLIKELY(index < 0)) {
-    LIB_LOG(WARN, "negative bitmapset member not allowed", K(index));
+    LIB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "negative bitmapset member not allowed", K(index));
     //just return false
   } else if (OB_UNLIKELY(index >= bit_count())) {
     //the bit is not set
@@ -271,7 +271,7 @@ inline bool ObFixedBitSet<N>::has_member(int64_t index) const
 {
   bool bool_ret = false;
   if (OB_UNLIKELY(index < 0)) {
-    LIB_LOG(WARN, "negative bitmapset member not allowed", K(index));
+    LIB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "negative bitmapset member not allowed", K(index));
     //just return false
   } else if (OB_UNLIKELY(index >= bit_count())) {
     //the bit is not set
@@ -747,7 +747,7 @@ inline bool ObBitSet<N, BlockAllocatorT, auto_free>::has_member(int64_t index) c
 {
   bool bool_ret = false;
   if (OB_UNLIKELY(index < 0)) {
-    LIB_LOG(WARN, "negative bitmapset member not allowed", K(index));
+    LIB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "negative bitmapset member not allowed", K(index));
     //just return false
   } else if (OB_UNLIKELY(index >= bit_count())) {
     //the bit is not set

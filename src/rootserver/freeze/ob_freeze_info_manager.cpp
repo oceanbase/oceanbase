@@ -329,7 +329,7 @@ int ObFreezeInfoManager::set_freeze_info()
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
         ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-        LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
+        LOG_WARN("fail to end trans", "is_commit", OB_SUCCESS == ret,  KR(tmp_ret));
       }
     }
   }
@@ -478,12 +478,9 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
 
   SCN cur_snapshot_gc_scn;
   SCN new_snapshot_gc_scn;
-  SCN cur_gts_scn;
   int64_t affected_rows = 0;
   ObMySQLTransaction trans;
   ObRecursiveMutexGuard guard(lock_);
-  int64_t max_stale_time_ns = transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(
-            tenant_id_, transaction::ObWeakReadUtil::IGNORE_TENANT_EXIST_WARN) * 1000;
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner error", KR(ret));
@@ -492,10 +489,11 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
   } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(trans, tenant_id_,
       cur_snapshot_gc_scn))) {
     LOG_WARN("fail to select snapshot_gc_scn for update", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(get_gts(cur_gts_scn))) {
+  }
+  // no need to minus max_stale_time_for_weak_consistency since 4.1, because the collection of
+  // multi-version data no longer depends on snapshot_gc_scn since 4.1
+  else if (OB_FAIL(get_gts(new_snapshot_gc_scn))) {
     LOG_WARN("fail to get_gts", KR(ret));
-  } else if (FALSE_IT(new_snapshot_gc_scn = SCN::minus(cur_gts_scn, max_stale_time_ns))) {
-    LOG_WARN("fail to calc new snapshot_gc_scn", KR(ret), K(cur_gts_scn));
   } else if ((new_snapshot_gc_scn <= freeze_info_.latest_snapshot_gc_scn_)
              || (cur_snapshot_gc_scn >= new_snapshot_gc_scn)) {
     ret = OB_ERR_UNEXPECTED;
@@ -515,7 +513,7 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
       ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-      LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
+      LOG_WARN("fail to end trans", "is_commit", OB_SUCCESS == ret, KR(tmp_ret));
     }
   }
 
@@ -605,7 +603,7 @@ int ObFreezeInfoManager::try_gc_freeze_info()
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
       ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-      LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
+      LOG_WARN("fail to end trans", "is_commit", OB_SUCCESS == ret, KR(tmp_ret));
     }
   }
   return ret;
@@ -628,7 +626,6 @@ int ObFreezeInfoManager::check_snapshot_gc_scn()
 {
   int ret = OB_SUCCESS;
   SCN cur_gts_scn;
-  SCN snapshot_gc_scn;
   int64_t delay = 0;
   int64_t start_service_time = -1;
   int64_t total_service_time = -1;
@@ -639,14 +636,14 @@ int ObFreezeInfoManager::check_snapshot_gc_scn()
   } else if (OB_FAIL(get_gts(cur_gts_scn))) {
     LOG_WARN("fail to get_gts", KR(ret));
   } else {
-    snapshot_gc_scn = freeze_info_.latest_snapshot_gc_scn_;
+    const SCN &snapshot_gc_scn = freeze_info_.latest_snapshot_gc_scn_;
     if (snapshot_gc_scn > cur_gts_scn) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to check snapshot_gc_scn, snapshot_gc_scn is larger than cur_gts_scn",
                KR(ret), K(snapshot_gc_scn), K(cur_gts_scn), K_(tenant_id));
     } else {
-      const int64_t snapshot_gc_time_us = freeze_info_.latest_snapshot_gc_scn_.convert_to_ts();
-      const int64_t delay = ((snapshot_gc_time_us == 0) ? 0 : (ObTimeUtility::current_time() - snapshot_gc_time_us));
+      const int64_t delay = (!snapshot_gc_scn.is_valid_and_not_min()) ? 0 :
+          (ObTimeUtility::current_time() - snapshot_gc_scn.convert_to_ts());
 
       if (TC_REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
         if (delay > SNAPSHOT_GC_TS_ERROR) {
@@ -664,12 +661,12 @@ int ObFreezeInfoManager::check_snapshot_gc_scn()
           } else if (FALSE_IT(total_service_time = ObTimeUtility::current_time() - start_service_time)) {
           } else if ((start_service_time > 0) && (total_service_time > SNAPSHOT_GC_TS_ERROR)) {
             LOG_ERROR("rs_monitor_check : snapshot_gc_ts delay for a long time",
-                      K(snapshot_gc_time_us), K(delay), K_(tenant_id), K(start_service_time),
+                      K(snapshot_gc_scn), K(delay), K_(tenant_id), K(start_service_time),
                       K(total_service_time));
           }
         } else if (delay > SNAPSHOT_GC_TS_WARN) {
           LOG_WARN("rs_monitor_check : snapshot_gc_ts delay for a long time",
-                  K(snapshot_gc_time_us), K(delay), K_(tenant_id));
+                  K(snapshot_gc_scn), K(delay), K_(tenant_id));
         }
       }
     }

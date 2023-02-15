@@ -102,10 +102,10 @@ using namespace oceanbase::obmysql;
 
 void ObSrvRpcXlator::register_rpc_process_function(int pcode, RPCProcessFunc func) {
   if(pcode >= MAX_PCODE || pcode < 0) {
-    SERVER_LOG(ERROR, "(SHOULD NEVER HAPPEN) input pcode is out of range in server rpc xlator", K(pcode));
+    SERVER_LOG_RET(ERROR, OB_ERROR, "(SHOULD NEVER HAPPEN) input pcode is out of range in server rpc xlator", K(pcode));
     ob_abort();
   } else if (funcs_[pcode] != nullptr) {
-    SERVER_LOG(ERROR, "(SHOULD NEVER HAPPEN) duplicate pcode in server rpc xlator", K(pcode));
+    SERVER_LOG_RET(ERROR, OB_ERROR, "(SHOULD NEVER HAPPEN) duplicate pcode in server rpc xlator", K(pcode));
     ob_abort();
   } else {
     funcs_[pcode] = func;

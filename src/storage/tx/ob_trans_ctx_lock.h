@@ -62,7 +62,7 @@ public:
   static void release(const LocalTask *task)
   {
     if (NULL == task) {
-      TRANS_LOG(ERROR, "task is null", KP(task));
+      TRANS_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "task is null", KP(task));
     } else {
       op_reclaim_free(const_cast<LocalTask *>(task));
       task = NULL;

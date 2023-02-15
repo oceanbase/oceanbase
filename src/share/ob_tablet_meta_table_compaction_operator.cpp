@@ -125,7 +125,7 @@ void ObTabletMetaTableCompactionOperator::handle_trans_stat(
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(tmp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
@@ -311,7 +311,7 @@ int ObTabletMetaTableCompactionOperator::inner_batch_update_unequal_report_scn_t
     LOG_WARN("failed to append fmt", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(append_tablet_id_array(tenant_id, unequal_tablet_id_array, 0, unequal_tablet_id_array.count(), sql))) {
     LOG_WARN("fail to append tablet id array", KR(ret), K(tenant_id), K(unequal_tablet_id_array));
-  } else if (OB_FAIL(sql.append_fmt(") AND compaction_scn = '%lu' AND report_scn <'%lu'",
+  } else if (OB_FAIL(sql.append_fmt(") AND compaction_scn >= '%lu' AND report_scn <'%lu'",
       major_frozen_scn, major_frozen_scn))) {
     LOG_WARN("failed to assign sql", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(GCTX.sql_proxy_->write(meta_tenant_id, sql.ptr(), affected_rows))) {

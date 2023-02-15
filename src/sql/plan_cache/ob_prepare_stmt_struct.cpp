@@ -628,7 +628,7 @@ bool ObPsStmtInfo::dec_ref_count_check_erase()
     need_erase = true;
     LOG_INFO("free ps info", K(ref_count), K(*this), K(need_erase));
   } else if (ref_count < 0) {
-    BACKTRACE(ERROR, true, "ObPsStmtInfo %p ref count < 0, ref_count = %ld", this, ref_count);
+    BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "ObPsStmtInfo %p ref count < 0, ref_count = %ld", this, ref_count);
   }
   return need_erase;
 }

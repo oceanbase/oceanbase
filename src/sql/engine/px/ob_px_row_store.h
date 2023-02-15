@@ -73,24 +73,30 @@ public:
   }
 
   static int to_expr(const ObChunkDatumStore::StoredRow *srow,
+                     const ObIArray<ObExpr*> &dynamic_const_exprs,
                      const ObIArray<ObExpr*> &exprs,
                      ObEvalCtx &eval_ctx);
 
-  static void attach_rows(const common::ObIArray<ObExpr*> &exprs,
-                         ObEvalCtx &eval_ctx,
-                         const ObChunkDatumStore::StoredRow **srows,
-                         const int64_t read_rows);
+  static int attach_rows(const common::ObIArray<ObExpr*> &exprs,
+                          const ObIArray<ObExpr*> &dynamic_const_exprs,
+                          ObEvalCtx &eval_ctx,
+                          const ObChunkDatumStore::StoredRow **srows,
+                          const int64_t read_rows);
 
   // get row interface for PX_CHUNK_ROW
   int get_next_row(common::ObNewRow &row);
 
   // get row interface for PX_DATUM_ROW
-  int get_next_row(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx);
+  int get_next_row(const ObIArray<ObExpr*> &exprs,
+                   const ObIArray<ObExpr*> &dynamic_const_exprs,
+                   ObEvalCtx &eval_ctx);
 
   // get next batch rows
   // set read row count to %read_rows
   // return OB_ITER_END and set %read_rows to zero for iterate end.
-  int get_next_batch(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+  int get_next_batch(const ObIArray<ObExpr*> &exprs,
+                     const ObIArray<ObExpr*> &dynamic_const_exprs,
+                     ObEvalCtx &eval_ctx,
                      const int64_t max_rows, int64_t &read_rows,
                      const ObChunkDatumStore::StoredRow **srows);
 

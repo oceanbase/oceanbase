@@ -16,6 +16,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 #include "logservice/ob_append_callback.h"
 
 namespace oceanbase
@@ -27,7 +28,7 @@ enum class ObDDLClogType : int64_t
 {
   UNKNOWN = -1,
   DDL_REDO_LOG = 0x1,
-//  DDL_COMMIT_LOG = 0x2, // deprecated
+  OLD_DDL_COMMIT_LOG = 0x2, // deprecated, only compatable use
   DDL_TABLET_SCHEMA_VERSION_CHANGE_LOG = 0x10,
   DDL_START_LOG = 0x20,
   DDL_COMMIT_LOG = 0x40,// rename from DDL_PREPARE_LOG
@@ -74,6 +75,27 @@ private:
   ObDDLClogCbStatus status_;
 };
 
+class ObDDLStartClogCb : public logservice::AppendCb
+{
+public:
+  ObDDLStartClogCb();
+  virtual ~ObDDLStartClogCb() = default;
+  int init(const uint32_t lock_tid, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  virtual int on_success() override;
+  virtual int on_failure() override;
+  inline bool is_success() const { return status_.is_success(); }
+  inline bool is_failed() const { return status_.is_failed(); }
+  inline bool is_finished() const { return status_.is_finished(); }
+  int get_ret_code() const { return status_.get_ret_code(); }
+  void try_release();
+  TO_STRING_KV(K(is_inited_), K(status_), K_(lock_tid));
+private:
+  bool is_inited_;
+  ObDDLClogCbStatus status_;
+  uint32_t lock_tid_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
+};
+
 class ObDDLMacroBlockClogCb : public logservice::AppendCb
 {
 public:
@@ -81,7 +103,9 @@ public:
   virtual ~ObDDLMacroBlockClogCb() = default;
   int init(const share::ObLSID &ls_id,
            const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
-           const blocksstable::MacroBlockId &macro_block_id);
+           const blocksstable::MacroBlockId &macro_block_id,
+           const uint32_t lock_tid,
+           ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   virtual int on_success() override;
   virtual int on_failure() override;
   inline bool is_success() const { return status_.is_success(); }
@@ -98,6 +122,8 @@ private:
   ObArenaAllocator arena_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
+  uint32_t lock_tid_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };
 
 class ObDDLCommitClogCb : public logservice::AppendCb
@@ -107,7 +133,9 @@ public:
   virtual ~ObDDLCommitClogCb() = default;
   int init(const share::ObLSID &ls_id,
            const common::ObTabletID &tablet_id,
-           const share::SCN &start_scn);
+           const share::SCN &start_scn,
+           const uint32_t lock_tid,
+           ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   virtual int on_success() override;
   virtual int on_failure() override;
   inline bool is_success() const { return status_.is_success(); }
@@ -115,13 +143,15 @@ public:
   inline bool is_finished() const { return status_.is_finished(); }
   int get_ret_code() const { return status_.get_ret_code(); }
   void try_release();
-  TO_STRING_KV(K(is_inited_), K(status_), K(ls_id_), K(tablet_id_), K(start_scn_));
+  TO_STRING_KV(K(is_inited_), K(status_), K(ls_id_), K(tablet_id_), K(start_scn_), K_(lock_tid));
 private:
   bool is_inited_;
   ObDDLClogCbStatus status_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   share::SCN start_scn_;
+  uint32_t lock_tid_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };
 
 class ObDDLClogHeader final

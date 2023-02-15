@@ -99,9 +99,9 @@ public:
 };
 
 template <typename TAKEOVER_OP>
-vector<ElectionImpl *> create_election_group(const int election_num, const vector<uint64_t> &allowed_be_leader, TAKEOVER_OP &&op)
+vector<ElectionImpl *> create_election_group(const int election_num, const vector<uint64_t> &priority_seed, TAKEOVER_OP &&op)
 {
-  if (allowed_be_leader.size() != election_num) {
+  if (priority_seed.size() != election_num) {
     abort();
   }
   vector<ElectionImpl *> v;
@@ -134,10 +134,14 @@ vector<ElectionImpl *> create_election_group(const int election_num, const vecto
       &timer,
       &GlobalNetService,
       ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port + index),
-      allowed_be_leader[index],
+      priority_seed[index],
       1,
-      [](const int64_t, const ObAddr &){ return OB_SUCCESS; },
-      [op](Election *election, ObRole before, ObRole after, RoleChangeReason reason) {
+      [&election](const int64_t, const ObAddr &dest_addr) {
+        return THREAD_POOL.commit_task_ignore_ret([&election, dest_addr]() {
+          election->change_leader_to(dest_addr);
+        });
+      },
+      [op, ret](Election *election, ObRole before, ObRole after, RoleChangeReason reason) {
         if (before == ObRole::FOLLOWER && after == ObRole::LEADER) {
           ELECT_LOG(INFO, "i become LEADER", K(obj_to_string(reason)), KPC(election));
           op();
@@ -556,6 +560,39 @@ TEST_F(TestElection, inner_priority_seed_valid_when_membership_version_equal) {
   ASSERT_EQ(lease_expired_to_be_follower_count, 0);
   ASSERT_EQ(change_leader_to_be_leader_count, 0);
   ASSERT_EQ(change_leader_to_be_follower_count, 0);
+  ASSERT_EQ(stop_to_be_follower_count, 1);
+}
+
+TEST_F(TestElection, set_inner_priority_seed) {
+  auto election_list = create_election_group(3, {(uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED, (uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED, (uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED}, [](){});
+  for (auto &election_1 : election_list) {
+    for (auto &election_2 : election_list) {
+      GlobalNetService.connect(election_1, election_2);
+    }
+  }
+  this_thread::sleep_for(chrono::seconds(7));
+  ObRole role;
+  int64_t _;
+  election_list[0]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
+
+  ASSERT_EQ(OB_SUCCESS, election_list[0]->add_inner_priority_seed_bit(PRIORITY_SEED_BIT::SEED_IN_REBUILD_PHASE_BIT));
+  this_thread::sleep_for(chrono::seconds(3));
+  election_list[1]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
+
+  for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter)
+    (*iter)->stop();
+  this_thread::sleep_for(chrono::seconds(2));
+  for (auto &election_ : election_list)
+    delete election_;
+
+  ASSERT_EQ(leader_takeover_times, 2);
+  ASSERT_EQ(leader_revoke_times, 2);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 1);
+  ASSERT_EQ(change_leader_to_be_follower_count, 1);
   ASSERT_EQ(stop_to_be_follower_count, 1);
 }
 

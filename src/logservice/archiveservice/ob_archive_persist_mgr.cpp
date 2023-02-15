@@ -37,8 +37,10 @@
 #include "share/ls/ob_ls_recovery_stat_operator.h"         // ObLSRecoveryStatOperator
 
 #define STAT(level, fmt, args...) ARCHIVE_LOG(level, "[LOG_STREAM] [ARCHIVE_PROGRESS] " fmt, ##args);
+#define STAT_RET(level, errcode, fmt, args...) ARCHIVE_LOG_RET(level, errcode, "[LOG_STREAM] [ARCHIVE_PROGRESS] " fmt, ##args);
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define WSTAT(fmt, args...) STAT(WARN, fmt, ##args)
+#define WSTAT_RET(errcode, fmt, args...) STAT_RET(WARN, errcode, fmt, ##args)
 #define TSTAT(fmt, args...) STAT(TRACE, fmt, ##args)
 
 namespace oceanbase

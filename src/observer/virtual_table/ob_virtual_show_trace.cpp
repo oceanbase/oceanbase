@@ -489,7 +489,8 @@ int ObVirtualShowTrace::format_flt_show_trace_record(sql::ObFLTShowTraceRec &rec
   const char *color_end = "\033[0m";
   char* name_buf = NULL;
   const sql::ObFLTShowTraceRec::trace_formatter::NameLeftPadding &pad = rec.formatter_;
-  int64_t len = pad.level_*8 + rec.data_.span_name_.length();
+  int pad_len = max(sizeof("└── "), max(sizeof("├── "), max(sizeof("│   "), sizeof("    "))));
+  int64_t len = pad.level_*pad_len + rec.data_.span_name_.length();
   name_buf = static_cast<char *>(alloc_.alloc(len));
   if (NULL == name_buf) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

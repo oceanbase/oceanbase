@@ -45,10 +45,10 @@ public:
   {
     int fd = -1;
     if (-1 == (fd = ::openat(dir_fd, block_path, palf::LOG_WRITE_FLAG | O_CREAT, 0664))) {
-      CLOG_LOG(WARN, "openat failed", K(block_path), K(errno));
+      CLOG_LOG_RET(WARN, common::OB_ERR_SYS, "openat failed", K(block_path), K(errno));
       return OB_IO_ERROR;
     } else if (-1 == ::fallocate(fd, 0, 0, block_size)) {
-      CLOG_LOG(WARN, "fallocate failed", K(block_path), K(errno));
+      CLOG_LOG_RET(WARN, common::OB_ERR_SYS, "fallocate failed", K(block_path), K(errno));
       return OB_IO_ERROR;
     } else {
       CLOG_LOG(INFO, "create_block_at success", K(block_path));

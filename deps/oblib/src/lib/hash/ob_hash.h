@@ -369,7 +369,7 @@ public:
     void print_list(FILE *fp)
     {
       if (OB_UNLIKELY(NULL == fp)) {
-        COMMON_LOG(ERROR, "print list error, fp is null", K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "print list error, fp is null", K(lbt()));
       } else {
         Node *head = get_head();
         fprintf(fp, "Hash: ");
@@ -617,7 +617,7 @@ public:
       bool is_deleted = false;
       if (OB_ISNULL(start) || OB_ISNULL(target)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "search in list error, start is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "search in list error, start is null", K(err), K(lbt()));
       } else {
         pre = start;
         next = NULL;
@@ -638,7 +638,7 @@ public:
       Node *next = NULL;
       if (OB_ISNULL(target)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "get from list error, target is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "get from list error, target is null", K(err), K(lbt()));
       } else if (0 != (err = search_in_list(start, target, pre, next))) {
       } else if (NULL == next || 0 != target->compare(next)) {
         err = -ENOENT;
@@ -654,13 +654,13 @@ public:
       Node *next = NULL;
       if (OB_ISNULL(target)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "get from list error, target is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "get from list error, target is null", K(err), K(lbt()));
       } else if (0 != (err = search_in_list(start, target, pre, next))) {
       } else if (NULL != next && 0 == target->compare(next)) {
         err = -EEXIST;
       } else if (OB_ISNULL(pre)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "pre is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "pre is null", K(err), K(lbt()));
       } else if (!pre->cas_next(target->next_ = next, target)) {
         err = -EAGAIN;
       }
@@ -673,7 +673,7 @@ public:
       Node *next = NULL;
       if (OB_ISNULL(target)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "get from list error, target is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "get from list error, target is null", K(err), K(lbt()));
       } else if (0 != (err = search_in_list(start, target, pre, next))) {
       } else if (NULL == next || 0 != target->compare(next)) {
         err = -ENOENT;
@@ -681,7 +681,7 @@ public:
         err = -EAGAIN;
       } else if (OB_ISNULL(pre)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "pre is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "pre is null", K(err), K(lbt()));
       } else if (!pre->cas_next(next, next->get_next())) {
         err = -EAGAIN;
         next->clear_delete_mark();
@@ -709,7 +709,7 @@ public:
   {
     //fprintf(fp, "%s\n", repr(root));
     if (OB_ISNULL(root.root_)) {
-      COMMON_LOG(ERROR, "hash root is null", K(lbt()));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "hash root is null", K(lbt()));
     } else {
       root.root_->print(fp);
     }

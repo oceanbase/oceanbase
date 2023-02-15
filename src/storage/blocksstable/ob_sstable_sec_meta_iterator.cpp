@@ -121,7 +121,7 @@ int ObSSTableSecMetaIterator::open(
       get_index_tree_type_map()[meta_type]))) {
     LOG_WARN("Fail to init index block tree cursor", K(ret), K(meta_type));
   } else if (OB_FAIL(init_micro_reader(
-      static_cast<ObRowStoreType>(sstable.get_meta().get_basic_meta().row_store_type_),
+      static_cast<ObRowStoreType>(sstable.get_meta().get_basic_meta().root_row_store_type_),
       allocator))) {
     LOG_WARN("Fail to get root row store type", K(ret), K(sstable));
   } else {

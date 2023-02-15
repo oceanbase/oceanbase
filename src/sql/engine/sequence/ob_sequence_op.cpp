@@ -57,7 +57,7 @@ ObSequenceOp::ObSequenceOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpIn
 {
   sequence_cache_ = &share::ObSequenceCache::get_instance();
   if (OB_ISNULL(sequence_cache_)) {
-    LOG_ERROR("fail alloc memory for ObSequenceCache instance");
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "fail alloc memory for ObSequenceCache instance");
   }
 }
 

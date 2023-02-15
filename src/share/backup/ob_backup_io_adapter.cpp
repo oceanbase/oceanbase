@@ -57,7 +57,7 @@ int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd 
 void release_device(ObIODevice*& dev_handle)
 {
   if (OB_ISNULL(dev_handle)) {
-    OB_LOG(WARN, "device handle is null, invalid parameter!");
+    OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "device handle is null, invalid parameter!");
   } else {
     ObDeviceManager::get_instance().release_device(dev_handle);
     dev_handle = NULL;

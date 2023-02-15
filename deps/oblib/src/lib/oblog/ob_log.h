@@ -39,8 +39,8 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/oblog/ob_log_level.h"
 #include "lib/oblog/ob_async_log_struct.h"
-#include "lib/utility/ob_sample_rate_limiter.h"
 #include "lib/utility/ob_defer.h"
+#include "lib/oblog/ob_syslog_rate_limiter.h"
 #include "common/ob_local_store.h"
 
 #define OB_LOG_MAX_PAR_MOD_SIZE 32
@@ -61,6 +61,8 @@ class ObVSliceAlloc;
 class ObBlockAllocMgr;
 class ObFIFOAllocator;
 class ObPLogItem;
+
+extern void allow_next_syslog(int64_t count = 1);
 extern int logdata_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, va_list args);
 extern ObPLogFDType get_fd_type(const char *mod_name);
 
@@ -272,12 +274,14 @@ public:
   static const int64_t GROUP_COMMIT_MIN_ITEM_COUNT = 1;
   static const int64_t GROUP_COMMIT_MAX_ITEM_COUNT = 4;
   static const char *PERF_LEVEL;
+  static const int64_t NORMAL_LOG_SIZE = 1 << 10;
 
   static const char *const SECURITY_AUDIT_FILE_NAME_FORMAT;
 
   //mainly for ob_localtime
   RLOCAL_STATIC(time_t, last_unix_sec_);
   RLOCAL_STATIC(struct tm, last_localtime_);
+  RLOCAL_STATIC(int64_t, limited_left_log_size_);
 
   enum UserMsgLevel
   {
@@ -285,17 +289,6 @@ public:
     USER_WARN,
     USER_ERROR,
     USER_NOTE
-  };
-
-  enum LogLevel
-  {
-    LOG_ERROR = 0,
-    LOG_USER_ERROR,
-    LOG_WARN,
-    LOG_INFO,
-    LOG_TRACE,
-    LOG_DEBUG,
-    LOG_MAX_LEVEL,
   };
 
   struct FileName
@@ -364,11 +357,11 @@ public:
   int64_t get_schema_log_dropped_count() const { return dropped_count_[4]; }
   int64_t get_force_allow_log_dropped_count() const { return dropped_count_[5]; }
 
-  int64_t get_dropped_error_log_count() const { return dropped_log_count_[LOG_ERROR]; }
-  int64_t get_dropped_warn_log_count() const { return dropped_log_count_[LOG_WARN]; }
-  int64_t get_dropped_info_log_count() const { return dropped_log_count_[LOG_INFO]; }
-  int64_t get_dropped_trace_log_count() const { return dropped_log_count_[LOG_TRACE]; }
-  int64_t get_dropped_debug_log_count() const { return dropped_log_count_[LOG_DEBUG]; }
+  int64_t get_dropped_error_log_count() const { return dropped_log_count_[OB_LOG_LEVEL_ERROR]; }
+  int64_t get_dropped_warn_log_count() const { return dropped_log_count_[OB_LOG_LEVEL_WARN]; }
+  int64_t get_dropped_info_log_count() const { return dropped_log_count_[OB_LOG_LEVEL_INFO]; }
+  int64_t get_dropped_trace_log_count() const { return dropped_log_count_[OB_LOG_LEVEL_TRACE]; }
+  int64_t get_dropped_debug_log_count() const { return dropped_log_count_[OB_LOG_LEVEL_DEBUG]; }
 
   int64_t get_async_flush_log_speed() const { return last_async_flush_count_per_sec_; }
   bool enable_async_log() const { return enable_async_log_; }
@@ -428,13 +421,15 @@ public:
                    const int32_t line,
                    const char *function,
                    const uint64_t location_hash_val,
-                   const char *fmt, ...) __attribute__((format(printf, 8, 9)));
+                   const int errcode,
+                   const char *fmt, ...) __attribute__((format(printf, 9, 10)));
   void log_message_va(const char *mod_name,
                       int32_t level,
                       const char *file,
                       int32_t line,
                       const char *function,
                       const uint64_t location_hash_val,
+                      const int errcode,
                       const char *fmt,
                       va_list args);
   void log_user_error_line_column(const UserMsgLevel user_msg_level,
@@ -497,7 +492,7 @@ public:
   template <typename ... Args>
   __attribute__((noinline, cold)) void log_message_kv(const char *mod_name,
       const int32_t level, const char *file, const int32_t line, const char *function,
-                                                      const uint64_t location_hash_val,
+      const uint64_t location_hash_val, const int errcode,
       const char *info, Args const && ... args)
   {
     auto &&log_data_func = [&] (char *buf, const int64_t buf_len, int64_t &pos) {
@@ -506,7 +501,7 @@ public:
                                                    std::forward<const Args&&>(args)...);
                              return ret;
                            };
-    log_it(mod_name, level, file, line, function, location_hash_val, log_data_func);
+    log_it(mod_name, level, file, line, function, location_hash_val, errcode, log_data_func);
   }
 
 
@@ -631,6 +626,14 @@ public:
     RLOCAL_INLINE(bool, guard);
     return guard;
   }
+
+  void set_new_file_info(const char *info) { new_file_info_ = info; }
+  void set_info_as_wdiag(const bool v) { info_as_wdiag_ = v; }
+  bool is_info_as_wdiag() const { return info_as_wdiag_; }
+
+  // issue a ERROR message for each EDIAG log right now
+  void issue_dba_error(const int errcode, const char *file, const int line, const char *info_str);
+
 private:
   //@brief If version <= 0, return true.
   //If version > 0, return version > level_version_ and if true, update level_version_.
@@ -643,6 +646,7 @@ private:
                 const char *file,
                 const int32_t line,
                 const char *function,
+                const int errcode,
                 char *buf, const int64_t buf_len, int64_t &pos);
 
   void insert_warning_buffer_line_column_info(const UserMsgLevel user_msg_level,
@@ -700,10 +704,11 @@ private:
   void check_log_end(ObPLogItem &log_item, int64_t pos);
 
   int backtrace_if_needed(ObPLogItem &log_item, const bool force);
-  int precheck_tl_log_limiter(const int32_t level, bool &allow);
-  int check_tl_log_limiter(ObPLogItem &log_item, const uint64_t location_hash_val);
+  int check_tl_log_limiter(const uint64_t location_hash_val, const int32_t level, const int errcode,
+                           const int64_t log_size, bool &allow);
+  bool need_print_log_limit_msg();
 
-  int alloc_log_item(const int32_t level, const int32_t size, ObPLogItem *&log_item);
+  int alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item);
   void free_log_item(ObPLogItem *log_item);
   void inc_dropped_log_count(const int32_t level);
   template<typename Function>
@@ -715,6 +720,7 @@ private:
                       const char *function,
                       const bool with_head,
                       const uint64_t location_hash_val,
+                      const int errcode,
                       Function &log_data_func);
 
   template<typename Function>
@@ -724,6 +730,7 @@ private:
               const int32_t line,
               const char *function,
               const uint64_t location_hash_val,
+              const int errcode,
               Function &&log_data_func);
   void check_probe(
       const char* file,
@@ -731,13 +738,15 @@ private:
       const uint64_t location_hash_val,
       bool& force_bt,
       bool& disable);
+
+  int log_new_file_info(const ObPLogFileStruct &log_file);
 private:
   static const char *const errstr_[];
   // default log rate limiter if there's no tl_log_limiger
   static ::oceanbase::lib::ObRateLimiter *default_log_limiter_;
   RLOCAL_STATIC(lib::ObRateLimiter*, tl_log_limiter_);
   static constexpr int N_LIMITER = 4096;
-  static lib::ObSampleRateLimiter per_log_limiters_[N_LIMITER];
+  static ObSyslogSampleRateLimiter per_log_limiters_[N_LIMITER];
   RLOCAL_STATIC(int32_t, tl_type_);
   //used for stat logging time and log dropped
   RLOCAL_STATIC(uint64_t, curr_logging_seq_);
@@ -779,7 +788,7 @@ private:
   bool stop_append_log_;//whether stop product log
   bool enable_perf_mode_;
   //used for statistics
-  int64_t dropped_log_count_[LOG_MAX_LEVEL];
+  int64_t dropped_log_count_[OB_LOG_LEVEL_MAX];
   int64_t last_async_flush_count_per_sec_;
 
   int64_t dropped_count_[MAX_TASK_LOG_TYPE + 1];//last one is force allow count
@@ -799,6 +808,10 @@ private:
   } probes_[8];
   int probe_cnt_ = 0;
   bool is_arb_replica_;
+
+  // This info will be logged when log file created.
+  const char *new_file_info_;
+  bool info_as_wdiag_;
 };
 
 inline ObLogger& ObLogger::get_logger()
@@ -906,11 +919,12 @@ void ObLogger::log_it(const char *mod_name,
             const int32_t line,
             const char *function,
             const uint64_t location_hash_val,
+            const int errcode,
             Function &&log_data_func)
 {
     int ret = OB_SUCCESS;
     if (OB_LIKELY(level <= OB_LOG_LEVEL_DEBUG)
-        && OB_LIKELY(level >= OB_LOG_LEVEL_ERROR)
+        && OB_LIKELY(level >= OB_LOG_LEVEL_DBA_ERROR)
         && OB_LIKELY(is_enable_logging())
         && OB_NOT_NULL(mod_name) && OB_NOT_NULL(file) && OB_NOT_NULL(function)
         && OB_NOT_NULL(function)) {
@@ -923,7 +937,7 @@ void ObLogger::log_it(const char *mod_name,
             int64_t buf_len = tb->get_cap();
             int64_t &pos = tb->get_pos();
             int64_t orig_pos = pos;
-            ret = log_head(mod_name, level, file, line, function, buf, buf_len, pos);
+            ret = log_head(mod_name, level, file, line, function, errcode, buf, buf_len, pos);
             if (OB_SUCC(ret)) {
               ret = log_data_func(buf, buf_len, pos);
             }
@@ -942,7 +956,7 @@ void ObLogger::log_it(const char *mod_name,
         }
       } else {
         do_log_message(is_async_log_used(), mod_name, level, file, line, function, true,
-                       location_hash_val, log_data_func);
+                       location_hash_val, errcode, log_data_func);
       }
     }
     UNUSED(ret);
@@ -954,13 +968,14 @@ inline void ObLogger::log_message_fmt(const char *mod_name,
                  const int32_t line,
                  const char *function,
                  const uint64_t location_hash_val,
+                 const int errcode,
                  const char *fmt, ...)
 {
   if (OB_NOT_NULL(fmt)) {
     va_list args;
     va_start(args, fmt);
     DEFER(va_end(args));
-    log_message_va(mod_name, level, file, line, function, location_hash_val, fmt, args);
+    log_message_va(mod_name, level, file, line, function, location_hash_val, errcode, fmt, args);
   }
 }
 
@@ -970,6 +985,7 @@ inline void ObLogger::log_message_va(const char *mod_name,
                  const int32_t line,
                  const char *function,
                  const uint64_t location_hash_val,
+                 const int errcode,
                  const char *fmt,
                  va_list args)
 {
@@ -980,7 +996,7 @@ inline void ObLogger::log_message_va(const char *mod_name,
       DEFER(va_end(args_cpy));
       return logdata_vprintf(buf, buf_len, pos, fmt, args_cpy);
     };
-    log_it(mod_name, level, file, line, function, location_hash_val, log_data_func);
+    log_it(mod_name, level, file, line, function, location_hash_val, errcode, log_data_func);
   }
 }
 
@@ -997,9 +1013,9 @@ bool __attribute__((weak, noinline, cold)) ObLogger::need_to_print(const uint64_
 
 inline int32_t ObLogger::get_log_level() const
 {
-  int8_t cur_level = OB_LOG_LEVEL_INFO;
+  int8_t cur_level = OB_LOG_LEVEL_WARN;
   if (enable_perf_mode_) {
-    cur_level = OB_LOG_LEVEL_ERROR;
+    cur_level = OB_LOG_LEVEL_DBA_ERROR;
   } else {
     cur_level = id_level_map_.get_level();
 
@@ -1018,9 +1034,9 @@ inline int32_t ObLogger::get_log_level() const
 
 inline int32_t ObLogger::get_log_level(const uint64_t par_mod_id) const
 {
-  int8_t cur_level = OB_LOG_LEVEL_INFO;
+  int8_t cur_level = OB_LOG_LEVEL_WARN;
   if (enable_perf_mode_) {
-    cur_level = OB_LOG_LEVEL_ERROR;
+    cur_level = OB_LOG_LEVEL_DBA_ERROR;
   } else {
     cur_level = id_level_map_.get_level(par_mod_id);
 
@@ -1039,9 +1055,9 @@ inline int32_t ObLogger::get_log_level(const uint64_t par_mod_id) const
 
 inline int32_t ObLogger::get_log_level(const uint64_t par_mod_id, const uint64_t sub_mod_id) const
 {
-  int8_t cur_level = OB_LOG_LEVEL_INFO;
+  int8_t cur_level = OB_LOG_LEVEL_WARN;
   if (enable_perf_mode_) {
-    cur_level = OB_LOG_LEVEL_ERROR;
+    cur_level = OB_LOG_LEVEL_DBA_ERROR;
   } else {
     cur_level = id_level_map_.get_level(par_mod_id, sub_mod_id);
 
@@ -1128,6 +1144,7 @@ inline void ObLogger::do_log_message(const bool is_async,
                                      const char *function,
                                      const bool with_head,
                                      const uint64_t location_hash_val,
+                                     const int errcode,
                                      Function &log_data_func)
 {
   int ret = OB_SUCCESS;
@@ -1140,11 +1157,13 @@ inline void ObLogger::do_log_message(const bool is_async,
   bool disable = false;
   check_probe(file, line, location_hash_val, force_bt, disable);
   if(OB_UNLIKELY(disable)) return;
-  const int64_t logging_time_us_begin = get_cur_us();
   auto fd_type = get_fd_type(mod_name);
-  if (OB_FAIL(precheck_tl_log_limiter(level, allow))) {
+  const int64_t log_size = limited_left_log_size_ + NORMAL_LOG_SIZE;
+  limited_left_log_size_ = 0;
+  const int64_t logging_time_us_begin = get_cur_us();
+  if (OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size, allow))) {
     LOG_STDERR("precheck_tl_log_limiter error, ret=%d\n", ret);
-  } else if (OB_UNLIKELY(!allow) && FD_TRACE_FILE != fd_type) {
+  } else if (OB_UNLIKELY(!allow) && !need_print_log_limit_msg()) {
     inc_dropped_log_count(level);
   } else {
     ++curr_logging_seq_;
@@ -1161,7 +1180,7 @@ inline void ObLogger::do_log_message(const bool is_async,
     int64_t buf_len = log_item->get_buf_size();
     int64_t pos = log_item->get_data_len();
     if (with_head) {
-      if (OB_FAIL(log_head(mod_name, level, file, line, function,
+      if (OB_FAIL(log_head(mod_name, level, file, line, function, errcode,
                            buf, buf_len, pos))) {
         LOG_STDERR("log_header error ret = %d\n", ret);
       }
@@ -1184,14 +1203,20 @@ inline void ObLogger::do_log_message(const bool is_async,
       }
     }
 
-    // check log limiter
-    if (OB_SUCC(ret) && is_async) {
-      if (OB_FAIL(check_tl_log_limiter(*log_item, location_hash_val))) {
-        LOG_STDERR("check_tl_log_limiter error ret = %d\n", ret);
+    if (OB_SUCC(ret) && !allow) {
+      static const char *EXCEED_INFO = " REACH SYSLOG RATE LIMIT";
+      int64_t pos = log_item->get_header_len();
+      if (OB_FAIL(logdata_print_info(log_item->get_buf(), log_item->get_buf_size(), pos,
+                                     EXCEED_INFO))) {
+        // do nothing
+      } else {
+        check_log_end(*log_item, pos);
       }
     }
 
+
     if (OB_SUCC(ret)) {
+      limited_left_log_size_ = std::max(0L, log_item->get_data_len() - NORMAL_LOG_SIZE);
       if (is_async) {
         // clone by data_size
         ObPLogItem *new_log_item = nullptr;
@@ -1241,14 +1266,18 @@ _Pragma("GCC diagnostic pop")
 
 template <typename ... Args>
 void OB_PRINT(const char *mod_name, const int32_t level, const char *file, const int32_t line,
-              const char *function, const uint64_t location_hash_val, const char *info_string,
+              const char *function, const uint64_t location_hash_val,
+              const int errcode, const char *info_string,
               const char *, /* placeholder */
               Args const && ... args)
 {
   int ret = OB_SUCCESS;
+  if (OB_LOG_LEVEL_ERROR == level) {
+    OB_LOGGER.issue_dba_error(errcode, file, line, info_string);
+  }
   if (OB_LIKELY(!OB_LOGGER.get_guard())) {
     OB_LOGGER.get_guard() = true;
-    OB_LOGGER.log_message_kv(mod_name, level, file, line, function, location_hash_val,
+    OB_LOGGER.log_message_kv(mod_name, level, file, line, function, location_hash_val, errcode,
                              info_string, std::forward<const Args&&>(args)...);
     OB_LOGGER.get_guard() = false;
     UNUSED(ret);

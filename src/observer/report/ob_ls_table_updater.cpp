@@ -85,7 +85,7 @@ bool ObLSTableUpdateTask::operator ==(const ObLSTableUpdateTask &other) const
 {
   bool equal = false;
   if (!is_valid() || !other.is_valid()) {
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (this == &other) { // same pointer
     equal = true;
   } else {
@@ -413,10 +413,10 @@ void ObLSTableUpdater::throttle(
     if (ls_id.is_sys_ls()) {
       // won't limit update for sys log stream
       sleep_us = 0;
-      LOG_WARN("detected slow update for sys table", K(ls_id));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "detected slow update for sys table", K(ls_id));
     } else {
       sleep_us = MIN(RETRY_INTERVAL_US, (execute_time_us - SLOW_UPDATE_TIME_US));
-      LOG_WARN("detected slow update, may be too many concurrent updating",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "detected slow update, may be too many concurrent updating",
           K(ls_id), K(sleep_us));
     }
   }

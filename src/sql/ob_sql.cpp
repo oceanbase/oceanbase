@@ -117,7 +117,7 @@ int ObSql::init(common::ObOptStatManager *opt_stat_mgr,
              KP(transport),
              KP(vt_partition_service));
   } else {
-    if (OB_FAIL(queue_.init(1, 8192))) {
+    if (OB_FAIL(queue_.init(1, 512))) {
       LOG_WARN("queue init failed", K(ret));
     } else {
       opt_stat_mgr_ = opt_stat_mgr;
@@ -4884,6 +4884,8 @@ int ObSql::handle_text_execute(const ObStmt *basic_stmt,
                                     result,
                                     false/*is_inner_sql*/))) {
         LOG_WARN("ps execute failed", K(ret));
+      } else if (OB_FAIL(construct_param_store(param_store, result.get_ps_params()))) {
+        LOG_WARN("construct ps params failed", K(ret));
       }
     }
     LOG_DEBUG("handle text execute done", K(ret), KPC(exec_stmt), K(param_store));

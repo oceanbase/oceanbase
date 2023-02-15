@@ -195,7 +195,8 @@ int ObRootBlockInfo::load_root_block_data(const ObMicroBlockDesMeta &des_meta)
     char *dst_buf = nullptr;
     ObMacroBlockReader reader;
     bool is_compressed = false;
-    if (OB_ISNULL(dst_buf = static_cast<char *>(ob_malloc(addr_.size())))) {
+    const ObMemAttr mem_attr(MTL_ID(), "RootBlkInfo");
+    if (OB_ISNULL(dst_buf = static_cast<char *>(ob_malloc(addr_.size(), mem_attr)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc buf", K(ret), K(addr_));
     } else if (OB_FAIL(read_block_data(addr_, dst_buf, addr_.size()))) {

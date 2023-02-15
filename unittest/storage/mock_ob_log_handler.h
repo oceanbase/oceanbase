@@ -409,6 +409,11 @@ public:
   }
   int enable_vote() { return OB_SUCCESS; }
   int disable_vote() { return OB_SUCCESS; }
+  int get_election_leader(common::ObAddr &addr) const
+  {
+    UNUSED(addr);
+    return OB_SUCCESS;
+  }
   int register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb)
   {
     UNUSED(rebuild_cb);

@@ -294,12 +294,12 @@ public:
   inline void set_interval_nmonth(const int64_t interval_nmonth)
   {
     *no_cv(interval_nmonth_) = interval_nmonth;
-    pack_ = sizeof(int64_t);
+    pack_ = static_cast<uint32_t>(sizeof(int64_t));
   };
   inline void set_interval_ym(const int64_t interval_nmonth)
   {
     *no_cv(interval_nmonth_) = interval_nmonth;
-    pack_ = sizeof(int64_t);
+    pack_ = static_cast<uint32_t>(sizeof(int64_t));
   };
   inline void set_interval_ds(const ObIntervalDSValue &v)
   {
@@ -347,27 +347,28 @@ public:
   OB_INLINE void set_pack(const int64_t len);
 
   inline void set_string(const ObString &v) { ptr_ = v.ptr(); pack_ = v.length(); }
-  inline void set_string(const char *ptr, const int64_t len) { ptr_ = ptr; pack_ = len; }
+  inline void set_string(const char *ptr, const uint32_t len) { ptr_ = ptr; pack_ = len; }
   inline void set_enumset_inner(const ObString &v) { set_string(v); }
-  inline void set_enumset_inner(const char *ptr, const int64_t len) { set_string(ptr, len); }
+  inline void set_enumset_inner(const char *ptr, const uint32_t len) { set_string(ptr, len); }
   inline void set_urowid(const ObURowIDData &urowid_data)
   {
     ptr_ = reinterpret_cast<const char *>(urowid_data.rowid_content_);
-    pack_ = urowid_data.rowid_len_;
+    pack_ = static_cast<uint32_t>(urowid_data.rowid_len_);//TODO(yongle.xh): need check
   }
   inline void set_urowid(const char *ptr, const int64_t size)
   {
-    ptr_ = ptr; pack_ = size;
+    ptr_ = ptr;
+    pack_ = static_cast<uint32_t>(size);
   }
   inline void set_lob_locator(const ObLobLocator &value)
   {
     lob_locator_ = &value;
-    pack_ = value.get_total_size();
+    pack_ = static_cast<uint32_t>(value.get_total_size());//TODO(yuanzhi.zy): need check
   }
   inline void set_lob_data(const ObLobCommon &value, int64_t length)
   {
     lob_data_ = &value;
-    pack_ = length;
+    pack_ = static_cast<uint32_t>(length);//TODO(yuanzhi.zy):need check
   }
   inline void set_datum(const ObDatum &other) { *this = other; }
   inline int deep_copy(const ObDatum &src, char *buf, int64_t max_size, int64_t &pos)
@@ -502,18 +503,18 @@ OB_INLINE void ObDatum::set_number(const number::ObNumber &num)
   no_cv(num_)->desc_ = num.d_;
   const int64_t len = num.d_.len_ * sizeof(*num.get_digits());
   memcpy(&no_cv(num_)->digits_[0], num.get_digits(), len);
-  pack_ = len + sizeof(*num_);
+  pack_ = static_cast<uint32_t>(len + sizeof(*num_));
 }
 
 OB_INLINE void ObDatum::set_number(const number::ObCompactNumber &cnum)
 {
-  pack_ = sizeof(cnum) + cnum.desc_.len_ * sizeof(cnum.digits_[0]);
+  pack_ = static_cast<uint32_t>(sizeof(cnum) + cnum.desc_.len_ * sizeof(cnum.digits_[0]));
   memcpy(no_cv(num_), &cnum, len_);
 }
 
 OB_INLINE void ObDatum::set_number_shallow(const number::ObCompactNumber &cnum)
 {
-  pack_ = sizeof(cnum) + cnum.desc_.len_ * sizeof(cnum.digits_[0]);
+  pack_ = static_cast<uint32_t>(sizeof(cnum) + cnum.desc_.len_ * sizeof(cnum.digits_[0]));
   num_ = &cnum;
 }
 
@@ -521,7 +522,7 @@ OB_INLINE void ObDatum::set_number_shallow(const number::ObCompactNumber &cnum)
 OB_INLINE void ObDatum::set_pack(const int64_t len)
 {
   //pack_ = desc.len_ * sizeof(no_cv(num_)->digits_[0]) + sizeof(*num_);
-  pack_ = len;
+  pack_ = static_cast<uint32_t>(len);
 }
 
 template <>

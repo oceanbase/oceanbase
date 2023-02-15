@@ -2379,7 +2379,7 @@ call bug4904()|
 ERROR 42S02: Table 'test.t3' doesn't exist
 drop procedure bug4904|
 create table t3 (s1 char character set latin1, s2 char character set latin2)|
-ERROR 42000: Unknown character set: 'latin1'
+ERROR 42000: Unknown character set: 'latin2'
 create table t3 (s1 char character set utf8, s2 char character set utf8)|
 drop procedure if exists bug4904|
 create procedure bug4904 ()
@@ -2602,13 +2602,6 @@ s1	count(s1)
 NULL	2
 drop procedure bug7013|
 drop table if exists t4|
-create table t4 (
-a mediumint(8) unsigned not null auto_increment,
-b smallint(5) unsigned not null,
-c char(32) not null,
-primary key  (a)
-) engine=myisam default charset=latin1|
-ERROR 42000: Unknown character set: 'latin1'
 create table t4 (
 a mediumint(8) unsigned not null auto_increment,
 b smallint(5) unsigned not null,
@@ -4593,8 +4586,12 @@ select routine_name,routine_schema from information_schema.routines where
 routine_schema like 'bug18344%'|
 routine_name	routine_schema
 bug18344	bug18344_012345678901
+bug18344	bug18344_012345678901
+bug18344_2	bug18344_012345678901
 bug18344_2	bug18344_012345678901
 bug18344	bug18344_0123456789012
+bug18344	bug18344_0123456789012
+bug18344_2	bug18344_0123456789012
 bug18344_2	bug18344_0123456789012
 drop database bug18344_012345678901|
 drop database bug18344_0123456789012|
@@ -4819,22 +4816,22 @@ SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest1" AND ROUTINE_NAME = "bug16211_f1"|
 dtd_identifier
-NULL
+char
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest1" AND ROUTINE_NAME = "bug16211_f2"|
 dtd_identifier
-NULL
+char
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest2" AND ROUTINE_NAME = "bug16211_f3"|
 dtd_identifier
-NULL
+char
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest2" AND ROUTINE_NAME = "bug16211_f4"|
 dtd_identifier
-NULL
+char
 SELECT CHARSET(bug16211_f1())|
 CHARSET(bug16211_f1())
 utf8mb4
@@ -4877,22 +4874,22 @@ SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest1" AND ROUTINE_NAME = "bug16211_f1"|
 dtd_identifier
-NULL
+char
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest1" AND ROUTINE_NAME = "bug16211_f2"|
 dtd_identifier
-NULL
+char
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest2" AND ROUTINE_NAME = "bug16211_f3"|
 dtd_identifier
-NULL
+char
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest2" AND ROUTINE_NAME = "bug16211_f4"|
 dtd_identifier
-NULL
+char
 SELECT CHARSET(bug16211_f1())|
 CHARSET(bug16211_f1())
 utf8mb4

@@ -142,7 +142,8 @@ public:
                K_(max_sync_storage_schema_version),
                K_(max_serialized_medium_scn),
                K_(ddl_execution_id),
-               K_(ddl_cluster_version));
+               K_(ddl_cluster_version),
+               K_(ddl_commit_scn));
 
 public:
   int32_t version_;
@@ -175,6 +176,7 @@ public:
   int64_t ddl_execution_id_;
   int64_t ddl_cluster_version_;
   int64_t max_serialized_medium_scn_; // update when serialized medium info
+  share::SCN ddl_commit_scn_;
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
@@ -235,7 +237,8 @@ public:
                K_(medium_info_list),
                K_(table_store_flag),
                K_(max_sync_storage_schema_version),
-               K_(max_serialized_medium_scn));
+               K_(max_serialized_medium_scn),
+               K_(ddl_commit_scn));
 private:
   int deserialize_old(const char *buf, const int64_t len, int64_t &pos);
 
@@ -273,6 +276,7 @@ public:
   int64_t ddl_execution_id_;
   int64_t ddl_cluster_version_;
   int64_t max_serialized_medium_scn_;
+  share::SCN ddl_commit_scn_;
 
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema

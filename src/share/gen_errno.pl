@@ -355,6 +355,7 @@ my @errors_deps = map {$_->[0]} @sorted_deps;
 my @pairs = map {[$_, $map{$_}->[0] ]} keys %map;
 my @sorted = sort {$b->[1] <=> $a->[1]} @pairs;
 my @errors = map {$_->[0]} @sorted;
+my @errnos = reverse sort { $a <=> $b } map {$map{$_}->[0]} keys %map;
 
 # generate share/ob_errno.h
 open my $fh_header, '>', "ob_errno.h";
@@ -424,6 +425,9 @@ constexpr int OB_ERR_SQL_END = -5999;
     my $tmp_ora_user_errmsg=sprintf($print_ora_errmsg, "ORA", $ora_errno, substr($ora_msg, 1, length($ora_msg) - 2));
     print $fh_header "#define ${oberr}__ORA_USER_ERROR_MSG $tmp_ora_user_errmsg\n";
   }
+
+  print $fh_header "\nextern int g_all_ob_errnos[${\(scalar @errnos)}];";
+
   print $fh_header '
 
   const char *ob_error_name(const int oberr);
@@ -592,6 +596,10 @@ namespace oceanbase
 {
 namespace common
 {
+';
+print $fh_cpp "int g_all_ob_errnos[${\(scalar @errnos)}] = {" . join(", ", @errnos) . "};";
+
+print $fh_cpp '
   const char *ob_error_name(const int err)
   {
     const char *ret = "Unknown error";

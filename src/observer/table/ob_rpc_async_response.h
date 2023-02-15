@@ -52,7 +52,7 @@ char *ObRpcAsyncResponse<T>::easy_alloc(int64_t size) const
 {
   void *buf = NULL;
   if (OB_ISNULL(req_)) {
-    RPC_OBRPC_LOG(ERROR, "request is invalid", KP(req_));
+    RPC_OBRPC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "request is invalid", KP(req_));
   } else {
     buf = RPC_REQ_OP.alloc_response_buffer(req_, static_cast<uint32_t>(size));
   }

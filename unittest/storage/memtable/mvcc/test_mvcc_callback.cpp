@@ -63,7 +63,7 @@ public:
     if (bit >= 100000) {
       ob_abort();
     } else if (1 == set_[bit]) {
-      TRANS_LOG(ERROR, "set in unexpected", K(bit));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set in unexpected", K(bit));
       ob_abort();
     } else {
       set_[bit] = 1;
@@ -77,11 +77,11 @@ public:
     for (int i = 0; i < 100000; i++) {
       if (set_[i] != other.set_[i]) {
         if (set_[i] == 1) {
-          TRANS_LOG(ERROR, "different bit set", K(i),
+          TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "different bit set", K(i),
                     "set_[i]", "1",
                     "other.set_[i]", "0");
         } else {
-          TRANS_LOG(ERROR, "different bit set", K(i),
+          TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "different bit set", K(i),
                     "set_[i]", "0",
                     "other.set_[i]", "1");
         }
@@ -327,19 +327,19 @@ TEST_F(TestTxCallbackList, remove_callback_by_release_memtable)
   EXPECT_EQ(9, callback_list_.get_length());
 
   EXPECT_EQ(OB_SUCCESS,
-            callback_list_.remove_callbacks_for_remove_memtable(memtable2));
+            callback_list_.remove_callbacks_for_remove_memtable(memtable2, scn_1/*not used*/));
 
   EXPECT_EQ(7, callback_list_.get_length());
   EXPECT_EQ(2, mgr_.get_callback_remove_for_remove_memtable_count());
 
   EXPECT_EQ(OB_SUCCESS,
-            callback_list_.remove_callbacks_for_remove_memtable(memtable1));
+            callback_list_.remove_callbacks_for_remove_memtable(memtable1, scn_1/*not used*/));
 
   EXPECT_EQ(5, callback_list_.get_length());
   EXPECT_EQ(4, mgr_.get_callback_remove_for_remove_memtable_count());
 
   EXPECT_EQ(OB_SUCCESS,
-            callback_list_.remove_callbacks_for_remove_memtable(memtable3));
+            callback_list_.remove_callbacks_for_remove_memtable(memtable3, scn_1/*not used*/));
 
   EXPECT_EQ(4, callback_list_.get_length());
   EXPECT_EQ(5, mgr_.get_callback_remove_for_remove_memtable_count());
@@ -787,16 +787,16 @@ TEST_F(TestTxCallbackList, checksum_remove_memtable_and_tx_end)
 
   EXPECT_EQ(9, callback_list_.get_length());
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable2));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable2, scn_1/*not used*/));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable3));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable3, scn_1/*not used*/));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
 
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable1));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable1, scn_1/*not used*/));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
 
@@ -1010,6 +1010,8 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
   ObFunction<bool()> remove_memtable_op =
     [&]() -> bool {
       ObMemtable *mt = mts[ObRandom::rand(0, mt_cnt-1)];
+      share::SCN scn_1;
+      scn_1.convert_for_logservice(1);
       bool enable = false;
       for (ObITransCallback* it = need_submit_head->next_;
            it != &(callback_list_.head_);
@@ -1024,7 +1026,7 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
 
       if (enable) {
         EXPECT_EQ(OB_SUCCESS,
-                  callback_list_.remove_callbacks_for_remove_memtable(mt));
+                  callback_list_.remove_callbacks_for_remove_memtable(mt, scn_1/*not used*/));
       }
 
       return enable;
@@ -1139,7 +1141,8 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   return ret;
 }
 
-int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove)
+int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove,
+                                                           const share::SCN)
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(latch_);

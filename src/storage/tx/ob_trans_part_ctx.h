@@ -378,7 +378,10 @@ public:
     role_state_ = for_replay ? TxCtxRoleState::FOLLOWER : TxCtxRoleState::LEADER;
   }
 
-  int register_multi_data_source(const ObTxDataSourceType type, const char *buf, const int64_t len);
+  int register_multi_data_source(const ObTxDataSourceType type,
+                                 const char *buf,
+                                 const int64_t len,
+                                 const bool try_lock = false);
 
   const share::SCN get_start_log_ts()
   {
@@ -497,7 +500,8 @@ private:
   int notify_data_source_(const NotifyType type,
                           const share::SCN &log_ts,
                           const bool for_replay,
-                          const ObTxBufferNodeArray &notify_array);
+                          const ObTxBufferNodeArray &notify_array,
+                          const bool is_force_kill = false);
   int gen_final_mds_array_(ObTxBufferNodeArray &array, bool is_committing = true) const;
   int gen_total_mds_array_(ObTxBufferNodeArray &mds_array) const;
   int deep_copy_mds_array(const ObTxBufferNodeArray &mds_array, bool need_replace = false);
@@ -607,6 +611,7 @@ private:
                               const ObTxMsg &recv_msg,
                               const common::ObAddr &self_addr,
                               ObITransRpc* rpc);
+  static int get_max_decided_scn_(const share::ObLSID &ls_id, share::SCN &scn);
   int get_2pc_participants_copy(share::ObLSArray &copy_participants);
   // for xa
   int post_tx_sub_prepare_resp_(const int status);
@@ -697,6 +702,8 @@ private:
   int set_state_info_array_();
   void build_and_post_collect_state_msg_(const share::SCN &snapshot);
   int build_and_post_ask_state_msg_(const share::SCN &snapshot);
+  void handle_trans_ask_state_(const SCN &snapshot);
+  int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id);
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
 protected:
   // for xa
@@ -797,6 +804,7 @@ private:
 
   ObTxState upstream_state_;
   const ObTxMsg * msg_2pc_cache_;
+  share::SCN max_2pc_commit_scn_;
   ObLSLogInfoArray coord_prepare_info_arr_;
   TransModulePageAllocator reserve_allocator_;
   // tmp scheduler addr is used to post response for the second phase of xa commit/rollback

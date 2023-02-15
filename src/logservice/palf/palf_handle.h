@@ -178,6 +178,7 @@ public:
 
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const;
+  int get_election_leader(common::ObAddr &addr) const;
 
   // @brief: a special config change interface, change replica number of paxos group
   // @param[in] common::ObMemberList: current memberlist, for pre-check

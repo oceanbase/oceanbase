@@ -1190,6 +1190,11 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         exec_end_timestamp_ = ObTimeUtility::current_time();
         record_stat(result.get_stmt_type(), exec_end_timestamp_);
       }
+      if (enable_perf_event && !THIS_THWORKER.need_retry()
+        && OB_NOT_NULL(result.get_physical_plan())) {
+        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+        ObSQLUtils::record_execute_time(result.get_physical_plan()->get_plan_type(), time_cost);
+      }
       if (enable_sql_audit) {
         audit_record.exec_record_.record_end(di);
         bool first_record = (1 == audit_record.try_cnt_);
@@ -1633,6 +1638,9 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
           if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
             LOG_WARN("fail setup user resource group", K(ret));
           }
+        }
+        if (sess != NULL) {
+          revert_session(sess);
         }
         ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }

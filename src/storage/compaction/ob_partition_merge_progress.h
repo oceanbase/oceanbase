@@ -50,6 +50,8 @@ public:
 public:
   static const int32_t UPDATE_INTERVAL = 2 * 1000 * 1000; // 2 second
   static const int32_t NORMAL_UPDATE_PARAM = 300;
+  static const int32_t DEFAULT_ROW_CNT_PER_MACRO_BLOCK = 1000;
+  static const int32_t DEFAULT_INCREMENT_ROW_FACTOR = 10;
 protected:
   int estimate(ObTabletMergeCtx *ctx);
   void update_estimated_finish_time_();

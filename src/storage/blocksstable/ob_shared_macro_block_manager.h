@@ -135,6 +135,7 @@ private:
   int rebuild_sstable(
       const ObTablet &tablet,
       const ObSSTable &old_sstable,
+      const uint64_t data_version,
       ObSSTableIndexBuilder &sstable_index_builder,
       ObIndexBlockRebuilder &index_block_rebuilder,
       ObTableHandleV2 &table_handle);

@@ -75,7 +75,7 @@ public:
           const SCN &recovery_until_scn = SCN::base_scn(),
           const ObArchiveMode &log_mode = NOARCHIVE_MODE);
  ObAllTenantInfo &operator=(const ObAllTenantInfo &other);
- int assign(const ObAllTenantInfo &other);
+ void assign(const ObAllTenantInfo &other);
  void reset();
  bool is_valid() const;
 
@@ -83,6 +83,19 @@ public:
  bool is_standby() const { return tenant_role_.is_standby(); }
  bool is_primary() const { return tenant_role_.is_primary(); }
  bool is_restore() const { return tenant_role_.is_restore(); }
+
+ /**
+  * @description:
+  * STS is STANDBY tenant's GTS. It is ready only when tenant is STANDBY and not in 'switchover to standby' status.
+  * Because STS will be changed when switchover to standby.
+  */
+ bool is_sts_ready() const { return !(tenant_role_.is_primary()
+                                      || tenant_is_switchover_to_standby()); }
+
+ // ************* Functions that describe what tenant is doing *********************
+ // tenant is in switchover from primary to standby
+ bool tenant_is_switchover_to_standby() const { return is_prepare_switching_to_standby_status()
+                                                       || is_switching_to_standby_status(); }
 
  // ObTenantSwitchoverStatus related function
 #define IS_TENANT_STATUS(STATUS) \
@@ -204,7 +217,6 @@ public:
    * @param[in] replayable_scn
    * @param[in] readable_scn
    * @param[in] recovery_until_scn
-   * @param[out] new_switchover_epoch
    * return :
    *   OB_SUCCESS update tenant role successfully
    */

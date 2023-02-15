@@ -738,12 +738,12 @@ OB_SERIALIZE_MEMBER(LogGetStatReq, get_type_);
 
 // ================= LogGetStatResp start ================
 LogGetStatResp::LogGetStatResp()
-  : max_scn_()
+  : max_scn_(), end_lsn_()
 {
 }
 
-LogGetStatResp::LogGetStatResp(const share::SCN &max_scn)
-  : max_scn_(max_scn)
+LogGetStatResp::LogGetStatResp(const share::SCN &max_scn, const LSN &end_lsn)
+  : max_scn_(max_scn), end_lsn_(end_lsn)
 {
 }
 
@@ -760,9 +760,10 @@ bool LogGetStatResp::is_valid() const
 void LogGetStatResp::reset()
 {
   max_scn_.reset();
+  end_lsn_.reset();
 }
 
-OB_SERIALIZE_MEMBER(LogGetStatResp, max_scn_);
+OB_SERIALIZE_MEMBER(LogGetStatResp, max_scn_, end_lsn_);
 // ================= LogGetStatResp end ================
 } // end namespace palf
 } // end namespace oceanbase

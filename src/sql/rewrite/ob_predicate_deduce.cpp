@@ -627,6 +627,7 @@ int ObPredicateDeduce::get_equal_exprs(ObRawExpr *pred,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> first_params;
+  ObSEArray<ObRawExpr *, 4> candi_exprs;
   int64_t param_idx = -1;
   ObRawExpr *param_expr = NULL;
   if (OB_ISNULL(pred) || OB_ISNULL(param_expr = pred->get_param_expr(0))) {
@@ -637,23 +638,101 @@ int ObPredicateDeduce::get_equal_exprs(ObRawExpr *pred,
   } else if (ObOptimizerUtil::find_item(input_exprs_, param_expr, &param_idx)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       ObRawExpr *expr = input_exprs_.at(i);
+      const ObRawExpr *real_expr = expr;
+      bool need_check_type_safe = false;
       if (!has(graph_, param_idx, i, EQ) || i == param_idx) {
         // do nothing
       } else if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input expr is null", K(ret));
-      } else if (!expr->is_column_ref_expr()) {
+      } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(expr, real_expr))) {
+        LOG_WARN("fail to get real expr", K(ret), K(expr));
+      } else if (!real_expr->is_column_ref_expr()) {
         // do nothing
-      } else if (expr->get_result_type() != param_expr->get_result_type()) {
-        // do nothing
-      } else if (!ObOptimizerUtil::find_item(target_exprs, expr)) {
+      } else if (!ObOptimizerUtil::find_item(target_exprs, real_expr)) {
         // do nothing
       } else if (ObOptimizerUtil::find_item(first_params, expr)) {
         // do nothing
+      } else if (param_expr->get_result_type().get_type() != expr->get_result_type().get_type()) {
+        need_check_type_safe = is_type_safe(param_idx, i);
+      } else if (ob_is_string_or_lob_type(param_expr->get_result_type().get_type())
+                && ((param_expr->get_result_type().get_collation_level() != expr->get_result_type().get_collation_level())
+                    || (param_expr->get_result_type().get_collation_type() != expr->get_result_type().get_collation_type()))) {
+        need_check_type_safe = is_type_safe(param_idx, i);
       } else if (OB_FAIL(equal_exprs.push_back(expr))) {
         LOG_WARN("failed to push back equal expr", K(ret));
       }
+      if (OB_SUCC(ret) && need_check_type_safe && OB_FAIL(candi_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back candi exprs whose result type is different from param_expr", K(ret));
+      }
     }
+    if (OB_SUCC(ret) && !candi_exprs.empty()) {
+      bool type_safe = false;
+      if (OB_FAIL(check_cmp_metas_for_general_preds(param_expr, pred, type_safe))) {
+        LOG_WARN("fail to get cmp metas for the param expr", K(ret));
+      } else if (type_safe) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < candi_exprs.count(); ++i) {
+          type_safe = false;
+          if (OB_FAIL(check_cmp_metas_for_general_preds(candi_exprs.at(i), pred, type_safe))) {
+            LOG_WARN("fail to get cmp metas for candi exprs", K(ret));
+          } else if (type_safe && OB_FAIL(equal_exprs.push_back(candi_exprs.at(i)))) {
+            LOG_WARN("failed to push back equal expr", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPredicateDeduce::check_cmp_metas_for_general_preds(ObRawExpr *left_expr, ObRawExpr *pred, bool &type_safe) {
+  int ret = OB_SUCCESS;
+  ObObjMeta cmp_meta;
+  if (OB_ISNULL(left_expr) || OB_ISNULL(pred)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(left_expr), K(pred));
+  } else if (T_OP_IN == pred->get_expr_type()) {
+    //params of preds like 'A in (a,b,c...)' has been grouped by result types in pre-process phase,
+    //for example: 'A in (int_a, int_b, float_a, float_b)' <=> A in (int_a, int_b) or A in (float_a, float_b)
+    //so only check the cmp type of A and the first param of row_op
+    ObRawExpr *right_expr = NULL;
+    if (OB_ISNULL(right_expr = pred->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(right_expr));
+    } else if (T_OP_ROW != right_expr->get_expr_type()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the second param of in expr is not row_op", K(ret), K(right_expr->get_expr_type()));
+    } else if (OB_ISNULL(right_expr = right_expr->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(right_expr));
+    } else if (OB_FAIL(ObRelationalExprOperator::get_equal_meta(cmp_meta, left_expr->get_result_type(),right_expr->get_result_type()))) {
+      LOG_WARN("failed to get equal meta", K(ret));
+    } else {
+      type_safe = (cmp_meta == cmp_type_);
+    }
+  } else if (T_OP_NE == pred->get_expr_type()) {
+    if (OB_ISNULL(pred->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(pred->get_param_expr(1)));
+    } else if (OB_FAIL(ObRelationalExprOperator::get_equal_meta(cmp_meta, left_expr->get_result_type(),pred->get_param_expr(1)->get_result_type()))) {
+      LOG_WARN("failed to get equal meta", K(ret));
+    } else {
+      type_safe = (cmp_meta == cmp_type_);
+    }
+  } else if (T_OP_BTW == pred->get_expr_type()) {
+    if (OB_ISNULL(pred->get_param_expr(1)) || OB_ISNULL(pred->get_param_expr(2))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(pred->get_param_expr(1)), K(pred->get_param_expr(2)));
+    } else if (OB_FAIL(ObRelationalExprOperator::get_equal_meta(cmp_meta, left_expr->get_result_type(), pred->get_param_expr(1)->get_result_type()))) {
+      LOG_WARN("failed to get equal meta", K(ret));
+    } else if (cmp_meta != cmp_type_) {
+    } else if (OB_FAIL(ObRelationalExprOperator::get_equal_meta(cmp_meta, left_expr->get_result_type(), pred->get_param_expr(2)->get_result_type()))) {
+      LOG_WARN("failed to get equal meta", K(ret));
+    } else {
+      type_safe = (cmp_meta == cmp_type_);
+    }
+  } else {
+    type_safe = false;
   }
   return ret;
 }

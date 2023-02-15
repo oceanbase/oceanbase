@@ -490,7 +490,33 @@ int ObLogTenantMgr::start_tenant_service_(
   return ret;
 }
 
-// add tenant for oblog
+int ObLogTenantMgr::add_tenant(
+    const int64_t start_tstamp_ns,
+    const int64_t sys_schema_version,
+    const char *&tenant_name,
+    const int64_t timeout,
+    bool &add_tenant_succ)
+{
+  int ret = OB_SUCCESS;
+  bool is_new_created_tenant = false;
+  bool is_new_tenant_by_restore = false;
+  ObLogSchemaGuard schema_guard;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+
+  if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_id_in_archive(start_tstamp_ns, tenant_id))) {
+    LOG_ERROR("GLOGMETADATASERVICE get_tenant_id_in_archive failed", KR(ret), K(tenant_id), K(start_tstamp_ns),
+        K(sys_schema_version));
+  } else if (OB_FAIL(add_tenant(tenant_id, is_new_created_tenant, is_new_tenant_by_restore, start_tstamp_ns,
+          sys_schema_version, schema_guard, tenant_name, timeout, add_tenant_succ))) {
+    LOG_ERROR("add tenant fail", KR(ret), K(tenant_id), K(start_tstamp_ns), K(sys_schema_version));
+  } else if (OB_UNLIKELY(! add_tenant_succ)) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "add tenant failed", K(tenant_id), K(tenant_name));
+  }
+
+  return ret;
+}
+
+// add tenant for obcdc
 //
 // @retval OB_SUCCESS                   success
 // @retval OB_TIMEOUT                   timeout
@@ -525,6 +551,8 @@ int ObLogTenantMgr::add_tenant(
     LOG_ERROR("invalid arguments", KR(ret), K(tenant_id), K(sys_schema_version));
   } else if (is_meta_tenant(tenant_id)) {
     LOG_INFO("won't add meta tenant", K(tenant_id), K(sys_schema_version));
+  } else if (OB_FAIL(ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(tenant_id))) {
+    LOG_ERROR("create and add tenant allocator failed", K(ret), K(tenant_id));
   } else {
     if (is_online_refresh_mode(refresh_mode_)) {
       TenantSchemaInfo tenant_schema_info;
@@ -576,7 +604,7 @@ int ObLogTenantMgr::add_tenant(
         } else {
           LOG_INFO("get_tenant_info_guard success", K(tenant_id), KPC(tenant_info));
           tenant_name = tenant_info->get_dict_tenant_meta().get_tenant_name();
-          // TODO is_restore API
+          is_restore = tenant_info->get_dict_tenant_meta().is_restore();
         }
       }
     } else {
@@ -644,6 +672,10 @@ int ObLogTenantMgr::add_tenant(
   // reset tenant_start_ddl_info for specified tenant_id regardless of ret(in case of tenant already dropped or not serve
   // and other unexpected case, otherwise global_heartbeat will be stucked.)
   try_del_tenant_start_ddl_info_(tenant_id);
+
+  if (! add_tenant_succ) {
+    ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
+  }
 
   return ret;
 }
@@ -1044,7 +1076,7 @@ int ObLogTenantMgr::get_tenant_guard(const uint64_t tenant_id, ObLogTenantGuard 
 void ObLogTenantMgr::revert_tenant_(ObLogTenant *tenant)
 {
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogTenantMgr has not inited");
+    LOG_ERROR_RET(OB_NOT_INIT, "ObLogTenantMgr has not inited");
   } else if (NULL != tenant) {
     tenant_hash_map_.revert(tenant);
   }

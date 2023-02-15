@@ -46,7 +46,8 @@ ObInfoSchemaColumnsTable::ObInfoSchemaColumnsTable() :
     last_filter_column_idx_(-1),
     database_schema_array_(),
     filter_table_schema_array_(),
-    view_resolve_alloc_()
+    mem_context_(nullptr),
+    iter_cnt_(0)
 {
 }
 
@@ -59,7 +60,11 @@ void ObInfoSchemaColumnsTable::reset()
 {
   ObVirtualTableScannerIterator::reset();
   tenant_id_ = OB_INVALID_ID;
-  view_resolve_alloc_.reset();
+  if (OB_LIKELY(NULL != mem_context_)) {
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = NULL;
+  }
+  iter_cnt_ = 0;
 }
 
 int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow *&row)
@@ -72,6 +77,8 @@ int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow *&row)
   } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "tenant id is invalid_id", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(init_mem_context())) {
+    SERVER_LOG(WARN, "failed to init mem context", K(ret));
   } else {
     if (!start_to_read_) {
       void *tmp_ptr = NULL;
@@ -204,7 +211,10 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
     } else {
       table_schema = table_schema_array.at(i);
     }
-    if (OB_ISNULL(table_schema)) {
+    ++iter_cnt_;
+    if (0 == ++iter_cnt_ % 1024 && OB_FAIL(THIS_WORKER.check_status())) {
+      SERVER_LOG(WARN, "failed to check status", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "table_schema should not be NULL", K(ret));
     } else {
@@ -226,47 +236,49 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       bool view_is_invalid = (0 == table_schema->get_object_status() || 0 == table_schema->get_column_count());
       if (OB_FAIL(ret)) {
       } else if (is_normal_view && view_is_invalid) {
-        view_resolve_alloc_.reset_remain_one_page();
-        ObString view_definition;
-        sql::ObSelectStmt *select_stmt = NULL;
-        sql::ObSelectStmt *real_stmt = NULL;
-        ObStmtFactory stmt_factory(view_resolve_alloc_);
-        ObRawExprFactory expr_factory(view_resolve_alloc_);
-        if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(
-                      view_resolve_alloc_,
-                      session_->get_local_collation_connection(),
-                      table_schema->get_view_schema(),
-                      view_definition))) {
-          SERVER_LOG(WARN, "fail to generate view definition for resolve", K(ret));
-        } else if (OB_FAIL(ObTableColumns::resolve_view_definition(&view_resolve_alloc_, session_, schema_guard_,
-                      *table_schema, select_stmt, expr_factory, stmt_factory, false))) {
-          if (OB_ERR_UNKNOWN_TABLE != ret && OB_ERR_VIEW_INVALID != ret) {
-            SERVER_LOG(WARN, "failed to resolve view definition", K(view_definition), K(ret), K(table_schema->get_table_id()));
-          } else {
-            ret = OB_SUCCESS;
-            continue;
-          }
-        } else if (OB_UNLIKELY(NULL == select_stmt)) {
-          ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "select_stmt is NULL", K(ret));
-        } else if (OB_ISNULL(real_stmt = select_stmt->get_real_stmt())) {
-          // case : view definition is set_op
-          // Bug : http://k3.alibaba-inc.com/issue/6455327?stat=1.5.3&toPage=1&versionId=1043693
-          ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "real stmt is NULL", K(ret));
-        } 
-        for (int64_t k = 0; OB_SUCC(ret) && k < real_stmt->get_select_item_size() && !has_more_; ++k) {
-          if (OB_FAIL(fill_row_cells(database_schema->get_database_name_str(), table_schema,
-                                      real_stmt, real_stmt->get_select_item(k), k + 1/* add for position */))) {
-            SERVER_LOG(WARN, "fail to fill row cells", K(ret));
-          } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-            SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
-            if (OB_SIZE_OVERFLOW == ret) {
-              last_schema_idx_ = last_db_schema_idx;
-              last_table_idx_ = i;
-              last_column_idx_ = k;
-              has_more_ = true;
+        mem_context_->reset_remain_one_page();
+        WITH_CONTEXT(mem_context_) {
+          ObString view_definition;
+          sql::ObSelectStmt *select_stmt = NULL;
+          sql::ObSelectStmt *real_stmt = NULL;
+          ObStmtFactory stmt_factory(mem_context_->get_arena_allocator());
+          ObRawExprFactory expr_factory(mem_context_->get_arena_allocator());
+          if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(
+                        mem_context_->get_arena_allocator(),
+                        session_->get_local_collation_connection(),
+                        table_schema->get_view_schema(),
+                        view_definition))) {
+            SERVER_LOG(WARN, "fail to generate view definition for resolve", K(ret));
+          } else if (OB_FAIL(ObTableColumns::resolve_view_definition(&mem_context_->get_arena_allocator(), session_, schema_guard_,
+                        *table_schema, select_stmt, expr_factory, stmt_factory, false))) {
+            if (OB_ERR_UNKNOWN_TABLE != ret && OB_ERR_VIEW_INVALID != ret) {
+              SERVER_LOG(WARN, "failed to resolve view definition", K(view_definition), K(ret), K(table_schema->get_table_id()), K(mem_context_->used()));
+            } else {
               ret = OB_SUCCESS;
+              continue;
+            }
+          } else if (OB_UNLIKELY(NULL == select_stmt)) {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "select_stmt is NULL", K(ret));
+          } else if (OB_ISNULL(real_stmt = select_stmt->get_real_stmt())) {
+            // case : view definition is set_op
+            // Bug : http://k3.alibaba-inc.com/issue/6455327?stat=1.5.3&toPage=1&versionId=1043693
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "real stmt is NULL", K(ret));
+          }
+          for (int64_t k = 0; OB_SUCC(ret) && k < real_stmt->get_select_item_size() && !has_more_; ++k) {
+            if (OB_FAIL(fill_row_cells(database_schema->get_database_name_str(), table_schema,
+                                        real_stmt, real_stmt->get_select_item(k), k + 1/* add for position */))) {
+              SERVER_LOG(WARN, "fail to fill row cells", K(ret));
+            } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
+              SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
+              if (OB_SIZE_OVERFLOW == ret) {
+                last_schema_idx_ = last_db_schema_idx;
+                last_table_idx_ = i;
+                last_column_idx_ = k;
+                has_more_ = true;
+                ret = OB_SUCCESS;
+              }
             }
           }
         }
@@ -1149,6 +1161,22 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
     } // end for
   }
 
+  return ret;
+}
+
+inline int ObInfoSchemaColumnsTable::init_mem_context()
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_LIKELY(NULL == mem_context_)) {
+    lib::ContextParam param;
+    param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
+      .set_mem_attr(tenant_id_, ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID);
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
+      SQL_ENG_LOG(WARN, "create entity failed", K(ret));
+    } else if (OB_ISNULL(mem_context_)) {
+      SQL_ENG_LOG(WARN, "mem entity is null", K(ret));
+    }
+  }
   return ret;
 }
 

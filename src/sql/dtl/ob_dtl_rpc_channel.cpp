@@ -32,7 +32,7 @@ namespace dtl {
 
 void ObDtlRpcChannel::SendMsgCB::on_invalid()
 {
-  LOG_WARN("SendMsgCB invalid, check object serialization impl or oom",
+  LOG_WARN_RET(OB_ERROR, "SendMsgCB invalid, check object serialization impl or oom",
            K_(trace_id));
   AsyncCB::on_invalid();
   const ObDtlRpcDataResponse &resp = result_;
@@ -44,12 +44,20 @@ void ObDtlRpcChannel::SendMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendMsgCB::on_timeout()
 {
-  LOG_WARN("SendMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
-           K_(trace_id));
   const ObDtlRpcDataResponse &resp = result_;
-  int ret = response_.on_finish(resp.is_block_, OB_TIMEOUT);
+  int tmp_ret = OB_TIMEOUT;
+  int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
+  if (timeout_ts_ - cur_timestamp > 100 * 1000) {
+    LOG_DEBUG("rpc return OB_TIMEOUT, but it is actually not timeout, "
+              "change error code to OB_CONNECT_ERROR", K(tmp_ret),
+              K(timeout_ts_), K(cur_timestamp));
+    tmp_ret = OB_RPC_CONNECT_ERROR;
+  }
+  int ret = response_.on_finish(resp.is_block_, tmp_ret);
+  LOG_WARN("SendMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
+           K_(trace_id), K(ret));
   if (OB_FAIL(ret)) {
-    LOG_WARN("set finish failed", K_(trace_id), K(ret));
+    LOG_WARN("set finish failed", K_(trace_id), K(ret), K(get_error()));
   }
 }
 
@@ -71,7 +79,7 @@ rpc::frame::ObReqTransport::AsyncCB *ObDtlRpcChannel::SendMsgCB::clone(
   SendMsgCB *cb = NULL;
   void *mem = alloc(sizeof(*this));
   if (NULL != mem) {
-    cb = new(mem)SendMsgCB(response_, trace_id_);
+    cb = new(mem)SendMsgCB(response_, trace_id_, timeout_ts_);
   }
   return cb;
 }
@@ -80,7 +88,7 @@ rpc::frame::ObReqTransport::AsyncCB *ObDtlRpcChannel::SendMsgCB::clone(
 
 void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
 {
-  LOG_WARN("SendBCMsgCB invalid, check object serialization impl or oom",
+  LOG_WARN_RET(OB_ERROR, "SendBCMsgCB invalid, check object serialization impl or oom",
            K_(trace_id));
   AsyncCB::on_invalid();
   ObIArray<ObDtlRpcDataResponse> &resps = result_.resps_;
@@ -98,7 +106,7 @@ void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
 {
-  LOG_WARN("SendBCMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
+  LOG_WARN_RET(OB_TIMEOUT, "SendBCMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
            K_(trace_id));
   ObIArray<ObDtlRpcDataResponse> &resps = result_.resps_;
   for (int64_t i = 0; i < responses_.count(); ++i) {
@@ -304,7 +312,7 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer *&buf)
     // The peer may not setup when the first message arrive,
     // we wait first message return and retry until peer setup.
     int64_t timeout_us = buf->timeout_ts() - ObTimeUtility::current_time();
-    SendMsgCB cb(msg_response_, *cur_trace_id);
+    SendMsgCB cb(msg_response_, *cur_trace_id, buf->timeout_ts());
     if (timeout_us <= 0) {
       ret = OB_TIMEOUT;
       LOG_WARN("send dtl message timeout", K(ret), K(peer_),

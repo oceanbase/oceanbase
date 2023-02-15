@@ -441,9 +441,9 @@ void ObDupTableRpc::destroy()
   if (is_inited_) {
     if (is_running_) {
       if (OB_SUCCESS != (tmp_ret = stop())) {
-        TRANS_LOG(WARN, "dup table rpc stop error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "dup table rpc stop error", K(tmp_ret));
       } else if (OB_SUCCESS != (tmp_ret = wait())) {
-        TRANS_LOG(WARN, "dup table rpc wait error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "dup table rpc wait error", K(tmp_ret));
       } else {
         // do nothing
       }

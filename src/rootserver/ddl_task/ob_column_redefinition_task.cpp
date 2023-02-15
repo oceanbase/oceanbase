@@ -67,6 +67,7 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     task_id_ = task_id;
     parallelism_ = parallelism;
     execution_id_ = 1L;
+    start_time_ = ObTimeUtility::current_time();
     if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
@@ -118,7 +119,7 @@ int ObColumnRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     execution_id_ = task_record.execution_id_;
     tenant_id_ = task_record.tenant_id_;
     ret_code_ = task_record.ret_code_;
-
+    start_time_ = ObTimeUtility::current_time();
     if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
@@ -240,6 +241,7 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
   return ret;
 }
 
+
 // Now, rebuild index table in schema and tablet.
 // Next, we only rebuild index in schema and remap new index schema to old tablet by sending RPC(REMAP_INDEXES_AND_TAKE_EFFECT_TASK) to RS.
 int ObColumnRedefinitionTask::copy_table_indexes()
@@ -281,7 +283,13 @@ int ObColumnRedefinitionTask::copy_table_indexes()
           LOG_INFO("indexes schema are already built", K(index_ids));
         } else {
           // if there is no indexes in new tables, we need to rebuild indexes in new table
-          if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+          int64_t rpc_timeout = 0;
+          int64_t all_tablet_count = 0;
+          if (OB_FAIL(get_orig_all_index_tablet_count(schema_guard, all_tablet_count))) {
+            LOG_WARN("get all tablet count failed", K(ret));
+          } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(all_tablet_count, rpc_timeout))) {
+            LOG_WARN("get ddl rpc timeout failed", K(ret));
+          } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
                 execute_ddl_task(alter_table_arg_, index_ids))) {
             LOG_WARN("rebuild hidden table index failed", K(ret));
           }
@@ -364,6 +372,7 @@ int ObColumnRedefinitionTask::copy_table_indexes()
 int ObColumnRedefinitionTask::copy_table_constraints()
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = 0;
   ObRootService *root_service = GCTX.root_service_;
   const ObTableSchema *table_schema = nullptr;
   ObSchemaGetterGuard schema_guard;
@@ -394,7 +403,9 @@ int ObColumnRedefinitionTask::copy_table_constraints()
         alter_table_arg_.ddl_task_type_ = share::REBUILD_CONSTRAINT_TASK;
         alter_table_arg_.table_id_ = object_id_;
         alter_table_arg_.hidden_table_id_ = target_object_id_;
-        if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+        if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, rpc_timeout))) {
+          LOG_WARN("get ddl rpc timeout failed", K(ret));
+        } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
               execute_ddl_task(alter_table_arg_, constraint_ids))) {
           LOG_WARN("rebuild hidden table constraint failed", K(ret));
         }
@@ -413,6 +424,7 @@ int ObColumnRedefinitionTask::copy_table_constraints()
 int ObColumnRedefinitionTask::copy_table_foreign_keys()
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = 0;
   ObRootService *root_service = GCTX.root_service_;
   const ObSimpleTableSchemaV2 *table_schema = nullptr;
   ObSchemaGetterGuard schema_guard;
@@ -438,7 +450,9 @@ int ObColumnRedefinitionTask::copy_table_foreign_keys()
         alter_table_arg_.ddl_task_type_ = share::REBUILD_FOREIGN_KEY_TASK;
         alter_table_arg_.table_id_ = object_id_;
         alter_table_arg_.hidden_table_id_ = target_object_id_;
-        if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+        if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, rpc_timeout))) {
+          LOG_WARN("get ddl rpc timeout failed", K(ret));
+        } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
               execute_ddl_task(alter_table_arg_, fk_ids))) {
           LOG_WARN("rebuild hidden table constraint failed", K(ret));
         }
@@ -574,6 +588,7 @@ int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus
 int ObColumnRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = 0;
   ObSArray<uint64_t> objs;
   alter_table_arg_.ddl_task_type_ = share::MAKE_DDL_TAKE_EFFECT_TASK;
   alter_table_arg_.table_id_ = object_id_;
@@ -615,7 +630,9 @@ int ObColumnRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status
     }
   } else if (OB_FAIL(sync_stats_info())) {
     LOG_WARN("fail to sync stats info", K(ret), K(object_id_), K(target_object_id_));
-  } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, rpc_timeout))) {
+    LOG_WARN("get ddl rpc timeout failed", K(ret));
+  } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
       execute_ddl_task(alter_table_arg_, objs))) {
     LOG_WARN("fail to swap original and hidden table state", K(ret));
     if (OB_TIMEOUT == ret) {

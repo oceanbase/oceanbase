@@ -87,6 +87,7 @@ char *lbt(void **addrs, int32_t size)
 void hex_dump(const void *data, const int32_t size,
               const bool char_type /*= true*/, const int32_t log_level /*= OB_LOG_LEVEL_DEBUG*/)
 {
+  int ret = OB_SUCCESS;
   if (OB_LOGGER.get_log_level() < log_level) { return; }
   /* dumps size bytes of *data to stdout. Looks like:
    * [0000] 75 6E 6B 6E 6F 77 6E 20
@@ -124,10 +125,10 @@ void hex_dump(const void *data, const int32_t size,
     if (n % 16 == 0) {
       /* line completed */
       if (char_type)
-        _OB_NUM_LEVEL_LOG(log_level, "[%ld] [%4.4s]   %-50.50s  %s\n",
+        _OB_NUM_LEVEL_LOG(log_level, OB_SUCCESS, "[%ld] [%4.4s]   %-50.50s  %s\n",
                           pthread_self(), addrstr, hexstr, charstr);
       else
-        _OB_NUM_LEVEL_LOG(log_level, "[%ld] [%4.4s]   %-50.50s\n",
+        _OB_NUM_LEVEL_LOG(log_level, OB_SUCCESS, "[%ld] [%4.4s]   %-50.50s\n",
                           pthread_self(), addrstr, hexstr);
       hexstr[0] = 0;
       charstr[0] = 0;
@@ -142,10 +143,10 @@ void hex_dump(const void *data, const int32_t size,
   if (strlen(hexstr) > 0) {
     /* print rest of buffer if not empty */
     if (char_type)
-      _OB_NUM_LEVEL_LOG(log_level, "[%ld] [%4.4s]   %-50.50s  %s\n",
+      _OB_NUM_LEVEL_LOG(log_level, OB_SUCCESS, "[%ld] [%4.4s]   %-50.50s  %s\n",
                         pthread_self(), addrstr, hexstr, charstr);
     else
-      _OB_NUM_LEVEL_LOG(log_level, "[%ld] [%4.4s]   %-50.50s\n",
+      _OB_NUM_LEVEL_LOG(log_level, OB_SUCCESS, "[%ld] [%4.4s]   %-50.50s\n",
                         pthread_self(), addrstr, hexstr);
   }
 }
@@ -448,7 +449,7 @@ int mem_chunk_serialize(char *buf, int64_t len, int64_t &pos, const char *data, 
   if (NULL == buf || len <= 0 || pos < 0 || pos > len || NULL == data || 0 > data_len) {
     err = OB_INVALID_ARGUMENT;
   } else if (OB_SUCCESS != (err = serialization::encode_i64(buf, len, tmp_pos, data_len))) {
-    _OB_LOG(ERROR, "encode_i64(buf=%p, len=%ld, pos=%ld, i=%ld)=>%d", buf, len, tmp_pos, data_len,
+    _OB_LOG_RET(ERROR, err, "encode_i64(buf=%p, len=%ld, pos=%ld, i=%ld)=>%d", buf, len, tmp_pos, data_len,
             err);
   } else if (tmp_pos + data_len > len) {
     err = OB_SERIALIZE_ERROR;
@@ -468,7 +469,7 @@ int mem_chunk_deserialize(const char *buf, int64_t len, int64_t &pos, char *data
   if (NULL == buf || len <= 0 || pos < 0 || pos > len || NULL == data || data_len < 0) {
     err = OB_INVALID_ARGUMENT;
   } else if (OB_SUCCESS != (err = serialization::decode_i64(buf, len, tmp_pos, &real_len))) {
-    _OB_LOG(ERROR, "decode_i64(buf=%p, len=%ld, pos=%ld, i=%ld)=>%d", buf, len, tmp_pos, real_len,
+    _OB_LOG_RET(ERROR, err, "decode_i64(buf=%p, len=%ld, pos=%ld, i=%ld)=>%d", buf, len, tmp_pos, real_len,
             err);
   } else if (real_len > data_len || tmp_pos + real_len > len) {
     err = OB_DESERIALIZE_ERROR;
@@ -562,52 +563,52 @@ int replace_str(char *src_str, const int64_t src_str_buf_size,
 
 int get_ethernet_speed(const char *devname, int64_t &speed)
 {
-  int rc = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   if (NULL == devname) {
+    ret = OB_INVALID_ARGUMENT;
     _OB_LOG(WARN, "invalid devname %p", devname);
-    rc = OB_INVALID_ARGUMENT;
   } else {
-    rc = get_ethernet_speed(ObString::make_string(devname), speed);
+    ret = get_ethernet_speed(ObString::make_string(devname), speed);
   }
-  return rc;
+  return ret;
 }
 
 int get_ethernet_speed(const ObString &devname, int64_t &speed)
 {
-  int rc = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   bool exist = false;
   char path[OB_MAX_FILE_NAME_LENGTH];
   static int dev_file_exist = 1;
   if (0 == devname.length()) {
+    ret = OB_INVALID_ARGUMENT;
     _OB_LOG(WARN, "empty devname");
-    rc = OB_INVALID_ARGUMENT;
   } else {
     IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s", devname.length(), devname.ptr());
-    if (OB_SUCCESS != (rc = FileDirectoryUtils::is_exists(path, exist)) || !exist) {
+    if (OB_SUCCESS != (ret = FileDirectoryUtils::is_exists(path, exist)) || !exist) {
       if (dev_file_exist) {
       _OB_LOG(WARN, "path %s not exist", path);
        dev_file_exist = 0;
       }
-      rc = OB_FILE_NOT_EXIST;
+      ret = OB_FILE_NOT_EXIST;
     }
   }
-  if (OB_SUCCESS != rc)
+  if (OB_SUCCESS != ret)
   {}
   else {
     CharArena alloc;
     ObString str;
     IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s/bonding/",
                            devname.length(), devname.ptr());
-    if (OB_SUCCESS != (rc = FileDirectoryUtils::is_exists(path, exist))) {
-      LIB_LOG(WARN, "check net file if exists failed.", K(rc));
+    if (OB_SUCCESS != (ret = FileDirectoryUtils::is_exists(path, exist))) {
+      LIB_LOG(WARN, "check net file if exists failed.", K(ret));
     } else if (exist) {
       IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s/bonding/slaves",
                              devname.length(), devname.ptr());
-      if (OB_SUCCESS != (rc = load_file_to_string(path, alloc, str))) {
-        _OB_LOG(WARN, "load file %s failed, rc %d", path, rc);
+      if (OB_SUCCESS != (ret = load_file_to_string(path, alloc, str))) {
+        _OB_LOG(WARN, "load file %s failed, ret %d", path, ret);
       } else if (0 == str.length()) {
         _OB_LOG(WARN, "can't get slave ethernet");
-        rc = OB_ERROR;
+        ret = OB_ERROR;
       } else {
         int len = 0;
         while (len < str.length() && !isspace(str.ptr()[len])) {
@@ -619,16 +620,16 @@ int get_ethernet_speed(const ObString &devname, int64_t &speed)
       IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s/speed",
                              devname.length(), devname.ptr());
     }
-    if (OB_SUCCESS == rc) {
-      if (OB_SUCCESS != (rc = load_file_to_string(path, alloc, str))) {
-        _OB_LOG(WARN, "load file %s failed, rc %d", path, rc);
+    if (OB_SUCCESS == ret) {
+      if (OB_SUCCESS != (ret = load_file_to_string(path, alloc, str))) {
+        _OB_LOG(WARN, "load file %s failed, ret %d", path, ret);
       } else {
         speed = atoll(str.ptr());
         speed = speed * 1024 * 1024 / 8;
       }
     }
   }
-  return rc;
+  return ret;
 }
 
 int deep_copy_obj(ObIAllocator &allocator, const ObObj &src, ObObj &dst)
@@ -678,8 +679,8 @@ bool is_case_space_equal(const char *s1, int64_t s1_len, const char *s2, int64_t
   //Check input
   if (NULL == s1 || NULL == s2 || s1_len < 0 || s2_len < 0) {
     result = false;
-    _OB_LOG(ERROR,
-            "Invalid argument, input arguments include NULL pointer or string length is less than zero.");
+    _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT,
+                "Invalid argument, input arguments include NULL pointer or string length is less than zero.");
   } else if (s1 != s2) { //If s1 == s2,return 1
     while (1) {
       //Left trim
@@ -745,8 +746,8 @@ bool is_n_case_space_equal(const char *s1, int64_t s1_len, const char *s2, int64
   //Check input
   if (NULL == s1 || NULL == s2 || s1_len < 0 || s2_len < 0) {
     result = false;
-    _OB_LOG(ERROR,
-            "Invalid argument, input arguments include NULL pointer or string length is less than zero.");
+    _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT,
+                "Invalid argument, input arguments include NULL pointer or string length is less than zero.");
   } else if (s1 != s2) { //If s1 == s2,return 1
     while (1) {
       //Left trim

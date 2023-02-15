@@ -127,7 +127,9 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
     LOG_WARN("fail to get snapshot", K(ret));
   } else {
     ObString data = datum.get_string();
-    ObLobLocatorV2 src(data, has_lob_header);
+    // datum with null ptr and zero len should treat as no lob header
+    bool set_has_lob_header = has_lob_header && data.length() > 0;
+    ObLobLocatorV2 src(data, set_has_lob_header);
     // 4.0 text tc compatiable
     ObLobAccessParam lob_param;
     lob_param.tx_desc_ = tx_desc;

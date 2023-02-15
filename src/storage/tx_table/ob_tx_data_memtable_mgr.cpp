@@ -251,7 +251,7 @@ int ObTxDataMemtableMgr::freeze_()
         // waiting for all write operation done.
         if (TC_REACH_TIME_INTERVAL(TX_DATA_MEMTABLE_MAX_FREEZE_WAIT_TIME)) {
           int64_t freeze_wait_time_ms = (ObTimeUtil::fast_current_time() - start_ts) / 1000;
-          STORAGE_LOG(WARN, "freeze tx data memtable cost too much time. has wait for(ms) : ",
+          STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "freeze tx data memtable cost too much time. has wait for(ms) : ",
                       K(freeze_wait_time_ms), KPC(freeze_memtable));
         }
         PAUSE();

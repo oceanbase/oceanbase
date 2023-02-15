@@ -1003,7 +1003,7 @@ TEST_F(ObTestTxFreeRoute, sample)
                 A_F(txn_free_route_ctx.parts_changed_),
                 A_F(txn_free_route_ctx.extra_changed_),
                 A_F(txn_free_route_ctx.flag_.is_tx_terminated_));
-  EX_DUMMY_WRITE(101,100);
+  EX_DUMMY_WRITE(201,100);
   // step2
   RESET_HOOKS_2();
   EXPECT_PROXY(POST_ROUTE, A_EQ(backend->server_, &server1));
@@ -1015,7 +1015,7 @@ TEST_F(ObTestTxFreeRoute, sample)
                 A_F(txn_free_route_ctx.parts_changed_),
                 A_T(txn_free_route_ctx.extra_changed_),
                 A_F(txn_free_route_ctx.flag_.is_tx_terminated_));
-  EX_SAVEPOINT(102, 102);
+  EX_SAVEPOINT(202, 102);
   // step3
   RESET_HOOKS_2();
   EXPECT_PROXY(POST_ROUTE, A_EQ(backend->server_, &server2));
@@ -1027,7 +1027,7 @@ TEST_F(ObTestTxFreeRoute, sample)
                 A_T(txn_free_route_ctx.in_txn_before_handle_request_),
                 A_EQ(OB_ENTRY_NOT_EXIST, server.check_tx_exist((ObTransID*)req.hook_ctx_)),
                 A_EQ(OB_SUCCESS, server.check_tx_sanity()));
-  EX_WRITE(101, 1001);
+  EX_WRITE(201, 1001);
   RESET_HOOKS_2();
   EX_COMMIT_TX();
 }

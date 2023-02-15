@@ -170,7 +170,8 @@ public:
   static void clear_expr_eval_flags(const ObExpr &expr, ObEvalCtx &ctx);
   static int calc_sql_expression_without_row(ObExecContext &exec_ctx,
                                              const ObISqlExpression &expr,
-                                             ObObj &result);
+                                             ObObj &result,
+                                             ObIAllocator *allocator = NULL);
 
   static int calc_const_expr(const ObRawExpr *expr,
                              const ParamStore *params,
@@ -221,7 +222,7 @@ public:
             const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_
                             + (*e)->res_buf_len_ * idx;
             if (datum_ptr != res_ptr) {
-              SQL_LOG(WARN, "sanity check failure, column index", K(expr_idx), K(idx),
+              SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index", K(expr_idx), K(idx),
                                      KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
               abort();
             }
@@ -230,7 +231,7 @@ public:
           const char *datum_ptr = datum->ptr_;
           const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_;
           if (datum_ptr != res_ptr) {
-            SQL_LOG(WARN, "sanity check failure, column index",
+            SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index",
                      K(expr_idx), KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
             abort();
           }
@@ -494,6 +495,8 @@ public:
                                                   common::ObCollationType connection_collation,
                                                   const share::schema::ObViewSchema &view_schema,
                                                   common::ObString &view_definition);
+  static void record_execute_time(const ObPhyPlanType type,
+                                  const int64_t time_cost);
   static int handle_audit_record(bool need_retry,
                                  const ObExecuteMode exec_mode,
                                  ObSQLSessionInfo &session,
@@ -565,7 +568,9 @@ public:
   static void adjust_time_by_ntp_offset(int64_t &dst_timeout_ts);
   static int async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                   ObSelectStmt *select_stmt,
-                                  bool reset_column_infos);
+                                  bool reset_column_infos,
+                                  common::ObIAllocator &alloc,
+                                  sql::ObSQLSessionInfo &session_info);
   static int find_synonym_ref_obj(const ObString &database_name,
                                   const ObString &object_name,
                                   const uint64_t tenant_id,

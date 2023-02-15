@@ -157,7 +157,7 @@ struct ObTxLogBigSegmentInfo
     submit_log_cb_template_ = nullptr;
 
     if (!unsynced_segment_part_cbs_.is_empty()) {
-      TRANS_LOG(WARN, "all log cbs need return before reset",
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "all log cbs need return before reset",
                 K(unsynced_segment_part_cbs_.get_size()), K(unsynced_segment_part_cbs_.get_first()),
                 K(unsynced_segment_part_cbs_.get_last()));
     }

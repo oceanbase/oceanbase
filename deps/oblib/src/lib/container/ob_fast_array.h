@@ -64,7 +64,7 @@ public:
   {
     T* buffer = get_buffer();
     if (OB_UNLIKELY(0 > idx || idx >= count_ || buffer == NULL)) {
-      LIB_LOG(ERROR, "invalid argument", K(idx), K_(count), K(buffer));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(idx), K_(count), K(buffer));
       common::right_to_die_or_duty_to_live();
     }
     return buffer[idx];
@@ -73,7 +73,7 @@ public:
   {
     const T* buffer = get_buffer();
     if (OB_UNLIKELY(0 > idx || idx >= count_ || buffer == NULL)) {
-      LIB_LOG(ERROR, "invalid argument", K(idx), K_(count), K(buffer));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(idx), K_(count), K(buffer));
       common::right_to_die_or_duty_to_live();
     }
     return buffer[idx];

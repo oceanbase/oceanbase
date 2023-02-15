@@ -40,7 +40,7 @@ struct ObDTLIntermResultMonitorInfo
     qc_id_(qc_id), dfo_id_(dfo_id), sqc_id_(sqc_id)
   { }
     TO_STRING_KV(K_(qc_id), K_(dfo_id), K_(sqc_id));
-  int32_t qc_id_;
+  int64_t qc_id_;
   int64_t dfo_id_;
   int64_t sqc_id_;
 };
@@ -104,6 +104,7 @@ public:
   int64_t dump_time_;
   int64_t dump_cost_;
   ObDTLIntermResultMonitorInfo monitor_info_;
+  uint64_t tenant_id_;
 };
 
 struct ObDTLIntermResultInfoGuard
@@ -212,7 +213,7 @@ public:
   int operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
       ObDTLIntermResultInfo *> &entry);
 public:
-  bool tenant_id_;
+  uint64_t tenant_id_;
   common::ObSEArray<ObDTLIntermResultKey, 64> expire_keys_;
   int ret_;
 };

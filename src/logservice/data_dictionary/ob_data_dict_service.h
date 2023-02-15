@@ -72,12 +72,16 @@ public:
   virtual int switch_to_follower_gracefully() override final;
   virtual int resume_leader() override final;
   virtual share::SCN get_rec_scn() override final { return share::SCN::max_scn(); }
+public:
+  OB_INLINE int64_t get_last_dump_succ_time() const { return last_dump_succ_time_; }
+  // mark need force dump data_dict, will dump data_dict regardless dump_interval.
+  OB_INLINE void mark_force_dump_data_dict(const bool need_dump = true)
+  { ATOMIC_SET(&force_need_dump_, need_dump); }
 private:
   void refresh_config_();
   void switch_role_to_(bool is_leader);
   int do_dump_data_dict_();
   int check_cluster_status_normal_(bool &is_normal);
-  int get_sys_ls_log_handle_(logservice::ObLogHandler *&log_handler);
   int get_snapshot_scn_(share::SCN &snapshot_scn);
   int generate_dict_and_dump_(const share::SCN &snapshot_scn);
   int get_tenant_schema_guard_(
@@ -114,6 +118,7 @@ private:
   int64_t dump_interval_;
   int timer_tg_id_;
   int64_t last_dump_succ_time_;
+  bool force_need_dump_;
 };
 
 } // namespace datadict

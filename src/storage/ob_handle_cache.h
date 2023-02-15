@@ -57,6 +57,15 @@ public:
 
   virtual ~ObHandleCache() {}
 
+  void reset_handles()
+  {
+    for (int64_t i = 0; i < N; ++i) {
+      nodes_[i].reset();
+    }
+    MEMSET(buckets_, -1, sizeof(buckets_));
+    MEMSET(chain_, -1, sizeof(chain_));
+  }
+
   int get_handle(const Key &key, Handle &handle)
   {
     int ret = common::OB_SUCCESS;

@@ -38,13 +38,24 @@ namespace oceanbase
 {
 namespace common
 {
+
+void __attribute__((weak)) allow_next_syslog(int64_t)
+{
+  // do nothing
+}
+
+const char* __attribute__((weak)) ob_strerror(const int oberr)
+{
+  const char* ret = "ob_strerror";
+  return ret;
+}
 _RLOCAL(ByteBuf<ObLogger::LOCAL_BUF_SIZE>, ObLogger::local_buf_);
 extern void update_easy_log_level();
 lib::ObRateLimiter *ObLogger::default_log_limiter_ = nullptr;
 _RLOCAL(lib::ObRateLimiter*, ObLogger::tl_log_limiter_);
 static const int64_t limiter_initial = 1000;
 static const int64_t limiter_thereafter = 100;
-lib::ObSampleRateLimiter ObLogger::per_log_limiters_[];
+ObSyslogSampleRateLimiter ObLogger::per_log_limiters_[];
 _RLOCAL(int32_t, ObLogger::tl_type_);
 _RLOCAL(uint64_t, ObLogger::curr_logging_seq_);
 _RLOCAL(uint64_t, ObLogger::last_logging_seq_);
@@ -53,6 +64,7 @@ _RLOCAL(time_t, ObLogger::last_unix_sec_);
 _RLOCAL(struct tm, ObLogger::last_localtime_);
 _RLOCAL(bool, ObLogger::disable_logging_);
 _RLOCAL(bool, ObLogger::trace_mode_);
+_RLOCAL(int64_t, ObLogger::limited_left_log_size_);
 static int64_t last_check_file_ts = 0; //last file sample timestamps
 static int64_t last_check_disk_ts = 0; //last disk sample timestamps
 
@@ -64,8 +76,6 @@ static const int ERROR_LOG_INIT_MEM = 2L << 20; // 2M
 static const int64_t MAX_BUFFER_ITEM_CNT = 512 << 10;
 
 static const int64_t POP_COMPENSATED_TIME[5] = {0, 1, 2, 3, 4};//for pop timeout
-
-static const int64_t NORMAL_LOG_SIZE = 1 << 10;
 
 ObPLogFDType get_fd_type(const char *mod_name)
 {
@@ -446,23 +456,24 @@ void ObLogger::print_trace_buffer(const char* mod_name,
     };
     // invoke log_it isn't workable，that will recycle infinitely
     do_log_message(is_async_log_used(), mod_name, level, file, line, function,
-                   false, location_hash_val, log_data_func);
+                   false, location_hash_val, 0, log_data_func);
     tb->reset();//reset, than reuse the TraceBuffer
   }
 }
 
-const char *const ObLogger::errstr_[] = {"ERROR", "USER_ERR", "WARN", "INFO", "TRACE", "DEBUG"};
+const char *const ObLogger::errstr_[] = {"ERROR", "WARN", "INFO", "EDIAG", "WDIAG", "TRACE", "DEBUG"};
 
 ObLogger::ObLogger()
   : ObBaseLogWriter(), log_file_(), max_file_size_(DEFAULT_MAX_FILE_SIZE), max_file_index_(0),
-    name_id_map_(), id_level_map_(), wf_level_(OB_LOG_LEVEL_WARN), level_version_(0),
+    name_id_map_(), id_level_map_(), wf_level_(OB_LOG_LEVEL_DBA_WARN), level_version_(0),
     disable_thread_log_level_(false), force_check_(false), redirect_flag_(false), open_wf_flag_(false),
     enable_wf_flag_(false), rec_old_file_flag_(false), can_print_(true),
     enable_async_log_(true), use_multi_flush_(false), stop_append_log_(false), enable_perf_mode_(false),
     last_async_flush_count_per_sec_(0), log_mem_limiter_(nullptr),
-    allocator_(nullptr), error_allocator_(nullptr), enable_log_limit_(true), is_arb_replica_(false)
+    allocator_(nullptr), error_allocator_(nullptr), enable_log_limit_(true), is_arb_replica_(false),
+    new_file_info_(nullptr), info_as_wdiag_(true)
 {
-  id_level_map_.set_level(OB_LOG_LEVEL_ERROR);
+  id_level_map_.set_level(OB_LOG_LEVEL_DBA_ERROR);
 
   (void)pthread_mutex_init(&file_size_mutex_, NULL);
   (void)pthread_mutex_init(&file_index_mutex_, NULL);
@@ -549,11 +560,14 @@ void ObLogger::set_file_name(const char *filename,
   //open wf file
   open_wf_flag_ = open_wf;
   enable_wf_flag_ = open_wf;
-  if (OB_FAIL(log_file_[FD_SVR_FILE].open(filename, open_wf, redirect_flag_))) {
+  if (OB_FAIL(log_file_[FD_SVR_FILE].open(filename, open_wf, redirect_flag_))
+      && OB_FAIL(log_new_file_info(log_file_[FD_SVR_FILE]))) {
     LOG_STDERR("fail to open log_file = %p, ret=%d\n", filename, ret);
-  } else if (NULL != rs_filename && OB_FAIL(log_file_[FD_RS_FILE].open(rs_filename, open_wf, false))) {
+  } else if (NULL != rs_filename && OB_FAIL(log_file_[FD_RS_FILE].open(rs_filename, open_wf, false))
+             && OB_FAIL(log_new_file_info(log_file_[FD_RS_FILE]))) {
     LOG_STDERR("fail to open log_file = %p, ret=%d\n", rs_filename, ret);
-  } else if (NULL != elec_filename && OB_FAIL(log_file_[FD_ELEC_FILE].open(elec_filename, open_wf, false))) {
+  } else if (NULL != elec_filename && OB_FAIL(log_file_[FD_ELEC_FILE].open(elec_filename, open_wf, false))
+             && OB_FAIL(log_new_file_info(log_file_[FD_ELEC_FILE]))) {
     LOG_STDERR("fail to open log_file = %p, ret=%d\n", elec_filename, ret);
   } else if (NULL != trace_filename && OB_FAIL(log_file_[FD_TRACE_FILE].open(trace_filename, false, false))) {
     LOG_STDERR("fail to open log_file = %p, ret=%d\n", trace_filename, ret);
@@ -627,6 +641,7 @@ int ObLogger::log_head(const char *mod_name,
                         const char *file,
                         const int32_t line,
                         const char *function,
+                        const int errcode,
                         char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -641,6 +656,15 @@ int ObLogger::log_head(const char *mod_name,
     struct tm tm;
     ob_fast_localtime(last_unix_sec_, last_localtime_, static_cast<time_t>(tv.tv_sec), &tm);
     const uint64_t *trace_id = ObCurTraceId::get();
+    const int32_t errcode_buf_size = 32;
+    char errcode_buf[errcode_buf_size];
+    errcode_buf[0] = '\0';
+    if (level == OB_LOG_LEVEL_DBA_ERROR
+        || level == OB_LOG_LEVEL_DBA_WARN
+        || level == OB_LOG_LEVEL_WARN
+        || level == OB_LOG_LEVEL_ERROR) {
+      snprintf(errcode_buf, errcode_buf_size, "[errcode=%d]", errcode);
+    }
     if (get_fd_type(mod_name) == FD_TRACE_FILE) {
       //forbid modify the format of logdata_printf
       ret = logdata_printf(buf, buf_len, pos,
@@ -654,12 +678,12 @@ int ObLogger::log_head(const char *mod_name,
       (void)snprintf(cluster_id_buf, cluster_id_buf_len, "[C%lu]", GET_CLUSTER_ID());
       ret = logdata_printf(buf, buf_len, pos,
                            "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
-                           "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][" TRACE_ID_FORMAT_V2 "] [lt=%ld] ",
+                           "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][" TRACE_ID_FORMAT_V2 "] [lt=%ld]%s ",
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                            tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, function,
                            base_file_name, line, GETTID(), GETTNAME(), is_arb_replica_ ? cluster_id_buf : "",
-                           GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id),
-                           last_logging_cost_time_us_);
+                           is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id),
+                           last_logging_cost_time_us_, errcode_buf);
     }
   }
   return ret;
@@ -673,6 +697,9 @@ void ObLogger::rotate_log(const int64_t size, const bool redirect_flag,
       rotate_log(log_struct.filename_, fd_type, redirect_flag, log_struct.fd_,
                  log_struct.wf_fd_, log_struct.file_list_, log_struct.wf_file_list_);
       (void)ATOMIC_SET(&log_struct.file_size_, 0);
+      if (fd_type <= FD_ELEC_FILE) {
+        (void)log_new_file_info(log_struct);
+      }
       (void)pthread_mutex_unlock(&file_size_mutex_);
     }
   }
@@ -1125,6 +1152,8 @@ int ObLogger::level_str2int(const char *level_name, int8_t &level_int)
     if (!find_level) {
       ret = OB_LOG_LEVEL_INVALID;
       LOG_WARN("Invalid log level", K(ret));
+    } else if (OB_LOG_LEVEL_INFO == level_int && info_as_wdiag_) {
+      level_int = OB_LOG_LEVEL_WARN;
     }
   }
   return ret;
@@ -1337,7 +1366,7 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
     LOG_STDERR("alloc failed");
   } else {
     for (int i = 0; i < ARRAYSIZEOF(per_log_limiters_); i++) {
-      new (&per_log_limiters_[i])lib::ObSampleRateLimiter(limiter_initial, limiter_thereafter);
+      new (&per_log_limiters_[i])ObSyslogSampleRateLimiter(limiter_initial, limiter_thereafter);
     }
     const int64_t limit = ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 2; // 512M
     log_mem_limiter_ = new (buf) ObBlockAllocMgr(limit);
@@ -1575,63 +1604,40 @@ int ObLogger::backtrace_if_needed(ObPLogItem &log_item, const bool force)
   return ret;
 }
 
-int ObLogger::precheck_tl_log_limiter(const int32_t level, bool &allow)
+int ObLogger::check_tl_log_limiter(const uint64_t location_hash_val,
+                                   const int32_t level,
+                                   const int errcode,
+                                   const int64_t log_size,
+                                   bool &allow)
 {
   int ret = OB_SUCCESS;
   allow = true;
-  auto log_limiter = (nullptr != tl_log_limiter_ ? tl_log_limiter_ : default_log_limiter_);
-  if (enable_log_limit_
-      && nullptr != log_limiter
-      && OB_SUCCESS != log_limiter->try_acquire(NORMAL_LOG_SIZE)
-      && !log_limiter->is_force_allows()
-      && (0 == log_limiter->rate() || OB_LOG_LEVEL_ERROR != level)) {
-    allow = false;
-  }
-  return ret;
-}
-
-int ObLogger::check_tl_log_limiter(ObPLogItem &log_item, const uint64_t location_hash_val)
-{
-  int ret = OB_SUCCESS;
-  static const char *EXCEED_INFO = " REACH SYSLOG RATE LIMIT";
-  auto log_limiter = (nullptr != tl_log_limiter_ ? tl_log_limiter_ : default_log_limiter_);
-  const int64_t log_size = log_item.get_data_len();
-  bool limit = nullptr != log_limiter
-    && (log_size <= NORMAL_LOG_SIZE ? false : (OB_SUCCESS != log_limiter->try_acquire(log_size - NORMAL_LOG_SIZE)));
-  bool per_log_limit = false;
-  int limiter_1st = 0;
-  int limiter_2nd = 0;
-  if (enable_log_limit_
-      && (limit ||
-       (per_log_limit = ({bool r1 = OB_SUCCESS != per_log_limiters_[limiter_1st = (location_hash_val >> 32) % N_LIMITER].try_acquire();
-                          bool r2 = OB_SUCCESS != per_log_limiters_[limiter_2nd = ((location_hash_val << 32) >> 32) % N_LIMITER].try_acquire(); r1 && r2;})))
-      && nullptr != log_limiter
-      && !log_limiter->is_force_allows()
-      && (0 == log_limiter->rate() || OB_LOG_LEVEL_ERROR != log_item.get_log_level())
-      && !log_item.is_trace_file()) {
-    if (TC_REACH_TIME_INTERVAL(1 * 1000L * 1000L)) { // every sec
-      int64_t pos = log_item.get_header_len();
-      char *buf = log_item.get_buf();
-      const int64_t buf_size = log_item.get_buf_size();
-      char msg[128];
-      const char *limiter_name = limit ? log_limiter->name() :
-        ({snprintf(msg, sizeof(msg), "per_log_limit, limiter_1st: %d, limiter_2nd: %d", limiter_1st, limiter_2nd); msg;});
-      if (OB_FAIL(logdata_print_info(buf, buf_size, pos, limiter_name))) {
-        //do nothing
+  if (OB_LIKELY(is_inited())) {
+    auto log_limiter = (nullptr != tl_log_limiter_ ? tl_log_limiter_ : default_log_limiter_);
+    if (enable_log_limit_) {
+      if (nullptr != log_limiter) {
+        allow = OB_SUCCESS == log_limiter->try_acquire(log_size, level, errcode);
       }
-
-      if (FAILEDx(logdata_print_info(buf, buf_size, pos, EXCEED_INFO))) {
-        //do nothing
-      } else {
-        check_log_end(log_item, pos);
+      if (allow) {
+        int64_t idx0 = (location_hash_val >> 32) % N_LIMITER;
+        int64_t idx1 = ((location_hash_val << 32) >> 32) % N_LIMITER;
+        bool r0 = OB_SUCCESS == per_log_limiters_[idx0].try_acquire(1, level, errcode);
+        bool r1 = OB_SUCCESS == per_log_limiters_[idx1].try_acquire(1, level, errcode);
+        allow = r0 || r1;
       }
-    } else {
-      LOG_STDOUT("log limited, no need save it");
-      ret = OB_ERR_UNEXPECTED;
+      if (!allow && nullptr != log_limiter && log_limiter->is_force_allows()) {
+        allow = true;
+      }
     }
   }
   return ret;
 }
+
+bool ObLogger::need_print_log_limit_msg()
+{
+  return TC_REACH_TIME_INTERVAL(1L * 1000 * 1000);
+}
+
 
 int64_t ObLogger::get_wait_us(const int32_t level)
 {
@@ -1641,6 +1647,8 @@ int64_t ObLogger::get_wait_us(const int32_t level)
     ret_timeout_us = 100;//100us
   } else {
     switch (level) {
+    case OB_LOG_LEVEL_DBA_ERROR: // pass
+    case OB_LOG_LEVEL_DBA_WARN: // pass
     case OB_LOG_LEVEL_ERROR: {
       ret_timeout_us = 100;//100us
       break;
@@ -1667,14 +1675,18 @@ int64_t ObLogger::get_wait_us(const int32_t level)
 }
 
 
-int ObLogger::alloc_log_item(const int32_t level, const int32_t size, ObPLogItem *&log_item)
+int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item)
 {
   UNUSED(level);
   int ret = OB_SUCCESS;
   log_item = NULL;
   if (!stop_append_log_) {
     char *buf = nullptr;
-    auto* p_alloc = level != LOG_ERROR ? (ObIAllocator*)allocator_ : (ObIAllocator*)error_allocator_;
+    auto *p_alloc = (level == OB_LOG_LEVEL_ERROR
+                     || level == OB_LOG_LEVEL_DBA_WARN
+                     || level == OB_LOG_LEVEL_DBA_ERROR)
+        ? (ObIAllocator *)error_allocator_
+        : (ObIAllocator *)allocator_;
     if (OB_UNLIKELY(nullptr == p_alloc)) {
       ret = OB_NOT_INIT;
       LOG_STDERR("uninit error, ret=%d, level=%d\n", ret, level);
@@ -1709,7 +1721,12 @@ int ObLogger::alloc_log_item(const int32_t level, const int32_t size, ObPLogItem
 void ObLogger::free_log_item(ObPLogItem *log_item)
 {
   if (NULL != log_item) {
-    auto* p_alloc = log_item->get_log_level() != LOG_ERROR ? (ObIAllocator*)allocator_ : (ObIAllocator*)error_allocator_;
+    const int level = log_item->get_log_level();
+    auto *p_alloc = (level == OB_LOG_LEVEL_ERROR
+                     || level == OB_LOG_LEVEL_DBA_WARN
+                     || level == OB_LOG_LEVEL_DBA_ERROR)
+        ? (ObIAllocator *)error_allocator_
+        : (ObIAllocator *)allocator_;
     abort_unless(p_alloc);
     log_item->~ObPLogItem();
     p_alloc->free(log_item);
@@ -1719,7 +1736,7 @@ void ObLogger::free_log_item(ObPLogItem *log_item)
 void ObLogger::inc_dropped_log_count(const int32_t level)
 {
   if (OB_LIKELY(level <= OB_LOG_LEVEL_DEBUG)
-      && OB_LIKELY(level >= OB_LOG_LEVEL_ERROR)) {
+      && OB_LIKELY(level >= OB_LOG_LEVEL_DBA_ERROR)) {
     //recode dropped count
     ATOMIC_AAF(dropped_log_count_ + level, 1);
   }
@@ -1729,6 +1746,44 @@ void ObLogger::inc_dropped_log_count(const int32_t level)
   if (is_force_allows()) {
     ATOMIC_AAF(dropped_count_ + MAX_TASK_LOG_TYPE, 1);
   }
+}
+
+int ObLogger::log_new_file_info(const ObPLogFileStruct &log_file)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != new_file_info_
+      && (log_file.fd_ > 0 || log_file.wf_fd_ > 0)) {
+    static const int64_t max_buf_len = 512;
+    char buf[max_buf_len];
+    struct timeval tv;
+    (void)gettimeofday(&tv, NULL);
+    struct tm tm;
+    ob_fast_localtime(last_unix_sec_, last_localtime_, static_cast<time_t>(tv.tv_sec), &tm);
+    snprintf(buf, max_buf_len, "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] INFO  New syslog file info: [%s]\n",
+             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
+             tm.tm_sec, tv.tv_usec, new_file_info_);
+    buf[max_buf_len - 2] = '\n';
+    buf[max_buf_len - 1] = '\0';
+    if (OB_SUCC(ret) && log_file.fd_ > STDOUT_FILENO) {
+      if (-1 == ::write(log_file.fd_, buf, strlen(buf)) < 0) {
+        ret = OB_ERR_SYS;
+      }
+    }
+    if (OB_SUCC(ret) && log_file.wf_fd_ > STDERR_FILENO) {
+      if (-1 == ::write(log_file.wf_fd_, buf, strlen(buf)) < 0) {
+        ret = OB_ERR_SYS;
+      }
+    }
+  }
+  return ret;
+}
+
+void ObLogger::issue_dba_error(const int errcode, const char *file, const int line, const char *info_str)
+{
+  const char *base_file_name = strrchr(file, '/');
+  base_file_name = (NULL != base_file_name) ? base_file_name + 1 : file;
+  LOG_DBA_ERROR(OB_UNEXPECT_INTERNAL_ERROR,
+                "errcode", errcode, "file", base_file_name, "line_no", line, "info", info_str);
 }
 
 }

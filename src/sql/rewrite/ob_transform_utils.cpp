@@ -3207,19 +3207,19 @@ int ObTransformUtils::classify_scalar_query_ref(ObRawExpr *expr,
     if (query_ref->is_set() || query_ref->get_output_column() > 1) {
       // if a query ref returns multi row or multi col,
       // we consider such query ref as a non-scalar one.
-      if (OB_FAIL(non_scalar_query_refs.push_back(query_ref))) {
+      if (OB_FAIL(add_var_to_array_no_dup(non_scalar_query_refs, expr))) {
         LOG_WARN("failed to push back non scalar query refs", K(ret));
       }
     } else {
       // if a query ref returns a scalar value
       // we consider such query ref as a scalar one.
-      if (OB_FAIL(scalar_query_refs.push_back(query_ref))) {
+      if (OB_FAIL(add_var_to_array_no_dup(scalar_query_refs, expr))) {
         LOG_WARN("failed to push back query ref", K(ret));
       }
     }
   } else if (T_REF_ALIAS_COLUMN == expr->get_expr_type()) {
     // a very special design for vector update set
-    if (OB_FAIL(scalar_query_refs.push_back(expr))) {
+    if (OB_FAIL(add_var_to_array_no_dup(scalar_query_refs, expr))) {
       LOG_WARN("failed to push back alias query ref", K(ret));
     }
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
@@ -4893,7 +4893,7 @@ int ObTransformUtils::extract_table_exprs(const ObDMLStmt &stmt,
       // do nothing
     } else if (!table_set.is_superset2(expr->get_relation_ids())) {
       /* do nothing */
-    } else if (OB_FAIL(table_exprs.push_back(expr))) {
+    } else if (OB_FAIL(add_var_to_array_no_dup(table_exprs, expr))) {
       LOG_WARN("failed to push back column expr", K(ret));
     }
   }
@@ -5263,8 +5263,11 @@ int ObTransformUtils::merge_table_items(ObDMLStmt *stmt,
     }
 
     if (OB_SUCC(ret) && !from_col_exprs.empty()) {
-      if (OB_FAIL(stmt->replace_relation_exprs(from_col_exprs, to_col_exprs))) {
-        LOG_WARN("failed to replace col exprs", K(ret));
+      ObStmtExprReplacer replacer;
+      if (OB_FAIL(replacer.add_replace_exprs(from_col_exprs, to_col_exprs))) {
+        LOG_WARN("failed to add replace exprs", K(ret));
+      } else if (OB_FAIL(stmt->iterate_stmt_expr(replacer))) {
+        LOG_WARN("failed to iterate stmt expr", K(ret));
       }
     }
     if (OB_SUCC(ret) && stmt->is_delete_stmt()) {
@@ -7242,8 +7245,6 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
                                            ObIArray<ObRawExpr *> &common_exprs)
 {
   int ret = OB_SUCCESS;
-  int64_t set_size = 32;
-  hash::ObHashSet<uint64_t> expr_set;
   ObArray<ObRawExpr *> relation_exprs;
   if (OB_ISNULL(parent) || OB_ISNULL(view_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7252,6 +7253,22 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(view_stmt->get_relation_exprs(relation_exprs))) {
     LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (OB_FAIL(extract_shared_exprs(parent, relation_exprs, common_exprs))) {
+    LOG_WARN("failed to extract shared exprs from relation exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
+                                           ObIArray<ObRawExpr *> &relation_exprs,
+                                           ObIArray<ObRawExpr *> &common_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t set_size = 32;
+  hash::ObHashSet<uint64_t> expr_set;
+  if (OB_ISNULL(parent)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(parent));
   } else if (relation_exprs.count() > set_size) {
     set_size = relation_exprs.count();
   }
@@ -11300,17 +11317,22 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
 {
   int ret = OB_SUCCESS;
   bool is_correlated = false;
+  bool is_scalar = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
   } else if (expr->is_static_const_expr()) {
     //do nothing
+  } else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
+    LOG_WARN("failed to check is scalar expr", K(ret));
   } else if (OB_FAIL(is_correlated_expr(query_ref.get_exec_params(),
                                         expr,
                                         is_correlated))) {
     LOG_WARN("failed to check is correlated expr", K(ret));
-  } else if (!is_correlated) {
-    if (pos >= new_column_list.count()) {
+  } else if (is_scalar && !is_correlated) {
+    if (expr->is_exec_param_expr()) {
+      //do nothing
+    } else if (pos >= new_column_list.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect array pos", K(pos), K(new_column_list), K(ret));
     } else {
@@ -11353,16 +11375,19 @@ int ObTransformUtils::pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
 {
   int ret = OB_SUCCESS;
   is_correlated = false;
+  bool is_scalar = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
   } else if (expr->is_static_const_expr()) {
     //do nothing
+  } else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
+    LOG_WARN("failed to check is scalar expr", K(ret));
   } else if (OB_FAIL(is_correlated_expr(query_ref.get_exec_params(),
                                         expr,
                                         is_correlated))) {
     LOG_WARN("failed to check is correlated expr", K(ret));
-  } else if (!is_correlated) {
+  } else if (is_scalar && !is_correlated) {
     if (expr->is_exec_param_expr()) {
       //do nothing
     } else if (OB_FAIL(new_select_list.push_back(expr))) {
@@ -11370,20 +11395,13 @@ int ObTransformUtils::pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
     }
   } else {
     int64_t N = expr->get_param_count();
+    bool param_correlated = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      bool param_correlated = false;
       if (OB_FAIL(SMART_CALL(pullup_correlated_expr(query_ref,
                                                     expr->get_param_expr(i),
                                                     new_select_list,
                                                     param_correlated)))) {
         LOG_WARN("failed to pullup correlated expr", K(ret));
-      } else {
-        is_correlated = param_correlated || is_correlated;
-      }
-    }
-    if (OB_SUCC(ret) && !is_correlated) {
-      if (OB_FAIL(new_select_list.push_back(expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
       }
     }
   }
@@ -12377,7 +12395,8 @@ int ObTransformUtils::extract_copier_exprs(ObRawExprCopier &copier,
 int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
                                                         ObRawExpr *aggr,
                                                         ObTransformerCtx *ctx,
-                                                        ObRawExpr *&out_expr) {
+                                                        ObRawExpr *&out_expr)
+{
   int ret = OB_SUCCESS;
   ObConstRawExpr *const_uint64_max = NULL;
   ObConstRawExpr *const_zero = NULL;
@@ -12406,6 +12425,22 @@ int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
                                                             out_expr,
                                                             ctx))) {
     LOG_WARN("failed to build case when expr", KR(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::is_scalar_expr(ObRawExpr* expr, bool &is_scalar)
+{
+  int ret = OB_SUCCESS;
+  is_scalar = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (T_OP_ROW == expr->get_expr_type()) {
+    is_scalar = false;
+  } else if (expr->is_query_ref_expr()) {
+    ObQueryRefRawExpr *query_ref = static_cast<ObQueryRefRawExpr*>(expr);
+    is_scalar = (!query_ref->is_set()) && (query_ref->get_output_column() == 1);
   }
   return ret;
 }

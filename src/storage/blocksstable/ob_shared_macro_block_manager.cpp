@@ -382,9 +382,10 @@ int ObSharedMacroBlockMgr::get_recyclable_blocks(ObIAllocator &allocator, ObIArr
 int ObSharedMacroBlockMgr::defragment()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator task_allocator;
+  ObArenaAllocator task_allocator("SSTDefragTask", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObArenaAllocator iter_allocator("SSTDefragIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObFixedArray<MacroBlockId, ObIAllocator> macro_ids(task_allocator);
-  ObTenantTabletIterator tablet_iter(*(MTL(ObTenantMetaMemMgr*)), task_allocator);
+  ObTenantTabletIterator tablet_iter(*(MTL(ObTenantMetaMemMgr*)), iter_allocator);
   ObSSTableIndexBuilder *sstable_index_builder = nullptr;
   ObIndexBlockRebuilder *index_block_rebuilder = nullptr;
   int64_t rewrite_cnt = 0;
@@ -403,6 +404,8 @@ int ObSharedMacroBlockMgr::defragment()
   } else {
     ObTabletHandle tablet_handle;
     while (OB_SUCC(ret)) {
+      tablet_handle.reset();
+      iter_allocator.reuse();
       if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
         LOG_WARN("fail to get tablet", K(ret), K(tablet_handle));
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
@@ -458,9 +461,12 @@ int ObSharedMacroBlockMgr::update_tablet(
   ObSArray<ObTableHandleV2> table_handles;
   ObTableHandleV2 sstable_handle;
   ObSArray<ObITable *> sstables;
+  uint64_t data_version = 0;
 
   if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(sstables))) {
     LOG_WARN("fail to get sstables of this tablet", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get data version", K(ret));
   }
   for (int64_t i = 0; i < sstables.count() && OB_SUCC(ret); i++) {
     const ObSSTable *sstable = static_cast<ObSSTable *>(sstables.at(i));
@@ -476,6 +482,7 @@ int ObSharedMacroBlockMgr::update_tablet(
         if (OB_FAIL(rebuild_sstable(
             *(tablet_handle.get_obj()),
             *sstable,
+            data_version,
             sstable_index_builder,
             index_block_rebuilder,
             sstable_handle))) {
@@ -514,6 +521,7 @@ int ObSharedMacroBlockMgr::update_tablet(
 int ObSharedMacroBlockMgr::rebuild_sstable(
     const ObTablet &tablet,
     const ObSSTable &old_sstable,
+    const uint64_t data_version,
     ObSSTableIndexBuilder &sstable_index_builder,
     ObIndexBlockRebuilder &index_block_rebuilder,
     ObTableHandleV2 &table_handle)
@@ -538,7 +546,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
       old_sstable.get_meta().get_basic_meta(),
       merge_type,
       tablet.get_snapshot_version(),
-      GET_MIN_CLUSTER_VERSION(),
+      data_version,
       data_desc))) {
     LOG_WARN("fail to prepare data desc", K(ret), K(merge_type), K(tablet.get_snapshot_version()));
   } else if (OB_FAIL(sstable_index_builder.init(data_desc, nullptr, ObSSTableIndexBuilder::DISABLE))) {
@@ -569,6 +577,8 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
         || OB_FAIL(ObSSTableMetaChecker::check_sstable_meta_strict_equality(old_sstable.get_meta(), new_sstable->get_meta()))) {
       ret = OB_INVALID_DATA;
       LOG_WARN("new sstable is not equal to old sstable", K(ret), KPC(new_sstable), K(old_sstable));
+    } else {
+      FLOG_INFO("successfully rebuild one sstable", K(ret), K(block_info), K(new_sstable->get_key()), K(new_sstable->get_meta()));
     }
   }
 
@@ -600,6 +610,7 @@ int ObSharedMacroBlockMgr::create_new_sstable(
   param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
   param.rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
   param.recycle_version_ = basic_meta.recycle_version_;
+  param.latest_row_store_type_ = basic_meta.latest_row_store_type_;
   param.is_ready_for_read_ = true;
 
   ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
@@ -665,11 +676,11 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
   } else {
     // overwrite the encryption related memberships, otherwise these memberships of new sstable may differ
     // from that of old sstable, since the encryption method of one tablet may change before defragmentation
-    data_desc.row_store_type_ = basic_meta.row_store_type_;
+    data_desc.row_store_type_ = basic_meta.root_row_store_type_;
     data_desc.compressor_type_ = basic_meta.compressor_type_;
     data_desc.master_key_id_ = basic_meta.master_key_id_;
     data_desc.encrypt_id_ = basic_meta.encrypt_id_;
-    data_desc.encoder_opt_.set_store_type(basic_meta.row_store_type_);
+    data_desc.encoder_opt_.set_store_type(basic_meta.root_row_store_type_);
     MEMCPY(data_desc.encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     data_desc.row_column_count_ = data_desc.rowkey_column_count_ + 1;
     data_desc.col_desc_array_.reset();

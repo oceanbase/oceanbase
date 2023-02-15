@@ -577,12 +577,12 @@ bool ObBlockSampleRangeIterator::ObBlockSampleSSTableEndkeyComparor::operator()(
 
   if (OB_UNLIKELY(nullptr == datum_utils_)) {
     ret_ = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "The ObBlockSampleSSTableEndkeyComparor is invalid", K(ret_));
+    STORAGE_LOG_RET(WARN, ret_, "The ObBlockSampleSSTableEndkeyComparor is invalid", K(ret_));
   } else if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
-    STORAGE_LOG(WARN, "The ObBlockSampleSSTableEndkeyComparor is under error", K(ret_));
+    STORAGE_LOG_RET(WARN, ret_, "The ObBlockSampleSSTableEndkeyComparor is under error", K(ret_));
   } else if (OB_UNLIKELY(left == nullptr || right == nullptr)) {
     ret_ = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument", K(ret_), KP(left), KP(right));
+    STORAGE_LOG_RET(WARN, ret_, "Invalid argument", K(ret_), KP(left), KP(right));
   } else {
     ret_ = left->get_endkey().compare(right->get_endkey(), *datum_utils_, cmp_ret);
   }

@@ -846,7 +846,11 @@ int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator &allocator,
       for (int i = 0; i < rt_expr.inner_func_cnt_; i++) {
         rt_expr.inner_functions_[i] = (void *)func_ptr;
       }
-      if (!is_param_all_const() || rt_expr.inner_func_cnt_ <= 2 ||
+      // expr in/not will use same hash func for both left/right param
+      // string and text type cannot share hash func now
+      bool is_string_text_cmp = (ob_is_string_tc(left_type) && ob_is_text_tc(right_type)) ||
+                                (ob_is_text_tc(left_type) && ob_is_string_tc(right_type));
+      if (!is_param_all_const() || rt_expr.inner_func_cnt_ <= 2 || is_string_text_cmp ||
           (ob_is_json(left_type) || ob_is_json(right_type)) ||
           (ob_is_urowid(left_type) || ob_is_urowid(right_type))) {
         rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_without_row_fallback;
@@ -856,7 +860,8 @@ int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator &allocator,
       //now only support c1 in (1,2,3,4...) to be vectorized
       if (is_param_can_vectorized()) {
         //目前认为右边参数 <= 2时， nest_loop算法的效果一定比hash更好
-        if (rt_expr.inner_func_cnt_ <= 2 || ob_is_urowid(left_type) || ob_is_urowid(right_type)) {
+        if (rt_expr.inner_func_cnt_ <= 2 || is_string_text_cmp ||
+            ob_is_urowid(left_type) || ob_is_urowid(right_type)) {
           rt_expr.eval_batch_func_ = &ObExprInOrNotIn::eval_batch_in_without_row_fallback;
         } else {
           rt_expr.eval_batch_func_ = &ObExprInOrNotIn::eval_batch_in_without_row;
@@ -927,13 +932,18 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
+        // expr in/not will use same hash func for both left/right param
+        // string and text type cannot share hash func now
+        bool is_string_text_cmp = false;
         for (int i = 0; i < left_types.count(); i++) {
           DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
               left_types.at(i), right_types.at(i), left_scales.at(i), right_scales.at(i),
               lib::is_oracle_mode(), left_cs_arr.at(i), has_lob_headers.at(i));
           func_buf[i] = (void *)func_ptr;
+          is_string_text_cmp |= (ob_is_string_tc(left_types.at(i)) && ob_is_text_tc(right_types.at(i))) ||
+                                (ob_is_text_tc(left_types.at(i)) && ob_is_string_tc(right_types.at(i)));
         }  // end for
-        if (!is_param_all_const()) {
+        if (!is_param_all_const() || is_string_text_cmp) {
           rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_with_row_fallback;
         } else {
           rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_with_row;

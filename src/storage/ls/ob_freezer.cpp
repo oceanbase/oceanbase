@@ -535,7 +535,7 @@ int ObFreezer::ls_freeze_task()
             TRANS_LOG(INFO, "[Freezer] resubmit log for ls_freeze", K(ls_id), K(cost_time));
           }
         }
-        TRANS_LOG(WARN, "[Freezer] finish ls_freeze costs too much time",
+        TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "[Freezer] finish ls_freeze costs too much time",
                   K(ls_id), K(cost_time));
         stat_.add_diagnose_info("finish ls_freeze costs too much time");
       }
@@ -811,7 +811,7 @@ int ObFreezer::wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *
             submit_log_for_freeze();
             TRANS_LOG(INFO, "[Freezer] resubmit log for tablet_freeze", K(ls_id), K(cost_time));
           }
-          TRANS_LOG(WARN, "[Freezer] ready_for_flush costs too much time",
+          TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "[Freezer] ready_for_flush costs too much time",
                     K(ls_id), K(cost_time), KPC(memtable));
           stat_.add_diagnose_info("ready_for_flush costs too much time");
         }
@@ -1073,7 +1073,7 @@ void ObFreezer::wait_memtable_ready_for_flush(memtable::ObMemtable *memtable)
           submit_log_for_freeze();
           TRANS_LOG(INFO, "[Freezer] resubmit log for tablet_freeze", K(ls_id), K(cost_time));
         }
-        TRANS_LOG(WARN, "[Freezer] ready_for_flush costs too much time",
+        TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "[Freezer] ready_for_flush costs too much time",
                   K(ls_id), K(cost_time), KPC(memtable));
         stat_.add_diagnose_info("ready_for_flush costs too much time");
         memtable->print_ready_for_flush();
@@ -1444,7 +1444,7 @@ void ObFreezer::set_tablet_freeze_begin_()
     retry_times++;
     ob_usleep(SLEEP_INTERVAL);
     if (retry_times % 100 == 0) { // 10 s
-      LOG_WARN("wait high priority freeze finish cost too much time",
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "wait high priority freeze finish cost too much time",
                K(ret), K(high_priority_freeze_cnt_), K(retry_times));
     }
   }
@@ -1464,7 +1464,7 @@ void ObFreezer::set_ls_freeze_begin_()
     retry_times++;
     ob_usleep(SLEEP_INTERVAL);
     if (retry_times % 100 == 0) { // 10 s
-      LOG_WARN("wait low priority freeze finish cost too much time",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "wait low priority freeze finish cost too much time",
                K(low_priority_freeze_cnt_), K(retry_times));
     }
   }

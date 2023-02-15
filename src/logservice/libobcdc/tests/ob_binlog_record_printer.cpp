@@ -563,11 +563,10 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
       }
       ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_extend_info:%s", column_index, enum_set_values_str.c_str());
     }
-    //  print precision & scale only in print detail mode, becacuse INT in oracle mode is also a kind of NUMBER(DECIMAL)
-    //  whose precision is 38 and scale is 0, more importantly, the default precision(-1, PRECISION_UNKNOWN_YET)
-    //  and scale(-85, ORA_NUMBER_SCALE_UNKNOWN_YET) of NUMBER in oracle mode is confusing, so we decide not to
-    //  modify test results for oracle mode temporarily for convenience and efficiency.
-    //  TODO
+    // print precision & scale only in print detail mode, becacuse INT in oracle mode is also a kind of NUMBER(DECIMAL)
+    // whose precision is 38 and scale is 0
+    // the default value of precision is -1(PRECISION_UNKNOWN_YET) and the default value of scale is -85
+    // (ORA_NUMBER_SCALE_UNKNOWN_YET), when using default precision & scale, the number type would behave adaptively
     else if ((oceanbase::obmysql::MYSQL_TYPE_DECIMAL == ctype) || (oceanbase::obmysql::MYSQL_TYPE_NEWDECIMAL == ctype)) {
       // Not sure if MYSQL_TYPE_DECIMAL is deprecated, DECIMAL in mysql & oracle mode should be MYSQL_TYPE_NEWDECIMAL
       ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_precision:%ld", column_index, precision);

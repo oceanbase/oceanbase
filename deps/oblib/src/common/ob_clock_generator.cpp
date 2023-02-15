@@ -86,7 +86,7 @@ void ObClockGenerator::run1()
         break;
       } else {
         if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL_US)) {
-          TRANS_LOG(WARN, "clock out of order", K(cur_ts), K(cur_ts_), K(delta));
+          TRANS_LOG_RET(WARN, OB_ERR_SYS, "clock out of order", K(cur_ts), K(cur_ts_), K(delta));
         }
         ::usleep(SLEEP_US);
       }

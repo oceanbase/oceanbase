@@ -310,7 +310,8 @@ public:
                        K(committed_end_lsn_),
                        K(next_to_submit_scn_),
                        K(base_lsn_),
-                       K(base_scn_));
+                       K(base_scn_),
+                       K(iterator_));
 private:
   int update_next_to_submit_lsn_(const palf::LSN &lsn);
   int update_next_to_submit_scn_(const share::SCN &scn);
@@ -465,8 +466,8 @@ public:
   // for follower speed_limit
   // 1. avoid more replay cause OOM because speed_limit cannot work when freeze
   // 2. quick improving max_undecided_log to reduce freeze cost
-  void set_pending();
-  void erase_pending();
+  void block_submit();
+  void unblock_submit();
 
   bool need_submit_log() const;
   bool try_rdlock()

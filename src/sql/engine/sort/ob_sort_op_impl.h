@@ -335,37 +335,23 @@ public:
     Compare &compare_;
   };
 
-protected:
-  class MemEntifyFreeGuard
-  {
-  public:
-    explicit MemEntifyFreeGuard(lib::MemoryContext &entify) : entify_(entify) {}
-    ~MemEntifyFreeGuard()
-    {
-      if (NULL != entify_) {
-        DESTROY_CONTEXT(entify_);
-        entify_ = NULL;
-      }
-    }
-    lib::MemoryContext &entify_;
-  };
-
   struct AQSItem {
-    short len_;
-    unsigned char sub_cache_[2];
     unsigned char *key_ptr_;
     ObChunkDatumStore::StoredRow *row_ptr_;
-    AQSItem() : len_(0),
-                sub_cache_(),
-                key_ptr_(NULL),
-                row_ptr_(NULL)
+    uint32_t len_;
+    unsigned char sub_cache_[2];
+    AQSItem() : key_ptr_(NULL),
+                row_ptr_(NULL),
+                len_(0),
+                sub_cache_()
     {
     }
     TO_STRING_KV(K_(len), K_(sub_cache), K_(key_ptr), KP(row_ptr_));
   };
   class ObAdaptiveQS {
     public:
-      ObAdaptiveQS(common::ObIArray<ObChunkDatumStore::StoredRow *> &sort_rows,
+      ObAdaptiveQS(common::ObIArray<ObChunkDatumStore::StoredRow *> &sort_rows, common::ObIAllocator &alloc);
+      int init(common::ObIArray<ObChunkDatumStore::StoredRow *> &sort_rows,
                    common::ObIAllocator &alloc, int64_t rows_begin, int64_t rows_end, bool &can_encode);
       ~ObAdaptiveQS() {
         reset();
@@ -408,6 +394,20 @@ protected:
       common::ObIAllocator &alloc_;
   };
 
+protected:
+  class MemEntifyFreeGuard
+  {
+  public:
+    explicit MemEntifyFreeGuard(lib::MemoryContext &entify) : entify_(entify) {}
+    ~MemEntifyFreeGuard()
+    {
+      if (NULL != entify_) {
+        DESTROY_CONTEXT(entify_);
+        entify_ = NULL;
+      }
+    }
+    lib::MemoryContext &entify_;
+  };
   //Optimize mem usage/performance of top-n sort:
   //https://aone.alibaba-inc.com/project/81079/issue/8572633
   //Record buf_len of each allocated row. When old row pop-ed out of the heap

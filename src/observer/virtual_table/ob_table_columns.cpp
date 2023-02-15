@@ -20,6 +20,7 @@
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "share/ob_get_compat_mode.h"
+#include "sql/resolver/ddl/ob_create_view_resolver.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -819,6 +820,8 @@ int ObTableColumns::set_null_and_default_according_binary_expr(
     if (OB_UNLIKELY(NULL == (tbl_item = select_stmt->get_table_item_by_id(bexpr->get_table_id())))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is NULL", K(ret), K(tbl_item));
+    } else if (OB_INVALID_ID == tbl_item->ref_id_) {
+      // do nothing
     } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, tbl_item->ref_id_, table_schema))
         || NULL == table_schema) {
       // reset return code to success: view_2.test
@@ -924,7 +927,11 @@ int ObTableColumns::resolve_view_definition(
                        K(select_stmt_node->type_));
             } else if (OB_FAIL(select_resolver.resolve(*select_stmt_node))) {
               LOG_WARN("resolve view definition failed", K(ret));
-              ret = OB_ERR_VIEW_INVALID;
+              if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+                ret = OB_ERR_VIEW_INVALID;
+              } else {
+                LOG_WARN("failed to resolve view", K(ret));
+              }
               if (throw_error) {
                 LOG_USER_ERROR(OB_ERR_VIEW_INVALID, db_name.length(), db_name.ptr(),
                               table_name.length(), table_name.ptr());
@@ -955,7 +962,7 @@ int ObTableColumns::resolve_view_definition(
           bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
           if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
             LOG_WARN("failed to resolve view", K(ret));
-          } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(table_schema, select_stmt, reset_column_infos))) {
+          } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(table_schema, select_stmt, reset_column_infos, *allocator, *session))) {
             LOG_WARN("failed to add recompile view task", K(tmp_ret));
             if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
               tmp_ret = OB_SUCCESS; //ignore

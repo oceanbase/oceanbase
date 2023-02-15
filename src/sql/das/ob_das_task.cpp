@@ -354,8 +354,7 @@ ObDASTaskResp::ObDASTaskResp()
     op_results_(),
     rcode_(),
     trans_result_(),
-    das_factory_(nullptr),
-    rpc_rcode_(OB_SUCCESS)
+    das_factory_(nullptr)
 {
 }
 
@@ -545,7 +544,10 @@ int DASOpResultIter::get_next_rows(int64_t &count, int64_t capacity)
         //remote task will change datum ptr, need to mark this flag
         //in order to let the next local task reset datum ptr before get_next_rows
         wild_datum_info_->exprs_ = &scan_op->get_result_outputs();
-        wild_datum_info_->max_output_rows_ = max(count, wild_datum_info_->max_output_rows_);
+        //Now in the group scan op, we implement jump read.
+        //We may touch more rows than count return.
+        //So we need to reset all of ptr in the output expr datum.
+        wild_datum_info_->max_output_rows_ = max(capacity, wild_datum_info_->max_output_rows_);
       }
     }
   } else {

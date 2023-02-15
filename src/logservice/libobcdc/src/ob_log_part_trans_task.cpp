@@ -2533,8 +2533,8 @@ int PartTransTask::parse_multi_data_source_data_for_ddl(
       const common::ObString &mds_data = tx_buf_node.get_data_buf();
       int64_t pos = 0;
 
-      if (datadict::ObDataDictStorage::parse_dict_metas(allocator_, mds_data.ptr(), mds_data.length(), pos,
-            tenant_metas, database_metas, table_metas)) {
+      if (OB_FAIL(datadict::ObDataDictStorage::parse_dict_metas(allocator_, mds_data.ptr(), mds_data.length(), pos,
+            tenant_metas, database_metas, table_metas))) {
         LOG_ERROR("ObDataDictStorage parse_dict_metas failed", KR(ret), K(caller), K(idx), KPC(this));
       } else {
         //TODO DEBUG
@@ -3734,7 +3734,10 @@ int PartTransTask::next_dml_stmt(DmlStmtTask *&dml_stmt_task)
   } else if (OB_ISNULL(dml_stmt_task = static_cast<DmlStmtTask*>(dml_task))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("dml_task get from SortedRedoList should not be null", KR(ret), K(dml_task));
-  } else { /* succ */ }
+  } else {
+    sorted_redo_list_.set_sorted_row_seq_no(dml_stmt_task->get_row_seq_no());
+    /* succ */
+  }
 
   return ret;
 }

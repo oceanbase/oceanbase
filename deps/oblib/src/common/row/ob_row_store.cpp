@@ -594,7 +594,7 @@ ObRowStore::BlockInfo* ObRowStore::new_block(int64_t block_size)
   ObMemAttr attr(tenant_id_, label_, ctx_id_);
   block = static_cast<BlockInfo *>(alloc_.alloc(block_size, attr));
   if (OB_ISNULL(block)) {
-    OB_LOG(WARN, "no memory");
+    OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "no memory");
   } else {
     block = new(block) BlockInfo(block_size);
     if (!has_big_block_ && block_size == BIG_BLOCK_SIZE) {
@@ -610,11 +610,11 @@ ObRowStore::BlockInfo *ObRowStore::new_block()
   BlockInfo *blk = NULL;
   if (OB_LIKELY(!has_big_block_)) { // use config BLOCK size
     if (OB_ISNULL(blk = new_block(block_size_))) {
-      OB_LOG(WARN, "failed to new block", K_(block_size));
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "failed to new block", K_(block_size));
     }
   } else { // use BIG_BLOCK
     if (OB_ISNULL(blk = new_block(BIG_BLOCK_SIZE))) {
-      OB_LOG(WARN, "failed to new big block", K(blk));
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "failed to new big block", K(blk));
     }
   }
   return blk;
@@ -900,15 +900,15 @@ ObRowStore *ObRowStore::clone(char *buffer, int64_t buffer_length) const
   ObRowStore *copy = NULL;
   int64_t used_length = 0;
   if (OB_ISNULL(buffer)) {
-    OB_LOG(WARN, "buffer is NULL");
+    OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "buffer is NULL");
   } else if (0 < reserved_columns_.count()) {
-    OB_LOG(ERROR, "row store with reserved columns should not be cloned");
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "row store with reserved columns should not be cloned");
   } else if (OB_UNLIKELY(buffer_length < get_meta_size())) {
-    OB_LOG(WARN, "invalid buffer length", K(buffer_length), K(get_meta_size()));
+    OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid buffer length", K(buffer_length), K(get_meta_size()));
   } else {
     copy = new(buffer) ObRowStore();
     if (OB_ISNULL(copy)) {
-      OB_LOG(WARN, "fail to new ObRowStore", K(copy));
+      OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "fail to new ObRowStore", K(copy));
     } else {
       used_length += get_meta_size();
       copy->is_read_only_ = true;
@@ -927,20 +927,20 @@ ObRowStore *ObRowStore::clone(char *buffer, int64_t buffer_length) const
         used_length += sz;
         if (OB_UNLIKELY(buffer_length < used_length)) {
           copy = NULL;
-          OB_LOG(WARN, "invalid buffer length", K(buffer_length), K(used_length));
+          OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid buffer length", K(buffer_length), K(used_length));
           break;
         }
         MEMCPY(buffer, bip, sz);
         tmp = new(buffer) BlockInfo(sz);
         if (OB_ISNULL(tmp)) {
-          OB_LOG(WARN, "fail to new BlockInfo");
+          OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "fail to new BlockInfo");
           copy = NULL;
           break;
         } else {
           tmp->set_curr_data_pos(bip->get_curr_data_pos());
           int64_t tmp_ret = OB_SUCCESS;
           if (OB_SUCCESS != (tmp_ret = copy->blocks_.add_last(tmp))) {
-            OB_LOG(WARN, "fail to add last to block", K(tmp_ret));
+            OB_LOG_RET(WARN, tmp_ret, "fail to add last to block", K(tmp_ret));
             copy = NULL;
             break;
           } else {

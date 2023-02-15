@@ -188,7 +188,7 @@ void ObTimerMonitor::dump(const bool print_trace)
       int64_t timeout = std::max(std::min(record.interval_ * 100, TIMER_TIMEOUT_MAX), TIMER_TIMEOUT_MIN);
       if (curr_time > record.start_time_ + timeout) {
         // timeout
-        OB_LOG(ERROR, "TIMER TASK TIMEOUT: timer task cost too much time", K(record));
+        OB_LOG_RET(ERROR, OB_ERR_TOO_MUCH_TIME, "TIMER TASK TIMEOUT: timer task cost too much time", K(record));
       }
     }
 

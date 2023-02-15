@@ -156,7 +156,7 @@ int64_t ObExprValuesSpec::get_serialize_size_(const ObPhyOpSeriCtx &seri_ctx) co
          array_idx < seri_ctx.exec_ctx_->get_row_id_list_array().count();
          ++array_idx) {
       if (OB_ISNULL(row_id_list = seri_ctx.exec_ctx_->get_row_id_list_array().at(array_idx))) {
-        LOG_WARN("row id list is null");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "row id list is null");
       } else {
         for (int idx = 0; idx < row_id_list->count(); ++idx) {
           int64_t start_idx = row_id_list->at(idx) * col_num;

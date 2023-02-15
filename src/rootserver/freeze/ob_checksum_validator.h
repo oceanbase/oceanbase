@@ -29,6 +29,7 @@ namespace rootserver
 class ObZoneMergeManager;
 class ObFreezeInfoManager;
 class ObServerManager;
+struct ObMergeTimeStatistics;
 
 class ObMergeErrorCallback
 {
@@ -69,6 +70,7 @@ public:
                         const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                         int64_t &table_count,
                         hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                        ObMergeTimeStatistics &merge_time_statistics,
                         const int64_t expected_epoch);
 
   static const int64_t MIN_CHECK_INTERVAL = 10 * 1000 * 1000LL;
@@ -91,6 +93,7 @@ private:
                                                     const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                                     int64_t &table_count,
                                                     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                                    ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) = 0;
 
 protected:
@@ -118,6 +121,7 @@ private:
                                                     const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                                     int64_t &table_count,
                                                     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                                    ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) override;
   // check whether all tablets of this table finished compaction or not,
   // and execute tablet replica checksum verification if this table has tablet.
@@ -154,6 +158,7 @@ private:
                                                     const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                                     int64_t &table_count,
                                                     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                                    ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) override;
   int check_need_validate(const bool is_primary_service,
                           const share::SCN &frozen_scn,
@@ -169,6 +174,7 @@ private:
                                          const share::schema::ObTableSchema *table_schema,
                                          const share::SCN &frozen_scn,
                                          hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                         ObMergeTimeStatistics &merge_time_statistics,
                                          const int64_t expected_epoch);
   int try_update_tablet_checksum_items(const volatile bool &stop,
                                        const ObArray<share::ObTabletLSPair> &pairs,
@@ -200,6 +206,7 @@ private:
                                                     const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                                     int64_t &table_count,
                                                     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                                    ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) override;
   void check_need_validate(const bool is_primary_service, bool &need_validate) const;
   // handle data table which has tablet and index table(s). its all index tables may finish virification or not

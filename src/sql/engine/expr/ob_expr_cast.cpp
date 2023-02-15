@@ -430,6 +430,10 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode][dst_type.get_type()];
           type.set_accuracy(acc);
           type1.set_accuracy(acc);
+        } else if (ObYearType == dst_type.get_type()) {
+          ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode][dst_type.get_type()];
+          type.set_accuracy(acc);
+          type1.set_accuracy(acc);
         } else {
           type.set_precision(dst_type.get_precision());
         }
@@ -537,7 +541,7 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
     bool is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_mode);
     dst_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
     dst_type.set_type(obj_type);
-    int64_t maxblen = 4;
+    int64_t maxblen = ObCharset::CharConvertFactorNum;
     if (ob_is_lob_locator(obj_type)) {
       // cast(x as char(10)) or cast(x as binary(10))
       dst_type.set_full_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX], param_type2.get_accuracy().get_length_semantics());
@@ -739,7 +743,10 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
         if (OB_UNLIKELY(UINT_MAX8 < src_res_type.get_length())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected zerofill length", K(ret), K(src_res_type.get_length()));
-        } else {
+        } else if (ob_is_string_or_lob_type(out_type)) {
+          // The zerofill information will only be used when cast to string/lob type.
+          // for these types, scale is unused, so the previous design is to save child length
+          // to the scale of the rt_expr.
           rt_expr.datum_meta_.scale_ = static_cast<int8_t>(src_res_type.get_length());
         }
       }

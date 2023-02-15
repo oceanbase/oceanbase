@@ -80,17 +80,15 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
   ObReqTimeGuard req_timeinfo_guard;
   is_end = false;
   if (OB_INVALID_ID == static_cast<uint64_t>(plan_id_array_idx_)) {
-    MTL_SWITCH(tenant_id) {
-      plan_cache_ = MTL(ObPlanCache*);
-      NG_TRACE(trav_ps_map_start);
-      ObGetAllCacheIdOp plan_id_op(&plan_id_array_);
-      if (OB_FAIL(plan_cache_->foreach_cache_obj(plan_id_op))) {
-        SERVER_LOG(WARN, "fail to traverse id2stat_map");
-      } else {
-        plan_id_array_idx_ = 0;
-      }
-      NG_TRACE(trav_ps_map_end);
+    plan_cache_ = MTL(ObPlanCache*);
+    NG_TRACE(trav_ps_map_start);
+    ObGetAllCacheIdOp plan_id_op(&plan_id_array_);
+    if (OB_FAIL(plan_cache_->foreach_cache_obj(plan_id_op))) {
+      SERVER_LOG(WARN, "fail to traverse id2stat_map");
+    } else {
+      plan_id_array_idx_ = 0;
     }
+    NG_TRACE(trav_ps_map_end);
   }
   if (NULL == plan_cache_) {
     // do nothing
@@ -899,17 +897,20 @@ int ObGVSql::get_row_from_tenants()
       ret = OB_ITER_END;
       tenant_id_array_idx_ = 0;
     } else {
-      if (OB_FAIL(get_row_from_specified_tenant(tenant_id_array_.at(tenant_id_array_idx_),
-                                                is_sub_end))) {
-        SERVER_LOG(WARN,
-                   "fail to insert plan by tenant id",
-                   K(ret),
-                   "tenant id",
-                   tenant_id_array_.at(tenant_id_array_idx_),
-                   K(tenant_id_array_idx_));
-      } else {
-        if (is_sub_end) {
-          ++tenant_id_array_idx_;
+      uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
+      MTL_SWITCH(tenant_id) {
+        if (OB_FAIL(get_row_from_specified_tenant(tenant_id,
+                                                  is_sub_end))) {
+          SERVER_LOG(WARN,
+                     "fail to insert plan by tenant id",
+                     K(ret),
+                     "tenant id",
+                     tenant_id_array_.at(tenant_id_array_idx_),
+                     K(tenant_id_array_idx_));
+        } else {
+          if (is_sub_end) {
+            ++tenant_id_array_idx_;
+          }
         }
       }
     }

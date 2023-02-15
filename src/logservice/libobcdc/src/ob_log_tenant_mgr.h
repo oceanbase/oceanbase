@@ -50,6 +50,19 @@ public:
       const int64_t sys_schema_version,
       const int64_t timeout) = 0;
 
+  // add tenant when fetch archive log in direct mode
+  // @param old_sys_schema_version sys_schema_version before ADD_TENANT DDL operate success
+  //
+  // @retval OB_SUCCESS                   success
+  // @retval OB_TIMEOUT                   timeout
+  // @retval other error code             fail
+  virtual int add_tenant(
+      const int64_t start_tstamp_ns,
+      const int64_t sys_schema_version,
+      const char *&tenant_name,
+      const int64_t timeout,
+      bool &add_tenant_succ) = 0;
+
   // add tenant
   // @param old_sys_schema_version sys_schema_version before ADD_TENANT DDL operate success
   //
@@ -190,6 +203,13 @@ public:
   int add_all_tenants(const int64_t start_tstamp_ns,
       const int64_t sys_schema_version,
       const int64_t timeout);
+
+  int add_tenant(
+      const int64_t start_tstamp_ns,
+      const int64_t sys_schema_version,
+      const char *&tenant_name,
+      const int64_t timeout,
+      bool &add_tenant_succ);
 
   // add tenant
   int add_tenant(const uint64_t tenant_id,

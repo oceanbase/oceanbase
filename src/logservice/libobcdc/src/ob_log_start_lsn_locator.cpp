@@ -787,7 +787,7 @@ void StartLSNLocateReq::check_locate_result_(const int64_t start_log_tstamp,
       && start_log_tstamp >= start_tstamp_ns_
       && cur_max_start_log_tstamp_ >= start_tstamp_ns_
       && start_log_tstamp != cur_max_start_log_tstamp_) {
-    LOG_ERROR("start lsn locate results from different servers are not consistent, "
+    LOG_ERROR_RET(OB_ERROR, "start lsn locate results from different servers are not consistent, "
         "may be OceanBase server BUG, need check manually",
         K_(tls_id), K(svr), K(start_lsn), K(start_log_tstamp), K(cur_max_start_log_tstamp_),
         K(start_tstamp_ns_), K(cur_max_start_lsn_), K(svr_list_consumed_),
@@ -914,7 +914,7 @@ bool StartLSNLocateReq::get_result(palf::LSN &start_lsn, common::ObAddr &svr)
   }
 
   if (! succeed) {
-    LOG_ERROR("request start lsn from all server fail", K_(tls_id),
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "request start lsn from all server fail", K_(tls_id),
         K_(start_tstamp_ns), "svr_cnt", svr_list_.count(), K_(svr_list_consumed),
         K_(result_svr_list_idx), K_(svr_list));
   }

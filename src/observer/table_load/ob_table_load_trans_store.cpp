@@ -91,9 +91,7 @@ ObTableLoadTransStoreWriter::SessionContext::SessionContext(int32_t session_id, 
   : session_id_(session_id),
     cast_allocator_("TLD_TS_Caster", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
     cast_params_(cast_params),
-    last_receive_sequence_no_(0),
-    extra_buf_(nullptr),
-    extra_buf_size_(0)
+    last_receive_sequence_no_(0)
 {
 }
 
@@ -204,21 +202,10 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   param.result_info_ = &(trans_ctx_->ctx_->store_ctx_->result_info_);
   for (int64_t i = 0; OB_SUCC(ret) && i < param_.session_count_; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
-    if (store_ctx_->is_multiple_mode_) {
-      session_ctx->extra_buf_size_ = store_ctx_->table_data_desc_.extra_buf_size_;
-      if (OB_ISNULL(session_ctx->extra_buf_ =
-                      static_cast<char *>(allocator_.alloc(session_ctx->extra_buf_size_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory", KR(ret));
-      } else {
-        param.extra_buf_ = session_ctx->extra_buf_;
-        param.extra_buf_size_ = session_ctx->extra_buf_size_;
-      }
-    }
-    if (OB_FAIL(ret)) {
-    }
+    param.extra_buf_ = store_ctx_->session_ctx_array_[i].extra_buf_;
+    param.extra_buf_size_ = store_ctx_->session_ctx_array_[i].extra_buf_size_;
     // init table_store_
-    else if (OB_FAIL(session_ctx->table_store_.init(param))) {
+    if (OB_FAIL(session_ctx->table_store_.init(param))) {
       LOG_WARN("fail to init table store", KR(ret));
     }
     // init datum_row_
@@ -393,7 +380,7 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
                                              session_id))) {
       LOG_WARN("fail to handle autoinc column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
     } else if (column_schema->is_identity_column() &&
-               OB_FAIL(handle_identity_column(column_schema, datum_row.storage_datums_[i]))) {
+               OB_FAIL(handle_identity_column(column_schema, datum_row.storage_datums_[i], cast_allocator))) {
       LOG_WARN("fail to handle identity column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
     }
   }
@@ -415,20 +402,17 @@ int ObTableLoadTransStoreWriter::handle_autoinc_column(const ObColumnSchemaV2 *c
                                                        const ObObjTypeClass &tc, int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t save_timeout_ts = THIS_WORKER.get_timeout_ts();
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() +
-                             max(GCONF.rpc_timeout, RPC_TIMEOUT_US));
   if (OB_FAIL(ObTableLoadAutoincNextval::eval_nextval(
         &(store_ctx_->session_ctx_array_[session_id - 1].autoinc_param_), datum, tc,
         param_.sql_mode_))) {
     LOG_WARN("fail to get auto increment next value", KR(ret));
   }
-  THIS_WORKER.set_timeout_ts(save_timeout_ts);
   return ret;
 }
 
 int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *column_schema,
-                                                        ObStorageDatum &datum)
+                                                        ObStorageDatum &datum,
+                                                        ObArenaAllocator &cast_allocator)
 {
   int ret = OB_SUCCESS;
   if (column_schema->is_always_identity_column()) {
@@ -438,11 +422,12 @@ int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *
     ret = OB_ERR_INVALID_NOT_NULL_CONSTRAINT_ON_IDENTITY_COLUMN;
     LOG_WARN("default identity column has null value", KR(ret));
   } else if (column_schema->is_default_on_null_identity_column()) {
+    ObSequenceValue seq_value;
     if (OB_FAIL(share::ObSequenceCache::get_instance().nextval(
-          trans_ctx_->ctx_->store_ctx_->sequence_schema_, allocator_, seq_value_))) {
+          trans_ctx_->ctx_->store_ctx_->sequence_schema_, cast_allocator, seq_value))) {
       LOG_WARN("fail get nextval for seq", KR(ret));
     } else if (datum.is_null()) {
-      datum.set_number(seq_value_.val());
+      datum.set_number(seq_value.val());
     }
   }
   return ret;

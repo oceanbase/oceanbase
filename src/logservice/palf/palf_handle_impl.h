@@ -238,6 +238,7 @@ public:
 
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
+  virtual int get_election_leader(common::ObAddr &addr) const = 0;
 
   // @brief: a special config change interface, change replica number of paxos group
   // @param[in] common::ObMemberList: current memberlist, for pre-check
@@ -489,7 +490,8 @@ public:
                                      const LSN &log_offset,
                                      const int64_t fetch_log_size,
                                      const int64_t fetch_log_count,
-                                     const int64_t accepted_mode_pid) = 0;
+                                     const int64_t accepted_mode_pid,
+                                     const SCN &replayable_point) = 0;
   virtual int receive_config_log(const common::ObAddr &server,
                                  const int64_t &msg_proposal_id,
                                  const int64_t &prev_log_proposal_id,
@@ -533,10 +535,12 @@ public:
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
+  // This interface is idempotent.
   virtual int disable_vote() = 0;
   // @brief: store a persistent flag which means this paxos replica
   // can reply ack when receiving logs.
   // By default, paxos replica can reply ack.
+  // This interface is idempotent.
   virtual int enable_vote() = 0;
 
   // ===================== Iterator start =======================
@@ -634,6 +638,7 @@ public:
   int change_leader_to(const common::ObAddr &dest_addr) override final;
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const override final;
+  int get_election_leader(common::ObAddr &addr) const;
   int change_replica_num(const common::ObMemberList &member_list,
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
@@ -678,6 +683,7 @@ public:
                          const share::SCN &ref_scn) override final;
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const override final;
   int get_access_mode(AccessMode &access_mode) const override final;
+  int get_access_mode_version(int64_t &mode_version) const;
   // =========================== Iterator start ============================
   int alloc_palf_buffer_iterator(const LSN &offset, PalfBufferIterator &iterator) override final;
   int alloc_palf_group_buffer_iterator(const LSN &offset, PalfGroupBufferIterator &iterator) override final;
@@ -796,7 +802,8 @@ public:
                              const LSN &fetch_start_lsn,
                              const int64_t fetch_log_size,
                              const int64_t fetch_log_count,
-                             const int64_t accepted_mode_pid) override final;
+                             const int64_t accepted_mode_pid,
+                             const SCN &replayable_point) override final;
   int receive_config_log(const common::ObAddr &server,
                          const int64_t &msg_proposal_id,
                          const int64_t &prev_log_proposal_id,
@@ -880,7 +887,8 @@ private:
                               const LSN &prev_lsn,
                               const LSN &fetch_start_lsn,
                               const int64_t fetch_log_size,
-                              const int64_t fetch_log_count);
+                              const int64_t fetch_log_count,
+                              const SCN &replayable_point);
   int submit_fetch_log_resp_(const common::ObAddr &server,
                              const int64_t &msg_proposal_id,
                              const int64_t &prev_log_proposal_id,
@@ -913,6 +921,7 @@ private:
   int check_need_advance_base_info_(const LSN &base_lsn,
                                     const LogInfo &base_prev_log_info,
                                     const bool is_rebuild);
+  int get_election_leader_without_lock_(ObAddr &addr) const;
   // ========================= flashback ==============================
   int can_do_flashback_(const int64_t mode_version,
                         const share::SCN &flashback_scn,
@@ -933,7 +942,7 @@ private:
   // =================================================================
   int leader_sync_mode_meta_to_arb_member_();
   void is_in_sync_(bool &is_log_sync, bool &is_use_cache);
-  int get_leader_max_scn_(SCN &max_scn);
+  int get_leader_max_scn_(SCN &max_scn, LSN &end_lsn);
 private:
   class ElectionMsgSender : public election::ElectionMsgSender
   {

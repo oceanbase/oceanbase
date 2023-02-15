@@ -161,7 +161,7 @@ ObDASScanOp::ObDASScanOp(ObIAllocator &op_alloc)
 ObDASScanOp::~ObDASScanOp()
 {
   if (result_ != nullptr && result_->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR("table scan iter is not released, maybe some bug occured",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "table scan iter is not released, maybe some bug occured",
               KPC(scan_ctdef_), K(scan_param_), KPC(scan_rtdef_));
   }
   scan_param_.destroy();
@@ -740,13 +740,13 @@ OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {
   if (lookup_iter_ != nullptr && lookup_iter_->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR("lookup_iter_ iter is not released, maybe some bug occured",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "lookup_iter_ iter is not released, maybe some bug occured",
               KPC(lookup_ctdef_), K(scan_param_), KPC(index_ctdef_),
               K(lookup_rowkey_cnt_), K(lookup_row_cnt_));
   }
 
   if (rowkey_iter_ != nullptr && rowkey_iter_->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR("rowkey_iter_ iter is not released, maybe some bug occured",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "rowkey_iter_ iter is not released, maybe some bug occured",
               KPC(lookup_ctdef_), K(scan_param_), KPC(index_ctdef_),
               K(lookup_rowkey_cnt_), K(lookup_row_cnt_));
   }

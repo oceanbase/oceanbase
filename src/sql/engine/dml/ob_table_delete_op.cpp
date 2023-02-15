@@ -332,7 +332,7 @@ int ObTableDeleteOp::check_delete_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_delete_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table delete affected row is not match with index table",
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table delete affected row is not match with index table",
                   K(ret), K(primary_write_rows), K(index_write_rows),
                   KPC(primary_del_ctdef), K(primary_del_rtdef),
                   KPC(index_del_ctdef), K(index_del_rtdef));
@@ -343,7 +343,7 @@ int ObTableDeleteOp::check_delete_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_delete_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table delete affected row is not match with found rows",
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table delete affected row is not match with found rows",
                   K(ret), K(primary_write_rows), K(primary_del_rtdef.cur_row_num_),
                   KPC(primary_del_ctdef), K(primary_del_rtdef));
       }

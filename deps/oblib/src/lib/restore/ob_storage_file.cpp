@@ -540,9 +540,9 @@ ObStorageFileReader::~ObStorageFileReader()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG(ERROR, "reader is not closed", KCSTRING(path_), K(fd_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "reader is not closed", KCSTRING(path_), K(fd_));
     if (OB_SUCCESS != (tmp_ret = close())) {
-      STORAGE_LOG(WARN, "failed to close reader", K(tmp_ret), KCSTRING(path_), K(fd_));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close reader", K(tmp_ret), KCSTRING(path_), K(fd_));
     }
   }
 }
@@ -649,9 +649,9 @@ ObStorageFileBaseWriter::~ObStorageFileBaseWriter()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG(ERROR, "writer is not closed", KCSTRING(path_), K(fd_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "writer is not closed", KCSTRING(path_), K(fd_));
     if (OB_SUCCESS != (tmp_ret = close())) {
-      STORAGE_LOG(WARN, "failed to close writer", K(tmp_ret), KCSTRING(path_), K(fd_));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close writer", K(tmp_ret), KCSTRING(path_), K(fd_));
     }
   }
 }
@@ -805,10 +805,10 @@ ObStorageFileWriter::~ObStorageFileWriter()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG(ERROR, "wrtier is not closed", KCSTRING(path_), K(fd_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "wrtier is not closed", KCSTRING(path_), K(fd_));
     has_error_ = true;
     if (OB_SUCCESS != (tmp_ret = close())) {
-      STORAGE_LOG(WARN, "failed to close wrtier", K(tmp_ret), KCSTRING(path_), K(fd_));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close wrtier", K(tmp_ret), KCSTRING(path_), K(fd_));
     }
   }
 }
@@ -894,9 +894,9 @@ ObStorageFileAppender::~ObStorageFileAppender()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG(ERROR, "appender is not closed");
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "appender is not closed");
     if (OB_SUCCESS != (tmp_ret = close())) {
-      STORAGE_LOG(WARN, "failed to close appender", K(tmp_ret), K(fd_));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close appender", K(tmp_ret), K(fd_));
     }
   }
 }

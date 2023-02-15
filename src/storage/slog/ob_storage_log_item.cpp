@@ -165,7 +165,7 @@ void ObStorageLogItem::finish_flush(const int flush_ret)
 {
   if (IS_NOT_INIT) {
     flush_ret_ = OB_NOT_INIT;
-    STORAGE_REDO_LOG(WARN, "Not init", K_(flush_ret));
+    STORAGE_REDO_LOG_RET(WARN, flush_ret_, "Not init", K_(flush_ret));
   } else {
     ObThreadCondGuard guard(flush_cond_);
     flush_ret_ = flush_ret;

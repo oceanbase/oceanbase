@@ -178,24 +178,30 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
     } else {
       ObKeyPartId key_part_id(col.table_id_, col.column_id_);
       const ObExprResType *expr_res_type = col.get_column_type();
+      void *ptr = NULL;
       if (OB_ISNULL(expr_res_type)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr result type is null", K(ret));
+      } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObKeyPartPos)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memeory for ObKeyPartPos", K(ret));
       } else {
         ObExprResType tmp_expr_type = *expr_res_type;
         if (tmp_expr_type.is_lob_locator()) {
           tmp_expr_type.set_type(ObLongTextType);
         }
         table_id = (i > 0 ? table_id : col.table_id_);
-        ObKeyPartPos key_part_pos(i, tmp_expr_type);
+        ObKeyPartPos *key_part_pos = new(ptr) ObKeyPartPos(i, tmp_expr_type);
 
         if (OB_UNLIKELY(table_id != col.table_id_)) { // table_id of range columns must be same
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("range columns must have the same table id", K(table_id), K_(col.table_id));
-        } else if (OB_FAIL(key_part_pos.set_enum_set_values(allocator_, col.expr_->get_enum_set_values()))) {
+        } else if (OB_FAIL(key_part_pos->set_enum_set_values(allocator_, col.expr_->get_enum_set_values()))) {
           LOG_WARN("fail to set values", K(ret), K(key_part_pos));
         } else if (OB_FAIL(query_range_ctx_->key_part_map_.set_refactored(key_part_id, key_part_pos))) {
           LOG_WARN("set key part map failed", K(ret), K(key_part_id));
+        } else if (OB_FAIL(query_range_ctx_->key_part_pos_array_.push_back(key_part_pos))) {
+          LOG_WARN("failed to push back key part pos", K(ret));
         }
       }
     }
@@ -228,6 +234,12 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
 void ObQueryRange::destroy_query_range_ctx(ObIAllocator &ctx_allocator)
 {
   if (NULL != query_range_ctx_) {
+    for (int64_t i = 0; i < query_range_ctx_->key_part_pos_array_.count(); ++i) {
+      if (NULL != query_range_ctx_->key_part_pos_array_.at(i)) {
+        query_range_ctx_->key_part_pos_array_.at(i)->~ObKeyPartPos();
+        ctx_allocator.free(query_range_ctx_->key_part_pos_array_.at(i));
+      }
+    }
     query_range_ctx_->~ObQueryRangeCtx();
     ctx_allocator.free(query_range_ctx_);
     query_range_ctx_ = NULL;
@@ -426,13 +438,18 @@ int ObQueryRange::check_cur_expr(const ObRawExpr *cur_expr, ObIArray<int64_t> &o
           } else if (param->is_column_ref_expr()) {
             const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(param);
             ObKeyPartId id(col_expr->get_table_id(), col_expr->get_column_id());
-            ObKeyPartPos pos;
+            ObKeyPartPos *pos = nullptr;
             bool b_key_part;
             if (OB_FAIL(is_key_part(id, pos, b_key_part))) {
               LOG_WARN("failed to get key part", K(ret));
             } else if (b_key_part) {
               is_valid_expr = true;
-              ret = add_var_to_array_no_dup(offsets, pos.offset_);
+              if (OB_ISNULL(pos)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get null key pos");
+              } else if (OB_FAIL(add_var_to_array_no_dup(offsets, pos->offset_))) {
+                LOG_WARN("failed to add var to array no dup");
+              }
             }
           }
         }
@@ -465,13 +482,16 @@ int ObQueryRange::extract_basic_info(const ObRawExpr *l_expr,
     if (l_expr->is_column_ref_expr()) {
       const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(l_expr);
       ObKeyPartId key_part_id(col_expr->get_table_id(), col_expr->get_column_id());
-      ObKeyPartPos key_part_pos;
+      ObKeyPartPos *key_part_pos = nullptr;
       bool b_key_part = false;
       if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_key_part))) {
         LOG_WARN("failed to get key part", K(ret));
       } else if (!b_key_part) {
         // do nothing
-      } else if (OB_FAIL(add_var_to_array_no_dup(offsets, key_part_pos.offset_))) {
+      } else if (OB_ISNULL(key_part_pos)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null key part pos");
+      } else if (OB_FAIL(add_var_to_array_no_dup(offsets, key_part_pos->offset_))) {
         LOG_WARN("failed to add key part offset", K(ret));
       } else {
         is_valid_expr = true;
@@ -509,12 +529,15 @@ int ObQueryRange::extract_basic_info(const ObRawExpr *l_expr,
       const_expr = l_expr;
     }
     ObKeyPartId key_part_id(col_expr->get_table_id(), col_expr->get_column_id());
-    ObKeyPartPos key_part_pos;
+    ObKeyPartPos *key_part_pos = nullptr;
     if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
       LOG_WARN("failed to check is key part", K(ret));
     } else if (!b_is_key_part || OB_UNLIKELY(!const_expr->is_const_expr())) {
       // always true
-    } else if (OB_FAIL(add_var_to_array_no_dup(offsets, key_part_pos.offset_))) {
+    } else if (OB_ISNULL(key_part_pos)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null key part pos");
+    } else if (OB_FAIL(add_var_to_array_no_dup(offsets, key_part_pos->offset_))) {
       LOG_WARN("failed to add key part offset", K(ret));
     } else {
       is_valid_expr = true;
@@ -571,7 +594,7 @@ int ObQueryRange::check_can_extract_rowid(const ObIArray<const ObColumnRefRawExp
         LOG_WARN("get unexpected null", K(ret));
       } else {
         ObKeyPartId key_part_id(col_expr->get_table_id(), col_expr->get_column_id());
-        ObKeyPartPos key_part_pos;
+        ObKeyPartPos *key_part_pos = nullptr;
         if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_key_part))) {
           LOG_WARN("failed to get key part", K(ret));
         } else if (b_key_part) {
@@ -589,7 +612,12 @@ int ObQueryRange::check_can_extract_rowid(const ObIArray<const ObColumnRefRawExp
         }
         if (OB_SUCC(ret) && cur_valid) {
           is_valid_expr = true;
-          ret = add_var_to_array_no_dup(offsets, key_part_pos.offset_);
+          if (OB_ISNULL(key_part_pos)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null key part pos");
+          } else if (OB_FAIL(add_var_to_array_no_dup(offsets, key_part_pos->offset_))) {
+            LOG_WARN("failed to add var to array no dup", K(ret));
+          }
         }
       }
     }
@@ -1527,7 +1555,7 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
       for (int64_t i = 0; OB_SUCC(ret) && i < pk_column_items.count(); ++i) {
         const ObColumnRefRawExpr *column_item = pk_column_items.at(i);
         ObKeyPartId key_part_id(column_item->get_table_id(), column_item->get_column_id());
-        ObKeyPartPos key_part_pos;
+        ObKeyPartPos *key_part_pos = nullptr;
         bool b_is_key_part = false;
         tmp_key_part = NULL;
         if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
@@ -1546,6 +1574,9 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
         }
         if (OB_FAIL(ret) || !b_is_key_part) {
           GET_ALWAYS_TRUE_OR_FALSE(true, tmp_key_part);
+        } else if (OB_ISNULL(key_part_pos)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null key part pos");
         } else if (OB_ISNULL((tmp_key_part = create_new_key_part()))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("alloc memory failed", K(ret));
@@ -1554,7 +1585,7 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
           tmp_key_part->rowid_column_idx_ = i;
           tmp_key_part->is_phy_rowid_key_part_ = is_physical_rowid;
           tmp_key_part->id_ = key_part_id;
-          tmp_key_part->pos_ = key_part_pos;
+          tmp_key_part->pos_ = *key_part_pos;
           tmp_key_part->null_safe_ = false;
           //if current expr can be extracted to range, just store the expr
           if (c_type != T_OP_LIKE) {
@@ -1629,7 +1660,7 @@ int ObQueryRange::get_extract_rowid_range_infos(const ObRawExpr *calc_urowid_exp
               LOG_WARN("get unexpected null", K(ret), K(col_expr));
             } else {
               ObKeyPartId id(col_expr->get_table_id(), col_expr->get_column_id());
-              ObKeyPartPos pos;
+              ObKeyPartPos *pos = nullptr;
               bool b_key_part = false;
               if (OB_FAIL(is_key_part(id, pos, b_key_part))) {
                 LOG_WARN("failed to check is key part", K(ret));
@@ -1682,14 +1713,17 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
       query_range_ctx_->need_final_extract_ = true;
     }
     ObKeyPartId id(column_item->get_table_id(), column_item->get_column_id());
-    ObKeyPartPos pos;
+    ObKeyPartPos *pos = nullptr;
     bool b_is_key_part = false;
     bool always_true = true;
     if (OB_FAIL(is_key_part(id, pos, b_is_key_part))) {
       LOG_WARN("is_key_part failed", K(ret));
     } else if (!b_is_key_part || OB_UNLIKELY(!const_expr->is_const_expr())) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-    } else if (!can_be_extract_range(cmp_type, pos.column_type_, calc_type,
+    } else if (OB_ISNULL(pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null key part pos");
+    } else if (!can_be_extract_range(cmp_type, pos->column_type_, calc_type,
                                      const_expr->get_result_type().get_type(), always_true)) {
       GET_ALWAYS_TRUE_OR_FALSE(always_true, out_key_part);
     } else if (OB_FAIL(get_calculable_expr_val(const_expr, const_val, is_valid))) {
@@ -1702,7 +1736,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
     } else {
       ObObj val;
       out_key_part->id_ = id;
-      out_key_part->pos_ = pos;
+      out_key_part->pos_ = *pos;
       out_key_part->null_safe_ = (T_OP_NSEQ == c_type);
       if (!const_expr->cnt_param_expr()
           || (!const_expr->has_flag(CNT_DYNAMIC_PARAM)
@@ -1770,7 +1804,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
           }
           if (OB_SUCC(ret) && is_oracle_mode()) {
             // NChar like Nchar, Char like Char is not precise due to padding blank characters
-            ObObjType column_type = pos.column_type_.get_type();
+            ObObjType column_type = pos->column_type_.get_type();
             ObObjType const_type = const_expr->get_result_type().get_type();
             if ((ObCharType == column_type && ObCharType == const_type) ||
                 (ObNCharType == column_type && ObNCharType == const_type)) {
@@ -1785,7 +1819,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
             // do nothing
           }
         }
-        if (OB_SUCC(ret) && OB_FAIL(check_expr_precise(out_key_part, const_expr, calc_type, pos))) {
+        if (OB_SUCC(ret) && OB_FAIL(check_expr_precise(out_key_part, const_expr, calc_type, *pos))) {
           LOG_WARN("failed to check expr precise", K(ret));
         }
       }
@@ -2358,37 +2392,34 @@ int ObQueryRange::pre_extract_ne_op(const ObOpRawExpr *t_expr,
     const ObRawExpr *l_expr = t_expr->get_param_expr(0);
     const ObRawExpr *r_expr = t_expr->get_param_expr(1);
     ObKeyPartList key_part_list;
-    if (lib::is_oracle_mode()
-      && T_OP_ROW == l_expr->get_expr_type() && T_OP_ROW == r_expr->get_expr_type()) {
-      if (1 == r_expr->get_param_count()
-          && T_OP_ROW == r_expr->get_param_expr(0)->get_expr_type()) {
-        r_expr = r_expr->get_param_expr(0);
+    if (T_OP_ROW == l_expr->get_expr_type() && T_OP_ROW == r_expr->get_expr_type()) {
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+        ObKeyPart *tmp = NULL;
+        if (OB_FAIL(get_basic_query_range(l_expr,
+                                          r_expr,
+                                          NULL,
+                                          i == 0 ? T_OP_LT : T_OP_GT,
+                                          t_expr->get_result_type(),
+                                          tmp,
+                                          dtc_params))) {
+          LOG_WARN("Get basic query range failed", K(ret));
+        } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
+          LOG_WARN("push back failed", K(ret));
+        } else {
+          // A != B 表达式被拆分成了两个表达式, A < B OR A > B
+          // 要保证每个表达式都是精确的，整个表达式才是精确的
+          is_precise = (is_precise && query_range_ctx_->cur_expr_is_precise_);
+        }
       }
-    }
-    for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
-      query_range_ctx_->cur_expr_is_precise_ = false;
-      ObKeyPart *tmp = NULL;
-      if (OB_FAIL(get_basic_query_range(l_expr,
-                                        r_expr,
-                                        NULL,
-                                        i == 0 ? T_OP_LT : T_OP_GT,
-                                        t_expr->get_result_type(),
-                                        tmp,
-                                        dtc_params))) {
-        LOG_WARN("Get basic query range failed", K(ret));
-      } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
-        LOG_WARN("push back failed", K(ret));
-      } else {
-        // A != B 表达式被拆分成了两个表达式, A < B OR A > B
-        // 要保证每个表达式都是精确的，整个表达式才是精确的
-        is_precise = (is_precise && query_range_ctx_->cur_expr_is_precise_);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      query_range_ctx_->cur_expr_is_precise_ = is_precise;
-      //not need params when preliminary extract
-      if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
-        LOG_WARN("or range graph failed", K(ret));
+      if (OB_SUCC(ret)) {
+        query_range_ctx_->cur_expr_is_precise_ = is_precise;
+        //not need params when preliminary extract
+        if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
+          LOG_WARN("or range graph failed", K(ret));
+        }
       }
     }
   }
@@ -2708,7 +2739,7 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
   int ret = OB_SUCCESS;
   ObKeyPart *tmp_key_part = NULL;
   bool has_rowid = false;
-  common::hash::ObHashMap<int64_t, ObKeyPartPos> idx_pos_map;
+  common::hash::ObHashMap<int64_t, ObKeyPartPos*> idx_pos_map;
   common::hash::ObHashMap<int64_t, InParamMeta *> idx_param_map;
   common::hash::ObHashMap<int64_t, int64_t> expr_idx_param_idx_map;
   if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
@@ -2751,7 +2782,7 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
             param_res_type.set_calc_meta(res_type.get_row_calc_cmp_types().at(j));
             const ObRawExpr *const_expr = r_param->get_param_expr(j);
             InParamMeta *param_meta = NULL;
-            ObKeyPartPos cur_key_pos;
+            ObKeyPartPos *cur_key_pos = nullptr;
             bool can_be_extract = true;
             bool always_true = true;
             bool is_val_valid = true;
@@ -2776,20 +2807,23 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
                   LOG_WARN("failed to check const value valid", K(ret));
                 }
               }
+            } else if (OB_ISNULL(cur_key_pos)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected null", K(ret), K(j));
             } else if (OB_UNLIKELY(!const_expr->is_const_expr())) {
               can_be_extract = false;
               always_true = true;
             } else if (OB_FAIL(idx_param_map.get_refactored(j, param_meta))) {
               LOG_WARN("failed to get param meta", K(ret));
             } else if (!can_be_extract_range(T_OP_EQ,
-                                             cur_key_pos.column_type_,
+                                             cur_key_pos->column_type_,
                                              param_res_type.get_calc_meta(),
                                              const_expr->get_result_type().get_type(),
                                              always_true)) {
               can_be_extract = false;
             } else if (OB_FAIL(get_param_value(tmp_key_part->in_keypart_,
                                                param_meta,
-                                               cur_key_pos,
+                                               *cur_key_pos,
                                                const_expr,
                                                dtc_params,
                                                is_val_valid))) {
@@ -2799,7 +2833,7 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
             } else if (OB_FAIL(check_expr_precise(tmp_key_part,
                                                   const_expr,
                                                   param_res_type.get_calc_meta(),
-                                                  cur_key_pos))) {
+                                                  *cur_key_pos))) {
               LOG_WARN("failed to check expr precise", K(ret));
             }
             if (OB_SUCC(ret) && !can_be_extract) {
@@ -2845,7 +2879,7 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
                                         const ObOpRawExpr *r_expr,
                                         ObKeyPart *&tmp_key_part,
                                         bool &has_rowid,
-                                        common::hash::ObHashMap<int64_t, ObKeyPartPos> &idx_pos_map,
+                                        common::hash::ObHashMap<int64_t, ObKeyPartPos*> &idx_pos_map,
                                         common::hash::ObHashMap<int64_t, InParamMeta *> &idx_param_map,
                                         common::hash::ObHashMap<int64_t, int64_t> &expr_idx_param_idx_map,
                                         const ObDataTypeCastParams &dtc_params)
@@ -2855,17 +2889,11 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
   if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(l_expr), K(r_expr));
-  } else if (OB_FAIL(idx_pos_map.create(
-             hash::cal_next_prime(l_expr->get_param_count()),
-             "IdxKeyMap", "IdxKeyMap"))) {
+  } else if (OB_FAIL(idx_pos_map.create(l_expr->get_param_count(), "IdxKeyMap", "IdxKeyMap"))) {
     LOG_WARN("fail to init hashmap", K(ret));
-  } else if (OB_FAIL(idx_param_map.create(
-            hash::cal_next_prime(l_expr->get_param_count()),
-            "IdxParamMap", "IdxParamMap"))) {
+  } else if (OB_FAIL(idx_param_map.create(l_expr->get_param_count(), "IdxParamMap", "IdxParamMap"))) {
     LOG_WARN("fail to init hashmap", K(ret));
-  } else if (OB_FAIL(expr_idx_param_idx_map.create(
-            hash::cal_next_prime(l_expr->get_param_count()),
-            "IdxMap", "IdxMap"))) {
+  } else if (OB_FAIL(expr_idx_param_idx_map.create(l_expr->get_param_count(), "IdxMap", "IdxMap"))) {
     LOG_WARN("fail to init hashmap", K(ret));
   } else {
     int64_t param_cnt = 0;
@@ -2889,12 +2917,15 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
       } else {
         const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(expr);
         ObKeyPartId key_id(col_expr->get_table_id(), col_expr->get_column_id());
-        ObKeyPartPos key_pos;
+        ObKeyPartPos *key_pos = nullptr;
         bool b_key_part = false;
         if (OB_FAIL(is_key_part(key_id, key_pos, b_key_part))) {
           LOG_WARN("failed to check key part", K(ret));
         } else if (!b_key_part) {
           query_range_ctx_->cur_expr_is_precise_ = false;
+        } else if (OB_ISNULL(key_pos)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null key part pos");
         } else {
           if (tmp_key_part == NULL) {
             if (OB_ISNULL(tmp_key_part = create_new_key_part())) {
@@ -2918,12 +2949,12 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
             LOG_WARN("failed to set idx to key meta map", K(ret));
           } else if (OB_FAIL(expr_idx_param_idx_map.set_refactored(i, param_cnt++))) {
             LOG_WARN("failed to set expr idx to key idx map", K(ret));
-          } else if (OB_FAIL(tmp_key_part->in_keypart_->offsets_.push_back(key_pos.offset_))) {
+          } else if (OB_FAIL(tmp_key_part->in_keypart_->offsets_.push_back(key_pos->offset_))) {
             LOG_WARN("failed to push back key offset", K(ret));
           } else if (OB_FAIL(tmp_key_part->in_keypart_->in_params_.push_back(new_param_meta))) {
             LOG_WARN("failed to push back param", K(ret));
           } else {
-            new_param_meta->pos_ = key_pos;
+            new_param_meta->pos_ = *key_pos;
             new_param_meta->vals_.set_block_allocator(ModulePageAllocator(allocator_));
           }
         }
@@ -2999,8 +3030,7 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
       if (OB_FAIL(get_calculable_expr_val(const_expr, val, is_valid))) {
         LOG_WARN("failed to get calculable expr val", K(ret));
       } else if (!is_valid) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("should not be invalid", K(ret), K(*const_expr));
+        is_val_valid = false;
       }
     } else {
       if (OB_FAIL(get_final_expr_val(const_expr, val))) {
@@ -3020,9 +3050,11 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
       LOG_WARN("failed to try cast value type", K(ret));
     } else if (cmp == 0) {
       val.set_collation_type(pos.column_type_.get_collation_type());
-      ret = param_meta->vals_.push_back(val);
     } else {
       is_val_valid = false;
+    }
+    if (OB_SUCC(ret) && OB_FAIL(param_meta->vals_.push_back(val))) {
+      LOG_WARN("failed to push back val", K(ret));
     }
   }
   return ret;
@@ -3043,13 +3075,16 @@ int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
     LOG_WARN("get invalid argument", K(ret), K(col_expr), K(r_expr));
   } else {
     ObKeyPartId key_id(col_expr->get_table_id(), col_expr->get_column_id());
-    ObKeyPartPos key_pos;
+    ObKeyPartPos *key_pos = nullptr;
     bool b_key_part = false;
     InParamMeta *new_param_meta = NULL;
     if (OB_FAIL(is_key_part(key_id, key_pos, b_key_part))) {
       LOG_WARN("failed to check key part", K(ret));
     } else if (!b_key_part) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else if (OB_ISNULL(key_pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null key part pos");
     } else if (OB_ISNULL(tmp_key_part = create_new_key_part())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create new key part", K(ret));
@@ -3058,15 +3093,17 @@ int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
     } else if (OB_ISNULL(tmp_key_part->in_keypart_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(tmp_key_part->in_keypart_->offsets_.push_back(key_pos.offset_))) {
+    } else if (OB_FAIL(tmp_key_part->in_keypart_->offsets_.push_back(key_pos->offset_))) {
       LOG_WARN("failed to push back key offset", K(ret));
     } else if (OB_ISNULL(new_param_meta = tmp_key_part->in_keypart_->create_param_meta(allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create new param meta", K(ret));
     } else {
       tmp_key_part->in_keypart_->table_id_ = col_expr->get_table_id();
-      new_param_meta->pos_ = key_pos;
+      tmp_key_part->in_keypart_->is_strict_in_ = true;
+      new_param_meta->pos_ = *key_pos;
       new_param_meta->vals_.set_block_allocator(ModulePageAllocator(allocator_));
+      ObSEArray<int64_t, 4> invalid_val_idx;
       bool always_true = false;
       for (int64_t i = 0; OB_SUCC(ret) && !always_true && i < r_expr->get_param_count(); ++i) {
         const ObRawExpr *const_expr = r_expr->get_param_expr(i);
@@ -3080,14 +3117,14 @@ int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
           cur_can_be_extract = false;
           cur_always_true = true;
         } else if (!can_be_extract_range(T_OP_EQ,
-                                        key_pos.column_type_,
+                                        key_pos->column_type_,
                                         res_type.get_calc_meta(),
                                         const_expr->get_result_type().get_type(),
                                         cur_always_true)) {
           cur_can_be_extract = false;
         } else if (OB_FAIL(get_param_value(tmp_key_part->in_keypart_,
                                           new_param_meta,
-                                          key_pos,
+                                          *key_pos,
                                           const_expr,
                                           dtc_params,
                                           is_val_valid))) {
@@ -3097,22 +3134,28 @@ int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
         } else if (OB_FAIL(check_expr_precise(tmp_key_part,
                                               const_expr,
                                               res_type.get_calc_meta(),
-                                              key_pos))) {
+                                              *key_pos))) {
           LOG_WARN("failed to check expr precise", K(ret));
         }
         if (OB_SUCC(ret) && !cur_can_be_extract && cur_always_true) {
           GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
           always_true = true;
         } // for always false, just no need to add the value to in param
+        if (OB_SUCC(ret) && !is_val_valid && OB_FAIL(invalid_val_idx.push_back(i))) {
+          LOG_WARN("failed to push back invalid val idx", K(ret));
+        }
       }
       if (OB_SUCC(ret) && !always_true) {
-        if (new_param_meta->vals_.empty()) {
+        if (OB_UNLIKELY(new_param_meta->vals_.empty())) {
           // all always false
           GET_ALWAYS_TRUE_OR_FALSE(false, out_key_part);
         } else if (OB_FAIL(tmp_key_part->in_keypart_->in_params_.push_back(new_param_meta))) {
           LOG_WARN("failed to push back param meta", K(ret));
+        } else if (OB_FAIL(tmp_key_part->remove_in_params_vals(invalid_val_idx))) {
+          LOG_WARN("failed to adjust in param values", K(ret));
+        } else if (OB_FAIL(tmp_key_part->formalize_keypart(contain_row_))) {
+          LOG_WARN("failed to formalize in key", K(ret));
         } else {
-          tmp_key_part->in_keypart_->is_strict_in_ = true;
           out_key_part = tmp_key_part;
         }
       }
@@ -3280,7 +3323,7 @@ int ObQueryRange::pre_extract_not_in_op(const ObOpRawExpr *b_expr,
              OB_ISNULL(r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("r_expr is null.", K(ret));
-  } else if (r_expr->get_param_count() > MAX_NOT_IN_SIZE) {
+  } else if (r_expr->get_param_count() > MAX_NOT_IN_SIZE || l_expr->get_expr_type() == T_OP_ROW) {
     // do not extract range over MAX_NOT_IN_SIZE
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     query_range_ctx_->cur_expr_is_precise_ = false;
@@ -3469,83 +3512,96 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else {
       op_type = get_geo_relation(expr->get_expr_type());
-      if (OB_UNLIKELY(r_expr->has_flag(IS_COLUMN))) {
-        column_item = static_cast<const ObColumnRefRawExpr *>(r_expr);
+      if (OB_UNLIKELY(r_expr->has_flag(CNT_COLUMN))) {
+        column_item = ObRawExprUtils::get_column_ref_expr_recursively(r_expr);
         const_item = l_expr;
-      } else if (l_expr->has_flag(IS_COLUMN)) {
-        column_item = static_cast<const ObColumnRefRawExpr *>(l_expr);
+      } else if (l_expr->has_flag(CNT_COLUMN)) {
+        column_item = ObRawExprUtils::get_column_ref_expr_recursively(l_expr);
         const_item = r_expr;
         op_type = (ObGeoRelationType::T_COVERS == op_type ? ObGeoRelationType::T_COVEREDBY :
                   (ObGeoRelationType::T_COVEREDBY == op_type ? ObGeoRelationType::T_COVERS : op_type));
-      }
-      bool is_cellid_col = false;
-      uint64_t column_id = column_item->get_column_id();
-      ObGeoColumnInfo column_info;
-      if (OB_FAIL(columnId_map_.get_refactored(column_id, column_info))) {
-        if (OB_NOT_INIT == ret || OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to get from columnId_map_", K(ret));
-        }
       } else {
-        is_cellid_col = true;
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find column item", K(ret), KPC(r_expr), KPC(l_expr));
+      }
+
+      if (OB_SUCC(ret) && OB_ISNULL(column_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find column item", K(ret), KPC(r_expr), KPC(l_expr));
       }
 
       if (OB_SUCC(ret)) {
-        if (const_item->cnt_param_expr()) {
-          query_range_ctx_->need_final_extract_ = true;
-        }
-        ObKeyPartId key_part_id(column_item->get_table_id(),
-                                is_cellid_col ? column_info.cellid_columnId_ : column_id);
-        ObKeyPartPos key_part_pos;
-        bool b_is_key_part = false;
-        if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
-          LOG_WARN("is_key_part failed", K(ret));
-        } else if (!b_is_key_part) {
-          GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-        } else if (OB_ISNULL((out_key_part = create_new_key_part()))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("alloc memory failed", K(ret));
-        } else {
-          contain_geo_filters_ = true;
-          out_key_part->id_ = key_part_id;
-          out_key_part->pos_ = key_part_pos;
-          if (op_type == ObGeoRelationType::T_DWITHIN) {
-            if (OB_FAIL(get_dwithin_item(expr, extra_item))) {
-              LOG_WARN("failed to get dwithin item", K(ret));
-            }
-          }
-
-          ObObj const_val;
-          bool is_valid = true;
-          if (OB_FAIL(ret)) {
-            // do nothing
-          } else if (OB_FAIL(get_calculable_expr_val(const_item, const_val, is_valid))) {
-            LOG_WARN("failed to get calculable expr val", K(ret));
-          } else if (!is_valid) {
-            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-          } else if (OB_FAIL(out_key_part->create_geo_key())) {
-            LOG_WARN("create like geo part failed", K(ret));
-          } else if (extra_item != NULL &&
-                     OB_FAIL(get_calculable_expr_val(extra_item,
-                                                    out_key_part->geo_keypart_->distance_,
-                                                    is_valid))) {
-            LOG_WARN("failed to get calculable expr val", K(ret));
-          } else if (!is_valid) {
-            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        bool is_cellid_col = false;
+        uint64_t column_id = column_item->get_column_id();
+        ObGeoColumnInfo column_info;
+        if (OB_FAIL(columnId_map_.get_refactored(column_id, column_info))) {
+          if (OB_NOT_INIT == ret || OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
           } else {
-            if (const_item->cnt_param_expr()) {
-              ObObj val;
-              out_key_part->geo_keypart_->geo_type_ = op_type;
-              if (OB_FAIL(get_final_expr_val(const_item, out_key_part->geo_keypart_->wkb_))) {
-                LOG_WARN("failed to get final expr idx", K(ret));
-              } else if (extra_item != NULL &&
-                         OB_FAIL(get_final_expr_val(extra_item, out_key_part->geo_keypart_->distance_))) {
-                  LOG_WARN("failed to get final distance expr idx", K(ret));
+            LOG_WARN("failed to get from columnId_map_", K(ret));
+          }
+        } else {
+          is_cellid_col = true;
+        }
+        if (OB_SUCC(ret)) {
+          if (const_item->cnt_param_expr()) {
+            query_range_ctx_->need_final_extract_ = true;
+          }
+          ObKeyPartId key_part_id(column_item->get_table_id(),
+                                  is_cellid_col ? column_info.cellid_columnId_ : column_id);
+          ObKeyPartPos *key_part_pos = nullptr;
+          bool b_is_key_part = false;
+          if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
+            LOG_WARN("is_key_part failed", K(ret));
+          } else if (!b_is_key_part) {
+            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+          } else if (OB_ISNULL(key_part_pos)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null key part pos");
+          } else if (OB_ISNULL((out_key_part = create_new_key_part()))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("alloc memory failed", K(ret));
+          } else {
+            contain_geo_filters_ = true;
+            out_key_part->id_ = key_part_id;
+            out_key_part->pos_ = *key_part_pos;
+            if (op_type == ObGeoRelationType::T_DWITHIN) {
+              if (OB_FAIL(get_dwithin_item(expr, extra_item))) {
+                LOG_WARN("failed to get dwithin item", K(ret));
               }
+            }
+
+            ObObj const_val;
+            bool is_valid = true;
+            if (OB_FAIL(ret)) {
+              // do nothing
+            } else if (OB_FAIL(get_calculable_expr_val(const_item, const_val, is_valid))) {
+              LOG_WARN("failed to get calculable expr val", K(ret));
+            } else if (!is_valid) {
+              GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+            } else if (OB_FAIL(out_key_part->create_geo_key())) {
+              LOG_WARN("create like geo part failed", K(ret));
+            } else if (extra_item != NULL &&
+                      OB_FAIL(get_calculable_expr_val(extra_item,
+                                                      out_key_part->geo_keypart_->distance_,
+                                                      is_valid))) {
+              LOG_WARN("failed to get calculable expr val", K(ret));
+            } else if (!is_valid) {
+              GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
             } else {
-              if (OB_FAIL(get_geo_range(const_val, op_type, out_key_part))) {
-                LOG_WARN("create geo range failed", K(ret));
+              if (const_item->cnt_param_expr()) {
+                ObObj val;
+                out_key_part->geo_keypart_->geo_type_ = op_type;
+                if (OB_FAIL(get_final_expr_val(const_item, out_key_part->geo_keypart_->wkb_))) {
+                  LOG_WARN("failed to get final expr idx", K(ret));
+                } else if (extra_item != NULL &&
+                          OB_FAIL(get_final_expr_val(extra_item, out_key_part->geo_keypart_->distance_))) {
+                    LOG_WARN("failed to get final distance expr idx", K(ret));
+                }
+              } else {
+                if (OB_FAIL(get_geo_range(const_val, op_type, out_key_part))) {
+                  LOG_WARN("create geo range failed", K(ret));
+                }
               }
             }
           }
@@ -3712,7 +3768,7 @@ int ObQueryRange::get_in_expr_res_type(const ObRawExpr *in_expr, int64_t val_idx
   return ret;
 }
 
-int ObQueryRange::is_key_part(const ObKeyPartId &id, ObKeyPartPos &pos, bool &is_key_part)
+int ObQueryRange::is_key_part(const ObKeyPartId &id, ObKeyPartPos *&pos, bool &is_key_part)
 {
   int ret = OB_SUCCESS;
   is_key_part = false;
@@ -3722,7 +3778,8 @@ int ObQueryRange::is_key_part(const ObKeyPartId &id, ObKeyPartPos &pos, bool &is
   } else {
     int64_t max_off = query_range_ctx_->max_valid_offset_;
     int map_ret = query_range_ctx_->key_part_map_.get_refactored(id, pos);
-    if (OB_SUCCESS == map_ret && (max_off == -1 || (max_off != - 1 && pos.offset_ <= max_off))) {
+    if (OB_SUCCESS == map_ret && OB_NOT_NULL(pos) &&
+        (max_off == -1 || (max_off != - 1 && pos->offset_ <= max_off))) {
       is_key_part = true;
       SQL_REWRITE_LOG(DEBUG, "id pair is  key part", K_(id.table_id), K_(id.column_id));
     } else if (OB_HASH_NOT_EXIST != map_ret) {
@@ -7544,7 +7601,7 @@ ObKeyPart *ObQueryRange::create_new_key_part()
     if (OB_UNLIKELY(OB_SUCCESS != key_part_store_.store_obj(key_part))) {
       key_part->~ObKeyPart();
       key_part = NULL;
-      LOG_WARN("Store ObKeyPart failed");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "Store ObKeyPart failed");
     }
   }
   return key_part;

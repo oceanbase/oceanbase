@@ -133,25 +133,6 @@ TEST_F(TestLogGroupBuffer, test_get_log_buf)
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.get_log_buf(lsn, len, log_buf));
 }
 
-TEST_F(TestLogGroupBuffer, test_wait)
-{
-  LSN lsn;
-  int64_t len = 0;
-  EXPECT_EQ(OB_NOT_INIT, log_group_buffer_.wait(lsn, len));
-  LSN start_lsn(100);
-  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_group_buffer_.wait(lsn, len));
-  lsn = start_lsn;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_group_buffer_.wait(lsn, len));
-  len = 100;
-  lsn.val_ = start_lsn.val_ - 1;
-  EXPECT_EQ(OB_ERR_UNEXPECTED, log_group_buffer_.wait(lsn, len));
-  lsn.val_ = start_lsn.val_ + log_group_buffer_.get_available_buffer_size();
-  EXPECT_EQ(OB_EAGAIN, log_group_buffer_.wait(lsn, len));
-  lsn.val_ = start_lsn.val_ + 100;
-  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.wait(lsn, len));
-}
-
 TEST_F(TestLogGroupBuffer, test_fill)
 {
   LSN lsn;

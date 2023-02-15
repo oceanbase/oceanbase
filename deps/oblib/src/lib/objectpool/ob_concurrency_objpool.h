@@ -389,7 +389,7 @@ class ObFixedClassAllocator
 public:
   ObFixedClassAllocator(const int obj_size, const ObMemAttr &attr, int blk_size, int64_t nway) : allocator_(obj_size, attr, blk_size)
   {
-    allocator_.set_nway(nway);
+    allocator_.set_nway(static_cast<int32_t>(nway));
   }
   virtual ~ObFixedClassAllocator() {}
 
@@ -466,7 +466,7 @@ public:
         if (OB_LIKELY(NULL != instance)) {
           if (common::OB_SUCCESS != instance->init(typeid(T).name(), RND16(sizeof(T)),
                                                    obj_count, RND16(alignment), cache_type, is_meta, label)) {
-            _OB_LOG(ERROR, "failed to init class allocator %s", typeid(T).name());
+            _OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "failed to init class allocator %s", typeid(T).name());
             delete instance;
             instance = NULL;
             ATOMIC_BCAS(&once_, 1, 0);
@@ -617,7 +617,7 @@ public:
         instance = new (std::nothrow) ObObjFreeListList();
         if (OB_LIKELY(NULL != instance)) {
           if (common::OB_SUCCESS != instance->init()) {
-            _OB_LOG(ERROR, "failed to init object freelist list");
+            _OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "failed to init object freelist list");
             delete instance;
             instance = NULL;
             (void)ATOMIC_BCAS(&once_, 1, 0);

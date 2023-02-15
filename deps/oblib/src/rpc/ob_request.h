@@ -65,7 +65,7 @@ public:
       : ez_req_(NULL), nio_protocol_(nio_protocol), type_(type), handle_ctx_(NULL), group_id_(0), sql_req_level_(0), pkt_(NULL),
         connection_phase_(ConnectionPhaseEnum::CPE_CONNECTED),
         recv_timestamp_(0), enqueue_timestamp_(0),
-        request_arrival_time_(0), stc_(), arrival_push_diff_(0),
+        request_arrival_time_(0), recv_mts_(), arrival_push_diff_(0),
         push_pop_diff_(0), pop_process_start_diff_(0),
         process_start_end_diff_(0), process_end_response_diff_(0),
         trace_id_(),discard_flag_(false),large_retry_flag_(false),retry_times_(0)
@@ -94,7 +94,7 @@ public:
   void set_request_opacket_size(int64_t size);
   int64_t get_send_timestamp() const;
   int64_t get_receive_timestamp() const;
-  common::ObMonotonicTs get_stc() const;
+  common::ObMonotonicTs get_receive_mts() const;
   void set_receive_timestamp(const int64_t recv_timestamp);
   void set_enqueue_timestamp(const int64_t enqueue_timestamp);
   void set_request_arrival_time(const int64_t now);
@@ -147,7 +147,7 @@ protected:
   int64_t enqueue_timestamp_;
   int64_t request_arrival_time_;
   // only used by transaction
-  common::ObMonotonicTs stc_;
+  common::ObMonotonicTs recv_mts_;
   int32_t arrival_push_diff_;
   int32_t push_pop_diff_;
   int32_t pop_process_start_diff_;
@@ -181,7 +181,7 @@ inline void ObRequest::set_ez_req(easy_request_t *r)
 inline void ObRequest::enable_request_ratelimit()
 {
   if (OB_ISNULL(ez_req_)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req_));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
   } else {
     ez_req_->ratelimit_enabled = 1;
     ez_req_->redispatched = 0;
@@ -191,7 +191,7 @@ inline void ObRequest::enable_request_ratelimit()
 inline void ObRequest::set_request_background_flow()
 {
   if (OB_ISNULL(ez_req_)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req_));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
   } else {
     ez_req_->is_bg_flow = 1;
   }
@@ -200,7 +200,7 @@ inline void ObRequest::set_request_background_flow()
 inline void ObRequest::set_request_opacket_size(int64_t size)
 {
   if (OB_ISNULL(ez_req_)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req_));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
   } else {
     ez_req_->opacket_size = size;
   }
@@ -211,16 +211,16 @@ inline int64_t ObRequest::get_receive_timestamp() const
   return recv_timestamp_;
 }
 
-inline common::ObMonotonicTs ObRequest::get_stc() const
+inline common::ObMonotonicTs ObRequest::get_receive_mts() const
 {
-  return stc_;
+  return recv_mts_;
 }
 
 inline void ObRequest::set_receive_timestamp(const int64_t recv_timestamp)
 {
   recv_timestamp_ = recv_timestamp;
   // used by transaction
-  stc_ = ObMonotonicTs::current_time();
+  recv_mts_ = ObMonotonicTs::current_time();
 }
 
 inline int64_t ObRequest::get_enqueue_timestamp() const

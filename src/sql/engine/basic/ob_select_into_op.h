@@ -35,7 +35,8 @@ public:
       filed_str_(),
       line_str_(),
       closed_cht_(0),
-      is_optional_(false)
+      is_optional_(false),
+      select_exprs_(alloc)
   {
   }
 
@@ -46,6 +47,7 @@ public:
   common::ObObj line_str_;
   char closed_cht_;
   bool is_optional_;
+  common::ObFixedArray<ObExpr*, common::ObIAllocator> select_exprs_;
 };
 
 class ObSelectIntoOp : public ObOperator

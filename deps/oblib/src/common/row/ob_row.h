@@ -90,13 +90,13 @@ public:
     int64_t real_idx = index;
     if (projector_size_ > 0) {
       if (OB_ISNULL(projector_) || index >= projector_size_ || index < 0) {
-        COMMON_LOG(ERROR, "index is invalid", K(index), K_(projector_size), K_(projector));
+        COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "index is invalid", K(index), K_(projector_size), K_(projector));
       } else {
         real_idx = projector_[index];
       }
     }
     if (real_idx >= count_) {
-      COMMON_LOG(ERROR, "real_idx is invalid", K_(count), K(real_idx));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "real_idx is invalid", K_(count), K(real_idx));
     }
     return cells_[real_idx];
   }
@@ -106,14 +106,14 @@ public:
     int64_t real_idx = index;
     if (projector_size_ > 0) {
       if (OB_ISNULL(projector_) || index >= projector_size_ || index < 0) {
-        COMMON_LOG(ERROR, "index is invalid", K(index), K_(projector_size), K_(projector));
+        COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "index is invalid", K(index), K_(projector_size), K_(projector));
         right_to_die_or_duty_to_live();
       } else {
         real_idx = projector_[index];
       }
     }
     if (real_idx >= count_) {
-      COMMON_LOG(ERROR, "real_idx is invalid", K_(count), K(real_idx));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "real_idx is invalid", K_(count), K(real_idx));
       right_to_die_or_duty_to_live();
     }
     return cells_[real_idx];

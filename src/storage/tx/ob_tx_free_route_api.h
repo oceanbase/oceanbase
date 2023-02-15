@@ -9,7 +9,7 @@ LST_DO(DEF_FREE_ROUTE_API, (;), static, dynamic, parts, extra)
 
 int calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx);
 int tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTxDesc &tx, const uint32_t session_id);
-int tx_free_route_handle_check_alive(const ObTxFreeRouteCheckAliveMsg &msg);
+int tx_free_route_handle_check_alive(const ObTxFreeRouteCheckAliveMsg &msg, const int retcode);
 int tx_free_route_handle_push_state(const ObTxFreeRoutePushState &msg);
 private:
 int clean_txn_state_(ObTxDesc *&tx, const ObTransID &tx_id);

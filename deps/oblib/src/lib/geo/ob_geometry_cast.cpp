@@ -65,7 +65,7 @@ const char *ObGeometryTypeCastUtil::get_cast_name(ObGeoType type)
       break;
     }
     default:{
-      LOG_WARN("unknown geometry type", K(type));
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "unknown geometry type", K(type));
       break;
     }
   }
@@ -168,7 +168,7 @@ bool ObGeometryTypeCastUtil::is_point_equal(const P &p_left, const P &p_right)
   if ((p_left.template get<0>() != p_right.template get<0>()) ||
       (p_left.template get<1>() != p_right.template get<1>())) {
     is_equal = false;
-    LOG_WARN("the back and front of the linestring are not the same point",
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "the back and front of the linestring are not the same point",
         K(p_left.template get<0>()), K(p_right.template get<0>()),
         K(p_left.template get<1>()), K(p_right.template get<1>()));
   }

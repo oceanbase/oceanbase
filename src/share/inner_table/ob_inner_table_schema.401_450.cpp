@@ -5787,7 +5787,7 @@ int ObInnerTableSchema::all_tenant_rewrite_rules_schema(ObTableSchema &table_sch
 
   if (OB_SUCC(ret)) {
     ObObj fixed_param_infos_default;
-    fixed_param_infos_default.set_lob_value(ObLongTextType, "", strlen(""));
+    fixed_param_infos_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
     ADD_COLUMN_SCHEMA_T("fixed_param_infos", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -5806,7 +5806,7 @@ int ObInnerTableSchema::all_tenant_rewrite_rules_schema(ObTableSchema &table_sch
 
   if (OB_SUCC(ret)) {
     ObObj dynamic_param_infos_default;
-    dynamic_param_infos_default.set_lob_value(ObLongTextType, "", strlen(""));
+    dynamic_param_infos_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
     ADD_COLUMN_SCHEMA_T("dynamic_param_infos", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -5825,7 +5825,7 @@ int ObInnerTableSchema::all_tenant_rewrite_rules_schema(ObTableSchema &table_sch
 
   if (OB_SUCC(ret)) {
     ObObj def_name_ctx_str_default;
-    def_name_ctx_str_default.set_lob_value(ObLongTextType, "", strlen(""));
+    def_name_ctx_str_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
     ADD_COLUMN_SCHEMA_T("def_name_ctx_str", //column_name
       ++column_id, //column_id
       0, //rowkey_id

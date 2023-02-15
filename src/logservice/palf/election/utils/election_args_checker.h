@@ -60,7 +60,7 @@ do {\
 #define CHECK_ELECTION_INIT() \
 do {\
   if (OB_UNLIKELY(!is_inited_)) {\
-    ELECT_LOG(WARN, "not init yet", K(*this), K(lbt()));\
+    ELECT_LOG_RET(WARN, common::OB_NOT_INIT, "not init yet", K(*this), K(lbt()));\
     return common::OB_NOT_INIT;\
   }\
 } while(0)
@@ -69,7 +69,7 @@ do {\
 do { \
   CHECK_ELECTION_INIT(); \
   if (OB_UNLIKELY(!is_running_)) { \
-    ELECT_LOG(WARN, "not running", K(*this), K(lbt()));\
+    ELECT_LOG_RET(WARN, common::OB_NOT_RUNNING, "not running", K(*this), K(lbt()));\
     return common::OB_NOT_RUNNING;\
   }\
 } while(0)

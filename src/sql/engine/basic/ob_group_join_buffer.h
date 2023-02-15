@@ -81,6 +81,7 @@ public:
   int batch_fill_group_buffer(const int64_t max_row_cnt, const ObBatchRows *&batch_rows);
   int get_next_row_from_store();
   int get_next_batch_from_store(int64_t max_rows, int64_t &read_rows);
+  ObBatchRowDatums &get_last_batch() { return last_batch_; }
   void destroy();
 private:
   int init_group_params();

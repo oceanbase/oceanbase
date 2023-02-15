@@ -5312,7 +5312,12 @@ int ObTimeConverter::check_dfm_deterministic(const ObString format,
 
 int32_t ObTimeConverter::get_days_of_month(int32_t year, int32_t month)
 {
-  return DAYS_PER_MON[IS_LEAP_YEAR(year)][month];
+  int32_t res = DT_PART_MAX[DT_MDAY];
+  if (OB_LIKELY(year >= DT_PART_MIN[DT_YEAR] && year <= DT_PART_MAX[DT_YEAR]
+                && month >= DT_PART_MIN[DT_MON] && month <= DT_PART_MAX[DT_MON])) {
+    res = DAYS_PER_MON[IS_LEAP_YEAR(year)][month];
+  }
+  return res;
 }
 
 int ObTimeConverter::set_ob_time_part_directly(ObTime &ob_time, int64_t &conflict_bitset, const int64_t part_offset, const int32_t part_value)

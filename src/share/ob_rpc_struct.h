@@ -6150,12 +6150,12 @@ public:
   ObGetLSSyncScnRes(): tenant_id_(OB_INVALID_TENANT_ID),
                        ls_id_(),
                        cur_sync_scn_(share::SCN::min_scn()),
-                       is_sync_to_latest_(false) {}
+                       cur_restore_source_max_scn_(share::SCN::min_scn()) {}
   ~ObGetLSSyncScnRes() {}
   bool is_valid() const;
-  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_sync_scn, const bool is_sync_to_latest);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_max_scn);
   int assign(const ObGetLSSyncScnRes &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_sync_scn), K_(is_sync_to_latest));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_max_scn));
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -6168,9 +6168,9 @@ public:
   {
     return cur_sync_scn_;
   }
-  bool is_sync_to_latest() const
+  share::SCN get_cur_restore_source_max_scn() const
   {
-    return is_sync_to_latest_;
+    return cur_restore_source_max_scn_;
   }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGetLSSyncScnRes);
@@ -6178,7 +6178,7 @@ private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;
-  bool is_sync_to_latest_;
+  share::SCN cur_restore_source_max_scn_;
 };
 
 struct ObRefreshTenantInfoArg
@@ -6229,16 +6229,16 @@ public:
   ObCheckpoint():
     ls_id_(),
     cur_sync_scn_(share::SCN::min_scn()),
-    is_sync_to_latest_(false) {}
-  explicit ObCheckpoint(const int64_t id, const share::SCN &cur_sync_scn, const bool is_sync_to_latest):
+    cur_restore_source_max_scn_(share::SCN::min_scn()) {}
+  explicit ObCheckpoint(const int64_t id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_max_scn):
     ls_id_(id),
     cur_sync_scn_(cur_sync_scn),
-    is_sync_to_latest_(is_sync_to_latest) {}
+    cur_restore_source_max_scn_(cur_restore_source_max_scn) {}
 
-  explicit ObCheckpoint(const share::ObLSID id, const share::SCN &cur_sync_scn, const bool is_sync_to_latest):
+  explicit ObCheckpoint(const share::ObLSID id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_max_scn):
     ls_id_(id),
     cur_sync_scn_(cur_sync_scn),
-    is_sync_to_latest_(is_sync_to_latest) {}
+    cur_restore_source_max_scn_(cur_restore_source_max_scn) {}
 
   bool is_valid() const;
   bool operator==(const obrpc::ObCheckpoint &r) const;
@@ -6250,16 +6250,22 @@ public:
   {
     return cur_sync_scn_;
   }
-  bool is_sync_to_latest() const
+  share::SCN get_cur_restore_source_max_scn() const
   {
-    return is_sync_to_latest_;
+    return cur_restore_source_max_scn_;
   }
 
-  TO_STRING_KV(K_(ls_id), K_(cur_sync_scn), K_(is_sync_to_latest));
+  bool is_sync_to_latest() const
+  {
+    return (cur_sync_scn_ >= cur_restore_source_max_scn_
+            && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_max_scn_.is_valid_and_not_min());
+  }
+
+  TO_STRING_KV(K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_max_scn));
 
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;
-  bool is_sync_to_latest_;
+  share::SCN cur_restore_source_max_scn_;
 };
 
 struct ObSwitchTenantArg
@@ -8068,13 +8074,15 @@ public:
   ~ObRpcRemoteWriteDDLRedoLogArg() = default;
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
-           const blocksstable::ObDDLMacroBlockRedoInfo &redo_info);
-  bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && redo_info_.is_valid(); }
-  TO_STRING_KV(K_(tenant_id), K(ls_id_), K_(redo_info));
+           const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+           const int64_t task_id);
+  bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && redo_info_.is_valid() && task_id_ != 0; }
+  TO_STRING_KV(K_(tenant_id), K(ls_id_), K_(redo_info), K(task_id_));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
+  int64_t task_id_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLRedoLogArg);

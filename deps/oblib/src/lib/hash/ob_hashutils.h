@@ -40,8 +40,12 @@
 #define HASH_WRITE_LOG(_loglevel_, _fmt_, args...) { \
     _OB_LOG(_loglevel_, _fmt_, ##args); \
   }
+#define HASH_WRITE_LOG_RET(_loglevel_, errcode, _fmt_, args...) { \
+    _OB_LOG_RET(_loglevel_, errcode, _fmt_, ##args); \
+  }
 #else
 #define HASH_WRITE_LOG(_loglevel_, _fmt_, args...) { \
+#define HASH_WRITE_LOG_RET(_loglevel_, errcode, _fmt_, args...) { \
   }
 #endif
 
@@ -89,7 +93,7 @@ public:
   explicit SpinLocker(pthread_spinlock_t &spin) : succ_(false), spin_(NULL)
   {
     if (0 != pthread_spin_lock(&spin)) {
-      HASH_WRITE_LOG(HASH_WARNING, "lock spin fail errno=%u", errno);
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "lock spin fail errno=%u", errno);
     } else {
       //HASH_WRITE_LOG(HASH_DEBUG, "lock spin succ spin=%p", &spin);
       spin_ = &spin;
@@ -120,7 +124,7 @@ public:
   explicit MutexLocker(pthread_mutex_t &mutex) : succ_(false), mutex_(NULL)
   {
     if (0 != pthread_mutex_lock(&mutex)) {
-      HASH_WRITE_LOG(HASH_WARNING, "lock mutex fail errno=%u", errno);
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "lock mutex fail errno=%u", errno);
     } else {
       //HASH_WRITE_LOG(HASH_DEBUG, "lock mutex succ mutex=%p", &mutex);
       mutex_ = &mutex;
@@ -173,7 +177,7 @@ public:
   explicit ReadLocker(pthread_rwlock_t &rwlock) : succ_(false), rwlock_(NULL)
   {
     if (0 != pthread_rwlock_rdlock(&rwlock)) {
-      HASH_WRITE_LOG(HASH_WARNING, "rdlock rwlock fail errno=%u", errno);
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "rdlock rwlock fail errno=%u", errno);
     } else {
       //HASH_WRITE_LOG(HASH_DEBUG, "rdlock rwlock succ rwlock=%p", &rwlock);
       rwlock_ = &rwlock;
@@ -204,7 +208,7 @@ public:
   explicit WriteLocker(pthread_rwlock_t &rwlock) : succ_(false), rwlock_(NULL)
   {
     if (0 != pthread_rwlock_wrlock(&rwlock)) {
-      HASH_WRITE_LOG(HASH_WARNING, "wrlock wrlock fail errno=%u", errno);
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "wrlock wrlock fail errno=%u", errno);
     } else {
       //HASH_WRITE_LOG(HASH_DEBUG, "wrlock rwlock succ rwlock=%p", &rwlock);
       rwlock_ = &rwlock;
@@ -235,7 +239,7 @@ public:
   explicit RWLockIniter(pthread_rwlock_t &rwlock) : succ_(false)
   {
     if (0 != pthread_rwlock_init(&rwlock, NULL)) {
-      HASH_WRITE_LOG(HASH_WARNING, "init rwlock fail errno=%u rwlock=%p", errno, &rwlock);
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "init rwlock fail errno=%u rwlock=%p", errno, &rwlock);
     } else {
       succ_ = true;
     }
@@ -320,7 +324,7 @@ public:
   explicit SpinReadLocker(SpinRWLock &rwlock) : succ_(false), rwlock_(NULL)
   {
     if (0 != rwlock.rdlock()) {
-      HASH_WRITE_LOG(HASH_WARNING, "rdlock rwlock fail errno=%u", errno);
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "rdlock rwlock fail errno=%u", errno);
     } else {
       rwlock_ = &rwlock;
       succ_ = true;
@@ -349,7 +353,7 @@ public:
   explicit SpinWriteLocker(SpinRWLock &rwlock) : succ_(false), rwlock_(NULL)
   {
     if (0 != rwlock.wrlock()) {
-      HASH_WRITE_LOG(HASH_WARNING, "wrlock wrlock fail errno=%u", errno);
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "wrlock wrlock fail errno=%u", errno);
     } else {
       rwlock_ = &rwlock;
       succ_ = true;
@@ -378,7 +382,7 @@ public:
   explicit SpinIniter(pthread_spinlock_t &spin) : succ_(false)
   {
     if (0 != pthread_spin_init(&spin, PTHREAD_PROCESS_PRIVATE)) {
-      HASH_WRITE_LOG(HASH_WARNING, "init mutex fail errno=%u spin=%p", errno, &spin);
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "init mutex fail errno=%u spin=%p", errno, &spin);
     } else {
       succ_ = true;
     }
@@ -399,7 +403,7 @@ public:
   explicit MutexIniter(pthread_mutex_t &mutex) : succ_(false)
   {
     if (0 != pthread_mutex_init(&mutex, NULL)) {
-      HASH_WRITE_LOG(HASH_WARNING, "init mutex fail errno=%u mutex=%p", errno, &mutex);
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "init mutex fail errno=%u mutex=%p", errno, &mutex);
     } else {
       succ_ = true;
     }
@@ -1117,8 +1121,8 @@ int do_create(Array &array, const int64_t total_size, const int64_t array_size, 
   if (total_size <= 0 || item_size <= 0) {
     ret = -1;
   } else if (NULL == (array = (Array)alloc.alloc(total_size * item_size))) {
-    _OB_LOG(WARN, "alloc memory failed,size:%ld", total_size * item_size);
     ret = -1;
+    _OB_LOG(WARN, "alloc memory failed,size:%ld", total_size * item_size);
   } else {
     //BACKTRACE(WARN, total_size * item_size > 65536, "hashutil create init size=%ld", total_size * item_size);
     memset(array, 0, total_size * item_size);
@@ -1278,7 +1282,7 @@ public:
     while (NULL != iter) {
       Block *next = iter->next;
       if (0 != iter->ref_cnt) {
-        HASH_WRITE_LOG(HASH_FATAL, "there is still node has not been free, ref_cnt=%d block=%p cur_pos=%d",
+        HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "there is still node has not been free, ref_cnt=%d block=%p cur_pos=%d",
                        iter->ref_cnt, iter, iter->cur_pos);
       } else {
         //delete iter;
@@ -1297,7 +1301,7 @@ public:
     if (NULL != free_list_head_) {
       Node *node = free_list_head_;
       if (NODE_MAGIC1 != node->magic1 || NODE_MAGIC2 != node->magic2 || NULL == node->block) {
-        HASH_WRITE_LOG(HASH_FATAL, "magic broken magic1=%x magic2=%x", node->magic1, node->magic2);
+        HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "magic broken magic1=%x magic2=%x", node->magic1, node->magic2);
       } else {
         free_list_head_ = node->next;
         node->block->ref_cnt++;
@@ -1308,7 +1312,7 @@ public:
       if (NULL == block || block->cur_pos >= (int32_t)NODE_NUM) {
         //if (NULL == (block = new(std::nothrow) Block()))
         if (NULL == (block = (Block *)allocer_.alloc(sizeof(Block)))) {
-          HASH_WRITE_LOG(HASH_WARNING, "new block fail");
+          HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_UNEXPECTED, "new block fail");
         } else {
           // BACKTRACE(WARN, ((int64_t)sizeof(Block))>DEFAULT_BLOCK_SIZE,
           // "hashutil alloc block=%ld node=%ld T=%ld N=%d",
@@ -1341,11 +1345,11 @@ public:
   {
     mutexlocker locker(lock_);
     if (NULL == data) {
-      HASH_WRITE_LOG(HASH_WARNING, "invalid param null pointer");
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_INVALID_ARGUMENT, "invalid param null pointer");
     } else {
       Node *node = (Node *)data;
       if (NODE_MAGIC1 != node->magic1 || NODE_MAGIC2 != node->magic2) {
-        HASH_WRITE_LOG(HASH_FATAL, "magic broken magic1=%x magic2=%x", node->magic1, node->magic2);
+        HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "magic broken magic1=%x magic2=%x", node->magic1, node->magic2);
       } else {
         data->~T();
         node->block->ref_cnt--;

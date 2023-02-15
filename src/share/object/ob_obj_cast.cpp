@@ -66,7 +66,7 @@ static int cast_not_support(const ObObjType expect_type,
                             const ObCastMode cast_mode)
 {
   UNUSED(params);
-  LOG_WARN("not supported obj type convert",
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "not supported obj type convert",
             K(expect_type), K(in), K(out), K(cast_mode));
   return OB_NOT_SUPPORTED;
 }
@@ -78,7 +78,7 @@ static int cast_not_expected(const ObObjType expect_type,
                              const ObCastMode cast_mode)
 {
   UNUSED(params);
-  LOG_WARN("not expected obj type convert",
+  LOG_WARN_RET(OB_ERR_UNEXPECTED, "not expected obj type convert",
             K(expect_type), K(in), K(out), K(cast_mode));
   return OB_ERR_UNEXPECTED;
 }
@@ -92,7 +92,7 @@ static int cast_inconsistent_types(const ObObjType expect_type,
   UNUSED(params);
   UNUSED(out);
   UNUSED(cast_mode);
-  LOG_WARN("inconsistent datatypes", "expected", expect_type, "got", in.get_type());
+  LOG_WARN_RET(OB_ERR_INVALID_TYPE_FOR_OP, "inconsistent datatypes", "expected", expect_type, "got", in.get_type());
   return OB_ERR_INVALID_TYPE_FOR_OP;
 }
 
@@ -123,8 +123,8 @@ static int cast_inconsistent_type_json_explicit(const ObObjType expect_type,
 {
   UNUSED(params);
   UNUSED(out);
-  LOG_WARN("inconsistent datatypes", "expected", expect_type, "got", in.get_type());
   int ret = OB_ERR_INVALID_TYPE_FOR_OP;
+  LOG_WARN("inconsistent datatypes", "expected", expect_type, "got", in.get_type());
   return ret;
 }
 
@@ -134,7 +134,7 @@ static int cast_not_support_enum_set(const ObExpectType &expect_type,
                                      ObObj &out)
 {
   UNUSED(params);
-  LOG_WARN("not supported obj type convert", K(expect_type), K(in), K(out));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "not supported obj type convert", K(expect_type), K(in), K(out));
   return OB_NOT_SUPPORTED;
 }
 
@@ -157,7 +157,7 @@ static int cast_not_expected_enum_set(const ObExpectType &expect_type,
                                       ObObj &out)
 {
   UNUSED(params);
-  LOG_WARN("not expected obj type convert", K(expect_type), K(in), K(out));
+  LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "not expected obj type convert", K(expect_type), K(in), K(out));
   return OB_ERR_UNEXPECTED;
 }
 
@@ -381,7 +381,7 @@ OB_INLINE int get_cast_ret(const ObCastMode cast_mode,
   if (params.res_accuracy_ != NULL && OB_SUCCESS == ret) {\
     params.res_accuracy_->set_scale(res_scale);\
     params.res_accuracy_->set_precision(res_precision);\
-    params.res_accuracy_->set_length(res_length);\
+    params.res_accuracy_->set_length(static_cast<int32_t>(res_length));\
   }
 
 #define SET_RES_ACCURACY_STRING(type, res_precision, res_length) \
@@ -750,7 +750,7 @@ int ObHexUtils::rawtohex(const ObObj &text, ObCastCtx &cast_ctx, ObObj &result)
         ObScale res_scale = -1;
         char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
         MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
-        int64_t length = ob_gcvt_opt(float_value, OB_GCVT_ARG_FLOAT, sizeof(buf) - 1,
+        int64_t length = ob_gcvt_opt(float_value, OB_GCVT_ARG_FLOAT, static_cast<int32_t>(sizeof(buf) - 1),
                                      buf, NULL, TRUE, TRUE);
         ObString float_str(sizeof(buf), static_cast<int32_t>(length), buf);
         if (OB_FAIL(nmb.from_sci_opt(float_str.ptr(), float_str.length(),
@@ -781,7 +781,7 @@ int ObHexUtils::rawtohex(const ObObj &text, ObCastCtx &cast_ctx, ObObj &result)
         ObScale res_scale = -1;
         char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
         MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
-        int64_t length = ob_gcvt_opt(double_value, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1,
+        int64_t length = ob_gcvt_opt(double_value, OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1),
                                      buf, NULL, TRUE, TRUE);
         ObString double_str(sizeof(buf), static_cast<int32_t>(length), buf);
         if (OB_FAIL(nmb.from_sci_opt(double_str.ptr(), double_str.length(),
@@ -2124,7 +2124,7 @@ static int float_number(const ObObjType expect_type, ObObjCastParams &params,
     MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
     int64_t length = 0;
     if (lib::is_oracle_mode()) {
-      length = ob_gcvt_opt(in.get_float(), OB_GCVT_ARG_FLOAT, sizeof(buf) - 1,
+      length = ob_gcvt_opt(in.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(sizeof(buf) - 1),
                            buf, NULL, TRUE, TRUE);
     } else {
       length = ob_gcvt(in.get_float(), OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL);
@@ -2245,7 +2245,7 @@ static int float_string(const ObObjType expect_type, ObObjCastParams &params,
       if (0 <= scale) {
         length = ob_fcvt(in.get_float(), scale, sizeof(buf) - 1, buf, NULL);
       } else {
-        length = ob_gcvt_opt(in.get_float(), OB_GCVT_ARG_FLOAT, sizeof(buf) - 1,
+        length = ob_gcvt_opt(in.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(sizeof(buf) - 1),
                              buf, NULL, lib::is_oracle_mode(), TRUE);
       }
     }
@@ -2557,7 +2557,7 @@ static int double_number(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
     MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
-    int64_t length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1,
+    int64_t length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1),
                                  buf, NULL, lib::is_oracle_mode(), TRUE);
     ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
     number::ObNumber nmb;
@@ -2721,7 +2721,7 @@ static int double_string(const ObObjType expect_type, ObObjCastParams &params,
         length = ob_fcvt(in.get_double(), scale, sizeof(buf) - 1, buf, NULL);
       } else {
         length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE,
-                              sizeof(buf) - 1, buf, NULL, lib::is_oracle_mode(), TRUE);
+                              static_cast<int32_t>(sizeof(buf) - 1), buf, NULL, lib::is_oracle_mode(), TRUE);
       }
     }
     ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
@@ -5316,7 +5316,7 @@ static int string_string(const ObObjType expect_type, ObObjCastParams &params,
                           break;
                         }
                         ret = ObCharset::charset_convert(in.get_collation_type(), str.ptr() + str_offset,
-                offset, params.dest_collation_, buf + buf_offset, buf_len - buf_offset, result_len);
+                static_cast<uint32_t>(offset), params.dest_collation_, buf + buf_offset, buf_len - buf_offset, result_len);
                         str_offset += offset;
                         if (OB_SUCCESS == ret) {
                             buf_offset += result_len;
@@ -5329,7 +5329,7 @@ static int string_string(const ObObjType expect_type, ObObjCastParams &params,
                       ret = OB_SIZE_OVERFLOW;
                       LOG_WARN("size overflow", K(ret), K(str), KPHEX(str.ptr(), str.length()));
                     } else {
-                        result_len = buf_offset;
+                        result_len = static_cast<uint32_t>(buf_offset);
                         ret = OB_SUCCESS;
                         LOG_WARN("charset convert failed", K(ret),
                                 K(in.get_collation_type()), K(params.dest_collation_));
@@ -5575,7 +5575,7 @@ static int string_set(const ObExpectType &expect_type, ObObjCastParams &params, 
       value = ObCharset::strntoull(in_str.ptr(), in_str.length(), 10, &err);
       if(err == 0) {
         ret = OB_SUCCESS;
-        uint32_t val_cnt = type_infos->count();
+        uint32_t val_cnt = static_cast<uint32_t>(type_infos->count());
         if (OB_UNLIKELY(val_cnt <= 0)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect val_cnt", K(in), K(out), K(expect_type), K(ret));
@@ -5869,7 +5869,7 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
 {
   int ret = OB_SUCCESS;
   ObObj tmp_val;
-  int64_t res_length = -1;
+  int32_t res_length = -1;
   bool need_charset_convert = ((CS_TYPE_BINARY != in.get_collation_type()) && 
                                (ObCharset::charset_type_by_coll(in.get_collation_type()) != 
                                 ObCharset::charset_type_by_coll(params.dest_collation_)));
@@ -8347,7 +8347,7 @@ static int json_raw(const ObObjType expect_type, ObObjCastParams &params,
       }
       if (!need_charset_convert) {
         if (accuracy_max_len > 0 && accuracy_max_len < j_buf.length()) {
-          temp_str_val.assign_ptr(j_buf.ptr(), accuracy_max_len);
+          temp_str_val.assign_ptr(j_buf.ptr(), static_cast<int32_t>(accuracy_max_len));
         }
         ret = copy_string(params, ObLongTextType, temp_str_val, t_out);
         t_out.set_collation_type(params.dest_collation_);
@@ -8359,7 +8359,7 @@ static int json_raw(const ObObjType expect_type, ObObjCastParams &params,
         ret = string_string(ObLongTextType, params, tmp_obj, t_out, cast_mode);
         if (accuracy_max_len && accuracy_max_len < t_out.get_string().length()) {
           ObString tmp_str = t_out.get_string();
-          t_out.set_string(ObLongTextType, tmp_str.ptr(), accuracy_max_len);
+          t_out.set_string(ObLongTextType, tmp_str.ptr(), static_cast<int32_t>(accuracy_max_len));
         }
       }
       if (OB_SUCC(ret)) {
@@ -8432,7 +8432,7 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
           ret = string_string(expect_type, params, tmp_obj, out, cast_mode);
           if (accuracy_max_len && accuracy_max_len < out.get_string().length()) {
             ObString tmp_str = out.get_string();
-            out.set_string(expect_type, tmp_str.ptr(), accuracy_max_len);
+            out.set_string(expect_type, tmp_str.ptr(), static_cast<ObString::obstr_size_t>(accuracy_max_len));
           }
           if (ObTextTC == ob_obj_type_class(expect_type)) {
             out.set_inrow();
@@ -11003,7 +11003,7 @@ bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_typ
                   || ob_is_blob_locator(expect_type, expect_cs_type);
   if (OB_UNLIKELY(ob_is_invalid_obj_type(orig_type) ||
                   ob_is_invalid_obj_type(expect_type))) {
-    LOG_WARN("invalid cast type", K(orig_type), K(expect_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid cast type", K(orig_type), K(expect_type));
   // number类型可以转换为clob但是不能转为blob, 无法通过矩阵实现这一点，所以在这里做特殊处理。
   } else if (is_oracle_mode() && (clob_in || ob_is_number_tc(orig_type) || ob_is_int_tc(orig_type)
                                   || ob_is_datetime_tc(orig_type)) && blob_out) {
@@ -11015,7 +11015,7 @@ bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_typ
     ObObjTypeClass expect_tc = ob_obj_type_class(expect_type);
     if (ObIntervalTC == orig_tc && ObIntervalTC == expect_tc && orig_type != expect_type) {
       bret = false;
-      LOG_WARN("cast between intervalYM and intervalDS not allowed",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "cast between intervalYM and intervalDS not allowed",
                 K(bret), K(orig_type), K(expect_type));
     } else {
       ObObjCastFunc cast_func = lib::is_oracle_mode() ?

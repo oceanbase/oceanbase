@@ -161,11 +161,11 @@ int calc_initcap_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
         }
       }
     } else { // text tc
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
       ObTextStringIter input_iter(expr.args_[0]->datum_meta_.type_, cs_type,
                                   arg_datum->get_string(),
                                   expr.args_[0]->obj_meta_.has_lob_header());
-      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
       ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
       int64_t input_byte_len = 0;
       int64_t buf_size = 0;
@@ -176,7 +176,8 @@ int calc_initcap_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
       } else if (OB_FAIL(output_result.init(input_byte_len * case_multiply))) {
         LOG_WARN("init stringtext result failed");
       } else if (input_byte_len == 0) {
-        output_result.set_result();
+        // do nothing, let res_str become empty string
+        res_str.assign_ptr(NULL, 0);
       } else if (OB_FAIL(output_result.get_reserved_buffer(res_buf, buf_size))) {
         LOG_WARN("stringtext result reserve buffer failed");
       } else {
@@ -204,7 +205,7 @@ int calc_initcap_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
       }
     }
     if (OB_SUCC(ret)) {
-      if (0 == res_str.length() || ob_is_empty_lob(expr.datum_meta_.type_, res_datum, expr.obj_meta_.has_lob_header())) {
+      if (0 == res_str.length()) {
         // initcap is only for oracle mode. set res be null when string length is 0.
         res_datum.set_null();
       } else {

@@ -262,9 +262,9 @@ int64_t SCN::convert_to_ts(bool ignore_invalid) const
     ts_us = ts_ns_ / 1000UL;
   } else {
     if (ignore_invalid) {
-      PALF_LOG(WARN, "invalid scn should not convert to ts ", K(val_));
+      PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid scn should not convert to ts ", K(val_));
     } else {
-      PALF_LOG(ERROR, "invalid scn should not convert to ts ", K(val_), K(lbt()));
+      PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid scn should not convert to ts ", K(val_), K(lbt()));
     }
   }
   return ts_us;
@@ -373,9 +373,9 @@ int64_t SCN::get_val_for_tx(const bool ignore_invalid_scn) const
   int64_t result_val = -1;
   if (!is_valid()) {
     if (!ignore_invalid_scn) {
-      PALF_LOG(ERROR, "invalid SCN", K(val_));
+      PALF_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid SCN", K(val_));
     } else {
-      PALF_LOG(WARN, "invalid SCN", K(val_));
+      PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid SCN", K(val_));
     }
   } else if (OB_MAX_SCN_TS_NS == ts_ns_) {
     result_val = INT64_MAX;

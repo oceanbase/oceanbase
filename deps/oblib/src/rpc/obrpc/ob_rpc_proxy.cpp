@@ -48,6 +48,13 @@ Handle::Handle()
 int ObRpcProxy::init(const ObReqTransport *transport,
     const oceanbase::common::ObAddr &dst)
 {
+  return init(transport, ObRpcNetHandler::CLUSTER_ID, dst);
+}
+
+int ObRpcProxy::init(const ObReqTransport *transport,
+    const int64_t src_cluster_id,
+    const oceanbase::common::ObAddr &dst)
+{
   int ret = OB_SUCCESS;
 
   if (init_) {
@@ -58,6 +65,7 @@ int ObRpcProxy::init(const ObReqTransport *transport,
     LOG_WARN("invalid argument", K(ret), KP(transport));
   } else {
     transport_ = transport;
+    src_cluster_id_ = src_cluster_id;
     dst_ = dst;
     init_ = true;
   }
@@ -239,13 +247,18 @@ int ObRpcProxy::init_pkt(
     pkt->set_timeout(timeout_);
     pkt->set_priority(opts.pr_);
     pkt->set_session_id(0);
-    pkt->set_log_level(common::ObThreadLogLevelUtils::get_level());
+    int8_t log_level = common::ObThreadLogLevelUtils::get_level();
+    // for log level compatibility, disable thread log level while upgrading.
+    if (OB_LOGGER.is_info_as_wdiag()) {
+      log_level = OB_LOG_LEVEL_NONE;
+    }
+    pkt->set_log_level(log_level);
     pkt->set_tenant_id(tenant_id_);
     pkt->set_priv_tenant_id(priv_tenant_id_);
     pkt->set_timestamp(ObTimeUtility::current_time());
     pkt->set_dst_cluster_id(dst_cluster_id_);
     // For request, src_cluster_id must be the cluster_id of this cluster, directly hard-coded
-    pkt->set_src_cluster_id(ObRpcNetHandler::CLUSTER_ID);
+    pkt->set_src_cluster_id(src_cluster_id_);
     pkt->set_unis_version(opts.unis_version_);
     pkt->set_group_id((0 != get_group_id()) ? get_group_id() : this_worker().get_group_id());
     if (need_increment_request_level(pcode)) {

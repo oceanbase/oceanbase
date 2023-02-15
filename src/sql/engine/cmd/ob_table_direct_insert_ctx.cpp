@@ -48,23 +48,19 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
       load_exec_ctx_->allocator_ = &(exec_ctx->get_allocator());
       uint64_t sql_mode = 0;
       ObSEArray<int64_t, 16> store_column_idxs;
-      ObObj obj;
       if (OB_FAIL(init_store_column_idxs(MTL_ID(), table_id, store_column_idxs))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
       } else if (OB_FAIL(exec_ctx->get_my_session()->get_sys_variable(SYS_VAR_SQL_MODE, sql_mode))) {
         LOG_WARN("fail to get sys variable", KR(ret));
-      } else if (OB_FAIL(exec_ctx->get_my_session()->get_sys_variable(SYS_VAR_ONLINE_OPT_STAT_GATHER, obj))) {
-        LOG_WARN("fail to get sys variable", K(ret));
       } else {
         ObTableLoadParam param;
         param.column_count_ = store_column_idxs.count();
         param.tenant_id_ = MTL_ID();
-        param.database_id_ = exec_ctx->get_my_session()->get_database_id();
         param.table_id_ = table_id;
         param.batch_size_ = 100;
         param.session_count_ = parallel;
         param.px_mode_ = true;
-        param.online_opt_stat_gather_ = obj.get_bool();
+        param.online_opt_stat_gather_ = false;
         param.need_sort_ = true;
         param.max_error_row_count_ = 0;
         param.dup_action_ = sql::ObLoadDupActionType::LOAD_STOP_ON_DUP;
@@ -81,18 +77,31 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
   return ret;
 }
 
-int ObTableDirectInsertCtx::finish()
+// commit() should be called before finish()
+int ObTableDirectInsertCtx::commit()
 {
   int ret = OB_SUCCESS;
-  table::ObTableLoadResultInfo result_info;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableDirectInsertCtx is not init", KR(ret));
-  } else if (OB_FAIL(table_load_instance_->commit(result_info))) {
-    LOG_WARN("failed to commit direct loader", KR(ret));
+  } else if (OB_FAIL(table_load_instance_->px_commit_data())) {
+    LOG_WARN("failed to do px_commit_data", KR(ret));
+  }
+  return ret;
+}
+
+// finish() should be called after commit()
+int ObTableDirectInsertCtx::finish()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableDirectInsertCtx is not init", KR(ret));
+  } else if (OB_FAIL(table_load_instance_->px_commit_ddl())) {
+    LOG_WARN("failed to do px_commit_ddl", KR(ret));
   } else {
     table_load_instance_->destroy();
-    LOG_DEBUG("succeeded to commit direct loader", K(result_info));
+    LOG_DEBUG("succeeded to finish direct loader");
   }
   return ret;
 }

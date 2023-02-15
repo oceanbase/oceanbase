@@ -70,9 +70,8 @@ public:
   LogRpc();
   ~LogRpc();
   int init(const common::ObAddr &self,
+           const int64_t cluster_id,
            const int64_t tenant_id,
-           rpc::frame::ObReqTransport *transport);
-  int init(const common::ObAddr &self,
            rpc::frame::ObReqTransport *transport);
   void destroy();
   int update_transport_compress_options(const PalfTransportCompressOptions &compress_opt);

@@ -124,7 +124,7 @@ public:
   virtual int register_timeout_task(ObITimeoutTask &task, const int64_t delay);
   virtual int unregister_timeout_task(ObITimeoutTask &task);
 private:
-  int get_thread_num_() { return common::max(sysconf(_SC_NPROCESSORS_ONLN) / 24, 2); }
+  int64_t get_thread_num_() { return common::max(sysconf(_SC_NPROCESSORS_ONLN) / 24, 2); }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransTimer);
 protected:

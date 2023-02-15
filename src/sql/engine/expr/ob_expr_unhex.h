@@ -42,7 +42,9 @@ inline int ObExprUnhex::calc_result_type1(ObExprResType &type,
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
 
-  text.set_calc_type(common::ObVarcharType);
+  if (!ob_is_text_tc(text.get_type())) {
+    text.set_calc_type(common::ObVarcharType);
+  }
 
   if (ObTinyTextType == text.get_type()) {
     const int32_t MAX_TINY_TEXT_BUFFER_SIZE = 383;

@@ -53,7 +53,7 @@ public:
   inline void set_addr(common::ObAddr addr) { addr_ = addr; }
   inline void set_self_addr(common::ObAddr addr) { self_addr_ = addr; }
   inline void set_tx_id(int64_t tx_id) { tx_id_ = tx_id; }
-  inline void set_tm_sessid(int64_t tm_sessid) { tm_sessid_ = tm_sessid; }
+  inline void set_tm_sessid(uint32_t tm_sessid) { tm_sessid_ = tm_sessid; }
   const ObString &get_user() { return user_; }
   const ObString &get_tenant() { return tenant_; }
   const ObString &get_cluster() { return cluster_; }

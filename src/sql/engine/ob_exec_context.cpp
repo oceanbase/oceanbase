@@ -282,15 +282,16 @@ int ObExecContext::init_phy_op(const uint64_t phy_op_size)
   return ret;
 }
 
-int ObExecContext::init_expr_op(uint64_t expr_op_size)
+int ObExecContext::init_expr_op(uint64_t expr_op_size, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
+  ObIAllocator &real_alloc = allocator != NULL ? *allocator : allocator_;
   if (OB_UNLIKELY(expr_op_size_ > 0)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init exec ctx twice", K(ret), K_(expr_op_size));
   } else if (expr_op_size > 0) {
     int64_t ctx_store_size = static_cast<int64_t>(expr_op_size * sizeof(ObExprOperatorCtx *));
-    if (OB_ISNULL(expr_op_ctx_store_ = static_cast<ObExprOperatorCtx **>(allocator_.alloc(ctx_store_size)))) {
+    if (OB_ISNULL(expr_op_ctx_store_ = static_cast<ObExprOperatorCtx **>(real_alloc.alloc(ctx_store_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail to alloc expr_op_ctx_store_ memory", K(ret), K(ctx_store_size));
     } else {
@@ -466,7 +467,7 @@ ObStmtFactory *ObExecContext::get_stmt_factory()
 {
   if (OB_ISNULL(stmt_factory_)) {
     if (OB_ISNULL(stmt_factory_ = OB_NEWx(ObStmtFactory, (&allocator_), allocator_))) {
-      LOG_WARN("fail to create log plan factory", K(stmt_factory_));
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to create log plan factory", K(stmt_factory_));
     }
   } else {
     // do nothing
@@ -478,7 +479,7 @@ ObRawExprFactory *ObExecContext::get_expr_factory()
 {
   if (OB_ISNULL(expr_factory_)) {
     if (OB_ISNULL(expr_factory_ = OB_NEWx(ObRawExprFactory, (&allocator_), allocator_))) {
-      LOG_WARN("fail to create log plan factory", K(expr_factory_));
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to create log plan factory", K(expr_factory_));
     }
   } else {
     // do nothing

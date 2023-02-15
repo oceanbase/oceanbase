@@ -142,7 +142,7 @@ int ObSSTableMacroBlockChecker::check_logical_checksum(
       for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
         if (column_checksum_in_header[i] != column_checksum[i]) {
           ret = OB_PHYSIC_CHECKSUM_ERROR;
-          STORAGE_LOG(ERROR, "Column checksum error", K(ret), K(i),
+          LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg","Column checksum error", K(ret), K(i),
               K(column_checksum_in_header[i]), K(column_checksum[i]));
         }
       }
@@ -237,7 +237,7 @@ int ObSSTableMacroBlockChecker::check_physical_checksum(
           common_header.get_payload_size()));
       if (physical_checksum != common_header.get_payload_checksum()) {
         ret = OB_PHYSIC_CHECKSUM_ERROR;
-        STORAGE_LOG(ERROR, "Invalid physical checksum", K(ret), K(physical_checksum),
+        LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg", "Invalid physical checksum", K(ret), K(physical_checksum),
             K(common_header));
       }
     }

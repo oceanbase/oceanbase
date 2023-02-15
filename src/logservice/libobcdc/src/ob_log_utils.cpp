@@ -844,7 +844,7 @@ bool ObLogKVCollection::is_valid() const
 {
   bool valid = true;
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(kv_delimiter_) || OB_ISNULL(pair_delimiter_)) {
-    LOG_ERROR("invalid argument", K_(inited), K_(kv_delimiter), K_(pair_delimiter));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", K_(inited), K_(kv_delimiter), K_(pair_delimiter));
     valid = false;
   } else {
     int64_t idx = 0;
@@ -1209,7 +1209,7 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
       // Retry to get it again
       ret = OB_SUCCESS;
       // After a failure to acquire the tenant schema, and in order to ensure that the modules can handle the performance, usleep for a short time
-      ob_usleep(100L);
+      ob_usleep(100);
     }
 
     int64_t left_time = end_time - ObTimeUtility::current_time();

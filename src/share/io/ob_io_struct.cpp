@@ -613,7 +613,7 @@ void ObCpuUsage::get_cpu_usage(double &avg_usage_percentage)
   int sys_errno = 0;
   if (0 != (sys_errno = getrusage(RUSAGE_SELF, &new_usage))) {
     if (REACH_TIME_INTERVAL(1000L * 1000L * 10)) {
-      LOG_WARN("get cpu usage failed", K(sys_errno));
+      LOG_WARN_RET(OB_ERR_SYS, "get cpu usage failed", K(sys_errno));
     }
   } else {
     if (last_ts_ > 0 && new_ts > last_ts_) {
@@ -688,10 +688,34 @@ void ObIOTuner::run1()
       // print interval must <= 1s, for ensuring real_iops >= 1 in gv$ob_io_quota.
       if (REACH_TIME_INTERVAL(1000L * 1000L * 1L)) {
         print_io_status();
+        print_sender_status();
       }
-      ob_usleep(100L * 1000L); // 100ms
+      ob_usleep(100 * 1000); // 100ms
     }
     LOG_INFO("io tuner thread stopped");
+  }
+}
+
+void ObIOTuner::print_sender_status()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < io_scheduler_.senders_.count(); ++i) {
+    ObIOSender *sender = io_scheduler_.senders_.at(i);
+    if (OB_ISNULL(sender)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("io sender is null", K(ret), K(i));
+    } else {
+      int64_t reservation_ts = 0;
+      int64_t group_limitation_ts = 0;
+      int64_t tenant_limitation_ts = 0;
+      int64_t proportion_ts = 0;
+
+      ret = sender->get_sender_info(reservation_ts, group_limitation_ts, tenant_limitation_ts, proportion_ts);
+      if (OB_NOT_INIT != ret) {
+        LOG_INFO("[IO SENDER STATUS]", "send_index", sender->sender_index_, "req_count", sender->get_queue_count(),
+                 K(reservation_ts), K(group_limitation_ts), K(tenant_limitation_ts), K(proportion_ts));
+      }
+    }
   }
 }
 
@@ -702,34 +726,18 @@ void ObIOTuner::print_io_status()
   if (OB_FAIL(OB_IO_MANAGER.get_tenant_ids(tenant_ids))) {
     LOG_WARN("get tenant id failed", K(ret));
   } else if (tenant_ids.count() > 0) {
-    ObArray<int64_t> queue_count_array;
-    if (OB_FAIL(queue_count_array.reserve(io_scheduler_.senders_.count()))) {
-      LOG_WARN("reserve queue count array failed", K(ret), K(io_scheduler_.senders_.count()));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < io_scheduler_.senders_.count(); ++i) {
-      ObIOSender *sender = io_scheduler_.senders_.at(i);
-      if (OB_ISNULL(sender)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("io sender is null", K(ret), K(i));
-      } else if (OB_FAIL(queue_count_array.push_back(sender->get_queue_count()))) {
-        LOG_WARN("push back queue count failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      LOG_INFO("[IO STATUS]", K(tenant_ids), "send_thread_count", io_scheduler_.senders_.count(), "send_queues", queue_count_array);
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
-    const uint64_t cur_tenant_id = tenant_ids.at(i);
-    ObRefHolder<ObTenantIOManager> tenant_holder;
-    if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
-      if (OB_HASH_NOT_EXIST != ret) {
-        LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+      const uint64_t cur_tenant_id = tenant_ids.at(i);
+      ObRefHolder<ObTenantIOManager> tenant_holder;
+      if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+        if (OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
       } else {
-        ret = OB_SUCCESS;
+        tenant_holder.get_ptr()->print_io_status();
       }
-    } else {
-      tenant_holder.get_ptr()->print_io_status();
     }
   }
 }
@@ -815,6 +823,7 @@ ObSenderInfo::~ObSenderInfo()
 /******************             IOScheduleQueue              **********************/
 ObIOSender::ObIOSender(ObIAllocator &allocator)
   : sender_req_count_(0),
+    sender_index_(0),
     tg_id_(-1),
     is_inited_(false),
     stop_submit_(false),
@@ -830,7 +839,7 @@ ObIOSender::~ObIOSender()
   destroy();
 }
 
-int ObIOSender::init()
+int ObIOSender::init(const int64_t sender_index)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -849,6 +858,7 @@ int ObIOSender::init()
   } else {
     is_inited_ = true;
     sender_req_count_ = 0;
+    sender_index_ = sender_index;
     LOG_INFO("io sender init succ", KCSTRING(lbt()));
   }
 
@@ -910,6 +920,7 @@ void ObIOSender::destroy()
   is_inited_ = false;
   stop_submit_ = false;
   sender_req_count_ = 0;
+  sender_index_ = 0;
   LOG_INFO("io sender destroyed", KCSTRING(lbt()));
 }
 
@@ -1240,9 +1251,29 @@ int ObIOSender::notify()
   return ret;
 }
 
-int32_t ObIOSender::get_queue_count() const
+int64_t ObIOSender::get_queue_count() const
 {
   return OB_ISNULL(io_queue_) ?  0 : sender_req_count_;
+}
+
+int ObIOSender::get_sender_info(int64_t &reservation_ts,
+                                int64_t &group_limitation_ts,
+                                int64_t &tenant_limitation_ts,
+                                int64_t &proportion_ts)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret), K(is_inited_));
+  } else {
+    ObThreadCondGuard cond_guard(queue_cond_);
+    if (OB_FAIL(cond_guard.get_ret())) {
+      LOG_ERROR("guard queue condition failed", K(ret));
+    } else {
+      ret = io_queue_->get_time_info(reservation_ts, group_limitation_ts, tenant_limitation_ts, proportion_ts);
+    }
+  }
+  return ret;
 }
 
 int ObIOSender::get_sender_status(const uint64_t tenant_id, const uint64_t index, ObSenderInfo &sender_info)
@@ -1252,8 +1283,7 @@ int ObIOSender::get_sender_status(const uint64_t tenant_id, const uint64_t index
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || index < 0 ||
-             (index >= io_group_queues->group_phy_queues_.count() && INT64_MAX != index))) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || index < 0)) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("invalid index", K(ret), K(index));
   } else {
@@ -1263,6 +1293,9 @@ int ObIOSender::get_sender_status(const uint64_t tenant_id, const uint64_t index
     } else {
       if (OB_FAIL(tenant_groups_map_.get_refactored(tenant_id, io_group_queues))) {
         LOG_WARN("get io_group_queues from map failed", K(ret), K(tenant_id));
+      } else if (OB_UNLIKELY((index >= io_group_queues->group_phy_queues_.count() && INT64_MAX != index))) {
+        ret = OB_INVALID_CONFIG;
+        LOG_WARN("invalid index", K(ret), K(index));
       } else {
         ObPhyQueue *tmp_phy_queue = index == INT64_MAX ?
                    &(io_group_queues->other_phy_queue_) : io_group_queues->group_phy_queues_.at(index);
@@ -1403,11 +1436,12 @@ int ObIOScheduler::init(const int64_t queue_count, const int64_t schedule_media_
     for (int64_t i = 0; OB_SUCC(ret) && i < queue_count; ++i) {
       void *buf = nullptr;
       ObIOSender *tmp_sender = nullptr;
+      int64_t sender_index = i + 1;
       if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObIOSender)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
       } else if (FALSE_IT(tmp_sender = new (buf) ObIOSender(allocator_))) {
-      } else if (OB_FAIL(tmp_sender->init())) {
+      } else if (OB_FAIL(tmp_sender->init(sender_index))) {
         LOG_WARN("init io sender failed", K(ret), K(i), K(*tmp_sender));
       } else if (OB_FAIL(senders_.push_back(tmp_sender))) {
         LOG_WARN("push back io sender failed", K(ret), K(i), K(*tmp_sender));
@@ -1718,10 +1752,10 @@ void ObAsyncIOChannel::destroy()
     // wait flying request
   const int64_t max_wait_ts = ObTimeUtility::fast_current_time() + 1000L * 1000L * 30L; // 30s
   while (submit_count_ > 0 && ObTimeUtility::fast_current_time() < max_wait_ts) {
-    ob_usleep(1000L * 10L);
+    ob_usleep(1000 * 10);
   }
   if (submit_count_ > 0) {
-    LOG_WARN("some request have not returned from file system", K(submit_count_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "some request have not returned from file system", K(submit_count_));
   }
   destroy_thread();
   if (nullptr != io_context_) {
@@ -2666,7 +2700,7 @@ const char *oceanbase::common::device_health_status_to_str(const ObDeviceHealthS
       break;
   }
   if (STRLEN(hstr) > OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH) {
-    LOG_ERROR("invalid device health status str", K(hstr),
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid device health status str", K(hstr),
         K(OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH), K(dhs));
   }
   return hstr;
@@ -2902,6 +2936,7 @@ void ObIOFaultDetector::set_device_warning()
 {
   last_device_warning_ts_ = ObTimeUtility::fast_current_time();
   is_device_warning_ = true;
+  LOG_WARN_RET(OB_IO_ERROR, "disk maybe too slow");
 }
 
 // set disk error and record error_ts
@@ -2917,7 +2952,8 @@ void ObIOFaultDetector::set_device_error()
   }
   last_device_error_ts_ = ObTimeUtility::fast_current_time();
   is_device_error_ = true;
-  LOG_ERROR("set_disk_error: attention!!!");
+  LOG_ERROR_RET(OB_IO_ERROR, "set_disk_error: attention!!!");
+  LOG_DBA_ERROR(OB_DISK_ERROR, "msg", "The disk may be corrupted");
 }
 
 ObIOTracer::ObIOTracer()
@@ -2963,7 +2999,7 @@ void ObIOTracer::reuse()
 {
   int tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(trace_map_.reuse())) {
-    LOG_WARN("reuse trace map failed", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "reuse trace map failed", K(tmp_ret));
   }
 }
 
@@ -3112,4 +3148,3 @@ void ObIOTracer::print_status()
     }
   }
 }
-

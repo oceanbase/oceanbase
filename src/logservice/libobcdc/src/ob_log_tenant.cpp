@@ -92,8 +92,6 @@ int ObLogTenant::init(const uint64_t tenant_id,
     LOG_ERROR("invalid argument", K(tenant_id), K(tenant_name), K(start_tstamp_ns), K(start_seq),
         K(start_schema_version), K(cf_handle));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(tenant_id))) {
-    LOG_ERROR("create and add tenant allocator failed", K(ret), K(tenant_id));
   } else if (OB_ISNULL(task_queue_ = OB_NEW(ObLogTenantTaskQueue, ObModIds::OB_LOG_TENANT_TASK_QUEUE, *this))) {
     LOG_ERROR("create task queue fail", K(task_queue_));
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -827,7 +825,7 @@ void ObLogTenantGuard::revert_tenant()
   if (OB_NOT_NULL(tenant_) && OB_NOT_NULL(tenant_mgr)) {
     int revert_ret = tenant_mgr->revert_tenant(tenant_);
     if (OB_SUCCESS != revert_ret) {
-      LOG_ERROR("revert ObLogTenant fail", K(revert_ret), KPC(tenant_));
+      LOG_ERROR_RET(revert_ret, "revert ObLogTenant fail", K(revert_ret), KPC(tenant_));
     } else {
       tenant_ = NULL;
     }

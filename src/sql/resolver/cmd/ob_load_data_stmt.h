@@ -180,9 +180,11 @@ public:
     PARALLEL_THREADS = 0,  //parallel threads on the host server, for parsing and calc partition
     BATCH_SIZE,
     QUERY_TIMEOUT,
+    APPEND,
     ENABLE_DIRECT,
     NEED_SORT,
     ERROR_ROWS,
+    GATHER_OPTIMIZER_STATISTICS,
     TOTAL_INT_ITEM
   };
   enum StringHintItem {

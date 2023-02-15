@@ -325,9 +325,9 @@ public:
   {
     BitSetWord word = 0;
     if (!is_valid()) {
-      SQL_RESV_LOG(WARN, "not inited", K(desc_.init_errcode_));
+      SQL_RESV_LOG_RET(WARN, OB_NOT_INIT, "not inited", K(desc_.init_errcode_));
     } else if (index < 0 || index >= desc_.len_) {
-      SQL_RESV_LOG(WARN, "bitmap word index exceeds scope", K(index), K(desc_.len_));
+      SQL_RESV_LOG_RET(WARN, OB_ERR_UNEXPECTED, "bitmap word index exceeds scope", K(index), K(desc_.len_));
     } else {
       word = bit_set_word_array_[index];
     }
@@ -363,7 +363,7 @@ public:
     if (!is_valid()) {
       // do nothing
     } else if (OB_UNLIKELY(index < 0)) {
-      SQL_RESV_LOG(WARN, "negative bitmap member not allowed");
+      SQL_RESV_LOG_RET(WARN, OB_INVALID_ARGUMENT, "negative bitmap member not allowed");
     } else {
       int64_t pos = index >> PER_BITSETWORD_MOD_BITS;
       if (pos >= desc_.len_) {

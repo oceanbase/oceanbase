@@ -328,7 +328,7 @@ TEST_F(TestIndexBlockTreeCursor, test_bare_micro_block_iterator)
 int main(int argc, char **argv)
 {
   system("rm -f test_index_block_tree_cursor.log*");
-  OB_LOGGER.set_file_name("test_index_block_tree_cursor.log", true, true);
+  OB_LOGGER.set_file_name("test_index_block_tree_cursor.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

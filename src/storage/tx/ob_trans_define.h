@@ -737,123 +737,6 @@ public:
   int64_t seq_no_;
 };
 
-class ObTransTaskInfo //unreferenced, need remove
-{
-  OB_UNIS_VERSION(1);
-public:
-  int start_stmt(const int32_t sql_no);
-  int start_stmt_v2(const int64_t seq_no);
-  int start_task(const int32_t sql_no, const int64_t snapshot_version);
-  int start_task_v2(const int32_t sql_no, const int64_t seq_no, const int64_t snapshot_version);
-  void end_task();
-  bool is_task_match(const int32_t sql_no) const;
-  bool is_task_match_v2(const int64_t seq_no) const;
-  void remove_task_after(const int32_t sql_no);
-  void remove_task_after_v2(const int64_t seq_no);
-  bool is_stmt_ended() const { return tasks_.empty(); }
-  int64_t get_top_snapshot_version() const;
-  void reset() { tasks_.reset(); }
-  TO_STRING_KV(K(tasks_));
-private:
-  common::ObSEArray<ObTaskInfo, 1> tasks_;
-};
-
-class ObTransStmtInfo //unused, to be removed
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTransStmtInfo() { reset(); }
-  ~ObTransStmtInfo() {}
-  void reset();
-  int start_stmt(const int64_t sql_no)
-  {
-    return task_info_.start_stmt(sql_no);
-  }
-  int start_stmt_v2(const int64_t seq_no)
-  {
-    return task_info_.start_stmt_v2(seq_no);
-  }
-  void end_stmt(const int64_t sql_no)
-  {
-    update_sql_no(sql_no);
-    need_rollback_ = true;
-    task_info_.remove_task_after(0);
-  }
-  void end_stmt_v2()
-  {
-    need_rollback_ = true;
-    task_info_.remove_task_after_v2(0);
-  }
-  void rollback_to(const int64_t from, const int64_t to)
-  {
-    update_sql_no(from);
-    need_rollback_ = true;
-    task_info_.remove_task_after(to);
-  }
-  void rollback_to_v2(const int64_t to)
-  {
-    // [to, from)
-    need_rollback_ = true;
-    task_info_.remove_task_after_v2(to);
-  }
-  int start_task(const int64_t sql_no, const int64_t snapshot_version)
-  {
-    update_sql_no(sql_no);
-    return task_info_.start_task(sql_no, snapshot_version);
-  }
-  int start_task_v2(const int64_t sql_no, const int64_t seq_no, const int64_t snapshot_version)
-  {
-    update_sql_no(sql_no);
-    // update_seq_no(seq_no);
-    return task_info_.start_task_v2(sql_no, seq_no, snapshot_version);
-  }
-  void end_task() { return task_info_.end_task(); }
-
-  int64_t get_top_snapshot_version() const { return task_info_.get_top_snapshot_version(); }
-  bool is_stmt_ended() const { return task_info_.is_stmt_ended(); }
-  bool is_task_match(const int64_t sql_no = 0) const { return task_info_.is_task_match(sql_no); }
-  bool is_task_match_v2(const int64_t seq_no = 0) const { return task_info_.is_task_match_v2(seq_no); }
-  bool stmt_expired(const int64_t sql_no, const bool is_rollback = false) const
-  {
-    return sql_no < sql_no_ || (!is_rollback && (need_rollback_ && sql_no == sql_no_));
-  }
-  bool stmt_expired_v2(const int64_t msg_seq, const bool is_rollback = false) const
-  {
-    return msg_seq < msg_seq_ || (!is_rollback && (need_rollback_ && msg_seq == msg_seq_));
-  }
-  bool stmt_matched(const int64_t sql_no) const { return sql_no == sql_no_ && !need_rollback_; }
-  bool stmt_matched_v2(const int64_t msg_seq) const { return msg_seq == msg_seq_ && !need_rollback_; }
-
-  bool main_stmt_change(const int64_t sql_no) const { return (sql_no >> 32) > main_sql_no_; }
-  bool main_stmt_change_compat(const int64_t sql_no) const { return sql_no > sql_no_; }
-  int64_t get_sql_no() const { return sql_no_; }
-  // int64_t get_seq_no() const { return seq_no_; }
-  void update_msg_seq(const int64_t msg_seq)
-  {
-    if (msg_seq > msg_seq_) { msg_seq_ = msg_seq; need_rollback_ = false; }
-  }
-
-  TO_STRING_KV(K_(sql_no), K_(msg_seq), K_(start_task_cnt), K_(end_task_cnt), K_(need_rollback), K_(task_info));
-private:
-  void update_sql_no(const int64_t sql_no)
-  {
-    if (sql_no > sql_no_) { sql_no_ = sql_no; need_rollback_ = false; }
-  }
-
-  union {
-    struct {
-      int32_t sub_sql_no_;
-      int32_t main_sql_no_;
-    };
-    int64_t sql_no_;
-  };
-  int64_t start_task_cnt_; // compat only
-  int64_t end_task_cnt_;   // compat only
-  bool need_rollback_;
-  ObTransTaskInfo task_info_;
-  int64_t msg_seq_;
-};
-
 class ObTransVersion
 {
 public:
@@ -1703,7 +1586,7 @@ public:
   int range_submitted(ObTxMDSCache &cache);
   void range_sync_failed();
 
-  int count() const { return count_; };
+  int64_t count() const { return count_; };
 
   TO_STRING_KV(K(count_));
 
@@ -1800,13 +1683,31 @@ struct ObMulSourceDataNotifyArg
   bool redo_submitted_;
   bool redo_synced_;
 
+  // force kill trans without abort scn
+  bool is_force_kill_;
+
+  ObMulSourceDataNotifyArg() { reset(); }
+
+  void reset()
+  {
+    tx_id_.reset();
+    scn_.reset();
+    trans_version_.reset();
+    for_replay_ = false;
+    notify_type_ = NotifyType::ON_ABORT;
+    redo_submitted_ = false;
+    redo_synced_ = false;
+    is_force_kill_ = false;
+  }
+
   TO_STRING_KV(K_(tx_id),
                K_(scn),
                K_(trans_version),
                K_(for_replay),
                K_(notify_type),
                K_(redo_submitted),
-               K_(redo_synced));
+               K_(redo_synced),
+               K_(is_force_kill));
 
   // The redo log of current buf_node has been submitted;
   bool is_redo_submitted() const;

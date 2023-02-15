@@ -656,7 +656,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
        EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, remain_size));
        sleep(1);
        LSN max_lsn2 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
-       PALF_LOG(ERROR, "runlin trace", K(max_lsn2), K(max_lsn1), K(remain_size), K(max_lsn));
+       PALF_LOG_RET(ERROR, OB_SUCCESS, "runlin trace", K(max_lsn2), K(max_lsn1), K(remain_size), K(max_lsn));
        EXPECT_EQ(max_lsn2, LSN(LEADER_DEFAULT_GROUP_BUFFER_SIZE));
        io_task_cond_6.cond_.signal();
        wait_lsn_until_flushed(max_lsn2, leader_6);
@@ -673,7 +673,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
      EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, remain_size));
      sleep(1);
      LSN max_lsn2 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
-     PALF_LOG(ERROR, "runlin trace", K(max_lsn2), K(max_lsn1), K(remain_size), K(max_lsn));
+     PALF_LOG_RET(ERROR, OB_SUCCESS, "runlin trace", K(max_lsn2), K(max_lsn1), K(remain_size), K(max_lsn));
      EXPECT_EQ(max_lsn2, LSN(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE));
      EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, 100));
      sleep(1);

@@ -170,7 +170,7 @@ int64_t ObClusterVersion::print_vsn(char *buf, const int64_t buf_len, uint64_t v
   const uint8_t minor_patch = OB_VSN_MINOR_PATCH(version);
   if (OB_UNLIKELY(!check_version_valid_(version))) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(ERROR, "invalid cluster version", KR(ret), KR(version), K(lbt()));
+    COMMON_LOG(ERROR, "invalid cluster version", KR(ret), K(version), K(lbt()));
   } else if (major < 3
              || (3 == major && minor < 2)
              || (3 == major && 2 == minor && 0 == major_patch && minor_patch < 3)) {
@@ -200,7 +200,7 @@ int64_t ObClusterVersion::print_version_str(char *buf, const int64_t buf_len, ui
   const uint8_t minor_patch = OB_VSN_MINOR_PATCH(version);
   if (OB_UNLIKELY(!check_version_valid_(version))) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(ERROR, "invalid cluster version", KR(version), K(lbt()));
+    COMMON_LOG(ERROR, "invalid cluster version", K(version), K(lbt()));
   } else if (major < 3
              || (3 == major && minor < 2)
              || (3 == major && 2 == minor && 0 == major_patch && minor_patch < 3)) {

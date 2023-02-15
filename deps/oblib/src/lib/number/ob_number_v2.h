@@ -511,7 +511,7 @@ public:
                                         const uint32_t *multiplier_digits,
                                         const uint32_t multiplicand_desc,
                                         const uint32_t multiplier_desc,
-                                        uint32_t res_len, uint32_t res_exp,
+                                        int64_t res_len, int64_t res_exp,
                                         uint32_t *res_digit, Desc &res_desc);
   // 2 number multiplication fast path
   // formular format: a(1 digit number) * b(1 digit number):
@@ -521,7 +521,7 @@ public:
                                         const uint32_t *multiplier_digits,
                                         const uint32_t multiplicand_desc,
                                         const uint32_t multiplier_desc,
-                                        uint32_t res_len, uint32_t res_exp,
+                                        int64_t res_len, int64_t res_exp,
                                         uint32_t *res_digit, Desc &res_desc);
   // 2 number multiplication fast path
   // formular format: a(2 digits number) * b(2 digits number):
@@ -531,7 +531,7 @@ public:
                                         const uint32_t *multiplier_digits,
                                         const uint32_t multiplicand_desc,
                                         const uint32_t multiplier_desc,
-                                        uint32_t res_len, uint32_t res_exp,
+                                        int64_t res_len, int64_t res_exp,
                                         uint32_t *res_digit, Desc &res_desc);
 
   // multiplication fast path entrance
@@ -1040,7 +1040,7 @@ public:
     MEMCPY(out.digits_ + 0, digits_ + l, out.len_ * sizeof(int64_t));
   }
 
-  inline void set(const int32_t loc, const int32_t value)
+  inline void set(const int64_t loc, const int64_t value)
   {
     digits_[loc] = value;
   }
@@ -1191,7 +1191,7 @@ public:
   }
 
 
-  void mul(const int32_t b, ObDivArray &c) {
+  void mul(const int64_t b, ObDivArray &c) {
     c.len_ = len_;
     int64_t carry = 0;
     for (int32_t i = 0; i < c.len_; ++i) {
@@ -2054,7 +2054,7 @@ inline int ObNumber::uint32cmp(const uint32_t *s1, const uint32_t *s2, const int
 {
   int cret = 0;
   if (n > 0 && (OB_ISNULL(s1) || OB_ISNULL(s2))) {
-    LIB_LOG(ERROR, "the poniter is null");
+    LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "the poniter is null");
   } else {
     for (int64_t i = 0; i < n; ++i) {
       if (s1[i] < s2[i]) {
@@ -2276,11 +2276,11 @@ inline uint32_t ObNumber::remove_back_zero(const uint32_t digit, int64_t &count)
 
 inline int64_t ObNumber::get_digit_len(const uint32_t d)
 {
-  int64_t ret = 0;
+  int64_t len = 0;
   if (BASE <= d) {
-    LIB_LOG(ERROR, "d is out of range");
+    LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "d is out of range");
   } else {
-    ret = (d >= 100000000) ? 9 :
+    len = (d >= 100000000) ? 9 :
           (d >= 10000000) ? 8 :
           (d >= 1000000) ? 7 :
           (d >= 100000) ? 6 :
@@ -2291,7 +2291,7 @@ inline int64_t ObNumber::get_digit_len(const uint32_t d)
           1;
   }
 
-  return ret;
+  return len;
 }
 
 inline void ObNumber::exp_shift_(const int64_t shift, Desc &desc)
@@ -3084,7 +3084,7 @@ inline bool ObNumber::is_integer() const
     bret = true;
   } else if (OB_ISNULL(digits_) || OB_UNLIKELY(0 >= d_.len_)) {
     bret = false;
-    _OB_LOG(ERROR, "not init");
+    _OB_LOG_RET(ERROR, common::OB_NOT_INIT, "not init");
   } else {
     if (POSITIVE == d_.sign_) {
       int_len = d_.se_ - POSITIVE_EXP_BOUNDARY;
@@ -3122,7 +3122,7 @@ inline bool ObNumber::is_integer(const int32_t expr_value) const
     bret = true;
   } else if (OB_ISNULL(digits_) || OB_UNLIKELY(0 >= d_.len_)) {
     bret = false;
-    _OB_LOG(ERROR, "not init");
+    _OB_LOG_RET(ERROR, common::OB_NOT_INIT, "not init");
   } else if (expr_value < 0 || (expr_value + 1 < d_.len_)) {
     bret = false;
   } else {
@@ -3237,7 +3237,7 @@ OB_INLINE bool ObNumber::fast_mul_1d_mul_2d(const uint32_t *multiplicand_digits,
                                           const uint32_t *multiplier_digits,
                                           uint32_t multiplicand_desc,
                                           uint32_t multiplier_desc,
-                                          uint32_t res_len, uint32_t res_exp,
+                                          int64_t res_len, int64_t res_exp,
                                           uint32_t *res_digit,
                                           Desc &res_desc)
 {
@@ -3250,7 +3250,7 @@ OB_INLINE bool ObNumber::fast_mul_1d_mul_2d(const uint32_t *multiplicand_digits,
         static_cast<uint64_t>(*multiplicand_digits);
     auto low_digit = tmp_multiplicand_di * multiplier_digits[1];
     auto high_digit = tmp_multiplicand_di * multiplier_digits[0];
-    auto digits_len = 0;
+    int64_t digits_len = 0;
     // formalize result digits
     uint64_t carry = 0;
     if (low_digit >= ObNumber::BASE) {
@@ -3288,7 +3288,7 @@ OB_INLINE bool ObNumber::fast_mul_1d_mul_1d(const uint32_t *multiplicand_digits,
                                             const uint32_t *multiplier_digits,
                                             uint32_t multiplicand_desc,
                                             uint32_t multiplier_desc,
-                                            uint32_t res_len, uint32_t res_exp,
+                                            int64_t res_len, int64_t res_exp,
                                             uint32_t *res_digit,
                                             Desc &res_desc)
 {
@@ -3300,7 +3300,7 @@ OB_INLINE bool ObNumber::fast_mul_1d_mul_1d(const uint32_t *multiplicand_digits,
        multiplier_desc == NUM_DESC_1DIGIT_POSITIVE_INTEGER)) {
     auto res_digit_value =
         static_cast<uint64_t>(*multiplicand_digits) * multiplier_digits[0];
-    auto digits_len = 0;
+    int64_t digits_len = 0;
     // formalize result digits
     uint64_t carry = 0;
     if (res_digit_value >= ObNumber::BASE) {
@@ -3331,7 +3331,7 @@ OB_INLINE bool ObNumber::fast_mul_2d_mul_2d(const uint32_t *multiplicand_digits,
                                            const uint32_t *multiplier_digits,
                                            uint32_t multiplicand_desc,
                                            uint32_t multiplier_desc,
-                                           uint32_t res_len, uint32_t res_exp,
+                                           int64_t res_len, int64_t res_exp,
                                            uint32_t *res_digit,
                                            Desc &res_desc)
 {
@@ -3347,7 +3347,7 @@ OB_INLINE bool ObNumber::fast_mul_2d_mul_2d(const uint32_t *multiplicand_digits,
     auto mid_digit = multiplicand_low_di * multiplier_digits[0];
     mid_digit += multiplicand_high_di * multiplier_digits[1];
     auto high_digit = multiplicand_high_di * multiplier_digits[0];
-    auto digits_len = 0;
+    int64_t digits_len = 0;
 
     // formalize result digits
     uint64_t carry = 0;

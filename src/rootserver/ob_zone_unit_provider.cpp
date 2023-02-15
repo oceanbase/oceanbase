@@ -41,7 +41,7 @@ int64_t ObAliveZoneUnitAdaptor::count() const
 {
   int64_t cnt = 0;
   if (OB_UNLIKELY(NULL == zu_)) {
-    LOG_ERROR("unexpected null zu_");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected null zu_");
   } else {
     cnt = zu_->count();
   }
@@ -99,7 +99,7 @@ bool ObAliveZoneUnitsProvider::UnitSortOp::operator()(
     // jump out
   } else if (OB_UNLIKELY(nullptr == left || nullptr == right)) {
     ret_ = common::OB_ERR_UNEXPECTED;
-    LOG_WARN("left or right ptr is null", K(ret_), KP(left), KP(right));
+    LOG_WARN_RET(ret_, "left or right ptr is null", K(ret_), KP(left), KP(right));
   } else if (left->unit_.unit_id_ < right->unit_.unit_id_) {
     bool_ret = true;
   } else {
@@ -117,11 +117,11 @@ bool ObAliveZoneUnitsProvider::ZoneUnitSortOp::operator()(
     // jump out
   } else if (left.count() <= 0 || right.count() <= 0) {
     ret_ = OB_ERR_UNEXPECTED;
-    LOG_WARN("left or right unit array empty", K(ret_),
+    LOG_WARN_RET(ret_, "left or right unit array empty", K(ret_),
              "left_count", left.count(), "right_count", right.count());
   } else if (nullptr == left.at(0) || nullptr == right.at(0)) {
     ret_ = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit ptr is null", K(ret_), "left_ptr", left.at(0), "right_ptr", right.at(0));
+    LOG_WARN_RET(ret_, "unit ptr is null", K(ret_), "left_ptr", left.at(0), "right_ptr", right.at(0));
   } else if (left.at(0)->unit_.zone_ < right.at(0)->unit_.zone_) {
     bool_ret = true;
   } else {
@@ -276,7 +276,7 @@ int64_t ObAllZoneUnitAdaptor::count() const
 {
   int64_t cnt = 0;
   if (OB_UNLIKELY(NULL == all_unit_)) {
-    LOG_ERROR("unexpected null all_unit_");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected null all_unit_");
   } else {
     cnt = all_unit_->count();
   }

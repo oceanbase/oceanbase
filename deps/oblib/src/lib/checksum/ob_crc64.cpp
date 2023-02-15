@@ -1130,15 +1130,15 @@ uint64_t crc64_sse42_dispatch(uint64_t crc, const char *buf, int64_t len)
 
   if (strcmp((char*)vendor_info, "GenuineIntel") == 0) {
     ob_crc64_sse42_func = &ob_crc64_isal;
-    _OB_LOG(WARN, "Use ISAL for crc64 calculate");
+    _OB_LOG_RET(WARN, OB_SUCCESS, "Use ISAL for crc64 calculate");
   } else{
     asm("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "0"(1));
     if ((c & (1 << 20)) != 0) {
       ob_crc64_sse42_func = &crc64_sse42;
-      _OB_LOG(WARN, "Use CPU crc32 instructs for crc64 calculate");
+      _OB_LOG_RET(WARN, OB_SUCCESS, "Use CPU crc32 instructs for crc64 calculate");
     } else {
       ob_crc64_sse42_func = &fast_crc64_sse42_manually;
-      _OB_LOG(WARN, "Use manual crc32 table lookup for crc64 calculate");
+      _OB_LOG_RET(WARN, OB_SUCCESS, "Use manual crc32 table lookup for crc64 calculate");
     }
   }
 

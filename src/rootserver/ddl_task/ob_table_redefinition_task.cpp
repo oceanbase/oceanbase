@@ -69,6 +69,7 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
     parallelism_ = parallelism;
     cluster_version_ = GET_MIN_CLUSTER_VERSION();
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
+    start_time_ = ObTimeUtility::current_time();
     if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
@@ -108,6 +109,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     tenant_id_ = task_record.tenant_id_;
     ret_code_ = task_record.ret_code_;
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
+    start_time_ = ObTimeUtility::current_time();
 
     if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
@@ -171,7 +173,7 @@ int ObTableRedefinitionTask::send_build_replica_request()
       break;
     }
     default: {
-      if (send_build_replica_request_by_sql()) {
+      if (OB_FAIL(send_build_replica_request_by_sql())) {
         LOG_WARN("failed to send build replica request", K(ret));
       }
       break;
@@ -402,9 +404,15 @@ int ObTableRedefinitionTask::copy_table_indexes()
           LOG_INFO("indexes schema are already built", K(index_ids));
         } else {
           // if there is no indexes in new tables, we need to rebuild indexes in new table
-          if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+          int64_t ddl_rpc_timeout = 0;
+          int64_t all_tablet_count = 0;
+          if (OB_FAIL(get_orig_all_index_tablet_count(schema_guard, all_tablet_count))) {
+            LOG_WARN("get all tablet count failed", K(ret));
+          } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(all_tablet_count, ddl_rpc_timeout))) {
+            LOG_WARN("get ddl rpc timeout failed", K(ret));
+          } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
                 execute_ddl_task(alter_table_arg_, index_ids))) {
-            LOG_WARN("rebuild hidden table index failed", K(ret));
+            LOG_WARN("rebuild hidden table index failed", K(ret), K(ddl_rpc_timeout));
           }
         }
       }
@@ -513,9 +521,12 @@ int ObTableRedefinitionTask::copy_table_constraints()
         alter_table_arg_.ddl_task_type_ = share::REBUILD_CONSTRAINT_TASK;
         alter_table_arg_.table_id_ = object_id_;
         alter_table_arg_.hidden_table_id_ = target_object_id_;
-        if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+        int64_t ddl_rpc_timeout = 0;
+        if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
+          LOG_WARN("get ddl rpc timeout fail", K(ret));
+        } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
               execute_ddl_task(alter_table_arg_, constraint_ids))) {
-          LOG_WARN("rebuild hidden table constraint failed", K(ret));
+          LOG_WARN("rebuild hidden table constraint failed", K(ret), K(ddl_rpc_timeout));
         }
       } else {
         LOG_INFO("constraint has already been built");
@@ -581,9 +592,12 @@ int ObTableRedefinitionTask::copy_table_foreign_keys()
           alter_table_arg_.ddl_task_type_ = share::REBUILD_FOREIGN_KEY_TASK;
           alter_table_arg_.table_id_ = object_id_;
           alter_table_arg_.hidden_table_id_ = target_object_id_;
-          if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+          int64_t ddl_rpc_timeout = 0;
+          if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
+            LOG_WARN("get ddl rpc timeout fail", K(ret));
+          } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
                 execute_ddl_task(alter_table_arg_, fk_ids))) {
-            LOG_WARN("rebuild hidden table constraint failed", K(ret));
+            LOG_WARN("rebuild hidden table constraint failed", K(ret), K(ddl_rpc_timeout));
           }
         }
         DEBUG_SYNC(TABLE_REDEFINITION_COPY_TABLE_FOREIGN_KEYS);
@@ -692,6 +706,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
   DEBUG_SYNC(BEFORE_TABLE_REDEFINITION_TASK_EFFECT);
 #endif
   ObSArray<uint64_t> objs;
+  int64_t ddl_rpc_timeout = 0;
   alter_table_arg_.ddl_task_type_ = share::MAKE_DDL_TAKE_EFFECT_TASK;
   alter_table_arg_.table_id_ = object_id_;
   alter_table_arg_.hidden_table_id_ = target_object_id_;
@@ -735,7 +750,9 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     }
   } else if (OB_FAIL(sync_stats_info())) {
     LOG_WARN("fail to sync stats info", K(ret), K(object_id_), K(target_object_id_));
-  } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
+            LOG_WARN("get ddl rpc timeout fail", K(ret));
+  } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
       execute_ddl_task(alter_table_arg_, objs))) {
     LOG_WARN("fail to swap original and hidden table state", K(ret));
     if (OB_TIMEOUT == ret) {
@@ -775,6 +792,11 @@ int ObTableRedefinitionTask::repending(const share::ObDDLTaskStatus next_task_st
     }
   }
   return ret;
+}
+
+bool ObTableRedefinitionTask::check_task_status_before_pending(const share::ObDDLTaskStatus task_status)
+{
+  return task_status == ObDDLTaskStatus::PREPARE || task_status == ObDDLTaskStatus::WAIT_TRANS_END || task_status == ObDDLTaskStatus::LOCK_TABLE;
 }
 
 int ObTableRedefinitionTask::process()

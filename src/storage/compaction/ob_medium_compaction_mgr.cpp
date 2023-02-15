@@ -425,7 +425,6 @@ int ObMediumCompactionInfoList::init_after_check_finish(
 void ObMediumCompactionInfoList::reset_list()
 {
   DLIST_REMOVE_ALL_NORET(info, medium_info_list_) {
-    medium_info_list_.remove(info);
     static_cast<ObMediumCompactionInfo *>(info)->~ObMediumCompactionInfo();
     allocator_->free(info);
   }

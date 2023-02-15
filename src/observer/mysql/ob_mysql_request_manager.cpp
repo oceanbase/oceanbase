@@ -48,7 +48,7 @@ const int64_t ObMySQLRequestManager::EVICT_INTERVAL;
 ObMySQLRequestManager::ObMySQLRequestManager()
   : inited_(false), destroyed_(false), request_id_(0), mem_limit_(0),
     allocator_(), queue_(), task_(),
-    tenant_id_(OB_INVALID_TENANT_ID), tg_id_(-1)
+    tenant_id_(OB_INVALID_TENANT_ID), tg_id_(-1), stop_flag_(true)
 {
 }
 
@@ -68,10 +68,6 @@ int ObMySQLRequestManager::init(uint64_t tenant_id,
     ret = OB_INIT_TWICE;
   } else if (OB_FAIL(queue_.init(ObModIds::OB_MYSQL_REQUEST_RECORD, queue_size, tenant_id))) {
     SERVER_LOG(WARN, "Failed to init ObMySQLRequestQueue", K(ret));
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::ReqMemEvict, tg_id_))) {
-    SERVER_LOG(WARN, "create failed", K(ret));
-  } else if (OB_FAIL(TG_START(tg_id_))) {
-    SERVER_LOG(WARN, "init timer fail", K(ret));
   } else if (OB_FAIL(allocator_.init(SQL_AUDIT_PAGE_SIZE,
                                      ObModIds::OB_MYSQL_REQUEST_RECORD,
                                      tenant_id,
@@ -81,8 +77,6 @@ int ObMySQLRequestManager::init(uint64_t tenant_id,
     //check FIFO mem used and sql audit records every 1 seconds
     if (OB_FAIL(task_.init(this))) {
       SERVER_LOG(WARN, "fail to init sql audit time tast", K(ret));
-    } else if (OB_FAIL(TG_SCHEDULE(tg_id_, task_, EVICT_INTERVAL, true))) {
-      SERVER_LOG(WARN, "start eliminate task failed", K(ret));
     } else {
       mem_limit_ = max_mem_size;
       tenant_id_ = tenant_id;
@@ -96,6 +90,39 @@ int ObMySQLRequestManager::init(uint64_t tenant_id,
   return ret;
 }
 
+int ObMySQLRequestManager::start()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN, "ObMySQLRequestManager is not inited", K(tenant_id_));
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::ReqMemEvict, tg_id_))) {
+    SERVER_LOG(WARN, "create failed", K(ret));
+  } else if (OB_FAIL(TG_START(tg_id_))) {
+    SERVER_LOG(WARN, "init timer fail", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(tg_id_, task_, EVICT_INTERVAL, true))) {
+    SERVER_LOG(WARN, "start eliminate task failed", K(ret));
+  } else {
+    stop_flag_ = false;
+  }
+  return ret;
+}
+
+void ObMySQLRequestManager::stop()
+{
+  if (inited_ && !stop_flag_) {
+    TG_STOP(tg_id_);
+  }
+}
+
+void ObMySQLRequestManager::wait()
+{
+  if (inited_ && !stop_flag_) {
+    TG_WAIT(tg_id_);
+    stop_flag_ = true;
+  }
+}
+
 void ObMySQLRequestManager::destroy()
 {
   if (!destroyed_) {
@@ -105,6 +132,7 @@ void ObMySQLRequestManager::destroy()
     allocator_.destroy();
     inited_ = false;
     destroyed_ = true;
+    stop_flag_ = true;
   }
 }
 
@@ -253,13 +281,23 @@ int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id,
   return ret;
 }
 
-int ObMySQLRequestManager::mtl_init(ObMySQLRequestManager* &req_mgr)
+int ObMySQLRequestManager::mtl_new(ObMySQLRequestManager* &req_mgr)
 {
   int ret = OB_SUCCESS;
   req_mgr = OB_NEW(ObMySQLRequestManager, ObModIds::OB_MYSQL_REQUEST_RECORD);
   if (nullptr == req_mgr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for ObMySQLRequestManager", K(ret));
+  }
+  return ret;
+}
+
+int ObMySQLRequestManager::mtl_init(ObMySQLRequestManager* &req_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == req_mgr) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObMySQLRequestManager not alloc yet", K(ret));
   } else {
     uint64_t tenant_id = lib::current_resource_owner_id();
     int64_t mem_limit = lib::get_tenant_memory_limit(tenant_id);

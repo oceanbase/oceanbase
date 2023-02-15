@@ -56,9 +56,8 @@ int do_fetch_next_buffer_if_need(
     rpc_buffer.get_position() = 0;
     rpc_buffer_parse_pos = 0;
     if (handle.has_more()) {
-      if (OB_SUCCESS != (ret = handle.get_more(rpc_buffer))) {
+      if (OB_FAIL(handle.get_more(rpc_buffer))) {
         STORAGE_LOG(WARN, "get_more(send request) failed", K(ret));
-        ret = OB_DATA_SOURCE_TIMEOUT;
       } else if (rpc_buffer.get_position() < 0) {
         ret = OB_ERR_SYS;
         LOG_ERROR("rpc buffer has no data", K(ret), K(rpc_buffer));

@@ -690,7 +690,7 @@ int ObOrderPerservingEncoder::encode_from_number(ObNumber val,
     to++;
 
     // digits encoding
-    int32_t digits_mask = (int64_t)((~se) ^ 0x80) >> 8;
+    int32_t digits_mask = static_cast<int32_t>((int64_t)((~se) ^ 0x80) >> 8);
     uint32_t *digits_ptr = val.get_digits();
     for (int64_t i = 0; i < desc.len_; i++) {
       uint32_t dig = bswap_32((digits_ptr[i] + 1) ^ digits_mask);
@@ -845,7 +845,9 @@ int ObSortkeyConditioner::process_key_conditioning(
     // do nothing
   } else if (OB_FAIL(share::ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
                data, to + to_len, max_buf_len, to_len, param))) {
-    LOG_WARN("failed  to encode sortkey", K(ret));
+    if (ret != OB_BUF_NOT_ENOUGH) {
+      LOG_WARN("failed  to encode sortkey", K(ret));
+    }
   } else if (!param.is_asc_) {
     process_decrease(to + 1, to_len);
   }

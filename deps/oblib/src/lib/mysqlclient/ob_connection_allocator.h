@@ -196,7 +196,7 @@ public:
     if (is_inited_) {
       FreeConnsOp op(this);
       if (OB_SUCCESS != sessionid_to_conns_map_.foreach_refactored(op)) {
-        _OB_LOG(WARN, "failed to foreach sessionid_to_conns_map_");
+        _OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "failed to foreach sessionid_to_conns_map_");
       }
       sessionid_to_conns_map_.destroy();
     }

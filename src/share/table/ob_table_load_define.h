@@ -110,7 +110,7 @@ public:
   }
   int compare(const ObTableLoadPartitionId &other) const
   {
-    return (partition_id_ != other.partition_id_ ? partition_id_ - other.partition_id_
+    return (partition_id_ != other.partition_id_ ? static_cast<int32_t>(partition_id_ - other.partition_id_)//TODO(suzhi.yt): fix convert int64 to int32
                                                  : tablet_id_.compare(other.tablet_id_));
   }
   TO_STRING_KV(K_(partition_id), K_(tablet_id));
@@ -230,7 +230,7 @@ public:
   }
   int compare(const ObTableLoadSegmentID &other) const
   {
-    return id_ - other.id_;
+    return static_cast<int32_t>(id_ - other.id_);//TODO(suzhi.yt): fix convert int64 to int32
   }
   TO_STRING_KV(K_(id));
 public:
@@ -290,7 +290,7 @@ public:
   int compare(const ObTableLoadTransId &other) const
   {
     return (segment_id_ != other.segment_id_ ? segment_id_.compare(other.segment_id_)
-                                             : trans_gid_ - other.trans_gid_);
+                                             : static_cast<int32_t>(trans_gid_ - other.trans_gid_));//TODO(suzhi.yt): fix convert int64 to int32
   }
   TO_STRING_KV(K_(segment_id), K_(trans_gid));
 public:

@@ -62,7 +62,7 @@ ObAsyncTask *ObEventTableClearTask::deep_copy(char *buf, const int64_t buf_size)
 {
   ObEventTableClearTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
     task = new(buf) ObEventTableClearTask(rs_event_operator_,
                                           server_event_operator_,
@@ -104,7 +104,7 @@ int64_t ObEventHistoryTableOperator::ObEventTableUpdateTask::hash() const
 {
   int64_t hash_value = 0;
   if (!this->is_valid()) {
-    LOG_WARN("invalid event table update task", "task", *this);
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid event table update task", "task", *this);
   } else {
     hash_value = reinterpret_cast<int64_t>(sql_.ptr());
   }
@@ -116,13 +116,13 @@ bool ObEventHistoryTableOperator::ObEventTableUpdateTask::operator==(
 {
   bool is_equal = false;
   if (!this->is_valid()) {
-    LOG_WARN("invalid event table update task", "task", *this);
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid event table update task", "task", *this);
   } else if (this->get_type() != other.get_type()) {
     is_equal = false;
   } else {
     const ObEventTableUpdateTask &o = static_cast<const ObEventTableUpdateTask &>(other);
     if (!o.is_valid()) {
-      LOG_WARN("invalid event table update task", "task", o);
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid event table update task", "task", o);
     } else if (this == &other) {
       is_equal = true;
     } else {
@@ -138,9 +138,9 @@ IObDedupTask *ObEventHistoryTableOperator::ObEventTableUpdateTask::deep_copy(
 {
   ObEventTableUpdateTask *task = NULL;
   if (!this->is_valid()) {
-    LOG_WARN("invalid event table update task", "task", *this);
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid event table update task", "task", *this);
   } else if (NULL == buf || buf_size < get_deep_copy_size()) {
-    LOG_WARN("invalid argument", "buf", reinterpret_cast<int64_t>(buf), K(buf_size),
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "buf", reinterpret_cast<int64_t>(buf), K(buf_size),
         "need size", get_deep_copy_size());
   } else {
     task = new (buf) ObEventTableUpdateTask(table_operator_, is_delete_);

@@ -341,9 +341,6 @@ int ScanHandle<BtreeKey, BtreeVal>::get(BtreeKey &key, BtreeVal &val, bool is_ba
     key = leaf->get_key(pos, index);
     val = leaf->get_val_with_tag(pos, version_, index);
     last_key = is_backward? &leaf->get_key(0, index): &leaf->get_key(leaf->size(index) - 1, index);
-    if (maybe_big_gap(is_backward)) {
-      val = (BtreeVal)((uint64_t)val | 2UL);
-    }
   }
   return ret;
 }
@@ -452,30 +449,6 @@ int ScanHandle<BtreeKey, BtreeVal>::find_path(BtreeNode *root, BtreeKey key, int
       root = nullptr;
     } else {
       root = (BtreeNode *)root->get_val(pos);
-    }
-  }
-  return ret;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-bool ScanHandle<BtreeKey, BtreeVal>::maybe_big_gap(bool is_backward) {
-  bool ret = false;
-  BtreeNode* node = nullptr;
-  int pos = 0;
-  MultibitSet *index = &this->index_;
-  if (0 == path_.top_k(3, node, pos)) {
-    if (is_backward) {
-      if (--pos >= 0) {
-        ret = node->get_tag(pos, index);
-      } else {
-        ret = true;
-      }
-    } else {
-      if (++pos < node->size(index)) {
-        ret = node->get_tag(pos, index);
-      } else {
-        ret = true;
-      }
     }
   }
   return ret;

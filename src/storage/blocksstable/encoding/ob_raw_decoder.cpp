@@ -112,7 +112,7 @@ struct RawVarBatchDecodeFunc_T
           break;
         }
         default: {
-          LOG_ERROR("Invalid column index byte", K(col_idx_byte));
+          LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Invalid column index byte", K(col_idx_byte));
         }
         }
       }

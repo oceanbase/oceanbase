@@ -38,6 +38,7 @@
 #include "ob_log_callback.h"                        // ObILogCallback
 #include "ob_cdc_lob_ctx.h"                         // ObLobDataOutRowCtxList
 #include "ob_cdc_lob_aux_table_schema_info.h"       // ObCDCLobAuxTableSchemaInfo
+#include "ob_log_safe_arena.h"
 
 namespace oceanbase
 {
@@ -715,9 +716,9 @@ private:
   int64_t            formatted_stmt_num_;   // Number of statements that formatted
   int64_t            row_ref_cnt_;          // reference count
 
-  // Non-thread safe allocator
-  // used for Parser/Formatter
-  common::ObArenaAllocator arena_allocator_;          // allocator
+  // thread safe allocator
+  // used for Parser/Formatter/LobDataMerger
+  ObCdcSafeArena arena_allocator_;          // allocator
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogEntryTask);
@@ -1075,6 +1076,11 @@ public:
   SortedLogEntryInfo &get_sorted_log_entry_info() { return sorted_log_entry_info_; }
   int is_all_redo_log_entry_fetched(bool &is_all_redo_fetched)
   { return sorted_log_entry_info_.is_all_log_entry_fetched(is_all_redo_fetched); };
+  // is dispatched redo all sorted:
+  OB_INLINE bool is_dispatched_redo_be_sorted() const
+  {
+    return ! sorted_redo_list_.has_dispatched_but_unsorted_redo();
+  }
   int push_multi_data_source_data(
       const palf::LSN &lsn,
       const transaction::ObTxBufferNodeArray &mds_data_arr,

@@ -128,7 +128,6 @@ public:
       const ObBackupPathString &archive_dest,
       IObLogFetcherDispatcher *dispatcher,
       IObLogSysLsTaskHandler *sys_ls_handler,
-      ObLogSysTableHelper &systable_helper,
       TaskPool *task_pool,
       IObLogEntryTaskPool *log_entry_task_pool,
       ObISQLClient *proxy,

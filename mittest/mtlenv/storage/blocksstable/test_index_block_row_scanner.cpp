@@ -242,7 +242,7 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
 int main(int argc, char **argv)
 {
   system("rm -f test_index_block_row_scanner.log*");
-  OB_LOGGER.set_file_name("test_index_block_row_scanner.log", true, true);
+  OB_LOGGER.set_file_name("test_index_block_row_scanner.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

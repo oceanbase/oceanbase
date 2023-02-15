@@ -235,16 +235,38 @@ int ObDASRef::execute_all_task()
     LOG_WARN("failed to move local tasks to last.", K(ret));
   } else {
     uint32_t finished_cnt = 0;
+    uint32_t high_priority_task_execution_cnt = 0;
+    bool has_unstart_high_priority_tasks = true;
     while (finished_cnt < aggregated_tasks_.get_size() && OB_SUCC(ret)) {
       finished_cnt = 0;
       // execute tasks follows aggregated task state machine.
-      DLIST_FOREACH_X(curr, aggregated_tasks_.get_obj_list(), OB_SUCC(ret)) {
-        ObDasAggregatedTasks* aggregated_task = curr->get_obj();
-        if (aggregated_task->has_unstart_tasks() && OB_FAIL(MTL(ObDataAccessService *)
-            ->execute_das_task(*this, *aggregated_task, async))) {
-          LOG_WARN("failed to execute aggregated das task", KR(ret));
-        } else {
-          LOG_DEBUG("successfully executing aggregated task", "server", aggregated_task->server_);
+      if (has_unstart_high_priority_tasks) {
+        high_priority_task_execution_cnt = 0;
+        DLIST_FOREACH_X(curr, aggregated_tasks_.get_obj_list(), OB_SUCC(ret)) {
+          ObDasAggregatedTasks* aggregated_task = curr->get_obj();
+          if (aggregated_task->has_unstart_high_priority_tasks()) {
+            if (OB_FAIL(MTL(ObDataAccessService *)->execute_das_task(*this, *aggregated_task, async))) {
+              LOG_WARN("failed to execute high priority aggregated das task", KR(ret), KPC(aggregated_task), K(async));
+            } else {
+              ++high_priority_task_execution_cnt;
+              LOG_DEBUG("successfully executing aggregated task", "server", aggregated_task->server_);
+            }
+          }
+        }
+        if (high_priority_task_execution_cnt == 0) {
+          has_unstart_high_priority_tasks = false;
+        }
+      }
+      if (!has_unstart_high_priority_tasks) {
+        DLIST_FOREACH_X(curr, aggregated_tasks_.get_obj_list(), OB_SUCC(ret)) {
+          ObDasAggregatedTasks* aggregated_task = curr->get_obj();
+          if (aggregated_task->has_unstart_tasks()) {
+            if (OB_FAIL(MTL(ObDataAccessService *)->execute_das_task(*this, *aggregated_task, async))) {
+              LOG_WARN("failed to execute aggregated das task", KR(ret), KPC(aggregated_task), K(async));
+            } else {
+              LOG_DEBUG("successfully executing aggregated task", "server", aggregated_task->server_);
+            }
+          }
         }
       }
       if (OB_FAIL(ret)) {
@@ -389,25 +411,20 @@ int ObDASRef::process_remote_task_resp()
   DLIST_FOREACH_X(curr, async_cb_list_.get_obj_list(), OB_SUCC(ret)) {
     const sql::ObDASTaskResp &task_resp = curr->get_obj()->get_task_resp();
     const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = curr->get_obj()->get_task_ops();
-    if (OB_UNLIKELY(OB_SUCCESS != task_resp.get_rpc_rcode())) {
-      LOG_WARN("das async rpc error", K(task_resp.get_rpc_rcode()));
+    if (OB_UNLIKELY(OB_SUCCESS != task_resp.get_err_code())) {
+      LOG_WARN("das async execution failed", K(task_resp));
       for (int i = 0; i < task_ops.count(); i++) {
         get_exec_ctx().get_my_session()->get_trans_result().add_touched_ls(task_ops.at(i)->get_ls_id());
-        task_ops.at(i)->set_task_status(ObDasTaskStatus::FAILED);
-        task_ops.at(i)->errcode_ = task_resp.get_rpc_rcode();
-        if (OB_FAIL(task_ops.at(i)->state_advance())) {
-          LOG_WARN("failed to advance das task state", K(ret));
-        }
       }
-      ret = COVER_SUCC(task_resp.get_rpc_rcode());
-      if (OB_FAIL(ret)) {
-        save_ret = ret;
-        ret = OB_SUCCESS;
-      }
-    } else if (OB_FAIL(MTL(ObDataAccessService *)->process_task_resp(*this, task_resp, task_ops))) {
+      save_ret = task_resp.get_err_code();
+    }
+    if (OB_FAIL(MTL(ObDataAccessService *)->process_task_resp(*this, task_resp, task_ops))) {
       LOG_WARN("failed to process das async task resp", K(ret), K(task_resp));
       save_ret = ret;
       ret = OB_SUCCESS;
+    } else {
+      // if task execute success, error must be success.
+      OB_ASSERT(OB_SUCCESS == task_resp.get_err_code());
     }
   }
   async_cb_list_.clear();  // no need to hold async cb anymore. destructor would be called in das factory.
@@ -426,7 +443,7 @@ int ObDASRef::move_local_tasks_to_last()
     if (aggregated_task->server_ == ctrl_addr) {
       if (!aggregated_tasks_.get_obj_list().move_to_last(curr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to move local task to last", KR(ret), K(*aggregated_task));
+        LOG_WARN("failed to move local task to last", KR(ret), KPC(aggregated_task));
       }
       found_local_tasks = true;
     }
@@ -881,6 +898,11 @@ bool ObDasAggregatedTasks::has_unstart_tasks() const
   return high_priority_tasks_.get_size() != 0 ||
          tasks_.get_size() != 0 ||
          failed_tasks_.get_size() != 0;
+}
+
+bool ObDasAggregatedTasks::has_unstart_high_priority_tasks() const
+{
+  return high_priority_tasks_.get_size() != 0;
 }
 
 int32_t ObDasAggregatedTasks::get_unstart_task_size() const

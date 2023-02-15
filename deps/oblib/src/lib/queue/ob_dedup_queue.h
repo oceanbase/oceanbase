@@ -161,7 +161,7 @@ public:
   ObDedupQueue();
   virtual ~ObDedupQueue();
 public:
-  int init(int32_t thread_num = DEFAULT_THREAD_NUM,
+  int init(const int64_t thread_num = DEFAULT_THREAD_NUM,
            const char* thread_name = nullptr,
            const int64_t queue_size = TASK_QUEUE_SIZE,
            const int64_t task_map_size = TASK_MAP_SIZE,
@@ -294,8 +294,8 @@ private:
 private:
   bool is_inited_;
   ThreadMeta thread_metas_[MAX_THREAD_NUM];
-  int32_t thread_num_;
-  int32_t work_thread_num_;
+  int64_t thread_num_;
+  int64_t work_thread_num_;
   int64_t thread_dead_threshold_;
   ObConcurrentFIFOAllocator allocator_;
   HashAllocator hash_allocator_;

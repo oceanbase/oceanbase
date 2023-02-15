@@ -38,7 +38,7 @@ struct ObReqTimeInfo: public common::ObDLinkBase<ObReqTimeInfo>
       // currrent_monotonic_time只保证时间不会退
       // 并不能保证时间一定递增，所以这里检测逻辑用start_time_ > end_time_
       if (OB_UNLIKELY(start_time_ > end_time_)) {
-        SERVER_LOG(ERROR, "invalid start and end time", K(start_time_),
+        SERVER_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid start and end time", K(start_time_),
                    K(end_time_), K(this));
       }
       start_time_ = common::ObTimeUtility::current_monotonic_time();
@@ -52,7 +52,7 @@ struct ObReqTimeInfo: public common::ObDLinkBase<ObReqTimeInfo>
     if (0 == reentrant_cnt_) {
       // 原因同上
       if (OB_UNLIKELY(start_time_ < end_time_)) {
-        SERVER_LOG(ERROR, "invalid start and end time", K(start_time_),
+        SERVER_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid start and end time", K(start_time_),
                    K(end_time_), K(this));
       }
       end_time_ = common::ObTimeUtility::current_monotonic_time();

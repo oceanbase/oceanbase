@@ -152,7 +152,7 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
 {
   ObIndexSSTableBuildTask *task = NULL;
   if (NULL == buf || buf_size < (sizeof(*task))) {
-    LOG_WARN("invalid argument", KP(buf), K(buf_size));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", KP(buf), K(buf_size));
   } else {
     task = new (buf) ObIndexSSTableBuildTask(
         task_id_,
@@ -354,6 +354,7 @@ int ObIndexBuildTask::init(
     task_id_ = task_id;
     parent_task_id_ = parent_task_id;
     task_version_ = OB_INDEX_BUILD_TASK_VERSION;
+    start_time_ = ObTimeUtility::current_time();
     cluster_version_ = GET_MIN_CLUSTER_VERSION();
     if (OB_SUCC(ret)) {
       task_status_ = static_cast<ObDDLTaskStatus>(task_status);
@@ -424,6 +425,7 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     task_id_ = task_record.task_id_;
     parent_task_id_ = task_record.parent_task_id_;
     ret_code_ = task_record.ret_code_;
+    start_time_ = ObTimeUtility::current_time();
 
     if (OB_FAIL(init_ddl_task_monitor_info(data_schema))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
@@ -519,6 +521,7 @@ int ObIndexBuildTask::check_health()
       || ObDDLTaskStatus::SUCCESS == static_cast<ObDDLTaskStatus>(task_status_)) {
     ret = OB_SUCCESS; // allow clean up
   }
+  check_ddl_task_execute_too_long();
   return ret;
 }
 
@@ -1119,13 +1122,6 @@ int ObIndexBuildTask::enable_index()
       LOG_WARN("create global index in slave cluster is not allowed", K(ret), K(index_table_id_));
     } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get schema guard", K(ret), K(tenant_id_));
-    } else if (OB_FAIL(schema_service.get_schema_version_in_inner_table(
-            root_service_->get_sql_proxy(), schema_status, version_in_inner_table))) {
-      LOG_WARN("fail to get version in inner table", K(ret));
-    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, local_schema_version))) {
-      LOG_WARN("fail to get schema version from guard", K(ret), K(tenant_id_));
-    } else if (version_in_inner_table > local_schema_version) {
-      // by pass, this server may not get the newest schema
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, index_table_id_, index_table_exist))) {
       LOG_WARN("fail to check table exist", K(ret), K_(tenant_id), K(index_table_id_));
     } else if (!index_table_exist) {
@@ -1140,8 +1136,14 @@ int ObIndexBuildTask::enable_index()
       if (INDEX_STATUS_AVAILABLE == index_status) {
         state_finished = true;
       } else if (INDEX_STATUS_UNAVAILABLE != index_status) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("index status not match", K(ret), K(index_table_id_), K(index_status));
+        if (INDEX_STATUS_UNUSABLE == index_status) {
+          // the index is unused, for example dropped
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("the index status is unusable, maybe dropped", K(ret), K(index_table_id_), K(index_status));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index status not match", K(ret), K(index_table_id_), K(index_status));
+        }
       } else if (OB_FAIL(update_index_status_in_schema(*index_schema, INDEX_STATUS_AVAILABLE))) {
         LOG_WARN("fail to try notify index take effect", K(ret), K(index_table_id_));
       } else {
@@ -1173,9 +1175,13 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     arg.status_ = new_status;
     arg.exec_tenant_id_ = tenant_id_;
     arg.in_offline_ddl_white_list_ = index_schema.get_table_state_flag() != TABLE_STATE_NORMAL;
+    int64_t ddl_rpc_timeout = 0;
+    int64_t table_id = index_schema.get_table_id();
 
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
-    if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ObDDLUtil::get_ddl_rpc_timeout()).update_index_status(arg))) {
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, table_id, ddl_rpc_timeout))) {
+      LOG_WARN("get ddl rpc timeout fail", K(ret));
+    } else if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).update_index_status(arg))) {
       LOG_WARN("update index status failed", K(ret), K(arg));
     } else {
       LOG_INFO("notify index status changed finish", K(new_status), K(index_table_id_));

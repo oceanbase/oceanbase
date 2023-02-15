@@ -265,7 +265,7 @@ void ObFastInitSqcReportQCMessageCall::operator()(hash::HashMapPair<ObInterrupti
 {
   UNUSED(entry);
   if (OB_NOT_NULL(sqc_)) {
-    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS) {
+    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS && err_ != OB_TIMEOUT) {
       // 当该SQC是虚拟表查询时, 调度RPC失败时需要忽略错误结果.
       // 并mock一个sqc finsh msg发送给正在轮询消息的PX算子
       // 此操作已确认是线程安全的.
@@ -388,7 +388,6 @@ int ObInitFastSqcP::process()
   } else {
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
     arg.sqc_.set_task_count(1);
-    arg.sqc_.set_rpc_worker(true);
     ObPxInterruptGuard px_int_guard(arg.sqc_.get_interrupt_id().px_interrupt_id_);
     lib::CompatModeGuard g(session->get_compatibility_mode() == ORACLE_MODE ?
         lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
@@ -540,7 +539,7 @@ void ObDealWithRpcTimeoutCall::deal_with_rpc_timeout_err()
         int a_ret = OB_SUCCESS;
         if (OB_UNLIKELY(OB_SUCCESS != (a_ret = retry_info_->add_invalid_server_distinctly(
                         addr_)))) {
-          LOG_WARN("fail to add invalid server distinctly", K_(trace_id), K(a_ret), K_(addr));
+          LOG_WARN_RET(a_ret, "fail to add invalid server distinctly", K_(trace_id), K(a_ret), K_(addr));
         }
       }
       ret_ = OB_RPC_CONNECT_ERROR;

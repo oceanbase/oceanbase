@@ -260,10 +260,10 @@ bool ObPartitionRowMergeIter::inner_check(const ObMergeParameter &merge_param)
 
   if (!table_->is_sstable()) {
     bret = false;
-    LOG_WARN("Unexpected table type for major merge", KPC(table_));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "Unexpected table type for major merge", KPC(table_));
   } else if (is_multi_version_merge(merge_param.merge_type_)) {
     bret = false;
-    LOG_WARN("Unexpected merge type for major merge", K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge type for major merge", K(merge_param));
   }
 
   return bret;
@@ -348,19 +348,19 @@ bool ObPartitionMacroMergeIter::inner_check(const ObMergeParameter &merge_param)
   bool bret = true;
   if (OB_UNLIKELY(!is_major_merge_type(merge_param.merge_type_) && !is_meta_major_merge(merge_param.merge_type_))) {
     bret = false;
-    LOG_WARN("Unexpected merge type for major macro merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge type for major macro merge iter", K(bret), K(merge_param));
   } else if (merge_param.merge_level_ != MACRO_BLOCK_MERGE_LEVEL) {
     bret = false;
-    LOG_WARN("Unexpected merge level for major macro merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge level for major macro merge iter", K(bret), K(merge_param));
   } else if (merge_param.is_full_merge_) {
     bret = false;
-    LOG_WARN("Unexpected full merge for major macro merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected full merge for major macro merge iter", K(bret), K(merge_param));
   } else if (OB_UNLIKELY(!is_base_iter())) {
     bret = false;
-    LOG_WARN("Unexpected iter idx for major macro merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected iter idx for major macro merge iter", K(bret), K(merge_param));
   } else if (OB_UNLIKELY(!table_->is_major_sstable() && !table_->is_meta_major_sstable())) {
     bret = false;
-    LOG_WARN("Unexpected base table type for major macro merge iter", K(bret), KPC(table_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected base table type for major macro merge iter", K(bret), KPC(table_));
   }
   return bret;
 }
@@ -546,19 +546,19 @@ bool ObPartitionMicroMergeIter::inner_check(const ObMergeParameter &merge_param)
 
   if (OB_UNLIKELY(!is_major_merge_type(merge_param.merge_type_) && !is_meta_major_merge(merge_param.merge_type_))) {
     bret = false;
-    LOG_WARN("Unexpected merge type for major micro merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge type for major micro merge iter", K(bret), K(merge_param));
   } else if (OB_UNLIKELY(merge_param.merge_level_ != MICRO_BLOCK_MERGE_LEVEL)) {
     bret = false;
-    LOG_WARN("Unexpected merge level for major micro merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge level for major micro merge iter", K(bret), K(merge_param));
   } else if (OB_UNLIKELY(merge_param.is_full_merge_)) {
     bret = false;
-    LOG_WARN("Unexpected full merge for major micro merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected full merge for major micro merge iter", K(bret), K(merge_param));
   } else if (OB_UNLIKELY(!is_base_iter())) {
     bret = false;
-    LOG_WARN("Unexpected iter idx for major micro merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected iter idx for major micro merge iter", K(bret), K(merge_param));
   } else if (OB_UNLIKELY(!table_->is_major_sstable() && !table_->is_meta_major_sstable())) {
     bret = false;
-    LOG_WARN("Unexpected base table type for major macro merge iter", K(bret), KPC(table_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected base table type for major macro merge iter", K(bret), KPC(table_));
   }
 
   return bret;
@@ -857,13 +857,13 @@ bool ObPartitionMinorRowMergeIter::inner_check(const ObMergeParameter &merge_par
 
   if (!is_multi_version_merge(merge_param.merge_type_) && !storage::is_backfill_tx_merge(merge_param.merge_type_)) {
     bret = false;
-    LOG_WARN("Unexpected merge type for minor row merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge type for minor row merge iter", K(bret), K(merge_param));
   } else if (merge_param.merge_level_ != MACRO_BLOCK_MERGE_LEVEL) {
     bret = false;
-    LOG_WARN("Unexpected merge level for minor row merge iter", K(bret), K(merge_param));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge level for minor row merge iter", K(bret), K(merge_param));
   } else if (!table_->is_multi_version_table()) {
     bret = false;
-    LOG_WARN("Unexpected table type for minor row merge iter", K(bret), KPC(table_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected table type for minor row merge iter", K(bret), KPC(table_));
   }
 
   return bret;
@@ -1282,7 +1282,7 @@ bool ObPartitionMinorMacroMergeIter::inner_check(const ObMergeParameter &merge_p
 
   if (!table_->is_sstable()) {
     bret = false;
-    LOG_WARN("Unexpected table type for minor row merge iter", K(bret), KPC(table_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected table type for minor row merge iter", K(bret), KPC(table_));
   } else {
     bret = ObPartitionMinorRowMergeIter::inner_check(merge_param);
   }

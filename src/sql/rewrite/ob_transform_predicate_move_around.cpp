@@ -486,6 +486,7 @@ int ObTransformPredicateMoveAround::update_subquery_pullup_preds(ObIArray<ObQuer
   ObSEArray<ObRawExpr *, 4> renamed_preds;
   for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
     ObQueryRefRawExpr *subquery = subquery_exprs.at(i);
+    renamed_preds.reuse();
     if (OB_ISNULL(subquery)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sub query is null", K(ret));
@@ -1487,16 +1488,35 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_const_select(ObSelect
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid select list", K(child_select_list.count()), K(parent_select_list), K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < child_select_list.count(); ++i) {
-      ObRawExpr *child_expr = child_select_list.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < parent_select_list.count(); ++i) {
+      ObRawExpr *child_expr = NULL;
       ObRawExpr *parent_expr = parent_select_list.at(i);
+      const ObRawExpr *real_parent_expr = parent_select_list.at(i);
       ObRawExpr *generated_expr = NULL;
       bool is_not_null = false;
-      if (OB_ISNULL(child_expr) || OB_ISNULL(parent_expr)) {
+      int64_t child_idx = OB_INVALID_ID;
+      if (OB_ISNULL(parent_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(parent_expr, real_parent_expr))) {
+        LOG_WARN("fail to get real expr", K(ret));
+      } else if (OB_ISNULL(real_parent_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid expr", K(ret), K(real_parent_expr));
+      } else if (!real_parent_expr->is_set_op_expr()) {
+        // do nothing
+      } else if (FALSE_IT(child_idx = static_cast<const ObSetOpRawExpr *>(real_parent_expr)->get_idx())) {
+      } else if (OB_UNLIKELY(child_idx < 0 || child_idx >= child_select_list.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("set op index is invalid", K(ret), K(child_idx));
+      } else if (OB_ISNULL(child_expr = child_select_list.at(child_idx))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid expr", K(ret));
       } else if (!child_expr->is_const_expr()) {
         // do nothing
+      } else if (child_expr->get_result_type().is_ext() ||
+                 real_parent_expr->get_result_type().is_ext()) {
+        // OP_EQ between udt not supported
       } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(
                            ctx_, child_stmt, child_expr, NULLABLE_SCOPE::NS_TOP, is_not_null))) {
         LOG_WARN("failed to check expr not null", K(ret));
@@ -1516,10 +1536,10 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_const_select(ObSelect
                   && !(lib::is_oracle_mode() && result.is_null_oracle()))) {
           //do nothing
         } else if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx_->expr_factory_,
-                                                                  parent_expr,
+                                                                  const_cast<ObRawExpr*>(real_parent_expr),
                                                                   false,
                                                                   generated_expr))) {
-          LOG_WARN("fail to build is null expr", K(ret), K(parent_expr));
+          LOG_WARN("fail to build is null expr", K(ret), K(real_parent_expr));
         } else if (OB_ISNULL(generated_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("is_null expr is null", K(ret));
@@ -1528,7 +1548,7 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_const_select(ObSelect
         } else {}
       } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
                            *(ctx_->expr_factory_), ctx_->session_info_, T_OP_EQ,
-                           generated_expr, parent_expr, child_expr))) {
+                           generated_expr, const_cast<ObRawExpr*>(real_parent_expr), child_expr))) {
         LOG_WARN("failed to create double op expr", K(ret));
       }
       if (OB_FAIL(ret) || NULL == generated_expr) {

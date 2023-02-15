@@ -15,7 +15,7 @@
 #include "storage/access/ob_dml_param.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/cmd/ob_table_direct_insert_trans.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -50,10 +50,10 @@ int ObPxMultiPartInsertOp::inner_open()
   }
   if (OB_SUCC(ret)) {
     const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-    if (plan->get_enable_append() && (0 != plan->get_append_table_id())) {
+    if (ObTableDirectInsertService::is_direct_insert(*plan)) {
       int64_t task_id = ctx_.get_px_task_id() + 1;
-      if (OB_FAIL(ObTableDirectInsertTrans::start_trans(plan->get_append_table_id(), task_id))) {
-        LOG_WARN("failed to start table direct insert trans", KR(ret),
+      if (OB_FAIL(ObTableDirectInsertService::open_task(plan->get_append_table_id(), task_id))) {
+        LOG_WARN("failed to open table direct insert task", KR(ret),
             K(plan->get_append_table_id()), K(task_id));
       } else {
         ins_rtdef_.das_rtdef_.direct_insert_task_id_ = task_id;
@@ -104,11 +104,14 @@ int ObPxMultiPartInsertOp::inner_close()
 {
   int ret = OB_SUCCESS;
   const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-  if (plan->get_enable_append() && (0 != plan->get_append_table_id())) {
+  if (ObTableDirectInsertService::is_direct_insert(*plan)) {
     int64_t task_id = ctx_.get_px_task_id() + 1;
-    if (OB_FAIL(ObTableDirectInsertTrans::finish_trans(plan->get_append_table_id(), task_id))) {
-      LOG_WARN("failed to finish table direct insert trans", KR(ret),
-          K(plan->get_append_table_id()), K(task_id));
+    int error_code = (static_cast<const ObPxMultiPartInsertOpInput *>(input_))->get_error_code();
+    if (OB_FAIL(ObTableDirectInsertService::close_task(plan->get_append_table_id(),
+                                                task_id,
+                                                error_code))) {
+      LOG_WARN("failed to close table direct insert task", KR(ret),
+          K(plan->get_append_table_id()), K(task_id), K(error_code));
     }
   }
   if (OB_FAIL(ObTableModifyOp::inner_close())) {

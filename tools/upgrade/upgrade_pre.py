@@ -226,59 +226,70 @@
 #    time.sleep(5)
 #
 #def do_begin_upgrade(cur, timeout):
-#  action_sql = "alter system begin upgrade"
-#  rollback_sql = "alter system end upgrade"
 #
 #  if not check_parameter(cur, False, "enable_upgrade_mode", "True"):
+#    action_sql = "alter system begin upgrade"
+#    rollback_sql = "alter system end upgrade"
 #    logging.info(action_sql)
+#
 #    cur.execute(action_sql)
+#
+#    global g_succ_sql_list
+#    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 #
 #  wait_parameter_sync(cur, False, "enable_upgrade_mode", "True", timeout)
 #
-#  global g_succ_sql_list
-#  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 #
 #def do_begin_rolling_upgrade(cur, timeout):
-#  action_sql = "alter system begin rolling upgrade"
-#  rollback_sql = "alter system end upgrade"
 #
 #  if not check_parameter(cur, False, "_upgrade_stage", "DBUPGRADE"):
+#    action_sql = "alter system begin rolling upgrade"
+#    rollback_sql = "alter system end upgrade"
+#
 #    logging.info(action_sql)
 #    cur.execute(action_sql)
+#
+#    global g_succ_sql_list
+#    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 #
 #  wait_parameter_sync(cur, False, "_upgrade_stage", "DBUPGRADE", timeout)
 #
-#  global g_succ_sql_list
-#  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 #
 #def do_end_rolling_upgrade(cur, timeout):
+#
+#  # maybe in upgrade_post_check stage or never run begin upgrade
+#  if check_parameter(cur, False, "enable_upgrade_mode", "False"):
+#    return
+#
 #  current_cluster_version = get_current_cluster_version()
-#
-#  action_sql = "alter system end rolling upgrade"
-#  rollback_sql = "alter system end upgrade"
-#
 #  if not check_parameter(cur, False, "_upgrade_stage", "POSTUPGRADE") or not check_parameter(cur, False, "min_observer_version", current_cluster_version):
+#    action_sql = "alter system end rolling upgrade"
+#    rollback_sql = "alter system end upgrade"
+#
 #    logging.info(action_sql)
 #    cur.execute(action_sql)
+#
+#    global g_succ_sql_list
+#    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 #
 #  wait_parameter_sync(cur, False, "min_observer_version", current_data_version, timeout)
 #  wait_parameter_sync(cur, False, "_upgrade_stage", "POSTUPGRADE", timeout)
 #
-#  global g_succ_sql_list
-#  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 #
 #def do_end_upgrade(cur, timeout):
-#  action_sql = "alter system end upgrade"
-#  rollback_sql = ""
 #
 #  if not check_parameter(cur, False, "enable_upgrade_mode", "False"):
+#    action_sql = "alter system end upgrade"
+#    rollback_sql = ""
+#
 #    logging.info(action_sql)
 #    cur.execute(action_sql)
 #
+#    global g_succ_sql_list
+#    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
+#
 #  wait_parameter_sync(cur, False, "enable_upgrade_mode", "False", timeout)
 #
-#  global g_succ_sql_list
-#  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
 #
 #class Cursor:
 #  __cursor = None
@@ -572,7 +583,6 @@
 #      if run_modules.MODULE_POST_CHECK in my_module_set:
 #        logging.info('================begin to run post check action ===============')
 #        conn.autocommit = True
-#        actions.do_end_upgrade(cur, timeout)
 #        upgrade_post_checker.do_check(conn, cur, query_cur, timeout)
 #        conn.autocommit = False
 #        actions.refresh_commit_sql_list()
@@ -1215,6 +1225,8 @@
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
 #    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+#    actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
+#    actions.set_parameter(cur, 'enable_rereplication', 'False', timeout)
 #####========******####======== actions begin ========####******========####
 #  return
 #####========******####========= actions end =========####******========####
@@ -1271,7 +1283,24 @@
 #  logging.info(sql)
 #  cur.execute(sql)
 #####========******####======== actions begin ========####******========####
+#  upgrade_syslog_level(conn, cur)
 #  return
+#
+#def upgrade_syslog_level(conn, cur):
+#  try:
+#    cur.execute("""select svr_ip, svr_port, value from oceanbase.__all_virtual_sys_parameter_stat where name = 'syslog_level'""")
+#    result = cur.fetchall()
+#    for r in result:
+#      logging.info("syslog level before upgrade: ip: {0}, port: {1}, value: {2}".format(r[0], r[1], r[2]))
+#    cur.execute("""select count(*) cnt from oceanbase.__all_virtual_sys_parameter_stat where name = 'syslog_level' and value = 'INFO'""")
+#    result = cur.fetchall()
+#    info_cnt = result[0][0]
+#    if info_cnt > 0:
+#      actions.set_parameter(cur, "syslog_level", "WDIAG")
+#
+#  except Exception, e:
+#    logging.warn("upgrade syslog level failed!")
+#    raise e
 #####========******####========= actions end =========####******========####
 #
 #def query(cur, sql):

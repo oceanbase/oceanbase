@@ -54,7 +54,7 @@ void ObLogBR::construct_data_(const bool creating_binlog_record)
   data_ = DRCMessageFactory::createBinlogRecord(TCTX.drc_message_factory_binlog_record_type_, creating_binlog_record);
 
   if (OB_ISNULL(data_)) {
-    OBLOG_LOG(ERROR, "DRCMessageFactory::createBinlogRecord fails");
+    OBLOG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "DRCMessageFactory::createBinlogRecord fails");
   } else {
     // set user data pointer to the pointer hold the binlog record
     data_->setUserData(this);

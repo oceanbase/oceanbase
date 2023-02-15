@@ -680,7 +680,7 @@ TEST_F(TestOptEstSel, histogram)
     num_elements.push_back(infos[i][2]);
   }
 
-  init_histogram(ObHistType::FREQUENCY, 100, 0.0025,
+  init_histogram(allocator_, ObHistType::FREQUENCY, 100, 0.0025,
                  repeat_count, value, num_elements, opt_stat_.get_histogram());
 
   run_test(test_file, result_file, tmp_file, 10);

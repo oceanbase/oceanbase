@@ -617,7 +617,7 @@ int ObGeoToWktVisitor::finish(ObIWkbGeogCollection *geo)
 
 void ObGeoToWktVisitor::get_wkt(ObString &wkt)
 {
-  wkt.assign(buffer_.ptr(), buffer_.length());
+  wkt.assign(buffer_.ptr(), static_cast<int32_t>(buffer_.length()));
 }
 
 int ObGeoToWktVisitor::init(uint32_t srid, int64_t maxdecimaldigits)

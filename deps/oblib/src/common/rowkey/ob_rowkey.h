@@ -255,7 +255,7 @@ inline int64_t ObRowkey::get_deep_copy_size() const
 
   if (OB_UNLIKELY(!is_legal())) {
     tmp_ret = OB_INVALID_DATA;
-    COMMON_LOG(ERROR, "illegal rowkey.",
+    COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "illegal rowkey.",
                KP_(obj_ptr), K_(obj_cnt), K(tmp_ret));
   } else {
     for (int64_t i = 0; i < obj_cnt_; ++i) {

@@ -130,10 +130,10 @@ const ObRowkeyColumn *ObRowkeyInfo::get_column(const int64_t index) const
   int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(index < 0 || index >= size_)) {
     tmp_ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument.", K(index), K_(size), K(tmp_ret));
+    COMMON_LOG_RET(WARN, tmp_ret, "Invalid argument.", K(index), K_(size), K(tmp_ret));
   } else if (!is_valid()) {
     tmp_ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "columns has not initialized.",
+    COMMON_LOG_RET(WARN, tmp_ret, "columns has not initialized.",
                KP_(columns), K_(size), K(index), K(tmp_ret));
   } else {
     ret = &columns_[index];

@@ -309,6 +309,9 @@ public:
                                const bool is_oracle_mode,
                                const bool is_ddl);
 
+  static void record_execute_time(sql::ObSQLSessionInfo& session,
+                                  const sql::ObPhysicalPlan *plan);
+
   int64_t get_init_timestamp() const { return init_timestamp_; }
 
 public:

@@ -114,12 +114,14 @@ private:
     int init(const common::ObString &load_info);
     int log_error_line(const common::ObString &file_name, int64_t line_no, int err_code);
   private:
+    int create_log_file(const common::ObString &load_info);
     static int generate_log_file_name(char *buf, int64_t size, common::ObString &file_name);
   private:
     lib::ObMutex mutex_;
     ObFileAppender file_appender_;
     bool is_oracle_mode_;
     char *buf_;
+    bool is_create_log_succ_;
     bool is_inited_;
     DISALLOW_COPY_AND_ASSIGN(Logger);
   };

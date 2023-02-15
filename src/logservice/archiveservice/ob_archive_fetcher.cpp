@@ -11,6 +11,7 @@
  */
 
 #include <cstdint>
+#include "lib/oblog/ob_log_module.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "ob_archive_fetcher.h"
@@ -32,6 +33,7 @@
 #include "objit/common/ob_item_type.h"        // print
 #include "share/ob_debug_sync.h"              // DEBUG_SYNC
 #include "share/ob_debug_sync_point.h"        // LOG_ARCHIVE_PUSH_LOG
+#include "share/ob_errno.h"
 #include "share/ob_ls_id.h"
 
 namespace oceanbase
@@ -225,9 +227,9 @@ ObArchiveLogFetchTask *ObArchiveFetcher::alloc_log_fetch_task()
 {
   ObArchiveLogFetchTask *task = NULL;
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(WARN, "ObArchiveFetcher not init");
+    ARCHIVE_LOG_RET(WARN, OB_NOT_INIT, "ObArchiveFetcher not init");
   } else if (OB_ISNULL(allocator_)) {
-    ARCHIVE_LOG(ERROR, "allocator_ is NULL", K(allocator_));
+    ARCHIVE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "allocator_ is NULL", K(allocator_));
   } else {
     task = allocator_->alloc_log_fetch_task();
   }
@@ -273,7 +275,7 @@ void ObArchiveFetcher::run1()
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "ObArchiveFetcher not init");
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "ObArchiveFetcher not init");
   } else {
     while (!has_set_stop() && !(OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
       int64_t begin_tstamp = ObTimeUtility::current_time();
@@ -949,7 +951,12 @@ void ObArchiveFetcher::handle_log_fetch_ret_(
     // handle ret with retry
   } else {
     if (OB_ERR_OUT_OF_LOWER_BOUND == ret_code) {
-      reason.set(ObArchiveInterruptReason::Factor::LOG_RECYCLE, lbt(), ret_code);
+      int tmp_ret = OB_CLOG_RECYCLE_BEFORE_ARCHIVE;
+      reason.set(ObArchiveInterruptReason::Factor::LOG_RECYCLE, lbt(), tmp_ret);
+      LOG_DBA_ERROR(OB_CLOG_RECYCLE_BEFORE_ARCHIVE, "msg", "observer clog is recycled "
+          "before archive, check if archive speed is less than clog writing speed "
+          "or archive device is full or archive device is not healthy",
+          "ret", tmp_ret);
     } else {
       reason.set(ObArchiveInterruptReason::Factor::UNKONWN, lbt(), ret_code);
     }

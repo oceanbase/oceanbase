@@ -102,22 +102,23 @@ private:
     ~ObQueryRangeCtx()
     {
     }
-    void clear()
-    {
-      key_part_map_.reset();
-      need_final_extract_ = false;
-    }
-    void reset()
-    {
-      clear();
-      precise_range_exprs_.reset();
-      final_exprs_.reset();
-      expr_constraints_ = NULL;
-      params_ = NULL;
-      cur_expr_is_precise_ = false;
-    }
+    // void clear()
+    // {
+    //   key_part_map_.reset();
+    //   key_part_pos_array_.reset();
+    //   need_final_extract_ = false;
+    // }
+    // void reset()
+    // {
+    //   clear();
+    //   precise_range_exprs_.reset();
+    //   final_exprs_.reset();
+    //   expr_constraints_ = NULL;
+    //   params_ = NULL;
+    //   cur_expr_is_precise_ = false;
+    // }
     //131的原因是最大的rowkey个数是128，距离128最近的素数是131
-    common::hash::ObPlacementHashMap<ObKeyPartId, ObKeyPartPos, 131> key_part_map_;
+    common::hash::ObPlacementHashMap<ObKeyPartId, ObKeyPartPos*, 131> key_part_map_;
     bool need_final_extract_;
     int64_t max_valid_offset_;
     bool cur_expr_is_precise_; //当前正在被抽取的表达式是精确的范围，没有被放大
@@ -128,6 +129,7 @@ private:
     ExprConstrantArray *expr_constraints_;
     const ParamsIArray *params_;
     common::ObSEArray<const ObRawExpr *, 16> final_exprs_;
+    ObSEArray<ObKeyPartPos*, 8> key_part_pos_array_;
   };
 public:
   enum ObQueryRangeState
@@ -182,7 +184,7 @@ public:
     {
       uint64_t uval = 0;
       if (NULL == range_) {
-        SQL_REWRITE_LOG(WARN, "range_ is not inited.");
+        SQL_REWRITE_LOG_RET(WARN, common::OB_NOT_INIT, "range_ is not inited.");
       } else {
         uval = range_->hash();
       }
@@ -644,7 +646,7 @@ private:
                             const ObOpRawExpr *r_expr,
                             ObKeyPart *&tmp_key_part,
                             bool &has_rowid,
-                            common::hash::ObHashMap<int64_t, ObKeyPartPos> &idx_pos_map,
+                            common::hash::ObHashMap<int64_t, ObKeyPartPos*> &idx_pos_map,
                             common::hash::ObHashMap<int64_t, InParamMeta *> &idx_param_map,
                             common::hash::ObHashMap<int64_t, int64_t> &expr_idx_param_idx_map,
                             const ObDataTypeCastParams &dtc_params);
@@ -681,7 +683,7 @@ private:
                          const ObRawExpr *const_expr,
                          const ObExprCalcType &calc_type,
                          const ObKeyPartPos &key_pos);
-  int is_key_part(const ObKeyPartId &id, ObKeyPartPos &pos, bool &is_key_part);
+  int is_key_part(const ObKeyPartId &id, ObKeyPartPos *&pos, bool &is_key_part);
   int split_general_or(ObKeyPart *graph, ObKeyPartList &or_storage);
   int split_or(ObKeyPart *graph, ObKeyPartList &or_list);
   int split_and(ObKeyPart *and_graph, ObKeyPartList &and_list);

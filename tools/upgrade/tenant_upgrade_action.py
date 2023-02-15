@@ -33,7 +33,24 @@ def do_upgrade(conn, cur, timeout, user, pwd):
   logging.info(sql)
   cur.execute(sql)
 ####========******####======== actions begin ========####******========####
+  upgrade_syslog_level(conn, cur)
   return
+
+def upgrade_syslog_level(conn, cur):
+  try:
+    cur.execute("""select svr_ip, svr_port, value from oceanbase.__all_virtual_sys_parameter_stat where name = 'syslog_level'""")
+    result = cur.fetchall()
+    for r in result:
+      logging.info("syslog level before upgrade: ip: {0}, port: {1}, value: {2}".format(r[0], r[1], r[2]))
+    cur.execute("""select count(*) cnt from oceanbase.__all_virtual_sys_parameter_stat where name = 'syslog_level' and value = 'INFO'""")
+    result = cur.fetchall()
+    info_cnt = result[0][0]
+    if info_cnt > 0:
+      actions.set_parameter(cur, "syslog_level", "WDIAG")
+
+  except Exception, e:
+    logging.warn("upgrade syslog level failed!")
+    raise e
 ####========******####========= actions end =========####******========####
 
 def query(cur, sql):

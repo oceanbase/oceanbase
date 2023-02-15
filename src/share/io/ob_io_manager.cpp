@@ -766,8 +766,8 @@ int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
       io_config_.memory_limit_ = io_config.memory_limit_;
       io_config_.callback_thread_count_ = io_config.callback_thread_count_;
       io_config_.unit_config_ = io_config.unit_config_;
-      if (!io_config_.enable_io_tracer_) {
-        ATOMIC_SET(&io_config_.enable_io_tracer_, false);
+      ATOMIC_SET(&io_config_.enable_io_tracer_, io_config.enable_io_tracer_);
+      if (!io_config.enable_io_tracer_) {
         io_tracer_.reuse();
       }
       LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_));

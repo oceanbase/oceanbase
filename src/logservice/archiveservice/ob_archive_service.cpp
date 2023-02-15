@@ -217,7 +217,7 @@ void ObArchiveService::run1()
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "archive service not init", K_(tenant_id));
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "archive service not init", K_(tenant_id));
   } else {
     while (! has_set_stop()) {
       int64_t begin_tstamp = ObTimeUtility::current_time();
@@ -408,7 +408,7 @@ int ObArchiveService::start_archive_(const ObTenantArchiveRoundAttr &attr)
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(
           *mysql_proxy, attr.key_.tenant_id_, attr.path_, dest))) {
     ARCHIVE_LOG(ERROR, "get backup dest failed", K(ret), K(attr));
-  } else if (OB_FAIL(archive_round_mgr_.set_archive_start(key,
+  } else if (OB_FAIL(archive_round_mgr_.set_archive_start(key, attr.start_scn_,
           attr.piece_switch_interval_, attr.start_scn_, attr.base_piece_id_,
           share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2, dest))) {
     ARCHIVE_LOG(ERROR, "archive round mgr set archive info failed", K(ret), K(attr));

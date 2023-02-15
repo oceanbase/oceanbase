@@ -121,7 +121,7 @@ public:
   inline value_type &at(const int64_t index) const
   {
     if (OB_UNLIKELY(index < 0 || index >= size())) {
-      COMMON_LOG(ERROR, "invalid index", K(index));
+      COMMON_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "invalid index", K(index));
     }
     return *(mem_begin_ + index);
   }

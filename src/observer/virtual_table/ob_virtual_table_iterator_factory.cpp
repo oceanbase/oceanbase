@@ -2179,6 +2179,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_IO_SCHEDULER_TID: {
+            ObAllVirtualIOScheduler *io_scheduler = nullptr;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualIOScheduler, io_scheduler))) {
+              if (OB_FAIL(io_scheduler->init(addr_))) {
+                SERVER_LOG(WARN, "fail to init io_scheduler_tid, ", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(io_scheduler);
+              }
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_TABLET_ENCRYPT_INFO_TID: {
             ObAllVirtualTabletEncryptInfo *partition_encrypt_info = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTabletEncryptInfo, partition_encrypt_info))) {

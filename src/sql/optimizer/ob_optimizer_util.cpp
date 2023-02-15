@@ -523,12 +523,12 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
     // do nothing
   } else if (ObRawExprUtils::expr_is_order_consistent(from, to, is_consistent)
              != OB_SUCCESS) {
-    LOG_WARN("check expr is order consist ent failed");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "check expr is order consist ent failed");
   } else if (is_consistent) {
     int64_t N = equal_sets.count();
     for (int64_t i = 0; !found && i < N; ++i) {
       if (OB_ISNULL(equal_sets.at(i))) {
-        LOG_WARN("get null equal set");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "get null equal set");
       } else if (find_equal_expr(*equal_sets.at(i), from) &&
                  find_equal_expr(*equal_sets.at(i), to)) {
         found = true;
@@ -2307,32 +2307,6 @@ int ObOptimizerUtil::is_same_table(
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObOptimizerUtil::get_partition_count(const ObLogicalOperator *top,
-                                         const ObIArray<ObRawExpr*> &partition_exprs,
-                                         const int64_t prefix_pos,
-                                         int64_t &part_cnt)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 8> pruning_partition_exprs;
-  if (OB_ISNULL(top) || OB_ISNULL(top->get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(top), K(ret));
-  } else if (prefix_pos > 0 || partition_exprs.empty()) {
-    part_cnt = 0;
-  } else if (OB_FAIL(simplify_ordered_exprs(top->get_fd_item_set(),
-                                            top->get_output_equal_sets(),
-                                            top->get_output_const_exprs(),
-                                            top->get_plan()->get_onetime_query_refs(),
-                                            partition_exprs,
-                                            pruning_partition_exprs))) {
-    LOG_WARN("failed to simplify ordered exprs", K(ret));
-  } else {
-    // 简化后 partition_exprs 中的表达式在 sort_keys 中都有效。
-    part_cnt = pruning_partition_exprs.count();
   }
   return ret;
 }

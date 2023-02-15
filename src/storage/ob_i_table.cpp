@@ -119,6 +119,12 @@ void ObITable::reset()
   key_.reset();
 }
 
+int ObITable::safe_to_destroy(bool &is_safe)
+{
+  is_safe = true;
+  return OB_SUCCESS;
+}
+
 int ObITable::exist(
     ObStoreCtx &ctx,
     const uint64_t table_id,
@@ -188,7 +194,7 @@ void ObTableHandleV2::reset()
 {
   if (nullptr != table_) {
     if (OB_UNLIKELY(!is_valid())) {
-      STORAGE_LOG(ERROR, "t3m or allocator is nullptr", KP_(table), KP_(t3m), KP_(allocator));
+      STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "t3m or allocator is nullptr", KP_(table), KP_(t3m), KP_(allocator));
       ob_abort();
     } else {
       const int64_t ref_cnt = table_->dec_ref();
@@ -200,7 +206,7 @@ void ObTableHandleV2::reset()
           allocator_->free(table_);
         }
       } else if (OB_UNLIKELY(ref_cnt < 0)) {
-        LOG_ERROR("table ref cnt may be leaked", K(ref_cnt), KP(table_), K(table_type_));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "table ref cnt may be leaked", K(ref_cnt), KP(table_), K(table_type_));
       }
       table_ = nullptr;
       t3m_ = nullptr;
@@ -426,7 +432,7 @@ ObTableHandleV2 &ObTableHandleV2::operator= (const ObTableHandleV2 &other)
     reset();
     if (nullptr != other.table_) {
       if (OB_UNLIKELY(!other.is_valid())) {
-        STORAGE_LOG(ERROR, "t3m_ is nullptr", K(other));
+        STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "t3m_ is nullptr", K(other));
         ob_abort();
       } else {
         table_ = other.table_;
@@ -435,7 +441,7 @@ ObTableHandleV2 &ObTableHandleV2::operator= (const ObTableHandleV2 &other)
         allocator_ = other.allocator_;
         table_type_ = other.table_type_;
         if (OB_UNLIKELY(other.table_->get_ref() < 2)) {
-          STORAGE_LOG(ERROR, "The reference count of the table is unexpectedly decreased,"
+          STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "The reference count of the table is unexpectedly decreased,"
               " the possible reason is that the table handle has concurrency", K(other));
         }
       }
@@ -507,7 +513,7 @@ void ObTablesHandleArray::reset()
         const int64_t ref_cnt = table->dec_ref();
         if (0 == ref_cnt) {
           if (OB_ISNULL(meta_mem_mgr_) && OB_ISNULL(allocator_)) {
-            STORAGE_LOG(ERROR, "[MEMORY LEAK] meta_mem_mgr is unexpected null!!!", KPC(table), K(tablet_id_), KP(meta_mem_mgr_), KP(allocator_));
+            STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "[MEMORY LEAK] meta_mem_mgr is unexpected null!!!", KPC(table), K(tablet_id_), KP(meta_mem_mgr_), KP(allocator_));
           } else if (nullptr != meta_mem_mgr_) {
             meta_mem_mgr_->push_table_into_gc_queue(table, table->get_key().table_type_);
           } else {
@@ -515,7 +521,7 @@ void ObTablesHandleArray::reset()
             allocator_->free(table);
           }
         } else if (OB_UNLIKELY(ref_cnt < 0)) {
-          LOG_ERROR("table ref cnt may be leaked", K(ref_cnt), KP(table), "table type", table->get_key().table_type_);
+          LOG_ERROR_RET(OB_ERR_UNEXPECTED, "table ref cnt may be leaked", K(ref_cnt), KP(table), "table type", table->get_key().table_type_);
         }
       }
       tables_.at(i) = nullptr;

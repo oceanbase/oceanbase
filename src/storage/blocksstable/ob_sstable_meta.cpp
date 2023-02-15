@@ -57,11 +57,12 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     table_mode_(),
     status_(0),
     contain_uncommitted_row_(false),
-    row_store_type_(ObRowStoreType::MAX_ROW_STORE),
+    root_row_store_type_(ObRowStoreType::MAX_ROW_STORE),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     encrypt_id_(0),
     master_key_id_(0),
-    sstable_logic_seq_(0)
+    sstable_logic_seq_(0),
+    latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -100,11 +101,12 @@ bool ObSSTableBasicMeta::operator==(const ObSSTableBasicMeta &other) const
       && table_mode_ == other.table_mode_
       && status_ == other.status_
       && contain_uncommitted_row_ == other.contain_uncommitted_row_
-      && row_store_type_ == other.row_store_type_
+      && root_row_store_type_ == other.root_row_store_type_
       && compressor_type_ == other.compressor_type_
       && encrypt_id_ == other.encrypt_id_
       && master_key_id_ == other.master_key_id_
-      && 0 == MEMCMP(encrypt_key_, other.encrypt_key_, sizeof(encrypt_key_));
+      && 0 == MEMCMP(encrypt_key_, other.encrypt_key_, sizeof(encrypt_key_))
+      && latest_row_store_type_ == other.latest_row_store_type_;
 }
 
 
@@ -131,7 +133,8 @@ bool ObSSTableBasicMeta::is_valid() const
            && filled_tx_scn_.is_valid()
            && data_index_tree_height_ >= 0
            && sstable_logic_seq_ >= 0
-           && row_store_type_ < ObRowStoreType::MAX_ROW_STORE);
+           && root_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
+           && is_latest_row_store_type_valid());
   return ret;
 }
 
@@ -164,12 +167,13 @@ void ObSSTableBasicMeta::reset()
   table_mode_.reset();
   status_ = SSTABLE_NOT_INIT;
   contain_uncommitted_row_ = false;
-  row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
+  root_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   encrypt_id_ = 0;
   master_key_id_ = 0;
   sstable_logic_seq_ = 0;
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+  latest_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
 }
 
 DEFINE_SERIALIZE(ObSSTableBasicMeta)
@@ -220,11 +224,12 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   table_mode_,
                   status_,
                   contain_uncommitted_row_,
-                  row_store_type_,
+                  root_row_store_type_,
                   compressor_type_,
                   encrypt_id_,
                   master_key_id_,
-                  sstable_logic_seq_);
+                  sstable_logic_seq_,
+                  latest_row_store_type_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -269,6 +274,8 @@ DEFINE_DESERIALIZE(ObSSTableBasicMeta)
 int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  // set latest_row_store_type to invalid on deserialize for compatibility
+  latest_row_store_type_ = ObRowStoreType::DUMMY_ROW_STORE;
   MEMCPY(encrypt_key_, buf + pos, sizeof(encrypt_key_));
   pos += sizeof(encrypt_key_);
   LST_DO_CODE(OB_UNIS_DECODE,
@@ -297,11 +304,12 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
               table_mode_,
               status_,
               contain_uncommitted_row_,
-              row_store_type_,
+              root_row_store_type_,
               compressor_type_,
               encrypt_id_,
               master_key_id_,
-              sstable_logic_seq_);
+              sstable_logic_seq_,
+              latest_row_store_type_);
   return ret;
 }
 
@@ -337,11 +345,12 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               table_mode_,
               status_,
               contain_uncommitted_row_,
-              row_store_type_,
+              root_row_store_type_,
               compressor_type_,
               encrypt_id_,
               master_key_id_,
-              sstable_logic_seq_);
+              sstable_logic_seq_,
+              latest_row_store_type_);
   return len;
 }
 
@@ -474,7 +483,8 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.filled_tx_scn_ = param.filled_tx_scn_;
     basic_meta_.data_index_tree_height_ = param.data_index_tree_height_;
     basic_meta_.sstable_logic_seq_ = param.sstable_logic_seq_;
-    basic_meta_.row_store_type_ = param.root_row_store_type_;
+    basic_meta_.root_row_store_type_ = param.root_row_store_type_;
+    basic_meta_.latest_row_store_type_ = param.latest_row_store_type_;
     basic_meta_.compressor_type_ = param.compressor_type_;
     basic_meta_.encrypt_id_ = param.encrypt_id_;
     basic_meta_.master_key_id_ = param.master_key_id_;

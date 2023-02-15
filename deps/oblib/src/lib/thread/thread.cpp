@@ -227,7 +227,7 @@ void* Thread::__th_start(void *arg)
   nss.ss_size = SIG_STACK_SIZE;
   bool restore_sigstack = false;
   if (-1 == sigaltstack(&nss, &oss)) {
-    LOG_WARN("sigaltstack failed, ignore it", K(errno));
+    LOG_WARN_RET(OB_ERR_SYS, "sigaltstack failed, ignore it", K(errno));
   } else {
     restore_sigstack = true;
   }
@@ -255,14 +255,13 @@ void* Thread::__th_start(void *arg)
       pm.set_max_chunk_cache_cnt(cache_cnt);
       ObPageManager::set_thread_local_instance(pm);
       MemoryContext *mem_context = GET_TSI0(MemoryContext);
-      ret = ROOT_CONTEXT->CREATE_CONTEXT(*mem_context,
-          ContextParam().set_properties(RETURN_MALLOC_DEFAULT)
-                        .set_label("ThreadRoot"));
-      if (OB_FAIL(ret)) {
-        LOG_ERROR("create memory context failed", K(ret));
-      } else if (OB_ISNULL(mem_context)) {
+      if (OB_ISNULL(mem_context)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("null ptr", K(ret));
+      } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(*mem_context,
+                         ContextParam().set_properties(RETURN_MALLOC_DEFAULT)
+                                       .set_label("ThreadRoot")))) {
+        LOG_ERROR("create memory context failed", K(ret));
       } else {
         th->pid_ = getpid();
         th->tid_ = static_cast<pid_t>(syscall(__NR_gettid));

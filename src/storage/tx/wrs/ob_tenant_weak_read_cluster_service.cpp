@@ -25,8 +25,10 @@
 #include "ob_tenant_weak_read_cluster_service.h"
 
 #define STAT(level, fmt, args...) TRANS_LOG(level, "[WRS] [TENANT_WEAK_READ_SERVICE] [CLUSTER_SERVICE] " fmt, ##args);
+#define STAT_RET(level, errcode, fmt, args...) TRANS_LOG_RET(level, errcode, "[WRS] [TENANT_WEAK_READ_SERVICE] [CLUSTER_SERVICE] " fmt, ##args);
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define WSTAT(fmt, args...) STAT(WARN, fmt, ##args)
+#define WSTAT_RET(errcode, fmt, args...) STAT_RET(WARN, errcode, fmt, ##args)
 #define DSTAT(fmt, args...) STAT(DEBUG, fmt, ##args)
 
 namespace oceanbase
@@ -581,7 +583,7 @@ bool ObTenantWeakReadClusterService::check_can_update_version_()
 
     // print log in first update version
     if (! old_can_update_version) {
-      WSTAT("force to update version while not all valid servers registered",
+      WSTAT_RET(OB_ERR_UNDEFINED, "force to update version while not all valid servers registered",
           "tenant_id", MTL_ID(),
           K(registered_server_count),
           K_(all_valid_server_count),
@@ -828,7 +830,7 @@ bool ObTenantWeakReadClusterService::need_force_change_leader_()
         && leader_alive_tstamp > LEADER_ALIVE_THRESHOLD_FOR_CHANGE_LEADER
         && last_error_interval < LAST_ERROR_TSTAMP_INTERVAL_FOR_CHANGE_LEADER) {
       bool_ret = true;
-      LOG_WARN("too many errors occur, need change weak read service partition leader",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "too many errors occur, need change weak read service partition leader",
           K(cluster_service_tablet_id_), K(error_static), K(start_service_tstamp), K(leader_alive_tstamp),
           K(tenant_id), K(bool_ret));
     }

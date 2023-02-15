@@ -247,7 +247,8 @@ public:
                                        ObIArray<ObColumnStatParam> &column_params,
                                        common::ObIArray<ObString> &record_cols);
 
-  static int parse_partition_name(const share::schema::ObTableSchema *&table_schema,
+  static int parse_partition_name(ObExecContext &ctx,
+                                  const share::schema::ObTableSchema *&table_schema,
                                   const ObObjParam &part_name,
                                   ObTableStatParam &param);
 
@@ -365,6 +366,9 @@ public:
                                   common::ObIArray<int64_t> &subpart_ids,
                                   OSGPartMap *part_map = NULL);
 
+  static int get_part_ids_from_schema(const share::schema::ObTableSchema *table_schema,
+                                      common::ObIArray<ObObjectID> &target_part_ids);
+
   static int update_stat_cache(obrpc::ObCommonRpcProxy *proxy,
                                const ObTableStatParam &param);
 
@@ -432,7 +436,8 @@ public:
 
   static int process_not_size_manual_column(sql::ObExecContext &ctx, ObTableStatParam &table_param);
 
-  static int parse_set_partition_name(const share::schema::ObTableSchema *&table_schema,
+  static int parse_set_partition_name(ObExecContext &ctx,
+                                      const share::schema::ObTableSchema *&table_schema,
                                       const ObObjParam &part_name,
                                       ObTableStatParam &param);
 
@@ -468,7 +473,9 @@ public:
   static int set_param_global_part_id(ObExecContext &ctx,
                                       ObTableStatParam &param,
                                       bool is_data_table = false,
-                                      const int64_t data_table_id = -1);
+                                      const int64_t data_table_id = -1,
+                                      share::schema::ObPartitionLevel data_table_level
+                                          = share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO);
 
   static int get_table_partition_map(const ObTableSchema &table_schema,
                                      OSGPartMap &part_map);
@@ -476,7 +483,8 @@ public:
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 
-  static int parse_column_info(const ObObjParam &column_name,
+  static int parse_column_info(sql::ObExecContext &ctx,
+                               const ObObjParam &column_name,
                                ObTableStatParam &param);
 
   static int parse_stat_category(const ObString &stat_category);
@@ -499,7 +507,11 @@ private:
                                                const StatTable &stat_table,
                                                double &stale_percent_threshold);
 
-  static void try_caseup(ObCollationType cs_type, ObString &str_val);
+  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
+                                      const common::ObDataTypeCastParams &dtc_params,
+                                      ObString &ident_name,
+                                      bool need_extra_conv = false);
+
 
   static int get_common_table_stale_percent(sql::ObExecContext &ctx,
                                             const uint64_t tenant_id,

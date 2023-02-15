@@ -432,5 +432,59 @@ drop table if exists tt1, tt2, tt3;
 drop table if exists cghldinf, puzdjypf, pujydypf;
 --enable_warnings
 
+#Bugfix:https://work.aone.alibaba-inc.com/issue/47217185
+--disable_warnings
+drop table if exists v0;
+--enable_warnings
+CREATE TABLE v0 ( v1 varchar(127));
+select * from v0 where v1 in (select -127 minus select _BINARY 'x');
+explain select * from v0 where v1 in (select -127 minus select _BINARY 'x');
+drop table if exists v0;
+
+
+#Bugfix:https://work.aone.alibaba-inc.com/issue/47186369
+--explain_protocol 0
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+--enable_warnings
+create table t1(c1 decimal(10), c2 varchar(10), c3 varbinary(20));
+insert into t1(c1,c2) values(10,'a'),(20,'ab'),(50,'ad'),(100,'b'),(150,'c');
+create table t2(c1 decimal(20), c2 double, c3 varchar(20));
+insert into t2(c1,c2,c3) values(10,10,'a'),(20,20,'b'),(50,50,NULL),(100,100,NULL),(150,150,NULL);
+create table t3(c1 decimal(16), c2 float);
+insert into t3(c1,c2) values(10,10),(20,20),(50,50),(100,100),(150,150);
+--explain_protocol 2
+--echo test IN pred
+### different accuracy
+select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t2.c1 in (10,20,40);
+select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t1.c1 in (10,20,40);
+select t1.c1,t2.c1 from t1,t2,t3 where t1.c1 = t3.c1 and t2.c1 = t3.c1 and t1.c1 in (10,20,40);
+### different types
+####preds are 'cast(t1.c1,double) = cast(t3.c2,double)' and 'cast(t3.c2,double) in (10,20,40)'. cast(t3.c2,double) is not column ref, so 't1.c1 in (10,20,40)' won't be deduced.
+select * from t1,t3 where t1.c1 = t3.c2 and t3.c2 in (10,20,40);
+####different collection type
+select * from t1,t2 where t1.c3 = t2.c3 and t2.c3 in ('a','b','c');
+select * from t1,t2 where t1.c3 = t2.c3 and t1.c3 in ('a','b','c');
+--echo test NOT EQUAL
+select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t2.c1 <> 20;
+select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t1.c1 <> 20;
+select t1.c1,t2.c1 from t1,t2,t3 where t1.c1 = t3.c1 and t2.c1 = t3.c1 and t1.c1 <>20;
+select * from t1,t3 where t1.c1 = t3.c2 and t3.c2 <> 20;
+
+--echo test BETWEEN
+### differnt types
+select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t2.c2 between 10 and cast(100 as float);
+select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t3.c2 between 10 and cast(100 as float);
+
+--echo test LIKE
+select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t2.c3 like 'a_';
+select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t1.c2 like 'a_';
+
+drop table t1;
+drop table t2;
+drop table t3;
+
 USE DB_PREDICATE_DEDUCE;
 drop database DB_PREDICATE_DEDUCE;

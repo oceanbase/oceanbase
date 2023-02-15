@@ -525,7 +525,7 @@ bool ObRemoteBaseExecuteP<T>::query_can_retry_in_remote(int &last_err,
         last_err = err;
         if (OB_SUCCESS != (err = exec_ctx_.check_status())) {
           bret = false;
-          LOG_WARN("cehck execute status failed", K(err), K(last_err), K(bret));
+          LOG_WARN_RET(err, "cehck execute status failed", K(err), K(last_err), K(bret));
           err = last_err; //返回真实值
         } else {
           LOG_INFO("query retry in remote", K(retry_times), K(last_err));
@@ -537,7 +537,7 @@ bool ObRemoteBaseExecuteP<T>::query_can_retry_in_remote(int &last_err,
     }
     if (!bret && is_try_lock_row_err(last_err) && is_timeout_err(err)) {
       //锁冲突重试到超时，最后直接给用户报LOCK CONFLICT错误
-      LOG_WARN("retry query until query timeout", K(last_err), K(err));
+      LOG_WARN_RET(err, "retry query until query timeout", K(last_err), K(err));
       err = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
     }
   }
@@ -763,7 +763,7 @@ int ObRemoteBaseExecuteP<T>::base_before_response(common::ObScanner &scanner)
     int get_ret = MTL(transaction::ObTransService*)
       ->get_tx_exec_result(*session->get_tx_desc(), scanner.get_trans_result());
     if (OB_SUCCESS != get_ret) {
-      LOG_WARN("failed to get trans result",
+      LOG_WARN_RET(get_ret, "failed to get trans result",
                K(get_ret),
                "scanner_trans_result", scanner.get_trans_result(),
                "tx_desc", *session->get_tx_desc());
@@ -794,7 +794,7 @@ int ObRemoteBaseExecuteP<T>::base_before_response(common::ObScanner &scanner)
         has_store_pl_msg = true;
       }
       if (!has_store_pl_msg) {
-        LOG_WARN("get pl msg fail.", K(exec_errcode_));
+        LOG_WARN_RET(OB_ERROR, "get pl msg fail.", K(exec_errcode_));
       }
     }
     if (!has_store_pl_msg) {

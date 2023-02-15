@@ -534,7 +534,7 @@ namespace sql
 
         // span name
         data.span_name_.assign(const_cast<char *>(trace::__span_type_mapper[span->span_type_]),
-                                strlen(trace::__span_type_mapper[span->span_type_]));
+                                static_cast<int32_t>(strlen(trace::__span_type_mapper[span->span_type_])));
 
         //parent_span_id_
         org_pos = pos;
@@ -552,7 +552,7 @@ namespace sql
 
         if (OB_NOT_NULL(tag_buf) && tag_len != 0) {
           //skip "tags":[ and trim ]
-          data.tags_.assign(tag_buf+sizeof("\"tags\":["), tag_len-sizeof("\"tags\":[")-2);
+          data.tags_.assign(tag_buf+sizeof("\"tags\":["), static_cast<int32_t>(tag_len-sizeof("\"tags\":[")-2));
           //data.tags_.assign(tag_buf, tag_len);
         }
 

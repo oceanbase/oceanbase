@@ -825,7 +825,7 @@ int ObTxDataMemtable::do_sort_by_tx_id_()
 
 int64_t get_start_ts_(const ObTxData &tx_data)
 {
-  return tx_data.start_scn_.get_val_for_tx();
+  return tx_data.start_scn_.get_val_for_tx(true/*ignore_invalid_scn*/);
 }
 
 int ObTxDataMemtable::do_sort_by_start_scn_()

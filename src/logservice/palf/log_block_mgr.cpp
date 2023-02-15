@@ -131,7 +131,7 @@ int LogBlockMgr::switch_next_block(const block_id_t next_block_id)
     ObSpinLockGuard guard(block_id_cache_lock_);
     // NB: just only set 'max_block_id_' is continous with 'prev_block_id'.
     max_block_id_ = next_block_id + 1;
-    PALF_LOG(INFO, "switch_next_block success", K(curr_writable_handler_), K(next_block_id));
+    PALF_LOG(INFO, "switch_next_block success", KPC(this));
   }
   return ret;
 }
@@ -395,7 +395,7 @@ int LogBlockMgr::do_delete_block_(const block_id_t block_id)
   } else if (OB_FAIL(log_block_pool_->remove_block_at(dir_fd_, tmp_block_path))) {
     PALF_LOG(ERROR, "remove_block_at failed", K(ret), KPC(this), K(block_id));
   } else {
-    PALF_LOG(INFO, "do_delete_block_ success", K(ret), K(block_path));
+    PALF_LOG(INFO, "do_delete_block_ success", K(ret), KPC(this));
   }
   return ret;
 }

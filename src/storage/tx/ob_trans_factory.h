@@ -97,7 +97,7 @@ T *TransObjFactory<T, STATISTIC_INTERVAL>::alloc()
   }
 
   if (NULL == (task = op_reclaim_alloc(T))) {
-    TRANS_LOG(WARN, "obj alloc fail", KP(task));
+    TRANS_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "obj alloc fail", KP(task));
   } else {
     (void)ATOMIC_FAA(&alloc_count_, 1);
   }
@@ -109,7 +109,7 @@ template <typename T, int64_t STATISTIC_INTERVAL>
 void TransObjFactory<T, STATISTIC_INTERVAL>::release(T *obj)
 {
   if (NULL == obj) {
-    TRANS_LOG(ERROR, "task which should be released is null");
+    TRANS_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "task which should be released is null");
   } else {
     op_reclaim_free(obj);
     obj = NULL;

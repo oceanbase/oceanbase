@@ -918,7 +918,7 @@ int ObKVGlobalCache::set_checker_cache_name(const char *cache_name)
 void ObKVGlobalCache::print_all_cache_info()
 {
   if (OB_UNLIKELY(!inited_)) {
-    COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ");
+    COMMON_LOG_RET(WARN, common::OB_NOT_INIT, "The ObKVGlobalCache has not been inited, ");
   } else {
     insts_.print_all_cache_info();
     map_.print_hazard_version_info();

@@ -287,7 +287,7 @@ void ObTxReplayExecutor::finish_replay_(const int retcode)
     if (OB_SUCCESS != retcode) {
       mt_ctx_->replay_end(false, /*is_replay_succ*/
                           log_ts_ns_);
-      TRANS_LOG(WARN, "[Replay Tx]Tx Redo replay error, rollback to start", K(*this));
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "[Replay Tx]Tx Redo replay error, rollback to start", K(*this));
     } else {
       mt_ctx_->replay_end(true, /*is_replay_succ*/
                           log_ts_ns_);

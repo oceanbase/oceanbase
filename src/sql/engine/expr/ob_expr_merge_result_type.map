@@ -2,14 +2,14 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
     /*NullType*/
     {
         ObNullType,          /*NullType=>NullType  */
-        ObTinyIntType,       /*NullType=>TinyIntType  */
-        ObSmallIntType,      /*NullType=>SmallIntType  */
-        ObIntType,           /*NullType=>MediumIntType  */
+        ObInt32Type,         /*NullType=>TinyIntType  */
+        ObInt32Type,         /*NullType=>SmallIntType  */
+        ObInt32Type,         /*NullType=>MediumIntType  */
         ObInt32Type,         /*NullType=>Int32Type  */
         ObIntType,           /*NullType=>IntType  */
-        ObUTinyIntType,       /*NullType=>UTinyIntType  */
-        ObUSmallIntType,      /*NullType=>USmallIntType  */
-        ObUMediumIntType,     /*NullType=>UMediumIntType  */
+        ObUInt32Type,        /*NullType=>UTinyIntType  */
+        ObUInt32Type,        /*NullType=>USmallIntType  */
+        ObUInt32Type,        /*NullType=>UMediumIntType  */
         ObUInt32Type,         /*NullType=>UInt32Type  */
         ObUInt64Type,           /*NullType=>UIntType  */
         ObFloatType,         /*NullType=>FloatType  */
@@ -54,7 +54,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
 
     /*TinyIntType*/
     {
-        ObTinyIntType,    /*TinyIntType=>NullType  */
+        ObInt32Type,      /*TinyIntType=>NullType  */
         ObInt32Type,      /*TinyIntType=>TinyIntType  */
         ObInt32Type,      /*TinyIntType=>SmallIntType  */
         ObInt32Type,      /*TinyIntType=>MediumIntType  */
@@ -107,7 +107,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
 
     /*SmallIntType*/
     {
-        ObSmallIntType,   /*SmallIntType=>NullType  */
+        ObInt32Type,      /*SmallIntType=>NullType  */
         ObInt32Type,      /*SmallIntType=>TinyIntType  */
         ObInt32Type,      /*SmallIntType=>SmallIntType  */
         ObInt32Type,      /*SmallIntType=>MediumIntType  */
@@ -160,7 +160,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
 
     /*MediumIntType*/
     {
-        ObMediumIntType,  /*MediumIntType=>NullType  */
+        ObInt32Type,      /*MediumIntType=>NullType  */
         ObInt32Type,      /*MediumIntType=>TinyIntType  */
         ObInt32Type,      /*MediumIntType=>SmallIntType  */
         ObInt32Type,      /*MediumIntType=>MediumIntType  */
@@ -319,7 +319,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
 
     /*UTinyIntType*/
     {
-        ObUTinyIntType,   /*UTinyIntType=>NullType  */
+        ObUInt32Type,      /*UTinyIntType=>NullType  */
         ObInt32Type,      /*UTinyIntType=>TinyIntType  */
         ObInt32Type,      /*UTinyIntType=>SmallIntType  */
         ObInt32Type,      /*UTinyIntType=>MediumIntType  */
@@ -372,7 +372,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
 
     /*USmallIntType*/
     {
-        ObUSmallIntType,   /*USmallIntType=>NullType  */
+        ObUInt32Type,      /*USmallIntType=>NullType  */
         ObInt32Type,      /*USmallIntType=>TinyIntType  */
         ObInt32Type,      /*USmallIntType=>SmallIntType  */
         ObInt32Type,      /*USmallIntType=>MediumIntType  */
@@ -425,7 +425,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
 
     /*UMediumIntType*/
     {
-        ObUMediumIntType,  /*UMediumIntType=>NullType  */
+        ObUInt32Type,      /*UMediumIntType=>NullType  */
         ObInt32Type,      /*UMediumIntType=>TinyIntType  */
         ObInt32Type,      /*UMediumIntType=>SmallIntType  */
         ObInt32Type,      /*UMediumIntType=>MediumIntType  */

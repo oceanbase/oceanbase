@@ -956,6 +956,25 @@ TEST_F(TestIndexTree, test_merge_info_build_row)
       ASSERT_EQ(info_val.column_checksums_[i], parsed_meta.val_.column_checksums_[i]);
     }
   }
+
+  // test deep_copy of macro_meta with given allocator
+  ObArenaAllocator arena_allocator;
+  ObFIFOAllocator safe_allocator;
+  OK(safe_allocator.init(&arena_allocator, OB_MALLOC_BIG_BLOCK_SIZE));
+  ObDataMacroBlockMeta *copy_meta = nullptr;
+  ObDataMacroBlockMeta &large_meta = *merge_info_list->at(0);
+  int64_t test_col_cnt = 100;
+  for (int64_t i = 0; i < test_col_cnt; ++i) {
+    OK(large_meta.val_.column_checksums_.push_back(i));
+  }
+  ASSERT_EQ(safe_allocator.current_using_, nullptr);
+  ASSERT_EQ(safe_allocator.normal_used_, 0);
+  OK(large_meta.deep_copy(copy_meta, safe_allocator));
+  ASSERT_NE(safe_allocator.current_using_, nullptr);
+  safe_allocator.free(copy_meta);
+  copy_meta->~ObDataMacroBlockMeta();
+  const int64_t end_key_deep_copy_size = 64; // due to end_key::reset by memset
+  ASSERT_EQ(safe_allocator.normal_used_, end_key_deep_copy_size);
 }
 
 TEST_F(TestIndexTree, test_meta_builder)
@@ -1460,7 +1479,7 @@ int main(int argc, char **argv)
 {
   system("rm -f test_index_tree.log*");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  OB_LOGGER.set_file_name("test_index_tree.log", true);
+  OB_LOGGER.set_file_name("test_index_tree.log");
   srand(time(NULL));
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

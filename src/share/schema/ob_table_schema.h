@@ -326,7 +326,7 @@ struct ObBackUpTableModeOp
     flag = strtok_r(table_mode_str, delim, &save_ptr);
     while (OB_SUCC(ret) && OB_NOT_NULL(flag))
     {
-      common::ObString flag_str(0, strlen(flag), flag);
+      common::ObString flag_str(0, static_cast<int32_t>(strlen(flag)), flag);
        if (0 == flag_str.case_compare("normal")) {
          // do nothing
        } else if (0 == flag_str.case_compare("queuing")) {

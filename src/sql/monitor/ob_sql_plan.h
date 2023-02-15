@@ -126,6 +126,11 @@ public:
                                  const ObExplainDisplayOpt& option,
                                  ObIArray<common::ObString> &plan_strs);
 
+  int print_sql_plan(ObLogPlan* plan,
+                     ExplainType type,
+                     const ObExplainDisplayOpt& option,
+                     ObIArray<common::ObString> &plan_strs);
+
   int get_sql_plan(const ObString &sql_id,
                    int64_t plan_id,
                    ExplainType type,
@@ -189,6 +194,8 @@ private:
   int get_plan_outline_info(PlanText &plan_text,
                             ObLogPlan* plan,
                             ObSqlPlanItem* sql_plan_item);
+
+  static int reset_plan_tree_outline_flag(ObLogicalOperator* op);
 
   static int get_plan_tree_outline(PlanText &plan_text,
                             ObLogicalOperator* op);

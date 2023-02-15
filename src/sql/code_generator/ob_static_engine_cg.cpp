@@ -1762,6 +1762,16 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
         spec.part_cnt_ = op.get_part_cnt();
         LOG_TRACE("trace order by", K(spec.all_exprs_.count()), K(spec.all_exprs_));
       }
+      if (OB_SUCC(ret)) {
+        if (spec.sort_collations_.count() != spec.sort_cmp_funs_.count()
+            || (spec.part_cnt_ > 0 && spec.part_cnt_ >= spec.sort_collations_.count())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("part cnt or sort size not meet the expection", K(ret),
+            K(OB_NOT_NULL(op.get_topn_expr())), K(OB_NOT_NULL(op.get_topk_limit_expr())),
+            K(spec.enable_encode_sortkey_opt_), K(spec.prefix_pos_), K(spec.is_local_merge_sort_),
+            K(spec.part_cnt_), K(spec.sort_collations_.count()), K(spec.sort_cmp_funs_.count()));
+        }
+      }
     }
   }
   return ret;
@@ -6040,6 +6050,8 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     LOG_WARN("fail to set line str", K(op.get_line_str()), K(ret));
   } else if (OB_FAIL(spec.user_vars_.init(op.get_user_vars().count()))) {
     LOG_WARN("init fixed array failed", K(ret), K(op.get_user_vars().count()));
+  } else if (OB_FAIL(spec.select_exprs_.init(op.get_select_exprs().count()))) {
+    LOG_WARN("init fixed array failed", K(ret), K(op.get_select_exprs().count()));
   } else {
     ObString var;
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_user_vars().count(); ++i) {
@@ -6048,6 +6060,18 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
         LOG_WARN("fail to deep copy string", K(op.get_user_vars().at(i)), K(ret));
       } else if (OB_FAIL(spec.user_vars_.push_back(var))) {
         LOG_WARN("fail to push back var", K(var), K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_select_exprs().count(); ++i) {
+      ObExpr *rt_expr = nullptr;
+      const ObRawExpr* select_expr = op.get_select_exprs().at(i);
+      if (OB_ISNULL(select_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*select_expr, rt_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret));
+      } else if (OB_FAIL(spec.select_exprs_.push_back(rt_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
       }
     }
     if (OB_SUCC(ret)) {

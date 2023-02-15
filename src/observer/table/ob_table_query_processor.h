@@ -42,7 +42,7 @@ protected:
   virtual uint64_t get_request_checksum() override;
 
 private:
-  int init_tb_ctx();
+  int init_tb_ctx(table::ObTableApiCacheGuard &cache_guard);
   int query_and_result(table::ObTableApiScanExecutor *executor);
   int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
 
@@ -50,7 +50,6 @@ private:
   common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
   int64_t result_row_count_;
-  table::ObTableApiCacheGuard cache_guard_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryP);
 };

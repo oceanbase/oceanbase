@@ -136,7 +136,7 @@ int ObLSFreezeThread::add_task(ObDataCheckpoint *data_checkpoint,
 void ObLSFreezeThread::handle(void *task)
 {
   if (NULL == task) {
-    STORAGE_LOG(WARN, "task is null", KP(task));
+    STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "task is null", KP(task));
   } else {
     ObLSFreezeTask *freeze_task = static_cast<ObLSFreezeTask *>(task);
     freeze_task->handle();

@@ -249,7 +249,7 @@ void ObPxSqcAsyncProxy::destroy() {
 }
 
 void ObPxSqcAsyncProxy::fail_process() {
-  LOG_WARN(
+  LOG_WARN_RET(OB_SUCCESS,
       "async sqc fails, process the callbacks that have not yet got results",
       K(return_cb_count_), K(callbacks_.count()));
   while (return_cb_count_ < callbacks_.count()) {
@@ -267,7 +267,7 @@ void ObPxSqcAsyncProxy::fail_process() {
     }
     cond_.wait_us(500);
   }
-  LOG_WARN("async sqc fails, all callbacks have been processed");
+  LOG_WARN_RET(OB_SUCCESS, "async sqc fails, all callbacks have been processed");
 }
 
 } // namespace sql

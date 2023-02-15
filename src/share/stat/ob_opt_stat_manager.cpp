@@ -413,12 +413,14 @@ int ObOptStatManager::handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg
 int ObOptStatManager::invalidate_plan(const uint64_t tenant_id, const uint64_t table_id)
 {
   int ret = OB_SUCCESS;
-  sql::ObPlanCache *pc = MTL(sql::ObPlanCache*);
+  MTL_SWITCH(tenant_id) {
+    sql::ObPlanCache *pc = MTL(sql::ObPlanCache*);
 
-  if (OB_FAIL(pc->evict_plan(table_id))) {
-    LOG_WARN("failed to evict plan", K(ret));
-    // use OB_SQL_PC_NOT_EXIST represent evict plan failed
-    ret = OB_SQL_PC_NOT_EXIST;
+    if (OB_FAIL(pc->evict_plan(table_id))) {
+      LOG_WARN("failed to evict plan", K(ret));
+      // use OB_SQL_PC_NOT_EXIST represent evict plan failed
+      ret = OB_SQL_PC_NOT_EXIST;
+    }
   }
   return ret;
 }

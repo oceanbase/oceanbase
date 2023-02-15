@@ -34,7 +34,7 @@ void ObSafeDestroyTask::update_retry_info()
   last_execute_timestamp_ = current_time;
   if ((current_time - recv_timestamp_) >= PRINT_INTERVAL_TIME &&
       retry_times_ % PRINT_TIMES_INTERVAL == 0) {
-    LOG_WARN("safe destroy task alive too long", KPC(this));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "safe destroy task alive too long", KPC(this));
   }
 }
 
@@ -215,7 +215,7 @@ void ObSafeDestroyThread::wait()
   int64_t start_ts = ObTimeUtility::current_time();
   while (!queue_.stop_finished()) {
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) { // every minute
-      LOG_WARN("the safe destroy thread wait cost too much time",
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "the safe destroy thread wait cost too much time",
                K(ObTimeUtility::current_time() - start_ts));
     }
     ob_usleep(SLEEP_TS);

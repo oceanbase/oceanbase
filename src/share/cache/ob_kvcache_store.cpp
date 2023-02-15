@@ -1188,7 +1188,7 @@ bool ObKVCacheStore::try_wash_mb(ObKVMemBlockHandle *mb_handle, const uint64_t t
 {
   bool block_washed = false;
   if (NULL == mb_handle || OB_INVALID_ID == tenant_id) {
-    COMMON_LOG(ERROR, "invalid arguments", KP(mb_handle), K(tenant_id));
+    COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid arguments", KP(mb_handle), K(tenant_id));
   } else {
     if (ATOMIC_BCAS((uint32_t*)(&mb_handle->status_), FULL, FREE)) {
       int ret = OB_SUCCESS;
@@ -1368,9 +1368,9 @@ void ObKVCacheStore::free_mb(ObTenantResourceMgrHandle &resource_handle,
 {
   if (NULL != ptr) {
     if (OB_INVALID_ID == tenant_id) {
-      COMMON_LOG(ERROR, "invalid tenant_id", K(tenant_id));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid tenant_id", K(tenant_id));
     } else if (!resource_handle.is_valid()) {
-      COMMON_LOG(ERROR, "invalid resource_handle");
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid resource_handle");
     } else {
       resource_handle.get_memory_mgr()->free_cache_mb(ptr);
     }

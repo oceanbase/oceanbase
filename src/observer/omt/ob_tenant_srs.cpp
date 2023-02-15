@@ -309,6 +309,20 @@ void ObTenantSrs::TenantSrsUpdatePeriodicTask::runTimerTask()
   }
 }
 
+int ObTenantSrs::cancle_update_task()
+{
+  int ret = OB_SUCCESS;
+  bool is_exist = true;
+  if (OB_FAIL(TG_TASK_EXIST(lib::TGDefIDs::SRS_MGR, srs_update_periodic_task_, is_exist))) {
+    LOG_WARN("failed to check tenant srs update task", K(ret), K(tenant_id_));
+  } else if (is_exist) {
+    if (OB_FAIL(TG_CANCEL_R(lib::TGDefIDs::SRS_MGR, srs_update_periodic_task_))) {
+      LOG_WARN("failed to cancel tenant srs update task", K(ret), K(tenant_id_));
+    }
+  }
+  return ret;
+}
+
 int ObSrsCacheSnapShot::get_srs_item(uint64_t srid, const ObSrsItem *&srs_item)
 {
   int ret = OB_SUCCESS;

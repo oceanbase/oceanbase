@@ -136,9 +136,12 @@ int ObDropIndexTask::update_index_status(const ObIndexStatus new_status)
     arg.status_ = new_status;
     arg.exec_tenant_id_ = tenant_id_;
     arg.in_offline_ddl_white_list_ = index_schema->get_table_state_flag() != TABLE_STATE_NORMAL;
-
+    int64_t ddl_rpc_timeout = 0;
+    int64_t table_id = index_schema->get_table_id();
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
-    if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ObDDLUtil::get_ddl_rpc_timeout()).update_index_status(arg))) {
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, table_id, ddl_rpc_timeout))) {
+      LOG_WARN("get ddl rpc timeout fail", K(ret));
+    } else if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).update_index_status(arg))) {
       LOG_WARN("update index status failed", K(ret), K(arg));
     } else {
       LOG_INFO("notify index status changed finish", K(new_status), K(target_object_id_));

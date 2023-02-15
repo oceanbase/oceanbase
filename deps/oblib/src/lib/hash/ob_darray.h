@@ -192,7 +192,7 @@ private:
   {
     int64_t tid = get_itid();
     if (tid >= MAX_THREAD_NUM) {
-      COMMON_LOG(ERROR, "set_ref error", K(tid));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "set_ref error", K(tid));
     } else {
       ATOMIC_STORE(&read_ref_[tid].value_, x);
     }
@@ -302,7 +302,7 @@ public:
   {
     bool bool_ret = false;
     if (OB_ISNULL(lock)) {
-      COMMON_LOG(ERROR, "ArrayHeadHandler try_wrlock error, null lock addr");
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "ArrayHeadHandler try_wrlock error, null lock addr");
     } else {
       bool_ret = LockHandler::try_wrlock_hard(read_ref_, lock);
     }
@@ -316,7 +316,7 @@ public:
   void wrunlock(uint32_t *lock)
   {
     if (OB_ISNULL(lock)) {
-      COMMON_LOG(ERROR, "ArrayHeadHandler wrunlock error, null lock addr");
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "ArrayHeadHandler wrunlock error, null lock addr");
     } else {
       LockHandler::wrunlock(read_ref_, lock);
     }
@@ -355,7 +355,7 @@ public:
   void print(FILE *fp, int64_t slot_idx = 0, int indent = 0)
   {
     if (OB_ISNULL(this) || OB_ISNULL(fp)) {
-      COMMON_LOG(ERROR, "print error, invalid argument or null this", KP(this), KP(fp));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "print error, invalid argument or null this", KP(this), KP(fp));
     } else {
       fprintf(fp, "%*s%ldL%d: ", indent * 4, "C", slot_idx, level_);
       if (level_ != 1) {
@@ -496,7 +496,7 @@ public:
         path_size_++;
         if (OB_UNLIKELY(path_size_ >= MAX_LEVEL)) {
           err = -EOVERFLOW;
-          COMMON_LOG(ERROR, "path size over flow, idx is too large",
+          COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "path size over flow, idx is too large",
                      K(err), K(idx), K(path_size_));
         }
       } while ((idx > 0 || path_size_ < root_level_) && OB_LIKELY(0 == err));
@@ -747,7 +747,7 @@ public:
     Node *old_root = NULL;
     if (OB_ISNULL(root)) {
       err = -EINVAL;
-      COMMON_LOG(ERROR, "root is null");
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "root is null");
     } else if (0 != (err = handle.acquire_ref())) {
     } else if (0 != (err = handle.search(old_root = ATOMIC_LOAD(root), idx))) {
     } else if (0 != (err = handle.get(val))) {
@@ -761,7 +761,7 @@ public:
     Node *new_root = NULL;
     if (OB_ISNULL(root) || OB_ISNULL(val)) {
       err = -EINVAL;
-      COMMON_LOG(ERROR, "root is null");
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "root is null");
     } else if (0 != (err = handle.acquire_ref())) {
     } else if (0 != (err = handle.search(old_root = ATOMIC_LOAD(root), idx))) {
     } else if (0 != (err = handle.insert(val, new_root))) {
@@ -780,7 +780,7 @@ public:
     Node *old_root = NULL;
     if (OB_ISNULL(root)) {
       err = -EINVAL;
-      COMMON_LOG(ERROR, "root is null");
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "root is null");
     } else if (0 != (err = handle.acquire_ref())) {
     } else if (0 != (err = handle.search(old_root = ATOMIC_LOAD(root), idx))) {
     } else if (0 != (err = handle.del(val, need_reclaim_root))) {

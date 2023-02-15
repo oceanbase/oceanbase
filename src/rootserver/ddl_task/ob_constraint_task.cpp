@@ -1020,6 +1020,8 @@ int ObConstraintTask::report_foreign_key_constraint_error_code()
 int ObConstraintTask::set_foreign_key_constraint_validated()
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = 0;
+  int64_t tablet_count = 0;
   ObRootService *root_service = GCTX.root_service_;
   obrpc::ObAlterTableRes res;
   ObArenaAllocator allocator(lib::ObLabel("ConstraiTask"));
@@ -1032,6 +1034,8 @@ int ObConstraintTask::set_foreign_key_constraint_validated()
     } else if (OB_ISNULL(root_service)) {
       ret = OB_ERR_SYS;
       LOG_WARN("error sys, root serivce must not be nullptr", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
+      LOG_WARN("get ddl rpc_timeout failed", K(ret));
     } else {
       DEBUG_SYNC(CONSTRAINT_BEFORE_SET_FK_VALIDATED_BEFORE_ALTER_TABLE);
       ObCreateForeignKeyArg &fk_arg = alter_table_arg.foreign_key_arg_list_.at(0);
@@ -1045,14 +1049,14 @@ int ObConstraintTask::set_foreign_key_constraint_validated()
         ObSArray<uint64_t> unused_ids;
         alter_table_arg.ddl_task_type_ = share::MODIFY_FOREIGN_KEY_STATE_TASK;
         alter_table_arg.hidden_table_id_ = object_id_;
-        if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+        if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
               execute_ddl_task(alter_table_arg, unused_ids))) {
           LOG_WARN("fail to alter table", K(ret), K(alter_table_arg), K(fk_arg));
         }
       } else {
         if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, alter_table_arg))) {
           LOG_WARN("failed to refresh name for alter table schema", K(ret));
-        } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+        } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
             alter_table(alter_table_arg, res))) {
           LOG_WARN("alter table failed", K(ret));
         }
@@ -1068,6 +1072,8 @@ int ObConstraintTask::set_check_constraint_validated()
   ObRootService *root_service = GCTX.root_service_;
   obrpc::ObAlterTableRes res;
   bool is_oracle_mode = false;
+  int64_t rpc_timeout = 0;
+  int64_t tablet_count = 0;
   ObArenaAllocator allocator(lib::ObLabel("ConstraiTask"));
   SMART_VAR(ObAlterTableArg, alter_table_arg) {
     if (OB_ISNULL(root_service)) {
@@ -1109,6 +1115,8 @@ int ObConstraintTask::set_check_constraint_validated()
         LOG_WARN("constraint not found", K(ret), K(target_object_id_), K(alter_table_arg));
       } else if (OB_FAIL(alter_table_arg.alter_table_schema_.check_if_oracle_compat_mode(is_oracle_mode))) {
         LOG_WARN("check if oracle compat mode failed", K(ret));
+      } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
+        LOG_WARN("get ddl rpc timeout failed", K(ret));
       } else if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
         if (is_table_hidden_) {
           if (!is_oracle_mode) {
@@ -1116,7 +1124,7 @@ int ObConstraintTask::set_check_constraint_validated()
             ObSArray<uint64_t> unused_ids;
             alter_table_arg.ddl_task_type_ = share::MODIFY_NOT_NULL_COLUMN_STATE_TASK;
             alter_table_arg.hidden_table_id_ = object_id_;
-            if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+            if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
                 execute_ddl_task(alter_table_arg, unused_ids))) {
               LOG_WARN("alter table failed", K(ret));
               if (OB_TABLE_NOT_EXIST == ret) {
@@ -1160,7 +1168,7 @@ int ObConstraintTask::set_check_constraint_validated()
             }
             DEBUG_SYNC(CONSTRAINT_BEFORE_SET_CHECK_CONSTRAINT_VALIDATED_BEFORE_ALTER_TABLE);
             if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+            } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
                 alter_table(alter_table_arg, res))) {
               LOG_WARN("alter table failed", K(ret));
             }
@@ -1175,6 +1183,8 @@ int ObConstraintTask::set_check_constraint_validated()
 int ObConstraintTask::set_new_not_null_column_validate()
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = 0;
+  int64_t tablet_count = 0;
   ObRootService *root_service = GCTX.root_service_;
   obrpc::ObAlterTableRes res;
   ObArenaAllocator allocator(lib::ObLabel("ConstraiTask"));
@@ -1219,7 +1229,9 @@ int ObConstraintTask::set_new_not_null_column_validate()
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+      } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
+        LOG_WARN("get ddl rpc timeout failed", K(ret));
+      } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
           alter_table(alter_table_arg, res))) {
         LOG_WARN("alter table failed", K(ret));
       } else {
@@ -1261,6 +1273,8 @@ int ObConstraintTask::rollback_failed_schema()
 int ObConstraintTask::rollback_failed_check_constraint()
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = 0;
+  int64_t tablet_count = 0;
   obrpc::ObAlterTableRes tmp_res;
   ObArenaAllocator allocator(lib::ObLabel("ConstraiTask"));
   SMART_VAR(ObAlterTableArg, alter_table_arg) {
@@ -1312,7 +1326,9 @@ int ObConstraintTask::rollback_failed_check_constraint()
       alter_table_arg.is_alter_columns_ = false;
       alter_table_arg.index_arg_list_.reset();
       alter_table_arg.foreign_key_arg_list_.reset();
-      if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+      if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
+        LOG_WARN("get ddl rpc timeout failed", K(ret));
+      } else if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
           alter_table(alter_table_arg, tmp_res))) {
         LOG_WARN("alter table failed", K(ret));
         if (OB_TABLE_NOT_EXIST == ret || OB_ERR_CANT_DROP_FIELD_OR_KEY == ret || OB_ERR_CONTRAINT_NOT_FOUND == ret) {
@@ -1333,6 +1349,8 @@ int ObConstraintTask::rollback_failed_check_constraint()
 int ObConstraintTask::rollback_failed_foregin_key()
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = 0;
+  int64_t tablet_count = 0;
   obrpc::ObAlterTableRes tmp_res;
   obrpc::ObDropForeignKeyArg drop_foreign_key_arg;
   ObCreateForeignKeyArg &fk_arg = alter_table_arg_.foreign_key_arg_list_.at(0);
@@ -1368,13 +1386,17 @@ int ObConstraintTask::rollback_failed_foregin_key()
       }
     }
     DEBUG_SYNC(CONSTRAINT_ROLLBACK_FAILED_FK_BEFORE_ALTER_TABLE);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
+      LOG_WARN("get ddl rpc timeout failed", K(ret));
+    }
     if (OB_SUCC(ret)) {
       alter_table_arg.is_inner_ = true;
       if (is_table_hidden_) {
         ObSArray<uint64_t> unused_ids;
         alter_table_arg.ddl_task_type_ = share::MODIFY_FOREIGN_KEY_STATE_TASK;
         alter_table_arg.hidden_table_id_ = object_id_;
-        if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+        if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
             execute_ddl_task(alter_table_arg, unused_ids))) {
           LOG_WARN("alter table failed", K(ret));
           if (OB_TABLE_NOT_EXIST == ret || OB_ERR_CANT_DROP_FIELD_OR_KEY == ret) {
@@ -1388,7 +1410,7 @@ int ObConstraintTask::rollback_failed_foregin_key()
           } else {
             LOG_WARN("failed to refresh name for alter table schema", K(ret));
           }
-        } else if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+        } else if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
             alter_table(alter_table_arg, tmp_res))) {
           LOG_WARN("alter table failed", K(ret));
           if (OB_TABLE_NOT_EXIST == ret || OB_ERR_CANT_DROP_FIELD_OR_KEY == ret) {
@@ -1450,6 +1472,8 @@ int ObConstraintTask::rollback_failed_add_not_null_columns()
       }
     }
     if (OB_SUCC(ret)) {
+      int64_t rpc_timeout = 0;
+      int64_t tablet_count = 0;
       obrpc::ObAlterTableRes tmp_res;
       ObSArray<uint64_t> objs;
       alter_table_arg.ddl_stmt_str_.assign_ptr(buf, static_cast<int32_t>(pos));
@@ -1470,8 +1494,12 @@ int ObConstraintTask::rollback_failed_add_not_null_columns()
               col_schema->get_column_name_str().length());
         }
       }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
+        LOG_WARN("get ddl rpc timeout failed", K(ret));
+      }
       if (OB_SUCC(ret)
-          && OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+          && OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
             execute_ddl_task(alter_table_arg, objs))) {
         LOG_WARN("alter table failed", K(ret));
         if (OB_TABLE_NOT_EXIST == ret || OB_ERR_CANT_DROP_FIELD_OR_KEY == ret) {

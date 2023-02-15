@@ -265,6 +265,8 @@ int ObMPConnect::process()
       session->set_ob20_protocol(conn->proxy_cap_flags_.is_ob_protocol_v2_support());
       // set sql request level to session, to avoid sql request dead lock between OB cluster (eg. dblink)
       session->set_sql_request_level(conn->sql_req_level_);
+      // set session var sync info.
+      session->set_session_var_sync(conn->proxy_cap_flags_.is_session_var_sync_support());
 
       LOG_TRACE("setup user resource group OK",
                "user_id", session->get_user_id(),
@@ -821,7 +823,7 @@ int ObMPConnect::unlock_user_if_time_is_up(const uint64_t tenant_id,
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(ret), K(temp_ret));
       ret = OB_SUCC(ret) ? temp_ret : ret;
     }
   }
@@ -884,7 +886,7 @@ int ObMPConnect::unlock_user_if_time_is_up_mysql(const uint64_t tenant_id,
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(ret), K(temp_ret));
       ret = OB_SUCC(ret) ? temp_ret : ret;
     }
   }
@@ -956,7 +958,7 @@ int ObMPConnect::update_login_stat_in_trans(const uint64_t tenant_id,
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret) && commit))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret) && commit, K(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret && commit, K(ret), K(temp_ret));
       ret = OB_SUCC(ret) ? temp_ret : ret;
     }
   }
@@ -1050,7 +1052,7 @@ int ObMPConnect::update_login_stat_in_trans_mysql(const uint64_t tenant_id,
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(ret), K(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(ret), K(temp_ret));
       ret = OB_SUCC(ret) ? temp_ret : ret;
     }
   }
@@ -1523,6 +1525,7 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
     server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_SESSIOIN_SYNC = 1;
     server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_FULL_LINK_TRACING = 1;
     server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_NEW_EXTRA_INFO = 1;
+    server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_SESSION_VAR_SYNC = 1;
     conn.proxy_cap_flags_.capability_ = (server_proxy_cap_flag.capability_ & client_proxy_cap);//if old java client, set it 0
 
     LOG_DEBUG("Negotiated capability",

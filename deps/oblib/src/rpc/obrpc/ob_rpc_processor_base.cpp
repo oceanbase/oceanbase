@@ -574,7 +574,7 @@ void ObRpcProcessorBase::cleanup()
     if (preserved_buf_) {
       common::ob_free(preserved_buf_);
     } else {
-      RPC_OBRPC_LOG(WARN, "preserved buffer is NULL, maybe alloc fail");
+      RPC_OBRPC_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "preserved buffer is NULL, maybe alloc fail");
     }
   }
 
@@ -594,7 +594,7 @@ void ObRpcProcessorBase::cleanup()
     piece.queue_time_ = get_run_timestamp() - get_enqueue_timestamp();
     piece.process_time_ = common::ObTimeUtility::current_time() - get_run_timestamp();
     if (0 == tenant_id_) {
-      RPC_OBRPC_LOG(WARN, "tenant_id of rpc_pkt is 0");
+      RPC_OBRPC_LOG_RET(WARN, OB_INVALID_ARGUMENT, "tenant_id of rpc_pkt is 0");
     }
     RPC_STAT(static_cast<ObRpcPacketCode>(m_get_pcode()), tenant_id_, piece);
   }

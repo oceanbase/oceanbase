@@ -89,11 +89,11 @@ bool LogMetaEntryHeader::check_integrity(const char *buf, int32_t data_len) cons
   const int16_t magic = MAGIC;
   if (magic != magic_) {
     bool_ret = false;
-    PALF_LOG(ERROR, "magic is different", K(magic_), K(magic));
+    PALF_LOG_RET(ERROR, OB_ERROR, "magic is different", K(magic_), K(magic));
   } else if (false == check_header_checksum_()) {
-    PALF_LOG(ERROR, "check header checsum failed", K(*this));
+    PALF_LOG_RET(ERROR, OB_ERROR, "check header checsum failed", K(*this));
   } else if (false == check_data_checksum_(buf, data_len)) {
-    PALF_LOG(ERROR, "check data checksum failed", K(*buf), K(data_len),
+    PALF_LOG_RET(ERROR, OB_ERROR, "check data checksum failed", K(*buf), K(data_len),
         K(*this));
   } else {
     bool_ret = true;
@@ -167,7 +167,7 @@ int64_t LogMetaEntryHeader::calc_data_checksum_(const char *buf,
 {
   int64_t data_checksum = 0;
   if (NULL == buf || data_len <= 0) {
-    PALF_LOG(ERROR, "invalid argument", K(buf), K(data_len));
+    PALF_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", K(buf), K(data_len));
   } else {
     data_checksum = static_cast<int64_t>(ob_crc64(buf, data_len));
   }
@@ -200,11 +200,11 @@ bool LogMetaEntryHeader::check_data_checksum_(const char *buf,
   bool bool_ret = false;
   int64_t crc_checksum = 0;
   if (NULL == buf || 0 >= data_len || data_len != data_len_) {
-    PALF_LOG(ERROR, "invalid argument", K(buf), K(data_len), K(data_len_));
+    PALF_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", K(buf), K(data_len), K(data_len_));
   } else if (FALSE_IT(crc_checksum = ob_crc64(buf, data_len))) {
   } else if (crc_checksum != data_checksum_) {
     bool_ret = false;
-    PALF_LOG(WARN, "the data checksum recorded in header is not same \
+    PALF_LOG_RET(WARN, OB_ERROR, "the data checksum recorded in header is not same \
         with data buf", K(*buf), K(data_len), K(data_len_), K(data_checksum_));
   } else {
     bool_ret = true;

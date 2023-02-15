@@ -111,9 +111,8 @@ int ObAllTenantInfo::init(
   return ret;
 }
 
-int ObAllTenantInfo::assign(const ObAllTenantInfo &other)
+void ObAllTenantInfo::assign(const ObAllTenantInfo &other)
 {
-  int ret = OB_SUCCESS;
   if (this != &other) {
     reset();
     tenant_id_ = other.tenant_id_;
@@ -126,7 +125,7 @@ int ObAllTenantInfo::assign(const ObAllTenantInfo &other)
     recovery_until_scn_ = other.recovery_until_scn_;
     log_mode_ = other.log_mode_;
   }
-  return ret;
+  return ;
 }
 
 void ObAllTenantInfo::reset()
@@ -147,11 +146,8 @@ OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
 
 ObAllTenantInfo& ObAllTenantInfo::operator= (const ObAllTenantInfo &other)
 {
-  int ret = OB_SUCCESS;
   if (this != &other) {
-    if (OB_FAIL(assign(other))) {
-      LOG_ERROR("failed to assign", KR(ret), K(other));
-    }
+    (void)assign(other);
   }
   return *this;
 }

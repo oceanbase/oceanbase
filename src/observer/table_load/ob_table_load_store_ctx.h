@@ -49,12 +49,12 @@ public:
 public:
   OB_INLINE table::ObTableLoadStatusType get_status() const
   {
-    lib::ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     return status_;
   }
   OB_INLINE int get_error_code() const
   {
-    lib::ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     return error_code_;
   }
   OB_INLINE int set_status_inited()
@@ -129,7 +129,11 @@ public:
   share::schema::ObSequenceSchema sequence_schema_;
   struct SessionContext
   {
+    SessionContext() : extra_buf_(nullptr), extra_buf_size_(0) {}
     share::AutoincParam autoinc_param_;
+    // for multiple mode
+    char *extra_buf_;
+    int64_t extra_buf_size_;
   };
   SessionContext *session_ctx_array_;
 private:
@@ -153,7 +157,7 @@ private:
   typedef common::ObLinkHashMap<table::ObTableLoadSegmentID, SegmentCtx> SegmentCtxMap;
 private:
   ObTableLoadObjectAllocator<ObTableLoadStoreTrans> trans_allocator_; // 多线程安全
-  mutable lib::ObMutex mutex_;
+  mutable obsys::ObRWLock rwlock_;
   common::ObArenaAllocator allocator_;
   table::ObTableLoadStatusType status_;
   int error_code_;

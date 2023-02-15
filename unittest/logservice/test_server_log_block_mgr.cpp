@@ -130,7 +130,7 @@ public:
       if (OB_SUCC(ret)) {
         map_[key] = size;
       } else {
-        this->log_block_mgr_.abort_create_tenant(size);
+        //this->log_block_mgr_.abort_create_tenant(size);
       }
     }
     return ret;
@@ -141,8 +141,9 @@ public:
     if (map_.end() == map_.find(key)) {
       ret = OB_ENTRY_NOT_EXIST;
     } else {
+      int64 size = map_[key];
       map_.erase(key);
-      this->log_block_mgr_.remove_tenant();
+      this->log_block_mgr_.remove_tenant(size);
     }
     return ret;
   };
@@ -156,7 +157,6 @@ public:
       ret = this->log_block_mgr_.update_tenant(old_size, new_size);
       if (OB_SUCCESS != ret) {
         map_[key] = old_size;
-        this->log_block_mgr_.abort_update_tenant(new_size, old_size);
       } else {
         map_[key] = new_size;
       }

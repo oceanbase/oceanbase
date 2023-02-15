@@ -160,7 +160,7 @@ OB_DEF_SERIALIZE_SIZE(ObTask)
 {
   int64_t len = 0;
   if (OB_I(t1) OB_ISNULL(exec_ctx_) || OB_ISNULL(ser_phy_plan_)) {
-    LOG_ERROR("task not init", K_(exec_ctx), K_(ser_phy_plan));
+    LOG_ERROR_RET(OB_NOT_INIT, "task not init", K_(exec_ctx), K_(ser_phy_plan));
   } else {
     if (ser_phy_plan_->is_dist_insert_or_replace_plan() && location_idx_ != OB_INVALID_INDEX) {
       exec_ctx_->reset_one_row_id_list(exec_ctx_->get_part_row_manager().get_row_id_list(location_idx_));
@@ -171,7 +171,7 @@ OB_DEF_SERIALIZE_SIZE(ObTask)
     LST_DO_CODE(OB_UNIS_ADD_LEN, runner_svr_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, ob_task_id_);
     if (OB_ISNULL(root_spec_)) {
-      LOG_ERROR("unexpected status: op root is null");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected status: op root is null");
     } else {
       const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
       len += ObPxTreeSerializer::get_serialize_expr_frame_info_size(*exec_ctx_,
@@ -260,7 +260,7 @@ OB_DEF_SERIALIZE_SIZE(ObMiniTask)
   OB_UNIS_ADD_LEN(has_extend_root_spec);
   if (has_extend_root_spec) {
     if (OB_ISNULL(extend_root_spec_) || OB_ISNULL(exec_ctx_)) {
-      LOG_ERROR("invalid argument", KP(extend_root_spec_), KP(exec_ctx_));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", KP(extend_root_spec_), KP(exec_ctx_));
     } else {
       len += ObPxTreeSerializer::get_tree_serialize_size(*extend_root_spec_,
                                                          false/*is fulltree*/);
@@ -343,7 +343,7 @@ OB_DEF_SERIALIZE_SIZE(ObRemoteTask)
   if (OB_ISNULL(remote_sql_info_)
       || OB_ISNULL(session_info_)
       || OB_ISNULL(ps_params = remote_sql_info_->ps_params_)) {
-    LOG_WARN("remote task not init", K_(remote_sql_info), K_(session_info), K(ps_params));
+    LOG_WARN_RET(OB_NOT_INIT, "remote task not init", K_(remote_sql_info), K_(session_info), K(ps_params));
   } else {
     int64_t tenant_id = session_info_->get_effective_tenant_id();
     LST_DO_CODE(OB_UNIS_ADD_LEN,

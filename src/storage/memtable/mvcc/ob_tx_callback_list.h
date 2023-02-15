@@ -62,7 +62,8 @@ public:
   // callback for the correctness. And user need guarantee all callbacks
   // belonged to the memtable must be synced before removing. What's more, it
   // will calculate checksum when removing.
-  int remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove);
+  int remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove,
+                                           const share::SCN max_applied_scn);
 
   // remove_callbacks_for_rollback_to will remove callbacks from back to front
   // until callbacks smaller or equal than the seq_no. It will remove both

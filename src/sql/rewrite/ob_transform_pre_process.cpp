@@ -3212,8 +3212,10 @@ int ObTransformPreProcess::transform_for_rls_table(ObDMLStmt *stmt, bool &trans_
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
-      } else if (table_item->is_basic_table() && !table_item->is_system_table_ &&
-                 !table_item->is_link_table()) {
+      } else if ((table_item->is_basic_table() &&
+                  !table_item->is_system_table_ &&
+                  !table_item->is_link_table()) ||
+                 table_item->is_view_table_) {
         uint64_t table_ref_id = table_item->ref_id_;
         const ObTableSchema *table_schema = NULL;
         if (OB_FAIL(schema_checker->get_table_schema(session_info->get_effective_tenant_id(),
@@ -3268,7 +3270,7 @@ int ObTransformPreProcess::check_exempt_rls_policy(bool &exempt_rls_policy)
       || OB_ISNULL(schema_checker->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null unexpected", K(ctx_), K(ret));
-  } else if (!session_info->is_user_session()) {
+  } else if (!session_info->is_user_session() || session_info->is_tenant_changed()) {
     exempt_rls_policy = true;
   } else if (OB_FAIL(ObOraSysChecker::check_ora_user_sys_priv(*schema_checker->get_schema_guard(),
                                                         session_info->get_effective_tenant_id(),
@@ -7798,6 +7800,10 @@ int ObTransformPreProcess::transform_cast_multiset_for_stmt(ObDMLStmt *&stmt,
         }
       }
     }
+    if (OB_SUCC(ret) && trans_happened &&
+        OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize", K(ret));
+    }
   }
   return ret;
 }
@@ -7816,9 +7822,8 @@ int ObTransformPreProcess::transform_cast_multiset_for_expr(ObRawExpr *&expr,
              expr->get_param_expr(0)->is_multiset_expr()) {
     ObQueryRefRawExpr *subquery_expr = static_cast<ObQueryRefRawExpr *>(expr->get_param_expr(0));
     ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(expr->get_param_expr(1));
-    ObSelectStmt *multiset_stmt = subquery_expr->get_ref_stmt();
     uint64_t udt_id = OB_INVALID_ID;
-    if (OB_ISNULL(const_expr) || OB_ISNULL(multiset_stmt) ||
+    if (OB_ISNULL(const_expr) || OB_ISNULL(subquery_expr->get_ref_stmt()) ||
        OB_UNLIKELY(!const_expr->is_const_raw_expr()) ||
        OB_UNLIKELY(OB_INVALID_ID == (udt_id = const_expr->get_udt_id()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -7847,53 +7852,18 @@ int ObTransformPreProcess::transform_cast_multiset_for_expr(ObRawExpr *&expr,
         //      create type tbl1 as table of obj1;
         //      cast(multiset(select '1.1','2.2' from dual) as tbl1)
         //    =>cast(multiset(select obj1('1.1','2.2') from dual) as tbl1)
-        if (OB_FAIL(add_constructor_to_multiset(subquery_expr, coll_type->get_element_type()))) {
+        if (OB_FAIL(add_constructor_to_multiset(subquery_expr,
+                                                coll_type->get_element_type(),
+                                                trans_happened))) {
           LOG_WARN("failed to add constuctor to multiset", K(ret));
-        } else {
-          trans_happened = true;
         }
       } else {
         // If the element type of collection is not udt,
-        // add explicit cast to the multiset subquery.
-        // e.g. create type tbl_int as table of number;
-        //      cast(multiset(select '1.1' from dual) as tbl_int)
-        //    =>cast(multiset(select cast('1.1' as number) from dual) as tbl_int)
-        const ObDataType *data_type = NULL;
-        if (OB_ISNULL(data_type = coll_type->get_element_type().get_data_type())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get null element data type", K(ret), KPC(coll_type));
-        } else if (OB_UNLIKELY(multiset_stmt->get_select_item_size() != 1) ||
-                  OB_UNLIKELY(subquery_expr->get_column_types().count() != 1)) {
-          ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("unexpected column count", K(ret), KPC(multiset_stmt), KPC(expr));
-        } else {
-          // cast child_res_type to cast_dst_type
-          const ObExprResType &child_res_type = subquery_expr->get_result_type();
-          ObExprResType cast_dst_type;
-          ObCastMode cm = CM_NONE;
-          cast_dst_type.set_meta(data_type->get_meta_type());
-          cast_dst_type.set_calc_meta(ObObjMeta());
-          cast_dst_type.set_result_flag(child_res_type.get_result_flag());
-          cast_dst_type.set_accuracy(data_type->get_accuracy());
-          SelectItem &select_item = multiset_stmt->get_select_item(0);
-          ObRawExpr *new_expr = NULL;
-          if (OB_ISNULL(select_item.expr_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get null expr", K(ret), K(select_item));
-          } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(true/*is_explicit_cast*/, 0,
-                                                               ctx_->session_info_, cm))) {
-            LOG_WARN("get_default_cast_mode failed", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                                                                     ctx_->session_info_,
-                                                                     *select_item.expr_,
-                                                                     cast_dst_type,
-                                                                     cm, new_expr))) {
-            LOG_WARN("failed to add cast expr", K(ret));
-          } else if (select_item.expr_ != new_expr) { // cast expr added
-            select_item.expr_ = new_expr;
-            subquery_expr->get_column_types().at(0) = new_expr->get_result_type();
-            trans_happened = true;
-          }
+        // add column conv to the multiset subquery.
+        if (OB_FAIL(add_column_conv_to_multiset(subquery_expr,
+                                                coll_type->get_element_type(),
+                                                trans_happened))) {
+          LOG_WARN("failed to add constuctor to multiset", K(ret));
         }
       }
     }
@@ -7907,7 +7877,8 @@ int ObTransformPreProcess::transform_cast_multiset_for_expr(ObRawExpr *&expr,
 }
 
 int ObTransformPreProcess::add_constructor_to_multiset(ObQueryRefRawExpr *multiset_expr,
-                                                       const pl::ObPLDataType &elem_type)
+                                                       const pl::ObPLDataType &elem_type,
+                                                       bool& trans_happened)
 {
   int ret = OB_SUCCESS;
   uint64_t elem_udt_id = elem_type.get_user_type_id();
@@ -7920,26 +7891,48 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObQueryRefRawExpr *multis
   ObSQLSessionInfo *session = ctx_->session_info_;
   int64_t rowsize = 0;
   const uint64_t tenant_id = pl::get_tenant_id_by_object_id(elem_udt_id);
-  ObIArray<SelectItem> &select_items = multiset_stmt->get_select_items();
   bool add_constructor = true;
-  if (select_items.count() == 1) {
+  if (multiset_stmt->get_select_item_size() == 1) {
     // do not add constructor if the select item is null or
     // the type of select item is already the target element type
-    ObObjType in_type = select_items.at(0).expr_->get_data_type();
-    if (ObNullType == in_type) {
+    ObRawExpr *in_expr = multiset_stmt->get_select_item(0).expr_;
+    if (OB_ISNULL(in_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (ObNullType == in_expr->get_data_type()) {
       add_constructor = false;
-    } else if (ObExtendType == in_type) {
-      if (select_items.at(0).expr_->get_udt_id() == elem_udt_id) {
+    } else if (ObExtendType == in_expr->get_data_type()) {
+      if (in_expr->get_udt_id() == elem_udt_id) {
         add_constructor = false;
       }
     }
   }
-  if (!add_constructor) {
+
+  ObSelectStmt *new_stmt = NULL;
+  if (OB_FAIL(ret) || !add_constructor) {
   } else if (OB_ISNULL(ctx_->exec_ctx_->get_sql_proxy()) ||
              OB_ISNULL(ctx_->schema_checker_->get_schema_mgr()) ||
              OB_UNLIKELY(OB_INVALID_ID == elem_udt_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", KPC(multiset_expr), K(elem_type));
+  } else if (!multiset_stmt->is_set_stmt()) {
+    // if multiset stmt is set stmt, create a view for it.
+    // e.g. create type tbl_obj as table of obj
+    //      cast(multiset(select 1 as a from dual union select 2 as a from dual) as tbl_obj)
+    //   => cast(multiset(select a from (select 1 as a from dual union select 2 as a from dual) v) as tbl_obj)
+    //   => cast(multiset(select obj(a) from (select 1 as a from dual union select 2 as a from dual) v) as tbl_obj)
+  } else if (OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_, multiset_stmt, new_stmt))) {
+    LOG_WARN("failed to create dummy view", K(ret));
+  } else if (OB_ISNULL(new_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    multiset_stmt = new_stmt;
+    multiset_expr->set_ref_stmt(multiset_stmt);
+  }
+  ObIArray<SelectItem> &select_items = multiset_stmt->get_select_items();
+  if (OB_FAIL(ret) || !add_constructor) {
+    // do nothing
   } else if (OB_FAIL(ctx_->schema_checker_->get_udt_info(tenant_id, elem_udt_id, elem_info))) {
     LOG_WARN("failed to get udt info", K(ret));
   } else if (OB_ISNULL(elem_info)) {
@@ -8042,6 +8035,7 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObQueryRefRawExpr *multis
       select_items.reset();
       multiset_expr->get_column_types().reset();
       multiset_expr->set_output_column(1);
+      trans_happened = true;
       if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
                                                        object_expr,
                                                        multiset_stmt))) {
@@ -8054,6 +8048,58 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObQueryRefRawExpr *multis
     }
   }
 
+  return ret;
+}
+
+int ObTransformPreProcess::add_column_conv_to_multiset(ObQueryRefRawExpr *multiset_expr,
+                                                       const pl::ObPLDataType &elem_type,
+                                                       bool& trans_happened)
+{
+  int ret = OB_SUCCESS;
+  const ObDataType *data_type = NULL;
+  ObSelectStmt *multiset_stmt = multiset_expr->get_ref_stmt();
+  ObSelectStmt *new_stmt = NULL;
+  if (OB_ISNULL(data_type = elem_type.get_data_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null element data type", K(ret), K(elem_type));
+  } else if (OB_UNLIKELY(multiset_stmt->get_select_item_size() != 1) ||
+            OB_UNLIKELY(multiset_expr->get_column_types().count() != 1)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("unexpected column count", K(ret), KPC(multiset_stmt), KPC(multiset_expr));
+  } else {
+    if (!multiset_stmt->is_set_stmt()) {
+      // do nothing
+      // if multiset stmt is set stmt, create a view for it.
+    } else if (OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_, multiset_stmt, new_stmt))) {
+      LOG_WARN("failed to create dummy view", K(ret));
+    } else if (OB_ISNULL(new_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      multiset_stmt = new_stmt;
+      multiset_expr->set_ref_stmt(multiset_stmt);
+    }
+    if (OB_SUCC(ret)) {
+      SelectItem &select_item = multiset_stmt->get_select_item(0);
+      ObRawExpr *child = select_item.expr_;
+      if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(ctx_->session_info_,
+                                                         *ctx_->expr_factory_,
+                                                         data_type->get_obj_type(),
+                                                         data_type->get_collation_type(),
+                                                         data_type->get_accuracy_value(),
+                                                         true,
+                                                         NULL,
+                                                         NULL,
+                                                         child,
+                                                         true))) {
+        LOG_WARN("failed to build column conv expr", K(ret));
+      } else {
+        select_item.expr_ = child;
+        multiset_expr->get_column_types().at(0) = child->get_result_type();
+        trans_happened = true;
+      }
+    }
+  }
   return ret;
 }
 

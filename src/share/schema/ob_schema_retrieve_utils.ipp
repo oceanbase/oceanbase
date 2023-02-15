@@ -1582,7 +1582,7 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, x509_subject, user_info, false, ObSchemaService::g_ignore_column_retrieve_error_, default_ssl_specified);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result,
-        type, user_info, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
+        type, user_info, int32_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID_AND_DEFAULT_VALUE(result, profile_id,
         user_info, tenant_id, false, ObSchemaService::g_ignore_column_retrieve_error_, common::OB_INVALID_ID);
     int64_t default_last_changed = -1;
@@ -4083,7 +4083,7 @@ bool ObSchemaRetrieveUtils::compare_table_id(
 {
   bool cmp = false;
   if (OB_ISNULL(table_schema)) {
-    SHARE_SCHEMA_LOG(WARN, "table schema is NULL");
+    SHARE_SCHEMA_LOG_RET(WARN, OB_ERR_UNEXPECTED, "table schema is NULL");
   } else {
     //order by table id desc, used in sort function, the tenant_id is desc too
     cmp = table_schema->get_table_id() > table_id;
@@ -5069,7 +5069,7 @@ bool ObSchemaRetrieveUtils::compare_rls_policy_id(
 {
   bool cmp = false;
   if (OB_ISNULL(rls_policy_schema)) {
-    SHARE_SCHEMA_LOG(WARN, "rls_policy schema is NULL");
+    SHARE_SCHEMA_LOG_RET(WARN, OB_ERR_UNEXPECTED, "rls_policy schema is NULL");
   } else {
     cmp = rls_policy_schema->get_rls_policy_id() > rls_policy_id;
   }

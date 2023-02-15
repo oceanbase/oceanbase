@@ -256,37 +256,30 @@ int ObArchiveFileUtils::get_file_length(const ObString &uri,
 int ObArchiveFileUtils::extract_file_id(const ObString &file_name, int64_t &file_id, bool &match)
 {
   int ret = OB_SUCCESS;
-  const int64_t length = file_name.length();
-  const char *str = file_name.ptr();
   int64_t tmp_file_id = 0;
+  int32_t len = file_name.length() - strlen(OB_ARCHIVE_SUFFIX);
+  char pure_name[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   match = true;
   file_id = 0;
 
-  if (OB_UNLIKELY(file_name.empty()) || OB_ISNULL(str) || OB_UNLIKELY('\0' == (*str))) {
+  if (OB_UNLIKELY(file_name.empty())) {
     match = false;
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(file_name));
-  } else if (OB_UNLIKELY('0' == (*str))) {
+  } else if (OB_UNLIKELY(len <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "file name without a unified suffix", K(file_name), K(OB_ARCHIVE_SUFFIX));
+  } else if (OB_FAIL(databuff_printf(pure_name, sizeof(pure_name), "%.*s", len, file_name.ptr()))) {
+    ARCHIVE_LOG(WARN, "databuff_printf failed", K(file_name), K(len));
+  } else if (OB_FAIL(ob_atoll(pure_name, tmp_file_id))) {
+    ARCHIVE_LOG(WARN, "ignore invalid file name", K(file_name), K(pure_name));
+    ret = OB_SUCCESS;
     match = false;
   } else {
-    for (int64_t i = 0; match && i < length; i++) {
-      if (!isdigit(str[i]) && '\0' != str[i]) {
-        match = false;
-      } else if ('\0' == str[i]) {
-        break;
-      } else {
-        tmp_file_id = tmp_file_id * 10 + (str[i] - '0');
-      }
-    }
+    file_id = tmp_file_id;
+    match = true;
   }
 
-  if (OB_SUCC(ret)) {
-    if (! match) {
-      ARCHIVE_LOG(WARN, "invalid file_name", K(file_name));
-    } else {
-      file_id = tmp_file_id;
-    }
-  }
   return ret;
 }
 

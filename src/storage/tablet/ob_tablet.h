@@ -388,6 +388,7 @@ public:
   int set_memtable_clog_checkpoint_scn(
       const ObMigrationTabletParam *tablet_meta);
   int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
+  int remove_memtables_from_data_checkpoint();
   TO_STRING_KV(KP(this), K_(wash_score), K_(ref_cnt), K_(tablet_meta), K_(table_store), K_(storage_schema),
       K_(medium_info_list));
 private:
@@ -857,7 +858,7 @@ int ObTablet::save_multi_source_data_unit(
              share::SCN::max_scn() == memtable_scn) {
         if (ObTimeUtility::current_time() - start > 100 * 1000) {
           ret = OB_BLOCK_FROZEN;
-          TRANS_LOG(WARN, "logging_block costs too much time", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op), K(for_replay));
+          TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "logging_block costs too much time", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op), K(for_replay));
         }
         ob_usleep(100);
       }

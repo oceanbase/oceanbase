@@ -176,9 +176,13 @@ enum ObBackupProviderItemType {
 };
 
 class ObBackupProviderItem {
+  friend class ObBackupTabletStat;
 public:
   ObBackupProviderItem();
   virtual ~ObBackupProviderItem();
+  // for tablet meta and sstable meta
+  int set_with_fake(const ObBackupProviderItemType &item_type, const common::ObTabletID &tablet_id);
+  // for macro block
   int set(const ObBackupProviderItemType &item_type, const ObBackupMacroBlockId &backup_macro_id,
       const storage::ObITable::TableKey &table_key, const common::ObTabletID &tablet_id);
   bool operator==(const ObBackupProviderItem &other) const;
@@ -196,6 +200,11 @@ public:
   void reset();
   TO_STRING_KV(K_(item_type), K_(logic_id), K_(table_key), K_(tablet_id), K_(nested_offset), K_(nested_size));
   NEED_SERIALIZE_AND_DESERIALIZE;
+private:
+  // for parallel external sort serialization restriction
+  static ObITable::TableKey get_fake_table_key_();
+  static blocksstable::ObLogicMacroBlockId get_fake_logic_id_();
+  static blocksstable::MacroBlockId get_fake_macro_id_();
 
 private:
   ObBackupProviderItemType item_type_;
@@ -261,7 +270,8 @@ private:
       const share::ObBackupDataType &backup_data_type, int64_t &count);
   int get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle);
-  int check_tablet_deleted_(const uint64_t tenant_id, const common::ObTabletID &tablet_id, bool &is_deleted);
+  int get_tablet_skipped_type_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id, share::ObBackupSkippedType &skipped_type);
   int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type);
   int hold_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
   int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle,

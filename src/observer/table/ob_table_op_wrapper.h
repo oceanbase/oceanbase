@@ -16,6 +16,7 @@
 #include "ob_table_executor.h"
 #include "ob_table_delete_executor.h"
 #include "ob_table_cache.h"
+#include "ob_table_cg_service.h"
 
 namespace oceanbase
 {
@@ -27,10 +28,41 @@ class ObTableOpWrapper
 public:
   // dml操作模板函数
   template<int TYPE>
-  static int process_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
+  static int process_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
+  {
+    int ret = OB_SUCCESS;
+    ObTableApiSpec *spec = nullptr;
+    observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+    ObTableApiCacheGuard cache_guard;
+    if (OB_FAIL(get_or_create_spec<TYPE>(tb_ctx, cache_guard, spec))) {
+      SERVER_LOG(WARN, "fail to get or create spec", K(ret), K(TYPE));
+    }else if (OB_FAIL(process_op_with_spec(tb_ctx, spec, op_result))) {
+      SERVER_LOG(WARN, "fail to process op with spec", K(ret), K(TYPE));
+    } else {
+      tb_ctx.set_expr_info(nullptr);
+    }
+
+    return ret;
+  }
   // 生成/匹配计划
   template<int TYPE>
-  static int get_or_create_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec);
+  static int get_or_create_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec)
+  {
+    int ret = OB_SUCCESS;
+    ObExprFrameInfo *expr_frame_info;
+    if (OB_FAIL(cache_guard.init(&tb_ctx))) {
+      SERVER_LOG(WARN, "fail to init cache guard", K(ret));
+    } else if (OB_FAIL(cache_guard.get_expr_info(&tb_ctx, expr_frame_info))) {
+      SERVER_LOG(WARN, "fail to get expr frame info", K(ret));
+    } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(tb_ctx, *expr_frame_info))) {
+      SERVER_LOG(WARN, "fail to alloc exprs memory", K(ret));
+    } else if (FALSE_IT(tb_ctx.set_expr_info(expr_frame_info))) {
+    } else if (FALSE_IT(tb_ctx.set_init_flag(true))) {
+    } else if (OB_FAIL(cache_guard.get_spec<TYPE>(&tb_ctx, spec))) {
+      SERVER_LOG(WARN, "fail to get spec from cache", K(ret), K(TYPE));
+    }
+    return ret;
+  }
   // 根据执行计划驱动executor执行
   static int process_op_with_spec(ObTableCtx &tb_ctx, ObTableApiSpec *spec, ObTableOperationResult &op_result);
   // get特有的逻辑，单独处理

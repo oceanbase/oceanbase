@@ -30,22 +30,22 @@ static struct sockaddr_in* obaddr2sockaddr(struct sockaddr_in *sin, const ObAddr
 
 int ObPocNio::post(const common::ObAddr& addr, const char* req, int64_t req_size,  IRespHandler* resp_handler)
 {
-  int err = 0;
+  int ret = 0;
   int64_t io_limit = 1<<21;
   RLOCAL(char*, resp_buf);
   struct sockaddr_in sin;
   int fd = -1;
   if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    err = errno;
+    ret = errno;
     RPC_LOG(WARN, "create socket fail", K(errno));
   } else if (connect(fd, (sockaddr*)obaddr2sockaddr(&sin, addr), sizeof(sin)) < 0) {
-    err = errno;
+    ret = errno;
     RPC_LOG(WARN, "connect fail", K(addr), K(errno));
   } else if (write(fd, req, req_size) != req_size) {
-    err = errno;
+    ret = errno;
     RPC_LOG(WARN, "write fail", K(req_size), K(errno));
   } else if (NULL == resp_buf && NULL == (resp_buf = (char*)malloc(io_limit))) {
-    err = ENOMEM;
+    ret = ENOMEM;
     RPC_LOG(WARN, "alloc resp buffer fail", K(io_limit), K(errno));
   } else {
     shutdown(fd, SHUT_WR);
@@ -56,13 +56,13 @@ int ObPocNio::post(const common::ObAddr& addr, const char* req, int64_t req_size
       sz = 0;
     }
     RPC_LOG(INFO, "receive resp finish", K(sz));
-    resp_handler->handle_resp(err, resp_buf, sz);
+    resp_handler->handle_resp(ret, resp_buf, sz);
     RPC_LOG(INFO, "resp callback finish");
   }
   if (fd >= 0) {
     close(fd);
   }
-  return err;
+  return ret;
 }
 
 int ObPocNio::resp(int64_t resp_id, char* buf, int64_t sz)
@@ -70,12 +70,12 @@ int ObPocNio::resp(int64_t resp_id, char* buf, int64_t sz)
   int fd = (int)resp_id;
   if (sz > 0 && fd >= 0) {
     if (write(fd, buf, sz) < 0) {
-      RPC_LOG(WARN, "write resp fail", K(errno));
+      RPC_LOG_RET(WARN, common::OB_ERR_SYS, "write resp fail", K(errno));
     } else {
-      RPC_LOG(WARN, "write resp OK");
+      RPC_LOG_RET(WARN, common::OB_SUCCESS, "write resp OK");
     }
   } else {
-    RPC_LOG(WARN, "resp invalid argument", KP(buf), K(sz), K(fd));
+    RPC_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "resp invalid argument", KP(buf), K(sz), K(fd));
   }
   if (fd >= 0) {
     close(fd);
@@ -91,14 +91,14 @@ int ObPocNio::do_work(int tid)
   while(1){
     int fd = -1;
     if (read(accept_queue_fd_, &fd, sizeof(fd)) != sizeof(fd)) {
-      RPC_LOG(ERROR, "read accept queue fail");
+      RPC_LOG_RET(ERROR, common::OB_ERR_SYS, "read accept queue fail");
       continue;
     } else {
       RPC_LOG(INFO, "read accept queue succ", K(fd));
     }
     int64_t sz = read(fd, io_buf, io_limit);
     if (sz < 0 || sz >= io_limit) {
-      RPC_LOG(WARN, "read socket error", K(errno), K(fd));
+      RPC_LOG_RET(WARN, common::OB_ERR_SYS, "read socket error", K(errno), K(fd));
       close(fd);
     } else {
       int ret = OB_SUCCESS;

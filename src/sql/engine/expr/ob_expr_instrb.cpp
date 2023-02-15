@@ -272,11 +272,11 @@ int calc_instrb_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
         res_datum.set_number(res_nmb);
       }
     } else { // text types
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
       // similar to instr, but reserve length is byte len, use binary cs type for byte access
       ObTextStringIter haystack_iter(haystack_type, CS_TYPE_BINARY, haystack->get_string(), haystack_has_lob_header);
       ObTextStringIter needle_iter(needle_type, calc_cs_type, needle->get_string(), needle_has_lob_header);
-      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
 
       if (OB_FAIL(calc_instrb_text(haystack_iter, needle_iter, calc_alloc,
                                    kmp_ctx, ctx, pos_int, occ_int, res_datum))) {

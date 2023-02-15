@@ -13,7 +13,6 @@
 #ifndef OCEANBASE_OBSERVER_OB_TABLE_EXECUTOR_FACTORY_H
 #define OCEANBASE_OBSERVER_OB_TABLE_EXECUTOR_FACTORY_H
 #include "ob_table_executor_reg.h"
-#include "ob_table_cg_service.h"
 
 namespace oceanbase
 {

@@ -537,6 +537,8 @@ int ObLSTabletService::remove_tablets(const common::ObIArray<common::ObTabletID>
           } else {
             LOG_WARN("failed to get tablet", K(ret), K(key));
           }
+        } else if (OB_FAIL(tablet_handle.get_obj()->remove_memtables_from_data_checkpoint())) {
+          LOG_WARN("failed to remove memtables from data_checkpoint", K(ret), K(key));
         } else if (OB_FAIL(tablet_handle.get_obj()->get_meta_disk_addr(tablet_addr))) {
           LOG_WARN("failed to get tablet addr", K(ret), K(key));
         } else if (!tablet_addr.is_disked()) {
@@ -2182,7 +2184,8 @@ int ObLSTabletService::build_create_sstable_param_for_migration(
     param.table_mode_                    = mig_param.basic_meta_.table_mode_;
     param.index_type_                    = static_cast<share::schema::ObIndexType>(mig_param.basic_meta_.index_type_);
     param.rowkey_column_cnt_             = mig_param.basic_meta_.rowkey_column_count_;
-    param.root_row_store_type_           = mig_param.basic_meta_.row_store_type_;
+    param.root_row_store_type_           = mig_param.basic_meta_.root_row_store_type_;
+    param.latest_row_store_type_         = mig_param.basic_meta_.latest_row_store_type_;
     param.index_blocks_cnt_              = mig_param.basic_meta_.index_macro_block_count_;
     param.data_blocks_cnt_               = mig_param.basic_meta_.data_macro_block_count_;
     param.micro_block_cnt_               = mig_param.basic_meta_.data_micro_block_count_;
@@ -2748,7 +2751,7 @@ int ObLSTabletService::update_rows(
       EVENT_ADD(STORAGE_UPDATE_ROW_COUNT, afct_num);
     }
     if (timeguard.get_diff() > 3 * 1000 * 1000) {
-      LOG_WARN("update rows use too much time", K(afct_num), K(got_row_count));
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "update rows use too much time", K(afct_num), K(got_row_count));
     }
   }
   NG_TRACE(S_update_rows_end);
@@ -3576,7 +3579,7 @@ int ObLSTabletService::check_old_row_legitimacy(
       } else {
         ObString func_name = ObString::make_string("check_old_row_legitimacy");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
             "column_id", column_ids,
             KPC(storage_old_row),
             "sql_old_row", old_row,
@@ -4557,7 +4560,7 @@ int ObLSTabletService::check_new_row_nullable_value(
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_nullable_value");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   K(column_id), K(column_ids), K(new_row), K(data_table));
       }
     } else if (new_row.get_cell(i).is_number()) {
@@ -4571,7 +4574,7 @@ int ObLSTabletService::check_new_row_nullable_value(
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_nullable_value");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   K(column_id), K(column_ids), K(new_row), K(data_table));
       }
     }
@@ -4620,7 +4623,7 @@ int ObLSTabletService::check_new_row_nullable_value(const ObIArray<ObColDesc> &c
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_nullable_value");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   K(column_id), K(col_descs), K(new_row), K(relative_table));
       }
     } else if (new_row.get_cell(i).is_number()) {
@@ -4634,7 +4637,7 @@ int ObLSTabletService::check_new_row_nullable_value(const ObIArray<ObColDesc> &c
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_nullable_value");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   K(column_id), K(col_descs), K(new_row), K(relative_table));
       }
     }
@@ -4695,7 +4698,7 @@ int ObLSTabletService::check_new_row_shadow_pk(
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_shadow_pk");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   "column_id", column_ids, K(new_row), K(data_table),
                   K(spk_value), "pk_value", new_row.get_cell(pk_idx),
                   K(pk_idx), K(i), K(spk_column_id), K(real_pk_id));
@@ -4987,6 +4990,7 @@ int ObLSTabletService::process_old_row_lob_col(
               if (has_lob_header) {
                 obj.set_has_lob_header();
               }
+              run_ctx.is_old_row_valid_for_lob_ = true;
             }
           }
         }
@@ -5190,11 +5194,13 @@ int ObLSTabletService::delete_lob_tablet_rows(
     ObLobCommon *lob_common = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
       const ObColDesc &column = run_ctx.col_descs_->at(i);
-      ObObj &obj = tbl_row.row_val_.get_cell(i);
-      const ObObj &sql_obj = row.get_cell(i);
-      ObLobAccessParam lob_param;
-      if (OB_FAIL(delete_lob_col(run_ctx, column, obj, sql_obj, lob_common, lob_param))) {
-        LOG_WARN("[STORAGE_LOB]failed to erase lob col.", K(ret), K(i), K(tbl_row));
+      if (column.col_type_.is_lob_storage()) {
+        ObObj &obj = tbl_row.row_val_.get_cell(i);
+        const ObObj &sql_obj = row.get_cell(i);
+        ObLobAccessParam lob_param;
+        if (OB_FAIL(delete_lob_col(run_ctx, column, obj, sql_obj, lob_common, lob_param))) {
+          LOG_WARN("[STORAGE_LOB]failed to erase lob col.", K(ret), K(i), K(tbl_row));
+        }
       }
     }
   }

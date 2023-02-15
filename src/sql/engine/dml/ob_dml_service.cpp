@@ -117,7 +117,7 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
           expr->datum_meta_, expr->obj_meta_.has_lob_header(), wkb))) {
         LOG_WARN("fail to get real string data", K(ret), K(wkb));
-      } else if (ObGeoTypeUtil::check_geo_type(column_geo_type, wkb)) {
+      } else if (OB_FAIL(ObGeoTypeUtil::check_geo_type(column_geo_type, wkb))) {
         LOG_WARN("check geo type failed", K(ret), K(wkb));
         ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
         LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
@@ -241,6 +241,46 @@ int ObDMLService::create_rowkey_check_hashset(int64_t estimate_row,
   return ret;
 }
 
+int ObDMLService::check_lob_column_changed(ObEvalCtx &eval_ctx,
+            const ObExpr& old_expr, ObDatum& old_datum,
+            const ObExpr& new_expr, ObDatum& new_datum,
+            int64_t& result) {
+  INIT_SUCC(ret);
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  int64_t timeout = 0;
+  int64_t query_st = eval_ctx.exec_ctx_.get_my_session()->get_query_start_time();
+  if (OB_ISNULL(lob_mngr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get lob manager handle null.", K(ret));
+  } else if (OB_FAIL(eval_ctx.exec_ctx_.get_my_session()->get_query_timeout(timeout))) {
+    LOG_WARN("failed to get session query timeout", K(ret));
+  } else {
+    timeout += query_st;
+    ObString old_str = old_datum.get_string();
+    ObString new_str = new_datum.get_string();
+    bool old_set_has_lob_header = old_expr.obj_meta_.has_lob_header() && old_str.length() > 0;
+    bool new_set_has_lob_header = new_expr.obj_meta_.has_lob_header() && new_str.length() > 0;
+    ObLobLocatorV2 old_lob(old_str, old_set_has_lob_header);
+    ObLobLocatorV2 new_lob(new_str, new_set_has_lob_header);
+    ObLobCompareParams cmp_params;
+    // binary compare ignore charset
+    cmp_params.collation_left_ = CS_TYPE_BINARY;
+    cmp_params.collation_right_ = CS_TYPE_BINARY;
+    cmp_params.offset_left_ = 0;
+    cmp_params.offset_right_ = 0;
+    cmp_params.compare_len_ = UINT64_MAX;
+    cmp_params.timeout_ = timeout;
+    if(old_set_has_lob_header && new_set_has_lob_header) {
+      if(OB_FAIL(lob_mngr->compare(old_lob, new_lob, cmp_params, result))) {
+        LOG_WARN("fail to compare lob", K(ret), K(old_lob), K(new_lob));
+      }
+    } else {
+      result = ObDatum::binary_equal(old_datum, new_datum) ? 0 : 1;
+    }
+  }
+  return ret;
+}
+
 int ObDMLService::check_row_whether_changed(const ObUpdCtDef &upd_ctdef,
                                             ObUpdRtDef &upd_rtdef,
                                             ObEvalCtx &eval_ctx)
@@ -276,7 +316,18 @@ int ObDMLService::check_row_whether_changed(const ObUpdCtDef &upd_ctdef,
             || OB_FAIL(new_row.at(idx)->eval(eval_ctx, new_datum))) {
           LOG_WARN("evaluate value failed", K(ret));
         } else {
-          upd_rtdef.is_row_changed_ = !ObDatum::binary_equal(*old_datum, *new_datum);
+          if(is_lob_storage(old_row.at(idx)->datum_meta_.type_)
+              && is_lob_storage(new_row.at(idx)->datum_meta_.type_))
+          {
+            int64_t cmp_res = 0;
+            if(OB_FAIL(check_lob_column_changed(eval_ctx, *old_row.at(idx), *old_datum, *new_row.at(idx), *new_datum, cmp_res))) {
+              LOG_WARN("compare lob datum failed", K(ret));
+            } else {
+              upd_rtdef.is_row_changed_ = (cmp_res != 0);
+            }
+          } else {
+            upd_rtdef.is_row_changed_ = !ObDatum::binary_equal(*old_datum, *new_datum);
+          }
         }
       }
     } else {
@@ -297,7 +348,18 @@ int ObDMLService::check_row_whether_changed(const ObUpdCtDef &upd_ctdef,
             || OB_FAIL(new_row.at(idx)->eval(eval_ctx, new_datum))) {
           LOG_WARN("evaluate value failed", K(ret));
         } else {
-          upd_rtdef.is_row_changed_ = !ObDatum::binary_equal(*old_datum, *new_datum);
+          if(is_lob_storage(old_row.at(idx)->datum_meta_.type_)
+              && is_lob_storage(new_row.at(idx)->datum_meta_.type_))
+          {
+            int64_t cmp_res = 0;
+            if(OB_FAIL(check_lob_column_changed(eval_ctx, *old_row.at(idx), *old_datum, *new_row.at(idx), *new_datum, cmp_res))) {
+              LOG_WARN("compare lob datum failed", K(ret));
+            } else {
+              upd_rtdef.is_row_changed_ = (cmp_res != 0);
+            }
+          } else {
+            upd_rtdef.is_row_changed_ = !ObDatum::binary_equal(*old_datum, *new_datum);
+          }
         }
       }
     }
@@ -651,11 +713,6 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
   if (upd_ctdef.is_primary_index_) {
     uint64_t ref_table_id = upd_ctdef.das_base_ctdef_.index_tid_;
     ObSQLSessionInfo *my_session = NULL;
-    if (upd_ctdef.is_heap_table_ &&
-        OB_FAIL(copy_heap_table_hidden_pk(dml_op.get_eval_ctx(), upd_ctdef))) {
-      LOG_WARN("fail to copy heap table hidden pk", K(ret), K(upd_ctdef));
-    }
-
     if (OB_SUCC(ret) && upd_ctdef.need_check_filter_null_ && !has_instead_of_trg) {
       bool is_null = false;
       if (OB_FAIL(check_rowkey_is_null(upd_ctdef.old_row_,
@@ -667,6 +724,14 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
         is_skipped = true;
       }
     }
+
+    if (OB_SUCC(ret) && !is_skipped) {
+      if (upd_ctdef.is_heap_table_ &&
+          OB_FAIL(copy_heap_table_hidden_pk(dml_op.get_eval_ctx(), upd_ctdef))) {
+        LOG_WARN("fail to copy heap table hidden pk", K(ret), K(upd_ctdef));
+      }
+    }
+
     if (OB_SUCC(ret) && !is_skipped && !has_instead_of_trg) {
       bool is_distinct = false;
       if (OB_FAIL(check_rowkey_whether_distinct(upd_ctdef.distinct_key_,
@@ -1016,6 +1081,9 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   dml_param.is_batch_stmt_ = base_ctdef.is_batch_stmt_;
   dml_param.dml_allocator_ = &das_alloc;
   dml_param.snapshot_ = snapshot;
+  if (base_ctdef.is_batch_stmt_) {
+    dml_param.write_flag_.set_is_dml_batch_opt();
+  }
   return ret;
 }
 
@@ -1731,18 +1799,34 @@ int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
         dml_rtdef.check_location_ = new(location_buf) ObTableLocation(allocator);
         tmp_location = dml_rtdef.check_location_;
         ObSchemaGetterGuard *schema_guard = dml_rtctx.get_exec_ctx().get_sql_ctx()->schema_guard_;
+        ObSQLSessionInfo *session = dml_rtctx.get_exec_ctx().get_my_session();
         ObSqlSchemaGuard sql_schema_guard;
         sql_schema_guard.set_schema_guard(schema_guard);
-        if (OB_FAIL(tmp_location->init_table_location_with_column_ids(sql_schema_guard,
-                                                                      table_id,
-                                                                      dml_ctdef.column_ids_,
-                                                                      dml_rtctx.get_exec_ctx()))) {
+        const ObTableSchema *table_schema = nullptr;
+        // Here, judge the schema version at the check table level.
+        // If the table-level schema_version is not equal, directly report an error schema_again
+        if (OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(schema_guard), K(session));
+        } else if (OB_FAIL(tmp_location->init_table_location_with_column_ids(
+            sql_schema_guard, table_id, dml_ctdef.column_ids_, dml_rtctx.get_exec_ctx()))) {
           LOG_WARN("init table location with column ids failed", K(ret), K(dml_ctdef), K(table_id));
+        } else if (OB_FAIL(schema_guard->get_table_schema(
+            session->get_effective_tenant_id(), table_id, table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_SCHEMA_ERROR;
+          LOG_WARN("failed to get schema", K(ret));
+        } else if (table_schema->get_schema_version() != dml_ctdef.das_base_ctdef_.schema_version_) {
+          ret = OB_SCHEMA_EAGAIN;
+          LOG_WARN("table version mismatch", K(ret), K(table_id),
+              K(table_schema->get_schema_version()), K(dml_ctdef.das_base_ctdef_.schema_version_));
         }
       }
     } else {
       tmp_location = dml_rtdef.check_location_;
     }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(convert_exprs_to_row(row,
                                        dml_rtctx.get_eval_ctx(),

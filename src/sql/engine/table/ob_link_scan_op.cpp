@@ -134,7 +134,7 @@ void ObLinkScanOp::reset_dblink()
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(dblink_proxy_) && OB_NOT_NULL(dblink_conn_) && !in_xa_trascaction_ &&
              OB_SUCCESS != (tmp_ret = dblink_proxy_->release_dblink(link_type_, dblink_conn_, sessid_))) {
-    LOG_WARN("failed to release connection", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "failed to release connection", K(tmp_ret));
   }
   if (OB_NOT_NULL(reverse_link_)) {
     reverse_link_->close();
@@ -155,7 +155,7 @@ void ObLinkScanOp::reset_result()
     if (DBLINK_DRV_OB == link_type_) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = result_->close())) {
-        LOG_WARN("failed to close result", K(tmp_ret));
+        LOG_WARN_RET(tmp_ret, "failed to close result", K(tmp_ret));
       }
     }
     result_ = NULL;

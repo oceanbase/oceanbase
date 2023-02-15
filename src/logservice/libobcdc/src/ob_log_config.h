@@ -138,8 +138,8 @@ public:
   // root server info for oblog, seperated by `;` between multi rootserver, a root server info format as `ip:rpc_port:sql_port`
   DEF_STR(rootserver_list, OB_CLUSTER_PARAMETER, "|", "OB RootServer list");
   DEF_STR(cluster_url, OB_CLUSTER_PARAMETER, "|", "OB configure url");
-  DEF_STR(cluster_user, OB_CLUSTER_PARAMETER, "", "OB login user");
-  DEF_STR(cluster_password, OB_CLUSTER_PARAMETER, "", "OB login password");
+  DEF_STR(cluster_user, OB_CLUSTER_PARAMETER, "default", "OB login user");
+  DEF_STR(cluster_password, OB_CLUSTER_PARAMETER, "default", "OB login password");
   DEF_STR(cluster_db_name, OB_CLUSTER_PARAMETER, "oceanbase", "OB login database name");
   DEF_STR(config_fpath, OB_CLUSTER_PARAMETER, DEFAULT_CONFIG_FPATN, "configuration file path");
   DEF_STR(timezone, OB_CLUSTER_PARAMETER, DEFAULT_TIMEZONE, "timezone");
@@ -201,6 +201,7 @@ public:
   DEF_INT(log_clean_cycle_time_in_hours, OB_CLUSTER_PARAMETER, "24", "[0,]",
       "clean log cycle time in hours, 0 means not to clean log");
   DEF_INT(max_log_file_count, OB_CLUSTER_PARAMETER, "40", "[0,]", "max log file count, 0 means no limit");
+  T_DEF_BOOL(enable_log_limit, OB_CLUSTER_PARAMETER, 1, "0:disable log_limit, 1:enable log_limit");
 
   T_DEF_BOOL(skip_dirty_data, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
@@ -385,7 +386,8 @@ public:
   // Not on by default (participatn-by-participant output)
   T_DEF_BOOL(enable_output_trans_order_by_sql_operation, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   // redo dispatcher memory limit
-  DEF_CAP(redo_dispatcher_memory_limit, OB_CLUSTER_PARAMETER, "1G", "[128M,]", "redo dispatcher memory limit");
+  DEF_CAP(redo_dispatcher_memory_limit, OB_CLUSTER_PARAMETER, "512M", "[128M,]", "redo dispatcher memory limit");
+  DEF_CAP(extra_redo_dispatch_memory_size, OB_CLUSTER_PARAMETER, "4M", "[0, 512M]", "extra redo dispatcher memory for data skew participant");
   // redo diepatcher memory limit ratio for output br by sql operation(compare with redo_dispatcher_memory_limit)
   T_DEF_INT_INFT(redo_dispatched_memory_limit_exceed_ratio, OB_CLUSTER_PARAMETER, 2, 1,
       "redo_dispatcher_memory_limit ratio for output by sql operation order");

@@ -373,7 +373,7 @@ int ObLSLocationService::get_leader_with_retry_until_timeout(
           } else if (ObTimeUtil::current_time() + retry_interval > curr_abs_retry_timeout_ts) {
             break;
           } else {
-            ob_usleep(retry_interval);
+            ob_usleep(static_cast<uint32_t>(retry_interval));
           }
         } else {
           LOG_WARN("fail to nonblock_get_leader", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));

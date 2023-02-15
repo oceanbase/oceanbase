@@ -56,3 +56,24 @@ int ObLogSelectInto::compute_plan_type()
   } else { /*do nothing*/ }
   return ret;
 }
+
+int ObLogSelectInto::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(all_exprs, select_exprs_))) {
+    LOG_WARN("failed to push back select exprs", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to get op exprs", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObLogSelectInto::inner_replace_op_exprs(
+        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(replace_exprs_action(to_replace_exprs, select_exprs_))) {
+    LOG_WARN("failed to replace select exprs", K(ret));
+  }
+  return ret;
+}

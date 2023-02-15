@@ -37,7 +37,7 @@ inline void *ob_malloc(const int64_t nbyte, const ObMemAttr &attr = default_mema
   if (!OB_ISNULL(allocator)) {
     ptr = allocator->alloc(nbyte, attr);
     if (OB_ISNULL(ptr)) {
-      LIB_LOG(WARN, "allocate memory fail", K(attr), K(nbyte));
+      LIB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(attr), K(nbyte));
     }
   }
   return ptr;
@@ -61,7 +61,7 @@ inline void *ob_realloc(void *ptr, const int64_t nbyte, const ObMemAttr &attr)
     if (!OB_ISNULL(allocator)) {
       nptr = allocator->realloc(ptr, nbyte, attr);
       if (OB_ISNULL(nptr)) {
-        LIB_LOG(ERROR, "allocate memory fail", K(attr), K(nbyte));
+        LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(attr), K(nbyte));
       }
     }
   }

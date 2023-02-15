@@ -279,7 +279,7 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
   ObObj *cells = nullptr;
   const ObTableCtx &tb_ctx = scan_executor_->get_table_ctx();
   ObIAllocator &allocator = tb_ctx.get_allocator();
-  const ExprFixedArray &output_exprs = scan_executor_->get_spec().get_ctdef().get_das_output_exprs();
+  const ExprFixedArray &output_exprs = scan_executor_->get_spec().get_ctdef().output_exprs_;
   const int64_t cells_cnt = output_exprs.count();
 
   if (OB_ISNULL(scan_executor_)) {
@@ -300,7 +300,6 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
     tmp_row = new(row_buf)ObNewRow(cells, cells_cnt);
     ObDatum *datum = nullptr;
     ObEvalCtx &eval_ctx = scan_executor_->get_eval_ctx();
-    const ObIArray<common::ObObjMeta> &output_metas = tb_ctx.get_select_metas();
     if (tb_ctx.is_scan()) { // 转为用户select的顺序
       const ObIArray<uint64_t> &select_col_ids = tb_ctx.get_select_col_ids();
       const ObIArray<uint64_t> &query_col_ids = tb_ctx.get_query_col_ids();
@@ -312,16 +311,16 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
           LOG_WARN("query column id not found", K(ret), K(select_col_ids), K(col_id), K(query_col_ids));
         } else if (OB_FAIL(output_exprs.at(idx)->eval(eval_ctx, datum))) {
           LOG_WARN("fail to eval datum", K(ret));
-        } else if (OB_FAIL(datum->to_obj(cells[i], output_metas.at(idx)))) {
-          LOG_WARN("fail to datum to obj", K(ret), K(output_metas.at(idx)), K(i), K(idx));
+        } else if (OB_FAIL(datum->to_obj(cells[i], output_exprs.at(idx)->obj_meta_))) {
+          LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(idx)->obj_meta_), K(i), K(idx));
         }
       }
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < cells_cnt; i++) {
         if (OB_FAIL(output_exprs.at(i)->eval(eval_ctx, datum))) {
           LOG_WARN("fail to eval datum", K(ret));
-        } else if (OB_FAIL(datum->to_obj(cells[i], output_metas.at(i)))) {
-          LOG_WARN("fail to datum to obj", K(ret), K(output_metas.at(i)));
+        } else if (OB_FAIL(datum->to_obj(cells[i], output_exprs.at(i)->obj_meta_))) {
+          LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(i)->obj_meta_));
         }
       }
     }

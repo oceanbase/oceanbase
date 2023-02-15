@@ -1235,7 +1235,9 @@ int JtScanNode::assign(const JtScanNode& other)
   INIT_SUCC(ret);
 
   if (OB_FAIL(reg_col_defs_.assign(other.reg_col_defs_))) {
-    LOG_WARN("fail to assign col defs.", K(ret));
+    LOG_WARN("fail to assign col defs.", K(ret), K(other.reg_col_defs_.count()));
+  } else if (OB_FAIL(child_idx_.assign(other.child_idx_))) {
+    LOG_WARN("fail to assign child idx defs.", K(ret), K(other.child_idx_.count()));
   } else {
     col_info_ = other.col_info_;
     nest_col_def_ = other.nest_col_def_;
@@ -1294,6 +1296,7 @@ void JtScanNode::destroy()
   }
 
   reg_col_defs_.reset();
+  child_idx_.reset();
 
   if (OB_NOT_NULL(nest_col_def_)) {
     nest_col_def_->destroy();

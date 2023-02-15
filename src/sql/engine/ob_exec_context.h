@@ -42,7 +42,7 @@
       op_ctx = new (ptr) ctx_type(exec_ctx); \
       int64_t tenant_id = GET_MY_SESSION(exec_ctx)->get_effective_tenant_id(); \
       if (oceanbase::common::OB_SUCCESS != (_ret_ = op_ctx->init_base(tenant_id))) { \
-        SQL_ENG_LOG(WARN, "init operator ctx failed", K(_ret_)); \
+        SQL_ENG_LOG_RET(WARN, _ret_, "init operator ctx failed", K(_ret_)); \
       } else { \
         op_ctx->set_op_id(op_id); \
         op_ctx->set_op_type(op_type); \
@@ -155,7 +155,7 @@ public:
    * @brief initialize execute context, must call before calling any function
    */
   int init_phy_op(uint64_t phy_op_size);
-  int init_expr_op(const uint64_t expr_op_size);
+  int init_expr_op(const uint64_t expr_op_size, ObIAllocator *allocator = NULL);
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
   int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);

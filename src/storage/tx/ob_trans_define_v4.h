@@ -344,7 +344,7 @@ protected:
 
   uint64_t op_sn_;                     // Tx level operation sequence No
 
-  enum class State                     // State of Tx
+  enum class State : int               // State of Tx
   {
     INVL,
     IDLE,               // created
@@ -371,7 +371,7 @@ protected:
     struct
     {
       bool EXPLICIT_:1;               // txn is explicted start
-      bool SHADOW_:1;                // this tx desc is a shadow copy
+      bool SHADOW_:1;                // this tx desc is a shadow copy, is not registered with tx_desc_mgr
       bool REPLICA_:1;               // a replica of primary/original, its state is transient, without whole lifecyle
       bool TRACING_:1;               // tracing the Tx
       bool INTERRUPTED_: 1;          // a single for blocking operation
@@ -469,7 +469,7 @@ private:
   int update_parts(const share::ObLSArray &parts);
   int switch_to_idle();
   int set_commit_cb(ObITxCallback *cb);
-  void execute_commit_cb();
+  bool execute_commit_cb();
 private:
   int update_part_(ObTxPart &p, bool append = true);
   int add_conflict_tx_(const ObTransIDAndAddr &conflict_tx);
@@ -547,7 +547,7 @@ public:
   void set_with_temporary_table() { flags_.WITH_TEMP_TABLE_ = true; }
   bool with_temporary_table() const { return flags_.WITH_TEMP_TABLE_; }
   int64_t get_op_sn() const { return op_sn_; }
-  int inc_op_sn() { state_change_flags_.DYNAMIC_CHANGED_ = true; return ++op_sn_; }
+  void inc_op_sn() { state_change_flags_.DYNAMIC_CHANGED_ = true; ++op_sn_; }
   share::SCN get_commit_version() const { return commit_version_; }
   bool contain_savepoint(const ObString &sp);
   bool is_tx_end() {
@@ -706,6 +706,7 @@ private:
     int for_each(Function &fn)
     {
       int ret = OB_SUCCESS;
+      ObSpinLockGuard guard(lk_);
       auto n = list_.next_;
       while(n != &list_) {
         auto tx = CONTAINER_OF(n, ObTxDesc, alloc_link_);

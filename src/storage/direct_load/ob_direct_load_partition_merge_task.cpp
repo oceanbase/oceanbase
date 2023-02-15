@@ -11,6 +11,7 @@
 #include "storage/direct_load/ob_direct_load_multiple_heap_table.h"
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
 #include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_stat_define.h"
 
 namespace oceanbase
 {
@@ -151,7 +152,8 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
       const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i + 1);
       ObOptColumnStat *col_stat = column_stat_array_.at(i);
-      if (col_stat != nullptr) {
+      bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+      if (col_stat != nullptr && is_valid) {
         ObObj obj;
         if (OB_FAIL(datum.to_obj_enhance(obj, col_desc.col_type_))) {
           LOG_WARN("Failed to transform datum to obj", K(ret), K(i), K(datum_row.storage_datums_[i]));
@@ -165,7 +167,8 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
       const ObStorageDatum &datum = datum_row.storage_datums_[i];
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
       ObOptColumnStat *col_stat = column_stat_array_.at(i);
-      if (col_stat != nullptr) {
+      bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+      if (col_stat != nullptr && is_valid) {
         ObObj obj;
         if (OB_FAIL(datum.to_obj_enhance(obj, col_desc.col_type_))) {
           LOG_WARN("Failed to transform datum to obj", K(ret), K(i), K(datum_row.storage_datums_[i]));
@@ -178,7 +181,8 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
       const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt];
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
       ObOptColumnStat *col_stat = column_stat_array_.at(i);
-      if (col_stat != nullptr) {
+      bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+      if (col_stat != nullptr && is_valid) {
         ObObj obj;
         if (OB_FAIL(datum.to_obj_enhance(obj, col_desc.col_type_))) {
           LOG_WARN("Failed to transform datum to obj", K(ret), K(i), K(datum_row.storage_datums_[i]));

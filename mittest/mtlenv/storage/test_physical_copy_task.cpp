@@ -246,6 +246,7 @@ void TestSSTableMeta::prepare_create_sstable_param()
   param_.root_block_addr_.set_none_addr();
   param_.data_block_macro_meta_addr_.set_none_addr();
   param_.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  param_.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
   param_.data_index_tree_height_ = 0;
   param_.index_blocks_cnt_ = 0;
   param_.data_blocks_cnt_ = 0;

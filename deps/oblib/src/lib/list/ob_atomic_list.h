@@ -165,10 +165,10 @@ inline void *ObAtomicList::push(void *item)
 
 #ifdef DOUBLE_FREE_CHECK
     if (TO_PTR(h) == item) {
-      OB_LOG(ERROR, "atomic list push: trying to free item twice");
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "atomic list push: trying to free item twice");
     }
     if (((reinterpret_cast<uint64_t>(TO_PTR(h))) & 3) != 0) {
-      OB_LOG(ERROR, "atomic list push: bad list");
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "atomic list push: bad list");
     }
 #endif
 
@@ -199,10 +199,10 @@ inline void *ObAtomicList::batch_push(void *head_item, void *tail_item)
 
 #ifdef DOUBLE_FREE_CHECK
     if (TO_PTR(h) == tail_item) {
-      OB_LOG(ERROR, "atomic list push: trying to free item twice");
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "atomic list push: trying to free item twice");
     }
     if ((reinterpret_cast<uint64_t>(TO_PTR(h))) & 3) {
-      OB_LOG(ERROR, "atomic list push: bad list");
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "atomic list push: bad list");
     }
 #endif
 
@@ -242,10 +242,10 @@ inline void *ObAtomicList::pop()
 #ifdef DOUBLE_FREE_CHECK
       if (result) {
         if (FREELIST_POINTER(item) == TO_PTR(FREELIST_POINTER(next))) {
-          OB_LOG(ERROR, "atomic list pop: loop detected");
+          OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "atomic list pop: loop detected");
         }
         if (((reinterpret_cast<uint64_t>(TO_PTR(FREELIST_POINTER(next)))) & 3) != 0) {
-          OB_LOG(ERROR, "atomic list pop: bad list");
+          OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "atomic list pop: bad list");
         }
       }
 #endif

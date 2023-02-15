@@ -88,7 +88,7 @@ PartTransDispatcher::~PartTransDispatcher()
   // That is, task_queue and task_map should not have tasks from this partition in them
   // If want to clean tasks here, we need to save the tls_id, but for the time being, don't need to save the tls_id in order to optimise memory usage
   if (task_queue_.size() > 0) {
-    LOG_ERROR("task_queue_ is not empty", K(task_queue_.size()), KPC(task_queue_.top()));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "task_queue_ is not empty", K(task_queue_.size()), KPC(task_queue_.top()));
   }
 
   tls_id_.reset();

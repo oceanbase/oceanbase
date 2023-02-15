@@ -58,21 +58,21 @@ void print_debug_ts_if_reach_warn_threshold(const ElectionMsgBase &msg, const in
                               res_debug_ts.src_construct_ts_, res_debug_ts.src_serialize_ts_,
                               res_debug_ts.dest_deserialize_ts_, res_debug_ts.dest_process_ts_}) - req_debug_ts.src_construct_ts_;
   if (req_debug_ts.src_serialize_ts_ != 0 && (diff = std::abs(req_debug_ts.src_serialize_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "request serialize in src too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "request serialize in src too delay");
   } else if (req_debug_ts.dest_deserialize_ts_ != 0 && (diff = std::abs(req_debug_ts.dest_deserialize_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "request deserialize in dest too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "request deserialize in dest too delay");
   } else if (req_debug_ts.dest_process_ts_ != 0 && (diff = std::abs(req_debug_ts.dest_process_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "request process in dest too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "request process in dest too delay");
   } else if (res_debug_ts.src_construct_ts_ != 0 && (diff = std::abs(res_debug_ts.src_construct_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "response construct in src too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "response construct in src too delay");
   } else if (res_debug_ts.src_serialize_ts_ != 0 && (diff = std::abs(res_debug_ts.src_serialize_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "response serialize in src too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "response serialize in src too delay");
   } else if (res_debug_ts.dest_deserialize_ts_ != 0 && (diff = std::abs(res_debug_ts.dest_deserialize_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "response deserialize in dest too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "response deserialize in dest too delay");
   } else if (res_debug_ts.dest_process_ts_ != 0 && (diff = std::abs(res_debug_ts.dest_process_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "response process in dest too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "response process in dest too delay");
   } else if (max_diff > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "max_diff too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "max_diff too delay");
   }
   return;
   #undef PRINT_WRAPPER
@@ -159,7 +159,10 @@ ElectionPrepareRequestMsgMiddle::ElectionPrepareRequestMsgMiddle() :
 ElectionMsgBase(),
 role_(ObRole::INVALID_ROLE),
 is_buffer_valid_(false),
-inner_priority_seed_(DEFAULT_SEED) { memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE); }
+inner_priority_seed_(static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED))
+{
+  memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE);
+}
 
 int ElectionPrepareRequestMsgMiddle::set(const ElectionPriority *priority,
                                    const common::ObRole role) {
@@ -257,7 +260,7 @@ lease_started_ts_on_proposer_(0),
 lease_interval_(0),
 accepted_(false),
 is_buffer_valid_(false),
-inner_priority_seed_(DEFAULT_SEED)
+inner_priority_seed_(static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED))
 {
   memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE);
 }

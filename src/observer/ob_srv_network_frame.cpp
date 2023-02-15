@@ -110,6 +110,7 @@ int ObSrvNetworkFrame::init()
   opts.mysql_io_cnt_ = io_cnt;
   opts.batch_rpc_io_cnt_ = io_cnt;
   opts.use_ipv6_ = GCONF.use_ipv6;
+  //TODO(tony.wzh): fix opts.tcp_keepidle  negative
   opts.tcp_user_timeout_ = static_cast<int>(GCONF.dead_socket_detection_timeout);
   opts.tcp_keepidle_     = static_cast<int>(GCONF.tcp_keepidle);
   opts.tcp_keepintvl_    = static_cast<int>(GCONF.tcp_keepintvl);

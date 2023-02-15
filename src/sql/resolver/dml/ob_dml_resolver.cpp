@@ -1207,21 +1207,30 @@ int ObDMLResolver::check_column_json_type(ParseNode *tab_col, bool &is_json_col,
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("get table schema failed", K_(table_item->table_name), K(table_item->ref_id_), K(ret));
         } else {
-          for (ObTableSchema::const_constraint_iterator iter = table_schema->constraint_begin(); OB_SUCC(ret) &&
-                        iter != table_schema->constraint_end() && !is_json_col && only_is_json <= 1; iter ++) {
-            if (OB_ISNULL((*iter)->get_check_expr_str().ptr())) {
+          for (ObTableSchema::const_constraint_iterator iter = table_schema->constraint_begin();
+                OB_SUCC(ret) && iter != table_schema->constraint_end() && !is_json_col && only_is_json <= 1; iter ++) {
+            const ObConstraint* ptr_constrain = *iter;
+            if (OB_ISNULL(ptr_constrain)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("table schema constrain is null", K(ret));
+            } else if (OB_ISNULL(ptr_constrain->get_check_expr_str().ptr())) {
             } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(
-                  (*iter)->get_check_expr_str(), *(params_.allocator_), node))) {
+                ptr_constrain->get_check_expr_str(), *(params_.allocator_), node))) {
               LOG_WARN("parse expr node from string failed", K(ret));
-            } else {
-              if (pos_col == *((*iter)->cst_col_begin()) && node->type_ == T_FUN_SYS_IS_JSON) {
-                is_json_col = true;
-              }
+            } else if (OB_ISNULL(node)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("parse expr get node failed", K(ret));
+            } else if (node->type_ == T_FUN_SYS_IS_JSON
+                       && ptr_constrain->get_column_cnt() > 0
+                       && pos_col == *(ptr_constrain->cst_col_begin())) {
+              is_json_col = true;
             }
           }
 
           if (OB_SUCC(ret) && ((only_is_json >= 1 && !is_json_col ) || (only_is_json == 0 && is_json_col))) {
-            if (OB_NOT_NULL(table_schema->get_column_schema(tab_col->children_[2]->str_value_)) && table_schema->get_column_schema(tab_col->children_[2]->str_value_)->is_json()) {
+            if (OB_NOT_NULL(tab_col->children_[2])
+                && OB_NOT_NULL(table_schema->get_column_schema(tab_col->children_[2]->str_value_))
+                && table_schema->get_column_schema(tab_col->children_[2]->str_value_)->is_json()) {
               if (only_is_json == 0 && is_json_col) {
                 is_json_col = false;
               } else {
@@ -4530,7 +4539,7 @@ int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &vie
       bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
       if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
         LOG_WARN("failed to resolve view", K(ret));
-      } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(*view_schema, view_stmt,reset_column_infos))) {
+      } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(*view_schema, view_stmt,reset_column_infos, *allocator_, *session_info_))) {
         LOG_WARN("failed to add recompile view task", K(tmp_ret));
         if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
           tmp_ret = OB_SUCCESS; //ignore
@@ -5868,6 +5877,10 @@ int ObDMLResolver::do_resolve_subquery_info(const ObSubQueryInfo &subquery_info,
         const ObExprResType &column_type = target_expr->get_result_type();
         if (OB_FAIL(subquery_info.ref_expr_->add_column_type(column_type))) {
           LOG_WARN("add column type to subquery ref expr failed", K(ret));
+        } else if (column_type.is_lob_storage() && !IS_CLUSTER_VERSION_BEFORE_4_1_0_0) {
+          ObExprResType &last_item = subquery_info.ref_expr_->get_column_types().
+                                     at(subquery_info.ref_expr_->get_column_types().count() - 1);
+          last_item.set_has_lob_header();
         }
       }
     }
@@ -6297,7 +6310,7 @@ bool ObDMLResolver::is_need_add_additional_function(const ObRawExpr *expr)
 {
   bool bret = false;
   if (OB_ISNULL(expr)) {
-    LOG_WARN("invalid argument to check whether to add additional function", K(expr));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument to check whether to add additional function", K(expr));
   } else if (T_FUN_COLUMN_CONV == expr->get_expr_type()) {
     bret = false;
   } else {
@@ -7141,10 +7154,11 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
   int ret = OB_SUCCESS;
+  bool has_dblink_node = false;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
-  } else if (OB_FAIL(resolve_dblink_name(node, dblink_name, is_reverse_link))) {
+  } else if (OB_FAIL(resolve_dblink_name(node, dblink_name, is_reverse_link, has_dblink_node))) {
     LOG_WARN("resolve dblink name failed", K(ret));
   } else {
     LOG_DEBUG("resolve dblink name", K(dblink_name), K(is_reverse_link));
@@ -8418,31 +8432,36 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
 // columns with is json constraint should set_strict_json_column > 00
 bool ObDMLResolver::check_generated_column_has_json_constraint(const ObSelectStmt *stmt, const ObColumnRefRawExpr *col_expr)
 {
-  bool ret_bool = false;
   int ret = OB_SUCCESS;
+  bool ret_bool = false;
+
+  const ParseNode *node = NULL;
   const share::schema::ObTableSchema *table_schema = NULL;
 
   if (OB_NOT_NULL(stmt) && OB_NOT_NULL(col_expr)) {
-    int tab_num = stmt->get_table_size();
-    ObString col_name = col_expr->get_column_name();
-    const ParseNode *node = NULL;
-    for (int i = 0; OB_SUCC(ret) && i < tab_num && !ret_bool; ++i) {
+    int table_num = stmt->get_table_size();
+    for (int i = 0; OB_SUCC(ret) && i < table_num && !ret_bool; ++i) {
       const TableItem *tmp_table_item = stmt->get_table_item(i);
-
       if (OB_NOT_NULL(tmp_table_item)
           && (OB_SUCC(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tmp_table_item->ref_id_, table_schema)))) {
         if (OB_NOT_NULL(table_schema)) {
-          ObString tab_name = tmp_table_item->table_name_;
-          for (ObTableSchema::const_constraint_iterator iter = table_schema->constraint_begin(); OB_SUCC(ret) &&
-              iter != table_schema->constraint_end() && !ret_bool; iter ++) {
-            if (OB_ISNULL((*iter)->get_check_expr_str().ptr())) {
-            } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(
-                  (*iter)->get_check_expr_str(), *(params_.allocator_), node))) {
+          for (ObTableSchema::const_constraint_iterator iter = table_schema->constraint_begin();
+               OB_SUCC(ret) && !ret_bool && iter != table_schema->constraint_end(); iter ++) {
+            const ObConstraint* ptr_constrain = *iter;
+            if (OB_ISNULL(ptr_constrain)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("table schema constrain is null", K(ret));
+            } else if (OB_ISNULL(ptr_constrain->get_check_expr_str().ptr())) {
+            } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(ptr_constrain->get_check_expr_str(),
+                                                                             *(params_.allocator_), node))) {
               LOG_WARN("parse expr node from string failed", K(ret));
-            } else {
-              if (col_expr->get_column_id() == *((*iter)->cst_col_begin()) && node->type_ == T_FUN_SYS_IS_JSON) {
-                ret_bool = true;
-              }
+            } else if (OB_ISNULL(node)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("parse expr get node failed", K(ret));
+            } else if (node->type_ != T_FUN_SYS_IS_JSON) {
+            } else if (ptr_constrain->get_column_cnt() == 0 || OB_ISNULL(ptr_constrain->cst_col_begin())) {
+            } else if (col_expr->get_column_id() == *(ptr_constrain->cst_col_begin())) {
+              ret_bool = true;
             }
           } // table item is null OR fail to get schema, do nothing, return false
         }
@@ -8560,6 +8579,8 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
               }
               if (!ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME, col_ref->get_column_name())) {
                 col_expr->set_joined_dup_column(col_ref->is_joined_dup_column());
+                col_expr->set_lob_column(col_ref->is_lob_column());
+                col_expr->set_srs_id(col_ref->get_srs_id());
                 ColumnItem *item = ref_stmt->get_column_item_by_id(col_ref->get_table_id(), col_ref->get_column_id());
                 if (OB_ISNULL(item)) {
                   ret = OB_ERR_UNEXPECTED;
@@ -8567,6 +8588,7 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
                 } else {
                   column_item.base_tid_ = item->base_tid_;
                   column_item.base_cid_ = item->base_cid_;
+                  column_item.is_geo_ = item->is_geo_;
                 }
               }
             }
@@ -11315,7 +11337,7 @@ const ParseNode *ObDMLResolver::get_outline_data_hint_node()
       || NULL == (select_node = params_.outline_parse_result_->result_tree_->children_[0])) {
     /* do nothing */
   } else if (OB_UNLIKELY(T_SELECT != select_node->type_)) {
-    LOG_WARN("unexpected node type", "type", get_type_name(select_node->type_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected node type", "type", get_type_name(select_node->type_));
   } else {
     node = select_node->children_[PARSE_SELECT_HINTS];
   }
@@ -11621,7 +11643,6 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     case T_APPEND: {
       CHECK_HINT_PARAM(hint_node, 0) {
         global_hint.merge_osg_hint(ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT);
-        global_hint.set_append(true);
       }
       break;
     }

@@ -354,7 +354,7 @@ private:
                                 ObPreCalcExprFrameInfo &expr_info);
 
   // total datums size: header + reserved data
-  int get_expr_datums_size(const ObExpr &expr) {
+  int64_t get_expr_datums_size(const ObExpr &expr) {
     return get_expr_datums_header_size(expr) + reserve_datums_buf_len(expr);
   }
 
@@ -364,7 +364,7 @@ private:
   // - EvalInfo instance
   // - EvalFlag(BitVector) instance + BitVector data
   // - SkipBitmap(BitVector) + BitVector data
-  int get_expr_datums_header_size(const ObExpr &expr) {
+  int64_t get_expr_datums_header_size(const ObExpr &expr) {
     return get_datums_header_size(expr) + sizeof(ObEvalInfo) +
            2 * get_expr_skip_vector_size(expr);
   }

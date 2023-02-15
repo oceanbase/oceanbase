@@ -391,7 +391,7 @@ public:
             if (NULL != tester_) {
               tester_->stop();
             }
-            COMMON_LOG(ERROR, "FATAL ERROR!!!", K_(expect), K(op_.value()), K_(expect_ret),
+            COMMON_LOG_RET(ERROR, OB_ERROR, "FATAL ERROR!!!", K_(expect), K(op_.value()), K_(expect_ret),
                 K(get_dag_ret()), K_(id));
             common::right_to_die_or_duty_to_live();
           }
@@ -407,7 +407,7 @@ public:
     tester_ = tester;
     ObAddr addr(1683068975,9999);
     if (OB_SUCCESS != (ObSysTaskStatMgr::get_instance().set_self_addr(addr))) {
-      COMMON_LOG(WARN, "failed to add sys task", K(addr));
+      COMMON_LOG_RET(WARN, OB_ERROR, "failed to add sys task", K(addr));
     }
     return OB_SUCCESS;
   }

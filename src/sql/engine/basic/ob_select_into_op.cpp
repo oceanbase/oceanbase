@@ -26,7 +26,7 @@ namespace sql
 {
 
 OB_SERIALIZE_MEMBER((ObSelectIntoSpec, ObOpSpec), into_type_, user_vars_,
-    outfile_name_, filed_str_, line_str_, closed_cht_, is_optional_);
+    outfile_name_, filed_str_, line_str_, closed_cht_, is_optional_, select_exprs_);
 
 
 int ObSelectIntoOp::inner_open()
@@ -284,7 +284,10 @@ int ObSelectIntoOp::get_row_str(const int64_t buf_len,
   const ObObj &filed_str = filed_str_;
   char closed_cht = MY_SPEC.closed_cht_;
   bool is_optional = MY_SPEC.is_optional_;
-  const ObIArray<ObExpr*> &select_exprs = MY_SPEC.output_;
+  //before 4_1 use output
+  //after 4_1 use select exprs
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+                                           MY_SPEC.output_ : MY_SPEC.select_exprs_;
   if (!is_first_row && line_str_.is_varying_len_char_type()) { // lines terminated by "a"
     ret = databuff_printf(buf, buf_len, pos, "%.*s", line_str_.get_varchar().length(),
                          line_str_.get_varchar().ptr());
@@ -491,7 +494,10 @@ int ObSelectIntoOp::into_dumpfile()
 int ObSelectIntoOp::into_outfile()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObExpr*> &select_exprs = MY_SPEC.output_;
+  //before 4_1 use output
+  //after 4_1 use select exprs
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+                                           MY_SPEC.output_ : MY_SPEC.select_exprs_ ;
   if (select_exprs.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid count of exprs in select into outfile", K(select_exprs.count()), K(ret));
@@ -518,7 +524,10 @@ int ObSelectIntoOp::into_outfile()
 int ObSelectIntoOp::into_outfile_batch(const ObBatchRows &brs)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObExpr*> &select_exprs = MY_SPEC.output_;
+  //before 4_1 use output
+  //after 4_1 use select exprs
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+                                           MY_SPEC.output_ : MY_SPEC.select_exprs_;
   if (select_exprs.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid count of exprs in select into outfile", K(select_exprs.count()), K(ret));
@@ -548,7 +557,10 @@ int ObSelectIntoOp::into_outfile_batch(const ObBatchRows &brs)
 int ObSelectIntoOp::into_varlist()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObExpr*> &select_exprs = MY_SPEC.output_;
+  //before 4_1 use output
+  //after 4_1 use select exprs
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+                                           MY_SPEC.output_ : MY_SPEC.select_exprs_;
   const ObIArray<ObString> &user_vars = MY_SPEC.user_vars_;
   if (select_exprs.count() != user_vars.count()) {
     ret = OB_ERR_COLUMN_SIZE;

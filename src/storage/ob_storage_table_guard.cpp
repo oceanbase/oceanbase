@@ -74,7 +74,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
       if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
           MTL_ID(), memstore_allocator))) {
       } else if (OB_ISNULL(memstore_allocator)) {
-        LOG_WARN("get_tenant_mutil_allocator failed", K(store_ctx_.tablet_id_), K(tmp_ret));
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "get_tenant_mutil_allocator failed", K(store_ctx_.tablet_id_), K(tmp_ret));
       } else {
         while (need_sleep &&
                !memstore_allocator->check_clock_over_seq(seq) &&
@@ -208,7 +208,7 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
       const int64_t cost_time = ObTimeUtility::current_time() - start;
       if (cost_time > 10 * 1000) {
         if (TC_REACH_TIME_INTERVAL(10 * 1000)) {
-          TRANS_LOG(WARN, "refresh replay table too much times", K(ret),
+          TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "refresh replay table too much times", K(ret),
                     K(ls_id), K(tablet_id), K(cost_time));
         }
       }
@@ -233,7 +233,7 @@ void ObStorageTableGuard::double_check_inc_write_ref(
     bool &bool_ret)
 {
   if (OB_ISNULL(memtable)) {
-    LOG_WARN("memtable is null when inc write ref");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "memtable is null when inc write ref");
   } else {
     memtable->inc_write_ref();
     const uint32 new_freeze_flag = memtable->get_freeze_flag();
@@ -394,7 +394,7 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
   if (bool_ret && check_if_need_log()) {
     const share::ObLSID &ls_id = tablet_->get_tablet_meta().ls_id_;
     const common::ObTabletID &tablet_id = tablet_->get_tablet_meta().tablet_id_;
-    LOG_WARN("refresh table too much times", K(ret), K(exit_flag), K(ls_id), K(tablet_id), KP(table));
+    LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "refresh table too much times", K(ret), K(exit_flag), K(ls_id), K(tablet_id), KP(table));
     if (0 == exit_flag) {
       LOG_WARN("table is null or not memtable", K(ret), K(ls_id), K(tablet_id), KP(table));
     } else if (1 == exit_flag) {
@@ -402,7 +402,7 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
     } else if (2 == exit_flag) {
       LOG_WARN("failed to check_freeze_to_inc_write_ref", K(ret), K(ls_id), K(tablet_id), KPC(table));
     } else if (3 == exit_flag) {
-      LOG_WARN("check_freeze_to_inc_write_ref costs too much time", K(ret), K(ls_id), K(tablet_id), KPC(table));
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "check_freeze_to_inc_write_ref costs too much time", K(ret), K(ls_id), K(tablet_id), KPC(table));
     } else {
       LOG_WARN("unexpect exit_flag", K(exit_flag), K(ret), K(ls_id), K(tablet_id));
     }

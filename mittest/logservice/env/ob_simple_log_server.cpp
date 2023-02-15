@@ -508,7 +508,7 @@ int ObLogDeliver::start()
 void ObLogDeliver::stop()
 {
   if (IS_NOT_INIT) {
-    SERVER_LOG(WARN, "ObLogDeliver stop failed");
+    SERVER_LOG_RET(WARN, OB_NOT_INIT, "ObLogDeliver stop failed");
   } else {
     is_stopped_ = true;
     TG_STOP(tg_id_);

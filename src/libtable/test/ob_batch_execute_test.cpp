@@ -246,6 +246,7 @@ TEST_F(TestBatchExecute, serialize_batch_result)
 }
 
 
+
 TEST_F(TestBatchExecute, all_single_operation)
 {
   ObTable *the_table = NULL;
@@ -363,6 +364,16 @@ TEST_F(TestBatchExecute, all_single_operation)
     ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
     ASSERT_TRUE(result_entity->is_empty());
+  }
+  // update rowkey column
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C1, value));
+    ObTableOperation table_operation = ObTableOperation::update(*entity);
+    ASSERT_EQ(OB_NOT_SUPPORTED, table_->execute(table_operation, r));
   }
   // replace C3
   {
@@ -1219,7 +1230,7 @@ TEST_F(TestBatchExecute, partial_update)
 
 
 // create table if not exists append_lob_test (C1 bigint primary key, C2 bigint, C3 mediumtext not null);
-/*TEST_F(TestBatchExecute, append_lob)
+TEST_F(TestBatchExecute, append_lob)
 {
   // setup
   ObTable *the_table = NULL;
@@ -1341,7 +1352,7 @@ TEST_F(TestBatchExecute, partial_update)
   service_client_->free_table(the_table);
   the_table = NULL;
 }
-*/
+
 // for lob column
 // drop table if exists all_lob_test; create table if not exists all_lob_test (C1 bigint primary key, C2 bigint, C3 mediumtext, index i1(c2) local)
 // TEST_F(TestBatchExecute, lob_column_test)
@@ -1558,7 +1569,7 @@ TEST_F(TestBatchExecute, partial_update)
 // create table if not exists virtual_generate_col_test
 // (C1 bigint primary key, C2 bigint, C3 varchar(100),
 // C3_PREFIX varchar(10) GENERATED ALWAYS AS (substr(C3,1,2)));
-/*TEST_F(TestBatchExecute, virtual_generate_col_test)
+TEST_F(TestBatchExecute, virtual_generate_col_test)
 {
   // setup
   ObTable *the_table = NULL;
@@ -1665,6 +1676,7 @@ TEST_F(TestBatchExecute, partial_update)
   service_client_->free_table(the_table);
   the_table = NULL;
 }
+
 // create table if not exists store_generate_col_test
 // (c1 bigint primary key, c2 varchar(10), c3 varchar(10),
 // gen varchar(30) generated always as (concat(c2,c3)) stored)
@@ -1849,121 +1861,121 @@ TEST_F(TestBatchExecute, stored_generate_col_test)
   service_client_->free_table(the_table);
   the_table = NULL;
 }
-*/
+
 // create table if not exists large_scan_test (C1 bigint primary key, C2 bigint, C3 varchar(100));
-TEST_F(TestBatchExecute, large_scan)
-{
-  // setup
-  ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("large_scan_test"), the_table);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObTableEntityFactory<ObTableEntity> entity_factory;
-  ObTableOperationResult r;
-  ObITableEntity *entity = NULL;
-  const ObITableEntity *result_entity = NULL;
-  ObTableOperation table_operation;
+// TEST_F(TestBatchExecute, large_scan)
+// {
+//   // setup
+//   ObTable *the_table = NULL;
+//   int ret = service_client_->alloc_table(ObString::make_string("large_scan_test"), the_table);
+//   ASSERT_EQ(OB_SUCCESS, ret);
+//   ObTableEntityFactory<ObTableEntity> entity_factory;
+//   ObTableOperationResult r;
+//   ObITableEntity *entity = NULL;
+//   const ObITableEntity *result_entity = NULL;
+//   ObTableOperation table_operation;
 
-  entity = entity_factory.alloc();
-  ASSERT_TRUE(NULL != entity);
-  int64_t key_key = 139107;
-  ObObj key;
-  key.set_int(key_key);
-  int64_t value_value = 33521;
-  ObObj value;
-  value.set_int(value_value);
+//   entity = entity_factory.alloc();
+//   ASSERT_TRUE(NULL != entity);
+//   int64_t key_key = 139107;
+//   ObObj key;
+//   key.set_int(key_key);
+//   int64_t value_value = 33521;
+//   ObObj value;
+//   value.set_int(value_value);
 
-  //prepare data
-  const int64_t large_batch_size = 10000;
-  ObString c3_value = ObString::make_string("hello world");
-  for (int64_t i = 0; i < large_batch_size; ++i) {
-    entity->reset();
-    key.set_int(key_key + i);
-    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-    value.set_int(value_value);
-    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
-    value.set_varchar(c3_value);
-    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-    table_operation = ObTableOperation::insert(*entity);
-    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-    ASSERT_EQ(1, r.get_affected_rows());
-    ASSERT_EQ(ObTableOperationType::INSERT, r.type());
-    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-  }
-  entity->reset();
+//   //prepare data
+//   const int64_t large_batch_size = 10000;
+//   ObString c3_value = ObString::make_string("hello world");
+//   for (int64_t i = 0; i < large_batch_size; ++i) {
+//     entity->reset();
+//     key.set_int(key_key + i);
+//     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+//     value.set_int(value_value);
+//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+//     value.set_varchar(c3_value);
+//     value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+//     ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+//     table_operation = ObTableOperation::insert(*entity);
+//     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+//     ASSERT_EQ(1, r.get_affected_rows());
+//     ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+//     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+//   }
+//   entity->reset();
 
-  //scan
-  ObTableQuery query;
-  ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
-  ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
-  ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
-  ObObj pk_objs_start;
-  pk_objs_start.set_int(0);
-  ObObj pk_objs_end;
-  pk_objs_end.set_max_value();
-  ObNewRange range;
-  range.start_key_.assign(&pk_objs_start, 1);
-  range.end_key_.assign(&pk_objs_end, 1);
-  range.border_flag_.set_inclusive_start();
-  range.border_flag_.set_inclusive_end();
+//   //scan
+//   ObTableQuery query;
+//   ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+//   ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+//   ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+//   ObObj pk_objs_start;
+//   pk_objs_start.set_int(0);
+//   ObObj pk_objs_end;
+//   pk_objs_end.set_max_value();
+//   ObNewRange range;
+//   range.start_key_.assign(&pk_objs_start, 1);
+//   range.end_key_.assign(&pk_objs_end, 1);
+//   range.border_flag_.set_inclusive_start();
+//   range.border_flag_.set_inclusive_end();
 
-  ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
-  query.set_scan_index(ObString::make_string("primary"));
-  query.set_scan_order(ObQueryFlag::Forward);
+//   ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+//   query.set_scan_index(ObString::make_string("primary"));
+//   query.set_scan_order(ObQueryFlag::Forward);
 
-  ObTableEntityIterator *iter = nullptr;
-  ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
-  int64_t result_cnt = 0;
-  while (OB_SUCC(iter->get_next_entity(result_entity))) {
-    result_cnt++;
-  }
-  ASSERT_EQ(OB_ITER_END, ret);
-  ASSERT_EQ(result_cnt, large_batch_size);
+//   ObTableEntityIterator *iter = nullptr;
+//   ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+//   int64_t result_cnt = 0;
+//   while (OB_SUCC(iter->get_next_entity(result_entity))) {
+//     result_cnt++;
+//   }
+//   ASSERT_EQ(OB_ITER_END, ret);
+//   ASSERT_EQ(result_cnt, large_batch_size);
 
-  //reverse scan
-  query.set_scan_order(ObQueryFlag::Reverse);
-  ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
-  result_cnt = 0;
-  while (OB_SUCC(iter->get_next_entity(result_entity))) {
-    result_cnt++;
-  }
-  ASSERT_EQ(OB_ITER_END, ret);
-  ASSERT_EQ(result_cnt, large_batch_size);
+//   //reverse scan
+//   query.set_scan_order(ObQueryFlag::Reverse);
+//   ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+//   result_cnt = 0;
+//   while (OB_SUCC(iter->get_next_entity(result_entity))) {
+//     result_cnt++;
+//   }
+//   ASSERT_EQ(OB_ITER_END, ret);
+//   ASSERT_EQ(result_cnt, large_batch_size);
 
-  //large batch append
-  {
-    int64_t append_batch_size = 10;
-    ObTableBatchOperation batch_operation;
-    for (int64_t i = 0; i < append_batch_size; ++i) {
-      entity = entity_factory.alloc();
-      ASSERT_TRUE(NULL != entity);
-      key.set_int(key_key + i);
-      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-      value.set_varchar(c3_value);
-      value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
-      ASSERT_EQ(OB_SUCCESS, batch_operation.append(*entity));
-    }
+//   //large batch append
+//   {
+//     int64_t append_batch_size = 10;
+//     ObTableBatchOperation batch_operation;
+//     for (int64_t i = 0; i < append_batch_size; ++i) {
+//       entity = entity_factory.alloc();
+//       ASSERT_TRUE(NULL != entity);
+//       key.set_int(key_key + i);
+//       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+//       value.set_varchar(c3_value);
+//       value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+//       ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+//       ASSERT_EQ(OB_SUCCESS, batch_operation.append(*entity));
+//     }
 
-    ObTableBatchOperationResult result;
-    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
-    OB_LOG(INFO, "batch execute result", K(result));
-    ASSERT_EQ(append_batch_size, result.count());
-    for (int64_t i = 0; i < append_batch_size; ++i)
-    {
-      const ObTableOperationResult &r = result.at(i);
-      ASSERT_EQ(OB_SUCCESS, r.get_errno());
-      ASSERT_EQ(1, r.get_affected_rows());
-      ASSERT_EQ(ObTableOperationType::APPEND, r.type());
-      const ObITableEntity *result_entity = NULL;
-      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-    } // end for
-  }
+//     ObTableBatchOperationResult result;
+//     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+//     OB_LOG(INFO, "batch execute result", K(result));
+//     ASSERT_EQ(append_batch_size, result.count());
+//     for (int64_t i = 0; i < append_batch_size; ++i)
+//     {
+//       const ObTableOperationResult &r = result.at(i);
+//       ASSERT_EQ(OB_SUCCESS, r.get_errno());
+//       ASSERT_EQ(1, r.get_affected_rows());
+//       ASSERT_EQ(ObTableOperationType::APPEND, r.type());
+//       const ObITableEntity *result_entity = NULL;
+//       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+//     } // end for
+//   }
 
-  // teardown
-  service_client_->free_table(the_table);
-  the_table = NULL;
-}
+//   // teardown
+//   service_client_->free_table(the_table);
+//   the_table = NULL;
+// }
 
 
 // create table if not exists uniq_replace_test (C1 bigint primary key, C2 bigint, C3 varchar(100), unique key C2_UNIQ(C2));
@@ -6053,7 +6065,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   delete [] rows;
 }
 
-/*TEST_F(TestBatchExecute, single_increment_append)
+TEST_F(TestBatchExecute, single_increment_append)
 {
   OB_LOG(INFO, "begin single_increment");
   ObTable *the_table = NULL;
@@ -6380,7 +6392,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   }
   service_client_->free_table(the_table);
 }
-*/
+
 // create table if not exists multi_update_test
 // (C1 bigint primary key, C2 double, C3 varchar(100) default 'hello world')
 // PARTITION BY KEY(C1) PARTITIONS 16
@@ -7595,7 +7607,7 @@ TEST_F(TestBatchExecute, complex_batch_execute)
   }
   service_client_->free_table(the_table);
 }
-/*
+
 TEST_F(TestBatchExecute, increment_and_append_batch)
 {
   ObTable *the_table = NULL;
@@ -7737,7 +7749,7 @@ TEST_F(TestBatchExecute, increment_and_append_batch)
     }
   }
 }
-*/
+
 TEST_F(TestBatchExecute, htable_put)
 {
   // setup
@@ -8833,6 +8845,106 @@ TEST_F(TestBatchExecute, query_sync_multi_batch)
   // teardown
   service_client_->free_table(the_table);
   the_table = NULL;
+}
+
+// create table if not exists htable1_query_sync (
+// K varbinary(1024), Q varbinary(256), T bigint, V varbinary(1024),
+// primary key(K, Q, T));
+TEST_F(TestBatchExecute, htble_query_sync)
+{
+  // setup
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("htable1_query_sync"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableBatchOperation batch_operation;
+  ObITableEntity *entity = NULL;
+  ////////////////////////////////////////////////////////////////
+  static constexpr int64_t VERSIONS_COUNT = 10;
+  DefaultBuf *rows = new (std::nothrow) DefaultBuf[BATCH_SIZE];
+  ASSERT_TRUE(NULL != rows);
+  ObObj key1, key2, key3;
+  ObObj value;
+  for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+    sprintf(rows[i], "row%ld", i);
+    key1.set_varbinary(ObString::make_string(rows[i]));
+    key2.set_varbinary(ObString::make_string(""));  // empty qualifier
+    for (int64_t k = 0; k < VERSIONS_COUNT; ++k)
+    {
+      key3.set_int(k);
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key1));
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key2));
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key3));
+      value.set_varbinary(ObString::make_string("value_string"));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(V, value));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.insert(*entity));
+    }   // end for
+  }     // end for
+
+  ASSERT_TRUE(!batch_operation.is_readonly());
+  ASSERT_TRUE(batch_operation.is_same_type());
+  ASSERT_TRUE(batch_operation.is_same_properties_names());
+  ObTableBatchOperationResult result;
+  ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+  OB_LOG(INFO, "batch execute result", K(result));
+  ASSERT_EQ(BATCH_SIZE*VERSIONS_COUNT, result.count());
+  ////////////////////////////////////////////////////////////////
+  ObTableQuery query;
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(K));
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(Q));
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(T));
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(V));
+  ObObj pk_objs_start[3];
+  pk_objs_start[0].set_min_value();
+  pk_objs_start[1].set_min_value();
+  pk_objs_start[2].set_min_value();
+  ObObj pk_objs_end[3];
+  pk_objs_end[0].set_max_value();
+  pk_objs_end[1].set_max_value();
+  pk_objs_end[2].set_max_value();
+  ObNewRange range;
+  range.start_key_.assign(pk_objs_start, 3);
+  range.end_key_.assign(pk_objs_end, 3);
+  range.border_flag_.set_inclusive_start();
+  range.border_flag_.set_inclusive_end();
+  ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+
+  ObHTableFilter &htable_filter = query.htable_filter();
+  ASSERT_EQ(OB_SUCCESS, htable_filter.add_column(ObString::make_string("")));
+  htable_filter.set_max_versions(2);
+  htable_filter.set_valid(true);
+  const int64_t query_round = 4;
+  query.set_batch(50);
+
+  ObTableQuerySyncResult *iter = nullptr;
+  const ObITableEntity *result_entity = NULL;
+  uint64_t result_cnt = 0;
+  uint64_t round = 0;
+  ASSERT_EQ(OB_SUCCESS, the_table->query_start(query, iter));
+  while (OB_SUCC(iter->get_next_entity(result_entity))) {
+    ++result_cnt;
+  }
+  ASSERT_EQ(OB_ITER_END, ret);
+  while (OB_SUCC(the_table->query_next(iter))) {
+    ++round;
+    // printf("iterator row count: %ld\n", iter->get_row_count());
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      ++result_cnt;
+    }
+    printf("round: %ld\n", round);
+    ASSERT_EQ(OB_ITER_END, ret);
+  }
+  ASSERT_EQ(OB_ITER_END, ret);
+  ASSERT_EQ(200, result_cnt); // set_max_versions(2)，故只有200条
+  ASSERT_EQ(round, query_round - 1); // start已经扫描了一次
+  ////////////////////////////////////////////////////////////////
+  // teardown
+  service_client_->free_table(the_table);
+  the_table = NULL;
+  delete [] rows;
 }
 
 // create table if not exists large_scan_query_sync_test (C1 bigint primary key, C2 bigint, C3 varchar(100));

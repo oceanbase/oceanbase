@@ -1460,7 +1460,7 @@ static int is_piece_start_file_name_(ObString &file_name, bool &is_piece_start)
   int ret = OB_SUCCESS;
   char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   is_piece_start = false;
-  int32_t len = file_name.length() - strlen(OB_ARCHIVE_SUFFIX);
+  const int32_t len = static_cast<int32_t>(file_name.length() - strlen(OB_ARCHIVE_SUFFIX));
   if (file_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("empty file name", K(ret), K(file_name));
@@ -1576,7 +1576,7 @@ static int is_round_start_file_name_(ObString &file_name, bool &is_round_start)
     is_round_start = false;
   } else if (file_name.length() < suffix_len) {
     is_round_start = false;
-  } else if (OB_FALSE_IT(tmp.assign(file_name.ptr() + p, strlen(SUFFIX)))) {
+  } else if (OB_FALSE_IT(tmp.assign(file_name.ptr() + p, static_cast<int32_t>(strlen(SUFFIX))))) {
   } else if (!tmp.prefix_match(SUFFIX)) {
     is_round_start = false;
   } else {
@@ -1847,7 +1847,7 @@ int ObArchiveStore::ObPieceFileListFilter::func(const dirent *entry)
   } else if (OB_ISNULL(entry)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid entry", K(ret));
-  } else if (FALSE_IT(len = strlen(entry->d_name) - strlen(OB_ARCHIVE_SUFFIX))) {
+  } else if (FALSE_IT(len = static_cast<int32_t>(strlen(entry->d_name) - strlen(OB_ARCHIVE_SUFFIX)))) {
   } else if (len <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("file name without a unified suffix", K(ret), K(entry->d_name), K(OB_ARCHIVE_SUFFIX));
@@ -1893,14 +1893,14 @@ int ObArchiveStore::ObLSFileListOp::func(const dirent *entry)
   ObString file_name;
   ObSingleLSInfoDesc::OneFile one_file;
   char *endptr = NULL;
-  int64 len = 0;
+  int32_t len = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLSFileListOp not init", K(ret));
   } else if (OB_ISNULL(entry)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid entry", K(ret));
-  } else if (FALSE_IT(len = strlen(entry->d_name) - strlen(OB_ARCHIVE_SUFFIX))) {
+  } else if (FALSE_IT(len = static_cast<int32_t>(strlen(entry->d_name) - strlen(OB_ARCHIVE_SUFFIX)))) {
   } else if (len <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("file name without a unified suffix", K(ret), K(entry->d_name), K(OB_ARCHIVE_SUFFIX));

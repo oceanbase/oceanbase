@@ -208,7 +208,7 @@ const char *ObZoneMergeInfo::get_merge_status_str(const MergeStatus status)
   const char *str_array[] = { "IDLE", "MERGING", "CHECKSUM" };
   STATIC_ASSERT(MERGE_STATUS_MAX == ARRAYSIZEOF(str_array), "status count mismatch");
   if (status < 0 || status >= MERGE_STATUS_MAX) {
-    LOG_WARN("invalid merge status", K(status));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid merge status", K(status));
   } else {
     str = str_array[status];
   }
@@ -235,7 +235,8 @@ bool ObZoneMergeInfo::is_valid() const
      || (!last_merged_scn_.is_valid())
      || (last_merged_time_.get_value() < 0)
      || (merge_start_time_.get_value() < 0)
-     || (!all_merged_scn_.is_valid())) {
+     || (!all_merged_scn_.is_valid())
+     || (!frozen_scn_.is_valid())) {
     is_valid = false;
   }
   return is_valid;

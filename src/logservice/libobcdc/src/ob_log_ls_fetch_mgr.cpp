@@ -242,7 +242,7 @@ bool ObLogLSFetchMgr::CtxRecycleCond::operator() (const TenantLSID &tls_id,
   bool bool_ret = false;
 
   if (OB_ISNULL(ctx)) {
-    LOG_ERROR("invalid part fetch ctx", K(ctx), K(tls_id));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid part fetch ctx", K(ctx), K(tls_id));
     bool_ret = false;
   } else {
     _LOG_INFO("[STAT] [LSFetchMgr] [RECYCLE_LS] tls_id=%s "
