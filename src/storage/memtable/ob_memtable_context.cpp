@@ -312,9 +312,9 @@ int ObMemtableCtx::write_lock_yield()
 void ObMemtableCtx::on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id)
 {
   mtstat_.on_wlock_retry();
-  if (log_conflict_interval_.reach()) {
-    TRANS_LOG_RET(WARN, OB_SUCCESS, "mvcc_write conflict", K(key), "tx_id", get_tx_id(), K(conflict_tx_id), KPC(this));
-  }
+  #define USING_LOG_PREFIX TRANS
+  FLOG_INFO("mvcc_write conflict", K(key), "tx_id", get_tx_id(), K(conflict_tx_id), KPC(this));
+  #undef USING_LOG_PREFIX
 }
 
 void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,

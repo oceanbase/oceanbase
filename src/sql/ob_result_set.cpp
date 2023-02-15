@@ -743,6 +743,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
       err_ignored = plan_ctx->is_error_ignored();
     }
     bool rollback = need_rollback(ret, errcode, err_ignored);
+    get_exec_context().set_errcode(errcode);
     sret = end_stmt(rollback || OB_SUCCESS != pret);
     // SQL_LOG(INFO, "end_stmt err code", K_(errcode), K(ret), K(pret), K(sret));
     // if branch fail is returned from end_stmt, then return it first

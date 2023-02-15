@@ -61,6 +61,7 @@ public:
   // build a directed dependency relationship to other
   virtual int block(const ObDependencyResource &) = 0;
   virtual int block(const BlockCallBack &) = 0;
+  virtual int get_block_list(common::ObIArray<ObDependencyResource> &cur_list) const = 0;
   // releace block list
   virtual int replace_block_list(const common::ObIArray<ObDependencyResource> &) = 0;
   // remove a directed dependency relationship to other

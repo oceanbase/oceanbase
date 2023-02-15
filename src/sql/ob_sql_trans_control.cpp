@@ -783,6 +783,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   OZ (get_tx_service(session, txs), *session);
   // plain select stmt don't require txn descriptor
   if (OB_SUCC(ret) && !is_plain_select) {
+    ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback);
     CK (OB_NOT_NULL(tx_desc));
     auto &tx_result = session->get_trans_result();
     if (OB_FAIL(ret)) {
@@ -817,10 +818,6 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
     ret = COVER_SUCC(tmp_ret);
   }
 
-  if (!is_plain_select) {
-    ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback);
-  }
-
   bool print_log = false;
 #ifndef NDEBUG
   print_log = true;
@@ -835,7 +832,8 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
              "tx_desc", PC(session->get_tx_desc()),
              "trans_result", session->get_trans_result(),
              K(rollback),
-             KPC(session));
+             KPC(session),
+             K(exec_ctx.get_errcode()));
   }
   if (OB_NOT_NULL(session)) {
     session->get_trans_result().reset();

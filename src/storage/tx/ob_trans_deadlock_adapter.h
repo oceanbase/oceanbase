@@ -72,7 +72,11 @@ class ObTransDeadlockDetectorAdapter
     LOCK_WAIT_MGR_REPOST,
     LOCK_WAIT_MGR_WAIT_FAILED,
     LOCK_WAIT_MGR_TRANSFORM_WAITING_ROW_TO_TX,
-    END_STMT,
+    END_STMT_DONE,
+    END_STMT_OTHER_ERR,
+    END_STMT_NO_CONFLICT,
+    END_STMT_TIMEOUT,
+    REPLACE_MEET_TOTAL_DIFFERENT_LIST
   };
   static const char* to_string(const UnregisterPath path)
   {
@@ -85,8 +89,16 @@ class ObTransDeadlockDetectorAdapter
       return "LOCK_WAIT_MGR_WAIT_FAILED";
     case UnregisterPath::LOCK_WAIT_MGR_TRANSFORM_WAITING_ROW_TO_TX:
       return "LOCK_WAIT_MGR_TRANSFORM_WAITING_ROW_TO_TX";
-    case UnregisterPath::END_STMT:
-      return "END_STMT";
+    case UnregisterPath::END_STMT_DONE:
+      return "END_STMT_DONE";
+    case UnregisterPath::END_STMT_OTHER_ERR:
+      return "END_STMT_OTHER_ERROR";
+    case UnregisterPath::END_STMT_NO_CONFLICT:
+      return "END_STMT_NO_CONFLICT";
+    case UnregisterPath::END_STMT_TIMEOUT:
+      return "END_STMT_TIMEOUT";
+    case UnregisterPath::REPLACE_MEET_TOTAL_DIFFERENT_LIST:
+      return "REPLACE_MEET_TOTAL_DIFFERENT_LIST";
     default:
       return "UNKNOWN";
     }
@@ -139,13 +151,15 @@ private:
                                                              const ObIArray<ObTransIDAndAddr> &conflict_tx_ids,
                                                              SessionGuard &session_guard);
   static int remote_execution_replace_conflict_trans_ids_(const ObTransID self_tx_id,
-                                                          const ObIArray<ObTransIDAndAddr> &conflict_tx_ids);
+                                                          const ObIArray<ObTransIDAndAddr> &conflict_tx_ids,
+                                                          SessionGuard &session_guard);
   static int create_detector_node_and_set_parent_if_needed_(CollectCallBack &on_collect_op,
                                                             const ObTransID &self_trans_id,
                                                             const uint32_t sess_id);
   static int get_session_related_info_(const uint32_t sess_id, int64_t &query_timeout);
   static int gen_dependency_resource_array_(const ObIArray<ObTransIDAndAddr> &blocked_trans_ids_and_addrs,
                                             ObIArray<share::detector::ObDependencyResource> &dependency_resources);
+  static void try_unregister_deadlock_detector_(sql::ObSQLSessionInfo &session, const ObTransID &trans_id, UnregisterPath path);
 };
 
 } // namespace transaction
