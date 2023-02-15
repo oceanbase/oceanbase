@@ -9802,11 +9802,15 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
         if (q_name.is_pl_udf()) {
           // 首先尝试下是不是复杂类型的构造函数
           int64_t acc_cnt = q_name.access_idents_.count();
+          bool is_construct = false;
           if (1 < acc_cnt && q_name.access_idents_.at(acc_cnt - 2).is_udt_ns()) {
             // udt obj.func(), this func can not be a constructor
             ret = OB_ERR_SP_UNDECLARED_TYPE;
           } else {
             OZ (resolve_construct(q_name, udf_info, expr), K(q_name));
+            if (OB_SUCC(ret)) {
+              is_construct = true;
+            }
           }
           // 其次尝试下是不是UDF
           if (OB_ERR_SP_UNDECLARED_TYPE == ret || OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
@@ -9814,6 +9818,11 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
             ObArray<ObString> access_name;
             OZ (access_name.push_back(ObString("SELF")));
             OZ (resolve_udf(udf_info, access_name, unit_ast), q_name, udf_info);
+          }
+
+          if (OB_SUCC(ret) && is_construct == false && udf_info.is_new_keyword_used_) {
+            ret = OB_ERR_PARSER_SYNTAX;
+            LOG_WARN("NEW key word is only allowed for constructors", K(q_name));
           }
         } else { //如果是udf return access，需要当做var解析
           if (OB_FAIL(resolve_var(q_name, unit_ast, expr))) {

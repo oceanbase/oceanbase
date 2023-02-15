@@ -1943,6 +1943,13 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
         LOG_WARN("node is NULL", K(node.num_child_), K(ret));
       } else {
         ObString ident_name(static_cast<int32_t>(func_node.children_[0]->str_len_), func_node.children_[0]->str_value_);
+
+        // first bit in value_ of T_FUN_SYS node is used to mark NEW keyword,
+        // value_ & 0x1 == 1: not used,
+        // value_ & 0x1 == 0: used,
+        // refer to sql_parser_oracle_mode.y
+        bool is_new_key_word_used = !(func_node.value_ & 0x1);
+
         if (lib::is_oracle_mode()
             && T_PL_SCOPE == ctx_.current_scope_
             && ident_name.empty()) {
@@ -1964,6 +1971,9 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
                         || func_node.children_[2]->type_ == T_ALL)) {
             ret = OB_DISTINCT_NOT_ALLOWED;
             LOG_WARN("distinct/all/unique not allowed here", K(ret));
+          } else if (is_new_key_word_used && PL_UDF != name_type) {
+            ret = OB_ERR_PARSER_SYNTAX;
+            LOG_WARN("NEW keyword is only allowed for constructors", K(q_name));
           } else {
             switch (name_type) {
             case SYS_FUNC: {
@@ -1990,6 +2000,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
               int64_t cnt = q_name.access_idents_.count();
               ParseNode *udt_udf_self_param_node = NULL;
               ObRawExpr *self_param = NULL;
+              access_ident.udf_info_.is_new_keyword_used_ = is_new_key_word_used;
               if (OB_FAIL(ObResolverUtils::transform_func_sys_to_udf(&ctx_.expr_factory_.get_allocator(),
                                                                      &func_node,
                                                                      q_name.database_name_,

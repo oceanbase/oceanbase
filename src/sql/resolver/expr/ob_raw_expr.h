@@ -948,6 +948,7 @@ struct ObUDFInfo
     is_udt_udf_(false),
     is_contain_self_param_(false),
     is_udt_udf_inside_pkg_(false),
+    is_new_keyword_used_(false),
     flag_(0),
     self_arg_(NULL) {}
 
@@ -997,6 +998,7 @@ struct ObUDFInfo
                K_(is_udt_udf),
                K_(is_contain_self_param),
                K_(is_udt_udf_inside_pkg),
+               K_(is_new_keyword_used),
                K_(flag));
 
   common::ObString udf_name_;
@@ -1009,6 +1011,7 @@ struct ObUDFInfo
   bool is_udt_udf_; // if this udf is udt object routine
   bool is_contain_self_param_; // self param is mocked.
   bool is_udt_udf_inside_pkg_;
+  bool is_new_keyword_used_;  // if in NEW obj(...) form
   uint64_t flag_;
   ObRawExpr *self_arg_; // if this is udt routine, it has self argument
 };
