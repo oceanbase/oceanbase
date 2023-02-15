@@ -290,6 +290,12 @@ public:
     ATOMIC_SET(&sorted_redo_count_, 0);
     ATOMIC_SET(&sorted_row_seq_no_, 0);
   }
+  void reset_for_sys_ls_dml_trans(const int64_t redo_node_count)
+  {
+    ATOMIC_SET(&dispatched_redo_count_, redo_node_count);
+    ATOMIC_SET(&sorted_redo_count_, redo_node_count);
+    ATOMIC_SET(&sorted_row_seq_no_, 0);
+  }
   OB_INLINE int64_t get_dispatched_redo_count() const { return ATOMIC_LOAD(&dispatched_redo_count_); }
   OB_INLINE void inc_dispatched_redo_count() { ATOMIC_INC(&dispatched_redo_count_); }
   OB_INLINE int64_t get_sorted_redo_count() const { return ATOMIC_LOAD(&sorted_redo_count_); }
@@ -435,6 +441,15 @@ struct SortedRedoLogList
       "cur_sort_redo", static_cast<DmlRedoLogNode*>(cur_sort_redo_),
       KP_(cur_sort_stmt),
       K_(is_dml_stmt_iter_end));
+
+  void mark_sys_ls_dml_trans_dispatched()
+  {
+    cur_dispatch_redo_ = NULL;
+    cur_sort_redo_ = NULL;
+    cur_sort_stmt_ = NULL;
+    sorted_progress_.reset_for_sys_ls_dml_trans(node_num_);
+  }
+
 };
 } // namespace libobcdc
 } // namespace oceanbase

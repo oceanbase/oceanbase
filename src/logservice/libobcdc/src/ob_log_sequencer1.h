@@ -172,8 +172,10 @@ private:
       const int64_t task_count,
       volatile bool &stop_flag,
       ObLogTenant *tenant);
-  void do_stat_for_part_trans_task_count_(PartTransTask &part_trans_task,
-      const int64_t task_count);
+  void do_stat_for_part_trans_task_count_(
+      PartTransTask &part_trans_task,
+      const int64_t task_count,
+      const bool is_sub_stat);
 
   // TODO add
   // 1. statistics on transaction tps and rps (rps before and after Formatter filtering)

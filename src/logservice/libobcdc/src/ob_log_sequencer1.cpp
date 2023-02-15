@@ -215,7 +215,7 @@ int ObLogSequencer::push(PartTransTask *part_trans_task, volatile bool &stop_fla
 
     if (OB_SUCC(ret)) {
       (void)ATOMIC_AAF(&queue_part_trans_task_count_, 1);
-      do_stat_for_part_trans_task_count_(*part_trans_task, 1);
+      do_stat_for_part_trans_task_count_(*part_trans_task, 1, false/*is_sub_stat*/);
     }
 
     if (OB_FAIL(ret)) {
@@ -700,7 +700,7 @@ int ObLogSequencer::push_task_into_committer_(PartTransTask *task,
     LOG_ERROR("sequencer has not been initialized", KR(ret), K(tenant));
   } else {
     // Counting the number of partitioned tasks
-    do_stat_for_part_trans_task_count_(*task, -task_count);
+    do_stat_for_part_trans_task_count_(*task, task_count, true/*is_sub_stat*/);
 
     RETRY_FUNC(stop_flag, (*trans_committer_), push, task, task_count, DATA_OP_TIMEOUT, tenant);
   }
@@ -744,7 +744,8 @@ int ObLogSequencer::handle_participants_ready_trans_(const bool is_dml_trans,
       ObByteLockGuard guard(trans_queue_lock_);
       trans_queue_.push(trx_sort_elem);
 
-      _DSTAT("[TRANS_QUEUE] TRANS_ID=%s QUEUE_SIZE=%lu IS_DML=%d",
+      _DSTAT("[TRANS_QUEUE] TENANT_ID=%lu TRANS_ID=%s QUEUE_SIZE=%lu IS_DML=%d",
+          tenant_id,
           to_cstring(trx_sort_elem),
           trans_queue_.size(),
           is_dml_trans);
@@ -829,6 +830,11 @@ int ObLogSequencer::handle_multi_data_source_info_(ObLogTenant &tenant, TransCtx
   IObLogPartMgr &part_mgr = tenant.get_part_mgr();
 
   while (OB_SUCC(ret) && OB_NOT_NULL(part_trans_task)) {
+    if (! part_trans_task->is_sys_ls_part_trans()) {
+      // USER_LS part_trans_task in DIST_DDL_TRANS won't into dispatcher, set_ref_cnt to 1 to
+      // recycle the part_trans_task.
+      part_trans_task->set_ref_cnt(1);
+    }
     if (part_trans_task->get_multi_data_source_info().has_tablet_change_op()) {
       const CDCTabletChangeInfoArray &tablet_change_info_arr =
           part_trans_task->get_multi_data_source_info().get_tablet_change_info_arr();
@@ -936,31 +942,45 @@ int ObLogSequencer::recycle_resources_after_trans_ready_(TransCtx &trans_ctx, Ob
   return ret;
 }
 
-void ObLogSequencer::do_stat_for_part_trans_task_count_(PartTransTask &part_trans_task,
-    const int64_t task_count)
+void ObLogSequencer::do_stat_for_part_trans_task_count_(
+    PartTransTask &part_trans_task,
+    const int64_t task_count,
+    const bool is_sub_stat)
 {
   bool is_hb_sub_stat = false;
   int64_t hb_dec_task_count = 0;
+  int64_t op_task_count = task_count;
+  if (is_sub_stat) {
+    op_task_count = -1 * task_count;
+  }
 
   if (part_trans_task.is_ddl_trans()) {
-    (void)ATOMIC_AAF(&ddl_part_trans_task_count_, task_count);
+    if (is_sub_stat) {
+      (void)ATOMIC_AAF(&ddl_part_trans_task_count_, -1);
+      // dist ddl_task contains dml part_trans_task, should do_stat seperately
+      if (task_count > 1) {
+        (void)ATOMIC_AAF(&dml_part_trans_task_count_, 1 - task_count);
+      }
+    } else {
+      (void)ATOMIC_AAF(&ddl_part_trans_task_count_, op_task_count);
+    }
   } else if (part_trans_task.is_dml_trans()) {
-    (void)ATOMIC_AAF(&dml_part_trans_task_count_, task_count);
+    (void)ATOMIC_AAF(&dml_part_trans_task_count_, op_task_count);
   } else {
     // heartbeat
-    if (task_count < 0) {
+    if (is_sub_stat) {
       is_hb_sub_stat = true;
-      hb_dec_task_count = task_count * SequencerThread::get_thread_num();
+      hb_dec_task_count = op_task_count * SequencerThread::get_thread_num();
       (void)ATOMIC_AAF(&hb_part_trans_task_count_, hb_dec_task_count);
     } else {
-      (void)ATOMIC_AAF(&hb_part_trans_task_count_, task_count);
+      (void)ATOMIC_AAF(&hb_part_trans_task_count_, op_task_count);
     }
   }
 
   if (is_hb_sub_stat) {
     (void)ATOMIC_AAF(&total_part_trans_task_count_, hb_dec_task_count);
   } else {
-    (void)ATOMIC_AAF(&total_part_trans_task_count_, task_count);
+    (void)ATOMIC_AAF(&total_part_trans_task_count_, op_task_count);
   }
 }
 

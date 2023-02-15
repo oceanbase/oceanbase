@@ -842,6 +842,7 @@ void ObLogResourceCollector::do_stat_(PartTransTask &task,
   (void)ATOMIC_AAF(&total_part_trans_task_count_, cnt);
 
   if (task.is_ddl_trans()) {
+    LOG_DEBUG("do_stat_ for ddl_trans", K_(ddl_part_trans_task_count), K(cnt), K(task), "lbt", lbt_oblog());
     (void)ATOMIC_AAF(&ddl_part_trans_task_count_, cnt);
   } else if (task.is_dml_trans()) {
     (void)ATOMIC_AAF(&dml_part_trans_task_count_, cnt);

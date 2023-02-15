@@ -66,6 +66,7 @@ private:
   int dispatch_offline_ls_task_(PartTransTask &task, volatile bool &stop_flag);
   int dispatch_global_ls_heartbeat_(PartTransTask &task, volatile bool &stop_flag);
   int dispatch_ls_table_op_(PartTransTask &task, volatile bool &stop_flag);
+  int dispatch_to_sys_ls_handler_(PartTransTask &task, volatile bool &stop_flag);
 
 private:
   bool              inited_;

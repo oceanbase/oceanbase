@@ -417,7 +417,7 @@ int ObLogCommitter::recycle_task_directly_(PartTransTask &task, const bool can_a
     if (OB_NOT_NULL(resource_collector_)
         && OB_SUCCESS != (revert_ret = resource_collector_->revert(&task))) {
       if (OB_IN_STOP_STATE != revert_ret) {
-        LOG_ERROR("revert HEARTBEAT task fail", K(revert_ret), K(task));
+        LOG_ERROR("revert PartTransTask fail", K(revert_ret), K(task));
       }
       ret = OB_SUCCESS == ret ? revert_ret : ret;
     }
@@ -1090,7 +1090,7 @@ int ObLogCommitter::handle_dml_task_(PartTransTask *participants)
 
     // Place the Binlog Record chain in the user queue
     // Binlog Record may be recycled at any time
-    if (OB_SUCCESS == ret) {
+    if (OB_SUCC(ret)) {
       if (OB_FAIL(commit_binlog_record_list_(*trans_ctx, cluster_id, valid_part_trans_task_count,
               tenant_id, trans_commit_version))) {
         if (OB_IN_STOP_STATE != ret) {

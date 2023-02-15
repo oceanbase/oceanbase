@@ -88,6 +88,7 @@ int ObLogTransRedoDispatcher::dispatch_trans_redo(TransCtx &trans, volatile bool
       LOG_ERROR("failed to dispatch redo of trans", KR(ret), K(trans), K(stop_flag));
     }
   } else {
+    trans.set_trans_redo_dispatched();
     trans_stat_mgr_->do_dispatch_trans_stat();
   }
 
@@ -175,7 +176,6 @@ int ObLogTransRedoDispatcher::dispatch_by_turn_(TransCtx &trans, volatile bool &
         LOG_WARN("trans dispatch_by_turn for too many times", KR(ret), K(retry_cnt), K(trans), K_(trans_dispatch_ctx));
       }
     } else {
-      trans.set_trans_redo_dispatched();
     }
   }
 
