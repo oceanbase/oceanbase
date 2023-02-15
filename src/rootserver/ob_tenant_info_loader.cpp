@@ -137,25 +137,25 @@ void ObTenantInfoLoader::run2()
   }
 }
 
-int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time, share::SCN &standby_scn)
+int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time_us, share::SCN &standby_scn)
 {
   int ret = OB_SUCCESS;
   standby_scn.set_min();
   share::ObAllTenantInfo tenant_info;
   int64_t refresh_time_us = OB_INVALID_TIMESTAMP;
 
-  if (OB_INVALID_TIMESTAMP == specified_time) {
+  if (OB_INVALID_TIMESTAMP == specified_time_us) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(specified_time));
+    LOG_WARN("invalid argument", KR(ret), K(specified_time_us));
   } else if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info, refresh_time_us))) {
     if (OB_NEED_WAIT == ret) {
       LOG_TRACE("tenant info cache is not refreshed, need wait", KR(ret));
     } else {
       LOG_WARN("failed to get tenant info", KR(ret));
     }
-  } else if (refresh_time_us < specified_time) {
+  } else if (refresh_time_us < specified_time_us) {
     ret = OB_NEED_WAIT;
-    LOG_TRACE("tenant info cache is old, need wait", KR(ret), K(refresh_time_us), K(specified_time), K(tenant_info));
+    LOG_TRACE("tenant info cache is old, need wait", KR(ret), K(refresh_time_us), K(specified_time_us), K(tenant_info));
     wakeup();
   } else if (!tenant_info.is_sts_ready()) {
     ret = OB_NEED_WAIT;
@@ -166,7 +166,7 @@ int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time, share:
 
   const int64_t PRINT_INTERVAL = 3 * 1000 * 1000L;
   if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
-    LOG_INFO("get_valid_sts_after", KR(ret), K(specified_time), K(refresh_time_us), K(tenant_info));
+    LOG_INFO("get_valid_sts_after", KR(ret), K(specified_time_us), K(refresh_time_us), K(tenant_info));
   }
 
   return ret;

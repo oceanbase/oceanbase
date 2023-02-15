@@ -89,7 +89,7 @@ public:
   *       2. tenant info cache is old, need wait
   *       3. sts can not work for current tenant status
   */
- int get_valid_sts_after(const int64_t specified_time, share::SCN &standby_scn);
+ int get_valid_sts_after(const int64_t specified_time_us, share::SCN &standby_scn);
  int refresh_tenant_info();
 private:
 

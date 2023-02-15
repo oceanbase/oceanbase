@@ -101,6 +101,7 @@ void ObStandbyTimestampService::destroy()
   //TODO(SCN):zhaoxing last_id should be uint64_t
   last_id_ = OB_INVALID_VERSION;
   epoch_ = OB_INVALID_TIMESTAMP;
+  switch_to_leader_ts_ = OB_INVALID_TIMESTAMP;
   TG_DESTROY(tg_id_);
   rpc_.destroy();
   TRANS_LOG(INFO, "standby timestamp service destroy", K_(tenant_id));
@@ -109,23 +110,22 @@ void ObStandbyTimestampService::destroy()
 int ObStandbyTimestampService::query_and_update_last_id()
 {
   int ret = OB_SUCCESS;
-  share::ObAllTenantInfo tenant_info;
-  if (OB_FAIL(MTL(rootserver::ObTenantInfoLoader *)->get_tenant_info(tenant_info))) {
-    if (REACH_TIME_INTERVAL(3 * 1000 * 1000)) {
-      TRANS_LOG(WARN, "failed to get tenant info", K(ret), K(tenant_info));
-    }
-  } else if (OB_UNLIKELY(!tenant_info.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "invalid tenant info", K(ret), K(tenant_info));
-  } else if (!tenant_info.is_primary()) {
-    if (last_id_ > 0 && (tenant_info.get_standby_scn().get_val_for_gts() < last_id_)) {
-      TRANS_LOG(ERROR, "snapshot rolls back ", K(tenant_info), K_(last_id));
-    } else {
-      inc_update(&last_id_, (int64_t)tenant_info.get_standby_scn().get_val_for_gts());
-    }
-  } else {
+  SCN standby_scn;
+  int64_t switch_to_leader_ts = ATOMIC_LOAD(&switch_to_leader_ts_);
+  int64_t query_ts = OB_INVALID_TIMESTAMP != switch_to_leader_ts ? switch_to_leader_ts : 0;
+  if (OB_FAIL(MTL(rootserver::ObTenantInfoLoader *)->get_valid_sts_after(query_ts, standby_scn))) {
     if (print_error_log_interval_.reach()) {
-      TRANS_LOG(INFO, "tenant role isn't standby", K(ret), K(tenant_info));
+      TRANS_LOG(INFO, "tenant info is invalid", K(ret), K(query_ts), K(standby_scn), KPC(this));
+    }
+  } else if (!standby_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(query_ts), K(standby_scn), KPC(this));
+  } else {
+    if (last_id_ > 0 && (standby_scn.get_val_for_gts() < last_id_)) {
+      TRANS_LOG(ERROR, "snapshot rolls back ", K_(switch_to_leader_ts), K(standby_scn), K_(last_id));
+    } else {
+      inc_update(&last_id_, (int64_t)standby_scn.get_val_for_gts());
+      ATOMIC_BCAS(&switch_to_leader_ts_, switch_to_leader_ts, OB_INVALID_TIMESTAMP);
     }
   }
   if (print_id_log_interval_.reach()) {
@@ -174,17 +174,13 @@ void ObStandbyTimestampService::switch_to_follower_forcedly()
 
 int ObStandbyTimestampService::resume_leader()
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(query_and_update_last_id())) {
-    TRANS_LOG(WARN, "query and update last id fail", KR(ret));
-  } else {
-    int64_t type = MTL(ObTimestampAccess *)->get_service_type();
-    if (ObTimestampAccess::ServiceType::FOLLOWER == type) {
-      MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::STS_LEADER);
-    }
-    TRANS_LOG(INFO, "ObStandbyTimestampService resume leader success", K(type), "service_type", MTL(ObTimestampAccess *)->get_service_type(), KPC(this));
+  int64_t type = MTL(ObTimestampAccess *)->get_service_type();
+  if (ObTimestampAccess::ServiceType::FOLLOWER == type) {
+    MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::STS_LEADER);
   }
-  return ret;
+  (void)query_and_update_last_id();
+  TRANS_LOG(INFO, "ObStandbyTimestampService resume leader success", K(type), "service_type", MTL(ObTimestampAccess *)->get_service_type(), KPC(this));
+  return OB_SUCCESS;
 }
 
 int ObStandbyTimestampService::switch_to_leader()
@@ -194,14 +190,14 @@ int ObStandbyTimestampService::switch_to_leader()
   int64_t tmp_epoch = OB_INVALID_TIMESTAMP;
   if (OB_FAIL(MTL(logservice::ObLogService *)->get_palf_role(share::GTS_LS, role, tmp_epoch))) {
     TRANS_LOG(WARN, "get ObStandbyTimestampService role fail", KR(ret));
-  } else if (OB_FAIL(query_and_update_last_id())) {
-    TRANS_LOG(WARN, "query and update last id fail", KR(ret));
   } else {
+    ATOMIC_STORE(&switch_to_leader_ts_, ObTimeUtility::current_time());
     epoch_ = tmp_epoch;
     int64_t type = MTL(ObTimestampAccess *)->get_service_type();
     if (ObTimestampAccess::ServiceType::FOLLOWER == type) {
       MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::STS_LEADER);
     }
+    (void)query_and_update_last_id();
     TRANS_LOG(INFO, "ObStandbyTimestampService switch to leader success", K(type), "service_type", MTL(ObTimestampAccess *)->get_service_type(), KPC(this));
   }
   return ret;
@@ -278,6 +274,11 @@ int ObStandbyTimestampService::get_number(int64_t &gts)
     ret = OB_NOT_MASTER;
     if (EXECUTE_COUNT_PER_SEC(10)) {
       TRANS_LOG(WARN, "ObStandbyTimestampService is not leader", K(ret), KPC(this));
+    }
+  } else if (OB_INVALID_TIMESTAMP != ATOMIC_LOAD(&switch_to_leader_ts_)) {
+    ret = OB_GTS_NOT_READY;
+    if (EXECUTE_COUNT_PER_SEC(10)) {
+      TRANS_LOG(WARN, "ObStandbyTimestampService is not serving", K(ret), KPC(this));
     }
   } else {
     gts = ATOMIC_LOAD(&last_id_);
