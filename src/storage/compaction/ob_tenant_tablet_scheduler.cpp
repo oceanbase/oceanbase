@@ -1017,7 +1017,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
             ls,
             *tablet,
             major_frozen_scn,
-            true/*schedule_with_memtable*/))) {
+            true/*scheduler_called*/))) {
           if (OB_EAGAIN != ret) {
             LOG_WARN("failed to schedule medium", K(tmp_ret), K(ls_id), K(tablet_id));
           }
