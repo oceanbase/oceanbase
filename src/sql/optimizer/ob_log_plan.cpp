@@ -12989,10 +12989,12 @@ int ObLogPlan::get_shared_expr(ObRawExpr *&expr)
   return ret;
 }
 
-int ObLogPlan::candi_allocate_material()
+// this function is used to allocate the material operator to the for-update operator
+int ObLogPlan::candi_allocate_for_update_material()
 {
   int ret = OB_SUCCESS;
   ObSEArray<CandidatePlan, 8> best_plans;
+  ObExchangeInfo exch_info;
   if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, best_plans))) {
     LOG_WARN("failed to get minimal cost candidates", K(ret));
   }
@@ -13000,11 +13002,13 @@ int ObLogPlan::candi_allocate_material()
     if (OB_ISNULL(best_plans.at(i).plan_tree_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null pointer", K(ret));
+    } else if (best_plans.at(i).plan_tree_->is_distributed() &&
+              OB_FAIL(allocate_exchange_as_top(best_plans.at(i).plan_tree_, exch_info))) {
+      LOG_WARN("failed to allocate exchange op", K(ret));
     } else if (OB_FAIL(allocate_material_as_top(best_plans.at(i).plan_tree_))) {
       LOG_WARN("fail to allocate material as top", K(ret));
     }
   }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(prune_and_keep_best_plans(best_plans))) {
       LOG_WARN("failed to prune and keep best plans", K(ret));
