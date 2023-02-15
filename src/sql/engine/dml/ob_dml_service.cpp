@@ -1274,6 +1274,10 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
             if (OB_FAIL(ObDMLService::create_rowkey_check_hashset(dml_op.get_spec().rows_, root_ctx, del_ctx.deleted_rows_))) {
               LOG_WARN("failed to create hash set", K(ret));
             } else if (OB_FAIL(del_ctx_list.push_back(del_ctx))) {
+              if (nullptr != del_ctx.deleted_rows_) {
+                del_ctx.deleted_rows_->destroy();
+                del_ctx.deleted_rows_ = nullptr;
+              }
               LOG_WARN("failed to push del ctx to list", K(ret));
             } else {
               del_rtdef.se_rowkey_dist_ctx_ = del_ctx.deleted_rows_;
@@ -1293,7 +1297,10 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
         } else if (OB_FAIL(ObDMLService::create_rowkey_check_hashset(dml_op.get_spec().rows_, root_ctx, del_ctx.deleted_rows_))) {
           LOG_WARN("failed to create hash set", K(ret));
         } else if (OB_FAIL(del_ctx_list.push_back(del_ctx))) {
-          LOG_WARN("failed to push del ctx to list", K(ret));
+          if (nullptr != del_ctx.deleted_rows_) {
+            del_ctx.deleted_rows_->destroy();
+            del_ctx.deleted_rows_ = nullptr;
+          }
         } else {
           del_rtdef.se_rowkey_dist_ctx_ = del_ctx.deleted_rows_;
         }
