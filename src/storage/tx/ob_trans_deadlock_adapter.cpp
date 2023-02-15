@@ -626,7 +626,7 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
   } else if (is_rollback) {// statment is failed, maybe will try again, check if need register to deadlock detector
     if (session->get_query_timeout_ts() < ObClockGenerator::getCurrentTime()) {
       DETECT_LOG(INFO, "query timeout, no need register to deadlock", KR(ret), K(desc->tid()));
-    } else if (OB_FAIL(desc->get_conflict_txs(conflict_txs))) {
+    } else if (OB_FAIL(desc->fetch_conflict_txs(conflict_txs))) {
       DETECT_LOG(WARN, "fail to get conflict txs from desc", KR(ret), K(desc->tid()));
     } else if (conflict_txs.empty()) {
       // no row conflicted, no need register to deadlock
