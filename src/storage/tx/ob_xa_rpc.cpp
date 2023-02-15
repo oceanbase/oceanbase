@@ -605,10 +605,8 @@ int ObXATerminateP::process()
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "xa ctx is null", K(ret), K(arg_));
   } else {
-    if (!xa_ctx->is_tightly_coupled()) {
-      xa_ctx->set_exiting();
-    } else if (OB_FAIL(xa_ctx->xa_rollback_session_terminate())) {
-      TRANS_LOG(WARN, "xa rollback session terminate fail", K(ret), K_(arg));
+    if (OB_FAIL(xa_ctx->process_terminate(xid))) {
+      TRANS_LOG(WARN, "process terminate failed", K(ret), K(xid), K(tx_id));
     }
     xa_service->revert_xa_ctx(xa_ctx);
   }

@@ -1009,7 +1009,7 @@ int ObXAService::xa_start(const ObXATransID &xid,
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start failed", K(ret), K(xid), K(flags), K(timeout_seconds));
   } else {
-    TRANS_LOG(INFO, "xa start", K(ret), K(xid), K(flags), K(timeout_seconds), "tx_id", tx_desc->get_tx_id());
+    TRANS_LOG(INFO, "xa start", K(ret), K(xid), K(flags), K(timeout_seconds), "tx_id", tx_desc->get_tx_id(), KPC(tx_desc));
   }
 
   return ret;
@@ -1139,22 +1139,25 @@ int ObXAService::xa_start_(const ObXATransID &xid,
         //commit record
         if (OB_FAIL(trans.end(true))) {
           TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
+          const bool need_decrease_ref = true;
+          xa_ctx->try_exit(need_decrease_ref);
+          xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
+          tx_desc = NULL;
         }
       } else {
         //rollback record
         if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
           TRANS_LOG(WARN, "rollback inner table trans failed", K(tmp_ret), K(xid));
         }
-      }
-
-      if (OB_FAIL(ret)) {
         if (OB_NOT_NULL(xa_ctx)) {
-          xa_ctx->set_exiting();
+          xa_ctx_mgr_.erase_xa_ctx(trans_id);
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
         }
+        // since tx_desc is not set into xa ctx, release tx desc explicitly
         MTL(ObTransService *)->release_tx(*tx_desc);
         tx_desc = NULL;
       }
+
     } else {
       // tightly coupled mode, xa start noflags
       // this xa start is not the first for this xa trans
@@ -1183,10 +1186,12 @@ int ObXAService::xa_start_(const ObXATransID &xid,
                                        &xa_rpc_,
                                        &timer_))) {
                 TRANS_LOG(WARN, "init xa ctx failed", K(ret), K(xid));
+                // if init fails, erase xa ctx
+                xa_ctx_mgr_.erase_xa_ctx(trans_id);
               }
             } else {
               if (OB_FAIL(xa_ctx->wait_xa_start_complete())) {
-                TRANS_LOG(WARN, "wait xa astart complete", K(ret), K(xid));
+                TRANS_LOG(WARN, "wait xa start complete", K(ret), K(xid));
               }
             }
           }
@@ -1199,6 +1204,8 @@ int ObXAService::xa_start_(const ObXATransID &xid,
               // Therefore, tx_desc shouled be synchronized from original scheduler.
               if (OB_FAIL(xa_ctx->xa_start_remote_first(xid, flags, timeout_seconds, tx_desc))) {
                 TRANS_LOG(WARN, "xa ctx start failed", K(ret), K(xid));
+                // if fail, erase xa ctx
+                xa_ctx_mgr_.erase_xa_ctx(trans_id);
               }
             } else {
               if (OB_FAIL(xa_ctx->xa_start_second(xid, flags, timeout_seconds, tx_desc))) {
@@ -1208,6 +1215,9 @@ int ObXAService::xa_start_(const ObXATransID &xid,
                   xa_ctx = NULL;
                   need_retry = true;
                   alloc = (GCTX.self_addr() == sche_addr) ? false : true;
+                } else if (OB_TRANS_XA_BRANCH_FAIL == ret) {
+                  const bool need_decrease_ref = false;
+                  xa_ctx->try_exit(need_decrease_ref);
                 }
               }
             }
@@ -1218,10 +1228,16 @@ int ObXAService::xa_start_(const ObXATransID &xid,
           if (OB_NOT_NULL(xa_ctx)) {
             xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
           }
-          if (OB_SUCCESS != (tmp_ret = delete_xa_record(tenant_id, xid))) {
-            TRANS_LOG(WARN, "delete xa record failed", K(tmp_ret), K(xid), K(flags));
+          if (OB_TRANS_XA_BRANCH_FAIL == ret) {
+            if (OB_SUCCESS != (tmp_ret = delete_xa_all_tightly_branch(tenant_id, xid))) {
+              TRANS_LOG(WARN, "delete all xa tightly branch failed", K(tmp_ret), K(xid));
+            }
+          } else {
+            if (OB_SUCCESS != (tmp_ret = delete_xa_record(tenant_id, xid))) {
+              TRANS_LOG(WARN, "delete xa record failed", K(tmp_ret), K(xid), K(flags));
+            }
           }
-        }
+        } // end if fail
       }
       // xa_start on new session, adjust tx_desc.sess_id_
       if (OB_SUCC(ret)) {
@@ -1240,6 +1256,7 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
                                 ObTxDesc *&tx_desc)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObAddr scheduler_addr;
   ObTransID trans_id;
   const uint64_t tenant_id = MTL_ID();
@@ -1289,6 +1306,8 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
                                    &xa_rpc_,
                                    &timer_))) {
             TRANS_LOG(WARN, "xa ctx init failed", K(ret), K(xid));
+            // if init fails, erase xa ctx
+            xa_ctx_mgr_.erase_xa_ctx(trans_id);
           }
         } else {
           if (OB_FAIL(xa_ctx->wait_xa_start_complete())) {
@@ -1305,17 +1324,21 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
           // Therefore, tx_desc shouled be synchronized from original scheduler.
           if (OB_FAIL(xa_ctx->xa_start_remote_first(xid, flags, timeout_seconds, tx_desc))) {
             TRANS_LOG(WARN, "xa ctx start failed", K(ret), K(xid));
+            // if fail, erase xa ctx
+            xa_ctx_mgr_.erase_xa_ctx(trans_id);
           }
         } else {
           if (OB_FAIL(xa_ctx->xa_start_second(xid, flags, timeout_seconds, tx_desc))) {
             TRANS_LOG(WARN, "xa ctx start failed", K(ret), K(xid));
-            // TODO, ATTENTION, add control according to time or number of retry times,
             // must be handled here or may affect error handling
             if (is_tightly_coupled && OB_TRANS_IS_EXITING == ret) {
               xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
               xa_ctx = NULL;
               need_retry = true;
               alloc = (GCTX.self_addr() == scheduler_addr) ? false : true;
+            } else if (OB_TRANS_XA_BRANCH_FAIL == ret) {
+              const bool need_decrease_ref = false;
+              xa_ctx->try_exit(need_decrease_ref);
             }
           }
         }
@@ -1325,6 +1348,10 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
       // ATTENTION, check here!!!
       if (OB_NOT_NULL(xa_ctx)) {
         xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
+      }
+      if (OB_TRANS_XA_BRANCH_FAIL == ret
+          && OB_SUCCESS != (tmp_ret = delete_xa_all_tightly_branch(tenant_id, xid))) {
+        TRANS_LOG(WARN, "delete all xa tightly branch failed", K(tmp_ret), K(xid));
       }
     }
   }
@@ -1351,7 +1378,7 @@ int ObXAService::xa_end(const ObXATransID &xid,
   } else if (!tx_desc->is_xa_trans()) {
     ret = OB_TRANS_XA_PROTO;
     TRANS_LOG(WARN, "Routine invoked in an improper context", K(ret), K(xid));
-  } else if (tx_desc->get_xid() != xid) {
+  } else if (!xid.gtrid_equal_to(tx_desc->get_xid())) {
     // tx->get_xid().gtrid != xid.gtrid
     // oracle returns 0
     ret = OB_TRANS_XA_NOTA;
@@ -1361,6 +1388,10 @@ int ObXAService::xa_end(const ObXATransID &xid,
     TRANS_LOG(ERROR, "transaction context is null", K(ret), K(xid));
   } else if (OB_FAIL(xa_ctx->xa_end(xid, flags, tx_desc))) {
     TRANS_LOG(WARN, "xa end failed", K(ret), K(xid), K(flags));
+    if (OB_TRANS_XA_BRANCH_FAIL == ret) {
+      tx_desc = NULL;
+      xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
+    }
   } else {
     tx_desc = NULL;
     xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
@@ -2018,6 +2049,7 @@ int ObXAService::delete_xa_pending_record(const uint64_t tenant_id,
   return ret;
 }
 
+// this is only used for session terminate
 int ObXAService::handle_terminate_for_xa_branch(const ObXATransID &xid, ObTxDesc *tx_desc, const int64_t xa_end_timeout_seconds)
 {
   int ret = OB_SUCCESS;
@@ -2032,59 +2064,39 @@ int ObXAService::handle_terminate_for_xa_branch(const ObXATransID &xid, ObTxDesc
     const int64_t timeout_us = xa_end_timeout_seconds * 1000 * 1000;
     ObXACtx *xa_ctx = tx_desc->get_xa_ctx();
     ObTransID tx_id = tx_desc->tid();
-    const int64_t expire_ts = now + timeout_us;
     int tmp_ret = OB_SUCCESS;
+    bool is_first_terminate = true;
     TRANS_LOG(INFO, "start to terminate xa trans", K(xid), K(tx_id), "lbt", lbt());
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "xa ctx is null, may be stmt fail or rollback", K(ret), K(tx_id), K(xid));
     } else if (!xa_ctx->is_tightly_coupled()) {
-      if (OB_FAIL(xa_ctx->xa_rollback_session_terminate())) {
+      // loosely coupled mode
+      if (OB_FAIL(xa_ctx->xa_rollback_session_terminate(is_first_terminate))) {
         TRANS_LOG(WARN, "rollback xa trans failed", K(ret), K(tx_id), K(xid));
       }
       // if tmp scheduler, we needs to send terminate request to the original scheduler
       // send the terminate request to the original scheduler no matter whether the rollback succeeds
-      if (xa_ctx->get_original_sche_addr() != self) {
-        int result;
-        do {
-          obrpc::ObXATerminateRPCRequest req;
-          obrpc::ObXARPCCB<obrpc::OB_XA_TERMINATE> cb;
-          ObTransCond cond;
-          // rely on timeout of cb, therefore timeout of cond is set to max
-          const int64_t wait_time = (INT64_MAX - now) / 2;
-          if (OB_FAIL(cb.init(&cond))) {
-            TRANS_LOG(WARN, "ObXARPCCB init failed", KR(ret));
-          } else if (OB_FAIL(req.init(tx_id, xid, timeout_us))) {
-            TRANS_LOG(WARN, "init ObXATerminateRPCRequest failed", KR(ret), K(xid), K(tx_id));
-          } else if (OB_FAIL(xa_rpc_.xa_terminate(tenant_id, xa_ctx->get_original_sche_addr(), req, &cb))) {
-            TRANS_LOG(WARN, "xa proxy terminate failed", KR(ret),
-                K(req), K(xa_ctx->get_original_sche_addr()));
-          } else if (OB_FAIL(cond.wait(wait_time, result))) {
-            TRANS_LOG(WARN, "wait xa_terminate rpc callback failed", KR(ret),
-                K(req), K(xa_ctx->get_original_sche_addr()));
-          } else if (OB_SUCCESS != result) {
-            TRANS_LOG(WARN, "xa_terminate rpc failed result", K(result),
-                K(req), K(xa_ctx->get_original_sche_addr()));
-          }
-        } while (OB_SUCC(ret) && (OB_TIMEOUT == result && expire_ts > ObTimeUtility::current_time()));
-        if (OB_SUCC(ret)) {
-          if (OB_TRANS_CTX_NOT_EXIST == result || OB_TIMEOUT == result) {
-            // if trans ctx does not exist or the rpc is timeout, assume that the orginal scheduler has been exited
-          } else {
-            ret = result;
-          }
+      if (is_first_terminate && xa_ctx->get_original_sche_addr() != self) {
+        // original scheduler is in remote
+        // send terminate to original scheduler
+        if (OB_SUCCESS != (tmp_ret = terminate_to_original_(xid, tx_id,
+                xa_ctx->get_original_sche_addr(), timeout_us))) {
+          TRANS_LOG(WARN, "terminate remote original scheduler failed", K(tmp_ret), K(xid),
+              K(tx_id), K(xa_ctx->get_original_sche_addr()), K(timeout_us));
         }
-        if (OB_FAIL(ret)) {
-          TRANS_LOG(WARN, "terminate remote original scheduler failed", K(ret),
-              K(xa_ctx->get_original_sche_addr()), K(tx_id), K(xid));
-        }
+      }
+      if (OB_SUCCESS != (tmp_ret = xa_ctx->clear_branch_for_xa_terminate(xid))) {
+        TRANS_LOG(WARN, "clear branch for xa terminate failed", K(ret), K(xid), K(tx_id));
       }
       if (OB_SUCCESS != (tmp_ret = delete_xa_branch(tenant_id, xid, false))) {
         TRANS_LOG(WARN, "delete xa record failed", K(ret), K(xid), K(tx_id));
       }
       xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
+      tx_desc = NULL;
       TRANS_LOG(INFO, "handle terminate for loosely coupled xa branch", K(ret), K(tx_id), K(xid));
     } else {
+      // tightly coupled mode
       // regardless of the location of scheduler, try to acquire lock first
       int64_t expired_time = now + 10000000;  // 10s
       while (!xa_ctx->is_terminated()
@@ -2098,55 +2110,79 @@ int ObXAService::handle_terminate_for_xa_branch(const ObXATransID &xid, ObTxDesc
       if (xa_ctx->is_terminated()) {
         // avoid the terminate operations of different branches
         TRANS_LOG(INFO, "xa trans has terminated", K(tx_id), K(xid));
-      } else if (xa_ctx->get_original_sche_addr() == self){
-        // original scheduler is in local
-        if (OB_FAIL(xa_ctx->xa_rollback_session_terminate())) {
-          TRANS_LOG(WARN, "rollback xa trans failed", K(ret), K(tx_id), K(xid));
-        } else {
-          TRANS_LOG(INFO, "rollback xa trans success", K(tx_id), K(xid));
-        }
       } else {
-        // original scheduler is in remote
-        int result;
-        xa_ctx->set_terminated();
-        do {
-          obrpc::ObXATerminateRPCRequest req;
-          obrpc::ObXARPCCB<obrpc::OB_XA_TERMINATE> cb;
-          ObTransCond cond;
-          // rely on timeout of cb, therefore timeout of cond is set to max
-          const int64_t wait_time = (INT64_MAX - now) / 2;
-          if (OB_FAIL(cb.init(&cond))) {
-            TRANS_LOG(WARN, "ObXARPCCB init failed", KR(ret));
-          } else if (OB_FAIL(req.init(tx_id, xid, timeout_us))) {
-            TRANS_LOG(WARN, "init ObXATerminateRPCRequest failed", KR(ret), K(xid), K(tx_id));
-          } else if (OB_FAIL(xa_rpc_.xa_terminate(tenant_id, xa_ctx->get_original_sche_addr(), req, &cb))) {
-            TRANS_LOG(WARN, "xa proxy terminate failed", KR(ret), K(xa_ctx->get_original_sche_addr()), K(req));
-          } else if (OB_FAIL(cond.wait(wait_time, result))) {
-            TRANS_LOG(WARN, "wait xa_terminate rpc callback failed", KR(ret),
-                K(req), K(xa_ctx->get_original_sche_addr()));
-          } else if (OB_SUCCESS != result) {
-            TRANS_LOG(WARN, "xa_terminate rpc failed result", K(result),
-                K(req), K(xa_ctx->get_original_sche_addr()));
-          } else {
-            // do nothing
-          }
-        } while (OB_SUCC(ret) && (OB_TIMEOUT == result && expire_ts > ObTimeUtility::current_time()));
-        if (OB_SUCC(ret)) {
-          if (OB_TRANS_CTX_NOT_EXIST == result || OB_TIMEOUT == result) {
-            ret = OB_SUCCESS;
-          } else {
-            ret = result;
+        if (OB_FAIL(xa_ctx->xa_rollback_session_terminate(is_first_terminate))) {
+          TRANS_LOG(WARN, "rollback xa trans failed", K(ret), K(tx_id), K(xid));
+        }
+        if (is_first_terminate && xa_ctx->get_original_sche_addr() != self) {
+          // original scheduler is in remote
+          // send terminate to original scheduler
+          if (OB_SUCCESS != (tmp_ret = terminate_to_original_(xid, tx_id,
+                  xa_ctx->get_original_sche_addr(), timeout_us))) {
+            TRANS_LOG(WARN, "terminate remote original scheduler failed", K(tmp_ret), K(xid),
+                K(tx_id), K(xa_ctx->get_original_sche_addr()), K(timeout_us));
           }
         }
       }
-      if (OB_SUCCESS != (tmp_ret = xa_ctx->clear_branch_for_xa_terminate(xid, tx_desc, true))) {
+      if (OB_SUCCESS != (tmp_ret = xa_ctx->clear_branch_for_xa_terminate(xid))) {
         TRANS_LOG(WARN, "clear branch for xa terminate failed", K(ret), K(xid), K(tx_id));
       }
+      if (OB_SUCCESS != (tmp_ret = delete_xa_all_tightly_branch(tenant_id, xid))) {
+        TRANS_LOG(WARN, "delete xa tight branch failed", K(ret), K(xid));
+      }
       xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
+      tx_desc = NULL;
       TRANS_LOG(INFO, "handle terminate for tightly coupled xa branch", K(ret), K(xid), K(tx_id));
     }
   }
 
+  return ret;
+}
+
+// send terminate rpc to original scheduler
+int ObXAService::terminate_to_original_(const ObXATransID &xid,
+                                        const ObTransID &tx_id,
+                                        const ObAddr &original_sche_addr,
+                                        const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  int result = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  const int64_t now = ObTimeUtility::current_time();
+  const int64_t expire_ts = now + timeout_us;
+
+  do {
+    obrpc::ObXATerminateRPCRequest req;
+    obrpc::ObXARPCCB<obrpc::OB_XA_TERMINATE> cb;
+    ObTransCond cond;
+    // rely on timeout of cb, therefore timeout of cond is set to max
+    const int64_t wait_time = (INT64_MAX - now) / 2;
+    if (OB_FAIL(cb.init(&cond))) {
+      TRANS_LOG(WARN, "ObXARPCCB init failed", KR(ret));
+    } else if (OB_FAIL(req.init(tx_id, xid, timeout_us))) {
+      TRANS_LOG(WARN, "init ObXATerminateRPCRequest failed", KR(ret), K(xid), K(tx_id));
+    } else if (OB_FAIL(xa_rpc_.xa_terminate(tenant_id, original_sche_addr, req, &cb))) {
+      TRANS_LOG(WARN, "xa proxy terminate failed", KR(ret), K(original_sche_addr), K(req));
+    } else if (OB_FAIL(cond.wait(wait_time, result))) {
+      TRANS_LOG(WARN, "wait xa_terminate rpc callback failed", KR(ret),
+          K(req), K(original_sche_addr));
+    } else if (OB_SUCCESS != result) {
+      TRANS_LOG(WARN, "xa_terminate rpc failed result", K(result),
+          K(req), K(original_sche_addr));
+    } else {
+      // do nothing
+    }
+  } while (OB_SUCC(ret) && (OB_TIMEOUT == result && expire_ts > ObTimeUtility::current_time()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_TRANS_CTX_NOT_EXIST == result || OB_TIMEOUT == result) {
+      // if trans ctx does not exist or the rpc is timeout,
+      // assume that the orginal scheduler has exited
+      ret = OB_SUCCESS;
+    } else {
+      ret = result;
+    }
+  }
   return ret;
 }
 
@@ -2836,11 +2872,9 @@ void ObXAService::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc)
     if (NULL == xa_ctx) {
       TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "xa ctx is null", K(tx_id), K(xid));
     } else {
-      xa_ctx->dec_xa_ref_count();
-      if (0 == xa_ctx->get_xa_ref_count()) {
-        xa_ctx->set_exiting();
-        xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
-      }
+      const bool need_decrease_ref = true;
+      xa_ctx->try_exit(need_decrease_ref);
+      xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
     }
   }
   tx_desc = NULL;

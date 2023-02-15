@@ -256,6 +256,10 @@ private:
   int gc_invalid_xa_record_(const uint64_t tenant_id,
                             const bool check_self,
                             const int64_t gc_time_threshold);
+  int terminate_to_original_(const ObXATransID &xid,
+                             const ObTransID &tx_id,
+                             const ObAddr &original_sche_addr,
+                             const int64_t timeout_us);
 private:
   // for 4.0 dblink
   int xa_start_for_tm_promotion_(const int64_t flags,

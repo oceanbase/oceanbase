@@ -81,8 +81,6 @@ public:
   bool is_tightly_coupled() const { return is_tightly_coupled_; }
   int stmt_lock_with_guard(const ObXATransID &xid);
   int stmt_unlock_with_guard(const ObXATransID &xid);
-  int check_terminated();
-  void set_terminated();
   bool is_terminated() { return is_terminated_; }
   int xa_scheduler_hb_req();
   common::ObAddr get_original_sche_addr() { return original_sche_addr_; }
@@ -115,11 +113,13 @@ public:
                           const bool is_rollback,
                           const int64_t timeout_us,
                           const int64_t request_id);
-  int xa_rollback_session_terminate();
-  int set_exiting();
-  int clear_branch_for_xa_terminate(const ObXATransID &xid,
-                                    ObTxDesc *&tx_desc,
-                                    const bool delete_branch);
+  // this is ONLY used for session terminate
+  int xa_rollback_session_terminate(bool &is_first_terminate);
+  // process terminate request from temporary scheduler
+  int process_terminate(const ObXATransID &xid);
+  void try_exit(const bool need_decrease_ref = false);
+  // this is ONLY used for session terminate
+  int clear_branch_for_xa_terminate(const ObXATransID &xid);
   int try_heartbeat();
   int response_for_heartbeat(const ObXATransID &xid, const ObAddr &original_addr);
   int update_xa_branch_for_heartbeat(const ObXATransID &xid);
@@ -141,11 +141,6 @@ public:
                       const int64_t timeout_us);
   int wait_one_phase_end_trans(const bool is_rollback,
                               const int64_t timeout_us);
-  void dec_xa_ref_count()
-  {
-    ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
-    xa_ref_count_--;
-  }
   int64_t get_xa_ref_count()
   {
     ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
@@ -234,9 +229,6 @@ private:
                            const int64_t timeout_us,
                            const int64_t request_id);
   int save_tx_desc_(ObTxDesc *tx_desc);
-  int clear_branch_for_xa_terminate_(const ObXATransID &xid,
-                                     ObTxDesc *&tx_desc,
-                                     const bool delete_branch);
   int start_stmt_local_(const ObXATransID &xid);
   int start_stmt_remote_(const ObXATransID &xid);
   int end_stmt_local_(const ObXATransID &xid);
@@ -244,9 +236,9 @@ private:
   bool check_response_(const int64_t response_id,
                        const bool is_stmt_response) const;
   int set_exiting_();
+  void try_exit_();
   int check_for_execution_(const ObXATransID &xid, const bool is_new_branch);
-  int xa_rollback_session_terminate_();
-  int xa_rollback_terminate_();
+  int xa_rollback_terminate_(const int cause);
   
   int xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool &need_exit);
   int drive_prepare_(const ObXATransID &xid,

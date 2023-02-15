@@ -194,13 +194,13 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
     flags = my_session->has_tx_level_temp_table() ? (flags | ObXAFlag::TEMPTABLE) : flags;
     if (OB_FAIL(MTL(transaction::ObXAService*)->xa_end(xid, flags,
           my_session->get_tx_desc()))) {
-      LOG_WARN("xa end failed", K(ret), K(stmt.get_xa_string()));
-      // 如果是OB_TRANS_XA_RMFAIL错误那么由用户决定是否回滚
-      // if (OB_TRANS_XA_RMFAIL != ret
-      //     && OB_SUCCESS != (tmp_ret = ObSqlTransControl::explicit_end_trans(ctx, true))) {
-      //   ret = tmp_ret;
-      //   LOG_WARN("explicit end trans failed", K(ret));
-      // }
+      LOG_WARN("xa end failed", K(ret), K(xid));
+      // if branch fail is returned, clean trans in session
+      if (OB_TRANS_XA_BRANCH_FAIL == ret) {
+        my_session->reset_tx_variable();
+        my_session->disassociate_xa();
+        ctx.set_need_disconnect(false);
+      }
     } else {
       my_session->reset_tx_variable();
       my_session->disassociate_xa();

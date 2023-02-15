@@ -187,16 +187,17 @@ int ObXAService::xa_start_for_tm_promotion_(const int64_t flags,
       //commit record
       if (OB_FAIL(trans.end(true))) {
         TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
+        const bool need_decrease_ref = true;
+        xa_ctx->try_exit(need_decrease_ref);
+        xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
       }
     } else {
       //rollback record
       if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
         TRANS_LOG(WARN, "rollback inner table trans failed", K(tmp_ret), K(xid));
       }
-    }
-
-    if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(xa_ctx)) {
+        xa_ctx_mgr_.erase_xa_ctx(trans_id);
         xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
       }
     }
@@ -361,18 +362,19 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
         if (OB_FAIL(trans.end(true))) {
           TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
         }
+        const bool need_decrease_ref = true;
+        xa_ctx->try_exit(need_decrease_ref);
+        xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
       } else {
         //rollback record
         if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
           TRANS_LOG(WARN, "rollback inner table trans failed", K(tmp_ret), K(xid));
         }
-      }
-
-      if (OB_FAIL(ret)) {
         if (OB_NOT_NULL(xa_ctx)) {
+          xa_ctx_mgr_.erase_xa_ctx(trans_id);
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
         }
-        // txs_->remove_tx(*tx_desc);
+        // since tx_desc is not set into xa ctx, release tx desc explicitly
         MTL(ObTransService *)->release_tx(*tx_desc);
         tx_desc = NULL;
       }
