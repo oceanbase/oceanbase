@@ -460,7 +460,15 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
         undo_status_list_.undo_node_cnt_++;
       }
     }
-    node->undo_actions_[node->size_++] = new_undo_action;
+
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(node)) {
+        node->undo_actions_[node->size_++] = new_undo_action;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "node is unexpected nullptr", KR(ret), KPC(this));
+      }
+    }
   }
 
   if (OB_NOT_NULL(undo_node)) {
