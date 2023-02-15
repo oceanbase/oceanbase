@@ -568,7 +568,7 @@ void ObTxDesc::implicit_start_tx_()
     active_ts_ = ObClockGenerator::getClock();
     expire_ts_ = active_ts_ + timeout_us_;
     active_scn_ = ObSequence::get_max_seq_no();
-    state_change_flags_.STATIC_CHANGED_ = true;
+    state_change_flags_.mark_all();
   }
 }
 

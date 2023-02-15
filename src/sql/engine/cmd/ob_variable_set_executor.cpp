@@ -908,16 +908,15 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
+  bool orig_ac = true;
+  int64_t autocommit = 0;
   if (OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else {
-    int64_t autocommit = 0;
     auto tx_desc = my_session->get_tx_desc();
     bool in_trans = OB_NOT_NULL(tx_desc) && tx_desc->in_tx_or_has_state();
-    bool ac = true;
-
-    if (OB_FAIL(my_session->get_autocommit(ac))) {
+    if (OB_FAIL(my_session->get_autocommit(orig_ac))) {
       LOG_WARN("fail to get autocommit", K(ret));
     } else if (OB_FAIL(val.get_int(autocommit))) {
       LOG_WARN("fail get commit val", K(val), K(ret));
@@ -928,7 +927,7 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
                      (int)strlen(autocommit_str), autocommit_str);
     } else {
       // skip commit txn if this is txn free route temporary node
-      if (false == ac &&  true == in_trans && 1 == autocommit && !my_session->is_txn_free_route_temp()) {
+      if (false == orig_ac &&  true == in_trans && 1 == autocommit && !my_session->is_txn_free_route_temp()) {
         if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false))) {
           LOG_WARN("fail implicit commit trans", K(ret));
         }
@@ -937,6 +936,7 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
       }
     }
   }
+  LOG_INFO("set var: autocommit", K(ret), K(orig_ac), "to", autocommit);
   return ret;
 }
 

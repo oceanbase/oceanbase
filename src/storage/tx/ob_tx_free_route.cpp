@@ -143,15 +143,15 @@ inline int ObTransService::txn_state_update_verify_by_version_(const ObTxnFreeRo
   if (ctx.is_txn_switch_) {
     if (ctx.global_version_water_mark_ > version) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "the state is stale", K(ret), K(version), K_(ctx.global_version_water_mark));
+      TRANS_LOG(ERROR, "the state is stale", K(ret), K(version), K(ctx));
     }
   // otherwise, the new state's version should be > water_mark
   } else if (ctx.global_version_water_mark_ == version) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "duplicated state sync", K(ret), K(version));
+    TRANS_LOG(ERROR, "duplicated state sync", K(ret), K(version), K(ctx));
   } else if (ctx.global_version_water_mark_ > version) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "the state is stale", K(ret), K(version), K_(ctx.global_version_water_mark));
+    TRANS_LOG(ERROR, "the state is stale", K(ret), K(version), K(ctx));
   }
   return ret;
 }

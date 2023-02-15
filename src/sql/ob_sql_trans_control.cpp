@@ -1088,6 +1088,11 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       session.reset_tx_variable();                                      \
     }                                                                   \
     LOG_DEBUG("update-txn-state", K(ret), K(session), K(prev_tx_id), KPC(tx_desc)); \
+    if (OB_FAIL(ret)) {                                                 \
+      LOG_WARN("update txn state fail", K(ret), "state", #name,         \
+               K(session.get_txn_free_route_ctx()),                     \
+               K(session), K(prev_tx_id), KPC(tx_desc));                \
+    }                                                                   \
     return ret;                                                         \
   }                                                                     \
   int ObSqlTransControl::serialize_txn_##name##_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos) \
