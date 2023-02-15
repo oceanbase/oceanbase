@@ -97,7 +97,7 @@ public:
   bool is_get_;
   bool is_bf_contain_;
   int8_t row_state_;    // possible states: NOT_EXIST, IN_ROW_CACHE, IN_BLOCK
-  int32_t range_idx_;
+  int64_t range_idx_;
   int64_t micro_begin_idx_;
   int64_t micro_end_idx_;
   union {
@@ -242,7 +242,7 @@ public:
   { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_]; }
   OB_INLINE bool is_current_micro_data_blockscan() const
   { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_].can_blockscan(); }
-  OB_INLINE int32_t prefetching_range_idx()
+  OB_INLINE int64_t prefetching_range_idx()
   {
     return 0 == cur_level_ ? cur_range_prefetch_idx_ - 1 :
         tree_handles_[cur_level_].current_block_read_handle().index_info_.range_idx();
@@ -315,7 +315,7 @@ private:
     }
     TO_STRING_KV(K_(end_prefetched_row_idx));
     // last row idx prefetched by index block
-    int32_t end_prefetched_row_idx_;
+    int64_t end_prefetched_row_idx_;
     // micro index info of index block
     ObMicroIndexInfo index_info_;
     // prefetched micro data handle
@@ -348,7 +348,7 @@ private:
     void reset()
     {
       is_prefetch_end_ = false;
-      is_row_lock_checked_ = false; 
+      is_row_lock_checked_ = false;
       can_blockscan_ = false;
       read_idx_ = 0;
       fetch_idx_ = -1;
@@ -443,11 +443,11 @@ private:
 public:
   bool is_prefetch_end_;
   bool is_row_lock_checked_;
-  int32_t cur_range_fetch_idx_;
-  int32_t cur_range_prefetch_idx_;
+  int64_t cur_range_fetch_idx_;
+  int64_t cur_range_prefetch_idx_;
   int64_t cur_micro_data_fetch_idx_;
   int64_t micro_data_prefetch_idx_;
-  int64_t row_lock_check_version_; 
+  int64_t row_lock_check_version_;
   ObAggregatedStore *agg_row_store_;
 private:
   bool can_blockscan_;

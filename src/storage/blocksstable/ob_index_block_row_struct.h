@@ -305,7 +305,7 @@ public:
   {
     return 0 != is_get_;
   }
-  OB_INLINE int16_t range_idx() const
+  OB_INLINE int64_t range_idx() const
   {
     return range_idx_;
   }
@@ -369,7 +369,7 @@ public:
       uint16_t reserved_ : 11;
     };
   };
-  int16_t range_idx_;
+  int64_t range_idx_;
   MacroBlockId parent_macro_id_;
 };
 
