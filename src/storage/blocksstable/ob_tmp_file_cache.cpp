@@ -739,7 +739,11 @@ int ObTmpTenantMemBlockManager::try_sync(const int64_t block_id)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(block_id));
   } else if (OB_FAIL(t_mblk_map_.get_refactored(block_id, t_mblk))) {
-    STORAGE_LOG(WARN, "the tmp macro block has been washed", K(ret), K(block_id));
+    if (OB_HASH_NOT_EXIST != ret) {
+      STORAGE_LOG(WARN, "t_mblk_map get block failed", K(ret), K(block_id));
+    } else {
+      STORAGE_LOG(DEBUG, "the tmp macro block has been washed", K(ret), K(block_id));
+    }
   } else if (t_mblk->is_washing()){
     STORAGE_LOG(WARN, "the tmp macro block is washing", K(ret), K(block_id));
   } else if (t_mblk->is_disked()){
