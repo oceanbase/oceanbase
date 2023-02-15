@@ -157,7 +157,8 @@ void ObSql::stat()
          || (allow_ps && stmt_type == stmt::StmtType::T_DEALLOCATE)) {  \
      } else {                                                           \
        ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;                         \
-       LOG_WARN("only DML stmt or SET command is supported to be executed on txn temporary node", KR(ret), K(stmt_type)); \
+       LOG_WARN("only DML stmt or SET command is supported to be executed on txn temporary node", \
+                KR(ret), K(stmt_type), K(session.get_txn_free_route_ctx()), K(session)); \
      }                                                                  \
    }                                                                    \
  }

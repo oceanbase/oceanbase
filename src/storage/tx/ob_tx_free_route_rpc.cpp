@@ -20,8 +20,8 @@ int ObTxFreeRouteCheckAliveP::process()
   transaction::ObTransID sess_tx_id;
   {
     sql::ObSQLSessionInfo *session = NULL;
-    auto session_mgr = GCTX.session_mgr_;
-    if (OB_FAIL(session_mgr->get_session(arg_.tx_sess_id_, session))) {
+    sql::ObSessionGetterGuard guard(*GCTX.session_mgr_, arg_.tx_sess_id_);
+    if (OB_FAIL(guard.get_session(session))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SESSION_NOT_FOUND;
       } else {

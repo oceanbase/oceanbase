@@ -906,7 +906,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
           if (OB_ERR_PROXY_REROUTE == ret) {
             LOG_DEBUG("query should be rerouted", K(ret), K(async_resp_used));
           } else {
-            LOG_WARN("query failed", K(ret), K(retry_ctrl_.need_retry()));
+            LOG_WARN("query failed", K(ret), K(session), K(sql), K(retry_ctrl_.need_retry()));
           }
           // 当need_retry=false时，可能给客户端回过包了，可能还没有回过任何包。
           // 不过，可以确定：这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，

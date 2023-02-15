@@ -48,11 +48,14 @@
     LOG_WARN("session has been killed", KR(ret), KPC(session)); \
   }
 #endif
-#define CHECK_TX_FREE_ROUTE(session, ...)                               \
+#define CHECK_TX_FREE_ROUTE(exec_ctx, session, ...)                     \
   if (OB_SUCC(ret) && session->is_txn_free_route_temp()) {              \
-    __VA_ARGS__;                                                      \
+    __VA_ARGS__;                                                        \
     ret = OB_ERR_UNEXPECTED;                                            \
-    TRANS_LOG(ERROR, "trans act on txn temporary node", KR(ret), K(session->get_tx_id()), KPC(session)); \
+    exec_ctx.set_need_disconnect(true);                                 \
+    TRANS_LOG(ERROR, "trans act on txn temporary node", KR(ret),        \
+              K(session->get_txn_free_route_ctx()),                     \
+              K(session->get_tx_id()), KPC(session));                   \
   }
 
 namespace oceanbase
@@ -141,7 +144,7 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
 
   CK (OB_NOT_NULL(plan_ctx), OB_NOT_NULL(session));
   CHECK_SESSION(session);
-  CHECK_TX_FREE_ROUTE(session, cleanup = false);
+  CHECK_TX_FREE_ROUTE(ctx, session, cleanup = false);
   if (OB_SUCC(ret) && session->is_in_transaction()) {
     ret = OB_ERR_UNEXPECTED;
     cleanup = false;
@@ -197,7 +200,7 @@ int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
   CK (OB_NOT_NULL(session));
   int64_t tx_id = 0;
   OX (tx_id = session->get_tx_id().get_id());
-  CHECK_TX_FREE_ROUTE(session);
+  CHECK_TX_FREE_ROUTE(exec_ctx, session);
   FLTSpanGuard(end_transaction);
   OZ(end_trans(exec_ctx, is_rollback, false, callback));
   FLT_SET_TAG(trans_id, tx_id);
@@ -218,7 +221,7 @@ int ObSqlTransControl::explicit_end_trans(ObExecContext &exec_ctx, const bool is
   if (OB_SUCC(ret) && session->get_tx_desc()) {
     txn_id = session->get_tx_desc()->tid();
   }
-  CHECK_TX_FREE_ROUTE(session);
+  CHECK_TX_FREE_ROUTE(exec_ctx, session);
   if (exec_ctx.is_end_trans_async()) {
     CK (OB_NOT_NULL(callback = &session->get_end_trans_cb()));
   }
@@ -684,7 +687,8 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
 #define CHECK_TXN_FREE_ROUTE_ALLOWED()                                  \
   if (OB_SUCC(ret) && !session->is_inner() && session->is_txn_free_route_temp()) { \
     ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;                            \
-    LOG_WARN("current stmt is not allowed executed on txn tmp node", K(ret), KPC(session)); \
+    LOG_WARN("current stmt is not allowed executed on txn tmp node", K(ret), \
+             K(session->get_txn_free_route_ctx()), KPC(session));       \
   }
 int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
                                         const ObString &sp_name)
@@ -1079,7 +1083,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     bool has_tx_desc = OB_NOT_NULL(tx_desc);                            \
     transaction::ObTransID prev_tx_id;                                 \
     if (has_tx_desc) { prev_tx_id =  session.get_tx_id(); }             \
-    OZ (txs->txn_free_route__update_##name##_state(session.get_sessid(), tx_desc, session.get_txn_free_route_ctx(), buf, len, pos)); \
+    OZ (txs->txn_free_route__update_##name##_state(session.get_sessid(), tx_desc, session.get_txn_free_route_ctx(), buf, len, pos), session); \
     if (OB_SUCC(ret) && has_tx_desc && (OB_ISNULL(tx_desc) || tx_desc->get_tx_id() !=  prev_tx_id)) { \
       session.reset_tx_variable();                                      \
     }                                                                   \
@@ -1104,7 +1108,9 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     transaction::ObTransService *txs = NULL;                            \
     MTL_SWITCH(session.get_effective_tenant_id()) {                     \
       OZ (get_tx_service(&session, txs));                               \
-      size = txs->txn_free_route__get_##name##_state_serialize_size(session.get_tx_desc(), session.get_txn_free_route_ctx()); \
+      if (OB_SUCC(ret)) {                                               \
+        size = txs->txn_free_route__get_##name##_state_serialize_size(session.get_tx_desc(), session.get_txn_free_route_ctx()); \
+      }                                                                 \
     }                                                                   \
     LOG_DEBUG("get-serialize-size-txn-state", K(session));              \
     return size;                                                        \

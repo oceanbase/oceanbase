@@ -82,20 +82,29 @@ int ObTransService::clean_txn_state_(ObTxDesc *&tx, const ObTransID &tx_id)
   //
   // if such insanity happened, it may the proxy was corrupted, we should disconnect
   // with proxy, because such error can not been repaired via retry
+  bool release_ref = false, release = false;
   {
     ObSpinLockGuard guard(tx->lock_);
-    if (TX_START_OR_RESUME_LOCAL(tx) && tx->tx_id_ == tx_id) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "!bug, try to clean txn state on txn start node", K(ret), KPC(tx));
+    if (TX_START_OR_RESUME_LOCAL(tx)) {
+      if (tx->tx_id_ == tx_id) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "try to clean txn state on txn start node", K(ret), KPC(tx));
+      } else if (tx->is_in_tx()) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "try to clean txn state while tx is active", K(ret), KPC(tx), K(tx_id));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (tx->is_xa_trans() && tx->addr_ == self_) {
+      // on XA orignal, release ref
+        release_ref = true;
+      } else {
+        release = true;
+      }
     }
   }
-  if (tx->is_xa_trans() && tx->addr_ == self_) {
-    // on XA orignal, release ref
-    release_tx_ref(*tx);
-  } else {
-    release_tx(*tx);
-  }
-  tx = NULL;
+  if (release_ref) { release_tx_ref(*tx); tx = NULL; }
+  if (release) { ret = release_tx(*tx); tx = NULL; }
 #ifndef NDEBUG
   TRANS_LOG(INFO, "[tx free route] clean-txn-state", K(ret));
 #endif
@@ -202,7 +211,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
     audit_record.upd_term_ = true;
     audit_record.upd_clean_tx_ = OB_NOT_NULL(tx);
     if (OB_NOT_NULL(tx) && OB_FAIL(clean_txn_state_(tx, tx_id))) {
-      TRANS_LOG(WARN, "cleanup prev txn state fail", K(ret), K(tx));
+      TRANS_LOG(WARN, "cleanup prev txn state fail", K(ret), K(tx_id), K(tx));
     }
   } else if (flag.is_fallback_) {
     audit_record.upd_fallback_ = true;
@@ -490,7 +499,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(tx)) {
     ObSpinLockGuard guard(tx->lock_);
-    TRANS_LOG(WARN, "update state fail", K(ret), KPC(tx));
+    TRANS_LOG(WARN, "update state fail", K(ret), K(session_id), KPC(tx));
   }
   return ret;
 }
