@@ -106,8 +106,6 @@ int ObAllVirtualMinorFreezeInfo::get_next_ls(ObLS *&ls)
 int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  ObFreezer *freezer = nullptr;
   ObFreezerStat freeze_stat;
   if (NULL == allocator_) {
     ret = OB_NOT_INIT;
@@ -115,17 +113,10 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
   } else if (FALSE_IT(start_to_read_ = true)) {
   } else if (ls_iter_guard_.get_ptr() == nullptr && OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
     SERVER_LOG(WARN, "get_ls_iter fail", K(ret));
-  } else if (OB_FAIL(get_next_ls(ls))) {
+  } else if (OB_FAIL(get_next_freeze_stat(freeze_stat))) {
     if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "get_next_ls failed", K(ret));
+      SERVER_LOG(WARN, "get_next_freeze_stat failed", K(ret));
     }
-  } else if (NULL == ls) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret));
-  } else if (FALSE_IT(freezer = ls->get_freezer())) {
-  } else if (!(freezer->get_stat().is_valid())) {
-  } else if (OB_FAIL(freezer->get_stat().deep_copy_to(freeze_stat))) {
-    SERVER_LOG(WARN, "fail to deep copy", K(ret));
   } else {
     int64_t freeze_clock = 0;
     const int64_t col_count = output_column_ids_.count();
@@ -240,39 +231,93 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
   return ret;
 }
 
-int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
+int ObAllVirtualMinorFreezeInfo::get_next_freeze_stat(ObFreezerStat &freeze_stat)
 {
   int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  ObFreezer *freezer = nullptr;
 
-  memset(memtables_info_string_, 0, OB_MAX_CHAR_LENGTH);
-  for (int i = 0; i < memtables_info_.count(); ++i) {
-    if (memtables_info_[i].is_valid()) {
-      // tablet_id
-      strcat(memtables_info_string_, "tablet_id:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].tablet_id_.id()));
-      // start_scn
-      strcat(memtables_info_string_, ", start_scn:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].start_scn_));
-      // end_scn
-      strcat(memtables_info_string_, ", end_scn:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].end_scn_));
-      // write_ref_cnt
-      strcat(memtables_info_string_, ", write_ref_cnt:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].write_ref_cnt_));
-      // unsubmitted_cnt
-      strcat(memtables_info_string_, ", unsubmitted_cnt:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].unsubmitted_cnt_));
-      // unsynced_cnt
-      strcat(memtables_info_string_, ", unsynced_cnt:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].unsynced_cnt_));
-      // current_right_boundary
-      strcat(memtables_info_string_, ", current_right_boundary:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].current_right_boundary_));
-      strcat(memtables_info_string_, "; ");
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(get_next_ls(ls))) {
+      if (OB_ITER_END != ret) {
+        SERVER_LOG(WARN, "get_next_ls failed", K(ret));
+      }
+    } else if (OB_ISNULL(ls)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret));
+    } else if (FALSE_IT(freezer = ls->get_freezer())) {
+    } else if (OB_ISNULL(freezer)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret));
+    } else if (OB_FAIL(freezer->get_stat().deep_copy_to(freeze_stat))) {
+      SERVER_LOG(WARN, "fail to deep copy", K(ret));
+    } else if (!(freeze_stat.is_valid())) {
+      SERVER_LOG(WARN, "freeze_stat is invalid", KP(ls), KP(freezer));
+    } else {
+      // freeze_stat is valid
+      break;
     }
   }
 
   return ret;
+}
+
+int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
+{
+  int ret = OB_SUCCESS;
+  memset(memtables_info_string_, 0, OB_MAX_CHAR_LENGTH);
+  int memtable_info_count = memtables_info_.count();
+  // leave space for '\0'
+  int64_t size = OB_MAX_CHAR_LENGTH - 1;
+
+  for (int i = 0; i < memtable_info_count && size > 0; ++i) {
+    if (memtables_info_[i].is_valid()) {
+      // tablet_id
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[0], to_cstring(memtables_info_[i].tablet_id_.id()), size);
+      // start_scn
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[1], to_cstring(memtables_info_[i].start_scn_), size);
+      // end_scn
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[2], to_cstring(memtables_info_[i].end_scn_), size);
+      // write_ref_cnt
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[3], to_cstring(memtables_info_[i].write_ref_cnt_), size);
+      // unsubmitted_cnt
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[4], to_cstring(memtables_info_[i].unsubmitted_cnt_), size);
+      // unsynced_cnt
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[5], to_cstring(memtables_info_[i].unsynced_cnt_), size);
+      // current_right_boundary
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[6], to_cstring(memtables_info_[i].current_right_boundary_), size);
+      // end of the memtable_info
+      if (size >= 2) {
+        strcat(memtables_info_string_, "; ");
+        size = size - 2;
+      } else if (size < 0) {
+        SERVER_LOG(WARN, "size is invalid", K(size), K(memtable_info_count), K(memtables_info_string_));
+      }
+    }
+  }
+
+  return ret;
+}
+
+void ObAllVirtualMinorFreezeInfo::append_memtable_info_string(const char *name, const char *str, int64_t &size)
+{
+  if (size > 0) {
+    int64_t name_len = MIN(size, strlen(name));
+    strncat(memtables_info_string_, name, name_len);
+    size = size - name_len;
+
+    int64_t mark_len = MIN(size, 1);
+    strncat(memtables_info_string_, ":", mark_len);
+    size = size - mark_len;
+
+    int64_t str_len = MIN(size, strlen(str));
+    strncat(memtables_info_string_, str, str_len);
+    size = size - str_len;
+
+    mark_len = MIN(size, 1);
+    strncat(memtables_info_string_, " ", mark_len);
+    size = size - mark_len;
+  }
 }
 
 }/* ns observer*/
