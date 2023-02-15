@@ -192,10 +192,7 @@ public:
   static uint32_t get_reserved_size(const ObObjDatumMapType type);
   // From ObObj, the caller is responsible for ensuring %ptr_ has enough memory
   inline int from_obj(const ObObj &obj, const ObObjDatumMapType map_type);
-  inline bool need_copy_for_encoding_column_in_flat_format(
-      const ObDatum &datum,
-      const ObObjDatumMapType map_type);
-  inline int from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type, bool need_copy = false);
+  inline int from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type);
   // From ObObj, the caller is responsible for ensuring %ptr_ has enough memory
   inline int from_obj(const ObObj &obj);
   inline int64_t checksum(const int64_t current) const;
@@ -728,14 +725,7 @@ inline int ObDatum::from_obj(const ObObj &obj, const ObObjDatumMapType map_type)
   return ret;
 }
 
-inline bool ObDatum::need_copy_for_encoding_column_in_flat_format(
-    const ObDatum &datum,
-    const ObObjDatumMapType map_type)
-{
-  return OBJ_DATUM_STRING == map_type && sizeof(uint64_t) == datum.len_;
-}
-
-inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type, bool need_copy)
+inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type)
 {
   int ret = common::OB_SUCCESS;
   if (datum.is_ext()) {
@@ -743,14 +733,6 @@ inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMap
     COMMON_LOG(WARN, "Invalid argument for ext storage datum to datum", K(ret), K(datum));
   } else if (datum.is_null()) {
     set_null();
-  } else if (need_copy && need_copy_for_encoding_column_in_flat_format(datum, map_type)) {
-    // 1. When need_copy is true, it means that we project multiple rows at one time.
-    // 2. Datum buffer will be reset each time in ObDASScanOp::reset_access_datums_ptr,
-    //    so it is safe to deep copy 8 bytes column with flat format micro block into datum buffer.
-    // 3. We project one row each time in ObRow2ExprsProjector::project, so we will not
-    //    deep copy 8 bytes column with flat format micro block into datum buffer.
-    memcpy(no_cv(ptr_), datum.ptr_, datum.len_);
-    pack_ = datum.pack_;
   } else {
     switch (map_type) {
       case OBJ_DATUM_NULL: { datum2datum<OBJ_DATUM_NULL>(datum); break; }

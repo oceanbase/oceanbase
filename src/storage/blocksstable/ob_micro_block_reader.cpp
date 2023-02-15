@@ -653,7 +653,7 @@ int ObMicroBlockReader::get_rows(
               LOG_WARN("Fail to transfer datum", K(ret), K(i), K(idx), K(row_idx), K(default_row));
             }
             LOG_TRACE("Transfer nop value", K(ret), K(idx), K(row_idx), K(col_idx), K(default_row));
-          } else if (OB_FAIL(datum.from_storage_datum(row_buf.storage_datums_[col_idx], map_types.at(i), true))) {
+          } else if (OB_FAIL(datum.from_storage_datum(row_buf.storage_datums_[col_idx], map_types.at(i)))) {
             LOG_WARN("Failed to from storage datum", K(ret), K(idx), K(row_idx), K(col_idx),
                      K(row_buf.storage_datums_[col_idx]), KPC_(header));
           }
