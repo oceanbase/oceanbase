@@ -556,6 +556,9 @@ int ObStorageLogWriter::get_log_item(
         LOG_WARN("build_log_item failed", K(ret), K(cmd), K(data));
       } else {
         item->end_cursor_ = build_cursor_;
+        if (total_item_size > LOG_ITEM_WARNING_LENGTH) {
+          LOG_ERROR("Slog item total size threashold warning, the corresponding table should consider splitting to more sub-partitions", K(ret), K(total_item_size));
+        }
       }
     }
   }
