@@ -18,6 +18,8 @@
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/worker.h"
+#include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl_stmt.h"
 
 namespace oceanbase
 {
@@ -35,11 +37,13 @@ ObRawExprPrinter::ObRawExprPrinter()
       tz_info_(NULL),
       print_params_(),
       param_store_(NULL),
-      gen_unique_name_(NULL)
+      gen_unique_name_(NULL),
+      schema_guard_(NULL)
 {
 }
 
-ObRawExprPrinter::ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObObjPrintParams print_params, const ParamStore *param_store)
+ObRawExprPrinter::ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
+                                   ObObjPrintParams print_params, const ParamStore *param_store)
     : buf_(buf),
       buf_len_(buf_len),
       pos_(pos),
@@ -49,7 +53,8 @@ ObRawExprPrinter::ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObO
       tz_info_(NULL),
       print_params_(print_params),
       param_store_(param_store),
-      gen_unique_name_(NULL)
+      gen_unique_name_(NULL),
+      schema_guard_(schema_guard)
 {
 }
 
@@ -57,12 +62,14 @@ ObRawExprPrinter::~ObRawExprPrinter()
 {
 }
 
-void ObRawExprPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObObjPrintParams print_params, const ParamStore *param_store)
+void ObRawExprPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
+                            ObObjPrintParams print_params, const ParamStore *param_store)
 {
   buf_ = buf;
   buf_len_ = buf_len;
   pos_ = pos;
   scope_ = T_NONE_SCOPE;
+  schema_guard_ = schema_guard;
   print_params_ = print_params;
   is_inited_ = true;
   param_store_ = param_store;
@@ -304,6 +311,7 @@ int ObRawExprPrinter::print(ObQueryRefRawExpr *expr)
                                            buf_len_,
                                            pos_,
                                            static_cast<ObSelectStmt*>(stmt),
+                                           schema_guard_,
                                            print_params_,
                                            column_list,
                                            is_set_subquery);
@@ -2796,6 +2804,22 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
       }
       case T_JSON: {
         DATA_PRINTF("json");
+        break;
+      }
+
+      case T_EXTEND: {
+        const int udt_id = con_expr->get_udt_id();
+        const uint64_t dest_tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+        const share::schema::ObUDTTypeInfo *dest_info = NULL;
+        if (OB_ISNULL(schema_guard_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(lbt()));
+        } else if (OB_FAIL(schema_guard_->get_udt_info(dest_tenant_id, udt_id, dest_info))) {
+          LOG_WARN("failed to get udt info", K(ret));
+        } else {
+          DATA_PRINTF(lib::is_oracle_mode() ? "\"%.*s\"" : "`%.*s`",
+                LEN_AND_PTR(dest_info->get_type_name()));
+        }
         break;
       }
       default: {

@@ -84,11 +84,14 @@ class ObRawExprPrinter
 
 public:
   ObRawExprPrinter();
-  ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, common::ObObjPrintParams print_params = common::ObObjPrintParams(), const ParamStore *param_store = NULL);
+  ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
+                   common::ObObjPrintParams print_params = common::ObObjPrintParams(),
+                   const ParamStore *param_store = NULL);
   ObRawExprPrinter(bool);
   virtual ~ObRawExprPrinter();
 
-  void init(char *buf, int64_t buf_len, int64_t *pos, ObObjPrintParams print_params, const ParamStore *param_store = NULL);
+  void init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
+            ObObjPrintParams print_params, const ParamStore *param_store = NULL);
   // stmt中会出现若干expr, 为了避免反复实例化，这里将expr作为do_print的参数
   int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false, bool is_bool_expr = false);
   int set_gen_unique_name(GenUniqueAliasName *gen_unique_name);
@@ -131,6 +134,7 @@ private:
   ObObjPrintParams print_params_;
   const ParamStore *param_store_;
   GenUniqueAliasName *gen_unique_name_;
+  ObSchemaGetterGuard *schema_guard_;
 };
 
 } // end namespace sql

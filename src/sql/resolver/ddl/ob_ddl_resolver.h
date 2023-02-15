@@ -204,6 +204,7 @@ public:
       const ObSQLMode sql_mode);
   static int print_expr_to_default_value(ObRawExpr &expr,
                                          share::schema::ObColumnSchemaV2 &column,
+                                         ObSchemaChecker *schema_checker,
                                          const common::ObTimeZoneInfo *tz_info);
   static int check_dup_gen_col(const ObString &expr,
                                ObIArray<ObString> &gen_col_expr_arr);

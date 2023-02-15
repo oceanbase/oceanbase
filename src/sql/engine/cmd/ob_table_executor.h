@@ -61,7 +61,11 @@ public:
   int execute_ctas(ObExecContext &ctx, ObCreateTableStmt &stmt, obrpc::ObCommonRpcProxy *common_rpc_proxy);
 private:
   int prepare_stmt(ObCreateTableStmt &stmt, const ObSQLSessionInfo &my_session, ObString &create_table_name);
-  int prepare_ins_arg(ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, const ParamStore *param_store, ObSqlString &ins_sql);
+  int prepare_ins_arg(ObCreateTableStmt &stmt,
+                      const ObSQLSessionInfo *my_session,
+                      ObSchemaGetterGuard *schema_guard,
+                      const ParamStore *param_store,
+                      ObSqlString &ins_sql);
   int prepare_alter_arg(ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, const ObString &create_table_name, obrpc::ObAlterTableArg &alter_table_arg);
   int prepare_drop_arg(const ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, obrpc::ObTableItem &table_item, obrpc::ObDropTableArg &drop_table_arg);
 };

@@ -9282,6 +9282,55 @@ int ObLogPlan::candi_allocate_filter(const ObIArray<ObRawExpr*> &filter_exprs)
   return ret;
 }
 
+int ObLogPlan::inner_plan_tree_traverse(const TraverseOp &operation,
+                                        void *ctx,
+                                        AllocGIContext &gi_ctx,
+                                        ObLocationConstraintContext &location_constraints)
+{
+  int ret = OB_SUCCESS;
+  if (((PX_ESTIMATE_SIZE == operation) ||
+       (PX_PIPE_BLOCKING == operation) ||
+       (PX_RESCAN == operation)) &&
+       (get_optimizer_context().is_local_or_remote_plan())) {
+    /*do nothing*/
+  } else if (ALLOC_GI == operation &&
+             get_optimizer_context().is_local_or_remote_plan() &&
+             !(gi_ctx.is_valid_for_gi_ &&
+               get_optimizer_context().enable_batch_rpc())) {
+    /*do nothing*/
+  } else if (OB_FAIL(get_plan_root()->do_plan_tree_traverse(operation, ctx))) {
+    LOG_WARN("failed to apply operation to operator", K(operation), K(ret));
+  } else {
+    // remember signature in plan
+    if (GEN_SIGNATURE == operation) {
+      if (OB_ISNULL(ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ctx is null", K(ret), K(ctx));
+      } else {
+        hash_value_ = *static_cast<uint64_t *>(ctx);
+        LOG_TRACE("succ to generate plan hash value", "hash_value", hash_value_);
+      }
+    } else if (GEN_LOCATION_CONSTRAINT == operation) {
+      ObSqlCtx *sql_ctx = NULL;
+      if (OB_ISNULL(optimizer_context_.get_exec_ctx())
+          || OB_ISNULL(sql_ctx = optimizer_context_.get_exec_ctx()->get_sql_ctx())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(optimizer_context_.get_exec_ctx()), K(sql_ctx));
+      } else if (OB_FAIL(remove_duplicate_constraint(location_constraints,
+                                                     *sql_ctx))) {
+        LOG_WARN("fail to remove duplicate constraint", K(ret));
+      } else if (OB_FAIL(calc_and_set_exec_pwj_map(location_constraints))) {
+        LOG_WARN("failed to calc and set exec pwj map", K(ret));
+      }
+    } else if (OPERATOR_NUMBERING == operation) {
+      NumberingCtx *num_ctx = static_cast<NumberingCtx *>(ctx);
+      max_op_id_ = num_ctx->op_id_;
+      LOG_TRACE("trace max operator id", K(max_op_id_), K(this));
+    } else { /* Do nothing */ }
+    LOG_TRACE("succ to apply operaion to operator", K(operation), K(ret));
+  }
+  return ret;
+}
 
 int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
 {
@@ -9301,7 +9350,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
     ObLocationConstraintContext location_constraints;
     AllocMDContext md_ctx;
     AllocBloomFilterContext bf_ctx;
-    GenLinkStmtPostContext link_ctx(get_allocator());
+    GenLinkStmtPostContext link_ctx(get_allocator(), get_optimizer_context().get_schema_guard());
     CopyPartExprCtx copy_part_expr_ctx;
 
     // set up context
@@ -9389,48 +9438,9 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
     default:
       break;
     }
-    if (OB_SUCC(ret)) {
-      if (((PX_ESTIMATE_SIZE == operation) ||
-           (PX_PIPE_BLOCKING == operation) ||
-           (PX_RESCAN == operation)) &&
-           (get_optimizer_context().is_local_or_remote_plan())) {
-        /*do nothing*/
-      } else if (ALLOC_GI == operation &&
-                 get_optimizer_context().is_local_or_remote_plan() &&
-                 !(gi_ctx.is_valid_for_gi_ &&
-                   get_optimizer_context().enable_batch_rpc())) {
-        /*do nothing*/
-      } else if (OB_FAIL(get_plan_root()->do_plan_tree_traverse(operation, ctx))) {
-        LOG_WARN("failed to apply operation to operator", K(operation), K(ret));
-      } else {
-        // remember signature in plan
-        if (GEN_SIGNATURE == operation) {
-          if (OB_ISNULL(ctx)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("ctx is null", K(ret), K(ctx));
-          } else {
-            hash_value_ = *static_cast<uint64_t *>(ctx);
-            LOG_TRACE("succ to generate plan hash value", "hash_value", hash_value_);
-          }
-        } else if (GEN_LOCATION_CONSTRAINT == operation) {
-          ObSqlCtx *sql_ctx = NULL;
-          if (OB_ISNULL(optimizer_context_.get_exec_ctx())
-              || OB_ISNULL(sql_ctx = optimizer_context_.get_exec_ctx()->get_sql_ctx())) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid argument", K(ret), K(optimizer_context_.get_exec_ctx()), K(sql_ctx));
-          } else if (OB_FAIL(remove_duplicate_constraint(location_constraints,
-                                                         *sql_ctx))) {
-            LOG_WARN("fail to remove duplicate constraint", K(ret));
-          } else if (OB_FAIL(calc_and_set_exec_pwj_map(location_constraints))) {
-            LOG_WARN("failed to calc and set exec pwj map", K(ret));
-          }
-        } else if (OPERATOR_NUMBERING == operation) {
-          NumberingCtx *num_ctx = static_cast<NumberingCtx *>(ctx);
-          max_op_id_ = num_ctx->op_id_;
-          LOG_TRACE("trace max operator id", K(max_op_id_), K(this));
-        } else { /* Do nothing */ }
-        LOG_TRACE("succ to apply operaion to operator", K(operation), K(ret));
-      }
+    if (OB_SUCC(ret) &&
+        OB_FAIL(inner_plan_tree_traverse(operation, ctx, gi_ctx, location_constraints))) {
+      LOG_WARN("failed to do inner plan tree traverse", K(ret));
     }
   }
   return ret;

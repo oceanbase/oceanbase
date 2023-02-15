@@ -2196,9 +2196,10 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
   } else if (ObItemType::T_INDEX != node->type_ && ObItemType::T_COLUMN_DEFINITION != node->type_) {
     ret = OB_INVALID_ARGUMENT;
     SQL_RESV_LOG(WARN, "invalid arguments.", K(ret), K(node->type_), K(node->num_child_));
-  } else if (OB_ISNULL(stmt_) || OB_ISNULL(session_info_)){
+  } else if (OB_ISNULL(stmt_) || OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)){
     ret = OB_NOT_INIT;
-    SQL_RESV_LOG(WARN, "stmt or session_info is null.", K(ret), KP(session_info_), KP(stmt_));
+    SQL_RESV_LOG(WARN, "stmt or session_info or schema_checker is null.",
+                 K(ret), KP(session_info_), KP(stmt_), K_(schema_checker));
   } else if (OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "node->children_ is null.", K(ret));
@@ -2289,7 +2290,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 if (OB_FAIL(ObIndexBuilderUtil::generate_ordinary_generated_column(*expr,
                                                                                    session_info_->get_sql_mode(),
                                                                                    tbl_schema,
-                                                                                   column_schema))) {
+                                                                                   column_schema,
+                                                                                   schema_checker_->get_schema_guard()))) {
                   LOG_WARN("generate ordinary generated column failed", K(ret));
                 } else {
                   sort_item.column_name_ = column_schema->get_column_name_str();

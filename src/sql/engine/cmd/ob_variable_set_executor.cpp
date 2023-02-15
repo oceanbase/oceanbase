@@ -340,7 +340,7 @@ int ObVariableSetExecutor::calc_subquery_expr_value(ObExecContext &ctx,
                                                     common::ObObj &value_obj)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr) || OB_ISNULL(session_info)) {
+  if (OB_ISNULL(expr) || OB_ISNULL(session_info) || OB_ISNULL(ctx.get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(expr), K(session_info));
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
@@ -354,7 +354,7 @@ int ObVariableSetExecutor::calc_subquery_expr_value(ObExecContext &ctx,
       ObSqlString tmp_expr_subquery;
       ObSqlString expr_subquery;
       ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH,
-                                    &pos, session_info->get_timezone_info());
+                                    &pos, ctx.get_sql_ctx()->schema_guard_, session_info->get_timezone_info());
       if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
         LOG_WARN("print expr definition failed", K(ret));
       } else if (OB_FAIL(tmp_expr_subquery.assign_fmt("select %.*s from dual",

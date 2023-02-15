@@ -4303,7 +4303,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObDDLResolver::print_expr_to_default_value(*expr, generated_column, session_info->get_timezone_info()))) {
+    } else if (OB_FAIL(ObDDLResolver::print_expr_to_default_value(*expr, generated_column,
+                                                                  params.schema_checker_, session_info->get_timezone_info()))) {
       LOG_WARN("fail to print_expr_to_default_value", KPC(expr), K(generated_column), K(ret));
     } else if (OB_FAIL(ObRawExprUtils::check_generated_column_expr_str(
         generated_column.get_cur_default_value().get_string(), *session_info, tbl_schema))) {
@@ -4559,9 +4560,9 @@ int ObResolverUtils::resolve_check_constraint_expr(
     // column_schema 为 NULL 表示约束为表级约束
     is_col_level_cst = true;
   }
-  if (OB_ISNULL(expr_factory) || OB_ISNULL(session_info) || OB_ISNULL(node)) {
+  if (OB_ISNULL(expr_factory) || OB_ISNULL(session_info) || OB_ISNULL(node) || OB_ISNULL(params.schema_checker_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("resolve status is invalid", K_(params.expr_factory), K(session_info), K(node));
+    LOG_WARN("resolve status is invalid", K_(params.expr_factory), K(session_info), K(node), K(params.schema_checker_));
   } else if (OB_FAIL(ObRawExprUtils::build_check_constraint_expr(*expr_factory, *session_info, *node, expr, columns))) {
     LOG_WARN("build generated column expr failed", K(ret));
   }
@@ -4678,7 +4679,8 @@ int ObResolverUtils::resolve_check_constraint_expr(
       MEMSET(expr_str_buf, 0, sizeof(expr_str_buf));
       int64_t pos = 0;
       ObString expr_def;
-      ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos, session_info->get_timezone_info());
+      ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                    params.schema_checker_->get_schema_guard(), session_info->get_timezone_info());
       if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
         LOG_WARN("print expr definition failed", K(ret));
       } else if (FALSE_IT(expr_def.assign_ptr(expr_str_buf, static_cast<int32_t>(pos)))) {

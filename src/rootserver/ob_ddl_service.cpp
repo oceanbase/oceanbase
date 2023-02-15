@@ -6289,7 +6289,7 @@ int ObDDLService::modify_generated_column_default_value(ObColumnSchemaV2 &genera
             ObString expr_def;
             int64_t pos = 0;
             ObObj default_value;
-            ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos, &tz_info);
+            ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos, &schema_guard, &tz_info);
             if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
               LOG_WARN("print expr definition failed", K(ret));
             } else if (FALSE_IT(expr_def.assign_ptr(expr_str_buf, static_cast<int32_t>(pos)))) {
@@ -6460,7 +6460,7 @@ int ObDDLService::modify_func_expr_column_name(
             SMART_VAR(char[OB_MAX_SQL_LENGTH], expr_str_buf) {
               MEMSET(expr_str_buf, 0, sizeof(expr_str_buf));
               int64_t inner_pos = 0;
-              ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_SQL_LENGTH, &inner_pos, &tz_info);
+              ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_SQL_LENGTH, &inner_pos, &schema_guard, &tz_info);
               if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
                 LOG_WARN("print expr definition failed", K(ret));
               } else if (0 == i
@@ -6830,7 +6830,7 @@ int ObDDLService::rebuild_constraint_check_expr(
             SMART_VAR(char[OB_MAX_SQL_LENGTH], expr_str_buf) {
               MEMSET(expr_str_buf, 0, sizeof(expr_str_buf));
               int64_t inner_pos = 0;
-              ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_SQL_LENGTH, &inner_pos, &tz_info);
+              ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_SQL_LENGTH, &inner_pos, &schema_guard, &tz_info);
               if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
                 LOG_WARN("print expr definition failed", K(ret));
               } else if (OB_FAIL(databuff_printf(new_check_expr_buf,

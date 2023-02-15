@@ -420,7 +420,7 @@ int ObSchemaPrinter::print_generated_column_definition(const ObColumnSchemaV2 &g
   sql::ObRawExpr *expr = NULL;
   ObTimeZoneInfo tz_infos;
   sql::ObRawExprPrinter raw_printer;
-  raw_printer.init(buf, buf_len, &pos, &tz_infos);
+  raw_printer.init(buf, buf_len, &pos, &schema_guard_, &tz_infos);
   SMART_VAR(sql::ObSQLSessionInfo, session) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, " GENERATED ALWAYS AS ("))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print keywords", K(ret));

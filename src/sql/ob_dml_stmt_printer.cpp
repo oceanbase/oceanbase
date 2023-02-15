@@ -29,6 +29,7 @@ ObDMLStmtPrinter::ObDMLStmtPrinter()
     buf_len_(0),
     pos_(NULL),
     stmt_(NULL),
+    schema_guard_(NULL),
     print_params_(),
     expr_printer_(),
     param_store_(NULL),
@@ -37,12 +38,14 @@ ObDMLStmtPrinter::ObDMLStmtPrinter()
 }
 
 ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObDMLStmt *stmt,
+                                   ObSchemaGetterGuard *schema_guard,
                                    ObObjPrintParams print_params,
                                    const ParamStore *param_store)
   : buf_(buf),
     buf_len_(buf_len),
     pos_(pos),
     stmt_(stmt),
+    schema_guard_(schema_guard),
     print_params_(print_params),
     expr_printer_(),
     param_store_(param_store),
@@ -293,6 +296,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
             const bool force_col_alias = stmt_->is_select_stmt();
             ObSelectStmtPrinter stmt_printer(buf_, buf_len_, pos_,
                                              static_cast<ObSelectStmt*>(table_item->ref_query_),
+                                             schema_guard_,
                                              print_params_,
                                              column_list,
                                              is_set_subquery,

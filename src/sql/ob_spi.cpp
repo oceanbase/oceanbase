@@ -1795,6 +1795,7 @@ int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
 
             if (OB_FAIL(resolve_exec_params(parse_result,
                                             session,
+                                            schema_guard,
                                             expr_factory,
                                             *secondary_namespace,
                                             prepare_result,
@@ -1802,6 +1803,7 @@ int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
               LOG_WARN("failed to resolve_exec_params", K(ret));
             } else if (OB_FAIL(resolve_into_params(parse_result,
                                                    session,
+                                                   schema_guard,
                                                    expr_factory,
                                                    *secondary_namespace,
                                                    prepare_result))) { //resolve PL into变量
@@ -6166,6 +6168,7 @@ int ObSPIService::force_refresh_schema(uint64_t tenant_id)
 
 int ObSPIService::resolve_exec_params(const ParseResult &parse_result,
                                       ObSQLSessionInfo &session,
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                       sql::ObRawExprFactory &expr_factory,
                                       pl::ObPLBlockNS &secondary_namespace,
                                       ObSPIPrepareResult &prepare_result,
@@ -6198,6 +6201,7 @@ int ObSPIService::resolve_exec_params(const ParseResult &parse_result,
                                             secondary_namespace,
                                             expr_factory,
                                             &session,
+                                            &schema_guard,
                                             expr));
       }
     }
@@ -6242,6 +6246,7 @@ int ObSPIService::resolve_exec_params(const ParseResult &parse_result,
 
 int ObSPIService::resolve_into_params(const ParseResult &parse_result,
                                       ObSQLSessionInfo &session,
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                       sql::ObRawExprFactory &expr_factory,
                                       pl::ObPLBlockNS &secondary_namespace,
                                       ObSPIPrepareResult &prepare_result)
@@ -6276,6 +6281,7 @@ int ObSPIService::resolve_into_params(const ParseResult &parse_result,
                                                       secondary_namespace,
                                                       expr_factory,
                                                       &session,
+                                                      &schema_guard,
                                                       expr))) {
             LOG_WARN("failed to resolve_local_var", K(ret));
           }

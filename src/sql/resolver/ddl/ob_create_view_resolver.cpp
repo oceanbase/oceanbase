@@ -516,15 +516,16 @@ int ObCreateViewResolver::stmt_print(const ObSelectStmt *stmt,
   if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_ISNULL(params_.query_ctx_)) {
+  } else if (OB_ISNULL(params_.query_ctx_) || OB_ISNULL(params_.schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("query ctx is null", K(ret));
+    LOG_WARN("query ctx or schema checker is null", K(ret));
   } else {
     do {
       pos = 0;
       ObObjPrintParams obj_print_params(params_.query_ctx_->get_timezone_info());
       obj_print_params.is_show_create_view_ = true;
       ObSelectStmtPrinter stmt_printer(buf, buf_len, &pos, stmt,
+                                      params_.schema_checker_->get_schema_guard(),
                                       params_.query_ctx_->get_timezone_info(),
                                       column_list,
                                       is_set_subquery);

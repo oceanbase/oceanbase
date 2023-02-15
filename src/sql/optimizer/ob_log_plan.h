@@ -1021,6 +1021,8 @@ public:
    */
   int plan_tree_traverse(const TraverseOp &operation, void *ctx);
 
+  int inner_plan_tree_traverse(const TraverseOp &operation, void *ctx, AllocGIContext &gi_ctx, ObLocationConstraintContext &location_constraints);
+
   inline void set_signature(uint64_t hash_value) { hash_value_ = hash_value; }
 
   int print_outline(planText &plan, bool is_hints = false) const;

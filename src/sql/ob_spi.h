@@ -757,6 +757,7 @@ private:
 
   static int resolve_exec_params(const ParseResult &parse_result,
                                  ObSQLSessionInfo &session,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                  sql::ObRawExprFactory &expr_factory,
                                  pl::ObPLBlockNS &secondary_namespace,
                                  ObSPIPrepareResult &prepare_result,
@@ -764,6 +765,7 @@ private:
 
   static int resolve_into_params(const ParseResult &parse_result,
                                  ObSQLSessionInfo &session,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                  sql::ObRawExprFactory &expr_factory,
                                  pl::ObPLBlockNS &secondary_namespace,
                                  ObSPIPrepareResult &prepare_result);

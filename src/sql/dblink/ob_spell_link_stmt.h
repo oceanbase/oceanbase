@@ -94,14 +94,15 @@ private:
   };
   typedef common::ObSEArray<LinkSpellNodeStatus, 4, common::ModulePageAllocator, true> StatusArray;
 public:
-  explicit GenLinkStmtPostContext(common::ObIAllocator &alloc)
+  explicit GenLinkStmtPostContext(common::ObIAllocator &alloc, ObSchemaGetterGuard *schema_guard)
   : dblink_id_(OB_INVALID_ID),
     alloc_(alloc),
     tmp_buf_(NULL),
     tmp_buf_len_(0),
     tmp_buf_pos_(0),
     is_inited_(false),
-    gen_unique_alias_()
+    gen_unique_alias_(),
+    schema_guard_(schema_guard)
   {}
 private:
 ObJoinType reverse_join_type(ObJoinType join_type);
@@ -218,6 +219,7 @@ private:
   StatusArray status_array_; //As a stack to save the status of each node in the traversal process
   ObArray<int64_t> nl_param_idxs_; // param_store index for nl_params
   GenUniqueAliasName gen_unique_alias_; // generate unique alias name
+  ObSchemaGetterGuard *schema_guard_;
 private:
   static const common::ObString JOIN_ON_;
   static const common::ObString LEFT_BRACKET_;

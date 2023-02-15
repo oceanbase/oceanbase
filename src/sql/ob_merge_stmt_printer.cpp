@@ -32,7 +32,7 @@ int ObMergeStmtPrinter::do_print()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else {
-    expr_printer_.init(buf_, buf_len_, pos_, print_params_);
+    expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_);
     if (OB_FAIL(print())) {
       LOG_WARN("fail to print stmt", K(ret));
     } 

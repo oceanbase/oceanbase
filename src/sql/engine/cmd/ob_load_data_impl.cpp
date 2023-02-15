@@ -588,13 +588,15 @@ int ObInsertValueGenerator::set_params(ObString &insert_header, ObCollationType 
 }
 
 int ObInsertValueGenerator::init(ObSQLSessionInfo &session,
-                                 ObLoadFileBuffer *data_buffer)
+                                 ObLoadFileBuffer *data_buffer,
+                                 ObSchemaGetterGuard *schema_guard)
 {
   ObObjPrintParams param = session.create_obj_print_params();
   param.cs_type_ = CS_TYPE_UTF8MB4_BIN;
   expr_printer_.init(data_buffer->begin_ptr(),
                      data_buffer->get_buffer_size(),
                      data_buffer->get_pos(),
+                     schema_guard,
                      param);
   data_buffer_ = data_buffer;
   return OB_SUCCESS;
@@ -985,7 +987,8 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
 
   if (OB_ISNULL(handle)
       || OB_ISNULL(handle->data_buffer)
-      || OB_ISNULL(handle->exec_ctx.get_my_session())) {
+      || OB_ISNULL(handle->exec_ctx.get_my_session())
+      || OB_ISNULL(handle->exec_ctx.get_sql_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(handle));
 //  } else if (FALSE_IT(handle->exec_ctx.get_allocator().reuse())) {
@@ -1017,7 +1020,8 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
       return common::OB_SUCCESS;
     };
 
-    if (OB_FAIL(handle->generator.init(*(handle->exec_ctx.get_my_session()), expr_buffer))) {
+    if (OB_FAIL(handle->generator.init(*(handle->exec_ctx.get_my_session()), expr_buffer,
+                                       handle->exec_ctx.get_sql_ctx()->schema_guard_))) {
       LOG_WARN("fail to init buffer", K(ret));
     } else if (OB_FAIL(parse_result.prepare_allocate(handle->generator.get_field_exprs().count()))) {
       LOG_WARN("fail to allocate", K(ret));
@@ -2599,7 +2603,8 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   ObSQLSessionInfo *session = NULL;
   ObTempExpr *calc_tablet_id_expr = nullptr;
 
-  if (OB_ISNULL(session = ctx.get_my_session())) {
+  if (OB_ISNULL(session = ctx.get_my_session()) ||
+      OB_ISNULL(ctx.get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else if (OB_FAIL(data_trimer.init(ctx.get_allocator(), formats))) {
@@ -2717,7 +2722,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       LOG_WARN("allocate memory failed", K(ret));
     } else if (FALSE_IT(expr_buffer = new(buf) ObLoadFileBuffer(
                           ObLoadFileBuffer::MAX_BUFFER_SIZE - sizeof(ObLoadFileBuffer)))) {
-    } else if (OB_FAIL(generator.init(*session, expr_buffer))) {
+    } else if (OB_FAIL(generator.init(*session, expr_buffer, ctx.get_sql_ctx()->schema_guard_))) {
       LOG_WARN("fail to init generator", K(ret));
     } else if (OB_FAIL(generator.set_params(insert_stmt_head_buff, load_args.file_cs_type_))) {
       LOG_WARN("fail to set pararms", K(ret));

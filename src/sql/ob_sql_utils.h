@@ -361,12 +361,14 @@ public:
                                    common::ObString &outline_sql);
 
   static int reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
+                             ObSchemaGetterGuard *schema_guard,
                              ObObjPrintParams print_params = ObObjPrintParams());
   static int print_sql(ObIAllocator &allocator,
                        char *buf,
                        int64_t buf_len,
                        const ObStmt *stmt,
                        ObString &sql,
+                       ObSchemaGetterGuard *schema_guard,
                        ObObjPrintParams print_params);
 
 

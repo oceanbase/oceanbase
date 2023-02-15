@@ -92,7 +92,7 @@ class ObInsertValueGenerator
 {
 public:
   ObInsertValueGenerator() : cs_type_(common::CS_TYPE_INVALID), data_buffer_(NULL) {}
-  int init(ObSQLSessionInfo &session, ObLoadFileBuffer* data_buffer);
+  int init(ObSQLSessionInfo &session, ObLoadFileBuffer* data_buffer, ObSchemaGetterGuard *schema_guard);
   int set_params(common::ObString &insert_header, common::ObCollationType cs_type);
   int fill_field_expr(common::ObIArray<ObCSVGeneralParser::FieldValue> &field_values,
                       const common::ObBitSet<> &string_values);

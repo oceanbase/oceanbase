@@ -53,7 +53,7 @@ int ObSelectStmtPrinter::do_print()
       LOG_WARN("column_list size should be equal select_item size", K(ret),
           K(column_list_->count()), K(select_stmt->get_select_item_size()));
     } else {
-      expr_printer_.init(buf_, buf_len_, pos_, print_params_, param_store_);
+      expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_, param_store_);
       if (stmt_->is_unpivot_select()) {
         if (OB_FAIL(print_unpivot())) {
           LOG_WARN("fail to print_unpivot",
@@ -216,7 +216,7 @@ int ObSelectStmtPrinter::print_unpivot()
                 ObRawExpr *expr = in_pair.exprs_.at(0);
                 int64_t pos = 0;
                 ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
-                                              stmt_->get_query_ctx()->get_timezone_info());
+                                              schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
                 if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
                   LOG_WARN("print expr definition failed", KPC(expr), K(ret));
                 } else {
@@ -228,7 +228,7 @@ int ObSelectStmtPrinter::print_unpivot()
                   ObRawExpr *expr = in_pair.exprs_.at(j);
                   int64_t pos = 0;
                   ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
-                                                stmt_->get_query_ctx()->get_timezone_info());
+                                                schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
                   if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
                     LOG_WARN("print expr definition failed", KPC(expr), K(ret));
                   } else {
@@ -288,7 +288,8 @@ int ObSelectStmtPrinter::print_set_op_stmt()
         std::swap(child_stmts.at(0), child_stmts.at(1));
       }
       bool is_set_subquery = true;
-      ObSelectStmtPrinter stmt_printer(buf_, buf_len_, pos_, child_stmts.at(0), print_params_,
+      ObSelectStmtPrinter stmt_printer(buf_, buf_len_, pos_, child_stmts.at(0),
+                                       schema_guard_, print_params_,
                                        column_list_, is_set_subquery);
       ObString set_op_str = ObString::make_string(
                                 ObSelectStmt::set_operator_str(select_stmt->get_set_op()));

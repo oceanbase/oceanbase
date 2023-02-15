@@ -7190,6 +7190,7 @@ int ObDMLResolver::get_target_sql_for_pivot(const ObIArray<ColumnItem> &column_i
               ObRawExpr *expr = in_pair.exprs_.at(k);
               int64_t pos = 0;
               ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                            schema_checker_->get_schema_guard(),
                                             TZ_INFO(params_.session_info_));
               if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
                 LOG_WARN("print expr definition failed", KPC(expr), K(ret));
@@ -7211,6 +7212,7 @@ int ObDMLResolver::get_target_sql_for_pivot(const ObIArray<ColumnItem> &column_i
               expr_name_length += DISTINCT_LENGTH;
             }
             ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                          schema_checker_->get_schema_guard(),
                                           TZ_INFO(params_.session_info_));
             if (OB_FAIL(expr_printer.do_print(aggr_pair.expr_, T_NONE_SCOPE, true))) {
               LOG_WARN("print expr definition failed", KPC(aggr_pair.expr_), K(ret));
@@ -7226,6 +7228,7 @@ int ObDMLResolver::get_target_sql_for_pivot(const ObIArray<ColumnItem> &column_i
                   ObRawExpr *expr = in_pair.exprs_.at(k);
                   int64_t pos = 0;
                   ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                                schema_checker_->get_schema_guard(),
                                                 TZ_INFO(params_.session_info_));
                   if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
                     LOG_WARN("print expr definition failed", KPC(expr), K(ret));
@@ -7330,6 +7333,7 @@ int ObDMLResolver::format_from_subquery(const ObString &unpivot_alias_name,
     int64_t pos = 0;
     ObSelectStmtPrinter stmt_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
                                      static_cast<ObSelectStmt*>(table_item.ref_query_),
+                                     schema_checker_->get_schema_guard(),
                                      params_.query_ctx_->get_timezone_info(), column_list, is_set_subquery);
     if (OB_FAIL(stmt_printer.do_print())) {
       LOG_WARN("fail to print generated table", K(ret));
@@ -7459,7 +7463,8 @@ int ObDMLResolver::get_target_sql_for_unpivot(const ObIArray<ColumnItem> &column
             } else {
               ObRawExpr *expr = in_pair.exprs_.at(j);
               int64_t pos = 0;
-              ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos, TZ_INFO(params_.session_info_));
+              ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                            schema_checker_->get_schema_guard(), TZ_INFO(params_.session_info_));
               if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
                 LOG_WARN("print expr definition failed", KPC(expr), K(ret));
               } else if (0 == i) {

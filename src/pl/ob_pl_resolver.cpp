@@ -3522,6 +3522,7 @@ int ObPLResolver::resolve_cursor_for_loop(
                                                   body_block->get_namespace(),
                                                   expr_factory_,
                                                   &resolve_ctx_.session_info_,
+                                                  &resolve_ctx_.schema_guard_,
                                                   expr))) {
         LOG_WARN("failed to resolve_local_var", K(ret));
       } else if (OB_FAIL(func.add_expr(expr))) {
@@ -3936,6 +3937,7 @@ int ObPLResolver::build_collection_value_expr(ObIArray<ObObjAccessIdx> &access_i
   OZ (make_var_from_access(access_idxs,
                            expr_factory_,
                            &(resolve_ctx_.session_info_),
+                           &(resolve_ctx_.schema_guard_),
                            current_block_->get_namespace(),
                            expr));
   CK (OB_NOT_NULL(expr));
@@ -4010,6 +4012,7 @@ int ObPLResolver::build_collection_property_expr(const ObString &property_name,
   OZ (make_var_from_access(access_idxs,
                            expr_factory_,
                            &(resolve_ctx_.session_info_),
+                           &(resolve_ctx_.schema_guard_),
                            current_block_->get_namespace(),
                            expr));
   if (OB_SUCC(ret) && expr->is_obj_access_expr()) {
@@ -8678,6 +8681,7 @@ do { \
     OZ (make_var_from_access(self_access_idxs, \
                              expr_factory_, \
                              &resolve_ctx_.session_info_, \
+                             &resolve_ctx_.schema_guard_, \
                              current_block_->get_namespace(), \
                              self_arg), K(obj_access_idents), K(self_access_idxs)); \
     OZ (func.add_obj_access_expr(self_arg)); \
@@ -8951,7 +8955,8 @@ do { \
         // for now, support extend,delete only, need check readonly prop
         OZ (check_variable_accessible(current_block_->get_namespace(), access_idxs, true));
         OZ (make_var_from_access(access_idxs, expr_factory_,
-                     &resolve_ctx_.session_info_, get_current_namespace(), expr, false));
+                     &resolve_ctx_.session_info_, &resolve_ctx_.schema_guard_,
+                     get_current_namespace(), expr, false));
         OZ (func.add_obj_access_expr(expr));
         OZ (func.add_expr(expr));
         CK (OB_NOT_NULL(type = &(access_idxs.at(access_idxs.count() - 2).elem_type_)));
@@ -9501,6 +9506,7 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
     OX (object_expr->add_elem_type(elem_type));
   }
   OZ (object_expr->set_access_names(q_name.access_idents_));
+  OX (object_expr->set_func_name(object_type->get_name()));
   int64_t i = udf_info.is_udf_udt_cons() && udf_info.is_contain_self_param_ ? 1 : 0; // ignore the self param
   for (; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
     OZ (object_expr->add_param_expr(udf_info.ref_expr_->get_param_exprs().at(i)));
@@ -10892,7 +10898,8 @@ int ObPLResolver::resolve_var(ObQualifiedName &q_name, ObPLBlockNS &ns,
                    access_idxs.at(access_idxs.count()-1).var_name_.ptr());
   } else if (OB_FAIL(check_variable_accessible(ns, access_idxs, for_write))) {
     LOG_WARN("failed to check variable read only", K(ret), K(q_name), K(access_idxs));
-  } else if (OB_FAIL(make_var_from_access(access_idxs, expr_factory, session_info, ns, expr, for_write))) {
+  } else if (OB_FAIL(make_var_from_access(access_idxs, expr_factory, session_info,
+                                          &resolve_ctx_.schema_guard_, ns, expr, for_write))) {
     LOG_WARN("failed to make var from access", K(ret), K(q_name), K(access_idxs));
   } else { /*do nothing*/ }
   return ret;
@@ -10902,6 +10909,7 @@ int ObPLResolver::resolve_local_var(const ObString &var_name,
                                     ObPLBlockNS &ns,
                                     ObRawExprFactory &expr_factory,
                                     const ObSQLSessionInfo *session_info,
+                                    ObSchemaGetterGuard *schema_guard,
                                     ObRawExpr *&expr,
                                     bool for_write)
 {
@@ -10938,7 +10946,8 @@ int ObPLResolver::resolve_local_var(const ObString &var_name,
     if (OB_FAIL(access_idxs.push_back(access_idx))) {
       LOG_WARN("failed to resolve symbol", K(var_name), K(ret));
     } else if (OB_FAIL(make_var_from_access(access_idxs, expr_factory,
-                                            session_info, ns, expr, for_write))) {
+                                            session_info, schema_guard,
+                                            ns, expr, for_write))) {
       LOG_WARN("failed to make var from access", K(var_name));
     } else { /*do nothing*/ }
   }
@@ -10949,12 +10958,14 @@ int ObPLResolver::resolve_local_var(const ParseNode &node,
                                     ObPLBlockNS &ns,
                                     ObRawExprFactory &expr_factory,
                                     const ObSQLSessionInfo *session_info,
+                                    ObSchemaGetterGuard *schema_guard,
                                     ObRawExpr *&expr,
                                     bool for_write)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(resolve_local_var(ObString(node.str_len_, node.str_value_),
-                                ns, expr_factory, session_info, expr, for_write))) {
+                                ns, expr_factory, session_info,
+                                schema_guard, expr, for_write))) {
     LOG_WARN("failed to resolve_local_var", K(ret));
   }
   return ret;
@@ -10963,6 +10974,7 @@ int ObPLResolver::resolve_local_var(const ParseNode &node,
 int ObPLResolver::build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
                                              ObRawExprFactory &expr_factory,
                                              const ObSQLSessionInfo *session_info,
+                                             ObSchemaGetterGuard *schema_guard,
                                              bool for_write,
                                              ObString &result)
 {
@@ -10996,7 +11008,7 @@ int ObPLResolver::build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &acc
           MEMSET(expr_str_buf, 0, sizeof(expr_str_buf));
           int64_t pos = 0;
           ObRawExprPrinter expr_printer(
-            expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos, session_info->get_timezone_info());
+            expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos, schema_guard, session_info->get_timezone_info());
           OZ (expr_printer.do_print(access_idxs.at(i).get_sysfunc_, T_NONE_SCOPE, true));
           OZ (buf.append_fmt("%.*s", static_cast<int32_t>(pos), expr_str_buf));
         }
@@ -11024,6 +11036,7 @@ int ObPLResolver::build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &acc
 int ObPLResolver::make_var_from_access(const ObIArray<ObObjAccessIdx> &access_idxs,
                                        ObRawExprFactory &expr_factory,
                                        const ObSQLSessionInfo *session_info,
+                                       ObSchemaGetterGuard *schema_guard,
                                        const ObPLBlockNS &ns,
                                        ObRawExpr *&expr,
                                        bool for_write)
@@ -11073,7 +11086,7 @@ int ObPLResolver::make_var_from_access(const ObIArray<ObObjAccessIdx> &access_id
     CK (OB_NOT_NULL(obj_access_ref));
     OZ (obj_access_ref->add_access_indexs(access_idxs));
 
-    OZ (build_obj_access_func_name(access_idxs, expr_factory, session_info, for_write, func_name));
+    OZ (build_obj_access_func_name(access_idxs, expr_factory, session_info, schema_guard, for_write, func_name));
     OX (obj_access_ref->set_enum_set_values(access_idxs.at(access_idxs.count() - 1).elem_type_.get_type_info()));
     OX (obj_access_ref->set_func_name(func_name));
     OX (obj_access_ref->set_write(for_write));

@@ -6061,7 +6061,12 @@ int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &sche
         && OB_INVALID_ID != expr->get_param_expr(1)->get_udt_id()) {
       uint64_t udt_id = expr->get_param_expr(1)->get_udt_id();
       ObRawExpr *src = expr->get_param_expr(0);
-      if (udt_id == src->get_udt_id()) { //同类型cast，直接返回原始表达式
+      if (ObNullType == src->get_result_type().get_type()) {
+        // do nothing
+      } else if (ObExtendType != src->get_result_type().get_type()) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid cast a normal type to udt", K(ret));
+      } else if (udt_id == src->get_udt_id()) { //同类型cast，直接返回原始表达式
         expr = src;
       } else {
         const share::schema::ObUDTTypeInfo *src_info = NULL;
@@ -6090,11 +6095,11 @@ int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &sche
         }
       }
     }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      OZ (SMART_CALL(check_composite_cast(expr->get_param_expr(i), schema_checker)));
-    }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    OZ (SMART_CALL(check_composite_cast(expr->get_param_expr(i), schema_checker)));
+  }
+
   return ret;
 }
 /*

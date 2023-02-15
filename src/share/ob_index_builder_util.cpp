@@ -706,7 +706,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
         } else if (!expr->is_column_ref_expr()) {
           //real index expr, so generate hidden generated column in data table schema
           if (OB_FAIL(generate_ordinary_generated_column(
-              *expr, arg.sql_mode_, data_schema, gen_col))) {
+              *expr, arg.sql_mode_, data_schema, gen_col, &guard))) {
             LOG_WARN("generate ordinary generated column failed", K(ret));
           } else if (OB_FAIL(ObRawExprUtils::check_generated_column_expr_str(
               gen_col->get_cur_default_value().get_string(), session, data_schema))) {
@@ -876,6 +876,7 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
     const ObSQLMode sql_mode,
     ObTableSchema &data_schema,
     ObColumnSchemaV2 *&gen_col,
+    ObSchemaGetterGuard *schema_guard,
     const uint64_t index_id)
 {
   int ret = OB_SUCCESS;
@@ -883,7 +884,7 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
   SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_def_buf) {
     MEMSET(expr_def_buf, 0, sizeof(expr_def_buf));
     int64_t pos = 0;
-    ObRawExprPrinter expr_printer(expr_def_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos);
+    ObRawExprPrinter expr_printer(expr_def_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos, schema_guard);
     const bool is_invalid = (index_id < OB_APP_MIN_COLUMN_ID || index_id > OB_MIN_SHADOW_COLUMN_ID);
     if (OB_FAIL(expr_printer.do_print(&expr, T_NONE_SCOPE, true))) {
       LOG_WARN("print expr definition failed", K(ret));

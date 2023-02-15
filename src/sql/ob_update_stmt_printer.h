@@ -26,8 +26,9 @@ class ObUpdateStmtPrinter : public ObDMLStmtPrinter {
 public:
   ObUpdateStmtPrinter() {}
   ObUpdateStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObUpdateStmt *stmt,
+                      ObSchemaGetterGuard *schema_guard,
                       common::ObObjPrintParams print_params) :
-    ObDMLStmtPrinter(buf, buf_len, pos, stmt, print_params) {}
+    ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params) {}
   virtual ~ObUpdateStmtPrinter() {}
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObUpdateStmt *stmt);

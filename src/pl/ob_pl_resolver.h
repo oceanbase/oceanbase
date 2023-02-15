@@ -274,12 +274,14 @@ public:
                                ObPLBlockNS &ns,
                                ObRawExprFactory &expr_factory,
                                const ObSQLSessionInfo *session_info,
+                               ObSchemaGetterGuard *schema_guard,
                                ObRawExpr *&expr,
                                bool for_write = false);
   static int resolve_local_var(const ObString &var_name,
                                ObPLBlockNS &ns,
                                ObRawExprFactory &expr_factory,
                                const ObSQLSessionInfo *session_info,
+                               ObSchemaGetterGuard *schema_guard,
                                ObRawExpr *&expr,
                                bool for_write = false);
   static int resolve_sp_integer_constraint(ObPLDataType &pls_type);
@@ -795,12 +797,14 @@ private:
   int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
                                  ObRawExprFactory &expr_factory,
                                  const sql::ObSQLSessionInfo *session_info,
+                                 ObSchemaGetterGuard *schema_guard,
                                  bool for_write,
                                  ObString &result);
   static
   int make_var_from_access(const ObIArray<ObObjAccessIdx> &access_idxs,
                            ObRawExprFactory &expr_factory,
                            const sql::ObSQLSessionInfo *session_info,
+                           ObSchemaGetterGuard *schema_guard,
                            const ObPLBlockNS &ns,
                            ObRawExpr *&expr,
                            bool for_write = false);

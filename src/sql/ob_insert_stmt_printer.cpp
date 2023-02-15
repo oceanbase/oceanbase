@@ -37,7 +37,7 @@ int ObInsertStmtPrinter::do_print()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else {
-    expr_printer_.init(buf_, buf_len_, pos_, print_params_);
+    expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_);
     if (OB_FAIL(print())) {
       LOG_WARN("fail to print stmt", K(ret));
     }
@@ -171,7 +171,8 @@ int ObInsertStmtPrinter::print_values()
       } else {
         ObSelectStmtPrinter printer(
               buf_, buf_len_, pos_,
-              static_cast<const ObSelectStmt*>(sub_select_stmt), print_params_, NULL, false);
+              static_cast<const ObSelectStmt*>(sub_select_stmt),
+              schema_guard_, print_params_, NULL, false);
         if (OB_FAIL(printer.do_print())) {
           LOG_WARN("failed to print sub select printer", K(ret));
         }
@@ -231,7 +232,7 @@ int ObInsertStmtPrinter::print_subquery(const ObInsertStmt *insert_stmt)
     } else {
       ObSelectStmtPrinter printer(buf_, buf_len_, pos_,
                                   static_cast<const ObSelectStmt*>(sub_select_stmt),
-                                  print_params_, NULL, false, false, true);
+                                  schema_guard_, print_params_, NULL, false, false, true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("failed to print sub select printer", K(ret));
       }
