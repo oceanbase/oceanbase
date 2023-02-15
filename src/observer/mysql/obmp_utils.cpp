@@ -151,7 +151,7 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
                                   (oceanbase::sql::SessionSyncInfoType)(info_type),
                                   buf, (int64_t)info_len + pos0, pos0))) {
         LOG_WARN("failed to update session sync info",
-                 K(ret), K(info_type), K(succ_info_types), K(pos), K(info_len), K(info_len+pos));
+                 K(ret), K(info_type), K(sess.get_sessid()), K(succ_info_types), K(pos), K(info_len), K(info_len+pos));
       } else {
         pos += info_len;
       }

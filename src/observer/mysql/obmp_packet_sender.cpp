@@ -659,9 +659,14 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
   if (OB_SUCC(ret) && OB_FAIL(alloc_ezbuf())) {
     LOG_WARN("ez_buf_ alloc failed", K(ret));
   }
-  if (OB_SUCC(ret) && conn_->is_support_sessinfo_sync() && proto20_context_.is_proto20_used_) {
+  // calc txn free route info if multi-stmt has stop execution
+  if (OB_SUCC(ret)
+      && !ok_param.has_more_result_
+      && conn_->is_support_sessinfo_sync()
+      && proto20_context_.is_proto20_used_) {
+    LOG_DEBUG("calc txn free route info", K(session));
     if (OB_FAIL(session.calc_txn_free_route())) {
-      SERVER_LOG(WARN, "fail calculate txn free route info", K(ret));
+      SERVER_LOG(WARN, "fail calculate txn free route info", K(ret), K(session.get_sessid()));
     }
   }
   if (OB_SUCC(ret)) {
