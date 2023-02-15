@@ -919,6 +919,7 @@ public:
     return is_offline_ls_task() && is_sys_ls_part_trans();
   }
   bool is_not_served_trans() const { return TASK_TYPE_NOT_SERVED_TRANS == type_; }
+  bool is_sys_ls_dml_trans() const { return is_dml_trans() && is_sys_ls_part_trans(); }
 
   void set_task_info(const TenantLSID &tls_id, const char *info);
 
@@ -1030,7 +1031,6 @@ public:
   bool is_served() const { return SERVED == serve_state_; }
   bool is_single_ls_trans() const { return transaction::TransType::SP_TRANS == trans_type_; }
   bool is_dist_trans() const { return transaction::TransType::DIST_TRANS == trans_type_; }
-  void is_part_trans_sort_finish() const { sorted_redo_list_.is_dml_stmt_iter_end(); }
   bool is_part_dispatch_finish() const { return sorted_redo_list_.is_dispatch_finish(); }
   void inc_sorted_br() { ATOMIC_INC(&output_br_count_by_turn_); }
   // get and reset sorted br count

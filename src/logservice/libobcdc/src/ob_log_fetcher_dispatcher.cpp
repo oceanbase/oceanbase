@@ -155,12 +155,28 @@ int ObLogFetcherDispatcher::dispatch_ddl_trans_task_(PartTransTask &task, volati
 {
   int ret = OB_SUCCESS;
 
+  if (OB_FAIL(dispatch_to_sys_ls_handler_(task, stop_flag))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("sys_ls_handler push fail", KR(ret), K(task));
+    }
+  } else {
+    // succ
+  }
+
+  return ret;
+}
+
+// dispatch sys_ls task into sys_ls_handler.
+// Including following trans_type: DDL/SYS_LS_HB/SYS_LS_OFFLINE
+int ObLogFetcherDispatcher::dispatch_to_sys_ls_handler_(PartTransTask &task, volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+
   if (OB_ISNULL(sys_ls_handler_)) {
     ret = OB_INVALID_ERROR;
     LOG_ERROR("invalid sys_ls_handler", KR(ret), K(sys_ls_handler_));
   } else {
-    // DDL transaction push into DDLHandler
-    LOG_DEBUG("dispatch ddl_trans to sys_ls_handler", K(task));
+    LOG_DEBUG("dispatch sys_ls_trans to sys_ls_handler", K(task));
     RETRY_FUNC(stop_flag, *sys_ls_handler_, push, &task, DATA_OP_TIMEOUT);
   }
 
@@ -189,12 +205,10 @@ int ObLogFetcherDispatcher::dispatch_ls_heartbeat_(PartTransTask &task, volatile
 
   // Heartbeat of the DDL partition is distributed to the DDL processor
   if (task.is_sys_ls_heartbeat()) {
-    if (OB_ISNULL(sys_ls_handler_)) {
-      ret = OB_INVALID_ERROR;
-      LOG_ERROR("invalid sys_ls_handler", KR(ret), K(sys_ls_handler_));
-    } else {
-      // Push into DDL Handler
-      RETRY_FUNC(stop_flag, *sys_ls_handler_, push, &task, DATA_OP_TIMEOUT);
+    if (OB_FAIL(dispatch_to_sys_ls_handler_(task, stop_flag))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("dispatch sys_ls_heartbeat task into sys_ls_handler failed", KR(ret), K(task));
+      }
     }
   } else {
     ret = dispatch_to_committer_(task, stop_flag);
@@ -210,12 +224,10 @@ int ObLogFetcherDispatcher::dispatch_offline_ls_task_(PartTransTask &task,
 
   // DDL partition's offline tasks are distributed to DDL processors
   if (task.is_sys_ls_offline_task()) {
-    if (OB_ISNULL(sys_ls_handler_)) {
-      ret = OB_INVALID_ERROR;
-      LOG_ERROR("invalid sys_ls_handler", KR(ret), K(sys_ls_handler_));
-    } else {
-      // Push into DDL Handler
-      RETRY_FUNC(stop_flag, *sys_ls_handler_, push, &task, DATA_OP_TIMEOUT);
+    if (OB_FAIL(dispatch_to_sys_ls_handler_(task, stop_flag))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("dispatch sys_ls_offline task into sys_ls_handler failed", KR(ret), K(task));
+      }
     }
   } else {
     ret = dispatch_to_committer_(task, stop_flag);
@@ -255,13 +267,11 @@ int ObLogFetcherDispatcher::dispatch_ls_table_op_(PartTransTask &task, volatile 
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(sys_ls_handler_)) {
-    ret = OB_INVALID_ERROR;
-    LOG_ERROR("invalid sys_ls_handler", KR(ret), K(sys_ls_handler_));
-  } else {
-    // DDL transaction push into DDLHandler
-    LOG_DEBUG("dispatch ls_table_op to sys_ls_handler", K(task));
-    RETRY_FUNC(stop_flag, *sys_ls_handler_, push, &task, DATA_OP_TIMEOUT);
+  // ls table op task expected only in sys_ls.
+  if (OB_FAIL(dispatch_to_sys_ls_handler_(task, stop_flag))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("dispatch sys_ls_heartbeat task into sys_ls_handler failed", KR(ret), K(task));
+    }
   }
 
   return ret;

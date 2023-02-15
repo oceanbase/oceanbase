@@ -150,8 +150,8 @@ int ObLogPartTransParser::parse(ObLogEntryTask &task, volatile bool &stop_flag)
         ret = OB_INVALID_DATA;
         // Calibrate data for completeness
       } else if (OB_UNLIKELY(! redo_node->check_data_integrity())) {
-        LOG_ERROR("redo data is not valid", KPC(redo_node));
         ret = OB_INVALID_DATA;
+        LOG_ERROR("redo data is not valid", KR(ret), KPC(redo_node));
       } else if (OB_FAIL(parse_stmts_(tenant, *redo_node,
               task, *part_trans_task, row_index, stop_flag))) {
         LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), KPC(redo_node), K(task), K(row_index));

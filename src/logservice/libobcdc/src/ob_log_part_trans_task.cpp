@@ -3004,6 +3004,9 @@ int PartTransTask::commit(
 
       if (! tls_id_.is_sys_log_stream()) {
         set_ref_cnt(sorted_redo_list_.get_node_number() + 1);
+      } else if (is_sys_ls_dml_trans()) {
+        // set ref for DML in SYS_LS
+        set_ref_cnt(1);
       }
     }
   }
@@ -3023,6 +3026,8 @@ int PartTransTask::try_to_set_data_ready_status()
     ret = OB_STATE_NOT_MATCH;
   } else if (is_data_ready()) {
     // do nothing
+  } else if (is_sys_ls_dml_trans()) {
+    set_data_ready();
   } else if (is_contain_empty_redo_log()) {
     set_data_ready();
   } else {
@@ -3507,7 +3512,11 @@ int PartTransTask::wait_formatted(const int64_t timeout, ObCond &cond)
 void PartTransTask::set_data_ready()
 {
   LOG_DEBUG("[STAT] [TRANS_TASK] SET_DATA_READY", K_(is_data_ready), "task", *this);
-  sorted_redo_list_.init_iterator();
+  if (is_sys_ls_dml_trans()) {
+    sorted_redo_list_.mark_sys_ls_dml_trans_dispatched();
+  } else {
+    sorted_redo_list_.init_iterator();
+  }
   (void)ATOMIC_SET(&is_data_ready_, true);
   wait_data_ready_cond_.signal();
 }

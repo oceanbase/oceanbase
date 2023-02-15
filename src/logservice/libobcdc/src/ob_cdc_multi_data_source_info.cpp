@@ -107,18 +107,16 @@ int64_t MultiDataSourceInfo::to_string(char *buf, const int64_t buf_len) const
 
   if (NULL != buf && buf_len > 0) {
     if (has_ls_table_op_) {
-      (void)common::databuff_printf(buf, buf_len, pos, "ls_table_op: ");
-      pos += ls_attr_.to_string(buf, buf_len);
+      (void)common::databuff_printf(buf, buf_len, pos, "{ls_table_op: %s", to_cstring(ls_attr_));
     } else {
       (void)common::databuff_printf(buf, buf_len, pos, "has_ls_table_op: false");
     }
 
     (void)common::databuff_printf(buf, buf_len, pos, ", is_ddl_trans: %d", has_ddl_trans_op_);
     if (has_tablet_change_op()) {
-      (void)common::databuff_printf(buf, buf_len, pos, ", tablet_change_info: ");
-      pos += tablet_change_info_arr_.to_string(buf, buf_len);
+      (void)common::databuff_printf(buf, buf_len, pos, ", tablet_change_info: %s}", to_cstring(tablet_change_info_arr_));
     } else {
-      (void)common::databuff_printf(buf, buf_len, pos, ", tablet_change_info: None");
+      (void)common::databuff_printf(buf, buf_len, pos, ", tablet_change_info: None}");
     }
   }
 
