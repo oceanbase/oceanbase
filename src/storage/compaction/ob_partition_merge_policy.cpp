@@ -507,11 +507,11 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
 
   if (OB_SUCC(ret)) {
     result.suggest_merge_type_ = param.merge_type_;
-    result.version_range_.snapshot_version_ = tablet.get_snapshot_version();
     if (OB_FAIL(refine_minor_merge_result(minor_compact_trigger, result))) {
       if (OB_NO_NEED_MERGE != ret) {
         LOG_WARN("failed to refine_minor_merge_result", K(ret));
       }
+    } else if (FALSE_IT(result.version_range_.snapshot_version_ = tablet.get_snapshot_version())) {
     } else {
       if (OB_FAIL(deal_with_minor_result(param.merge_type_, ls, tablet, result))) {
         LOG_WARN("Failed to deal with minor merge result", K(ret), K(param), K(result));
