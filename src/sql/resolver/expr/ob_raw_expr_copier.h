@@ -197,7 +197,7 @@ int ObRawExprCopier::copy_on_replace(const common::ObIArray<T *> &from_exprs,
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(to_exprs.assign(tmp_arr))) {
-    SQL_RESV_LOG(WARN, "failed to assgin replaced results", K(ret));
+    SQL_RESV_LOG(WARN, "failed to assign replaced results", K(ret));
   }
   return ret;
 }
