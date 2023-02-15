@@ -751,10 +751,6 @@ int ObTabletDDLKvMgr::create_empty_ddl_sstable(ObTableHandleV2 &table_handle)
 {
   int ret = OB_SUCCESS;
   table_handle.reset();
-  ObArenaAllocator arena;
-  ObSSTableIndexBuilder *sstable_index_builder = nullptr;
-  ObIndexBlockRebuilder *index_block_rebuilder = nullptr;
-  const ObSSTableIndexBuilder::ObSpaceOptimizationMode mode = ObSSTableIndexBuilder::DISABLE;
   ObTabletDDLParam ddl_param;
   if (OB_FAIL(get_ddl_param(ddl_param))) {
     LOG_WARN("get ddl param failed", K(ret));
@@ -762,24 +758,12 @@ int ObTabletDDLKvMgr::create_empty_ddl_sstable(ObTableHandleV2 &table_handle)
     ddl_param.table_key_.table_type_ = ObITable::DDL_DUMP_SSTABLE;
     ddl_param.table_key_.scn_range_.start_scn_ = SCN::scn_dec(start_scn_);
     ddl_param.table_key_.scn_range_.end_scn_ = start_scn_;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObTabletDDLUtil::prepare_index_builder(ddl_param, arena, mode, nullptr/*first_ddl_sstable*/,
-          sstable_index_builder, index_block_rebuilder))) {
-    LOG_WARN("prepare sstable index builder failed", K(ret), K(ddl_param));
-  } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(sstable_index_builder, ddl_param, nullptr/*first_ddl_sstable*/, table_handle))) {
-    LOG_WARN("create ddl sstable failed", K(ret), K(ddl_param));
-  }
-
-  if (nullptr != index_block_rebuilder) {
-    index_block_rebuilder->~ObIndexBlockRebuilder();
-    arena.free(index_block_rebuilder);
-    index_block_rebuilder = nullptr;
-  }
-  if (nullptr != sstable_index_builder) {
-    sstable_index_builder->~ObSSTableIndexBuilder();
-    arena.free(sstable_index_builder);
-    sstable_index_builder = nullptr;
+    ObArray<const ObDataMacroBlockMeta *> empty_meta_array;
+    if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(ddl_param, empty_meta_array, nullptr/*first_ddl_sstable*/, table_handle))) {
+      LOG_WARN("create empty ddl sstable failed", K(ret));
+    } else if (OB_FAIL(ObTabletDDLUtil::update_ddl_table_store(ddl_param, table_handle))) {
+      LOG_WARN("update ddl table store failed", K(ret), K(ddl_param), K(table_handle));
+    }
   }
   return ret;
 }
