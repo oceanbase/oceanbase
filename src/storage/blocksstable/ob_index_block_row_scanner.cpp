@@ -296,7 +296,7 @@ int ObIndexBlockRowScanner::open(
     const MacroBlockId &macro_id,
     const ObMicroBlockData &idx_block_data,
     const ObDatumRowkey &rowkey,
-    const int16_t range_idx)
+    const int64_t range_idx)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -324,7 +324,7 @@ int ObIndexBlockRowScanner::open(
     const MacroBlockId &macro_id,
     const ObMicroBlockData &idx_block_data,
     const ObDatumRange &range,
-    const int16_t range_idx,
+    const int64_t range_idx,
     const bool is_left_border,
     const bool is_right_border)
 {

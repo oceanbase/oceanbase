@@ -100,12 +100,12 @@ public:
       const MacroBlockId &macro_id,
       const ObMicroBlockData &idx_block_data,
       const ObDatumRowkey &rowkey,
-      const int16_t range_idx = 0);
+      const int64_t range_idx = 0);
   int open(
       const MacroBlockId &macro_id,
       const ObMicroBlockData &idx_block_data,
       const ObDatumRange &range,
-      const int16_t range_idx,
+      const int64_t range_idx,
       const bool is_left_border,
       const bool is_right_border);
   int get_next(ObMicroIndexInfo &idx_block_row);
@@ -155,7 +155,7 @@ private:
   int64_t start_;               // inclusive
   int64_t end_;                 // inclusive
   int64_t step_;
-  int16_t range_idx_;
+  int64_t range_idx_;
   int64_t nested_offset_;
   IndexFormat index_format_;
   bool is_get_;
