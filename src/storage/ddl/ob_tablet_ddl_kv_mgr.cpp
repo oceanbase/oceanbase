@@ -667,8 +667,12 @@ int ObTabletDDLKvMgr::unregister_from_tablet(const SCN &ddl_start_scn, ObDDLKvMg
 int ObTabletDDLKvMgr::rdlock(const int64_t timeout_us, uint32_t &tid)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(lock_.rdlock(ObLatchIds::TABLET_DDL_KV_MGR_LOCK, timeout_us))) {
+  const int64_t abs_timeout_us = timeout_us + ObTimeUtility::current_time();
+  if (OB_SUCC(lock_.rdlock(ObLatchIds::TABLET_DDL_KV_MGR_LOCK, abs_timeout_us))) {
     tid = static_cast<uint32_t>(GETTID());
+  }
+  if (OB_TIMEOUT == ret) {
+    ret = OB_EAGAIN;
   }
   return ret;
 }
@@ -676,8 +680,12 @@ int ObTabletDDLKvMgr::rdlock(const int64_t timeout_us, uint32_t &tid)
 int ObTabletDDLKvMgr::wrlock(const int64_t timeout_us, uint32_t &tid)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(lock_.wrlock(ObLatchIds::TABLET_DDL_KV_MGR_LOCK, timeout_us))) {
+  const int64_t abs_timeout_us = timeout_us + ObTimeUtility::current_time();
+  if (OB_SUCC(lock_.wrlock(ObLatchIds::TABLET_DDL_KV_MGR_LOCK, abs_timeout_us))) {
     tid = static_cast<uint32_t>(GETTID());
+  }
+  if (OB_TIMEOUT == ret) {
+    ret = OB_EAGAIN;
   }
   return ret;
 }
