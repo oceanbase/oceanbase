@@ -81,16 +81,20 @@ private:
   /// dispatch by priority with budget
   /// @retval OB_SUCCESS     cur_batch dispatch finish
   /// @retval OB_NEED_RETRY  need retry (cause current redo memory budget used up)
-  int dispatch_part_redo_with_budget_(TransCtx &trans, PartBudgetArray &part_task_with_budget_array, volatile bool &stop_flag);
+  int dispatch_part_redo_with_budget_(
+      TransCtx &trans,
+      PartBudgetArray &part_task_with_budget_array,
+      volatile bool &stop_flag);
   /// try dispatch one redo of part_trans_task
   /// note: try next part directly if is_part_dispatch_finish = true, avoid use part_trans_task
   ///       because part_trans_task may be recycled anytime after dispatch.
   ///
-  int try_get_and_dispatch_single_redo_(PartTransTask &part_trans_task,
-                                bool &has_memory_to_dispatch_redo,
-                                bool &is_part_dispatch_finish,
-                                volatile bool &stop_flag,
-                                PartTransDispatchBudget *part_budget = NULL);
+  int try_get_and_dispatch_single_redo_(
+      PartTransTask &part_trans_task,
+      bool &has_memory_to_dispatch_redo,
+      bool &is_part_dispatch_finish,
+      volatile bool &stop_flag,
+      PartTransDispatchBudget *part_budget = NULL);
   // check redo can dispatch or not
   int check_redo_can_dispatch_(bool &can_dispatch, PartTransDispatchBudget *part_budget = NULL);
   // dispatch redo, part_budget should not be null if dispatch by turn

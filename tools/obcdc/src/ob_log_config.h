@@ -320,7 +320,7 @@ public:
   T_DEF_BOOL(enable_force_start_mode, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
   // Upper limit of progress difference between partitions, in seconds
-  T_DEF_INT_INFT(progress_limit_sec_for_dml, OB_CLUSTER_PARAMETER, 3, 1, "dml progress limit in seconds");
+  T_DEF_INT_INFT(progress_limit_sec_for_dml, OB_CLUSTER_PARAMETER, 10, 1, "dml progress limit in seconds");
 
   // The Sys Tenant is not filtered by default
   T_DEF_BOOL(enable_filter_sys_tenant, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
@@ -418,10 +418,11 @@ public:
   // Not on by default (partition-by-partition output)
   T_DEF_BOOL(enable_output_trans_order_by_sql_operation, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   // redo dispatcher memory limit
-  DEF_CAP(redo_dispatcher_memory_limit, OB_CLUSTER_PARAMETER, "1G", "[128M,]", "redo dispatcher memory limit");
+  DEF_CAP(redo_dispatcher_memory_limit, OB_CLUSTER_PARAMETER, "256M", "[128M,]", "redo dispatcher memory limit");
   // redo diepatcher memory limit ratio for output br by sql operation(compare with redo_dispatcher_memory_limit)
   T_DEF_INT_INFT(redo_dispatched_memory_limit_exceed_ratio, OB_CLUSTER_PARAMETER, 2, 1,
       "redo_dispatcher_memory_limit ratio for output by sql operation order");
+  DEF_CAP(extra_redo_dispatch_memory_size, OB_CLUSTER_PARAMETER, "4M", "[0, 512M]", "extra redo dispatcher memory for data skew participant");
   // sorter thread num
   T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
   // sorter thread

@@ -307,6 +307,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
     const int64_t participant_count = trans_ctx->get_ready_participant_count();
     PartTransTask *participant_list = trans_ctx->get_participant_objs();
     const bool is_dml_trans = participant_list->is_dml_trans();
+    const bool is_ddl_trans = participant_list->is_ddl_trans();
     const int64_t local_schema_version = participant_list->get_local_schema_version();
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObLogTenantGuard guard;
@@ -350,16 +351,24 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
             // succ
           }
         } // while
-      } else if (OB_FAIL(push_task_into_committer_(participant_list, participant_count, stop_flag, tenant))) {
-        if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("push_task_into_committer_ fail", KR(ret), K(tenant_id), K(participant_list),
-              K(participant_count), K(tenant));
+      } else if (is_ddl_trans) {
+        trans_ctx->set_trans_redo_dispatched(); // ddl need not dispatch redo.
+
+        if (OB_FAIL(push_task_into_committer_(participant_list, participant_count, stop_flag, tenant))) {
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("push_task_into_committer_ fail", KR(ret), K(tenant_id), K(participant_list),
+                K(participant_count), K(tenant));
+          }
+        } else {
+          monitor.mark_and_get_cost("ddl-done", true);
+          // No further operation is possible after that and may be recalled at any time
         }
       } else {
-        monitor.mark_and_get_cost("ddl-done", true);
-        // No further operation is possible after that and may be recalled at any time
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected trans type handled by sequencer", KR(ret), KPC(tenant), KPC(trans_ctx), KPC(participant_list));
       }
     }
+
     LOG_DEBUG("handle_to_be_sequenced_trans_ end", KR(ret), KPC(trans_ctx));
   }
 

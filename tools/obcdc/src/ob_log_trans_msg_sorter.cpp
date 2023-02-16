@@ -64,11 +64,12 @@ ObLogTransMsgSorter::~ObLogTransMsgSorter()
   destroy();
 }
 
-int ObLogTransMsgSorter::init(const bool enable_sort_by_seq_no,
-                        const int64_t thread_num,
-                        const int64_t task_limit,
-                        IObLogTransStatMgr &trans_stat_mgr,
-                        IObLogErrHandler *err_handler)
+int ObLogTransMsgSorter::init(
+    const bool enable_sort_by_seq_no,
+    const int64_t thread_num,
+    const int64_t task_limit,
+    IObLogTransStatMgr &trans_stat_mgr,
+    IObLogErrHandler *err_handler)
 {
   int ret = OB_SUCCESS;
 

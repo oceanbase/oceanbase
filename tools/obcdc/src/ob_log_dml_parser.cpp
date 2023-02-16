@@ -137,7 +137,7 @@ int ObLogDmlParser::push(ObLogEntryTask &task, const int64_t timeout)
       }
     } else {
       ATOMIC_INC(&log_entry_task_count_);
-      LOG_DEBUG("push task into DML parser", K(task));
+      LOG_DEBUG("push task into DML parser", KP(&task), K(task));
     }
   }
 
@@ -171,7 +171,7 @@ int ObLogDmlParser::handle(void *data,
     LOG_ERROR("part_trans_task is NULL", K(part_trans_task), KPC(task));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    LOG_DEBUG("DML parser handle task", K(thread_index), KPC(task));
+    LOG_DEBUG("DML parser handle task", K(thread_index), KP(task), KPC(task));
     const uint64_t tenant_id = part_trans_task->get_tenant_id();
     share::ObWorker::CompatMode compat_mode = share::ObWorker::CompatMode::INVALID;
 

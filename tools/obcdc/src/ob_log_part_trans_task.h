@@ -955,6 +955,11 @@ public:
   /// @retval OB_NEED_RETRY   the redo node to find stmt is not formatted
   int next_dml_stmt(DmlStmtTask *&dml_stmt_task);
   RollbackList& get_rollback_list() { return rollback_list_; }
+  // is dispatched redo all sorted:
+  OB_INLINE bool is_dispatched_redo_be_sorted() const
+  {
+    return ! sorted_redo_list_.has_dispatched_but_unsorted_redo();
+  }
 
   TO_STRING_KV("state", serve_state_,
       "type", print_task_type(type_),

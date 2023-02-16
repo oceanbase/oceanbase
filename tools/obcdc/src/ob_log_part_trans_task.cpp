@@ -3588,7 +3588,10 @@ int PartTransTask::next_dml_stmt(DmlStmtTask *&dml_stmt_task)
   } else if (OB_ISNULL(dml_stmt_task = static_cast<DmlStmtTask*>(dml_task))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("cast ObLink to DmlStmtTask failed", KR(ret), KP(dml_task));
-  } else { /* succ */ }
+  } else {
+    sorted_redo_list_.set_sorted_row_seq_no(dml_stmt_task->get_row_sql_no());
+    /* succ */
+  }
 
   return ret;
 }

@@ -97,6 +97,7 @@ TransCtx::TransCtx() :
     committed_br_count_(0),
     valid_part_trans_task_count_(0),
     revertable_participant_count_(0),
+    is_trans_redo_dispatched_(false),
     is_trans_sorted_(false),
     br_out_queue_(),
     allocator_(ObModIds::OB_LOG_TRANS_CTX, PAGE_SIZE),
@@ -129,6 +130,7 @@ void TransCtx::reset()
   committed_br_count_ = 0;
   valid_part_trans_task_count_ = 0;
   revertable_participant_count_ = 0;
+  is_trans_redo_dispatched_ = false;
   is_trans_sorted_ = false;
 
   allocator_.reset();
@@ -706,6 +708,9 @@ int TransCtx::revert_participants()
     _TCTX_DSTAT("[REVERT_PARTICIPANTS] TRANS_ID=%s PARTICIPANTS=%ld SEQ=%ld",
         to_cstring(trans_id_), participant_count_, seq_);
 
+    // wait redo dispatched cause dispatch_redo and sort&commit br is async steps and dispatched
+    // sorted state may early than dispatched state.
+    wait_trans_redo_dispatched_();
     // Note: All participants are recalled by external modules
     ready_participant_objs_ = NULL;
     ready_participant_count_ = 0;
@@ -838,6 +843,19 @@ int TransCtx::pop_br_for_committer(ObLogBR *&br)
   return ret;
 }
 
+void TransCtx::wait_trans_redo_dispatched_()
+{
+  static const int64_t PRINT_INTERVAL = 5 * _SEC_;
+  static const int64_t WAIT_SLEEP_TIME = 10 * _MSEC_;
+  while (! ATOMIC_LOAD(&is_trans_redo_dispatched_)) {
+    usleep(WAIT_SLEEP_TIME);
+    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+      LOG_INFO("waiting redo dispatch finish...", K_(trans_id),
+          K_(participant_count), K_(ready_participant_count), K_(revertable_participant_count),
+          K_(total_br_count), K_(committed_br_count), K_(is_trans_sorted));
+    }
+  }
+}
 
 } // namespace liboblog
 } // namespace oceanbase

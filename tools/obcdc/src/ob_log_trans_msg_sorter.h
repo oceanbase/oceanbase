@@ -60,11 +60,12 @@ public:
   void mark_stop_flag();
 
 public:
-  int init(const bool enable_sort_by_seq_no,
-           const int64_t thread_num,
-           const int64_t task_limit,
-           IObLogTransStatMgr &trans_stat_mgr,
-           IObLogErrHandler *err_handler);
+  int init(
+      const bool enable_sort_by_seq_no,
+      const int64_t thread_num,
+      const int64_t task_limit,
+      IObLogTransStatMgr &trans_stat_mgr,
+      IObLogErrHandler *err_handler);
   void destroy();
 
 private:

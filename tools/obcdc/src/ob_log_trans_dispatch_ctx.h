@@ -101,8 +101,8 @@ public:
       const TransCtx &trans);
   PartBudgetArray& get_normal_priority_part_budgets() { return normal_priority_part_budget_arr_; }
   PartBudgetArray& get_high_priority_part_budgets() { return high_priority_part_budget_arr_; }
-  void inc_dispatched_part() { dispatched_part_count_++; }
-  bool is_trans_dispatched() const { return dispatched_part_count_ == total_part_count_; }
+  void inc_dispatched_part() { ATOMIC_INC(&dispatched_part_count_); }
+  bool is_trans_dispatched() const { return ATOMIC_LOAD(&dispatched_part_count_) == total_part_count_; }
 public:
   TO_STRING_KV(K_(trans_id), K_(total_part_count), K_(dispatched_part_count),
     K_(normal_priority_part_budget_arr), K_(high_priority_part_budget_arr));
