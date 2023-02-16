@@ -346,11 +346,11 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     optimizer_tracer_.reset();
     sql_plan_manager_ = NULL;
     destroy_session_plan_mgr();
-    txn_free_route_ctx_.reset();
     expect_group_id_ = OB_INVALID_ID;
     group_id_not_expected_ = false;
     //call at last time
     ObBasicSessionInfo::reset(skip_sys_var);
+    txn_free_route_ctx_.reset();
   }
 }
 

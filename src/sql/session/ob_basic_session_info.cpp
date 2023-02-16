@@ -3534,6 +3534,8 @@ int ObBasicSessionInfo::replace_new_session_label(uint64_t policy_id, const ObLa
 int64_t ObBasicSessionInfo::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
+  bool ac = false;
+  get_autocommit(ac),
   J_OBJ_START();
   J_KV(KP(this), "id", sessid_,
        N_TENANT, get_tenant_name(), "tenant_id", tenant_id_,
@@ -3542,6 +3544,7 @@ int64_t ObBasicSessionInfo::to_string(char *buf, const int64_t buf_len) const
        N_USER, (lib::is_oracle_mode() ? get_user_name() : get_user_at_host()),
        "consistency_level", consistency_level_,
        "session_state", thread_data_.state_,
+       "autocommit", ac,
        "tx", OB_P(tx_desc_));
   J_OBJ_END();
   return pos;
