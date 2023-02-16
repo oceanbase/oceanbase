@@ -6601,6 +6601,29 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
   OZ (helper_.create_block(ObString("raise_exception"), get_func(), raise_exception));
   OZ (set_current(raise_exception));
   if (OB_SUCC(ret)) {
+    /*
+     * 关闭从当前位置开始到目的exception位置所有For Loop Cursor
+     * 因为此时已经在exception过程中，只尝试关闭，不再check_success
+     */
+    int64_t dest_level = get_current_exception() != NULL ? get_current_exception()->level_ : 0;
+    if (NULL != get_current_loop()
+        && get_current_loop()->level_ >= dest_level) {
+      for (int64_t i = get_loop_count(); OB_SUCC(ret) && i > 0; --i) {
+        if (get_loops()[i - 1].level_ >= dest_level
+            && NULL != get_loops()[i - 1].cursor_) {
+          LOG_INFO("close ForLoop Cursor while raising exception",
+                   K(*get_loops()[i - 1].cursor_->get_cursor()),
+                   K(ret));
+          OZ (generate_close(*get_loops()[i - 1].cursor_,
+                             get_loops()[i - 1].cursor_->get_cursor()->get_package_id(),
+                             get_loops()[i - 1].cursor_->get_cursor()->get_routine_id(),
+                             get_loops()[i - 1].cursor_->get_index(),
+                             false,/*cannot ignoe as must have been opened*/
+                             false/*此时已经在exception里，如果出错不能再抛exception了*/));
+        }
+      }
+    }
+
     ObLLVMValue ret_value;
     ObLLVMValue exception_result;
     if (OB_ISNULL(get_current_exception())) {
@@ -6617,28 +6640,6 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
       OZ (helper_.create_unreachable());
 #endif
     } else {
-      /*
-       * 关闭从当前位置开始到目的exception位置所有For Loop Cursor
-       * 因为此时已经在exception过程中，只尝试关闭，不再check_success
-       */
-      if (NULL != get_current_loop()
-          && get_current_loop()->level_ >= get_current_exception()->level_) {
-        for (int64_t i = get_loop_count(); OB_SUCC(ret) && i > 0; --i) {
-          if (get_loops()[i - 1].level_ >= get_current_exception()->level_
-              && NULL != get_loops()[i - 1].cursor_) {
-            LOG_INFO("close ForLoop Cursor while raising exception",
-                     K(*get_loops()[i - 1].cursor_->get_cursor()),
-                     K(ret));
-            OZ (generate_close(*get_loops()[i - 1].cursor_,
-                               get_loops()[i - 1].cursor_->get_cursor()->get_package_id(),
-                               get_loops()[i - 1].cursor_->get_cursor()->get_routine_id(),
-                               get_loops()[i - 1].cursor_->get_index(),
-                               false,/*cannot ignoe as must have been opened*/
-                               false/*此时已经在exception里，如果出错不能再抛exception了*/));
-          }
-        }
-      }
-
       OZ (helper_.create_invoke(ObString("raise_exception"),
                                 get_eh_service().eh_raise_exception_,
                                 exception,
