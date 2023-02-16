@@ -18,6 +18,9 @@
 #include "rpc/obrpc/ob_rpc_translator.h"
 #include "rpc/obmysql/ob_mysql_translator.h"
 
+#define RPCP_BUF_SIZE 1024
+union EP_RPCP_BUF;
+RLOCAL_EXTERN(EP_RPCP_BUF, co_ep_rpcp_buf);
 
 #define RPC_PROCESSOR(ObRpcP, ...)                                             \
 xlator->register_rpc_process_function(ObRpcP::PCODE,                           \
@@ -28,7 +31,12 @@ xlator->register_rpc_process_function(ObRpcP::PCODE,                           \
   UNUSED(gctx_);                                                               \
   int ret = OB_SUCCESS;                                                        \
   ObIAllocator *alloc = &get_sql_arena_allocator();                            \
-  ObRpcP *p = OB_NEWx(ObRpcP, alloc, __VA_ARGS__);                             \
+  ObRpcP *p =  NULL;                                                           \
+  if (sizeof(ObRpcP) <= RPCP_BUF_SIZE) {                                       \
+    p = new (&co_ep_rpcp_buf) ObRpcP(__VA_ARGS__);                             \
+  } else {                                                                     \
+    p = OB_NEWx(ObRpcP, alloc, __VA_ARGS__);                                   \
+  }                                                                            \
   if (NULL == p) {                                                             \
     ret = OB_ALLOCATE_MEMORY_FAILED;                                           \
   } else if (OB_FAIL(p->init())) {                                             \
