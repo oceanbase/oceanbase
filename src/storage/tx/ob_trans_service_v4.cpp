@@ -314,13 +314,13 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   } else {
     if (!tx.commit_task_.is_registered()){
       TRANS_LOG(INFO, "task canceled", K(tx));
+    } else if (FALSE_IT(timer_.unregister_timeout_task(tx.commit_task_))) {
     } else if (tx.flags_.RELEASED_) {
       TRANS_LOG(INFO, "tx released, cancel commit retry", K(tx));
-    } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
     } else if (tx.state_ != ObTxDesc::State::IN_TERMINATE) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpect tx state", K(ret), K_(tx.state), K(tx));
-    } else if (tx.expire_ts_ <= now){
+    } else if (tx.expire_ts_ <= now) {
       TRANS_LOG(WARN, "tx has timeout", K_(tx.expire_ts), K(tx));
       handle_tx_commit_result_(tx, OB_TRANS_TIMEOUT);
     } else if (tx.commit_expire_ts_ <= now) {
@@ -432,7 +432,7 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
 
       if (OB_FAIL(register_commit_retry_task_(tx, max_delay))) {
         commit_fin = true;
-        tx.state_ = ObTxDesc::State::ROLLED_BACK;
+        state = ObTxDesc::State::ROLLED_BACK;
         commit_out = OB_TRANS_ROLLBACKED;
       }
     }
