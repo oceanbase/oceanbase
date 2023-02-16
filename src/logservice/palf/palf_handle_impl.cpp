@@ -2784,13 +2784,14 @@ int PalfHandleImpl::fetch_log_from_storage(const common::ObAddr &server,
                                            const int64_t fetch_log_size,
                                            const int64_t fetch_log_count,
                                            const int64_t accepted_mode_pid,
-                                           const SCN &replayable_point)
+                                           const SCN &replayable_point,
+                                           FetchLogStat &fetch_stat)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(fetch_log_from_storage_(server, fetch_type, msg_proposal_id, prev_lsn,
-      fetch_start_lsn, fetch_log_size, fetch_log_count, replayable_point))) {
+      fetch_start_lsn, fetch_log_size, fetch_log_count, replayable_point, fetch_stat))) {
     PALF_LOG(WARN, "fetch_log_from_storage_ failed", K(ret), K_(palf_id), K_(self),
         K(server), K(fetch_type), K(msg_proposal_id), K(prev_lsn), K(fetch_start_lsn),
         K(fetch_log_size), K(fetch_log_count), K(accepted_mode_pid));
@@ -2836,9 +2837,11 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
                                             const LSN &fetch_start_lsn,
                                             const int64_t fetch_log_size,
                                             const int64_t fetch_log_count,
-                                            const SCN &replayable_point)
+                                            const SCN &replayable_point,
+                                            FetchLogStat &fetch_stat)
 {
   int ret = OB_SUCCESS;
+  int64_t send_cost = 0, get_entry_cost = 0;
   PalfGroupBufferIterator iterator;
   const LSN fetch_end_lsn = fetch_start_lsn + fetch_log_size;
   const bool need_check_prev_log = (prev_lsn.is_valid() && PALF_INITIAL_LSN_VAL < fetch_start_lsn.val_);
@@ -2884,8 +2887,8 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
     PALF_LOG(INFO, "no need fetch_log_from_storage", K(ret), KPC(this), K(server), K(fetch_start_lsn), K(prev_lsn),
         K(max_flushed_end_lsn), K(access_mode));
   } else if (true == need_check_prev_log
-      && OB_FAIL(get_prev_log_info_(fetch_start_lsn, prev_log_info))) {
-    PALF_LOG(WARN, "get_prev_log_info_ failed", K(ret), K_(palf_id), K(prev_lsn), K(fetch_start_lsn));
+      && OB_FAIL(get_prev_log_info_for_fetch_(prev_lsn, fetch_start_lsn, prev_log_info))) {
+    PALF_LOG(WARN, "get_prev_log_info_for_fetch_ failed", K(ret), K_(palf_id), K(prev_lsn), K(fetch_start_lsn));
   } else if (true == need_check_prev_log && prev_log_info.lsn_ != prev_lsn) {
     if (is_dest_in_memberlist) {
       ret = OB_ERR_UNEXPECTED;
@@ -2905,14 +2908,20 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
     bool is_reach_count_limit = false;
     bool is_reach_end = false;
     int64_t fetched_count = 0;
+    int64_t total_size = 0;
+    int64_t read_cost = 0;
     LSN curr_log_end_lsn = curr_lsn + curr_group_entry.get_group_entry_size();
     LSN prev_log_end_lsn;
     int64_t prev_log_proposal_id = prev_log_info.log_proposal_id_;
+    int64_t read_begin_time = ObTimeUtility::current_time(), send_begin_time = read_begin_time, tmp_ts = 0;
     while (OB_SUCC(ret) && !is_reach_size_limit && !is_reach_count_limit && !is_reach_end
         && OB_SUCC(iterator.next())) {
+      tmp_ts = ObTimeUtility::current_time();
+      read_cost += tmp_ts - read_begin_time;
       if (OB_FAIL(iterator.get_entry(curr_group_entry, curr_lsn))) {
         PALF_LOG(ERROR, "PalfGroupBufferIterator get_entry failed", K(ret), K_(palf_id),
             K(curr_group_entry), K(curr_lsn), K(iterator));
+      } else if (FALSE_IT(get_entry_cost += ObTimeUtility::current_time() - tmp_ts)) {
       } else if (FALSE_IT(curr_log_end_lsn = curr_lsn + curr_group_entry.get_group_entry_size())) {
       } else if (is_limitted_by_end_lsn && curr_log_end_lsn > committed_end_lsn) {
         // Only leader replica can send uncommitted logs to others,
@@ -2927,12 +2936,15 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
         is_reach_end = true;
         PALF_LOG(INFO, "non paxos member could not fetch logs which scn is bigger than replayable_point, end fetch",
             K_(palf_id), K(server), K(msg_proposal_id), K(curr_lsn), K(replayable_point));
+      } else if (FALSE_IT(send_begin_time = ObTimeUtility::current_time())) {
       } else if (OB_FAIL(submit_fetch_log_resp_(server, msg_proposal_id, prev_log_proposal_id, \
               each_round_prev_lsn, curr_lsn, curr_group_entry))) {
         PALF_LOG(WARN, "submit_fetch_log_resp_ failed", K(ret), K_(palf_id), K(server),
             K(msg_proposal_id), K(each_round_prev_lsn), K(fetch_start_lsn));
       } else {
+        send_cost += ObTimeUtility::current_time() - send_begin_time;
         fetched_count++;
+        total_size += curr_group_entry.get_group_entry_size();
         if (fetched_count >= fetch_log_count) {
           is_reach_count_limit = true;
         }
@@ -2948,6 +2960,7 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
         prev_log_end_lsn = curr_log_end_lsn;
         prev_log_proposal_id = curr_group_entry.get_header().get_log_proposal_id();
       }
+      read_begin_time = ObTimeUtility::current_time();
     }
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
@@ -2957,6 +2970,12 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
       RLockGuard guard(lock_);
       (void) try_send_committed_info_(server, each_round_prev_lsn, prev_log_end_lsn, prev_log_proposal_id);
     }
+    // update fetch statistic info
+    fetch_stat.total_size_ = total_size;
+    fetch_stat.group_log_cnt_ = fetched_count;
+    fetch_stat.read_cost_ = read_cost;
+    fetch_stat.get_cost_ = get_entry_cost;
+    fetch_stat.send_cost_ = send_cost;
   }
 
   if (OB_FAIL(ret) && OB_ERR_OUT_OF_LOWER_BOUND == ret) {
@@ -3347,6 +3366,45 @@ int PalfHandleImpl::inner_after_truncate_log(const TruncateLogCbCtx &truncate_lo
     PALF_LOG(WARN, "inner_after_truncate_log failed", K(ret), K(truncate_log_cb_ctx));
   } else {
     PALF_LOG(INFO, "after_truncate_log success", K(ret), K_(self), K_(palf_id));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::get_prev_log_info_for_fetch_(const LSN &prev_lsn,
+                                                 const LSN &curr_lsn,
+                                                 LogInfo &prev_log_info)
+{
+  int ret = OB_SUCCESS;
+  PalfGroupBufferIterator iterator;
+  auto get_file_end_lsn = [&]() { return curr_lsn; };
+  auto get_mode_version = [this]() -> int64_t {
+    int64_t mode_version = INVALID_PROPOSAL_ID;
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(this->get_access_mode_version(mode_version))) {
+      PALF_LOG(WARN, "get_access_mode_version failed", K(ret), KPC(this));
+      mode_version = INVALID_PROPOSAL_ID;
+    }
+    return mode_version;
+  };
+  if (OB_FAIL(iterator.init(prev_lsn, get_file_end_lsn, get_mode_version, log_engine_.get_log_storage()))) {
+    PALF_LOG(WARN, "LogGroupEntryIterator init failed", K(ret), K(iterator), K(prev_lsn), K(curr_lsn));
+  } else {
+    LogGroupEntry entry;
+    LSN lsn;
+    if (OB_SUCC(iterator.next())) {
+      if (OB_FAIL(iterator.get_entry(entry, lsn))) {
+        PALF_LOG(ERROR, "get_entry failed", K(ret), K(iterator));
+      } else {
+        const LogGroupEntryHeader &header = entry.get_header();
+        prev_log_info.log_id_ = header.get_log_id();
+        prev_log_info.scn_ = header.get_max_scn();
+        prev_log_info.accum_checksum_ = header.get_accum_checksum();
+        prev_log_info.log_proposal_id_ = header.get_log_proposal_id();
+        prev_log_info.lsn_ = prev_lsn;
+      }
+    } else if (OB_FAIL(get_prev_log_info_(curr_lsn, prev_log_info))) {
+      PALF_LOG(WARN, "get_prev_log_info_ failed", K(ret), KPC(this));
+    }
   }
   return ret;
 }

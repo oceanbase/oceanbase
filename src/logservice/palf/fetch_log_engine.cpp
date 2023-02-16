@@ -198,6 +198,7 @@ void FetchLogEngine::handle(void *task)
     int64_t handle_start_time_us = ObTimeUtility::current_time();
     FetchLogTask *fetch_log_task = static_cast<FetchLogTask *>(task);
     int64_t palf_id = -1;
+    FetchLogStat fetch_stat;
     if (OB_ISNULL(fetch_log_task)) {
       PALF_LOG(ERROR, "fetch_log_task is NULL");
     } else if (is_task_queue_timeout_(fetch_log_task)) {
@@ -222,8 +223,9 @@ void FetchLogEngine::handle(void *task)
                                                                   fetch_log_task->get_start_lsn(),
                                                                   fetch_log_task->get_log_size(),
                                                                   fetch_log_task->get_log_count(),
-                                                                  fetch_log_task->get_accepted_mode_meta(),
-                                                                  replayable_point_.atomic_load()))) {
+                                                                  fetch_log_task->get_accepted_mode_pid(),
+                                                                  replayable_point_.atomic_load(),
+                                                                  fetch_stat))) {
         PALF_LOG(WARN, "fetch_log_from_storage failed", K(ret), K(palf_id), KPC(fetch_log_task));
       } else {
         // do nothing
@@ -232,10 +234,10 @@ void FetchLogEngine::handle(void *task)
     int64_t handle_finish_time_us = ObTimeUtility::current_time();
     int64_t handle_cost_time_us = handle_finish_time_us - handle_start_time_us;
     if (REACH_TIME_INTERVAL(100 * 1000L)) {
-      PALF_LOG(INFO, "handle fetch log task", K(ret), K(palf_id), K(handle_cost_time_us), KPC(fetch_log_task));
+      PALF_LOG(INFO, "handle fetch log task", K(ret), K(palf_id), K(handle_cost_time_us), KPC(fetch_log_task), K(fetch_stat));
     } else if (handle_cost_time_us > 200 * 1000L) {
       PALF_LOG(INFO, "handle fetch log task cost too much time", K(ret), K(palf_id), K(handle_cost_time_us),
-               KPC(fetch_log_task));
+               KPC(fetch_log_task), K(fetch_stat));
     }
     free_fetch_log_task(fetch_log_task);
   }

@@ -111,6 +111,19 @@ struct PalfDiagnoseInfo {
                K(palf_proposal_id_));
 };
 
+struct FetchLogStat {
+  int64_t total_size_;
+  int64_t group_log_cnt_;
+  int64_t read_cost_;  // time cost of reading and deserializing log
+  int64_t get_cost_;   // time cost of checking integrity
+  int64_t send_cost_;  // time cost of sending logs by rpc
+  TO_STRING_KV(K_(total_size),
+               K_(group_log_cnt),
+               K_(read_cost),
+               K_(get_cost),
+               K_(send_cost));
+};
+
 struct LSKey {
   LSKey() : id_(-1) {}
   explicit LSKey(const int64_t id) : id_(id) {}
@@ -491,7 +504,8 @@ public:
                                      const int64_t fetch_log_size,
                                      const int64_t fetch_log_count,
                                      const int64_t accepted_mode_pid,
-                                     const SCN &replayable_point) = 0;
+                                     const SCN &replayable_point,
+                                     FetchLogStat &fetch_stat) = 0;
   virtual int receive_config_log(const common::ObAddr &server,
                                  const int64_t &msg_proposal_id,
                                  const int64_t &prev_log_proposal_id,
@@ -803,7 +817,8 @@ public:
                              const int64_t fetch_log_size,
                              const int64_t fetch_log_count,
                              const int64_t accepted_mode_pid,
-                             const SCN &replayable_point) override final;
+                             const SCN &replayable_point,
+                             FetchLogStat &fetch_stat) override final;
   int receive_config_log(const common::ObAddr &server,
                          const int64_t &msg_proposal_id,
                          const int64_t &prev_log_proposal_id,
@@ -867,6 +882,9 @@ private:
   int after_flush_replica_property_meta_(const bool allow_vote);
   int set_allow_vote_flag_(const bool allow_vote);
   int get_prev_log_info_(const LSN &lsn, LogInfo &log_info);
+  int get_prev_log_info_for_fetch_(const LSN &prev_lsn,
+                                   const LSN &curr_lsn,
+                                   LogInfo &prev_log_info);
   int submit_prepare_response_(const common::ObAddr &server,
                                const int64_t &proposal_id);
   int construct_palf_base_info_(const LSN &max_committed_lsn,
@@ -888,7 +906,8 @@ private:
                               const LSN &fetch_start_lsn,
                               const int64_t fetch_log_size,
                               const int64_t fetch_log_count,
-                              const SCN &replayable_point);
+                              const SCN &replayable_point,
+                              FetchLogStat &fetch_stat);
   int submit_fetch_log_resp_(const common::ObAddr &server,
                              const int64_t &msg_proposal_id,
                              const int64_t &prev_log_proposal_id,

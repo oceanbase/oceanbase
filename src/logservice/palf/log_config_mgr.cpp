@@ -1928,12 +1928,6 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
     // if committed lsn of new majority do not retreat, then start config change
     PALF_LOG(INFO, "majority of new_member_list are sync with leader, start config change", K(ret), K_(palf_id), K_(self),
             K(first_committed_end_lsn), K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
-  // any majority of new memberlist must contain added member, but the max_flushed_end_lsn must always be
-  // smaller than leader's, just skip
-  } else if (is_add_log_sync_member_list(args.type_) && 2 == new_member_list.get_member_number()) {
-    ret = OB_SUCCESS;
-    PALF_LOG(INFO, "majority of new memberlist must contain added member, skip", K(ret), K_(palf_id), K_(self),
-            K(first_committed_end_lsn), K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
   } else {
     PALF_LOG(INFO, "majority of new_member_list aren't sync with leader", K_(palf_id), K_(self), K(first_committed_end_lsn),
         K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
