@@ -356,6 +356,7 @@ int ObIndexBlockRowScanner::open(
 int ObIndexBlockRowScanner::get_next(ObMicroIndexInfo &idx_block_row)
 {
   idx_block_row.reset();
+  const ObDatumRowkey *endkey = nullptr;
   const ObIndexBlockRowHeader *idx_row_header = nullptr;
   const ObIndexBlockRowMinorMetaInfo *idx_minor_info = nullptr;
   const char *idx_data_buf = nullptr;
@@ -365,22 +366,21 @@ int ObIndexBlockRowScanner::get_next(ObMicroIndexInfo &idx_block_row)
     LOG_WARN("Not inited", K(ret));
   } else if (end_of_block()) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(read_curr_idx_row(idx_row_header))) {
+  } else if (OB_FAIL(read_curr_idx_row(idx_row_header, endkey))) {
     LOG_WARN("Fail to read currend index row", K(ret), K_(index_format), K_(current));
-  } else {
-    if (OB_ISNULL(idx_row_header)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected null index block row header", K(ret), K(index_format_));
-    } else if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
-      if (OB_FAIL(idx_row_parser_.get_minor_meta(idx_minor_info))) {
-        LOG_WARN("Fail to get minor meta info", K(ret));
-      }
+  } else if (OB_UNLIKELY(nullptr == idx_row_header || nullptr == endkey)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null index block row header/endkey", K(ret),
+             K(index_format_), KP(idx_row_header), KP(endkey));
+  } else if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
+    if (OB_FAIL(idx_row_parser_.get_minor_meta(idx_minor_info))) {
+      LOG_WARN("Fail to get minor meta info", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
     idx_block_row.flag_ = 0;
-    idx_block_row.endkey_ = &endkey_;
+    idx_block_row.endkey_ = endkey;
     idx_block_row.row_header_ = idx_row_header;
     idx_block_row.minor_meta_info_ = idx_minor_info;
     idx_block_row.is_get_ = is_get_;
@@ -693,7 +693,7 @@ int ObIndexBlockRowScanner::init_datum_row()
   return ret;
 }
 
-int ObIndexBlockRowScanner::read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header)
+int ObIndexBlockRowScanner::read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header, const ObDatumRowkey *&endkey)
 {
   int ret = OB_SUCCESS;
   idx_row_header = nullptr;
@@ -707,9 +707,10 @@ int ObIndexBlockRowScanner::read_curr_idx_row(const ObIndexBlockRowHeader *&idx_
     } else if (OB_FAIL(idx_row_parser_.get_header(idx_row_header))) {
       LOG_WARN("Fail to get index block row header", K(ret));
     } else {
-      endkey_ = idx_data_header_->rowkey_array_[current_];
+      endkey = &idx_data_header_->rowkey_array_[current_];
     }
   } else if (IndexFormat::RAW_DATA == index_format_) {
+    endkey_.reset();
     if (OB_ISNULL(datum_row_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected null pointer to index row", K(ret));
@@ -721,12 +722,14 @@ int ObIndexBlockRowScanner::read_curr_idx_row(const ObIndexBlockRowHeader *&idx_
       LOG_WARN("Fail to get index block row header", K(ret));
     } else if (OB_FAIL(endkey_.assign(datum_row_->storage_datums_, rowkey_column_count))) {
       LOG_WARN("Fail to assign storage datum to endkey", K(ret), KPC(datum_row_), K(rowkey_column_count));
+    } else {
+      endkey = &endkey_;
     }
   } else if (IndexFormat::BLOCK_TREE == index_format_) {
     if (OB_ISNULL(block_meta_tree_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block meta iterator is null", K(ret));
-    } else if (OB_FAIL(block_meta_tree_->get_index_block_row_header(current_, idx_row_header, endkey_))) {
+    } else if (OB_FAIL(block_meta_tree_->get_index_block_row_header(current_, idx_row_header, endkey))) {
       LOG_WARN("get index block row header failed", K(ret), K(current_));
     }
   } else {

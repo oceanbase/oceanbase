@@ -377,11 +377,10 @@ int ObBlockMetaTree::locate_range(const blocksstable::ObDatumRange &range,
 
 int ObBlockMetaTree::get_index_block_row_header(const int64_t idx,
                                                 const ObIndexBlockRowHeader *&idx_header,
-                                                blocksstable::ObDatumRowkey &endkey)
+                                                const blocksstable::ObDatumRowkey *&endkey)
 {
   int ret = OB_SUCCESS;
   idx_header = nullptr;
-  endkey.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -390,11 +389,8 @@ int ObBlockMetaTree::get_index_block_row_header(const int64_t idx,
     LOG_WARN("invalid argument", K(ret), K(idx), K(sorted_rowkeys_.count()));
   } else {
     IndexItem &cur_item = sorted_rowkeys_.at(idx);
-    if (OB_FAIL(cur_item.block_meta_->get_rowkey(endkey))) {
-      LOG_WARN("get endkey failed", K(ret), K(cur_item));
-    } else {
-      idx_header = &cur_item.header_;
-    }
+    endkey = &cur_item.block_meta_->end_key_;
+    idx_header = &cur_item.header_;
   }
   return ret;
 }

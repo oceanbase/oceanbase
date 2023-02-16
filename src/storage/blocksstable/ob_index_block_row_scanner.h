@@ -126,7 +126,7 @@ private:
   int locate_key(const ObDatumRowkey &rowkey);
   int locate_range(const ObDatumRange &range, const bool is_left_border, const bool is_right_border);
   int init_datum_row();
-  int read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header);
+  int read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header, const ObDatumRowkey *&endkey);
 private:
   union {
     const ObDatumRowkey *rowkey_;

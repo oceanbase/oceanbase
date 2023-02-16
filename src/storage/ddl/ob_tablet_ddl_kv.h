@@ -65,7 +65,7 @@ public:
                    int64_t &end_idx);
   int get_index_block_row_header(const int64_t idx,
                                  const blocksstable::ObIndexBlockRowHeader *&header,
-                                 blocksstable::ObDatumRowkey &endkey);
+                                 const blocksstable::ObDatumRowkey *&endkey);
   int get_macro_block_meta(const int64_t idx,
                            blocksstable::ObDataMacroBlockMeta &macro_meta);
   int64_t get_macro_block_cnt() const { return macro_blocks_.count(); }
