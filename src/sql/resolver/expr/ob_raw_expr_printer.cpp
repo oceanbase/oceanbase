@@ -1506,10 +1506,11 @@ int ObRawExprPrinter::print_json_return_type(ObRawExpr *expr)
 {
   INIT_SUCC(ret);
   const int32_t DEFAULT_VARCHAR_LEN = 4000;
-
+  ObScale scale = static_cast<ObConstRawExpr *>(expr)->get_accuracy().get_scale();
   if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
+  } else if (scale == 1) { // scale == 1 is default returning
   } else if (ObRawExpr::EXPR_CONST != expr->get_expr_class()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr class should be EXPR_CONST ", K(ret), K(expr->get_expr_class()));

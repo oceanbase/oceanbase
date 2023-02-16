@@ -6313,8 +6313,8 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
       ret = OB_SUCCESS;
       ParseNode parse_node;
       parse_node.value_ = aggr_info.returning_type_;
-      ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
-      ObCollationType obj_cs_type = static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]);
+      ObObjType obj_type = aggr_info.expr_->obj_meta_.get_type();
+      ObCollationType obj_cs_type = aggr_info.expr_->obj_meta_.get_collation_type();
       if (json_object_buf.length() > 1) {
         char *end_of_obj = json_object_buf.ptr() + json_object_buf.length() - 1;
         *end_of_obj = '}';

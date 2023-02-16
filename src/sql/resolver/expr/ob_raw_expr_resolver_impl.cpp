@@ -4022,11 +4022,15 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
     } else if (T_FUN_ORA_JSON_OBJECTAGG == node->type_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
         sub_expr = NULL;
+        ObString def_val(7, "default");
         if (OB_ISNULL(node->children_[i])) {
           // do nothing
         } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[i], sub_expr)))) {
           LOG_WARN("fail to recursive resolve expr list item", K(ret));
-        } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
+        } else if ((i == 4) && (0 == def_val.case_compare(node->children_[i]->raw_text_))) {
+          (static_cast<ObConstRawExpr *>(sub_expr))->set_scale(1);
+        }
+        if (OB_SUCC(ret) && OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
           LOG_WARN("fail to add param expr to agg expr", K(ret));
         }
       } // end for

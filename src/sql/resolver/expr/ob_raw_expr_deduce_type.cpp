@@ -1237,9 +1237,11 @@ int ObRawExprDeduceType::set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprR
         } else {
           ParseNode parse_node;
           parse_node.value_ = static_cast<ObConstRawExpr *>(return_type_expr)->get_value().get_int();
+          ObScale scale = static_cast<ObConstRawExpr *>(return_type_expr)->get_accuracy().get_scale();
+          bool is_json_type = (scale == 1) && (col_type.get_type_class() == ObJsonTC);
           ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
           result_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
-          if (ob_is_string_type(obj_type)) {
+          if (ob_is_string_type(obj_type) && !is_json_type) {
             result_type.set_type(obj_type);
             result_type.set_length(OB_MAX_SQL_LENGTH);
             result_type.set_length_semantics(my_session_->get_actual_nls_length_semantics());
@@ -1258,7 +1260,7 @@ int ObRawExprDeduceType::set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprR
             result_type.set_calc_collation_type(my_session_->get_nls_collation());
             result_type.set_collation_level(CS_LEVEL_IMPLICIT);
             expr.set_result_type(result_type);
-          } else if (ob_is_json(obj_type)) {
+          } else if (ob_is_json(obj_type) || is_json_type) {
             result_type.set_json();
             result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
           } else if (ob_is_raw(obj_type)) {
