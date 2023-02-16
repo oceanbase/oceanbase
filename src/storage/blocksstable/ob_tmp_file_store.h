@@ -318,6 +318,7 @@ public:
   {
     return tenant_store_;
   }
+  TO_STRING_KV(KP_(tenant_store), KP_(allocator));
 
 private:
   ObTmpTenantFileStore *tenant_store_;

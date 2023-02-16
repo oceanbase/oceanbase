@@ -1474,6 +1474,12 @@ int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStoreHand
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(!handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected error, invalid tenant file store handle", K(ret), K(handle));
+    }
+  }
   return ret;
 }
 
