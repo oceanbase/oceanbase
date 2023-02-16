@@ -726,7 +726,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
           OX (has_implicit_savepoint = true);
         }
       }
-      OZ (ObSQLUtils::calc_sql_expression_without_row(*ctx->exec_ctx_, *expr, *result),
+      OZ (ObSQLUtils::calc_sql_expression_without_row(*ctx->exec_ctx_, *expr, *result, ctx->allocator_),
         KPC(expr), K(result_idx));
       if ((OB_DATA_OUT_OF_RANGE == ret || OB_ERR_DATA_TOO_LONG == ret
           || OB_ERR_VALUE_LARGER_THAN_ALLOWED == ret) && lib::is_oracle_mode()) {
@@ -1255,7 +1255,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
   CK (OB_NOT_NULL(ctx->func_));
-  CK (OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer()));
+  OX (wb = common::ob_get_tsi_warning_buffer());
 
   ObExecRecord exec_record;
   ObExecTimestamp exec_timestamp;
@@ -1300,7 +1300,9 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
               exec_record.record_start();
             }
             ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()->set_sqlcode(OB_SUCCESS);
-            if (!ObStmt::is_diagnostic_stmt(static_cast<stmt::StmtType>(type)) && lib::is_mysql_mode()) {
+            if (!ObStmt::is_diagnostic_stmt(static_cast<stmt::StmtType>(type))
+                && lib::is_mysql_mode()
+                && OB_NOT_NULL(wb)) {
               wb->reset();
             }
             row_count = 0;
@@ -3831,12 +3833,10 @@ int ObSPIService::spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t code, 
 {
   int ret = OB_SUCCESS;
   ObPLSqlCodeInfo *sqlcode_info = NULL;
-  ObWarningBuffer* wb = NULL;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(sqlcode_info = ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
-  CK (OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer()));
   if (OB_SUCC(ret) && code != sqlcode_info->get_sqlcode()) {
     if (lib::is_oracle_mode()) {
       OX (sqlcode_info->set_sqlcode(code > 0 ? 1 : code));
@@ -3867,13 +3867,13 @@ int ObSPIService::spi_get_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t *code)
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(sqlcode_info = ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
   CK (OB_NOT_NULL(code));
-  CK (OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer()));
-  if (lib::is_mysql_mode()) {
+  if (lib::is_mysql_mode()
+      && OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer())) {
     OX (wb->reset_warning());
   }
   OX (*code = sqlcode_info->get_sqlcode());
-  CK (OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer()));
-  if (lib::is_mysql_mode()) {
+  if (lib::is_mysql_mode()
+      && OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer())) {
     OZ (sqlcode_info->get_stack_warning_buf().push_back(*wb));
   }
   return ret;
@@ -4195,7 +4195,7 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(ctx), ctx->valid());
   CK (OB_NOT_NULL(session_info = ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(sqlcode_info = ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
-  CK (OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer()));
+  OX (wb = common::ob_get_tsi_warning_buffer());
   CK (OB_NOT_NULL(error_code));
 
 #define CALC(expr, type, result) \
@@ -4210,7 +4210,9 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
 
   if (OB_SUCC(ret)) {
     type = ObPLEH::eh_classify_exception(sql_state);
-    cur_err_code = wb->get_err_code();
+    if (OB_NOT_NULL(wb)) {
+      cur_err_code = wb->get_err_code();
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(errcode_expr)) {
@@ -4276,26 +4278,36 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
     snprintf(err_msg, STR_LEN, "%.*s", sqlcode_info->get_sqlmsg().length(), sqlcode_info->get_sqlmsg().ptr());
     if (ObPLConditionType::SQL_WARNING == type) {
       if (OB_ISNULL(errcode_expr)) {
-        wb->append_warning(err_msg, OB_ERR_SIGNAL_WARN);
+        if (OB_NOT_NULL(wb)) {
+          wb->append_warning(err_msg, OB_ERR_SIGNAL_WARN);
+        }
       } else {
-        wb->append_warning(err_msg, sqlcode_info->get_sqlcode(), sql_state);
+        if (OB_NOT_NULL(wb)) {
+          wb->append_warning(err_msg, sqlcode_info->get_sqlcode(), sql_state);
+        }
       }
       if (is_signal) {
         sqlcode_info->set_sqlcode(OB_SUCCESS);
-        wb->reset_err();
+        if (OB_NOT_NULL(wb)) {
+          wb->reset_err();
+        }
       }
     } else {
       if (is_signal) {
         LOG_MYSQL_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR,
                             MIN(sqlcode_info->get_sqlmsg().length(), STR_LEN),
                             sqlcode_info->get_sqlmsg().ptr());
-        wb->set_error_code(sqlcode_info->get_sqlcode());
-        wb->set_sql_state(sql_state);
+        if (OB_NOT_NULL(wb)) {
+          wb->set_error_code(sqlcode_info->get_sqlcode());
+          wb->set_sql_state(sql_state);
+        }
       } else {
-        wb->set_error(err_msg, sqlcode_info->get_sqlcode());
-        wb->set_sql_state(sql_state != NULL
-                           ? sql_state
-                           : (resignal_sql_state != NULL) ? resignal_sql_state : ob_sqlstate(cur_err_code));
+        if (OB_NOT_NULL(wb)) {
+          wb->set_error(err_msg, sqlcode_info->get_sqlcode());
+          wb->set_sql_state(sql_state != NULL
+                             ? sql_state
+                             : (resignal_sql_state != NULL) ? resignal_sql_state : ob_sqlstate(cur_err_code));
+        }
       }
       *error_code = sqlcode_info->get_sqlcode();
     }

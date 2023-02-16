@@ -208,7 +208,7 @@ int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
   return ret;
 }
 
-int ObExprFrameInfo::pre_alloc_exec_memory(ObExecContext &exec_ctx) const
+int ObExprFrameInfo::pre_alloc_exec_memory(ObExecContext &exec_ctx, ObIAllocator *allocator) const
 {
   int ret = OB_SUCCESS;
   uint64_t frame_cnt = 0;
@@ -217,7 +217,7 @@ int ObExprFrameInfo::pre_alloc_exec_memory(ObExecContext &exec_ctx) const
   if (NULL == (phy_ctx = exec_ctx.get_physical_plan_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(phy_ctx), K(ret));
-  } else if (OB_FAIL(alloc_frame(exec_ctx.get_allocator(),
+  } else if (OB_FAIL(alloc_frame(allocator != NULL ? *allocator : exec_ctx.get_allocator(),
                                  phy_ctx->get_param_frame_ptrs(),
                                  frame_cnt,
                                  frames))) {

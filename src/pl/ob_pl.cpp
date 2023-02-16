@@ -2436,7 +2436,8 @@ do {                                                                  \
                                get_params().at(i)));
         } else if (pl_type.is_obj_type() // 复杂类型不需要做类型转换(不支持复杂类型的转换), 直接赋值
                    && (params->at(i).get_meta() != get_params().at(i).get_meta()
-                      || params->at(i).get_accuracy() != get_params().at(i).get_accuracy())) {
+                      || params->at(i).get_accuracy() != get_params().at(i).get_accuracy())
+                   && !func_.is_function()) {
           if (params->at(i).is_null()
               || (lib::is_oracle_mode() && params->at(i).is_null_oracle())) {
             ObObjMeta null_meta = get_params().at(i).get_meta();
@@ -2596,13 +2597,13 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
   OX (ctx_.exec_ctx_->set_physical_plan_ctx(&get_physical_plan_ctx()));
   OX (need_reset_physical_plan_ = true);
   if (OB_SUCC(ret) && func_.get_expr_op_size() > 0)  {
-    OZ (ctx_.exec_ctx_->init_expr_op(func_.get_expr_op_size()));
+    OZ (ctx_.exec_ctx_->init_expr_op(func_.get_expr_op_size(), ctx_.allocator_));
   }
 
   if (OB_SUCC(ret)) {
     // TODO bin.lb: how about the memory?
     // https://aone.alibaba-inc.com/project/81079/task/34962640
-    OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_));
+    OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, ctx_.allocator_));
   }
 
 

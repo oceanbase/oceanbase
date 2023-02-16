@@ -523,7 +523,8 @@ void ObSQLUtils::clear_expr_eval_flags(const ObExpr &expr, ObEvalCtx &ctx)
 int ObSQLUtils::calc_sql_expression_without_row(
   ObExecContext &exec_ctx,
   const ObISqlExpression &expr,
-  ObObj &result)
+  ObObj &result,
+  ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
@@ -540,7 +541,7 @@ int ObSQLUtils::calc_sql_expression_without_row(
       LOG_WARN("static engine should have implement this function. unexpected null", K(ret));
     } else {
       ObDatum *datum = NULL;
-      ObEvalCtx eval_ctx(exec_ctx);
+      ObEvalCtx eval_ctx(exec_ctx, allocator);
       clear_expr_eval_flags(*new_expr, eval_ctx);
       OZ(new_expr->eval(eval_ctx, datum));
       OZ(datum->to_obj(result, new_expr->obj_meta_, new_expr->obj_datum_map_));
