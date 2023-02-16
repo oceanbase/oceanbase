@@ -36,6 +36,7 @@ class ObTableLoadErrorRowHandler;
 
 class ObTableLoadStoreCtx
 {
+static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
 public:
   ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadStoreCtx();
