@@ -53,7 +53,7 @@ ob_define(THIN_LTO_CONCURRENCY_LINK "")
 
 if(ENABLE_THIN_LTO)
   set(THIN_LTO_OPT "-flto=thin")
-  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=16")
+  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=32")
 endif()
 
 
@@ -86,7 +86,7 @@ if (OB_USE_CLANG)
 
   if (OB_USE_LLD)
     set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld")
-    set(REORDER_COMP_OPT "-ffunction-sections -funique-internal-linkage-names -fdebug-info-for-profiling")
+    set(REORDER_COMP_OPT "-ffunction-sections -fdebug-info-for-profiling")
     set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
     set(OB_LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
   endif()
