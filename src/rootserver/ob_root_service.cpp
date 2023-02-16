@@ -3251,7 +3251,11 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           if (OB_SUCC(ret)) {
             if (foreign_key_arg.is_parent_table_mock_) {
               uint64_t dup_name_mock_fk_parent_table_count = 0;
-              if (OB_FAIL(mock_fk_parent_table_map.get_refactored(foreign_key_arg.parent_table_, dup_name_mock_fk_parent_table_count))) {
+              if (NULL != parent_schema) {
+                ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+                LOG_WARN("the mock parent table is conflict with the real parent table, need retry",
+                    K(ret), K(foreign_key_arg), K(parent_schema->get_table_id()));
+              } else if (OB_FAIL(mock_fk_parent_table_map.get_refactored(foreign_key_arg.parent_table_, dup_name_mock_fk_parent_table_count))) {
                 if (OB_HASH_NOT_EXIST == ret) {
                   ret = OB_SUCCESS;
                   if (OB_FAIL(mock_fk_parent_table_map.set_refactored(foreign_key_arg.parent_table_, ++dup_name_mock_fk_parent_table_count))) {
