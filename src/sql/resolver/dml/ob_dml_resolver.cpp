@@ -6174,7 +6174,7 @@ int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo *session,
       // Since we expanded the generated column into a dependent expression,
       // we need to add trim on its dependent expression in this layer.
       if (const_cast<ObSQLSessionInfo *>(session)->get_ddl_info().is_ddl() &&
-          stmt::T_INSERT == session->get_stmt_type()) {
+          stmt::T_INSERT == session->get_stmt_type() && column_schema->is_virtual_generated_column()) {
         if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema,
                                                     *params_.expr_factory_,
                                                     session_info_,
