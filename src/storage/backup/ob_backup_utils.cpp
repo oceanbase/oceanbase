@@ -656,9 +656,8 @@ int ObBackupTabletStat::mark_item_reused(const share::ObBackupDataType &backup_d
   ObBackupProviderItem item;
   ObBackupProviderItemType item_type = PROVIDER_ITEM_MACRO_ID;
   ObBackupMacroBlockId macro_id;
-  blocksstable::MacroBlockId fake_macro_id;
+  macro_id.macro_block_id_ = ObBackupProviderItem::get_fake_macro_id_();
   macro_id.logic_id_ = id_pair.logic_id_;
-  macro_id.macro_block_id_ = fake_macro_id;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup tablet stat do not init", K(ret));
@@ -1292,7 +1291,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObBackupProviderItem)
   return size;
 }
 
-ObITable::TableKey ObBackupProviderItem::get_fake_table_key_() const
+ObITable::TableKey ObBackupProviderItem::get_fake_table_key_()
 {
   ObITable::TableKey table_key;
   table_key.tablet_id_ = ObTabletID(1);
@@ -1302,12 +1301,12 @@ ObITable::TableKey ObBackupProviderItem::get_fake_table_key_() const
   return table_key;
 }
 
-ObLogicMacroBlockId ObBackupProviderItem::get_fake_logic_id_() const
+ObLogicMacroBlockId ObBackupProviderItem::get_fake_logic_id_()
 {
   return ObLogicMacroBlockId(0/*data_seq*/, 1/*logic_version*/, 1/*tablet_id*/);
 }
 
-MacroBlockId ObBackupProviderItem::get_fake_macro_id_() const
+MacroBlockId ObBackupProviderItem::get_fake_macro_id_()
 {
   return MacroBlockId(4096/*first_id*/, 0/*second_id*/, 0/*third_id*/);
 }
