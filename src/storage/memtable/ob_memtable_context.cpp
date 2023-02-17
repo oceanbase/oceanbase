@@ -247,6 +247,10 @@ int ObMemtableCtx::write_auth(const bool exclusive)
       ret = OB_ERR_READ_ONLY_TRANSACTION;
       TRANS_LOG(ERROR, "WriteAuth: readonly trans not support update operation",
                 "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K(ret));
+    } else if (!ATOMIC_LOAD(&is_master_)) {
+      ret = OB_NOT_MASTER;
+      TRANS_LOG(WARN, "WriteAuth: trans is already not master",
+                "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K(ret));
     } else if (OB_SUCCESS != ATOMIC_LOAD(&end_code_)) {
       ret = ATOMIC_LOAD(&end_code_);
       TRANS_LOG(WARN, "WriteAuth: trans is already end", K(ret),
@@ -257,10 +261,6 @@ int ObMemtableCtx::write_auth(const bool exclusive)
       ret = OB_TRANS_KILLED;
       TRANS_LOG(WARN, "WriteAuth: trans is already end", K(ret),
                 "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K_(end_code));
-    } else if (!ATOMIC_LOAD(&is_master_)) {
-      ret = OB_NOT_MASTER;
-      TRANS_LOG(WARN, "WriteAuth: trans is already not master",
-                "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K(ret));
     } else if (lock_succ) {
       // all check passed after lock succ
       break;
