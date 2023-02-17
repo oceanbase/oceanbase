@@ -18,7 +18,7 @@
 #include "rpc/obrpc/ob_rpc_translator.h"
 #include "rpc/obmysql/ob_mysql_translator.h"
 
-#define RPCP_BUF_SIZE 1024
+#define RPCP_BUF_SIZE 1280
 union EP_RPCP_BUF;
 RLOCAL_EXTERN(EP_RPCP_BUF, co_ep_rpcp_buf);
 
