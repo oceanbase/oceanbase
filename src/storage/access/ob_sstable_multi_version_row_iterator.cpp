@@ -81,6 +81,7 @@ int ObSSTableMultiVersionRowGetter::inner_open(
     } else if (OB_FAIL(not_exist_row_.init(*access_ctx.allocator_, iter_param.get_out_col_cnt()))) {
         LOG_WARN("fail to init datum row", K(ret));
     } else {
+      not_exist_row_.row_flag_.reset();
       not_exist_row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
     }
   }
@@ -205,6 +206,7 @@ int ObSSTableMultiVersionRowMultiGetter::inner_open(
       } else if (OB_FAIL(not_exist_row_.init(*access_ctx.allocator_, iter_param.get_out_col_cnt()))) {
         LOG_WARN("fail to init datum row", K(ret));
       } else {
+        not_exist_row_.row_flag_.reset();
         not_exist_row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
       }
     }

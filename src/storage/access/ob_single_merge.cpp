@@ -243,6 +243,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     access_ctx_->query_flag_.set_not_use_row_cache();
     nop_pos_.reset();
     full_row_.count_ = 0;
+    full_row_.row_flag_.reset();
     full_row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
     full_row_.snapshot_version_ = 0L;
     access_ctx_->use_fuse_row_cache_ = enable_fuse_row_cache;

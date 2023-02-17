@@ -406,6 +406,7 @@ int ObMicroBlockRowGetter::get_not_exist_row(const ObDatumRowkey &rowkey, const 
     } else if (OB_FAIL(row_.reserve(read_info->get_request_count()))) {
       LOG_WARN("fail to reserve datum row", K(ret), KPC(read_info));
     } else {
+      row_.row_flag_.reset();
       row_.count_ = read_info->get_request_count();
       row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
       for (int64_t i = 0; i < rowkey.get_datum_cnt(); i++) {
