@@ -874,7 +874,7 @@ int ObSelectStmtPrinter::print_with()
     if (select_stmt->get_cte_definition_size() == 0) {
       // don't print
     } else {
-      DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE");
+      DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE ");
       //恢复定义，cte先放本stmt中T_WITH_CLAUSE产生的的cte，再放parent放过来的
       for (int64_t i = 0; i < cte_tables.count() && OB_SUCC(ret); i++) {
         TableItem* cte_table = cte_tables.at(i);
@@ -923,9 +923,9 @@ int ObSelectStmtPrinter::print_cte_define_title(TableItem* cte_table)
   //不能打印database name
   ObSelectStmt *sub_select_stmt = NULL;
   PRINT_TABLE_NAME(cte_table);
-  if (OB_ISNULL(cte_table->node_->children_[1]) && (TableItem::RECURSIVE_CTE == cte_table->cte_type_)) {
+  if (OB_ISNULL(cte_table) || OB_ISNULL(cte_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the recursive cte must have the colume definition", K(ret));
+    LOG_WARN("unexpect null params", K(ret));
   } else if (OB_NOT_NULL(cte_table->node_->children_[1])) {
     DATA_PRINTF("(");
     sub_select_stmt = cte_table->ref_query_;
