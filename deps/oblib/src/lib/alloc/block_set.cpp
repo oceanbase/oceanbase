@@ -43,6 +43,11 @@ BlockSet::~BlockSet()
   reset();
 }
 
+bool BlockSet::check_has_unfree()
+{
+  return clist_ != NULL;
+}
+
 void BlockSet::reset()
 {
   while (NULL != clist_) {
