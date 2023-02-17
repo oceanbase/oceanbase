@@ -357,7 +357,10 @@ public:
     role_state_ = for_replay ? TxCtxRoleState::FOLLOWER : TxCtxRoleState::LEADER;
   }
 
-  int register_multi_data_source(const ObTxDataSourceType type, const char *buf, const int64_t len);
+  int register_multi_data_source(const ObTxDataSourceType type,
+                                 const char *buf,
+                                 const int64_t len,
+                                 const bool try_lock = false);
 
   int64_t get_start_log_ts()
   {

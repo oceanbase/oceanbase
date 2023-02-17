@@ -1285,7 +1285,8 @@ int ObMemtableCtx::register_multi_source_data_if_need_(
       // TODO: yanyuan.cxf need seqno to do rollback.
     } else if (OB_FAIL(part_ctx->register_multi_data_source(type,
                                                             buf,
-                                                            serialize_size))) {
+                                                            serialize_size,
+                                                            true /* try lock */))) {
       TRANS_LOG(WARN, "register to multi source data failed", K(ret));
     } else {
       // do nothing
