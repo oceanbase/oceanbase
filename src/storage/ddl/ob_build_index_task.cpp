@@ -556,6 +556,16 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
       } else {
         keep_report_err_msg = false;
       }
+
+      if (OB_TMP_FAIL(ret) && keep_report_err_msg) {
+        bool is_tenant_dropped = false;
+        if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(tenant_id_, is_tenant_dropped))) {
+          LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id_));
+        } else if (is_tenant_dropped) {
+          keep_report_err_msg = false;
+          LOG_INFO("break when tenant dropped", K(tmp_ret), KPC(index_schema_), K(tablet_id_), K(self_addr));
+        }
+      }
     }
   }
   return ret;
