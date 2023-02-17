@@ -92,7 +92,9 @@ public:
     const int64_t *row_ids,
     const int64_t row_cap,
     ObDatumRow &row_buf,
-    common::ObIArray<ObDatum *> &datums);
+    common::ObIArray<ObDatum *> &datums,
+    sql::ExprFixedArray &exprs,
+    sql::ObEvalCtx &eval_ctx);
   virtual int get_row_count(
       int32_t col,
       const int64_t *row_ids,

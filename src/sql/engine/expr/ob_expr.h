@@ -403,12 +403,14 @@ public:
     return ctx.frames_[frame_idx_] + res_buf_off_;
   }
 
-
   // locate expr datum && reset ptr_ to reserved buf
   OB_INLINE ObDatum &locate_datum_for_write(ObEvalCtx &ctx) const;
 
   // locate batch datums and reset datum ptr_ to reserved buf
   inline ObDatum *locate_datums_for_update(ObEvalCtx &ctx, const int64_t size) const;
+
+  // reset ptr in ObDatum to reserved buf
+  OB_INLINE void reset_ptr_in_datum(ObEvalCtx &ctx, const int64_t datum_idx) const;
 
   OB_INLINE ObDatum &locate_param_datum(ObEvalCtx &ctx, int param_index) const
   {
@@ -935,6 +937,16 @@ inline ObDatum *ObExpr::locate_datums_for_update(ObEvalCtx &ctx,
     d++;
   }
   return datums;
+}
+
+OB_INLINE void ObExpr::reset_ptr_in_datum(ObEvalCtx &ctx, const int64_t datum_idx) const
+{
+  OB_ASSERT(datum_idx >= 0);
+  char *frame = ctx.frames_[frame_idx_];
+  OB_ASSERT(NULL != frame);
+  ObDatum *expr_datum = reinterpret_cast<ObDatum *>(frame + datum_off_) + datum_idx;
+  char *data_pos = frame + res_buf_off_ + res_buf_len_ * datum_idx;
+  expr_datum->ptr_ = data_pos;
 }
 
 template <typename ...TS>

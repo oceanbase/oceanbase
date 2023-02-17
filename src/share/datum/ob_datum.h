@@ -193,7 +193,7 @@ public:
   static uint32_t get_reserved_size(const ObObjDatumMapType type);
   // From ObObj, the caller is responsible for ensuring %ptr_ has enough memory
   inline int from_obj(const ObObj &obj, const ObObjDatumMapType map_type);
-  inline int from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type);
+  inline int from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type, bool need_copy = false);
   // From ObObj, the caller is responsible for ensuring %ptr_ has enough memory
   inline int from_obj(const ObObj &obj);
   inline int64_t checksum(const int64_t current) const;
@@ -729,7 +729,7 @@ inline int ObDatum::from_obj(const ObObj &obj, const ObObjDatumMapType map_type)
   return ret;
 }
 
-inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type)
+inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type, bool need_copy)
 {
   int ret = common::OB_SUCCESS;
   if (datum.is_ext()) {
@@ -737,6 +737,9 @@ inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMap
     COMMON_LOG(WARN, "Invalid argument for ext storage datum to datum", K(ret), K(datum));
   } else if (datum.is_null()) {
     set_null();
+  } else if (need_copy) {
+    memcpy(no_cv(ptr_), datum.ptr_, datum.len_);
+    pack_ = datum.pack_;
   } else {
     switch (map_type) {
       case OBJ_DATUM_NULL: { datum2datum<OBJ_DATUM_NULL>(datum); break; }
