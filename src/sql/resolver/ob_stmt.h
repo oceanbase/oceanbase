@@ -129,6 +129,7 @@ public:
   bool is_support_batch_exec_stmt() const
   {
     return stmt_type_ == stmt::T_INSERT
+            || stmt_type_ == stmt::T_REPLACE
             || stmt_type_ == stmt::T_UPDATE
             || stmt_type_ == stmt::T_DELETE;
   }

@@ -273,6 +273,7 @@ typedef struct _InsMultiValuesResult
   ParenthesesOffset *tail_parentheses_;
   int values_col_;
   int values_count_;
+  int on_duplicate_pos_; // the start position of on duplicate key in insert ... on duplicate key update statement
   int ret_code_;
 } InsMultiValuesResult;
 
