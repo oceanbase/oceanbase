@@ -44,21 +44,22 @@ void ObTableLoadService::ObGCTask::runTimerTask()
     LOG_WARN("ObTableLoadService::ObGCTask not init", KR(ret), KP(this));
   } else {
     LOG_DEBUG("table load start gc", K(tenant_id_));
+    ObTableLoadManager &manager = service_.get_manager();
     ObArray<ObTableLoadTableCtx *> inactive_table_ctx_array;
-    if (OB_FAIL(service_.manager_.get_inactive_table_ctx_list(inactive_table_ctx_array))) {
+    if (OB_FAIL(manager.get_inactive_table_ctx_list(inactive_table_ctx_array))) {
       LOG_WARN("fail to get inactive table ctx list", KR(ret), K(tenant_id_));
     }
     for (int64_t i = 0; i < inactive_table_ctx_array.count(); ++i) {
       ObTableLoadTableCtx *table_ctx = inactive_table_ctx_array.at(i);
       const uint64_t table_id = table_ctx->param_.table_id_;
-      const uint64_t target_table_id = table_ctx->param_.target_table_id_;
+      const uint64_t hidden_table_id = table_ctx->ddl_param_.dest_table_id_;
       // check if table ctx is removed
       if (table_ctx->is_dirty()) {
         LOG_DEBUG("table load ctx is dirty", K(tenant_id_), "table_id", table_ctx->param_.table_id_,
                   "ref_count", table_ctx->get_ref_count());
       }
       // check if table ctx is activated
-      else if (table_ctx->get_ref_count() > 2) {
+      else if (table_ctx->get_ref_count() > 1) {
         LOG_DEBUG("table load ctx is active", K(tenant_id_), "table_id",
                   table_ctx->param_.table_id_, "ref_count", table_ctx->get_ref_count());
       }
@@ -66,28 +67,28 @@ void ObTableLoadService::ObGCTask::runTimerTask()
       else {
         ObSchemaGetterGuard schema_guard;
         const ObTableSchema *table_schema = nullptr;
-        if (target_table_id == OB_INVALID_ID) {
+        if (hidden_table_id == OB_INVALID_ID) {
           LOG_INFO("hidden table has not been created, gc table load ctx", K(tenant_id_),
-                   K(table_id), K(target_table_id));
-          service_.remove_table_ctx(table_ctx);
-        } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id_, target_table_id,
+                   K(table_id), K(hidden_table_id));
+          ObTableLoadService::remove_ctx(table_ctx);
+        } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id_, hidden_table_id,
                                                                schema_guard, table_schema))) {
           if (OB_UNLIKELY(OB_TABLE_NOT_EXIST != ret)) {
-            LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(target_table_id));
+            LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(hidden_table_id));
           } else {
             LOG_INFO("hidden table not exist, gc table load ctx", K(tenant_id_), K(table_id),
-                     K(target_table_id));
-            service_.remove_table_ctx(table_ctx);
+                     K(hidden_table_id));
+            ObTableLoadService::remove_ctx(table_ctx);
           }
         } else if (table_schema->is_in_recyclebin()) {
           LOG_INFO("hidden table is in recyclebin, gc table load ctx", K(tenant_id_), K(table_id),
-                   K(target_table_id));
-          service_.remove_table_ctx(table_ctx);
+                   K(hidden_table_id));
+          ObTableLoadService::remove_ctx(table_ctx);
         } else {
-          LOG_DEBUG("table load ctx is running", K(tenant_id_), K(table_id), K(target_table_id));
+          LOG_DEBUG("table load ctx is running", K(tenant_id_), K(table_id), K(hidden_table_id));
         }
       }
-      service_.put_table_ctx(table_ctx);
+      manager.put_table_ctx(table_ctx);
     }
   }
 }
@@ -124,9 +125,9 @@ void ObTableLoadService::ObReleaseTask::runTimerTask()
     for (int64_t i = 0; i < releasable_table_ctx_array.count(); ++i) {
       ObTableLoadTableCtx *table_ctx = releasable_table_ctx_array.at(i);
       const uint64_t table_id = table_ctx->param_.table_id_;
-      const uint64_t target_table_id = table_ctx->param_.target_table_id_;
-      LOG_INFO("free table ctx", K(tenant_id_), K(table_id), K(target_table_id), KP(table_ctx));
-      OB_DELETE(ObTableLoadTableCtx, "TLD_TableCtxVal", table_ctx);
+      const uint64_t hidden_table_id = table_ctx->ddl_param_.dest_table_id_;
+      LOG_INFO("free table ctx", K(tenant_id_), K(table_id), K(hidden_table_id), KP(table_ctx));
+      ObTableLoadService::free_ctx(table_ctx);
     }
   }
 }
@@ -148,8 +149,40 @@ int ObTableLoadService::mtl_init(ObTableLoadService *&service)
   return ret;
 }
 
-int ObTableLoadService::create_ctx(const ObTableLoadParam &param, ObTableLoadTableCtx *&table_ctx,
-                                   bool &is_new)
+int ObTableLoadService::check_support_direct_load(uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_id));
+  } else {
+    const uint64_t tenant_id = MTL_ID();
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(
+          ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_FAIL(ObTableLoadSchema::check_constraints(schema_guard, table_schema))) {
+      LOG_WARN("fail to check schema constraints", KR(ret), K(tenant_id), K(table_id));
+    }
+  }
+  return ret;
+}
+
+ObTableLoadTableCtx *ObTableLoadService::alloc_ctx()
+{
+  return OB_NEW(ObTableLoadTableCtx, ObMemAttr(MTL_ID(), "TLD_TableCtxVal"));
+}
+
+void ObTableLoadService::free_ctx(ObTableLoadTableCtx *table_ctx)
+{
+  if (OB_NOT_NULL(table_ctx)) {
+    OB_DELETE(ObTableLoadTableCtx, "TLD_TableCtxVal", table_ctx);
+    table_ctx = nullptr;
+  }
+}
+
+int ObTableLoadService::add_ctx(ObTableLoadTableCtx *table_ctx)
 {
   int ret = OB_SUCCESS;
   ObTableLoadService *service = nullptr;
@@ -157,7 +190,35 @@ int ObTableLoadService::create_ctx(const ObTableLoadParam &param, ObTableLoadTab
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
   } else {
-    ret = service->create_table_ctx(param, table_ctx, is_new);
+    ObTableLoadUniqueKey key(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
+    ret = service->get_manager().add_table_ctx(key, table_ctx);
+  }
+  return ret;
+}
+
+int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ObTableLoadUniqueKey key(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
+    ret = service->get_manager().remove_table_ctx(key);
+  }
+  return ret;
+}
+
+int ObTableLoadService::get_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *&table_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->get_manager().get_table_ctx(key, table_ctx);
   }
   return ret;
 }
@@ -170,7 +231,7 @@ int ObTableLoadService::get_ctx(const ObTableLoadKey &key, ObTableLoadTableCtx *
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
   } else {
-    ret = service->get_table_ctx(key.table_id_, table_ctx);
+    ret = service->get_manager().get_table_ctx_by_table_id(key.table_id_, table_ctx);
   }
   return ret;
 }
@@ -183,21 +244,8 @@ void ObTableLoadService::put_ctx(ObTableLoadTableCtx *table_ctx)
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
   } else {
-    service->put_table_ctx(table_ctx);
+    service->get_manager().put_table_ctx(table_ctx);
   }
-}
-
-int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadService *service = nullptr;
-  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("null table load service", KR(ret));
-  } else {
-    ret = service->remove_table_ctx(table_ctx);
-  }
-  return ret;
 }
 
 ObTableLoadService::ObTableLoadService()
@@ -258,74 +306,6 @@ void ObTableLoadService::destroy()
 {
   is_inited_ = false;
   gc_timer_.destroy();
-}
-
-int ObTableLoadService::create_table_ctx(const ObTableLoadParam &param,
-                                         ObTableLoadTableCtx *&table_ctx, bool &is_new)
-{
-  int ret = OB_SUCCESS;
-  table_ctx = nullptr;
-  is_new = false;
-  if (OB_UNLIKELY(!param.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(param));
-  } else {
-    const uint64_t table_id = param.table_id_;
-    ObTableLoadTableCtx *new_table_ctx = nullptr;
-    if (OB_FAIL(manager_.get_table_ctx(table_id, table_ctx))) {
-      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-        LOG_WARN("fail to get table ctx", KR(ret), K(table_id));
-      } else {
-        table_ctx = nullptr;
-        ret = OB_SUCCESS;
-      }
-    }
-    if (OB_SUCC(ret) && nullptr == table_ctx) {
-      if (OB_ISNULL(new_table_ctx =
-                      OB_NEW(ObTableLoadTableCtx, ObMemAttr(MTL_ID(), "TLD_TableCtxVal"), param))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new table ctx", KR(ret), K(param));
-      } else if (OB_FAIL(new_table_ctx->init())) {
-        LOG_WARN("fail to init table ctx", KR(ret));
-      } else if (OB_FAIL(manager_.add_table_ctx(table_id, new_table_ctx))) {
-        LOG_WARN("fail to add table ctx", KR(ret), K(table_id));
-      } else {
-        table_ctx = new_table_ctx;
-        is_new = true;
-      }
-    }
-    if (OB_FAIL(ret)) {
-      if (nullptr != new_table_ctx) {
-        OB_DELETE(ObTableLoadTableCtx, "TLD_TableCtxVal", new_table_ctx);
-        new_table_ctx = nullptr;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadService::remove_table_ctx(ObTableLoadTableCtx *table_ctx)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t table_id = table_ctx->param_.table_id_;
-  if (OB_FAIL(manager_.remove_table_ctx(table_id))) {
-    LOG_WARN("fail to remove table ctx", KR(ret), K(table_id));
-  }
-  return ret;
-}
-
-int ObTableLoadService::get_table_ctx(uint64_t table_id, ObTableLoadTableCtx *&ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(manager_.get_table_ctx(table_id, ctx))) {
-    LOG_WARN("fail to get table ctx", KR(ret), K(table_id));
-  }
-  return ret;
-}
-
-void ObTableLoadService::put_table_ctx(ObTableLoadTableCtx *table_ctx)
-{
-  manager_.put_table_ctx(table_ctx);
 }
 
 } // namespace observer

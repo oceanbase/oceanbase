@@ -8,8 +8,9 @@
 #include "common/object/ob_object.h"
 #include "observer/ob_server.h"
 #include "observer/table/ob_table_rpc_processor.h"
-#include "storage/blocksstable/ob_datum_row.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "storage/blocksstable/ob_datum_range.h"
+#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {
@@ -182,6 +183,18 @@ int ObTableLoadUtils::deep_copy(const ObDatumRange &src, ObDatumRange &dest, ObI
 bool ObTableLoadUtils::is_local_addr(const ObAddr &addr)
 {
   return (ObServer::get_instance().get_self() == addr);
+}
+
+int ObTableLoadUtils::init_session_info(uint64_t user_id, ObSQLSessionInfo &session_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(session_info.init(0, 0, nullptr, nullptr, ObTimeUtility::current_time(), MTL_ID()))) {
+    LOG_WARN("fail to init session info", KR(ret));
+  }
+  OZ(session_info.load_default_sys_variable(false, false)); //加载默认的session参数
+  OZ(session_info.load_default_configs_in_pc());
+  OX(session_info.set_priv_user_id(user_id));
+  return ret;
 }
 
 int ObTableLoadUtils::generate_credential(uint64_t tenant_id, uint64_t user_id,

@@ -22,13 +22,12 @@ using namespace obrpc;
 
 ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
   : ctx_(ctx),
-    allocator_("TLD_CoordCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx->param_.tenant_id_),
+    allocator_("TLD_CoordCtx"),
     task_scheduler_(nullptr),
     last_trans_gid_(1024),
     next_session_id_(0),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
-    redef_table_(),
     is_inited_(false)
 {
 }
@@ -38,26 +37,22 @@ ObTableLoadCoordinatorCtx::~ObTableLoadCoordinatorCtx()
   destroy();
 }
 
-int ObTableLoadCoordinatorCtx::init(ObSQLSessionInfo *session_info,
-    const ObIArray<int64_t> &idx_array)
+int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t user_id)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadCoordinatorCtx init twice", KR(ret), KP(this));
-  } else if (idx_array.count() != ctx_->param_.column_count_) {
+  } else if (OB_UNLIKELY(idx_array.count() != ctx_->param_.column_count_ ||
+                         OB_INVALID_ID == user_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid idx_array", KR(ret), K(idx_array.count()), K_(ctx_->param_.column_count));
+    LOG_WARN("invalid args", KR(ret), K(idx_array.count()), K_(ctx_->param_.column_count),
+             K(user_id));
   } else {
-    // init redef table
-    if (OB_FAIL(redef_table_.init(ctx_, session_info))) {
-      LOG_WARN("failed to init ddl processor", KR(ret));
-    } else if (OB_FAIL(redef_table_.start())) {
-      LOG_WARN("failed to create hidden table", KR(ret));
-    } else if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_,
-                                            ctx_->param_.target_table_id_))) {
+    allocator_.set_tenant_id(MTL_ID());
+    if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
-                K(ctx_->param_.target_table_id_));
+               K(ctx_->ddl_param_.dest_table_id_));
     }
     // init idx array
     else if (OB_FAIL(idx_array_.assign(idx_array))) {
@@ -96,8 +91,8 @@ int ObTableLoadCoordinatorCtx::init(ObSQLSessionInfo *session_info,
       LOG_WARN("fail to init segment ctx map", KR(ret));
     }
     // generate credential_
-    else if (OB_FAIL(generate_credential(session_info->get_priv_user_id()))) {
-      LOG_WARN("fail to generate credential", KR(ret));
+    else if (OB_FAIL(generate_credential(user_id))) {
+      LOG_WARN("fail to generate credential", KR(ret), K(user_id));
     }
     // init task_scheduler_
     else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
@@ -150,7 +145,6 @@ void ObTableLoadCoordinatorCtx::destroy()
   trans_ctx_map_.reuse();
   segment_ctx_map_.reset();
   commited_trans_ctx_array_.reset();
-  redef_table_.reset();
 }
 
 int ObTableLoadCoordinatorCtx::generate_credential(uint64_t user_id)
@@ -615,35 +609,5 @@ int ObTableLoadCoordinatorCtx::check_exist_committed_trans(bool &is_exist) const
   return ret;
 }
 
-int ObTableLoadCoordinatorCtx::commit()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinatorCtx not init", KR(ret));
-  } else if (OB_FAIL(check_status(ObTableLoadStatusType::MERGED))) {
-    LOG_WARN("fail to check status", KR(ret));
-  } else if (OB_FAIL(redef_table_.finish())){
-    LOG_WARN("failed to finish redef table", KR(ret));
-  }
-  return ret;
-}
-
-int ObTableLoadCoordinatorCtx::abort()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinatorCtx not init", KR(ret));
-  } else if (OB_FAIL(redef_table_.abort())){
-    LOG_WARN("failed to abort redef table", KR(ret));
-  }
-  return ret;
-}
-
-int64_t ObTableLoadCoordinatorCtx::get_ddl_task_id() const
-{
-  return redef_table_.get_ddl_task_id();
-}
 } // namespace observer
 } // namespace oceanbase

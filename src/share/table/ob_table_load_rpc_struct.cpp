@@ -20,10 +20,12 @@ using namespace common;
 OB_SERIALIZE_MEMBER(ObTableLoadBeginRequest,
                     credential_,
                     table_name_,
-                    config_);
+                    config_,
+                    timeout_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadBeginResult,
                     table_id_,
+                    task_id_,
                     column_names_,
                     status_,
                     error_code_);
@@ -31,22 +33,24 @@ OB_SERIALIZE_MEMBER(ObTableLoadBeginResult,
 OB_SERIALIZE_MEMBER(ObTableLoadPreBeginPeerRequest,
                     credential_,
                     table_id_,
-                    target_table_id_,
                     config_,
                     column_count_,
-                    partition_id_array_,
-                    target_partition_id_array_,
                     dup_action_,
-                    ddl_task_id_,
                     px_mode_,
-                    online_opt_stat_gather_);
+                    online_opt_stat_gather_,
+                    dest_table_id_,
+                    task_id_,
+                    schema_version_,
+                    partition_id_array_,
+                    target_partition_id_array_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadPreBeginPeerResult,
                     ret_code_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadConfirmBeginPeerRequest,
                     credential_,
-                    table_id_)
+                    table_id_,
+                    task_id_)
 
 OB_SERIALIZE_MEMBER(ObTableLoadConfirmBeginPeerResult,
                     ret_code_);
@@ -57,7 +61,8 @@ OB_SERIALIZE_MEMBER(ObTableLoadConfirmBeginPeerResult,
 
 OB_SERIALIZE_MEMBER(ObTableLoadFinishRequest,
                     credential_,
-                    table_id_);
+                    table_id_,
+                    task_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadFinishResult,
                     ret_code_);
@@ -65,6 +70,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadFinishResult,
 OB_SERIALIZE_MEMBER(ObTableLoadPreMergePeerRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     committed_trans_id_array_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadPreMergePeerResult,
@@ -72,7 +78,8 @@ OB_SERIALIZE_MEMBER(ObTableLoadPreMergePeerResult,
 
 OB_SERIALIZE_MEMBER(ObTableLoadStartMergePeerRequest,
                     credential_,
-                    table_id_);
+                    table_id_,
+                    task_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadStartMergePeerResult,
                     ret_code_);
@@ -83,7 +90,8 @@ OB_SERIALIZE_MEMBER(ObTableLoadStartMergePeerResult,
 
 OB_SERIALIZE_MEMBER(ObTableLoadCommitRequest,
                     credential_,
-                    table_id_);
+                    table_id_,
+                    task_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadCommitResult,
                     ret_code_,
@@ -92,7 +100,8 @@ OB_SERIALIZE_MEMBER(ObTableLoadCommitResult,
 
 OB_SERIALIZE_MEMBER(ObTableLoadCommitPeerRequest,
                     credential_,
-                    table_id_);
+                    table_id_,
+                    task_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadCommitPeerResult,
                     ret_code_,
@@ -105,14 +114,16 @@ OB_SERIALIZE_MEMBER(ObTableLoadCommitPeerResult,
 
 OB_SERIALIZE_MEMBER(ObTableLoadAbortRequest,
                     credential_,
-                    table_id_);
+                    table_id_,
+                    task_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadAbortResult,
                     ret_code_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadAbortPeerRequest,
                     credential_,
-                    table_id_);
+                    table_id_,
+                    task_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadAbortPeerResult,
                     ret_code_);
@@ -123,7 +134,8 @@ OB_SERIALIZE_MEMBER(ObTableLoadAbortPeerResult,
 
 OB_SERIALIZE_MEMBER(ObTableLoadGetStatusRequest,
                     credential_,
-                    table_id_);
+                    table_id_,
+                    task_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadGetStatusResult,
                     status_,
@@ -131,7 +143,8 @@ OB_SERIALIZE_MEMBER(ObTableLoadGetStatusResult,
 
 OB_SERIALIZE_MEMBER(ObTableLoadGetStatusPeerRequest,
                     credential_,
-                    table_id_);
+                    table_id_,
+                    task_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadGetStatusPeerResult,
                     status_,
@@ -144,6 +157,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadGetStatusPeerResult,
 OB_SERIALIZE_MEMBER(ObTableLoadRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_,
                     session_id_,
                     sequence_no_,
@@ -155,6 +169,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadResult,
 OB_SERIALIZE_MEMBER(ObTableLoadPeerRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_,
                     session_id_,
                     sequence_no_,
@@ -170,6 +185,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadPeerResult,
 OB_SERIALIZE_MEMBER(ObTableLoadStartTransRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     segment_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadStartTransResult,
@@ -180,6 +196,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadStartTransResult,
 OB_SERIALIZE_MEMBER(ObTableLoadPreStartTransPeerRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadPreStartTransPeerResult,
@@ -188,6 +205,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadPreStartTransPeerResult,
 OB_SERIALIZE_MEMBER(ObTableLoadConfirmStartTransPeerRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadConfirmStartTransPeerResult,
@@ -200,6 +218,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadConfirmStartTransPeerResult,
 OB_SERIALIZE_MEMBER(ObTableLoadFinishTransRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadFinishTransResult,
@@ -208,6 +227,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadFinishTransResult,
 OB_SERIALIZE_MEMBER(ObTableLoadPreFinishTransPeerRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadPreFinishTransPeerResult,
@@ -216,6 +236,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadPreFinishTransPeerResult,
 OB_SERIALIZE_MEMBER(ObTableLoadConfirmFinishTransPeerRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadConfirmFinishTransPeerResult,
@@ -228,6 +249,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadConfirmFinishTransPeerResult,
 OB_SERIALIZE_MEMBER(ObTableLoadAbandonTransRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadAbandonTransResult,
@@ -236,6 +258,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadAbandonTransResult,
 OB_SERIALIZE_MEMBER(ObTableLoadAbandonTransPeerRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadAbandonTransPeerResult,
@@ -248,6 +271,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadAbandonTransPeerResult,
 OB_SERIALIZE_MEMBER(ObTableLoadGetTransStatusRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadGetTransStatusResult,
@@ -257,6 +281,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadGetTransStatusResult,
 OB_SERIALIZE_MEMBER(ObTableLoadGetTransStatusPeerRequest,
                     credential_,
                     table_id_,
+                    task_id_,
                     trans_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadGetTransStatusPeerResult,

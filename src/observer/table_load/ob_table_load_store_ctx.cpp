@@ -57,9 +57,9 @@ ObTableLoadStoreCtx::~ObTableLoadStoreCtx()
   destroy();
 }
 
-int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
-                              const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
-                              const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
+int ObTableLoadStoreCtx::init(
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -71,9 +71,9 @@ int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
   } else {
     ObDirectLoadInsertTableParam insert_table_param;
     insert_table_param.table_id_ = ctx_->param_.table_id_;
-    insert_table_param.schema_version_ = ctx_->schema_.schema_version_;
+    insert_table_param.schema_version_ = ctx_->ddl_param_.schema_version_;
     insert_table_param.snapshot_version_ = ObTimeUtil::current_time_ns();
-    insert_table_param.ddl_task_id_ = ddl_task_id;
+    insert_table_param.ddl_task_id_ = ctx_->ddl_param_.task_id_;
     insert_table_param.execution_id_ = 1; //仓氐说暂时设置为1，不然后面检测过不了
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_id_array.count(); ++i) {
       const ObLSID &ls_id = partition_id_array[i].ls_id_;
@@ -543,21 +543,16 @@ int ObTableLoadStoreCtx::generate_autoinc_params(AutoincParam &autoinc_param)
 int ObTableLoadStoreCtx::init_sequence()
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ctx_->param_.tenant_id_;
+  const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
   share::schema::ObSchemaGetterGuard table_schema_guard;
   share::schema::ObSchemaGetterGuard sequence_schema_guard;
   const ObSequenceSchema *sequence_schema = nullptr;
-  uint64_t tenant_id = ctx_->param_.tenant_id_;
   const ObTableSchema *target_table_schema = nullptr;
   uint64_t sequence_id = OB_INVALID_ID;
-  if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_,
-                                                  ctx_->param_.target_table_id_,
-                                                  table_schema_guard, target_table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(ctx_->param_.tenant_id_),
-                                         K(ctx_->param_.target_table_id_));
-  } else if (OB_ISNULL(target_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not exist", KR(ret), K(tenant_id),
-             K(ctx_->param_.target_table_id_));
+  if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, table_schema_guard,
+                                                  target_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else {
     //ddl对于identity是建表的时候进行自增值同步，对于sequence参数初始化得用隐藏表table id的table schema
     for (ObTableSchema::const_column_iterator iter = target_table_schema->column_begin();

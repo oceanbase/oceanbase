@@ -28,7 +28,11 @@ class ObNewRow;
 namespace table
 {
   class ObTableApiCredential;
-}
+} // namespace table
+namespace sql
+{
+class ObSQLSessionInfo;
+} // namespace sql
 namespace observer
 {
 class ObGlobalContext;
@@ -58,6 +62,7 @@ public:
   static int deep_copy(const common::ObIArray<T> &src, table::ObTableLoadArray<T> &dest, common::ObIAllocator &allocator);
 
   static bool is_local_addr(const common::ObAddr &addr);
+  static int init_session_info(uint64_t user_id, sql::ObSQLSessionInfo &session_info);
 
   static const int64_t CREDENTIAL_BUF_SIZE = 256;
   static int generate_credential(uint64_t tenant_id, uint64_t user_id, uint64_t database_id,
