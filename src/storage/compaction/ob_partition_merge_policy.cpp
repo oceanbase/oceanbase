@@ -535,19 +535,6 @@ int ObPartitionMergePolicy::get_major_merge_tables(
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(base_table)) {
-    const int64_t major_snapshot = MAX(base_table->get_snapshot_version(), freeze_info.freeze_ts);
-    result.read_base_version_ = base_table->get_snapshot_version();
-    result.version_range_.snapshot_version_ = major_snapshot;
-    result.create_snapshot_version_ = base_table->get_meta().get_basic_meta().create_snapshot_version_;
-    result.schema_version_ = freeze_info.schema_version;
-    result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
-    if (multi_version_start < result.version_range_.multi_version_start_) {
-      LOG_WARN("cannot reserve multi_version_start", "old multi_version_start", result.version_range_.multi_version_start_,
-               K(multi_version_start));
-    } else if (multi_version_start < result.version_range_.snapshot_version_) {
-      result.version_range_.multi_version_start_ = multi_version_start;
-      LOG_TRACE("succ reserve multi_version_start", K(result.version_range_));
-    }
     if (OB_UNLIKELY(tablet.get_snapshot_version() < param.merge_version_)) {
       ret = OB_NO_NEED_MERGE;
       LOG_INFO("tablet is not ready to schedule major merge", K(ret), K(tablet), K(param));
@@ -555,8 +542,22 @@ int ObPartitionMergePolicy::get_major_merge_tables(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet haven't kept major snapshot", K(ret), K(tablet), K(param));
     } else {
-      result.version_range_.multi_version_start_ = result.version_range_.snapshot_version_;
-      LOG_TRACE("no need keep multi version", K(result.version_range_));
+      const int64_t major_snapshot = MAX(base_table->get_snapshot_version(), freeze_info.freeze_ts);
+      result.read_base_version_ = base_table->get_snapshot_version();
+      result.version_range_.snapshot_version_ = major_snapshot;
+      result.create_snapshot_version_ = base_table->get_meta().get_basic_meta().create_snapshot_version_;
+      result.schema_version_ = freeze_info.schema_version;
+      result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
+      if (multi_version_start < result.version_range_.multi_version_start_) {
+        LOG_WARN("cannot reserve multi_version_start", "old multi_version_start", result.version_range_.multi_version_start_,
+                K(multi_version_start));
+      } else if (multi_version_start < result.version_range_.snapshot_version_) {
+        result.version_range_.multi_version_start_ = multi_version_start;
+        LOG_TRACE("succ reserve multi_version_start", K(result.version_range_));
+      } else {
+        result.version_range_.multi_version_start_ = result.version_range_.snapshot_version_;
+        LOG_TRACE("no need keep multi version", K(result.version_range_));
+      }
     }
   }
   return ret;
