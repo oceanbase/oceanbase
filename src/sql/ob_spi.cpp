@@ -1422,6 +1422,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
     //自动提交,禁掉PL整体重试
     if (OB_SUCC(ret)
         && (ObStmt::is_ddl_stmt(stmt_type, true)
+            || ObStmt::is_tcl_stmt(stmt_type)
             || (lib::is_mysql_mode() && session->get_local_autocommit()))) {
       OX (session->set_pl_can_retry(false));
     }
@@ -1632,6 +1633,7 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
     //自动提交,禁掉PL整体重试
     if (OB_SUCC(ret)
         && (ObStmt::is_ddl_stmt(stmt_type, true)
+            || ObStmt::is_tcl_stmt(stmt_type)
             || (lib::is_mysql_mode() && session->get_local_autocommit()))) {
       OX (session->set_pl_can_retry(false));
     }
@@ -2530,6 +2532,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
       //自动提交,禁掉PL整体重试
       if (OB_SUCC(ret)
           && (ObStmt::is_ddl_stmt(stmt_type, true)
+              || ObStmt::is_tcl_stmt(stmt_type)
               || (lib::is_mysql_mode() && session->get_local_autocommit()))) {
         OX (session->set_pl_can_retry(false));
       }

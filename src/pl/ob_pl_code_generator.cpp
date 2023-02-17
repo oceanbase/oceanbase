@@ -1086,6 +1086,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
       CK (OB_NOT_NULL(s.get_cursor()));
       OZ (generator_.set_current(cursor_forloop_fetch));
       OZ (generator_.get_helper().stack_save(stack));
+      OZ (generator_.set_loop(stack, s.get_level(), cursor_forloop_fetch, cursor_forloop_end, &s));
       OZ (generator_.generate_fetch(static_cast<const ObPLStmt&>(s),
                                     static_cast<const ObPLInto&>(s),
                                     s.get_cursor()->get_package_id(),
@@ -1115,12 +1116,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
         LOG_WARN("failed to set current", K(s), K(ret));
       } else if (OB_FAIL(generator_.get_helper().stack_save(stack))) {
         LOG_WARN("failed to stack_save", K(ret));
-      } else if (OB_FAIL(generator_.set_loop(stack,
-                                             s.get_level(),
-                                             cursor_forloop_fetch,
-                                             cursor_forloop_end,
-                                             &s))) {
-        LOG_WARN("failed to set loop stack", K(ret));
       } else if (OB_FAIL(SMART_CALL(generate(*s.get_body())))) {
         LOG_WARN("failed to generate exception body", K(ret));
       } else if (OB_FAIL(generator_.reset_loop())) {
