@@ -2324,7 +2324,7 @@ int ObTransService::recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx)
     tx->tenant_id_ = tx_info.tenant_id_;
     tx->cluster_id_ = tx_info.cluster_id_;
     tx->cluster_version_ = tx_info.cluster_version_;
-    tx->addr_ = tx_info.addr_;
+    tx->addr_ = tx_info.addr_; /*origin scheduler addr*/
     tx->tx_id_ = tx_info.tx_id_;
     tx->isolation_ = tx_info.isolation_;
     tx->access_mode_ = tx_info.access_mode_;

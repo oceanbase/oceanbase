@@ -105,7 +105,7 @@ public:
                             const int64_t timeout_seconds,
                             ObTxDesc *&tx_desc);
   int xa_end(const ObXATransID &xid, const int64_t flags, ObTxDesc *&tx_desc);
-  int start_stmt(const ObXATransID &xid);
+  int start_stmt(const ObXATransID &xid, const uint32_t session_id);
   int wait_start_stmt();
   int end_stmt(const ObXATransID &xid);
   const ObXATransID &get_executing_xid() const { return executing_xid_; }
@@ -166,8 +166,8 @@ public:
                K_(trans_id), K_(is_executing), K_(is_xa_end_trans), K_(tenant_id), 
                K_(is_xa_readonly), K_(xa_trans_state), K_(is_xa_one_phase),
                K_(xa_branch_count), K_(xa_ref_count), K_(lock_grant),
-               K_(is_tightly_coupled), K_(lock_xid), K_(is_terminated),
-               K_(executing_xid), "uref", get_uref(),
+               K_(is_tightly_coupled), K_(lock_xid), K_(xa_stmt_info),
+               K_(is_terminated), K_(executing_xid), "uref", get_uref(),
                K_(has_tx_level_temp_table));
 private:
   int register_timeout_task_(const int64_t interval_us);
@@ -246,6 +246,10 @@ private:
   int check_trans_state_(const bool is_rollback,
                          const int64_t request_id,
                          const bool is_xa_one_phase);
+  int update_xa_stmt_info_(const ObXATransID &xid);
+  int create_xa_savepoint_if_need_(const ObXATransID &xid,
+                                   const uint32_t session_id);
+  int remove_xa_stmt_info_(const ObXATransID &xid);
 private:
   // for 4.0 dblink
   int get_dblink_client_(const common::sqlclient::DblinkDriverProto dblink_type,
@@ -290,6 +294,7 @@ private:
   bool is_tightly_coupled_;
   ObXATransID lock_xid_;
   ObXABranchInfoArray *xa_branch_info_;
+  ObXAStmtInfoArray xa_stmt_info_;
   bool is_terminated_;
   common::ObTraceEventRecorder tlog_;
   bool need_print_trace_log_;

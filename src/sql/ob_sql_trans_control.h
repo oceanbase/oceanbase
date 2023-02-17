@@ -247,6 +247,9 @@ private:
                                            const ObSQLSessionInfo &session);
   static int inc_session_ref(const ObSQLSessionInfo *session);
   static int acquire_tx_if_need_(transaction::ObTransService *txs, ObSQLSessionInfo &session);
+  static int start_hook_if_need_(ObSQLSessionInfo &session,
+                                 transaction::ObTransService *txs,
+                                 bool &start_hook);
 public:
   /*
    * create a savepoint without name

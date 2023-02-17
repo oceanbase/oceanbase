@@ -497,6 +497,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OZ (acquire_tx_if_need_(txs, *session));
   OZ (stmt_sanity_check_(session, plan, plan_ctx));
   OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid()));
+  bool start_hook = OB_SUCC(ret) && !session->get_xid().empty() ? true : false;
   if (OB_SUCC(ret)
       && txs->get_tx_elr_util().check_and_update_tx_elr_info(*session->get_tx_desc())) {
     LOG_WARN("check and update tx elr info", K(ret), KPC(session->get_tx_desc()));
@@ -530,6 +531,12 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   }
   if (plan->is_contain_oracle_trx_level_temporary_table()) {
     OX (tx_desc->set_with_temporary_table());
+  }
+  if (OB_FAIL(ret) && start_hook) {
+    int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("call sql stmt end hook fail", K(tmp_ret));
+    }
   }
 bool print_log = false;
 #ifndef NDEBUG
@@ -701,7 +708,28 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
   CHECK_TXN_FREE_ROUTE_ALLOWED();
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
-  OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name), sp_name);
+  bool start_hook = false;
+  OZ(start_hook_if_need_(*session, txs, start_hook));
+  OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, !session->get_xid().empty() ? session->get_sessid() : 0), sp_name);
+  if (start_hook) {
+    int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("call sql stmt end hook fail", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
+int ObSqlTransControl::start_hook_if_need_(ObSQLSessionInfo &session,
+                                           transaction::ObTransService *txs,
+                                           bool &start_hook)
+{
+  int ret = OB_SUCCESS;
+  if (!session.get_tx_desc()->is_shadow() && !session.has_start_stmt() &&
+      OB_SUCC(txs->sql_stmt_start_hook(session.get_xid(), *session.get_tx_desc(), session.get_sessid()))) {
+    start_hook = true;
+  }
   return ret;
 }
 
@@ -720,7 +748,16 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
   OX (stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session));
-  OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts), sp_name);
+  bool start_hook = false;
+  OZ(start_hook_if_need_(*session, txs, start_hook));
+  OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, !session->get_xid().empty() ? session->get_sessid() : 0), sp_name);
+  if (start_hook) {
+    int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("call sql stmt end hook fail", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
   return ret;
 }
 
@@ -735,7 +772,16 @@ int ObSqlTransControl::release_savepoint(ObExecContext &exec_ctx,
   CHECK_TXN_FREE_ROUTE_ALLOWED();
   OZ (get_tx_service(session, txs), *session);
   OZ (acquire_tx_if_need_(txs, *session));
-  OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name), *session, sp_name);
+  bool start_hook = false;
+  OZ(start_hook_if_need_(*session, txs, start_hook));
+  OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name, !session->get_xid().empty() ? session->get_sessid() : 0), *session, sp_name);
+  if (start_hook) {
+    int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("call sql stmt end hook fail", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
   return ret;
 }
 

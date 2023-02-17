@@ -1135,7 +1135,7 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
   return ret;
 }
 
-int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &savepoint)
+int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &savepoint, const uint32_t session_id)
 {
   int ret = OB_SUCCESS;
   int64_t scn = 0;
@@ -1143,7 +1143,7 @@ int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &save
   tx.inc_op_sn();
   scn = ObSequence::inc_and_get_max_seq_no();
   ObTxSavePoint sp;
-  if (OB_SUCC(sp.init(scn, savepoint))) {
+  if (OB_SUCC(sp.init(scn, savepoint, session_id))) {
     if (OB_FAIL(tx.savepoints_.push_back(sp))) {
       TRANS_LOG(WARN, "push savepoint failed", K(ret));
     } else if (!tx.tx_id_.is_valid() && OB_FAIL(tx_desc_mgr_.add(tx))) {
@@ -1154,7 +1154,7 @@ int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &save
       ARRAY_FOREACH_X(tx.savepoints_, i, cnt, i != cnt - 1) {
         ObTxSavePoint &it = tx.savepoints_.at(cnt - 2 - i);
         if (it.is_stash()) { break; }
-        if (it.is_savepoint() && it.name_ == savepoint) {
+        if (it.is_savepoint() && it.name_ == savepoint && it.session_id_ == session_id) {
           TRANS_LOG(TRACE, "move savepoint", K(savepoint), "from", it.scn_, "to", scn, K(tx));
           it.release();
           break; // assume only one if exist
@@ -1180,7 +1180,8 @@ int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &save
 // 2. invalidate savepoint and snapshot after the savepoint Node.
 int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
                                                    const ObString &savepoint,
-                                                   const int64_t expire_ts)
+                                                   const int64_t expire_ts,
+                                                   const uint32_t session_id)
 {
   int ret = OB_SUCCESS;
   auto start_ts = ObTimeUtility::current_time();
@@ -1192,7 +1193,7 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
       const ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
       TRANS_LOG(TRACE, "sp iterate:", K(it));
       if (it.is_stash()) { break; }
-      if (it.is_savepoint() && it.name_ == savepoint) {
+      if (it.is_savepoint() && it.name_ == savepoint && it.session_id_ == session_id) {
         sp_scn = it.scn_;
         break;
       }
@@ -1242,7 +1243,7 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
 
 // impl note
 // registered snapshot keep valid
-int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &savepoint)
+int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &savepoint, const uint32_t session_id)
 {
   int ret = OB_SUCCESS;
   bool hit = false;
@@ -1252,7 +1253,7 @@ int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &sav
     tx.inc_op_sn();
     ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
       ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
-      if (it.is_savepoint() && it.name_ == savepoint) {
+      if (it.is_savepoint() && it.name_ == savepoint && it.session_id_ == session_id) {
         hit = true;
         sp_id = it.scn_;
         break;
@@ -1269,7 +1270,7 @@ int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &sav
           it.release();
         }
       }
-      TRANS_LOG(TRACE, "release savepoint", K(savepoint), K(sp_id), K(tx));
+      TRANS_LOG(TRACE, "release savepoint", K(savepoint), K(sp_id), K(session_id), K(tx));
     }
   }
   tx.state_change_flags_.EXTRA_CHANGED_ = true;
@@ -1288,7 +1289,7 @@ int ObTransService::create_stash_savepoint(ObTxDesc &tx, const ObString &name)
   tx.inc_op_sn();
   auto seq_no = ObSequence::inc_and_get_max_seq_no();
   ObTxSavePoint sp;
-  if (OB_SUCC(sp.init(seq_no, name, true))) {
+  if (OB_SUCC(sp.init(seq_no, name, 0, true))) {
     if (OB_FAIL(tx.savepoints_.push_back(sp))) {
       TRANS_LOG(WARN, "push savepoint failed", K(ret));
     }
@@ -1760,7 +1761,7 @@ int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, co
         TRANS_LOG(WARN, "register tx fail", K(ret), K_(tx.tx_id), K(xid), KP(&tx));
       } else { registed = true; }
     }
-    if (OB_SUCC(ret) && OB_FAIL(MTL(ObXAService*)->start_stmt(xid, tx))) {
+    if (OB_SUCC(ret) && OB_FAIL(MTL(ObXAService*)->start_stmt(xid, session_id, tx))) {
       TRANS_LOG(WARN, "xa trans start stmt failed", K(ret), K_(tx.xid), K(xid));
       ObGlobalTxType global_tx_type = tx.get_global_tx_type(xid);
       if (ObGlobalTxType::DBLINK_TRANS == global_tx_type && OB_TRANS_XA_BRANCH_FAIL == ret) {

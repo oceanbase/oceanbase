@@ -189,6 +189,12 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
   } else if (!my_session->get_in_transaction()) {
     ret = OB_TRANS_XA_PROTO;
     LOG_WARN("not in a trans", K(ret));
+  } else if (my_session->get_xid().empty()) {
+    ret = OB_TRANS_XA_PROTO;
+    LOG_WARN("not in xa trans", K(ret));
+  } else if (!xid.all_equal_to(my_session->get_xid())) {
+    ret = OB_TRANS_XA_NOTA;
+    TRANS_LOG(WARN, "xid not match", K(ret), K(xid));
   } else {
     int64_t flags = stmt.get_flags();
     flags = my_session->has_tx_level_temp_table() ? (flags | ObXAFlag::TEMPTABLE) : flags;

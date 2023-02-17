@@ -1378,11 +1378,6 @@ int ObXAService::xa_end(const ObXATransID &xid,
   } else if (!tx_desc->is_xa_trans()) {
     ret = OB_TRANS_XA_PROTO;
     TRANS_LOG(WARN, "Routine invoked in an improper context", K(ret), K(xid));
-  } else if (!xid.gtrid_equal_to(tx_desc->get_xid())) {
-    // tx->get_xid().gtrid != xid.gtrid
-    // oracle returns 0
-    ret = OB_TRANS_XA_NOTA;
-    TRANS_LOG(WARN, "xid not match", K(ret), K(xid));
   } else if (NULL == (xa_ctx = tx_desc->get_xa_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "transaction context is null", K(ret), K(xid));
@@ -1402,7 +1397,7 @@ int ObXAService::xa_end(const ObXATransID &xid,
   return ret;
 }
 
-int ObXAService::start_stmt(const ObXATransID &xid, ObTxDesc &tx_desc)
+int ObXAService::start_stmt(const ObXATransID &xid, const uint32_t session_id, ObTxDesc &tx_desc)
 {
   int ret = OB_SUCCESS;
   const ObTransID &tx_id = tx_desc.tid();
@@ -1414,7 +1409,7 @@ int ObXAService::start_stmt(const ObXATransID &xid, ObTxDesc &tx_desc)
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected trans descriptor", K(ret), K(tx_id), K(xid));
-    } else if (OB_FAIL(xa_ctx->start_stmt(xid))) {
+    } else if (OB_FAIL(xa_ctx->start_stmt(xid, session_id))) {
       TRANS_LOG(WARN, "xa trans start stmt failed", K(ret), K(tx_id), K(xid));
     } else if (OB_FAIL(xa_ctx->wait_start_stmt())) {
       TRANS_LOG(WARN, "fail to wait start stmt", K(ret), K(tx_id), K(xid));
@@ -2195,7 +2190,7 @@ int ObXAService::xa_rollback_all_changes(const ObXATransID &xid, ObTxDesc *&tx_d
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(tx_desc), K(xid), K(stmt_expired_time));
   } else {
-    if (OB_FAIL(start_stmt(xid, *tx_desc))) {
+    if (OB_FAIL(start_stmt(xid, 0/*unused session id*/, *tx_desc))) {
       TRANS_LOG(WARN, "xa start stmt fail", K(ret), K(tx_desc), K(xid));
     } else if (OB_FAIL(MTL(transaction::ObTransService *)->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expired_time, NULL))) {
       TRANS_LOG(WARN, "do savepoint rollback error", K(ret), K(tx_desc));
