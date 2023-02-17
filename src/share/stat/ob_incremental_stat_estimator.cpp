@@ -142,10 +142,13 @@ int ObIncrementalStatEstimator::write_all_opt_stats_by_dircet_load(
     ObIArray<ObOptColumnStat *> &all_cstats)
 {
   int ret = OB_SUCCESS;
+  obrpc::ObCommonRpcProxy *proxy = NULL;
   ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
   ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
   //before write, we need record history stats.
-  if (OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param,
+  if (OB_FAIL(ctx.get_task_executor_ctx()->get_common_rpc(proxy))) {
+    LOG_WARN("fail to get proxy", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param,
                                                                   history_tab_handles,
                                                                   history_col_handles))) {
     LOG_WARN("failed to get history stat handles", K(ret));
@@ -157,6 +160,8 @@ int ObIncrementalStatEstimator::write_all_opt_stats_by_dircet_load(
     LOG_WARN("failed to batch write history stats", K(ret));
   } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
     LOG_WARN("failed to update last modified count", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(proxy, param))) {
+    LOG_WARN("fail to update stat cache", K(ret));
   } else {/*do nothing*/}
   return ret;
 }

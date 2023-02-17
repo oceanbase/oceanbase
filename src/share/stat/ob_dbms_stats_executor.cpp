@@ -21,6 +21,7 @@
 #include "share/stat/ob_dbms_stats_history_manager.h"
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
 #include "share/stat/ob_index_stats_estimator.h"
+#include "pl/sys_package/ob_dbms_stats.h"
 namespace oceanbase {
 using namespace pl;
 namespace common {
@@ -782,6 +783,7 @@ int ObDbmsStatsExecutor::update_stat_online(ObExecContext &ctx,
   int ret = OB_SUCCESS;
 
   int64_t affected_rows = 0;
+  obrpc::ObCommonRpcProxy *proxy = NULL;
 
   //before write, we need record history stats.
   ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
@@ -800,6 +802,8 @@ int ObDbmsStatsExecutor::update_stat_online(ObExecContext &ctx,
     LOG_WARN("fail to check lock stat", K(ret));
   }
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ctx.get_task_executor_ctx()->get_common_rpc(proxy))) {
+    LOG_WARN("fail to get proxy", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_ids_from_param(param, part_ids))) {
     //part id should generated after check stat locked, since check_stat_locked will change part_info
     LOG_WARN("fail to get part_ids");
@@ -828,6 +832,8 @@ int ObDbmsStatsExecutor::update_stat_online(ObExecContext &ctx,
   } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
     //update history
     LOG_WARN("failed to update last modified count", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(proxy, param))) {
+    LOG_WARN("fail to update stat cache", K(ret));
   } else {
     // should reuse stats out-side this function.
   }
