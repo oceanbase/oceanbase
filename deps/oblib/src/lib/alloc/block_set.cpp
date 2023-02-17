@@ -172,19 +172,9 @@ void BlockSet::free_block(ABlock *const block)
       // head won't been NULL,
       if (head != NULL) {
         head->in_use_ = false;
-        bool all_blocks_unused = false;
         // copy a temp
         chunk->mark_unused_blk_offset_bit(chunk->blk_offset(head));
-        if (0 != chunk->washed_size_) {
-          auto blk_bs = chunk->blk_bs_;
-          blk_bs.combine(chunk->unused_blk_bs_,
-                [](int64_t left, int64_t right) { return (left ^ right); });
-          all_blocks_unused = -1 == blk_bs.min_bit_ge(0);
-        } else {
-          all_blocks_unused = -1 == chunk->blk_bs_.min_bit_ge(1);
-        }
-
-        if (all_blocks_unused) {
+        if (chunk->is_all_blks_unused()) {
           if (0 != chunk->washed_size_) {
             int offset = 0;
             do {
@@ -348,7 +338,7 @@ void BlockSet::free_chunk(AChunk *const chunk)
   abort_unless(NULL != chunk->next_);
   abort_unless(NULL != chunk->prev_);
   abort_unless(NULL != clist_);
-
+  abort_unless(chunk->is_all_blks_unused());
   if (chunk == clist_) {
     clist_ = clist_->next_;
   }
