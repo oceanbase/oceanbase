@@ -2436,8 +2436,7 @@ do {                                                                  \
                                get_params().at(i)));
         } else if (pl_type.is_obj_type() // 复杂类型不需要做类型转换(不支持复杂类型的转换), 直接赋值
                    && (params->at(i).get_meta() != get_params().at(i).get_meta()
-                      || params->at(i).get_accuracy() != get_params().at(i).get_accuracy())
-                   && !func_.is_function()) {
+                      || params->at(i).get_accuracy() != get_params().at(i).get_accuracy())) {
           if (params->at(i).is_null()
               || (lib::is_oracle_mode() && params->at(i).is_null_oracle())) {
             ObObjMeta null_meta = get_params().at(i).get_meta();
