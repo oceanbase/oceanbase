@@ -473,7 +473,7 @@ int ObLobLocatorV2::fill(ObMemLobType type,
         K(ret), K(type), KP(offset), K(size_), K(flags), K(disk_lob_full_size));
     }
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObLobLocatorV2::copy(const ObLobLocatorV2* src_locator) const
