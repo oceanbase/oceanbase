@@ -186,7 +186,7 @@ int ObJsonExprHelper::cast_to_json_tree(ObString &text, common::ObIAllocator *al
     LOG_WARN("get json tree fail", K(ret));
   } else {
     ObJsonBuffer jbuf(allocator);
-    if (OB_FAIL(j_tree->print(jbuf, true, false, 0, true))) {
+    if (OB_FAIL(j_tree->print(jbuf, true, false, 0))) {
       LOG_WARN("json binary to string failed", K(ret));
     } else if (jbuf.empty()) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1162,7 +1162,7 @@ int ObJsonExprHelper::transform_convertible_2String(const ObExpr &expr,
         }
       } else {
         ObJsonString ob_str(value.ptr(), value.length());
-        if (OB_FAIL(ob_str.print(j_buf, true, false, 0, true))) {
+        if (OB_FAIL(ob_str.print(j_buf, true, false, 0))) {
           LOG_WARN("fail to print json node", K(ret));
         }
       }
@@ -1178,7 +1178,7 @@ int ObJsonExprHelper::transform_convertible_2String(const ObExpr &expr,
                                                    ObJsonInType::JSON_BIN, json_node))) {
         ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
         LOG_WARN("fail to get json base", K(ret));
-      } else if (OB_FAIL(json_node->print(j_buf, true, false, 0, true))) {
+      } else if (OB_FAIL(json_node->print(j_buf, true, false, 0))) {
         LOG_WARN("fail to print json node", K(ret));
       }
       break;

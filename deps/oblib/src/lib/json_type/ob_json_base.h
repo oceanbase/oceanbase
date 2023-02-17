@@ -250,7 +250,7 @@ public:
   // @param [in]  depth      The depth of json tree.
   // @return Returns OB_SUCCESS on success, error code otherwise.
   virtual int print(ObJsonBuffer &j_buf, bool is_quoted,
-                    bool is_pretty = false, uint64_t depth = 0, bool format_json = false) const;
+                    bool is_pretty = false, uint64_t depth = 0) const;
   
   // calculate json hash value
   //
@@ -361,7 +361,7 @@ private:
   // @param [in]      depth     The depth of json tree.
   // @param [in]      is_pretty Whether is from json funcion JSON_PRETTY or not.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  int print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty, bool format_json = false) const;
+  int print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty) const;
 
   // Change json decimal to string.
   //
@@ -1075,7 +1075,7 @@ public:
   // @param [in] data         The source string.
   // @param [in] length       The length of source string.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  static int append_string(ObJsonBuffer &j_buf, bool is_quoted, const char *data, uint64_t length, bool format_json = false);
+  static int append_string(ObJsonBuffer &j_buf, bool is_quoted, const char *data, uint64_t length);
 
   // Compare two numbers.
   //

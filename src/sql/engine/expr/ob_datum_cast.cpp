@@ -1821,7 +1821,7 @@ static int common_json_string(const ObExpr &expr,
     // get json string
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-    } else if (CAST_FAIL(j_base->print(j_buf, true, false, 0, true))) {
+    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
       LOG_WARN("fail to convert json to string", K(ret), K(j_bin_str));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -7029,7 +7029,7 @@ CAST_FUNC_NAME(json, raw)
 
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-    } else if (CAST_FAIL(j_base->print(j_buf, true, false, 0, true))) {
+    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
       LOG_WARN("fail to convert json to string", K(ret), K(j_bin_str));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -7078,7 +7078,7 @@ CAST_FUNC_NAME(json, string)
 
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true, false, 0, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
         LOG_WARN("fail to convert json to string", K(ret), K(j_bin_str));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);

@@ -374,7 +374,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
           if (OB_SUCC(ret)) {
             if (unique_type == OB_JSON_ON_UNIQUE_USE && OB_FAIL(check_key_valid(view_key_names, key))) {
               LOG_WARN("duplicate key fail");
-            } else if (OB_FAIL(ob_str.print(res_str, true, false, 0, true))) {
+            } else if (OB_FAIL(ob_str.print(res_str, true))) {
               LOG_WARN("fail to print json node", K(ret));
             } else if (OB_FAIL(res_str.append(":"))) {
               LOG_WARN("colon write fail");
@@ -391,7 +391,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
           if (OB_SUCC(ret)) {
             if (unique_type == OB_JSON_ON_UNIQUE_USE && OB_FAIL(check_key_valid(view_key_names, key))) {
               LOG_WARN("duplicate key fail");
-            } else if (OB_FAIL(ob_str.print(res_str, true, false, 0, true))) {
+            } else if (OB_FAIL(ob_str.print(res_str, true))) {
               LOG_WARN("fail to print json node", K(ret));
             } else if (OB_FAIL(res_str.append(":"))) {
               LOG_WARN("colon write fail");

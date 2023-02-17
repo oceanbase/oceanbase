@@ -1057,10 +1057,8 @@ int ObMySQLUtil::json_cell_str(char *buf, const int64_t len, const ObString &val
     }
   } else if (OB_FAIL(j_bin.reset_iter())) {
     OB_LOG(WARN, "fail to reset json bin iter", K(ret), K(val));
-  } else if (lib::is_mysql_mode() && OB_FAIL(j_base->print(jbuf, true))) {
+  } else if (OB_FAIL(j_base->print(jbuf, true))) {
     OB_LOG(WARN, "json binary to string failed in mysql mode", K(ret), K(val), K(*j_base));
-  } else if (lib::is_oracle_mode() && OB_FAIL(j_base->print(jbuf, true, false, 0, true))) {
-    OB_LOG(WARN, "json binary to string failed in oracle mode", K(ret), K(val), K(*j_base));
   } else {
     int64_t new_length = jbuf.length();
     if (OB_LIKELY(new_length < len - pos)) {

@@ -335,7 +335,8 @@ int JtFuncHelpler::cast_to_string(JtColNode* node,
                                   ObObjType dst_type,
                                   ObString &val,
                                   bool is_trunc,
-                                  bool is_quote)
+                                  bool is_quote,
+                                  bool is_const)
 {
   INIT_SUCC(ret);
 
@@ -380,8 +381,7 @@ int JtFuncHelpler::cast_to_string(JtColNode* node,
             // just copy string when in_cs_type or out_cs_type is binary
             const ObCharsetInfo *cs = NULL;
             int64_t align_offset = 0;
-            if (CS_TYPE_BINARY == in_cs_type && lib::is_mysql_mode()
-                && (NULL != (cs = ObCharset::get_charset(dst_cs_type)))) {
+            if (CS_TYPE_BINARY == in_cs_type && (NULL != (cs = ObCharset::get_charset(dst_cs_type)))) {
               if (cs->mbminlen > 0 && temp_str_val.length() % cs->mbminlen != 0) {
                 align_offset = cs->mbminlen - temp_str_val.length() % cs->mbminlen;
               }
@@ -419,13 +419,14 @@ int JtFuncHelpler::cast_to_string(JtColNode* node,
       if (OB_SUCC(ret)) {
         if (max_accuracy_len == DEFAULT_STR_LENGTH) { // default string len
         } else if (is_trunc && max_accuracy_len < str_len_char) {
-          if (node->col_info_.col_type_ == static_cast<int>(COL_TYPE_EXISTS)
-              || j_base->json_type() == ObJsonNodeType::J_INT
-              || j_base->json_type() == ObJsonNodeType::J_UINT
-              || j_base->json_type() == ObJsonNodeType::J_BOOLEAN
-              || j_base->json_type() == ObJsonNodeType::J_DOUBLE
-              || j_base->json_type() == ObJsonNodeType::J_DECIMAL) {
-            ret = OB_OPERATE_OVERFLOW;
+          if (!is_const &&
+              (node->col_info_.col_type_ == static_cast<int>(COL_TYPE_EXISTS)
+               || j_base->json_type() == ObJsonNodeType::J_INT
+               || j_base->json_type() == ObJsonNodeType::J_UINT
+               || j_base->json_type() == ObJsonNodeType::J_BOOLEAN
+               || j_base->json_type() == ObJsonNodeType::J_DOUBLE
+               || j_base->json_type() == ObJsonNodeType::J_DECIMAL)) {
+            ret = OB_ERR_VALUE_EXCEEDED_MAX;
           } else {
             // bugfix: https://work.aone.alibaba-inc.com/issue/46640577
             // Q1:SELECT c1 ,jt.ww b_c1 FROM t1, json_table ( c2 columns( ww varchar2(2 char) truncate  path '$.a')) jt ;
@@ -886,7 +887,8 @@ int JtFuncHelpler::cast_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNode& c
     case ObLongTextType: {
       ObString val;
       bool is_quote = (col_info.col_type_ == COL_TYPE_QUERY && js_val->json_type() == ObJsonNodeType::J_STRING);
-      ret = cast_to_string(&col_node, &ctx->row_alloc_, js_val, in_coll_type, dst_coll_type, accuracy, dst_type, val, is_truncate, is_quote);
+      ret = cast_to_string(&col_node, &ctx->row_alloc_, js_val, in_coll_type, dst_coll_type,
+                           accuracy, dst_type, val, is_truncate, is_quote, ctx->is_const_input_);
       if (OB_FAIL(ret) && enable_error) {
         int tmp_ret = set_error_val(ctx, col_node, ret);
         if (tmp_ret != OB_SUCCESS) {
@@ -956,8 +958,9 @@ int JtFuncHelpler::set_error_val(JtScanCtx* ctx, JtColNode& col_node, int& ret)
   } else {
     const ObJtColInfo& info = col_node.col_info_;
     JtColType col_type = col_node.type();
+    ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_node.col_info_.output_column_idx_);
     if (col_type == COL_TYPE_VALUE) {
-      if (info.on_error_ == JSN_VALUE_ERROR || info.on_empty_ == JSN_VALUE_ERROR) {
+      if (info.on_error_ == JSN_VALUE_ERROR || (info.on_error_ == JSN_VALUE_IMPLICIT && info.on_empty_ == JSN_VALUE_ERROR)) {
         EVAL_COVER_CODE(ctx, ret) ;
         if (OB_SUCC(ret) && ctx->is_need_end_) {
           ret = OB_ITER_END;
@@ -965,6 +968,7 @@ int JtFuncHelpler::set_error_val(JtScanCtx* ctx, JtColNode& col_node, int& ret)
       } else if (info.on_error_ == JSN_VALUE_DEFAULT) {
         ObExpr* default_expr = ctx->spec_ptr_->err_default_exprs_.at(col_node.col_info_.error_expr_id_);
         ObDatum* err_datum = nullptr;
+        col_node.is_null_result_ = false;
         tmp_ret = default_expr->eval(*ctx->eval_ctx_, err_datum);
         if (tmp_ret != OB_SUCCESS) {
           LOG_WARN("failed do cast to returning type.", K(tmp_ret));
@@ -1074,14 +1078,15 @@ int JtFuncHelpler::set_error_val(JtScanCtx* ctx, JtColNode& col_node, int& ret)
         }
       }
 
-      if (OB_SUCC(ret)) {
-        if (col_node.is_null_result_) {
-          ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_node.col_info_.output_column_idx_);
-          expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
-        } else if (OB_FAIL(JtFuncHelpler::cast_to_res(ctx, col_node.curr_, col_node, false))) {
-          LOG_WARN("failed do cast defaut value to returning type.", K(ret));
-        }
+      if (OB_SUCC(ret)
+          && !col_node.is_null_result_
+          && OB_FAIL(JtFuncHelpler::cast_to_res(ctx, col_node.curr_, col_node, false))) {
+        LOG_WARN("failed do cast defaut value to returning type.", K(ret));
       }
+    }
+
+    if (OB_SUCC(ret) && col_node.is_null_result_) {
+      expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
     }
   }
   return ret;
@@ -1159,8 +1164,7 @@ int JtFuncHelpler::check_default_value_inner(JtScanCtx* ctx,
     in_str.assign_ptr(emp_datum->ptr_, emp_datum->len_);
   }
   if (OB_FAIL(ret)) {
-  } else if ((default_expr->datum_meta_.type_ == ObNullType || emp_datum->is_null())
-             && ob_is_string_type(col_info.data_type_.get_obj_type())) {
+  } else if (default_expr->datum_meta_.type_ == ObNullType && ob_is_string_type(col_info.data_type_.get_obj_type())) {
     ret = OB_ERR_DEFAULT_VALUE_NOT_LITERAL;
     LOG_WARN("default value not match returing type", K(ret));
   } else if (OB_FAIL(ObJsonExprHelper::pre_default_value_check(col_expr->datum_meta_.type_, in_str, default_expr->datum_meta_.type_))) {
@@ -2631,9 +2635,9 @@ int ObJsonTableOp::init()
   }
 
   jt_ctx_.is_cover_error_ = false;
+  jt_ctx_.is_const_input_ = !MY_SPEC.has_correlated_expr_;
   jt_ctx_.error_code_ = 0;
   jt_ctx_.is_need_end_ = 0;
-
   return ret;
 }
 
@@ -2690,7 +2694,10 @@ int ObJsonTableOp::inner_get_next_row()
 
     if (doc_type == ObNullType) {
       ret = OB_ITER_END;
-    } else if (doc_type == ObNCharType || !(doc_type == ObJsonType || ob_is_string_type(doc_type))) {
+    } else if (doc_type == ObNCharType ||
+                !(doc_type == ObJsonType
+                  || doc_type == ObRawType
+                  || ob_is_string_type(doc_type))) {
       ret = OB_ERR_INPUT_JSON_TABLE;
       LOG_WARN("fail to get json base", K(ret), K(doc_type));
     } else {

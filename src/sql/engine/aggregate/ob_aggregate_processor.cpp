@@ -6231,7 +6231,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
             }
             ObJsonString ob_str(key_string.ptr(), key_string.length());
             if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(ob_str.print(json_object_buf, true, false, 0, true))) {
+            } else if (OB_FAIL(ob_str.print(json_object_buf, true))) {
               LOG_WARN("fail to print json node", K(ret));
             } else if (OB_FAIL(json_object_buf.append(":"))) {
               LOG_WARN("fail to append colon", K(ret));
