@@ -232,7 +232,11 @@ int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
           } else {
             ObTableLoadErrorRowHandler *error_row_handler = param_.error_row_handler_;
             if (OB_FAIL(error_row_handler->append_error_row(*item->datum_row_))) {
-              LOG_WARN("fail to append row to error row handler", KR(ret), K(item->datum_row_));
+              if ((OB_ERR_TOO_MANY_ROWS == ret)
+                  && (0 == param_.error_row_handler_->get_capacity())){
+                ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
+              }
+              LOG_WARN("fail to append row to error row handler", KR(ret), KPC(item->datum_row_));
             }
           }
         } else if (ObLoadDupActionType::LOAD_IGNORE == param_.dup_action_) {
