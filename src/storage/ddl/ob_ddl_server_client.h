@@ -33,6 +33,7 @@ public:
   static int build_ddl_single_replica_response(const obrpc::ObDDLBuildSingleReplicaResponseArg &arg);
 private:
   static int wait_table_lock(const uint64_t tenant_id, const int64_t task_id, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session);
+  static int heart_beat_clear(const int64_t task_id);
 };
 
 }  // end of namespace observer
