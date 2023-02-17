@@ -309,6 +309,7 @@ struct ObStorageDatum : public common::ObDatum
   OB_INLINE int64_t get_deep_copy_size() const;
   OB_INLINE ObStorageDatum& operator=(const ObStorageDatum &other);
   OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len) const;
+  OB_INLINE bool need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const;
   //only for unittest
   OB_INLINE bool operator==(const ObStorageDatum &other) const;
   OB_INLINE bool operator==(const ObObj &other) const;
@@ -669,6 +670,11 @@ OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len) 
   }
 
   return pos;
+}
+
+OB_INLINE bool ObStorageDatum::need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const
+{
+  return OBJ_DATUM_STRING == map_type && sizeof(uint64_t) == len_ && is_local_buf();
 }
 
 struct ObGhostRowUtil {
