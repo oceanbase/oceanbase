@@ -158,7 +158,7 @@ int ObDtlFlowControl::unregister_all_channel()
     }
   }
   if (is_receive() && (0 != get_blocked_cnt() || 0 != get_total_buffer_cnt() || 0 != get_used())) {
-    LOG_ERROR("unexpected dfc status", K(chans_.count()), K(ret), K(get_blocked_cnt()), K(get_total_buffer_cnt()), K(get_used()), K(get_accumulated_blocked_cnt()));
+    LOG_WARN("unexpected dfc status", K(chans_.count()), K(ret), K(get_blocked_cnt()), K(get_total_buffer_cnt()), K(get_used()), K(get_accumulated_blocked_cnt()));
   }
   LOG_TRACE("unregister all channel", K(chans_.count()), K(ret), K(get_blocked_cnt()), K(get_total_buffer_cnt()), K(get_used()), K(get_accumulated_blocked_cnt()));
   return ret;
