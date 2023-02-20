@@ -407,13 +407,18 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
 {
   int ret = OB_SUCCESS;
   transaction::ObTxDesc *&tx_ptr = session->get_tx_desc();
-  if (session->is_registered_to_deadlock()) {
-    if (OB_SUCC(MTL(share::detector::ObDeadLockDetectorMgr*)->unregister_key(tx_ptr->tid()))) {
-      DETECT_LOG(INFO, "unregister deadlock detector in do end trans", KPC(tx_ptr));
-    } else {
-      DETECT_LOG(WARN, "unregister deadlock detector in do end trans failed", KPC(tx_ptr));
-    }
-    session->set_registered_to_deadlock(false);
+  bool is_detector_exist = false;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_ISNULL(MTL(share::detector::ObDeadLockDetectorMgr*))) {
+    tmp_ret = OB_BAD_NULL_ERROR;
+    DETECT_LOG(WARN, "MTL ObDeadLockDetectorMgr is NULL", K(tmp_ret), K(tx_ptr->tid()));
+  } else if (OB_TMP_FAIL(MTL(share::detector::ObDeadLockDetectorMgr*)->
+                         check_detector_exist(tx_ptr->tid(), is_detector_exist))) {
+    DETECT_LOG(WARN, "fail to check detector exist, may causing detector leak", K(tmp_ret),
+               K(tx_ptr->tid()));
+  } else if (is_detector_exist) {
+    ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(tx_ptr->tid(),
+                                    ObTransDeadlockDetectorAdapter::UnregisterPath::DO_END_TRANS);
   }
   if (session->associated_xa() && !is_explicit) {
     ret = OB_TRANS_XA_RMFAIL;

@@ -32,6 +32,11 @@ namespace share
 {
 namespace detector
 {
+// if msg in map count below LCL_MSG_CACHE_LIMIT/2, all pending msg is accepted
+// if msg in map count greater than LCL_MSG_CACHE_LIMIT/2, but less than LCL_MSG_CACHE_LIMIT,
+// random drop appending msg, drop probability depends on how many msg keeping in map,
+// if msg count in map reach LCL_MSG_CACHE_LIMIT, drop probability is 100%, no more msg is accepted.
+constexpr int64_t LCL_MSG_CACHE_LIMIT = 4096;
 
 class ObLCLMessage;
 class ObDependencyResource;

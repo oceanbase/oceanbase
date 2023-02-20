@@ -358,7 +358,6 @@ int ObTransDeadlockDetectorAdapter::register_remote_execution_to_deadlock_detect
     DETECT_LOG(WARN, "fail to register deadlock", PRINT_WRAPPER);
   } else {
     MTL(ObDeadLockDetectorMgr*)->set_timeout(self_tx_id, query_timeout);
-    session_guard->set_registered_to_deadlock(true);
     if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_tx_id, blocked_resources))) {
       DETECT_LOG(WARN, "block on resource failed", PRINT_WRAPPER);
     } else if (self_tx_scheduler != GCTX.self_addr()) {
@@ -408,8 +407,7 @@ int ObTransDeadlockDetectorAdapter::remote_execution_replace_conflict_trans_ids_
         DETECT_LOG(WARN, "replace block list failed", PRINT_WRAPPER);
       }
     } else {
-      try_unregister_deadlock_detector_(session_guard.get_session(),
-                                        self_tx_id,
+      unregister_from_deadlock_detector(self_tx_id,
                                         UnregisterPath::REPLACE_MEET_TOTAL_DIFFERENT_LIST);
       DETECT_LOG(WARN, "unregister detector cause meet total different block list", PRINT_WRAPPER);
     }
@@ -426,6 +424,7 @@ int ObTransDeadlockDetectorAdapter::register_remote_execution_or_replace_conflic
   CHECK_DEADLOCK_ENABLED();
   int ret = OB_SUCCESS;
   SessionGuard session_guard;
+  bool is_detector_exist = false;
   if (self_session_id == 1) {
     DETECT_LOG(INFO, "inner session no need register to deadlock", PRINT_WRAPPER);
   } else if (self_session_id == 0) {
@@ -437,7 +436,12 @@ int ObTransDeadlockDetectorAdapter::register_remote_execution_or_replace_conflic
   } else if (!session_guard.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(ERROR, "fail to get session info", PRINT_WRAPPER);
-  } else if (!session_guard->is_registered_to_deadlock()) {
+  } else if (OB_ISNULL(MTL(ObDeadLockDetectorMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    DETECT_LOG(ERROR, "MTL ObDeadLockDetectorMgr is NULL", PRINT_WRAPPER);
+  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_tx_id, is_detector_exist))) {
+    DETECT_LOG(WARN, "fail to get detector exist status", PRINT_WRAPPER);
+  } else if (!is_detector_exist) {
     if (OB_FAIL(register_remote_execution_to_deadlock_detector_(self_tx_id, self_session_id, conflict_tx_ids, session_guard))) {
       DETECT_LOG(WARN, "register new detector in remote execution failed", PRINT_WRAPPER);
     } else {
@@ -646,15 +650,15 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
     // no trans opened, for example:read-only trans
   } else if (is_rollback) {// statment is failed, maybe will try again, check if need register to deadlock detector
     if (session->get_query_timeout_ts() < ObClockGenerator::getCurrentTime()) {
-      try_unregister_deadlock_detector_(*session, desc->tid(), UnregisterPath::END_STMT_TIMEOUT);
+      unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_TIMEOUT);
       DETECT_LOG(INFO, "query timeout, no need register to deadlock", PRINT_WRAPPER);
     } else if (OB_FAIL(desc->fetch_conflict_txs(conflict_txs))) {
       DETECT_LOG(WARN, "fail to get conflict txs from desc", PRINT_WRAPPER);
     } else if (conflict_txs.empty()) {
-      try_unregister_deadlock_detector_(*session, desc->tid(), UnregisterPath::END_STMT_NO_CONFLICT);
+      unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_NO_CONFLICT);
       DETECT_LOG(INFO, "try unregister deadlock detecotr cause conflict array is empty", PRINT_WRAPPER);
     } else if (exec_ctx.get_errcode() != OB_TRY_LOCK_ROW_CONFLICT) {
-      try_unregister_deadlock_detector_(*session, desc->tid(), UnregisterPath::END_STMT_OTHER_ERR);
+      unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_OTHER_ERR);
       DETECT_LOG(INFO, "try unregister deadlock detecotr cause meet non-lock error", PRINT_WRAPPER);
     } else if (OB_FAIL(register_remote_execution_or_replace_conflict_trans_ids(desc->tid(),
                                                                                session->get_sessid(),
@@ -662,10 +666,10 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
       DETECT_LOG(WARN, "register or replace list failed", PRINT_WRAPPER);
     } else {
       desc->reset_conflict_txs();
-      DETECT_LOG(INFO, "maintain deadlock info when end_stmt", PRINT_WRAPPER);
+      DETECT_LOG(TRACE, "maintain deadlock info when end_stmt", PRINT_WRAPPER);
     }
   } else {// statment is done, will not try again, all related deadlock info should be resetted
-    try_unregister_deadlock_detector_(*session, desc->tid(), UnregisterPath::END_STMT_DONE);
+    unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_DONE);
     DETECT_LOG(TRACE, "unregister from deadlock detector", KR(ret), K(desc->tid()));
   }
   return ret;
@@ -814,26 +818,17 @@ void ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(const ObT
 {
   int ret = common::OB_SUCCESS;
   ObDeadLockDetectorMgr *mgr = nullptr;
-  if (ObDeadLockDetectorMgr::is_deadlock_enabled()) {
-    if (nullptr == (mgr = MTL(ObDeadLockDetectorMgr*))) {
-      ret = OB_ERR_UNEXPECTED;
-      DETECT_LOG(WARN, "fail to get ObDeadLockDetectorMgr", K(self_trans_id), K(to_string(path)));
-    } else if (OB_FAIL(mgr->unregister_key(self_trans_id))) {
+  if (nullptr == (mgr = MTL(ObDeadLockDetectorMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    DETECT_LOG(WARN, "fail to get ObDeadLockDetectorMgr", K(self_trans_id), K(to_string(path)));
+  } else if (OB_FAIL(mgr->unregister_key(self_trans_id))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
       DETECT_LOG(WARN, "unregister from deadlock detector failed", K(self_trans_id), K(to_string(path)));
     } else {
-      DETECT_LOG(INFO, "unregister from deadlock detector success", K(self_trans_id), K(to_string(path)));
+      ret = OB_SUCCESS;// it's ok if detector not exist
     }
-  }
-}
-
-void ObTransDeadlockDetectorAdapter::try_unregister_deadlock_detector_(sql::ObSQLSessionInfo &session,
-                                                                       const ObTransID &trans_id,
-                                                                       UnregisterPath path)
-{
-  if (OB_UNLIKELY(session.is_registered_to_deadlock())) {
-    unregister_from_deadlock_detector(trans_id, path);
-    session.set_registered_to_deadlock(false);
-    DETECT_LOG(INFO, "unregister from deadlock detector", K(trans_id), K(to_string(path)));
+  } else {
+    DETECT_LOG(INFO, "unregister from deadlock detector success", K(self_trans_id), K(to_string(path)));
   }
 }
 

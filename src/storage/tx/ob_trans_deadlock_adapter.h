@@ -76,7 +76,8 @@ class ObTransDeadlockDetectorAdapter
     END_STMT_OTHER_ERR,
     END_STMT_NO_CONFLICT,
     END_STMT_TIMEOUT,
-    REPLACE_MEET_TOTAL_DIFFERENT_LIST
+    REPLACE_MEET_TOTAL_DIFFERENT_LIST,
+    DO_END_TRANS,
   };
   static const char* to_string(const UnregisterPath path)
   {
@@ -99,6 +100,8 @@ class ObTransDeadlockDetectorAdapter
       return "END_STMT_TIMEOUT";
     case UnregisterPath::REPLACE_MEET_TOTAL_DIFFERENT_LIST:
       return "REPLACE_MEET_TOTAL_DIFFERENT_LIST";
+    case UnregisterPath::DO_END_TRANS:
+      return "DO_END_TRANS";
     default:
       return "UNKNOWN";
     }

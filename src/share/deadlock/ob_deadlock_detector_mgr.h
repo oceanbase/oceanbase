@@ -105,6 +105,8 @@ public:
                  const KeyType2 &parent_key);
   template<typename KeyType>
   int set_timeout(const KeyType &key, const int64_t timeout);
+  template<typename KeyType>
+  int check_detector_exist(const KeyType &key, bool &exist);
   // ungister resource operation
   template<typename KeyType>
   int unregister_key(const KeyType &key);
@@ -281,6 +283,28 @@ int ObDeadLockDetectorMgr::register_key(const KeyType &key,
   return ret;
   #undef PRINT_WRAPPER
 }
+template<typename KeyType>
+int ObDeadLockDetectorMgr::check_detector_exist(const KeyType &key, bool &exist)
+{
+  CHECK_INIT();
+  CHECK_ARGS(key);
+  #define PRINT_WRAPPER KR(ret), K(key)
+  int ret = common::OB_SUCCESS;
+  UserBinaryKey user_key;
+  DetectorRefGuard ref_guard;
+  if (OB_FAIL(user_key.set_user_key(key))) {
+    DETECT_LOG(WARN, "user key serialization failed", PRINT_WRAPPER);
+  } else if (OB_FAIL(get_detector_(user_key, ref_guard))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      exist = false;
+      ret = OB_SUCCESS;
+    }
+  } else {
+    exist = true;
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
 // unregister a user specified key
 // unregister action means:
 // 1. the detector instance associated with user specified key will be released
@@ -295,7 +319,6 @@ template<typename KeyType>
 int ObDeadLockDetectorMgr::unregister_key(const KeyType &key)
 {
   CHECK_INIT();
-  CHECK_ENABLED();
   CHECK_ARGS(key);
   #define PRINT_WRAPPER KR(ret), K(key)
   int ret = common::OB_SUCCESS;

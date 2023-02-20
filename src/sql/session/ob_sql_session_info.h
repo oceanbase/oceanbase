@@ -963,8 +963,6 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_sql_extension();
   }
-  bool is_registered_to_deadlock() const { return ATOMIC_LOAD(&is_registered_to_deadlock_); }
-  void set_registered_to_deadlock(bool state) { ATOMIC_SET(&is_registered_to_deadlock_, state); }
   bool is_ps_prepare_stage() const { return is_ps_prepare_stage_; }
   void set_is_ps_prepare_stage(bool v) { is_ps_prepare_stage_ = v; }
   int get_tenant_audit_trail_type(ObAuditTrailType &at_type)
@@ -1139,8 +1137,6 @@ private:
   bool is_table_name_hidden_;
   void *piece_cache_;
   bool is_load_data_exec_session_;
-  // 记录session是否注册过死锁检测的信息
-  bool is_registered_to_deadlock_;
   ObSqlString pl_exact_err_msg_;
   bool is_ps_prepare_stage_;
   // Record whether this session has got connection resource, which means it increased connections count.
