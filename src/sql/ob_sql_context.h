@@ -379,7 +379,7 @@ public:
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
 private:
   share::schema::ObSchemaGetterGuard *schema_guard_;
-  common::ModulePageAllocator allocator_;
+  common::ObArenaAllocator allocator_;
   common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_;
   uint64_t next_link_table_id_;
 };
