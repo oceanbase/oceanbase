@@ -521,6 +521,9 @@ int JtFuncHelpler::cast_to_otimstamp(ObIJsonBase *j_base,
   } else if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
+  } else if (is_oracle_mode() && j_base->is_json_number(j_base->json_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can't cast to timestamps", K(ret));
   } else {
     cvrt_ctx.tz_info_ = session->get_timezone_info();
     if (OB_FAIL(common_get_nls_format(session, ObDateTimeType,
@@ -529,7 +532,8 @@ int JtFuncHelpler::cast_to_otimstamp(ObIJsonBase *j_base,
       LOG_WARN("common_get_nls_format failed", K(ret));
     }
   }
-  if (OB_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
     LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
   } else {
     ObScale scale = accuracy.get_scale();
