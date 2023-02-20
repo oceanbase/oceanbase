@@ -332,9 +332,10 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       if (medium_info.medium_snapshot_ == tablet_.get_snapshot_version() //  no uncommitted sstable
           && weak_read_ts.get_val_for_tx() <= max_reserved_snapshot
           && weak_read_ts.get_val_for_tx() + DEFAULT_SCHEDULE_MEDIUM_INTERVAL < ObTimeUtility::current_time_ns()) {
-        medium_info.medium_snapshot_ = MAX(max_reserved_snapshot, weak_read_ts.get_val_for_tx());
+        const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
+        medium_info.medium_snapshot_ = MAX(max_reserved_snapshot, MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts));
         LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
-            K(medium_info), K(max_reserved_snapshot), K(weak_read_ts));
+            K(medium_info), K(max_reserved_snapshot), K(weak_read_ts), K(snapshot_gc_ts));
       } else {
         ret = OB_NO_NEED_MERGE;
       }
@@ -839,7 +840,6 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
         LOG_WARN("failed to get status from inner tablet", K(ret), K(ls_id), K(tablet_id));
       } else if (ret_info.could_schedule_next_round(last_major->get_snapshot_version())) {
         LOG_INFO("success to check RS major checksum validation finished", K(ret), K(ls_id), K(tablet_id));
-      } else {
         schedule_flag = true;
       }
     } else {

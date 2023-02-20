@@ -164,7 +164,7 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
   ObMediumCompactionInfo replay_medium_info;
   ObTabletHandle tmp_tablet_handle;
   if (OB_FAIL(replay_get_tablet_handle(ls_id_, tablet_id_, scn, tmp_tablet_handle))) {
-    LOG_WARN("failed to get tablet handle", K(ret), K_(tablet_id), K(scn));
+    LOG_WARN("failed to get tablet handle", K(ret), K_(ls_id), K_(tablet_id), K(scn));
   } else if (OB_FAIL(replay_medium_info.deserialize(tmp_allocator, buf, size, pos))) {
     LOG_WARN("failed to deserialize medium compaction info", K(ret));
   } else if (!replay_medium_info.from_cur_cluster()
@@ -176,7 +176,7 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
     LOG_WARN("failed to save medium info", K(ret), K_(tablet_id), K(replay_medium_info));
   } else {
     tmp_tablet_handle.reset();
-    FLOG_INFO("success to save medium info", K(ret), K_(tablet_id), K(replay_medium_info), K(max_saved_version_));
+    FLOG_INFO("success to save medium info", K(ret), K_(ls_id), K_(tablet_id), K(replay_medium_info), K(max_saved_version_));
   }
   return ret;
 }
@@ -193,7 +193,7 @@ int ObTabletMediumCompactionInfoRecorder::sync_clog_succ_for_leader(const int64_
   } else if (OB_FAIL(dec_ref_on_memtable(true/*sync_finish*/))) {
     LOG_WARN("failed to dec ref on memtable", K(ret), K_(tablet_id), KPC(medium_info_));
   } else {
-    FLOG_INFO("success to save medium info", K(ret), K_(tablet_id), KPC(medium_info_),
+    FLOG_INFO("success to save medium info", K(ret), K_(ls_id), K_(tablet_id), KPC(medium_info_),
         K(max_saved_version_), K_(clog_scn));
   }
   return ret;
