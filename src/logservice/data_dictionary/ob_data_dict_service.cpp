@@ -120,6 +120,7 @@ int ObDataDictService::start()
   } else if (OB_FAIL(TG_SCHEDULE(timer_tg_id_, *this, TIMER_TASK_INTERVAL, true/*is_repeat*/))) {
     DDLOG(WARN, "schedule data_dict_service timer_task failed", KR(ret), K_(timer_tg_id));
   } else {
+    disable_timeout_check(); // dump data_dict may cost too much, distable timetout check.
     stop_flag_ = false;
     DDLOG(INFO, "start datadict_service", K_(tenant_id), K_(timer_tg_id));
   }
