@@ -178,7 +178,7 @@ public:
   ~ObAggRow();
   void reset();
   void reuse();
-  int init(const ObTableAccessParam &param);
+  int init(const ObTableAccessParam &param, const int64_t batch_size);
   OB_INLINE int64_t get_agg_count() const { return agg_cells_.count(); }
   OB_INLINE bool need_exclude_null() const { return need_exclude_null_; };
   OB_INLINE bool has_lob_column_out() const { return has_lob_column_out_; }
