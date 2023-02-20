@@ -832,14 +832,15 @@ int ObRootInspection::construct_tenant_ids_(
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(check_cancel())) {
     LOG_WARN("check_cancel failed", KR(ret));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::get_standby_tenants(sql_proxy_, standby_tenants))) {
-    LOG_WARN("fail to get standby tenants", KR(ret));
   } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tmp_tenants))) {
     LOG_WARN("get_tenant_ids failed", KR(ret));
   } else {
+    bool is_standby = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenants.count(); i++) {
       const uint64_t tenant_id = tmp_tenants.at(i);
-      if (has_exist_in_array(standby_tenants, tenant_id)) {
+      if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id, is_standby))) {
+        LOG_WARN("fail to check is standby tenant", KR(ret), K(tenant_id));
+      } else if (is_standby) {
         // skip
       } else if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
         LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
