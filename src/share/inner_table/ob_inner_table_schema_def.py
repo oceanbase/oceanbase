@@ -8047,6 +8047,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+# table_id = 11117: used for __all_virtual_tablet_stat on column_store branch
 
 
 
@@ -25845,6 +25846,8 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+# 21370: GV$OB_TABLET_STATS
+# 21371: V$OB_TABLET_STATS
 
 
 
