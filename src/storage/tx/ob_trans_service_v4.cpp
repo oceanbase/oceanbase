@@ -287,6 +287,10 @@ int ObTransService::register_commit_retry_task_(ObTxDesc &tx, int64_t max_delay)
     TRANS_LOG(WARN, "register commit retry task fail", K(ret), K(delay), K(tx));
   }
 #endif
+  ObTransTraceLog &tlog = tx.get_tlog();
+  REC_TRANS_TRACE_EXT(&tlog, register_timeout_task, OB_Y(ret),
+                      OB_ID(arg), delay,
+                      OB_ID(ref), tx.get_ref());
   return ret;
 }
 
@@ -294,8 +298,9 @@ int ObTransService::register_commit_retry_task_(ObTxDesc &tx, int64_t max_delay)
 int ObTransService::unregister_commit_retry_task_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
+  const bool is_registered = tx.commit_task_.is_registered();
 
-  if (!tx.commit_task_.is_registered()) {
+  if (!is_registered) {
     // task has not been scheduled, it has't ref to txDesc
     TRANS_LOG(INFO, "task canceled", K(tx));
   } else if (OB_SUCC(timer_.unregister_timeout_task(tx.commit_task_))) {
@@ -310,8 +315,12 @@ int ObTransService::unregister_commit_retry_task_(ObTxDesc &tx)
     TRANS_LOG(TRACE, "timeout task not scheduled, deregistered", K(tx));
   } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
   } else {
-    TRANS_LOG(WARN, "deregister timeout task fail", K(tx));
+    TRANS_LOG(WARN, "deregister timeout task fail", K(ret), K(tx));
   }
+  ObTransTraceLog &tlog = tx.get_tlog();
+  REC_TRANS_TRACE_EXT(&tlog, unregister_timeout_task, OB_Y(ret),
+                      OB_ID(arg), is_registered,
+                      OB_ID(ref), tx.get_ref());
 
   return ret;
 }
@@ -373,6 +382,10 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   // has been called, the tx may has been reused or release
   // in the commit_cb
   TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id), K(cb_executed));
+  ObTransTraceLog &tlog = tx.get_tlog();
+  REC_TRANS_TRACE_EXT(&tlog, handle_timeout, OB_Y(ret),
+                      OB_ID(arg), delay,
+                      OB_ID(ref), tx.get_ref());
   return ret;
 }
 
