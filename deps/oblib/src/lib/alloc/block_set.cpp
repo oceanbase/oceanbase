@@ -349,17 +349,16 @@ void BlockSet::free_chunk(AChunk *const chunk)
     chunk->next_->prev_ = chunk->prev_;
     chunk->prev_->next_ = chunk->next_;
   }
-
-  const uint64_t all_size = AChunkMgr::aligned(chunk->alloc_bytes_);
+  uint64_t payload = 0;
+  const uint64_t hold = chunk->hold(&payload);
   bool freed = false;
-  if (INTACT_ACHUNK_SIZE == all_size) {
+  if (INTACT_ACHUNK_SIZE == hold) {
     LockGuard lock(cache_shared_lock_);
     freed = chunk_free_list_.push(chunk);
   }
   if (!freed) {
     if (OB_NOT_NULL(tallocator_)) {
-      uint64_t payload = 0;
-      UNUSED(ATOMIC_FAA(&total_hold_, -chunk->hold(&payload)));
+      UNUSED(ATOMIC_FAA(&total_hold_, -hold));
       UNUSED(ATOMIC_FAA(&total_payload_, -payload));
       if (chunk->washed_size_ != 0) {
         tallocator_->update_wash_stat(-1, -chunk->washed_blks_, -chunk->washed_size_);
