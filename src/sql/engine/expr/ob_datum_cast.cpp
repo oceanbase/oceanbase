@@ -2199,11 +2199,7 @@ int cast_inconsistent_types_json(const sql::ObExpr &expr,
   ObObjType in_type = expr.args_[0]->datum_meta_.type_;
   ObObjType out_type = expr.datum_meta_.type_;
   if (CM_IS_IMPLICIT_CAST(expr.extra_)) {
-    if (!expr.is_called_in_sql_) {
-      ret = OB_ERR_INVALID_JSON_TEXT;
-    } else {
-      ret = OB_ERR_INVALID_INPUT;
-    }
+    ret = OB_ERR_INVALID_INPUT;
     LOG_WARN("invalid input in implicit cast", K(ret));
   } else {
     LOG_WARN("inconsistent datatypes", K(ret), K(in_type), K(out_type), K(expr.extra_));
@@ -3681,11 +3677,7 @@ CAST_FUNC_NAME(number, json)
     ObObjType in_type = expr.args_[0]->datum_meta_.type_;
     if (lib::is_oracle_mode() && !number::ObNumber::is_zero_number(nmb.get_desc())) {
       if (CM_IS_IMPLICIT_CAST(expr.extra_)) {
-        if (!expr.is_called_in_sql_) {
-          ret = OB_ERR_INVALID_JSON_TEXT;
-        } else {
-          ret = OB_ERR_INVALID_INPUT;
-        }
+        ret = OB_ERR_INVALID_INPUT;
         LOG_WARN("invalid input in implicit cast", K(ret));
       } else {
         LOG_WARN("inconsistent datatypes", K(ret), K(in_type), K("json"), K(expr.extra_));
@@ -4929,11 +4921,7 @@ CAST_FUNC_NAME(date, json)
     ObObjType in_type = expr.args_[0]->datum_meta_.type_;
     if (lib::is_oracle_mode() && in_val != 0) {
       if (CM_IS_IMPLICIT_CAST(expr.extra_)) {
-        if (!expr.is_called_in_sql_) {
-          ret = OB_ERR_INVALID_JSON_TEXT;
-        } else {
-          ret = OB_ERR_INVALID_INPUT;
-        }
+        ret = OB_ERR_INVALID_INPUT;
         LOG_WARN("invalid input in implicit cast", K(ret));
       } else {
         LOG_WARN("inconsistent datatypes", K(ret), K(in_type), K("json"), K(expr.extra_));
@@ -6039,11 +6027,7 @@ CAST_FUNC_NAME(time, json)
     ObObjType in_type = expr.args_[0]->datum_meta_.type_;
     if (lib::is_oracle_mode() && in_val != 0) {
       if (CM_IS_IMPLICIT_CAST(expr.extra_)) {
-        if (!expr.is_called_in_sql_) {
-          ret = OB_ERR_INVALID_JSON_TEXT;
-        } else {
-          ret = OB_ERR_INVALID_INPUT;
-        }
+        ret = OB_ERR_INVALID_INPUT;
         LOG_WARN("invalid input in implicit cast", K(ret));
       } else {
         LOG_WARN("inconsistent datatypes", K(ret), K(in_type), K("json"), K(expr.extra_));

@@ -1534,7 +1534,10 @@ int ObRawExprResolverImpl::check_name_type(ObQualifiedName &q_name,
   if ((OB_SUCC(ret) && !check_success)
       || (OB_ERR_INVOKE_STATIC_BY_INSTANCE != ret && OB_FAIL(ret))) {
     ret = OB_SUCCESS;
-    CK (q_name.access_idents_.count() <= 3 && q_name.access_idents_.count() >= 1);
+    if (!(q_name.access_idents_.count() <= 3 && q_name.access_idents_.count() >= 1)) {
+      ret = OB_WRONG_COLUMN_NAME;
+      LOG_WARN("check name type failed", K(ret), K(q_name));
+    }
     if (3 == q_name.access_idents_.count()) {
       OX (q_name.database_name_ = q_name.access_idents_.at(0).access_name_);
       OX (q_name.tbl_name_ = q_name.access_idents_.at(1).access_name_);
@@ -5375,7 +5378,7 @@ int ObRawExprResolverImpl::process_json_exists_node(const ParseNode *node, ObRaw
           ObRawExpr *para_expr = NULL;
           CK(OB_NOT_NULL(node->children_[i]->children_[name_idx]));
           OZ(SMART_CALL(recursive_resolve(node->children_[i]->children_[name_idx], para_expr)));
-          if (name_idx % 2 == 0 && para_expr->get_expr_type() == T_REF_QUERY) {
+          if (OB_NOT_NULL(para_expr) && name_idx % 2 == 0 && para_expr->get_expr_type() == T_REF_QUERY) {
             ret = OB_ERR_INVALID_VARIABLE_IN_JSON_PATH;
             LOG_USER_ERROR(OB_ERR_INVALID_VARIABLE_IN_JSON_PATH);
           } else {

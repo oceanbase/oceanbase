@@ -1951,7 +1951,7 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                 && !expr.is_need_deserialize_row()
                 && !(T_FUN_PL_AGG_UDF == expr.get_expr_type() && !expr.is_param_distinct())
                 && !(T_FUN_WM_CONCAT == expr.get_expr_type() && !expr.is_param_distinct()))) {
-      ret = ob_is_json(param_expr->get_data_type()) ?
+      ret = (ob_is_json(param_expr->get_data_type()) && !(expr.get_expr_type() == T_FUN_SUM || expr.get_expr_type() == T_FUN_AVG)) ?
               OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("lob or json type parameter not expected", K(ret));
     }
