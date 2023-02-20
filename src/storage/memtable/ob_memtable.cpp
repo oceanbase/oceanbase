@@ -269,11 +269,17 @@ void ObMemtable::destroy()
 int ObMemtable::safe_to_destroy(bool &is_safe)
 {
   int ret = OB_SUCCESS;
+  int64_t ref_cnt = get_ref();
+  int64_t write_ref_cnt = get_write_ref();
+  int64_t unsubmitted_cnt = get_unsubmitted_cnt();
+  int64_t unsynced_cnt = get_unsynced_cnt();
 
-  is_safe = (0 == get_ref() &&
-             0 == get_write_ref() &&
-             0 == get_unsubmitted_cnt() &&
-             0 == get_unsynced_cnt());
+  is_safe = (0 == ref_cnt && 0 == write_ref_cnt);
+  if (is_safe) {
+    int64_t multi_source_data_unsync_cnt = multi_source_data_.get_all_unsync_cnt_for_multi_data();
+    is_safe = (0 == unsubmitted_cnt && 0 == unsynced_cnt) ||
+      (unsubmitted_cnt == multi_source_data_unsync_cnt && unsynced_cnt == multi_source_data_unsync_cnt);
+  }
 
   return ret;
 }
@@ -1786,8 +1792,6 @@ bool ObMemtable::ready_for_flush_()
       migration_clog_checkpoint_scn >= get_end_scn() &&
       0 != unsynced_cnt &&
       multi_source_data_.get_all_unsync_cnt_for_multi_data() == unsynced_cnt) {
-    ATOMIC_STORE(&unsubmitted_cnt_, 0);
-    ATOMIC_STORE(&unsynced_cnt_, 0);
     bool_ret = true;
     TRANS_LOG(INFO, "skip ready for flush for migration", KPC(this));
   }

@@ -6463,10 +6463,10 @@ int ObPartTransCtx::do_force_kill_tx_()
     // do nothing
   } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
     TRANS_LOG(WARN, "gen total mds array failed", KR(ret), K(*this));
-  } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT,
-                                         ctx_tx_data_.get_end_log_ts() /*invalid_scn*/, false,
-                                         tmp_array, true /*is_force_kill*/))) {
-    TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
+  // } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT,
+  //                                        ctx_tx_data_.get_end_log_ts() /*invalid_scn*/, false,
+  //                                        tmp_array, true /*is_force_kill*/))) {
+  //   TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
   }
 
   if (OB_SUCC(ret)) {
