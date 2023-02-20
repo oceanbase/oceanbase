@@ -712,7 +712,8 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (NULL != detector &&
              detector->is_data_disk_has_fatal_error()) { // also consider slog writer hung
     ret = OB_DISK_CORRUPTED;
-    LOG_WARN("data disk has fatal error", K(ret));
+    // for temporary positioning issue, get lbt of log replay
+    LOG_DBA_ERROR(OB_DISK_CORRUPTED, "msg", "data disk has fatal error");
   } else if (OB_FAIL(alloc_io_request(io_allocator_, callback_size, req))) {
     LOG_WARN("alloc io request failed", K(ret), KP(req));
   } else if (FALSE_IT(req->tenant_io_mgr_.hold(this))) {
