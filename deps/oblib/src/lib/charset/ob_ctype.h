@@ -435,6 +435,7 @@ extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;
 extern ObCharsetHandler ob_charset_utf16_handler;
 extern ObCollationHandler ob_collation_binary_handler;
+extern ObCollationHandler ob_collation_8bit_bin_handler;
 extern ObCollationHandler ob_collation_8bit_simple_ci_handler;
 //=============================================================================
 

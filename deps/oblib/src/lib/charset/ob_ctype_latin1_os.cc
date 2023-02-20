@@ -404,5 +404,5 @@ ObCharsetInfo ob_charset_latin1_bin = {
     1,                   /* levels_for_compare */
     1,                   /* levels_for_order */
     &ob_charset_latin1_handler,
-    &ob_collation_binary_handler,
+    &ob_collation_8bit_bin_handler,
     PAD_SPACE};
