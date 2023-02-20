@@ -74,10 +74,10 @@ public:
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   OB_INLINE void reset() { destroy(); }
-  bool can_schedule_major_compaction(const ObTabletMeta &tablet_meta);
   bool can_schedule_major_compaction_nolock(const ObTabletMeta &tablet_meta);
-  int get_ddl_major_merge_param(ObDDLTableMergeDagParam &merge_param);
+  int get_ddl_major_merge_param(const ObTabletMeta &tablet_meta, ObDDLTableMergeDagParam &merge_param);
   int get_rec_scn(share::SCN &rec_scn);
+  void prepare_info_for_checksum_report(const uint64_t table_id, const int64_t ddl_task_id) { table_id_ = table_id; ddl_task_id_ = ddl_task_id; }
   TO_STRING_KV(K_(is_inited), K_(success_start_scn), K_(ls_id), K_(tablet_id), K_(table_key),
       K_(cluster_version), K_(start_scn), K_(commit_scn), K_(max_freeze_scn),
       K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));

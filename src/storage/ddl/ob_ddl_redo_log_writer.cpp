@@ -1102,6 +1102,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     LOG_WARN("get tablet failed", K(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FALSE_IT(ddl_kv_mgr_handle.get_obj()->prepare_info_for_checksum_report(table_id, ddl_task_id))) {
   } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, table_key, table_id, execution_id, ddl_task_id, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(table_key), K(table_id), K(execution_id), K(ddl_task_id));

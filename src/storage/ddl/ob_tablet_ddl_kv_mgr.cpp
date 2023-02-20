@@ -304,17 +304,22 @@ int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &co
   return ret;
 }
 
-int ObTabletDDLKvMgr::get_ddl_major_merge_param(ObDDLTableMergeDagParam &param)
+int ObTabletDDLKvMgr::get_ddl_major_merge_param(const ObTabletMeta &tablet_meta, ObDDLTableMergeDagParam &param)
 {
   int ret = OB_SUCCESS;
-  param.ls_id_ = ls_id_;
-  param.tablet_id_ = tablet_id_;
-  param.rec_scn_ = commit_scn_;
-  param.is_commit_ = true;
-  param.start_scn_ = start_scn_;
-  param.table_id_ = table_id_;
-  param.execution_id_ = execution_id_;
-  param.ddl_task_id_ = ddl_task_id_;
+  ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+  if (can_schedule_major_compaction_nolock(tablet_meta)) {
+    param.ls_id_ = ls_id_;
+    param.tablet_id_ = tablet_id_;
+    param.rec_scn_ = get_commit_scn_nolock(tablet_meta);
+    param.is_commit_ = true;
+    param.start_scn_ = start_scn_;
+    param.table_id_ = table_id_;
+    param.execution_id_ = execution_id_;
+    param.ddl_task_id_ = ddl_task_id_;
+  } else {
+    ret = OB_EAGAIN;
+  }
   return ret;
 }
 
@@ -474,12 +479,6 @@ void ObTabletDDLKvMgr::reset_commit_success()
 {
   ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
   success_start_scn_.set_min();
-}
-
-bool ObTabletDDLKvMgr::can_schedule_major_compaction(const ObTabletMeta &tablet_meta)
-{
-  ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
-  return can_schedule_major_compaction_nolock(tablet_meta);
 }
 
 bool ObTabletDDLKvMgr::can_schedule_major_compaction_nolock(const ObTabletMeta &tablet_meta)
