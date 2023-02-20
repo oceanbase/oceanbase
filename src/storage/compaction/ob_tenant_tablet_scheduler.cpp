@@ -1127,7 +1127,6 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
             ObTimeUtility::fast_current_time(),
             "schedule_stats",
             schedule_stats_);
-        schedule_stats_.clear_tablet_cnt();
       }
     }
 
@@ -1156,6 +1155,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
 
     LOG_INFO("finish schedule all tablet merge", K(merge_version), K(schedule_stats_), K(tenant_merge_finish),
         K(merged_version_));
+    schedule_stats_.clear_tablet_cnt();
   }
   return ret;
 }

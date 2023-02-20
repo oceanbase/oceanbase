@@ -191,7 +191,7 @@ int ObAllVirtualTabletCompactionInfo::process_curr_tenant(common::ObNewRow *&row
           }
           break;
         case SERIALIZE_SCN_LIST:
-          if (medium_info_list.size() > 0) {
+          if (medium_info_list.size() > 0 || compaction::ObMediumCompactionInfo::MAJOR_COMPACTION == medium_info_list.get_last_compaction_type()) {
             int64_t pos = 0;
             medium_info_list.gene_info(medium_info_buf_, OB_MAX_VARCHAR_LENGTH, pos);
             cur_row_.cells_[i].set_varchar(medium_info_buf_);
