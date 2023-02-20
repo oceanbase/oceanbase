@@ -1186,6 +1186,7 @@ private:
   ObTxnExtraInfoEncoder txn_extra_info_encoder_;
 public:
   void post_sync_session_info();
+  void prep_txn_free_route_baseline(bool reset_audit = true);
   void set_txn_free_route(bool txn_free_route);
   int calc_txn_free_route();
   bool can_txn_free_route() const;
