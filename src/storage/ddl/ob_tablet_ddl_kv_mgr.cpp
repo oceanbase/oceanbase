@@ -886,6 +886,7 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObTableHandleV2 &kv_handle)
 int ObTabletDDLKvMgr::get_or_create_ddl_kv(const SCN &start_scn, const SCN &scn, ObTableHandleV2 &kv_handle)
 {
   int ret = OB_SUCCESS;
+  const int64_t TRY_LOCK_TIMEOUT = 1 * 1000000; // 1s
   kv_handle.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -894,17 +895,24 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(const SCN &start_scn, const SCN &scn,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(scn));
   } else {
-    ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
-    if (start_scn != start_scn_) {
+    uint32_t lock_tid = 0; // try lock to avoid hang in clog callback
+    if (OB_FAIL(rdlock(TRY_LOCK_TIMEOUT, lock_tid))) {
+      LOG_WARN("failed to rdlock", K(ret), K(start_scn), KPC(this));
+    } else if (start_scn != start_scn_) {
       ret = OB_TASK_EXPIRED;
       LOG_WARN("ddl task expired", K(ret), K(start_scn), KPC(this));
     } else {
       try_get_ddl_kv_unlock(scn, kv_handle);
     }
+    if (lock_tid != 0) {
+      unlock(lock_tid);
+    }
   }
   if (OB_SUCC(ret) && !kv_handle.is_valid()) {
-    ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
-    if (start_scn != start_scn_) {
+    uint32_t lock_tid = 0; // try lock to avoid hang in clog callback
+    if (OB_FAIL(wrlock(TRY_LOCK_TIMEOUT, lock_tid))) {
+      LOG_WARN("failed to wrlock", K(ret), K(start_scn), KPC(this));
+    } else if (start_scn != start_scn_) {
       ret = OB_TASK_EXPIRED;
       LOG_WARN("ddl task expired", K(ret), K(start_scn), KPC(this));
     } else {
@@ -914,6 +922,9 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(const SCN &start_scn, const SCN &scn,
       } else if (OB_FAIL(alloc_ddl_kv(kv_handle))) {
         LOG_WARN("create ddl kv failed", K(ret));
       }
+    }
+    if (lock_tid != 0) {
+      unlock(lock_tid);
     }
   }
   return ret;
