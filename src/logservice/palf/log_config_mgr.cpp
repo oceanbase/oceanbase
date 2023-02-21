@@ -1881,6 +1881,7 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
   constexpr int64_t conn_timeout_us = 3 * 1000 * 1000L;  // 3s
   const int64_t max_log_gap_time = PALF_LEADER_ACTIVE_SYNC_TIMEOUT_US / 4;
   added_member_has_new_version = is_add_member_list(args.type_)? false: true;
+  LSN added_member_flushed_end_lsn;
 
   (void) sw_->get_committed_end_lsn(first_leader_committed_end_lsn);
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
@@ -1889,7 +1890,7 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
   } else if (new_member_list.get_member_number() == 1) {
     ret = OB_SUCCESS;
   } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num,
-      conn_timeout_us, first_committed_end_lsn, added_member_has_new_version))) {
+      conn_timeout_us, first_committed_end_lsn, added_member_has_new_version, added_member_flushed_end_lsn))) {
     PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_member_list),
         K(new_replica_num), K(added_member_has_new_version));
   } else if (need_skip_log_barrier) {
@@ -1928,6 +1929,16 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
     // if committed lsn of new majority do not retreat, then start config change
     PALF_LOG(INFO, "majority of new_member_list are sync with leader, start config change", K(ret), K_(palf_id), K_(self),
             K(first_committed_end_lsn), K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
+  // when quorum has been changed (e.g., 1 -> 2), committed_end_lsn of new memberlist may always be behind the committed_end_lsn of
+  // leader, so we relax the condition for adding members which has changed quorum
+  } else if (is_add_log_sync_member_list(args.type_) &&
+            (new_replica_num / 2) > (log_ms_meta_.curr_.log_sync_replica_num_ / 2) &&
+            added_member_flushed_end_lsn.is_valid() &&
+            first_leader_committed_end_lsn - added_member_flushed_end_lsn < LEADER_DEFAULT_GROUP_BUFFER_SIZE) {
+    ret = OB_SUCCESS;
+    PALF_LOG(INFO, "the gap between the leader and added member is smaller than the group_buffer_size, skip",
+        K(ret), K_(palf_id), K_(self), K(args), K(new_replica_num), K(first_leader_committed_end_lsn),
+        K(added_member_flushed_end_lsn));
   } else {
     PALF_LOG(INFO, "majority of new_member_list aren't sync with leader", K_(palf_id), K_(self), K(first_committed_end_lsn),
         K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
@@ -1939,7 +1950,7 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
     int64_t sync_speed_gap;
     added_member_has_new_version = is_add_member_list(args.type_)? false: true;
     if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num, conn_timeout_us,
-        second_committed_end_lsn, added_member_has_new_version))) {
+        second_committed_end_lsn, added_member_has_new_version, added_member_flushed_end_lsn))) {
       PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_member_list),
           K(new_replica_num), K(added_member_has_new_version));
     } else if (second_committed_end_lsn >= second_leader_committed_end_lsn) {
@@ -2016,7 +2027,8 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
                                               const int64_t new_replica_num,
                                               const int64_t conn_timeout_us,
                                               LSN &committed_end_lsn,
-                                              bool &added_member_has_new_version) const
+                                              bool &added_member_has_new_version,
+                                              LSN &added_member_flushed_end_lsn) const
 {
   int ret = OB_SUCCESS, tmp_ret = OB_SUCCESS;
   int64_t resp_cnt = 0;
@@ -2024,6 +2036,7 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
   LSN lsn_array[OB_MAX_MEMBER_NUMBER];
 
   added_member_has_new_version = is_add_member_list(args.type_)? false: true;
+  added_member_flushed_end_lsn.reset();
 
   for (int64_t i = 0; i < new_member_list.get_member_number(); ++i) {
     common::ObAddr server;
@@ -2044,6 +2057,7 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
       lsn_array[resp_cnt++] = max_flushed_end_lsn;
     }
     added_member_has_new_version = (is_added_member)? has_same_version: added_member_has_new_version;
+    added_member_flushed_end_lsn = (is_added_member)? max_flushed_end_lsn: added_member_flushed_end_lsn;
   }
 
   // added member isn't in new_member_list, e.g., add arb member
@@ -2073,7 +2087,8 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
   }
   PALF_LOG(INFO, "sync_get_committed_end_lsn_ finish", K(ret), K_(palf_id), K_(self), K(args),
       K(new_member_list), K(new_replica_num), K(conn_timeout_us), K(committed_end_lsn),
-      K(added_member_has_new_version), "lsn_array:", common::ObArrayWrap<LSN>(lsn_array, resp_cnt));
+      K(added_member_has_new_version), K(added_member_flushed_end_lsn),
+      "lsn_array:", common::ObArrayWrap<LSN>(lsn_array, resp_cnt));
   return ret;
 }
 

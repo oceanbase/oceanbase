@@ -422,7 +422,8 @@ private:
                                   const int64_t new_replica_num,
                                   const int64_t conn_timeout_us,
                                   LSN &committed_end_lsn,
-                                  bool &added_member_has_new_version) const;
+                                  bool &added_member_has_new_version,
+                                  LSN &added_member_flushed_end_lsn) const;
   int check_follower_sync_status_(const LogConfigChangeArgs &args,
                                   const ObMemberList &new_member_list,
                                   const int64_t new_replica_num,
