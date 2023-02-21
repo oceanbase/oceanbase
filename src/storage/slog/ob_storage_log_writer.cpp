@@ -565,7 +565,7 @@ int ObStorageLogWriter::advance_file_id()
     write_offset_ = 0;
     cursor_.offset_ = write_offset_;
     batch_write_buf_.reuse();
-    STORAGE_REDO_LOG(WARN, "Successfully open slog file", K(cursor_.file_id_));
+    STORAGE_REDO_LOG(INFO, "Successfully open slog file", K(cursor_.file_id_));
   }
 
   return ret;

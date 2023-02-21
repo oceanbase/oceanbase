@@ -296,6 +296,16 @@ int ObSharedMacroBlockMgr::try_switch_macro_block()
   return ret;
 }
 
+int64_t ObSharedMacroBlockMgr::get_shared_block_cnt()
+{
+  int64_t count = 0;
+  {
+    lib::ObMutexGuard guard(blocks_mutex_);
+    count = block_used_size_.count();
+  }
+  return count;
+}
+
 int ObSharedMacroBlockMgr::add_block(const MacroBlockId &block_id, const int64_t block_size)
 {
   int ret = OB_SUCCESS;
@@ -407,7 +417,9 @@ int ObSharedMacroBlockMgr::defragment()
       tablet_handle.reset();
       iter_allocator.reuse();
       if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
-        LOG_WARN("fail to get tablet", K(ret), K(tablet_handle));
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get tablet", K(ret), K(tablet_handle));
+        }
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
