@@ -11,10 +11,10 @@
  */
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_context.h"
+#include "ob_table_service.h"
 #include "ob_table_cg_service.h" // for generate_table_loc_meta
 #include "sql/das/ob_das_define.h" // for ObDASTableLocMeta
 #include "lib/utility/utility.h"
-#include "ob_table_service.h"
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
@@ -513,15 +513,18 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   int ret = OB_SUCCESS;
   const ObString &index_name = query.get_index_name();
   const ObIArray<ObString> &select_columns = query.get_select_columns();
+  const bool select_all_columns = select_columns.empty(); // select all when query column is empty.
   const ObColumnSchemaV2 *column_schema = nullptr;
   operation_type_ = ObTableOperationType::Type::SCAN;
   // init is_weak_read_,scan_order_
   is_weak_read_ = is_wead_read;
   scan_order_ = query.get_scan_order();
   // init limit_,offset_
-  limit_ = query.get_limit();
+  bool is_query_with_filter = query.get_htable_filter().is_valid() ||
+                              query.get_filter_string().length() > 0;
+  limit_ = is_query_with_filter ? -1 : query.get_limit(); // // query with filter can't pushdown limit
   offset_ = query.get_offset();
-  // init is_index_scan_,is_index_back_
+  // init is_index_scan_
   if (index_name.empty() || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) { // scan with primary key
     index_table_id_ = ref_table_id_;
     is_index_back_ = false;
@@ -531,11 +534,6 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
     if (OB_FAIL(init_index_info(index_name))) {
       LOG_WARN("fail to init index info", K(ret), K(index_name));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < select_columns.count() && !is_index_back_; i++) {
-        if (OB_ISNULL(column_schema = index_schema_->get_column_schema(select_columns.at(i)))) {
-          is_index_back_ = true;
-        }
-      }
       // init index_col_ids_
       if (OB_SUCC(ret)) {
         const common::ObIndexInfo &index_info = index_schema_->get_index_info();
@@ -546,38 +544,55 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
     }
   }
 
-  // init key_ranges_
   if (OB_SUCC(ret)) {
+    // init key_ranges_
     if (OB_FAIL(generate_key_range(query.get_scan_ranges()))) {
       LOG_WARN("fail to generate key ranges", K(ret));
     } else {
       // select_col_ids用schema序
       for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
-         OB_SUCC(ret) && iter != table_schema_->column_end();
-         ++iter) {
+          OB_SUCC(ret) && iter != table_schema_->column_end(); ++iter) {
         const ObColumnSchemaV2 *column_schema = *iter;
+        ObString column_name;
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column schema is NULL", K(ret));
+        } else if (FALSE_IT(column_name = column_schema->get_column_name_str())) {
+        } else if (select_all_columns) {
+          if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
+            LOG_WARN("fail to add column id", K(ret));
+          } else if (OB_FAIL(query_col_ids_.push_back(column_schema->get_column_id()))) {
+            LOG_WARN("fail to push back column id", K(ret), K(column_schema->get_column_id()));
+          } else if (OB_FAIL(query_col_names_.push_back(column_name))) {
+            LOG_WARN("fail to push back column name", K(ret), K(column_name));
+          } else if (is_index_scan_ && !is_index_back_ &&
+              OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
+            is_index_back_ = true; // 判断是否需要回表,查询的列不在索引表上即需要回表
+          }
         } else if (has_exist_in_columns(select_columns, column_schema->get_column_name_str())) {
           if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
             LOG_WARN("fail to add column id", K(ret));
+          } else if (is_index_scan_ && !is_index_back_ &&
+              OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
+            is_index_back_ = true; // 判断是否需要回表,查询的列不在索引表上即需要回表
           }
         }
       }
       if (OB_SUCC(ret)) {
-        if (select_col_ids_.count() != select_columns.count()) {
+        if ((select_col_ids_.count() != select_columns.count()) && !select_all_columns) {
           ret = OB_ERR_COLUMN_NOT_FOUND;
           LOG_WARN("select_col_ids or select_metas count is not equal to select_columns",
               K(select_columns), K(select_col_ids_));
-        } else {
-          // init query_col_ids_
+        } else if (!select_all_columns) {
+          // query_col_ids_是用户查询序
           for (int64_t i = 0; OB_SUCC(ret) && i < select_columns.count(); i++) {
             if (OB_ISNULL(column_schema = table_schema_->get_column_schema(select_columns.at(i)))) {
               ret = OB_SCHEMA_ERROR;
               LOG_WARN("select column not found in schema", K(ret), K(select_columns.at(i)));
             } else if (OB_FAIL(query_col_ids_.push_back(column_schema->get_column_id()))) {
               LOG_WARN("fail to push back column id", K(ret), K(column_schema->get_column_id()));
+            } else if (OB_FAIL(query_col_names_.push_back(column_schema->get_column_name_str()))) {
+              LOG_WARN("fail to push back column name", K(ret), K(column_schema->get_column_name_str()));
             }
           }
         }
@@ -691,6 +706,8 @@ int ObTableCtx::init_delete()
       // skip
     } else if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
       LOG_WARN("fail to push back column id", K(ret), K(column_schema->get_column_id()));
+    } else if (OB_FAIL(query_col_names_.push_back(column_schema->get_column_name_str()))) {
+      LOG_WARN("fail to push back column name", K(ret));
     }
   }
 
@@ -761,8 +778,11 @@ int ObTableCtx::init_get()
   if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table scheam is null", K(ret));
+  } else if (OB_FAIL(entity_->get_properties_names(query_col_names_))) {
+    LOG_WARN("fail to get entity properties names", K(ret));
   } else {
-    // init select_col_ids
+    const bool need_get_all_column = query_col_names_.empty(); // 未设置get的列，默认返回全部列
+    // init select_col_ids, query_col_names_
     for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
         OB_SUCC(ret) && iter != table_schema_->column_end();
         ++iter) {
@@ -772,6 +792,9 @@ int ObTableCtx::init_get()
         LOG_WARN("column schema is NULL", K(ret));
       } else if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
         LOG_WARN("fail to add column id", K(ret));
+      } else if (need_get_all_column
+          && OB_FAIL(query_col_names_.push_back(column_schema->get_column_name_str()))) {
+        LOG_WARN("fail to push back column name", K(ret));
       }
     }
   }

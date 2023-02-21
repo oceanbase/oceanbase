@@ -287,6 +287,7 @@ int ObTableRpcImpl::batch_execute(const ObTableBatchOperation &batch_operation, 
       request.returning_affected_rows_ = request_options.returning_affected_rows();
       request.returning_affected_entity_ = request_options.returning_affected_entity();
       request.returning_rowkey_ = request_options.returning_rowkey();
+      request.batch_operation_as_atomic_ = request_options.batch_operation_as_atomic();
       if (REACH_TIME_INTERVAL(10*1000*1000)) {
         // TODO: we can not print the tenat memory usage now.
         // ObTenantManager::get_instance().print_tenant_usage();

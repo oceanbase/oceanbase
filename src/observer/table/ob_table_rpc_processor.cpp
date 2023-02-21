@@ -247,35 +247,30 @@ int ObTableApiProcessorBase::get_ls_id(const ObTabletID &tablet_id, ObLSID &ls_i
   return ret;
 }
 
-int ObTableApiUtils::check_user_access(const ObString &credential_str, const ObGlobalContext &gctx, ObTableApiCredential &credential)
+int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   ObTableApiSessGuard guard;
   const ObTableApiCredential *sess_credetial = nullptr;
-  if (OB_FAIL(serialization::decode(credential_str.ptr(), credential_str.length(), pos, credential))) {
+  if (OB_FAIL(serialization::decode(credential_str.ptr(), credential_str.length(), pos, credential_))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));
-  } else if (OB_FAIL(gctx.table_service_->get_sess_mgr().get_sess_info(credential.tenant_id_,
-                                                                       credential.user_id_,
+  } else if (OB_FAIL(gctx_.table_service_->get_sess_mgr().get_sess_info(credential_.tenant_id_,
+                                                                       credential_.user_id_,
                                                                        guard))) {
-    LOG_WARN("fail to get session info", K(ret), K(credential));
+    LOG_WARN("fail to get session info", K(ret), K_(credential));
   } else if (OB_FAIL(guard.get_credential(sess_credetial))) {
     LOG_WARN("fail to get credential", K(ret));
-  } else if (sess_credetial->hash_val_ != credential.hash_val_) {
+  } else if (sess_credetial->hash_val_ != credential_.hash_val_) {
     ret = OB_ERR_NO_PRIVILEGE;
-    LOG_WARN("invalid credential", K(ret), K(credential), K(*sess_credetial));
-  } else if (sess_credetial->cluster_id_ != credential.cluster_id_) {
+    LOG_WARN("invalid credential", K(ret), K_(credential), K(*sess_credetial));
+  } else if (sess_credetial->cluster_id_ != credential_.cluster_id_) {
     ret = OB_ERR_NO_PRIVILEGE;
-    LOG_WARN("invalid credential cluster id", K(ret), K(credential), K(*sess_credetial));
+    LOG_WARN("invalid credential cluster id", K(ret), K_(credential), K(*sess_credetial));
   } else {
-    LOG_DEBUG("user can access", K(credential));
+    LOG_DEBUG("user can access", K_(credential));
   }
   return ret;
-}
-
-int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
-{
-  return ObTableApiUtils::check_user_access(credential_str, gctx_, credential_);
 }
 
 oceanbase::sql::ObSQLSessionInfo &session()

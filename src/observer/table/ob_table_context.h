@@ -117,6 +117,8 @@ public:
                "is_get_", is_get_,
                "limit", limit_,
                "offset", offset_,
+               "query_col_names", query_col_names_,
+               "select_col_ids", select_col_ids_,
                // update to string
                "is_update", is_for_update_,
                // insert up to string
@@ -166,6 +168,7 @@ public:
   OB_INLINE common::ObIArray<common::ObNewRange>& get_key_ranges() { return key_ranges_; }
   OB_INLINE const common::ObIArray<uint64_t>& get_select_col_ids() const { return select_col_ids_; }
   OB_INLINE const common::ObIArray<uint64_t>& get_query_col_ids() const { return query_col_ids_; }
+  OB_INLINE const common::ObIArray<common::ObString>& get_query_col_names() const { return query_col_names_; }
   // for update
   OB_INLINE bool is_for_update() const { return is_for_update_; }
   OB_INLINE const common::ObIArray<common::ObString>& get_expr_strs() const { return expr_strs_; }
@@ -311,6 +314,7 @@ private:
   common::ObArray<sql::ObRawExpr*> index_exprs_;
   common::ObArray<uint64_t> select_col_ids_; // 基于schema序的select column id
   common::ObArray<uint64_t> query_col_ids_; // 用户查询的select column id
+  common::ObArray<common::ObString> query_col_names_; // 用户查询的select column name，引用的是schema上的列名
   common::ObArray<uint64_t> index_col_ids_;
   const share::schema::ObTableSchema *index_schema_;
   int64_t offset_;

@@ -167,8 +167,10 @@ TEST_F(TestCreateExecutor, scan)
 {
   ObTableCtx fake_ctx(allocator_);
   ObExprFrameInfo fake_expr_info(allocator_);
+  ObTableEntity entity;
   // init ctx
   fake_ctx_init_common(fake_ctx, &table_schema_);
+  fake_ctx.set_entity(&entity);
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_get());
   for (int i = 0; i < 3; i++) {
     ASSERT_EQ(columns_[i].get_column_id(), fake_ctx.select_col_ids_.at(i));

@@ -11,6 +11,7 @@
 #define USING_LOG_PREFIX SERVER
 #include <stdint.h>
 #include "observer/table/ob_htable_filters.h"
+#include "observer/table/ob_table_filter.h"
 #include "observer/table/ob_htable_filter_parser.h"
 #include "observer/table/htable_filter_lex.hxx"
 #define YYDEBUG 1
@@ -30,13 +31,16 @@ using namespace oceanbase::common;
 
 %token RowFilter ValueFilter QualifierFilter SingleColumnValueFilter PageFilter ColumnCountGetFilter
 %token CheckAndMutateFilter PrefixFilter
-%token LESS LESS_OR_EQUAL EQUAL NOT_EQUAL GREATER GREATER_OR_EQUAL NO_OP
+%token TableCompareFilter
+%token LESS LESS_OR_EQUAL EQUAL NOT_EQUAL GREATER GREATER_OR_EQUAL NO_OP IS IS_NOT
 %token  <ival>          BOOL_VALUE
 %token  <sval>          STRING_VALUE
 %token  <lval>          INT_VALUE
 
 %left OR
 %left AND
+%left T_OR
+%left T_AND
 %right SKIP WHILE
 %token END 0 "end of file"
 %token ERROR
@@ -81,6 +85,48 @@ filter:
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::FilterListBase *filter_list = nullptr;
                     $$ = filter_list = OB_NEWx(hfilter::FilterListOR, parse_ctx->allocator(),
+                                               hfilter::FilterListBase::Operator::MUST_PASS_ONE);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if (OB_FAIL(filter_list->add_filter($1))) {
+                        LOG_WARN("failed to add filter to list", K(ret));
+                    } else if (OB_FAIL(filter_list->add_filter($3))) {
+                        LOG_WARN("failed to add filter to list", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse FilterList with AND");
+                        YYABORT;
+                    }
+                }
+        |       filter T_AND filter %prec AND
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::FilterListBase *filter_list = nullptr;
+                    $$ = filter_list = OB_NEWx(ObTableFilterListAnd, parse_ctx->allocator(),
+                                               hfilter::FilterListBase::Operator::MUST_PASS_ALL);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if (OB_FAIL(filter_list->add_filter($1))) {
+                        LOG_WARN("failed to add filter to list", K(ret));
+                    } else if (OB_FAIL(filter_list->add_filter($3))) {
+                        LOG_WARN("failed to add filter to list", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse FilterList with AND");
+                        YYABORT;
+                    }
+                }
+        |       filter T_OR filter %prec OR
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::FilterListBase *filter_list = nullptr;
+                    $$ = filter_list = OB_NEWx(ObTableFilterListOr, parse_ctx->allocator(),
                                                hfilter::FilterListBase::Operator::MUST_PASS_ONE);
                     if (nullptr == $$) {
                         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -326,6 +372,26 @@ simple_filter:
                         YYABORT;
                     }
                 }
+        |       TableCompareFilter '(' compare_op ',' comparator ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($5, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        $$ = OB_NEWx(ObTableCompareFilter, parse_ctx->allocator(), $3, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse TableCompareFilter");
+                        YYABORT;
+                    }
+                }
         ;
 family:
                 STRING_VALUE { $$ = $1; }
@@ -341,6 +407,8 @@ compare_op:
         |       GREATER { $$ = hfilter::CompareOperator::GREATER; }
         |       GREATER_OR_EQUAL { $$ = hfilter::CompareOperator::GREATER_OR_EQUAL; }
         |       NO_OP { $$ = hfilter::CompareOperator::NO_OP; }
+        |       IS { $$ = hfilter::CompareOperator::IS; }
+        |       IS_NOT { $$ = hfilter::CompareOperator::IS_NOT; }
         ;
 comparator:
                 STRING_VALUE

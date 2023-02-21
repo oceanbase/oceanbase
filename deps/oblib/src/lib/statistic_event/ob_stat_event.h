@@ -603,6 +603,9 @@ STAT_EVENT_ADD_DEF(TABLEAPI_TSC_VIOLATE_COUNT, "table api OB_TRANSACTION_SET_VIO
 STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_COUNT, "query count", ObStatClassIds::TABLEAPI, "query count", 190901, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_TIME, "query time", ObStatClassIds::TABLEAPI, "query time", 190902, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_ROW, "query row count", ObStatClassIds::TABLEAPI, "query row count", 190903, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_AND_MUTATE_COUNT, "query_and_mutate count", ObStatClassIds::TABLEAPI, "query_and_mutate count", 190904, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_AND_MUTATE_TIME, "query_and_mutate time", ObStatClassIds::TABLEAPI, "query_and_mutate time", 190905, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_AND_MUTATE_ROW, "query_and_mutate row count", ObStatClassIds::TABLEAPI, "query_and_mutate row count", 190906, true, true)
 // -- hbase api 1910xx
 STAT_EVENT_ADD_DEF(HBASEAPI_SCAN_COUNT, "hbase scan count", ObStatClassIds::TABLEAPI, "scan count", 191001, true, true)
 STAT_EVENT_ADD_DEF(HBASEAPI_SCAN_TIME, "hbase scan time", ObStatClassIds::TABLEAPI, "scan time", 191002, true, true)

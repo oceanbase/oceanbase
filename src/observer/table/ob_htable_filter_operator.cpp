@@ -634,7 +634,8 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       scan_order_(query.get_scan_order()),
       cell_count_(0),
       count_per_row_(0),
-      has_more_cells_(true)
+      has_more_cells_(true),
+      is_first_result_(true)
 {}
 
 ObHTableRowIterator::~ObHTableRowIterator()
@@ -1043,107 +1044,89 @@ ObHTableFilterOperator::ObHTableFilterOperator(const ObTableQuery &query,
 int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
 {
   int ret = OB_SUCCESS;
-  if (is_first_result_ || is_query_sync_) {
-    if (is_first_result_) {
-      is_first_result_ = false;
+  one_result_->reset_except_property();
+  bool has_filter_row = (NULL != hfilter_) && (hfilter_->has_filter_row());
+  next_result = one_result_;
+  ObTableQueryResult *htable_row = nullptr;
+  // ObNewRow first_entity;
+  // ObObj first_entity_cells[4];
+  // first_entity.cells_ = first_entity_cells;
+  // first_entity.count_ = 4;
+  while (OB_SUCC(ret) && row_iterator_.has_more_result()
+      && OB_SUCC(row_iterator_.get_next_result(htable_row))) {
+    LOG_DEBUG("[yzfdebug] got one row", "cells_count", htable_row->get_row_count());
+    bool is_empty_row = (htable_row->get_row_count() == 0);
+    if (is_empty_row) {
+      if (nullptr != hfilter_) {
+        hfilter_->reset();
+      }
+      continue;
     }
-    if (0 != one_result_->get_property_count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("property should be empty", K(ret));
+    /*
+    if (NULL != hfilter_) {
+      // for RowFilter etc. which filter according to rowkey
+      if (OB_FAIL(htable_row->get_first_row(first_entity))) {
+        LOG_WARN("failed to get first cell", K(ret));
+      } else {
+        ObHTableCellEntity first_cell_entity(&first_entity);
+        if (hfilter_->filter_row_key(first_cell_entity)) {
+          // filter out the current row and fetch the next row
+          hfilter_->reset();
+          LOG_DEBUG("[yzfdebug] skip the row", K(ret));
+          continue;
+        }
+      }
     }
-    const ObIArray<ObString> &select_columns = query_->get_select_columns();
-    const int64_t N = select_columns.count();
-    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
-    {
-      if (OB_FAIL(one_result_->add_property_name(select_columns.at(i)))) {
-        LOG_WARN("failed to copy name", K(ret));
-      }
-    } // end for
-  } else {
-    one_result_->reset_except_property();
-  }
-  if (OB_SUCC(ret)) {
-    bool has_filter_row = (NULL != hfilter_) && (hfilter_->has_filter_row());
-    next_result = one_result_;
-    ObTableQueryResult *htable_row = nullptr;
-    // ObNewRow first_entity;
-    // ObObj first_entity_cells[4];
-    // first_entity.cells_ = first_entity_cells;
-    // first_entity.count_ = 4;
-    while(OB_SUCCESS == ret
-          && row_iterator_.has_more_result()
-          && OB_SUCC(row_iterator_.get_next_result(htable_row))) {
-      LOG_DEBUG("[yzfdebug] got one row", "cells_count", htable_row->get_row_count());
-      bool is_empty_row = (htable_row->get_row_count() == 0);
-      if (is_empty_row) {
-        if (nullptr != hfilter_) {
-          hfilter_->reset();
-        }
-        continue;
-      }
-      /*
-      if (NULL != hfilter_) {
-        // for RowFilter etc. which filter according to rowkey
-        if (OB_FAIL(htable_row->get_first_row(first_entity))) {
-          LOG_WARN("failed to get first cell", K(ret));
-        } else {
-          ObHTableCellEntity first_cell_entity(&first_entity);
-          if (hfilter_->filter_row_key(first_cell_entity)) {
-            // filter out the current row and fetch the next row
-            hfilter_->reset();
-            LOG_DEBUG("[yzfdebug] skip the row", K(ret));
-            continue;
-          }
+    */
+    bool exclude = false;
+    if (has_filter_row) {
+      // FIXME @todo allows direct modification of the final list to be submitted
+      hfilter_->filter_row_cells(*htable_row);
+      is_empty_row = (htable_row->get_row_count() == 0);
+      if (!is_empty_row) {
+        // last chance to drop entire row based on the sequence of filter calls
+        if (hfilter_->filter_row()) {
+          LOG_DEBUG("[yzfdebug] filter out the row");
+          exclude = true;
         }
       }
-      */
-      bool exclude = false;
-      if (has_filter_row) {
-        // FIXME @todo allows direct modification of the final list to be submitted
-        hfilter_->filter_row_cells(*htable_row);
-        is_empty_row = (htable_row->get_row_count() == 0);
-        if (!is_empty_row) {
-          // last chance to drop entire row based on the sequence of filter calls
-          if (hfilter_->filter_row()) {
-            LOG_DEBUG("[yzfdebug] filter out the row");
-            exclude = true;
-          }
-        }
-      }
-      if (is_empty_row || exclude) {
-        if (NULL != hfilter_) {
-          hfilter_->reset();
-        }
-        // fetch next row
-        continue;
-      }
-      /* @todo check batch limit and size limit */
-      // We have got one hbase row, store it to this batch
-      if (OB_FAIL(one_result_->add_all_row(*htable_row))) {
-        LOG_WARN("failed to add cells to row", K(ret));
-      }
+    }
+    if (is_empty_row || exclude) {
       if (NULL != hfilter_) {
         hfilter_->reset();
       }
-      if (OB_SUCC(ret)) {
-        if (one_result_->reach_batch_size_or_result_size(batch_size_, max_result_size_)) {
-          break;
-        }
+      // fetch next row
+      continue;
+    }
+    /* @todo check batch limit and size limit */
+    // We have got one hbase row, store it to this batch
+    if (OB_FAIL(one_result_->add_all_row(*htable_row))) {
+      LOG_WARN("failed to add cells to row", K(ret));
+    }
+    if (NULL != hfilter_) {
+      hfilter_->reset();
+    }
+    if (OB_SUCC(ret)) {
+      if (one_result_->reach_batch_size_or_result_size(batch_size_, max_result_size_)) {
+        break;
       }
     }
-    if (!row_iterator_.has_more_result()) {
-      ret = OB_ITER_END;
-    }
+  } // end while
+
+  if (!row_iterator_.has_more_result()) {
+    ret = OB_ITER_END;
   }
+
   if (OB_ITER_END == ret
       && one_result_->get_row_count() > 0) {
     ret = OB_SUCCESS;
   }
+
   LOG_DEBUG("[yzfdebug] get_next_result", K(ret), "row_count", one_result_->get_row_count());
   return ret;
 }
 
-int ObHTableFilterOperator::parse_filter_string(common::ObArenaAllocator* allocator)
+int ObHTableFilterOperator::parse_filter_string(common::ObIAllocator* allocator)
 {
   int ret = OB_SUCCESS;
   const ObString &hfilter_string = query_->get_htable_filter().get_filter();

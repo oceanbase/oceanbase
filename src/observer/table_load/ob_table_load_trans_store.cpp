@@ -6,7 +6,6 @@
 
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "observer/table/ob_table_service.h"
 #include "observer/table_load/ob_table_load_autoinc_nextval.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_stat.h"

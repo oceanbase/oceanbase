@@ -154,7 +154,7 @@ int ObTableApiReplaceExecutor::fetch_conflict_rowkey()
   DASTaskIter task_iter = dml_rtctx_.das_ref_.begin_task_iter();
 
   while (OB_SUCC(ret) && !task_iter.is_end()) {
-    if (OB_FAIL(get_next_conflict_rowkey(task_iter))) {
+    if (OB_FAIL(get_next_conflict_rowkey(task_iter, conflict_checker_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next conflict rowkey from das_result", K(ret));
       }
@@ -212,52 +212,6 @@ int ObTableApiReplaceExecutor::check_values(bool &is_equal,
       }
     }
   }
-  return ret;
-}
-
-
-int ObTableApiReplaceExecutor::get_next_conflict_rowkey(DASTaskIter &task_iter)
-{
-  int ret = OB_SUCCESS;
-  bool got_row = false;
-
-  while (OB_SUCC(ret) && !got_row) {
-    ObNewRow *dup_row = nullptr;
-    ObChunkDatumStore::StoredRow *stored_row = nullptr;
-    ObDASWriteBuffer::DmlShadowRow ssr;
-    ObDASInsertOp *ins_op = static_cast<ObDASInsertOp*>(*task_iter);
-    ObNewRowIterator *conflict_result = ins_op->get_duplicated_result();
-    const ObDASInsCtDef *ins_ctdef = static_cast<const ObDASInsCtDef*>(ins_op->get_ctdef());
-    if (OB_ISNULL(conflict_result)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("duplicted key result is null", K(ret));
-    } else if (OB_FAIL(conflict_result->get_next_row(dup_row))) {
-      if (OB_ITER_END == ret) {
-        ++task_iter;
-        if (!task_iter.is_end()) {
-          ret = OB_SUCCESS;
-        }
-      } else {
-        LOG_WARN("fail to get next row from das result", K(ret));
-      }
-    } else if (OB_FAIL(ssr.init(dml_rtctx_.get_das_alloc(), ins_ctdef->table_rowkey_types_, false))) {
-      LOG_WARN("fail to init shadow stored row", K(ret), K(ins_ctdef->table_rowkey_types_));
-    } else if (OB_FAIL(ssr.shadow_copy(*dup_row))) {
-      LOG_WARN("fail to shadow copy ob new row", K(ret));
-    } else if (OB_ISNULL(stored_row = ssr.get_store_row())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("stored row is null", K(ret));
-    } else if (OB_FAIL(stored_row->to_expr(
-          conflict_checker_.checker_ctdef_.data_table_rowkey_expr_,
-          conflict_checker_.eval_ctx_))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get next row from result iterator", K(ret));
-      }
-    } else {
-      got_row = true;
-    }
-  }
-
   return ret;
 }
 

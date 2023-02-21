@@ -356,17 +356,13 @@ int ObTableApiExecuteP::process_get()
   } else {
     // fill result entity
     ObITableEntity *result_entity = nullptr;
-    const ObITableEntity *request_entity = tb_ctx_.get_entity();
-    ObArray<ObString> properties;
     const ObTableSchema *table_schema = tb_ctx_.get_table_schema();
-    if (OB_FAIL(request_entity->get_properties_names(properties))) {
-      LOG_WARN("fail to get entity properties", K(ret));
-    } else if (OB_FAIL(result_.get_entity(result_entity))) {
+    if (OB_FAIL(result_.get_entity(result_entity))) {
       LOG_WARN("fail to get result entity", K(ret));
     } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator_,
                                                                  row,
                                                                  table_schema,
-                                                                 properties,
+                                                                 tb_ctx_.get_query_col_names(),
                                                                  result_entity))) {
       LOG_WARN("fail to fill result entity", K(ret));
     }
@@ -374,7 +370,7 @@ int ObTableApiExecuteP::process_get()
 
   release_read_trans();
   result_.set_errno(ret);
-  ObTableRpcProcessorUtil::replace_ret_code(ret);
+  ObTableApiUtil::replace_ret_code(ret);
   result_.set_type(arg_.table_operation_.type());
 
   return ret;

@@ -14,7 +14,6 @@
 #define OCEANBASE_OBSERVER_TABLE_REPLACE_EXECUTOR_H
 #include "ob_table_modify_executor.h"
 #include "ob_table_context.h"
-#include "sql/engine/dml/ob_conflict_checker.h"
 
 namespace oceanbase
 {
@@ -91,7 +90,6 @@ private:
   int get_next_row_from_child();
   int post_das_task();
   int fetch_conflict_rowkey();
-  int get_next_conflict_rowkey(sql::DASTaskIter &task_iter);
   int reset_das_env();
   int check_values(bool &is_equal,
                    const ObChunkDatumStore::StoredRow *replace_row,
