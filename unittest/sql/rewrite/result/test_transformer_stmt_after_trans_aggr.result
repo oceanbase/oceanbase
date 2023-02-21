@@ -86953,34 +86953,163 @@ SQL: SELECT MIN(DISTINCT OUTR . `col_varchar_10`) AS X FROM B AS OUTR WHERE (OUT
   ],
   "having": [
      {
-      "item_type":"T_BOOL",
+      "item_type":"T_OP_EQ",
       "result_type": {
         "meta": {
-          "type":"TINYINT",
+          "type":"INT",
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
         "accuracy": {
           "length":-1,
-          "precision":-1,
-          "scale":-1
+          "precision":1,
+          "scale":0
         },
-        "flag":1,
+        "flag":0,
         "calc_type": {
-          "type":"NULL",
-          "collation":"invalid_type",
-          "coercibility":"INVALID"
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"IMPLICIT"
         }
       },
       "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
+        "CNT_CONST",
+        "CNT_COLUMN",
+        "CNT_PARAM",
+        "CNT_AGG"
       ],
       "rel_id": [
+        1
       ],
-      "value": {
-        "TINYINT":0
-      }
+      "expr_levels": [
+        0
+      ],
+      "children": [
+         {
+          "item_type":"T_FUN_MIN",
+          "result_type": {
+            "meta": {
+              "type":"VARCHAR",
+              "collation":"utf8mb4_general_ci",
+              "coercibility":"IMPLICIT"
+            },
+            "accuracy": {
+              "length":10,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_AGG",
+            "CNT_COLUMN",
+            "CNT_AGG"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_level":0,
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"VARCHAR",
+                  "collation":"utf8mb4_general_ci",
+                  "coercibility":"IMPLICIT"
+                },
+                "accuracy": {
+                  "length":10,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+                1
+              ],
+              "table_id":-10,
+              "column_id":16,
+              "database_name":"",
+              "table_name":"VIEW4",
+              "synonym_name":"",
+              "synonym_db_name":"",
+              "column_name":"col_varchar_10",
+              "expr_level":0,
+              "expr_levels": [
+                0
+              ],
+              "column_flags":0,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false,
+              "is_unpivot_mocked_column":false,
+              "is_hidden":false
+            }
+          ],
+          "distinct":false,
+          "order_by": [
+          ],
+          "separator_param_expr":null,
+          "udf_meta": {
+            "tenant_id":-1,
+            "name":"",
+            "ret":0,
+            "dl":"",
+            "type":0
+          },
+          "linear_inter_expr":null
+        },
+         {
+          "item_type":"T_QUESTIONMARK",
+          "result_type": {
+            "meta": {
+              "type":"NULL",
+              "collation":"binary",
+              "coercibility":"IGNORABLE"
+            },
+            "accuracy": {
+              "length":0,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "IS_PARAM",
+            "CNT_CONST",
+            "CNT_PARAM"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "UNKNOWN":1
+          }
+        }
+      ]
     }
   ],
   "aggr_func": [

@@ -18455,6 +18455,188 @@ ERROR 21000: Subquery returns more than 1 row
 explain_protocol: 0
 drop table if exists t1;
 
+drop table if exists t1;
+create table t1(c1 int);
+insert into t1 values(1);
+insert into t1 values(2);
+
+explain select 1 from t1 having count(*) = NULL;
+Query Plan
+=========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST |
+-----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |78755|
+|1 | TABLE SCAN    |t1  |100000   |59654|
+=========================================
+
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([T_FUN_COUNT(*) = NULL]),
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil),
+      access([t1.__pk_increment]), partitions(p0)
+
+select 1 from t1 having count(*) = NULL;
++---+
+| 1 |
++---+
++---+
+explain select 1 from t1 having count(*) = NULL or 1 = 1;
+Query Plan
+=========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST |
+-----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |78755|
+|1 | TABLE SCAN    |t1  |100000   |59654|
+=========================================
+
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([T_FUN_COUNT(*) = NULL OR 1]),
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil),
+      access([t1.__pk_increment]), partitions(p0)
+
+select 1 from t1 having count(*) = NULL or 1 = 1;
++---+
+| 1 |
++---+
+| 1 |
++---+
+explain select 1 from t1 having count(*) is NULL or 1 = 1;
+Query Plan
+=========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST |
+-----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |78755|
+|1 | TABLE SCAN    |t1  |100000   |59654|
+=========================================
+
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([(T_OP_IS, T_FUN_COUNT(*), NULL, 0) OR 1]),
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil),
+      access([t1.__pk_increment]), partitions(p0)
+
+select 1 from t1 having count(*) is NULL or 1 = 1;
++---+
+| 1 |
++---+
+| 1 |
++---+
+explain select 1 from t1 having count(*) is NULL;
+Query Plan
+=========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST |
+-----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |78755|
+|1 | TABLE SCAN    |t1  |100000   |59654|
+=========================================
+
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([(T_OP_IS, T_FUN_COUNT(*), NULL, 0)]),
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil),
+      access([t1.__pk_increment]), partitions(p0)
+
+select 1 from t1 having count(*) is NULL;
++---+
+| 1 |
++---+
++---+
+##remove dummy filter
+explain select 1 from t1 having 1 > 2 and count(*) < 3;
+Query Plan
+=========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST |
+-----------------------------------------
+|0 |SCALAR GROUP BY|    |0        |78755|
+|1 | TABLE SCAN    |t1  |100000   |59654|
+=========================================
+
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([0], [T_FUN_COUNT(*) < 3]),
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil),
+      access([t1.__pk_increment]), partitions(p0)
+
+select 1 from t1 having 1 > 2 and count(*) < 3;
++---+
+| 1 |
++---+
++---+
+explain select 1 from t1 having 1 = 1 or count(*) < 3;
+Query Plan
+=========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST |
+-----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |78755|
+|1 | TABLE SCAN    |t1  |100000   |59654|
+=========================================
+
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([1 OR T_FUN_COUNT(*) < 3]),
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil),
+      access([t1.__pk_increment]), partitions(p0)
+
+select 1 from t1 having 1 = 1 or count(*) < 3;
++---+
+| 1 |
++---+
+| 1 |
++---+
+##remove dummy case when
+explain select case when 1 then (case when 1 then 1 else count(*) end) else 2 end from t1;
+Query Plan
+=========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST |
+-----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |78755|
+|1 | TABLE SCAN    |t1  |100000   |59654|
+=========================================
+
+Outputs & filters:
+-------------------------------------
+  0 - output([CASE WHEN 1 THEN CASE WHEN 1 THEN 1 ELSE T_FUN_COUNT(*) END ELSE 2 END]), filter(nil),
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil),
+      access([t1.__pk_increment]), partitions(p0)
+
+select case when 1 then (case when 1 then 1 else count(*) end) else 2 end from t1;
++--------------------------------------------------------------------+
+| case when 1 then (case when 1 then 1 else count(*) end) else 2 end |
++--------------------------------------------------------------------+
+|                                                                  1 |
++--------------------------------------------------------------------+
+explain select c1 from t1 having (case when 1 then (case when 1 then 1 else count(*) end) else 2 end) = c1;
+Query Plan
+=========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST |
+-----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |80961|
+|1 | TABLE SCAN    |t1  |100000   |61860|
+=========================================
+
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter([CASE WHEN 1 THEN CASE WHEN 1 THEN 1 ELSE T_FUN_COUNT(*) END ELSE 2 END = t1.c1]),
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([t1.c1]), filter(nil),
+      access([t1.c1]), partitions(p0)
+
+select c1 from t1 having (case when 1 then (case when 1 then 1 else count(*) end) else 2 end) = c1;
++------+
+| c1   |
++------+
+|    1 |
++------+
+drop table t1;
+
 USE DB_SIMPLIFY;
 drop database DB_SIMPLIFY;
 alter system set _enable_record_rollback_trans_log=true;

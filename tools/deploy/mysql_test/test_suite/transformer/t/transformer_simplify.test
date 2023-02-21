@@ -2172,6 +2172,36 @@ select /*+no_rewrie*/(SELECT SUM(c1)  FROM t1 GROUP BY c1 WITH ROLLUP) from dual
 --explain_protocol 0
 drop table if exists t1;
 
+#Bugfix: https://work.aone.alibaba-inc.com/issue/47667866
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int);
+insert into t1 values(1);
+insert into t1 values(2);
+
+#remove op null
+explain select 1 from t1 having count(*) = NULL;
+select 1 from t1 having count(*) = NULL;
+explain select 1 from t1 having count(*) = NULL or 1 = 1;
+select 1 from t1 having count(*) = NULL or 1 = 1;
+explain select 1 from t1 having count(*) is NULL or 1 = 1;
+select 1 from t1 having count(*) is NULL or 1 = 1;
+#remove is null
+explain select 1 from t1 having count(*) is NULL;
+select 1 from t1 having count(*) is NULL;
+##remove dummy filter
+explain select 1 from t1 having 1 > 2 and count(*) < 3;
+select 1 from t1 having 1 > 2 and count(*) < 3;
+explain select 1 from t1 having 1 = 1 or count(*) < 3;
+select 1 from t1 having 1 = 1 or count(*) < 3;
+##remove dummy case when
+explain select case when 1 then (case when 1 then 1 else count(*) end) else 2 end from t1;
+select case when 1 then (case when 1 then 1 else count(*) end) else 2 end from t1;
+explain select c1 from t1 having (case when 1 then (case when 1 then 1 else count(*) end) else 2 end) = c1;
+select c1 from t1 having (case when 1 then (case when 1 then 1 else count(*) end) else 2 end) = c1;
+drop table t1;
+
 USE DB_SIMPLIFY;
 drop database DB_SIMPLIFY;
 alter system set _enable_record_rollback_trans_log=true;

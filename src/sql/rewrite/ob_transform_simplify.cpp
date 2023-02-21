@@ -758,7 +758,7 @@ int ObTransformSimplify::replace_is_null_condition(ObDMLStmt* stmt, bool& trans_
         trans_happened |= is_happened;
       }
     }
-    if (OB_SUCC(ret) && stmt->is_select_stmt()) {
+    if (OB_SUCC(ret) && stmt->is_select_stmt() && !static_cast<ObSelectStmt *>(stmt)->is_scala_group_by()) {
       ObSelectStmt* sel_stmt = static_cast<ObSelectStmt*>(stmt);
       for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
         if (OB_FAIL(inner_replace_is_null_condition(sel_stmt, sel_stmt->get_having_exprs().at(i),
@@ -909,7 +909,7 @@ int ObTransformSimplify::replace_op_null_condition(ObDMLStmt* stmt, bool& trans_
       trans_happened |= is_happened;
     }
   }
-  if (OB_SUCC(ret) && stmt->is_select_stmt()) {
+  if (OB_SUCC(ret) && stmt->is_select_stmt() && !static_cast<ObSelectStmt *>(stmt)->is_scala_group_by()) {
     ObSelectStmt* sel_stmt = static_cast<ObSelectStmt*>(stmt);
     for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
       if (OB_FAIL(replace_cmp_null_condition(
@@ -2495,7 +2495,7 @@ int ObTransformSimplify::remove_dummy_exprs(ObDMLStmt* stmt, bool& trans_happene
       }
     }
     // remove dummy exprs in having clause
-    if (OB_SUCC(ret) && stmt->is_select_stmt()) {
+    if (OB_SUCC(ret) && stmt->is_select_stmt() && !static_cast<ObSelectStmt*>(stmt)->is_scala_group_by()) {
       ObSelectStmt* select_stmt = static_cast<ObSelectStmt*>(stmt);
       if (OB_FAIL(remove_dummy_filter_exprs(select_stmt->get_having_exprs(), is_happened))) {
         LOG_WARN("failed to post process filter exprs", K(ret));
@@ -3284,9 +3284,16 @@ int ObTransformSimplify::remove_dummy_case_when(ObDMLStmt* stmt, bool& trans_hap
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
-  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
   } else {
+    int32_t ignore_scope = 0;
+    if (stmt->is_select_stmt() && static_cast<ObSelectStmt*>(stmt)->is_scala_group_by()) {
+      ignore_scope = RelExprCheckerBase::HAVING_SCOPE | RelExprCheckerBase::FIELD_LIST_SCOPE;
+    }
+    if (OB_FAIL(stmt->get_relation_exprs(relation_exprs, ignore_scope))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
       ObRawExpr* expr = relation_exprs.at(i);
       if (OB_FAIL(remove_dummy_case_when(stmt->get_query_ctx(), expr, trans_happened))) {

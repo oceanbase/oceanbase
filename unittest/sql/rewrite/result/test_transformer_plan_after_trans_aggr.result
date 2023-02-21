@@ -2307,7 +2307,7 @@ SQL: SELECT MIN(DISTINCT OUTR . `col_varchar_10`) AS X FROM B AS OUTR WHERE (OUT
 ========================================================
 |ID|OPERATOR                 |NAME      |EST. ROWS|COST|
 --------------------------------------------------------
-|0 |SCALAR GROUP BY          |          |0        |401 |
+|0 |SCALAR GROUP BY          |          |1        |401 |
 |1 | SUBPLAN SCAN            |VIEW4     |1        |401 |
 |2 |  LIMIT                  |          |1        |401 |
 |3 |   TOP-N SORT            |          |1        |401 |
@@ -2322,7 +2322,7 @@ SQL: SELECT MIN(DISTINCT OUTR . `col_varchar_10`) AS X FROM B AS OUTR WHERE (OUT
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([T_FUN_MIN(VIEW4.col_varchar_10)]), filter([0]), 
+  0 - output([T_FUN_MIN(VIEW4.col_varchar_10)]), filter([T_FUN_MIN(VIEW4.col_varchar_10) = ?]),
       group(nil), agg_func([T_FUN_MIN(VIEW4.col_varchar_10)])
   1 - output([VIEW4.col_varchar_10]), filter(nil), 
       access([VIEW4.col_varchar_10])
