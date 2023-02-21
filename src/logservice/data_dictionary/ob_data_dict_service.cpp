@@ -587,7 +587,8 @@ int ObDataDictService::filter_table_(const share::schema::ObTableSchema *table_s
     DDLOG(WARN, "invalid table_schema", KR(ret));
   } else {
     is_filtered =
-      ! (table_schema->is_user_table()
+      ! (table_schema->has_tablet()
+        || table_schema->is_user_table()
         || table_schema->is_unique_index()
         || table_schema->is_tmp_table());
   }
