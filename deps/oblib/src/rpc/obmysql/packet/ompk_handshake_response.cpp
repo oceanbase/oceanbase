@@ -48,7 +48,7 @@ int OMPKHandshakeResponse::decode()
     capability_.capability_ = uint2korr(pos);
     if (!capability_.cap_flags_.OB_CLIENT_PROTOCOL_41) {
       ret = OB_NOT_SUPPORTED;
-      LOG_ERROR("ob only support mysql client protocol 4.1", K(ret));
+      LOG_WARN("ob only support mysql client protocol 4.1", K(ret));
     } else {
       ObMySQLUtil::get_uint4(pos, capability_.capability_);
       // When the driver establishes a connection, it decides whether to open the CLIENT_MULTI_RESULTS

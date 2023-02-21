@@ -165,7 +165,8 @@ inline int ObMysqlProtocolProcessor::decode_sslr_body(ObICSMemPool& pool, const 
     buf += pktlen;
 
     if (OB_FAIL(sslrpkt->decode())) {
-      LOG_ERROR("failed to decode OMPKSSLRequest", KPC(sslrpkt), K(ret));
+      LOG_WARN("failed to decode OMPKSSLRequest and the socket connection that this session belongs"
+                "to could be an illegal connection", KPC(sslrpkt), K(ret));
     }
   }
   return ret;
