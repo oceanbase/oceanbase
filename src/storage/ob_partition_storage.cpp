@@ -6022,6 +6022,8 @@ int ObPartitionStorage::local_sort_index_by_range(
       uint64_t tenant_id = extract_tenant_id(table_schema->get_table_id());
       if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id, allocator, expr_ctx))) {
         STORAGE_LOG(WARN, "failed to make default expr context ", K(ret));
+      } else {
+        expr_ctx.calc_buf_ = &calc_buf;
       }
       tables_handle.reset();
       DEBUG_SYNC(BEFORE_BUILD_LOCAL_INDEX_REFRESH_TABLES);

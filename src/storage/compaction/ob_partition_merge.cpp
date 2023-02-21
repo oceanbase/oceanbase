@@ -420,6 +420,8 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter& merge_param)
       uint64_t tenant_id = extract_tenant_id(merge_param.table_schema_->get_table_id());
       if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id, allocator_, expr_ctx_))) {
         STORAGE_LOG(WARN, "Failed to make default expr context ", K(ret));
+      } else {
+        expr_ctx_.calc_buf_ = &expr_allocator_;
       }
     }
   }
