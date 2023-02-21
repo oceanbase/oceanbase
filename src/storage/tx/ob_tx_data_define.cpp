@@ -112,12 +112,12 @@ int ObUndoStatusList::deserialize_(const char *buf,
     LST_DO_CODE(OB_UNIS_DECODE, action);
     // allcate new undo status node if needed
     if (OB_ISNULL(cur_node) || cur_node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
-      void *buf = nullptr;
-      if (OB_ISNULL(buf = slice_allocator.alloc())) {
+      void *undo_node_buf = nullptr;
+      if (OB_ISNULL(undo_node_buf = slice_allocator.alloc())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "allocate memory when deserialize ObTxData failed.", KR(ret));
       } else {
-        cur_node = new (buf) ObUndoStatusNode;
+        cur_node = new (undo_node_buf) ObUndoStatusNode;
 
         // update undo status list link after allocated new node
         ObUndoStatusNode *tmp_node = head_;
@@ -126,7 +126,14 @@ int ObUndoStatusList::deserialize_(const char *buf,
       }
     }
 
-    cur_node->undo_actions_[cur_node->size_++] = action;
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(cur_node)) {
+        cur_node->undo_actions_[cur_node->size_++] = action;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "unexpected nullptr when deserialize undo status list", KR(ret), KP(buf), K(pos), K(data_len));
+      }
+    }
   }
 
   return ret;
