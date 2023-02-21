@@ -376,12 +376,14 @@ int ObDASRef::wait_all_tasks()
   return OB_UNIMPLEMENTED_FEATURE;
 }
 
-int ObDASRef::allocate_async_das_cb(ObRpcDasAsyncAccessCallBack *&async_cb, const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops)
+int ObDASRef::allocate_async_das_cb(ObRpcDasAsyncAccessCallBack *&async_cb,
+                                    const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops,
+                                    int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
   OB_ASSERT(async_cb == nullptr);
   ObDASTaskFactory &das_factory = get_das_factory();
-  if (OB_FAIL(das_factory.create_das_async_cb(task_ops, das_alloc_.get_attr(), *this, async_cb))) {
+  if (OB_FAIL(das_factory.create_das_async_cb(task_ops, das_alloc_.get_attr(), *this, async_cb, timeout_ts))) {
     LOG_WARN("failed to create das async cb", K(ret));
   } else if (OB_ISNULL(async_cb)) {
     ret = OB_ERR_UNEXPECTED;
