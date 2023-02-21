@@ -1422,7 +1422,9 @@ ObBackupTabletProvider::ObBackupTabletProvider()
       index_kv_cache_(NULL),
       sql_proxy_(NULL),
       backup_item_cmp_(sort_ret_),
-      meta_index_store_()
+      meta_index_store_(),
+      prev_item_(),
+      has_prev_item_(false)
 {}
 
 ObBackupTabletProvider::~ObBackupTabletProvider()
@@ -1576,6 +1578,12 @@ int ObBackupTabletProvider::inner_get_batch_items_(
       LOG_WARN("next item is not valid", K(ret), KPC(next_item));
     } else if (OB_FAIL(items.push_back(*next_item))) {
       LOG_WARN("failed to push back", K(ret), K(next_item));
+    } else if (has_prev_item_ && OB_FAIL(compare_prev_item_(*next_item))) {
+      LOG_WARN("failed to compare prev item", K(ret), K(prev_item_), KPC(next_item));
+    } else {
+      has_prev_item_ = true;
+      prev_item_ = *next_item;
+
     }
   }
   LOG_INFO("inner get batch item", K(items), K_(backup_data_type));
@@ -2166,6 +2174,23 @@ int ObBackupTabletProvider::check_tablet_replica_validity_(const uint64_t tenant
       LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(src_addr), K(tablet_id));
     } else {
       ls_backup_ctx_->check_tablet_info_cost_time_ += ObTimeUtility::current_time() - start_ts;
+    }
+  }
+  return ret;
+}
+
+int ObBackupTabletProvider::compare_prev_item_(const ObBackupProviderItem &cur_item)
+{
+  int ret = OB_SUCCESS;
+  ObBackupProviderItemCompare compare(ret);
+  compare.set_backup_data_type(backup_data_type_);
+  bool bret = compare(&prev_item_, &cur_item); // check if smaller
+  if (!bret) {
+    if (prev_item_ == cur_item && PROVIDER_ITEM_MACRO_ID == cur_item.get_item_type()) {
+      // macro id might be same
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("comparing item not match", K(ret), K(prev_item_), K(cur_item));
     }
   }
   return ret;
