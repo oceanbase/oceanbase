@@ -15,6 +15,7 @@
 #include "lib/ob_define.h"
 #include "lib/time/ob_time_utility.h"
 #include "share/backup/ob_backup_struct.h"    // ObBackupPathString
+#include "share/ob_debug_sync.h"              // DEBUG
 #include "storage/ls/ob_ls.h"                 // ObLS
 #include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService
@@ -344,6 +345,8 @@ void ObArchiveLSMgr::do_thread_task_()
   // otherwise ls archive state can not persist in table successfully
   const bool is_in_doing = state.is_doing() || state.is_interrupted() || state.is_suspend();
   gc_stale_ls_task_(key, is_in_doing);
+
+  DEBUG_SYNC(BEFORE_ARCHIVE_ADD_LS_TASK);
 
   if (is_in_doing) {
     add_ls_task_();
