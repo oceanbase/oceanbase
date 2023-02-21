@@ -48,6 +48,7 @@ ObMacroBlockReader::~ObMacroBlockReader()
 {
   if (nullptr != encryption_) {
     encryption_->~ObMicroBlockEncryption();
+    ob_free(encryption_);
     encryption_ = nullptr;
   }
   if (nullptr != compressor_) {
@@ -263,7 +264,8 @@ int ObMacroBlockReader::alloc_buf(const int64_t req_size, char *&buf, int64_t &b
   int ret = OB_SUCCESS;
   if (NULL == buf || buf_size < req_size) {
     if (nullptr != buf) {
-      allocator_.free(buf);
+      allocator_.reuse();
+      buf = nullptr;
     }
     if (NULL == (buf = static_cast<char*>(allocator_.alloc(req_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
