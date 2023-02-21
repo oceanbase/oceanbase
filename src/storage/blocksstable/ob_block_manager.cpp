@@ -1390,11 +1390,6 @@ void ObBlockManager::InspectBadBlockTask::inspect_bad_block()
         std::max(GCONF._data_storage_io_timeout * 1,
                  max_check_count_per_round * DEFAULT_IO_WAIT_TIME_MS * 1000);
     const int64_t begin_time = ObTimeUtility::current_time();
-#ifdef ERRSIM
-    const int64_t access_time_interval = 0;
-#else
-    const int64_t access_time_interval = ACCESS_TIME_INTERVAL;
-#endif
     int64_t check_count = 0;
 
     for (int64_t i = 0;

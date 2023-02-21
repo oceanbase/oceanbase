@@ -48,6 +48,7 @@ public:
   TO_STRING_KV(K_(macro_id), K_(io_handle));
 private:
   int report_bad_block() const;
+  static uint64_t get_tenant_id();
 private:
   MacroBlockId macro_id_;
   common::ObIOHandle io_handle_;
