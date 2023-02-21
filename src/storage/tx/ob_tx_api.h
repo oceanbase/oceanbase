@@ -83,7 +83,7 @@ int commit_tx(ObTxDesc &tx, const int64_t expire_ts, const ObString *trace_info 
  * Return:
  * OB_SUCCESS            - the commit successfully submitted,
  *                         result will notify caller via @callback
- * OB_TRANS_COMMITTED    - transaction committed yet
+ * OB_TRANS_COMMITED    - transaction committed yet
  * OB_TRANS_ROLLBACKED   - transaction rollbacked yet
  * OB_TRANS_TIMEOUT      - transaction timeout and aborted internally
  * OB_TRANS_STMT_TIMEOUT - commit not accomplished before expire_ts

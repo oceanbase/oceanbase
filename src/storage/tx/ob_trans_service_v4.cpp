@@ -333,6 +333,7 @@ int ObTransService::unregister_commit_retry_task_(ObTxDesc &tx)
 int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
 {
   int ret = OB_SUCCESS;
+  int32_t ref_cnt = 0;
   // remember tx_id because tx maybe cleanout and reused
   // in this function's following steps.
   auto tx_id = tx.tx_id_;
@@ -374,6 +375,7 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
         }
       }
     }
+    ref_cnt = tx.get_ref();
     tx.lock_.unlock();
     cb_executed = tx.execute_commit_cb();
   }
@@ -381,11 +383,11 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   // it not safe and meaningless to access tx after commit_cb
   // has been called, the tx may has been reused or release
   // in the commit_cb
-  TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id), K(cb_executed));
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, handle_timeout, OB_Y(ret),
                       OB_ID(arg), delay,
                       OB_ID(ref), tx.get_ref());
+  TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id), K(ref_cnt), K(cb_executed));
   return ret;
 }
 
@@ -441,6 +443,7 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
                                              const SCN commit_version)
 {
   int ret = OB_SUCCESS;
+  int32_t ref_cnt_0 = tx.get_ref();
   bool commit_fin = true;
   ObTxDesc::State state = ObTxDesc::State::INVL;
   int commit_out = OB_SUCCESS;
@@ -524,8 +527,10 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
 #ifndef NDEBUG
   TRANS_LOG(INFO, "handle tx commit result", K(ret), K(tx), K(commit_fin), K(result));
 #else
-  if (OB_FAIL(ret) || (OB_SUCCESS != result) || (ObClockGenerator::getClock() - tx.commit_ts_) > 5 * 1000 * 1000) {
-    TRANS_LOG(INFO, "handle tx commit result", K(ret), K(tx), K(commit_fin), K(result));
+  if (OB_FAIL(ret)
+      || (OB_SUCCESS != result && OB_TRANS_COMMITED != result)
+      || (ObClockGenerator::getClock() - tx.commit_ts_) > 5 * 1000 * 1000) {
+    TRANS_LOG(INFO, "handle tx commit result", K(ret), K(ref_cnt_0), K(tx), K(commit_fin), K(result));
   }
 #endif
   ObTransTraceLog &tlog = tx.get_tlog();
@@ -533,8 +538,11 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
                       OB_ID(arg), result,
                       OB_ID(is_finish), commit_fin,
                       OB_ID(result), commit_out,
+                      OB_ID(state), tx.state_,
+                      OB_ID(tag1), ref_cnt_0,
+                      OB_ID(ref), tx.get_ref(),
                       OB_ID(commit_version), commit_version,
-                      OB_ID(state), tx.state_);
+                      OB_ID(thread_id), GETTID());
   return ret;
 }
 
