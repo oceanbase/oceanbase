@@ -182,6 +182,8 @@ int ObSSTableRowScanner::open_cur_data_block(ObSSTableReadHandle &read_handle)
         if (OB_FAIL(micro_scanner_->apply_blockscan(block_row_store_, access_ctx_->table_store_stat_))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to apply_block_scan", K(ret), KPC(block_row_store_));
+          } else {
+            ret = OB_SUCCESS;
           }
         }
         EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
