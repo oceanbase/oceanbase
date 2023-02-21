@@ -29,6 +29,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
+#include "rootserver/ob_tenant_info_loader.h"
 
 namespace oceanbase
 {
@@ -1003,6 +1004,8 @@ int ObLSService::create_ls_for_ha(
     LOG_WARN("ls waiting for destroy, need retry later", K(ret), K(arg));
   } else if (OB_FAIL(ObMigrationStatusHelper::trans_migration_op(arg.type_, migration_status))) {
     LOG_WARN("failed to trans migration op", K(ret), K(arg), K(task_id));
+  } else if (OB_FAIL(get_restore_status_(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), K(arg), K(task_id));
   } else if (OB_FAIL(inner_create_ls_(arg.ls_id_,
                                       arg.dst_.get_replica_type(),
                                       migration_status,
@@ -1284,6 +1287,32 @@ int ObLSService::iterate_diagnose(const ObFunction<int(const storage::ObLS &ls)>
   }
   return ret;
 }
+
+int ObLSService::get_restore_status_(
+    share::ObLSRestoreStatus &restore_status)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  share::ObAllTenantInfo tenant_info;
+  restore_status = ObLSRestoreStatus::RESTORE_NONE;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant info loader should not be NULL", K(ret), KP(tenant_info_loader));
+  } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    restore_status = ObLSRestoreStatus::RESTORE_NONE;
+  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+    LOG_WARN("failed to get tenant info", K(ret));
+  } else if (FALSE_IT(restore_status = tenant_info.is_restore() ?
+      ObLSRestoreStatus::RESTORE_START : ObLSRestoreStatus::RESTORE_NONE)) {
+  }
+  return ret;
+}
+
 
 } // storage
 } // oceanbase

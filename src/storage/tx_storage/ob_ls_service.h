@@ -178,6 +178,8 @@ private:
   int alloc_ls_(ObLS *&ls);
   bool is_ls_to_restore_(const obrpc::ObCreateLSArg &arg) const;
   bool need_create_inner_tablets_(const obrpc::ObCreateLSArg &arg) const;
+  int get_restore_status_(
+      share::ObLSRestoreStatus &restore_status);
 
 private:
   bool is_inited_;
