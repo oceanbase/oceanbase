@@ -728,24 +728,26 @@ int ObMajorMergeScheduler::try_update_epoch_and_reload()
       const int64_t ori_epoch = get_epoch();
       // update freeze_service_epoch before reload to ensure loading latest merge_info and freeze_info
       if (OB_FAIL(do_update_freeze_service_epoch(latest_epoch))) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(set_epoch(ori_epoch))) {
-          LOG_WARN("fail to set epoch", KR(ret), KR(tmp_ret), K(ori_epoch));
-        }
         LOG_WARN("fail to update freeze_service_epoch", KR(ret), K(ori_epoch), K(latest_epoch));
-      } else {
-        FREEZE_TIME_GUARD;
-        if (OB_FAIL(set_epoch(latest_epoch))) {
-          LOG_WARN("fail to set epoch", KR(ret), K(latest_epoch));
-        } else if (OB_FAIL(zone_merge_mgr_->reload())) {
-          LOG_WARN("fail to reload zone_merge_mgr", KR(ret));
-        } else if (OB_FAIL(freeze_info_mgr_->reload())) {
-          LOG_WARN("fail to reload freeze_info_mgr", KR(ret));
+        // Here, we do not know if freeze_service_epoch in __all_service_epoch has been updated to
+        // latest_epoch. If it has been updated to latest_epoch, freeze_service_epoch in memory
+        // must also be updated to latest_epoch. So as to keep freeze_service_epoch consistent in
+        // memory and table. https://work.aone.alibaba-inc.com/issue/47854487
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(update_epoch_in_memory_and_reload())) {
+          if (OB_EAGAIN == tmp_ret) {
+            LOG_WARN("fail to update epoch in memory and reload, will retry", KR(ret), KR(tmp_ret),
+                     K(ori_epoch), K(latest_epoch));
+            // in order to retry do_one_tenant_major_freeze, set ret to OB_EAGAIN here
+            ret = tmp_ret;
+          } else {
+            LOG_WARN("fail to update epoch in memory and reload", KR(ret), KR(tmp_ret),
+                     K(ori_epoch), K(latest_epoch));
+          }
         }
-        if (OB_FAIL(ret)) {
-          zone_merge_mgr_->reset_merge_info();
-          freeze_info_mgr_->reset_freeze_info();
-          LOG_WARN("fail to reload", KR(ret));
+      } else {
+        if (OB_FAIL(do_update_and_reload(latest_epoch))) {
+          LOG_WARN("fail to do update and reload", KR(ret), K(ori_epoch), K(latest_epoch));
         }
       }
 
@@ -776,6 +778,104 @@ int ObMajorMergeScheduler::do_update_freeze_service_epoch(
     LOG_WARN("not indeed update freeze_service_epoch", KR(ret), K(latest_epoch), K_(tenant_id), K(affected_rows));
   }
   LOG_INFO("finish to update freeze_service_epoch", KR(ret), K(latest_epoch), K_(tenant_id));
+  return ret;
+}
+
+int ObMajorMergeScheduler::update_epoch_in_memory_and_reload()
+{
+  int ret = OB_SUCCESS;
+  int64_t freeze_service_epoch = -1;
+  // 1. get freeze_service_epoch from __all_service_epoch with retry
+  if (OB_FAIL(get_epoch_with_retry(freeze_service_epoch))) {
+    LOG_WARN("fail to get epoch with retry", KR(ret));
+  } else {
+    // 2. if role = LEADER, update freeze_service_epoch in memory and reload merge_info/freeze_info
+    int64_t latest_epoch = -1;
+    ObRole role = ObRole::INVALID_ROLE;
+    if (OB_FAIL(obtain_proposal_id_from_ls(is_primary_service_, latest_epoch, role))) {
+      LOG_WARN("fail to obtain latest epoch", KR(ret));
+    } else if (ObRole::LEADER == role) {
+      int64_t cur_epoch = get_epoch();
+      if (freeze_service_epoch < cur_epoch) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("freeze_service_epoch in table should not be less than freeze_service_epoch in "
+                 "memory", KR(ret), K(freeze_service_epoch), K(cur_epoch));
+      } else if (latest_epoch < freeze_service_epoch) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("latest_epoch should not be less than freeze_service_epoch in table", KR(ret),
+                 K(latest_epoch), K(freeze_service_epoch));
+      } else if (latest_epoch > freeze_service_epoch) {
+        // 1. freeze_service_epoch in __all_service_epoch has not been successfully updated, when
+        // executing do_update_service_and_epoch.
+        // 2. freeze_service_epoch in __all_service_epoch has [not] been successfully updated, when
+        // executing do_update_service_and_epoch. After this, switch leader to other observer and
+        // switch leader back to this observer.
+        ret = OB_EAGAIN;
+        LOG_WARN("latest_epoch is larger than freeze_service_epoch in table, will retry", KR(ret),
+                 K(latest_epoch), K(freeze_service_epoch));
+      } else if (latest_epoch == freeze_service_epoch) {
+        // freeze_service_epoch in __all_service_epoch has been successfully updated, when executing
+        // do_update_service_and_epoch. moreover, leader does not switch later.
+        if (OB_FAIL(do_update_and_reload(freeze_service_epoch))) {
+          LOG_WARN("fail to do update and reload", KR(ret), K(freeze_service_epoch));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("succ to update epoch in memory and reload", K(freeze_service_epoch));
+  }
+  return ret;
+}
+
+int ObMajorMergeScheduler::get_epoch_with_retry(int64_t &freeze_service_epoch)
+{
+  int ret = OB_SUCCESS;
+  int final_ret = OB_SUCCESS;
+  bool get_service_epoch_succ = false;
+  const int64_t MAX_RETRY_COUNT = 5;
+  for (int64_t i = 0; !stop_ && OB_SUCC(ret) && (!get_service_epoch_succ) && (i < MAX_RETRY_COUNT); ++i) {
+    FREEZE_TIME_GUARD;
+    if (OB_FAIL(ObServiceEpochProxy::get_service_epoch(*sql_proxy_, tenant_id_,
+                ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, freeze_service_epoch))) {
+      const int64_t idle_time_us = 100 * 1000 * (i + 1);
+      LOG_WARN("fail to get freeze_service_epoch, will retry", KR(ret), K_(tenant_id),
+               K(idle_time_us), "cur_retry_count", i + 1, K(MAX_RETRY_COUNT));
+      USLEEP(idle_time_us);
+      final_ret = ret;
+      ret = OB_SUCCESS;
+    } else {
+      get_service_epoch_succ = true;
+    }
+  }
+  if (OB_SUCC(ret) && !get_service_epoch_succ) {
+    ret = final_ret;
+    LOG_WARN("fail to get freeze_service_epoch", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObMajorMergeScheduler::do_update_and_reload(const int64_t epoch)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(zone_merge_mgr_) || OB_ISNULL(freeze_info_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("zone_merge_mgr or freeze_info_mgr is null", KR(ret), KP_(zone_merge_mgr), KP_(freeze_info_mgr));
+  } else {
+    FREEZE_TIME_GUARD;
+    if (OB_FAIL(set_epoch(epoch))) {
+      LOG_WARN("fail to set epoch", KR(ret), K(epoch));
+    } else if (OB_FAIL(zone_merge_mgr_->reload())) {
+      LOG_WARN("fail to reload zone_merge_mgr", KR(ret));
+    } else if (OB_FAIL(freeze_info_mgr_->reload())) {
+      LOG_WARN("fail to reload freeze_info_mgr", KR(ret));
+    }
+    if (OB_FAIL(ret)) {
+      zone_merge_mgr_->reset_merge_info();
+      freeze_info_mgr_->reset_freeze_info();
+      LOG_WARN("fail to reload", KR(ret));
+    }
+  }
   return ret;
 }
 
