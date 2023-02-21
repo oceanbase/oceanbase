@@ -288,6 +288,7 @@ private:
   int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type, int64_t &retry_id);
   int check_tablet_replica_validity_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type);
+  int compare_prev_item_(const ObBackupProviderItem &item);
 
 private:
   static const int64_t BATCH_SIZE = 2000;
@@ -312,6 +313,8 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   ObBackupProviderItemCompare backup_item_cmp_;
   ObBackupMetaIndexStore meta_index_store_;
+  ObBackupProviderItem prev_item_;
+  bool has_prev_item_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletProvider);
 };
 
