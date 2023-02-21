@@ -347,6 +347,9 @@ int ObBackupUtils::check_ls_valid_for_backup(const uint64_t tenant_id, const sha
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream not exist", K(ret), K(ls_id));
+  } else if (ls->is_stopped()) {
+    ret = OB_REPLICA_CANNOT_BACKUP;
+    LOG_WARN("ls has stopped, can not backup", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(ls->get_ls_meta(ls_meta))) {
     LOG_WARN("failed to get ls meta", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(ls_meta.check_valid_for_backup())) {
@@ -1761,9 +1764,25 @@ int ObBackupTabletProvider::get_tablet_skipped_type_(const uint64_t tenant_id, c
       skipped_type = ObBackupSkippedType(ObBackupSkippedType::DELETED);
     } else if (1 == tablet_count) {
       if (tmp_ls_id == ls_id.id()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet not exist, but __all_tablet_to_ls still exist",
-            K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+        storage::ObLS *ls = NULL;
+        ObLSService *ls_service = NULL;
+        ObLSHandle handle;
+        if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("log stream service is NULL", K(ret), K(tenant_id));
+        } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD))) {
+          LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+        } else if (OB_ISNULL(ls = handle.get_ls())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("log stream not exist", K(ret), K(ls_id));
+        } else if (ls->is_stopped()) {
+          ret = OB_REPLICA_CANNOT_BACKUP;
+          LOG_WARN("ls has stopped, can not backup", K(ret), K(tenant_id), K(ls_id));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tablet not exist, but __all_tablet_to_ls still exist",
+              K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+        }
       } else {
         skipped_type = ObBackupSkippedType(ObBackupSkippedType::TRANSFER);
         LOG_INFO("tablet transfered, need change turn", K(ls_id));
