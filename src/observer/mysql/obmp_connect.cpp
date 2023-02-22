@@ -209,6 +209,7 @@ int ObMPConnect::process()
   ObSMConnection *conn = NULL;
   uint64_t tenant_id = OB_INVALID_ID;
   ObSQLSessionInfo *session = NULL;
+  bool autocommit = false;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   THIS_WORKER.set_timeout_ts(INT64_MAX); // avoid see a former timeout value
   if (THE_TRACE != nullptr) {
@@ -275,6 +276,7 @@ int ObMPConnect::process()
                "group_id", conn->group_id_,
                "sql_req_level", conn->sql_req_level_);
       conn->set_auth_phase();
+      session->get_autocommit(autocommit);
     }
 
     int proc_ret = ret;
@@ -364,7 +366,7 @@ int ObMPConnect::process()
              K(from_java_client), K(from_oci_client), K(from_jdbc_client),
              K(capability), K(proxy_capability), K(use_ssl),
              "c/s protocol", get_cs_protocol_type_name(protoType),
-             K(proc_ret), K(ret));
+             K(autocommit), K(proc_ret), K(ret));
   }
   return ret;
 }

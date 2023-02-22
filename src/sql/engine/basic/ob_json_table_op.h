@@ -294,7 +294,8 @@ public:
                             ObObjType dst_type,
                             ObString &val,
                             bool is_trunc = false,
-                            bool is_quote = false);
+                            bool is_quote = false,
+                            bool is_const = false);
   static int time_scale_check(const ObAccuracy &accuracy, int64_t &value, bool strict = false);
   static int datetime_scale_check(const ObAccuracy &accuracy, int64_t &value, bool strict = false);
   static int number_range_check(const ObAccuracy &accuracy,
@@ -373,6 +374,7 @@ struct JtScanCtx {
   bool is_cover_error_;
   bool is_need_end_;
   bool is_charset_converted_;
+  bool is_const_input_;
   int error_code_;
   int32_t ord_val_;
   ObDatum* res_obj_;

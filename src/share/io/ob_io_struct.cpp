@@ -49,8 +49,8 @@ const ObIOConfig &ObIOConfig::default_config()
 void ObIOConfig::set_default_value()
 {
   write_failure_detect_interval_ = 60 * 1000 * 1000; // 1 min
-  read_failure_black_list_interval_ = 300 * 1000 * 1000; // 5 min
-  data_storage_warning_tolerance_time_ = 30L * 1000L * 1000L; // 30s
+  read_failure_black_list_interval_ = 60 * 1000 * 1000; // Cooperate with the adjustment of tolerance_time to 1min
+  data_storage_warning_tolerance_time_ = 5L * 1000L * 1000L; // 5s, same as parameter seed
   data_storage_error_tolerance_time_ = 300L * 1000L * 1000L; // 300s
   disk_io_thread_count_ = 8;
   data_storage_io_timeout_ms_ = 120L * 1000L; // 120s
@@ -1915,8 +1915,7 @@ void ObAsyncIOChannel::get_events()
           }
         } else { // io failed
           LOG_ERROR("io request failed", K(*req), K(system_errno), K(complete_size));
-          const bool need_retry = false; // wait io device to support retry policy
-          if (need_retry) {
+          if (-EAGAIN == system_errno) { //retry
             if (OB_FAIL(on_full_retry(*req))) {
               LOG_WARN("retry io request failed", K(ret), K(system_errno), K(*req));
             }
@@ -2794,6 +2793,7 @@ void ObIOFaultDetector::handle(void *task)
     const int64_t LONG_AIO_TIMEOUT_MS = 30000; // 30s
     RetryTask *retry_task = reinterpret_cast<RetryTask *>(task);
     retry_task->io_info_.flag_.set_unlimited();
+    retry_task->io_info_.flag_.set_detect();
     int64_t timeout_ms = retry_task->timeout_ms_;
     // remain 1s to avoid race condition for retry_black_list_interval
     const int64_t retry_black_list_interval_ms = io_config_.read_failure_black_list_interval_ / 1000L - 1000L;
@@ -2880,6 +2880,8 @@ void ObIOFaultDetector::record_failure(const ObIORequest &req)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("io fault detector not init", K(ret), KP(is_inited_));
+  } else if (req.get_flag().is_detect()) {
+    //ignore, do not retry
   } else if (req.is_finished_ && OB_IO_ERROR != req.ret_code_.io_ret_) {
     // ignore, do nothing here
   } else if (req.get_flag().is_read()) {

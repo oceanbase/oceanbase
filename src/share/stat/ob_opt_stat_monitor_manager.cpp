@@ -23,6 +23,7 @@
 #include "share/schema/ob_schema_utils.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "observer/ob_sql_client_decorator.h"
+#include "storage/ob_locality_manager.h"
 
 namespace oceanbase
 {
@@ -171,22 +172,40 @@ int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &
                                                             const bool is_flush_dml_stat)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObCommonRpcProxy *proxy = NULL;
-  if (OB_ISNULL(ctx.get_my_session())) {
+  int64_t timeout = -1;
+  ObSEArray<ObServerLocality, 8> all_server_arr;
+  bool has_read_only_zone = false; // UNUSED;
+  if (OB_ISNULL(ctx.get_my_session()) ||
+      OB_ISNULL(GCTX.srv_rpc_proxy_) ||
+      OB_ISNULL(GCTX.locality_manager_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ctx.get_task_executor_ctx()->get_common_rpc(proxy))) {
-    LOG_WARN("failed to get common rpc", K(ret));
-  } else if (OB_ISNULL(proxy)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("proxy is null", K(ret), K(proxy));
+    LOG_WARN("get unexpected null", K(ret), K(GCTX.srv_rpc_proxy_),
+                                    K(GCTX.locality_manager_), K(ctx.get_my_session()));
   } else {
     obrpc::ObFlushOptStatArg arg(ctx.get_my_session()->get_effective_tenant_id(),
                                  is_flush_col_usage,
                                  is_flush_dml_stat);
-    if (OB_FAIL(proxy->flush_opt_stat_monitoring_info(arg))) {
-      LOG_WARN("failed to flush opt stat monitoring info", K(ret));
-    } else {/*do nothing*/}
+    if (OB_FAIL(GCTX.locality_manager_->get_server_locality_array(all_server_arr,
+                                                                  has_read_only_zone))) {
+      LOG_WARN("fail to get server locality", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_server_arr.count(); i++) {
+        if (!all_server_arr.at(i).is_active()
+            || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
+            || 0 == all_server_arr.at(i).get_start_service_time()
+            || 0 != all_server_arr.at(i).get_server_stop_time()) {
+        //server may not serving
+        } else if (0 >= (timeout = THIS_WORKER.get_timeout_remain())) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("query timeout is reached", K(ret), K(timeout));
+        } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(all_server_arr.at(i).get_addr())
+                                                  .timeout(timeout)
+                                                  .by(ctx.get_my_session()->get_rpc_tenant_id())
+                                                  .flush_local_opt_stat_monitoring_info(arg))) {
+          LOG_WARN("failed to flush opt stat monitoring info", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }

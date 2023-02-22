@@ -138,7 +138,7 @@ void ObLogRestoreService::run1()
   lib::set_thread_name("LogRessvr");
   ObCurTraceId::init(GCONF.self_addr_);
 
-  const int64_t THREAD_RUN_INTERVAL = 5 * 1000 * 1000L;
+  const int64_t THREAD_RUN_INTERVAL = 1 * 1000 * 1000L;
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR_RET(OB_NOT_INIT, "ObLogRestoreService not init", "tenant_id", MTL_ID());
   } else {

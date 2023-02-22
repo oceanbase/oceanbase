@@ -389,8 +389,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init table store stat mgr failed", KR(ret));
     } else if (OB_FAIL(ObCompatModeGetter::instance().init(&sql_proxy_))) {
       LOG_ERROR("init get compat mode server failed",KR(ret));
-    } else if (OB_FAIL(table_service_.init(gctx_))) {
-    LOG_ERROR("init table service failed", KR(ret));
+    } else if (OB_FAIL(table_service_.init())) {
+      LOG_ERROR("init table service failed", KR(ret));
     } else if (OB_FAIL(ObTimerMonitor::get_instance().init())) {
       LOG_ERROR("init timer monitor failed", KR(ret));
     } else if (OB_FAIL(ObBGThreadMonitor::get_instance().init())) {

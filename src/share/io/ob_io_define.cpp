@@ -151,9 +151,19 @@ void ObIOFlag::set_unlimited(const bool is_unlimited)
   is_unlimited_ = is_unlimited;
 }
 
+void ObIOFlag::set_detect(const bool is_detect)
+{
+  is_detect_ = is_detect;
+}
+
 bool ObIOFlag::is_unlimited() const
 {
   return is_unlimited_;
+}
+
+bool ObIOFlag::is_detect() const
+{
+  return is_detect_;
 }
 
 /******************             IOCallback              **********************/

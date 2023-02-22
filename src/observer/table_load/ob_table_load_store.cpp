@@ -28,22 +28,22 @@ ObTableLoadStore::ObTableLoadStore(ObTableLoadTableCtx *ctx)
 {
 }
 
-int ObTableLoadStore::init_ctx(ObTableLoadTableCtx *ctx,
-    int64_t ddl_task_id,
-                               const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
-                               const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
+int ObTableLoadStore::init_ctx(
+  ObTableLoadTableCtx *ctx,
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret));
-  } else if (OB_FAIL(ctx->init_store_ctx(ddl_task_id, partition_id_array, target_partition_id_array))) {
+  } else if (OB_FAIL(ctx->init_store_ctx(partition_id_array, target_partition_id_array))) {
     LOG_WARN("fail to init store ctx", KR(ret));
   }
   return ret;
 }
 
-int ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx)
+void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ctx->is_valid())) {
@@ -58,11 +58,10 @@ int ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx)
       LOG_WARN("fail to set store status abort", KR(ret));
     }
     // 2. mark all active trans abort
-    else if (OB_FAIL(abort_active_trans(ctx))) {
+    if (OB_FAIL(abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(ret));
     }
   }
-  return ret;
 }
 
 int ObTableLoadStore::abort_active_trans(ObTableLoadTableCtx *ctx)

@@ -183,6 +183,7 @@ private:
   int is_replica_in_ls_member_list(const share::ObTabletReplica &replica,
                                    const share::ObLSReplica::MemberList &member_list,
                                    bool &is_in_member_list) const;
+  int mark_uncompacted_tables_as_verified(const common::ObIArray<share::ObTableCompactionInfo> &uncompacted_tables);
 
 private:
   bool is_inited_;

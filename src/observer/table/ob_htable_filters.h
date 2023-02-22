@@ -64,7 +64,10 @@ public:
   virtual int filter_row_cells(const RowCells &cells) = 0;
   /// Last chance to veto row based on previous filterCell(Cell) calls.
   virtual bool filter_row() = 0;
-
+  /// for tableApi filter
+  virtual int filter_row(const ObIArray<ObString> &select_columns,
+                         const common::ObNewRow &row,
+                         bool &filtered) = 0;
   /// Primarily used to check for conflicts with scans(such as scans that do not read a full row at a time).
   virtual bool has_filter_row() = 0;
 
@@ -79,7 +82,14 @@ private:
 
 enum class CompareOperator
 {
-  EQUAL, GREATER, GREATER_OR_EQUAL, LESS, LESS_OR_EQUAL, NO_OP, NOT_EQUAL
+  EQUAL,
+  GREATER,
+  GREATER_OR_EQUAL,
+  LESS, LESS_OR_EQUAL,
+  NO_OP,
+  NOT_EQUAL,
+  IS/*table api only*/,
+  IS_NOT/*table api only*/
 };
 
 class FilterBase: public Filter
@@ -98,6 +108,12 @@ public:
   { UNUSED(cells); return common::OB_SUCCESS; }
   virtual bool filter_row() override { return false; }
   virtual bool has_filter_row() override { return false; }
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override
+  { UNUSED(cell); UNUSED(ret_code); return common::OB_SUCCESS; }
+  virtual int filter_row(const ObIArray<ObString> &select_columns,
+                         const common::ObNewRow &row,
+                         bool &filtered) override
+  { UNUSED(select_columns); UNUSED(row); UNUSED(filtered); return common::OB_SUCCESS; }
 
   static const char* compare_operator_to_string(CompareOperator cmp_op);
 private:
@@ -111,7 +127,21 @@ public:
       :comparator_value_(comparator_value)
   {}
   virtual ~Comparable() {}
-  virtual int compare_to(const ObString &b) = 0;
+  virtual int compare_to(const ObString &b) { UNUSED(b); return common::OB_SUCCESS; }
+  virtual int compare_to(const ObIArray<ObString> &select_columns,
+                         const common::ObNewRow &row,
+                         int &cmp_ret)
+  { UNUSED(select_columns); UNUSED(row); UNUSED(cmp_ret); return common::OB_SUCCESS; }
+  virtual int compare_to(const ObIArray<ObString> &select_columns,
+                         const common::ObNewRow &row,
+                         CompareOperator compare_op,
+                         int &cmp_ret)
+  { UNUSED(select_columns);
+    UNUSED(row);
+    UNUSED(compare_op);
+    UNUSED(cmp_ret);
+    return common::OB_SUCCESS;
+  }
   VIRTUAL_TO_STRING_KV("comprable", "Comprable");
 protected:
   ObString comparator_value_;

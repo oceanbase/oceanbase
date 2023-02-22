@@ -65,8 +65,6 @@ int ObBackupTmpFile::write(const char *buf, const int64_t size)
     LOG_WARN("failed to get io info", K(ret), K(buf), K(size));
   } else if (OB_FAIL(ObTmpFileManager::get_instance().write(io_info, timeout_ms))) {
     LOG_WARN("failed to write tmp file", K(ret), K(io_info), K(timeout_ms));
-  } else if (OB_FAIL(ObTmpFileManager::get_instance().sync(file_fd_, timeout_ms))) {
-    LOG_WARN("failed to sync tmp file", K(ret), K(file_fd_));
   } else {
     file_size_ += size;
     LOG_INFO("backup tmp file write", K(buf), K(size));

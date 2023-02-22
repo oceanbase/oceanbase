@@ -182,6 +182,8 @@ int ObSSTableRowScanner::open_cur_data_block(ObSSTableReadHandle &read_handle)
         if (OB_FAIL(micro_scanner_->apply_blockscan(block_row_store_, access_ctx_->table_store_stat_))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to apply_block_scan", K(ret), KPC(block_row_store_));
+          } else {
+            ret = OB_SUCCESS;
           }
         }
         EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
@@ -389,6 +391,7 @@ int ObSSTableRowScanner::fetch_rows(ObSSTableReadHandle &read_handle)
       }
     }
 
+    bool need_prefetch = false;
     while (OB_SUCC(ret) && !block_row_store_->is_end()) {
       if (OB_FAIL(micro_scanner_->get_next_rows())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -402,10 +405,15 @@ int ObSSTableRowScanner::fetch_rows(ObSSTableReadHandle &read_handle)
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to open cur data block", K(ret), KPC(this));
           }
+        } else if (need_prefetch && OB_FAIL(prefetcher_.prefetch())) {
+          LOG_WARN("Fail to do prefetch", K(ret), K_(prefetcher));
         } else if (!can_vectorize()) {
           ret = OB_PUSHDOWN_STATUS_CHANGED;
           LOG_TRACE("[Vectorized] pushdown status changed, pushdown=>fuse", K(ret),
                     K(prefetcher_.cur_micro_data_fetch_idx_));
+        } else {
+          // should do prefetch as all the prefetched micros may be read
+          need_prefetch = iter_param_->enable_pd_aggregate();
         }
       }
     }

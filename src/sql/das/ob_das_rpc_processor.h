@@ -85,17 +85,21 @@ class ObDASAsyncAccessP final : public ObDASBaseAccessP<obrpc::OB_DAS_ASYNC_ACCE
 class ObDasAsyncRpcCallBackContext
 {
 public:
-  ObDasAsyncRpcCallBackContext(ObDASRef &das_ref, const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops)
-      : das_ref_(das_ref), task_ops_(task_ops), alloc_() {}
+  ObDasAsyncRpcCallBackContext(ObDASRef &das_ref,
+                               const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops,
+                               int64_t timeout_ts)
+      : das_ref_(das_ref), task_ops_(task_ops), alloc_(), timeout_ts_(timeout_ts) {}
   ~ObDasAsyncRpcCallBackContext() = default;
   int init(const ObMemAttr &attr);
   ObDASRef &get_das_ref() { return das_ref_; };
   const common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() const { return task_ops_; };
   common::ObArenaAllocator &get_alloc() { return alloc_; };
+  int64_t get_timeout_ts() const { return timeout_ts_; }
 private:
   ObDASRef &das_ref_;
   const common::ObSEArray<ObIDASTaskOp*, 2> task_ops_;
   common::ObArenaAllocator alloc_;  // used for async rpc result allocation.
+  int64_t timeout_ts_;
 };
 
 class ObRpcDasAsyncAccessCallBack

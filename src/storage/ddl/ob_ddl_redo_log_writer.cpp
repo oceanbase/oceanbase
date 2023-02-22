@@ -608,7 +608,7 @@ int ObDDLRedoLogWriter::write(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(log), K(ls_id), K(tenant_id), KP(buffer));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->rdlock(ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT, lock_tid))) {
-    LOG_WARN("failed to wrlock", K(ret));
+    LOG_WARN("failed to rdlock", K(ret));
   } else if (ddl_kv_mgr_handle.get_obj()->get_commit_scn_nolock(tablet_handle.get_obj()->get_tablet_meta()).is_valid_and_not_min()) {
     ret = OB_TRANS_COMMITED;
     LOG_WARN("already commit", K(ret));
@@ -640,6 +640,9 @@ int ObDDLRedoLogWriter::write(
     handle.scn_ = scn;
     LOG_INFO("submit ddl redo log succeed", K(lsn), K(base_scn), K(scn));
   }
+  if (0 != lock_tid) {
+    ddl_kv_mgr_handle.get_obj()->unlock(lock_tid);
+  }
   if (OB_SUCC(ret)) {
     int64_t real_sleep_us = 0;
     if (OB_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(tenant_id, ls_id, buffer_size, task_id, real_sleep_us))) {
@@ -651,9 +654,6 @@ int ObDDLRedoLogWriter::write(
       op_free(cb);
       cb = nullptr;
     }
-  }
-  if (0 != lock_tid) {
-    ddl_kv_mgr_handle.get_obj()->unlock(lock_tid);
   }
   return ret;
 }
@@ -1073,6 +1073,8 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
   } else if (FALSE_IT(set_start_scn(tmp_scn))) {
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->register_to_tablet(get_start_scn(), ddl_kv_mgr_handle))) {
     LOG_WARN("register ddl kv mgr to tablet failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else {
+    ddl_kv_mgr_handle.get_obj()->reset_commit_success(); // releated issue: https://work.aone.alibaba-inc.com/issue/47686927
   }
   return ret;
 }
@@ -1100,6 +1102,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     LOG_WARN("get tablet failed", K(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FALSE_IT(ddl_kv_mgr_handle.get_obj()->prepare_info_for_checksum_report(table_id, ddl_task_id))) {
   } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, table_key, table_id, execution_id, ddl_task_id, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(table_key), K(table_id), K(execution_id), K(ddl_task_id));

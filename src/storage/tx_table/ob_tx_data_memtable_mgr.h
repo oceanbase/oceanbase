@@ -121,9 +121,14 @@ protected:
                                      const bool force);
 
 private:  // ObTxDataMemtableMgr
-  int create_memtable_(const share::SCN clog_checkpoint_scn, const int64_t schema_version);
+  int create_memtable_(const share::SCN clog_checkpoint_scn,
+                       const int64_t schema_version,
+                       const int64_t buckets_cnt);
 
   int freeze_();
+  int calc_new_memtable_buckets_cnt_(const double load_factory,
+                                     const int64_t old_buckests_cnt,
+                                     int64_t &new_buckest_cnt);
 
   int get_all_memtables_(ObTableHdlArray &handles);
 

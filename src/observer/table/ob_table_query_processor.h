@@ -16,7 +16,6 @@
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
-#include "ob_table_service.h"
 #include "ob_table_context.h"
 #include "ob_table_executor.h"
 #include "ob_table_cache.h"

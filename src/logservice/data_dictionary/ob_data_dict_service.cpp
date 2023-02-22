@@ -120,6 +120,7 @@ int ObDataDictService::start()
   } else if (OB_FAIL(TG_SCHEDULE(timer_tg_id_, *this, TIMER_TASK_INTERVAL, true/*is_repeat*/))) {
     DDLOG(WARN, "schedule data_dict_service timer_task failed", KR(ret), K_(timer_tg_id));
   } else {
+    disable_timeout_check(); // dump data_dict may cost too much, distable timetout check.
     stop_flag_ = false;
     DDLOG(INFO, "start datadict_service", K_(tenant_id), K_(timer_tg_id));
   }
@@ -586,7 +587,8 @@ int ObDataDictService::filter_table_(const share::schema::ObTableSchema *table_s
     DDLOG(WARN, "invalid table_schema", KR(ret));
   } else {
     is_filtered =
-      ! (table_schema->is_user_table()
+      ! (table_schema->has_tablet()
+        || table_schema->is_user_table()
         || table_schema->is_unique_index()
         || table_schema->is_tmp_table());
   }

@@ -18,73 +18,12 @@ using namespace lib;
 using namespace table;
 
 /**
- * TableCtxHandle
- */
-
-ObTableLoadManager::TableCtxHandle::TableCtxHandle()
-  : table_ctx_(nullptr)
-{
-}
-
-ObTableLoadManager::TableCtxHandle::TableCtxHandle(ObTableLoadTableCtx *table_ctx)
-  : table_ctx_(table_ctx)
-{
-  if (OB_NOT_NULL(table_ctx_)) {
-    table_ctx_->inc_ref_count();
-  }
-}
-
-ObTableLoadManager::TableCtxHandle::TableCtxHandle(const TableCtxHandle &other)
-  : table_ctx_(other.table_ctx_)
-{
-  if (OB_NOT_NULL(table_ctx_)) {
-    table_ctx_->inc_ref_count();
-  }
-}
-
-ObTableLoadManager::TableCtxHandle::~TableCtxHandle()
-{
-  reset();
-}
-
-void ObTableLoadManager::TableCtxHandle::reset()
-{
-  if (nullptr != table_ctx_) {
-    table_ctx_->dec_ref_count();
-    table_ctx_ = nullptr;
-  }
-}
-
-void ObTableLoadManager::TableCtxHandle::set(ObTableLoadTableCtx *table_ctx)
-{
-  reset();
-  if (OB_NOT_NULL(table_ctx)) {
-    table_ctx_ = table_ctx;
-    table_ctx_->inc_ref_count();
-  }
-}
-
-ObTableLoadManager::TableCtxHandle &ObTableLoadManager::TableCtxHandle::operator=(
-  const TableCtxHandle &other)
-{
-  if (this != &other) {
-    set(other.table_ctx_);
-  }
-  return *this;
-}
-
-/**
  * ObTableLoadManager
  */
 
-ObTableLoadManager::ObTableLoadManager()
-  : is_inited_(false)
-{
-}
+ObTableLoadManager::ObTableLoadManager() : is_inited_(false) {}
 
-ObTableLoadManager::~ObTableLoadManager()
-{
-}
+ObTableLoadManager::~ObTableLoadManager() {}
 
 int ObTableLoadManager::init()
 {
@@ -95,8 +34,11 @@ int ObTableLoadManager::init()
     LOG_WARN("ObTableLoadManager init twice", KR(ret), KP(this));
   } else {
     if (OB_FAIL(
-          table_ctx_map_.create(bucket_num, "TLD_TableCtxMap", "TLD_TableCtxMap", MTL_ID()))) {
-      LOG_WARN("fail to create table ctx map", KR(ret), K(bucket_num));
+          table_ctx_map_.create(bucket_num, "TLD_TableCtxMgr", "TLD_TableCtxMgr", MTL_ID()))) {
+      LOG_WARN("fail to create hashmap", KR(ret), K(bucket_num));
+    } else if (OB_FAIL(table_handle_map_.create(bucket_num, "TLD_TableCtxMgr", "TLD_TableCtxMgr",
+                                                MTL_ID()))) {
+      LOG_WARN("fail to create hashmap", KR(ret), K(bucket_num));
     } else {
       is_inited_ = true;
     }
@@ -104,64 +46,92 @@ int ObTableLoadManager::init()
   return ret;
 }
 
-int ObTableLoadManager::add_table_ctx(uint64_t table_id, ObTableLoadTableCtx *table_ctx)
+int ObTableLoadManager::add_table_ctx(const ObTableLoadUniqueKey &key,
+                                      ObTableLoadTableCtx *table_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id || nullptr == table_ctx)) {
+  } else if (OB_UNLIKELY(!key.is_valid() || nullptr == table_ctx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(table_id), KP(table_ctx));
+    LOG_WARN("invalid args", KR(ret), K(key), KP(table_ctx));
   } else if (OB_UNLIKELY(table_ctx->is_dirty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected dirty table ctx", KR(ret), KP(table_ctx));
   } else {
-    TableCtxHandle handle(table_ctx); // inc_ref_count
-    if (OB_FAIL(table_ctx_map_.set_refactored(table_id, handle))) {
+    const uint64_t table_id = key.table_id_;
+    TableHandle table_handle;
+    table_handle.key_ = key;
+    table_handle.table_ctx_ = table_ctx;
+    obsys::ObWLockGuard guard(rwlock_);
+    if (OB_FAIL(table_ctx_map_.set_refactored(key, table_ctx))) {
       if (OB_UNLIKELY(OB_HASH_EXIST != ret)) {
-        LOG_WARN("fail to set refactored", KR(ret), K(table_id));
+        LOG_WARN("fail to set refactored", KR(ret), K(key));
       } else {
         ret = OB_ENTRY_EXIST;
       }
+    }
+    // force update table index
+    else if (OB_FAIL(table_handle_map_.set_refactored(table_id, table_handle, 1))) {
+      LOG_WARN("fail to set refactored", KR(ret), K(table_id));
+      // erase from table ctx map, avoid wild pointer is been use
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(table_ctx_map_.erase_refactored(key))) {
+        LOG_WARN("fail to erase refactored", KR(tmp_ret), K(key));
+      }
     } else {
-      handle.take(); // keep reference count
+      table_ctx->inc_ref_count();
     }
   }
   return ret;
 }
 
-int ObTableLoadManager::remove_table_ctx(uint64_t table_id)
+int ObTableLoadManager::remove_table_ctx(const ObTableLoadUniqueKey &key)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+  } else if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(table_id));
+    LOG_WARN("invalid args", KR(ret), K(key));
   } else {
-    TableCtxHandle handle;
-    // remove from map
-    if (OB_FAIL(table_ctx_map_.erase_refactored(table_id, &handle))) {
-      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
-        LOG_WARN("fail to get refactored", KR(ret), K(table_id));
-      } else {
-        ret = OB_ENTRY_NOT_EXIST;
+    const uint64_t table_id = key.table_id_;
+    ObTableLoadTableCtx *table_ctx = nullptr;
+    TableHandle table_handle;
+    {
+      obsys::ObWLockGuard guard(rwlock_);
+      if (OB_FAIL(table_ctx_map_.erase_refactored(key, &table_ctx))) {
+        if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
+          LOG_WARN("fail to erase refactored", KR(ret), K(key));
+        } else {
+          ret = OB_ENTRY_NOT_EXIST;
+        }
+      }
+      // remove table index if key match
+      else if (OB_FAIL(table_handle_map_.get_refactored(table_id, table_handle))) {
+        if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
+          LOG_WARN("fail to get refactored", KR(ret), K(table_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else if (table_handle.key_ == key &&
+                 OB_FAIL(table_handle_map_.erase_refactored(table_id))) {
+        LOG_WARN("fail to erase refactored", KR(ret), K(table_id), K(table_handle));
       }
     }
-    // add to dirty list
-    else {
-      ObTableLoadTableCtx *table_ctx = handle.get();
-      table_ctx->set_dirty();
-      ObMutexGuard guard(mutex_);
-      OB_ASSERT(dirty_list_.add_last(table_ctx));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(add_dirty_list(table_ctx))) {
+        LOG_WARN("fail to add dirty list", KR(ret), K(key), KP(table_ctx));
+      }
     }
   }
   return ret;
 }
 
-int ObTableLoadManager::get_table_ctx(uint64_t table_id, ObTableLoadTableCtx *&table_ctx)
+int ObTableLoadManager::get_table_ctx(const ObTableLoadUniqueKey &key,
+                                      ObTableLoadTableCtx *&table_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -169,15 +139,40 @@ int ObTableLoadManager::get_table_ctx(uint64_t table_id, ObTableLoadTableCtx *&t
     LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));
   } else {
     table_ctx = nullptr;
-    TableCtxHandle handle;
-    if (OB_FAIL(table_ctx_map_.get_refactored(table_id, handle))) {
+    obsys::ObRLockGuard guard(rwlock_);
+    if (OB_FAIL(table_ctx_map_.get_refactored(key, table_ctx))) {
+      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
+        LOG_WARN("fail to get refactored", KR(ret), K(key));
+      } else {
+        ret = OB_ENTRY_NOT_EXIST;
+      }
+    } else {
+      table_ctx->inc_ref_count();
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadManager::get_table_ctx_by_table_id(uint64_t table_id,
+                                                  ObTableLoadTableCtx *&table_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));
+  } else {
+    table_ctx = nullptr;
+    TableHandle table_handle;
+    obsys::ObRLockGuard guard(rwlock_);
+    if (OB_FAIL(table_handle_map_.get_refactored(table_id, table_handle))) {
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("fail to get refactored", KR(ret), K(table_id));
       } else {
         ret = OB_ENTRY_NOT_EXIST;
       }
     } else {
-      table_ctx = handle.take(); // keep reference count
+      table_ctx = table_handle.table_ctx_;
+      table_ctx->inc_ref_count();
     }
   }
   return ret;
@@ -192,21 +187,24 @@ int ObTableLoadManager::get_inactive_table_ctx_list(
     LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));
   } else {
     table_ctx_array.reset();
-    auto fn = [&ret, &table_ctx_array](HashMapPair<uint64_t, TableCtxHandle> &entry) -> int {
-      TableCtxHandle handle = entry.second; // inc_ref_count
-      ObTableLoadTableCtx *table_ctx = handle.get();
+    auto fn = [&ret, &table_ctx_array](
+                const HashMapPair<ObTableLoadUniqueKey, ObTableLoadTableCtx *> &entry) -> int {
+      ObTableLoadTableCtx *table_ctx = entry.second;
       OB_ASSERT(nullptr != table_ctx);
-      if (table_ctx->get_ref_count() > 2) { // 2 = map + handle
+      if (table_ctx->get_ref_count() > 0) {
         // skip active table ctx
       } else if (OB_FAIL(table_ctx_array.push_back(table_ctx))) {
         LOG_WARN("fail to push back", KR(ret));
       } else {
-        handle.take(); // keep reference count
+        table_ctx->inc_ref_count();
       }
       return ret;
     };
-    if (OB_FAIL(table_ctx_map_.foreach_refactored(fn))) {
-      LOG_WARN("fail to foreach map", KR(ret));
+    {
+      obsys::ObRLockGuard guard(rwlock_);
+      if (OB_FAIL(table_ctx_map_.foreach_refactored(fn))) {
+        LOG_WARN("fail to foreach map", KR(ret));
+      }
     }
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < table_ctx_array.count(); ++i) {
@@ -228,6 +226,23 @@ void ObTableLoadManager::put_table_ctx(ObTableLoadTableCtx *table_ctx)
   } else {
     OB_ASSERT(table_ctx->dec_ref_count() >= 0);
   }
+}
+
+int ObTableLoadManager::add_dirty_list(ObTableLoadTableCtx *table_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == table_ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_ctx));
+  } else if (OB_UNLIKELY(table_ctx->is_dirty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected dirty table ctx", KR(ret), KPC(table_ctx));
+  } else {
+    table_ctx->set_dirty();
+    ObMutexGuard guard(mutex_);
+    OB_ASSERT(dirty_list_.add_last(table_ctx));
+  }
+  return ret;
 }
 
 int ObTableLoadManager::get_releasable_table_ctx_list(

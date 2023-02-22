@@ -774,6 +774,7 @@ int ObEncodeBlockGetReader::locate_row(
     }
 
     if (OB_SUCC(ret)) {
+      row.row_flag_.reset();
       if (found) {
         row.count_ = request_cnt_;
         row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
@@ -1398,6 +1399,7 @@ OB_INLINE int ObMicroBlockDecoder::get_row_impl(int64_t index, ObDatumRow &row)
     } else if (OB_FAIL(decode_cells(index, row_len, row_data, 0, request_cnt_, row.storage_datums_))) {
       LOG_WARN("decode cells failed", K(ret), K(index), K_(request_cnt));
     } else {
+      row.row_flag_.reset();
       row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       row.count_ = request_cnt_;
       row.mvcc_row_flag_.reset();

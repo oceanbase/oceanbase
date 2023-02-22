@@ -705,7 +705,7 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
         int64_t ref_cnt = tas[ctx_id]->get_ref_cnt();
         if (0 == ref_cnt) {
           LOG_INFO("wait tenant ctx allocator success", K(tenant_id), K(ctx_id),
-                   K(get_global_ctx_info().get_ctx_name(ctx_id)));
+                  "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id));
           tas[ctx_id] = NULL;
           waiting_cnt--;
         }
@@ -718,7 +718,7 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
       if (ctx_allocator != NULL) {
         LOG_ERROR("tenant ctx allocator is still refered by upper-layer modules",
                   K(tenant_id), K(ctx_id),
-                  K(get_global_ctx_info().get_ctx_name(ctx_id)),
+                  "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
                   K(ctx_allocator->get_ref_cnt()));
       }
     }
@@ -728,11 +728,10 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
       ObTenantCtxAllocator *ctx_allocator = tas[ctx_id];
       if (NULL == ctx_allocator) {
         ctx_allocator = &ta[ctx_id];
-        const char *first_label = NULL;
-        bool has_unfree = ctx_allocator->check_has_unfree(&first_label);
+        bool has_unfree = ctx_allocator->check_has_unfree();
         if (has_unfree) {
-          LOG_ERROR("tenant ctx allocator has unfree objects", K(tenant_id),
-                    K(ctx_id), K(get_global_ctx_info().get_ctx_name(ctx_id)), K(first_label));
+          LOG_ERROR("tenant memory leak!!!", K(tenant_id),
+                    K(ctx_id), "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id));
           tas[ctx_id] = ctx_allocator;
         }
       }

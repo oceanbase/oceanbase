@@ -70,6 +70,7 @@
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_store.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -240,6 +241,14 @@ int ObLSTabletService::prepare_for_safe_destroy()
   if (OB_FAIL(delete_all_tablets())) {
     LOG_WARN("fail to delete all tablets", K(ret));
   }
+#ifdef ERRSIM
+  if (!ls_->get_ls_id().is_sys_ls()) {
+    SERVER_EVENT_SYNC_ADD("ls_tablet_service", "after_delete_all_tablets",
+                          "tenant_id", MTL_ID(),
+                          "ls_id", ls_->get_ls_id().id());
+    DEBUG_SYNC(AFTER_LS_GC_DELETE_ALL_TABLETS);
+  }
+#endif
   return ret;
 }
 
@@ -3127,7 +3136,7 @@ int ObLSTabletService::rebuild_create_tablet(
       OB_FAIL(migrate_update_tablet(mig_tablet_param))) {
     LOG_WARN("failed to rebuild create tablet", K(ret), K(tablet_id), K(mig_tablet_param));
   } else if (b_exist && keep_old) {
-    if (OB_FAIL(check_and_get_tablet(tablet_id, old_tablet_handle))) {
+    if (OB_FAIL(check_and_get_tablet(tablet_id, old_tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
       LOG_WARN("failed to check and get tablet", K(ret), K(tablet_id));
     } else if (OB_UNLIKELY(old_tablet_handle.get_obj()->get_tablet_meta().has_next_tablet_)) {
       ret = OB_ERR_UNEXPECTED;

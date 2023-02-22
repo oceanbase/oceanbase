@@ -92,6 +92,7 @@ LogSlidingWindow::LogSlidingWindow()
     last_fetch_end_lsn_(),
     last_fetch_max_log_id_(OB_INVALID_LOG_ID),
     last_fetch_committed_end_lsn_(),
+    last_fetch_trigger_type_(FetchTriggerType::LOG_LOOP_TH),
     match_lsn_map_lock_(common::ObLatchIds::PALF_SW_MATCH_LSN_MAP_LOCK),
     match_lsn_map_(),
     last_truncate_lsn_(),
@@ -100,7 +101,7 @@ LogSlidingWindow::LogSlidingWindow()
     larger_log_warn_time_(OB_INVALID_TIMESTAMP),
     log_life_long_warn_time_(OB_INVALID_TIMESTAMP),
     lc_cb_get_warn_time_(OB_INVALID_TIMESTAMP),
-    fetch_dst_invalid_warn_time_(OB_INVALID_TIMESTAMP),
+    fetch_failure_print_time_(OB_INVALID_TIMESTAMP),
     commit_log_handling_lease_(),
     submit_log_handling_lease_(),
     last_fetch_log_renew_leader_ts_us_(OB_INVALID_TIMESTAMP),
@@ -1643,6 +1644,7 @@ void LogSlidingWindow::try_reset_last_fetch_log_info_(const LSN &expected_end_ls
     last_fetch_end_lsn_.reset();
     last_fetch_committed_end_lsn_.reset();
     last_fetch_max_log_id_ = OB_INVALID_LOG_ID;
+    last_fetch_trigger_type_ = FetchTriggerType::LOG_LOOP_TH;
     PALF_LOG(INFO, "reset last fetch log info", K_(palf_id), K_(self), K(expected_end_lsn));
   } else {
     // do nothing
@@ -1708,6 +1710,19 @@ void LogSlidingWindow::try_update_committed_lsn_for_fetch_(
   }
 }
 
+bool LogSlidingWindow::need_execute_fetch_(const FetchTriggerType &fetch_trigger_type)
+{
+  bool bool_ret = true;
+  // If self is currently in streamingly fetch state, it does not need fetch again
+  // in some trigger cases.
+  if (FetchTriggerType::SLIDING_CB == last_fetch_trigger_type_
+      && (FetchTriggerType::ADD_MEMBER_PRE_CHECK == fetch_trigger_type
+          || FetchTriggerType::MODE_META_BARRIER == fetch_trigger_type)) {
+    bool_ret = false;
+  }
+  return bool_ret;
+}
+
 int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
                                     const LSN prev_lsn,
                                     const LSN fetch_start_lsn,
@@ -1726,8 +1741,12 @@ int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K_(self), K(fetch_log_type), K(prev_lsn), K(fetch_start_lsn), K(fetch_start_log_id));
   } else if (OB_FAIL(get_fetch_log_dst_(fetch_log_dst)) || !fetch_log_dst.is_valid()) {
-    if (palf_reach_time_interval(5 * 1000 * 1000, fetch_dst_invalid_warn_time_)) {
+    if (palf_reach_time_interval(5 * 1000 * 1000, fetch_failure_print_time_)) {
       PALF_LOG(WARN, "get_fetch_log_dst failed or invalid", K(ret), K_(palf_id), K_(self), K(fetch_log_dst));
+    }
+  } else if (false == need_execute_fetch_(fetch_log_type)) {
+    if (palf_reach_time_interval(5 * 1000 * 1000, fetch_failure_print_time_)) {
+      PALF_LOG(INFO, "no need execute fetch", K(ret), K_(palf_id), K_(self), K(fetch_log_type));
     }
   } else if (FetchTriggerType::MODE_META_BARRIER == fetch_log_type) {
     int64_t last_slide_log_id = OB_INVALID_LOG_ID;
@@ -1863,7 +1882,8 @@ int LogSlidingWindow::do_fetch_log_(const FetchTriggerType &trigger_type,
               fetch_start_lsn, fetch_log_size, fetch_log_count, accepted_mode_pid))) {
         PALF_LOG(WARN, "submit_fetch_log_req failed", K(ret), K_(palf_id), K_(self));
       } else {
-        // do nothing
+        // Record fetch trigger type
+        last_fetch_trigger_type_ = trigger_type;
       }
       PALF_LOG(INFO, "do_fetch_log_ finished", K(ret), K_(palf_id), K_(self), K(dest),
           K(fetch_log_count), K(fetch_start_lsn), K(prev_lsn), K(fetch_start_log_id),

@@ -1233,16 +1233,21 @@ int ObDDLRedefinitionTask::finish()
     LOG_WARN("get schema guard failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
     LOG_WARN("get data table schema failed", K(ret), K(tenant_id_), K(object_id_));
-  } else if (OB_FAIL(get_orig_all_index_tablet_count(schema_guard, all_orig_index_tablet_count))) {
-    LOG_WARN("get orig all tablet count failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(max(all_orig_index_tablet_count, data_table_schema->get_all_part_num()), rpc_timeout))) {
-    LOG_WARN("get ddl rpc timeout failed", K(ret));
-  } else if (nullptr != data_table_schema && data_table_schema->get_association_table_id() != OB_INVALID_ID &&
-            OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
-                execute_ddl_task(alter_table_arg_, objs))) {
-    LOG_WARN("cleanup garbage failed", K(ret));
-  } else if (OB_FAIL(cleanup())) {
-    LOG_WARN("clean up failed", K(ret));
+  } else if (nullptr != data_table_schema) {
+    if (OB_FAIL(get_orig_all_index_tablet_count(schema_guard, all_orig_index_tablet_count))) {
+      LOG_WARN("get orig all tablet count failed", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(max(all_orig_index_tablet_count, data_table_schema->get_all_part_num()), rpc_timeout))) {
+      LOG_WARN("get ddl rpc timeout failed", K(ret));
+    } else if (data_table_schema->get_association_table_id() != OB_INVALID_ID &&
+        OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+                  execute_ddl_task(alter_table_arg_, objs))) {
+      LOG_WARN("cleanup garbage failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(cleanup())) {
+      LOG_WARN("clean up failed", K(ret));
+    }
   }
   return ret;
 }

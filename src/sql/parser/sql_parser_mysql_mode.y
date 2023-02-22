@@ -17572,44 +17572,46 @@ int obsql_mysql_multi_fast_parse(ParseResult *p)
 }
 
 enum state_multi_values {
-  INS_START_STATE = 0,
-  INS_INSERT_STATE = 1,
-  INS_HINT_START_STATE = 2,
-  INS_HINT_END_STATE = 3,
-  INS_INTO_STATE = 4,
-  INS_VALUES_STATE = 5,
-  INS_LEFT_PAR_STATE = 6,
-  INS_RIGHT_PAR_STATE = 7,
-  INS_COMMA_STATE = 8,
-  INS_END_SUCCESS = 9,
-  ERROR_STATE = 10
+  STMT_START_STATE = 0,
+  STMT_INS_OR_REPLACE_STATE = 1,
+  STMT_HINT_START_STATE = 2,
+  STMT_HINT_END_STATE = 3,
+  STMT_INTO_STATE = 4,
+  STMT_VALUES_STATE = 5,
+  STMT_LEFT_PAR_STATE = 6,
+  STMT_RIGHT_PAR_STATE = 7,
+  STMT_ON_STATE = 8,
+  STMT_DUPLICATE_STATE = 9,
+  STMT_KEY_STATE = 10,
+  STMT_UPDATE_STATE = 11,
+  STMT_END_SUCCESS = 12,
+  ERROR_STATE = 13
 };
 
  // Used to split an insert SQL with multiple values
  // example: insert /*+parllen(5)*/ into test.t1(c1,c2,c3) values(1,1,1),((1),(2),3);
  // insert /*+parllen(5)*/ into test.t1(c1,c2,c3) values(1,1,1);
  // insert /*+parllen(5)*/ into test.t1(c1,c2,c3) values((1),(2),3);
- /*
-  * INS_START_STATE -(insert)-> INS_INSERT_STATE -(into)-> INS_INTO_STATE -(values/value)-> INS_VALUES_STATE
-  * INS_VALUES_STATE -(find left'(')-> INS_LEFT_PAR_STATE -(find last right')')-> INS_RIGHT_PAR_STATE
-  * INS_RIGHT_PAR_STATE -(find ',')-> INS_VALUES_STATE -->....
-  * INS_RIGHT_PAR_STATE -(find ';')-> INS_END_SUCCESS
-  */
 int obsql_mysql_multi_values_parse(ParseResult *p)
 {
-  int ret = 0;
+  int SUCCESS = 0;
+  int UNEXPECTED_RRROR = -1;
+  int ret = SUCCESS;
   int64_t pair_count = 0;
   bool is_end = false;
-  int state = INS_START_STATE;
+  int state = STMT_START_STATE;
   if (OB_UNLIKELY(NULL == p)) {
-    ret = -1;
+    ret = UNEXPECTED_RRROR;
   } else {
     YYSTYPE yylval;
     YYLTYPE yylloc;
     int token = YYEMPTY;
     int left_parentheses = 0;
     int right_parentheses = 0;
-    while (0 == ret && !is_end) {
+    int on_start_pos = 0;
+    p->ins_multi_value_res_->on_duplicate_pos_  = -1;
+    p->ins_multi_value_res_->values_col_ = -1;
+    while (SUCCESS == ret && !is_end) {
       token = obsql_mysql_yylex(&yylval, &yylloc, p->yyscan_info_);
       if (token == PARSER_SYNTAX_ERROR || token == ERROR) {
         state = ERROR_STATE;
@@ -17618,86 +17620,117 @@ int obsql_mysql_multi_values_parse(ParseResult *p)
         is_end = true;
       }
       switch (state) {
-        case INS_START_STATE:
-          if (token == INSERT) {
-            state = INS_INSERT_STATE;
-          } else if (token == INSERT_HINT_BEGIN) {
-            state = INS_HINT_START_STATE;
+        case STMT_START_STATE:
+          if (token == INSERT || token == REPLACE) {
+            state = STMT_INS_OR_REPLACE_STATE;
+          } else if (token == INSERT_HINT_BEGIN || token == REPLACE_HINT_BEGIN) {
+            state = STMT_HINT_START_STATE;
           }
           break;
-        case INS_INSERT_STATE:
+        case STMT_INS_OR_REPLACE_STATE:
           if (token == INTO) {
-            state = INS_INTO_STATE;
+            state = STMT_INTO_STATE;
+          } else if (token == VALUES || token == VALUE) {
+            p->ins_multi_value_res_->values_col_ = yylloc.last_column;
+            state = STMT_VALUES_STATE;
           }
           break;
-        case INS_HINT_START_STATE:
+        case STMT_HINT_START_STATE:
           if (token == HINT_END) {
-            state = INS_HINT_END_STATE;
+            state = STMT_HINT_END_STATE;
           }
           break;
-        case INS_HINT_END_STATE:
+        case STMT_HINT_END_STATE:
           if (token == INTO) {
-            state = INS_INTO_STATE;
+            state = STMT_INTO_STATE;
+          } else if (token == VALUES || token == VALUE) {
+            state = STMT_VALUES_STATE;
           }
           break;
-        case INS_INTO_STATE:
+        case STMT_INTO_STATE:
           if (token == VALUES || token == VALUE) {
-            state = INS_VALUES_STATE;
+            state = STMT_VALUES_STATE;
             p->ins_multi_value_res_->values_col_ = yylloc.last_column;
           }
           break;
-        case INS_VALUES_STATE:
+        case STMT_VALUES_STATE:
           if (token == '(') {
-            state = INS_LEFT_PAR_STATE;
+            state = STMT_LEFT_PAR_STATE;
             // Record the starting position of the left bracket
             pair_count++;
             left_parentheses = yylloc.last_column;
           } else {
-            // If the first position is not the left bracket, it will jump out of the loop and will not be rewritten
-            ret = -1; 
+            // If the first token following 'values' is not '(', report an error directly
+            ret = UNEXPECTED_RRROR;
           }
           break;
-        case INS_LEFT_PAR_STATE:
+        case STMT_LEFT_PAR_STATE:
           if (token == ')') {
             pair_count--;
             if (pair_count == 0) {
-              // Record the starting position of the right bracket
-              state = INS_RIGHT_PAR_STATE;
-              right_parentheses = yylloc.last_column;
+              // After the ')' are matched, record the position of the left and right brackets at the moment
+              if (left_parentheses > 0) {
+                right_parentheses = yylloc.last_column;
+                on_start_pos = yylloc.last_column;
+                ret = store_prentthese_info(left_parentheses, right_parentheses, p);
+                left_parentheses = 0;
+                right_parentheses = 0;
+                state = STMT_RIGHT_PAR_STATE;
+              } else {
+                // only ')', without the position of '('
+                ret = UNEXPECTED_RRROR;
+              }
             }
           } else if (token == '(') {
             pair_count++;
           } else {
-            // do nothing
+            // Other tokens will not be processed
           }
           break;
-        case INS_RIGHT_PAR_STATE:
+        case STMT_RIGHT_PAR_STATE:
+          // Ended the right bracket matching, if you encounter ',', it means that the next '(' is about to start
+          // If you encounter ON, it means that this is an inset ... on duplicate key statement
+          // If the terminator is encountered, it means the end of the current SQL
           if (token == ',') {
-            if (pair_count == 0) {
-              // At this point, a set of values ends and offset is recorded
-              if (right_parentheses <= 0 || left_parentheses <= 0) {
-                ret = -1;
-              } else {
-                ret = store_prentthese_info(left_parentheses, right_parentheses, p);
-                // Start looking for the next set of values
-                state = INS_VALUES_STATE;
-                left_parentheses = 0;
-                right_parentheses = 0;
-              }
-            } else {
-              ret = -1;
-            }
+            state = STMT_VALUES_STATE;
+          } else if (token == ON) {
+            // Is insert on duplicate key update...
+            // Record the start position of on duplicate key
+            p->ins_multi_value_res_->on_duplicate_pos_ = on_start_pos;
+            state = STMT_ON_STATE;
           } else if (token == END_P || token == DELIMITER) {
             // When the termination symbol appears, it jumps out of the loop
-            if (right_parentheses <= 0 || left_parentheses <= 0) {
-              ret = -1;
-            } else {
-              ret = store_prentthese_info(left_parentheses, right_parentheses, p);
-              state = INS_END_SUCCESS;
-            }
+            state = STMT_END_SUCCESS;
           } else {
-            // If other characters appear, skip rewriting
-            ret = -1;
+            // Other symbol appear, it jumps out of the loop
+            ret = UNEXPECTED_RRROR;
+          }
+          break;
+        case STMT_ON_STATE:
+          if (token == DUPLICATE) {
+            state = STMT_DUPLICATE_STATE;
+          } else {
+            ret = UNEXPECTED_RRROR;
+          }
+          break;
+        case STMT_DUPLICATE_STATE:
+          if (token == KEY) {
+            state = STMT_KEY_STATE;
+          } else {
+            ret = UNEXPECTED_RRROR;
+          }
+          break;
+        case STMT_KEY_STATE:
+          if (token == UPDATE) {
+            state = STMT_UPDATE_STATE;
+          } else {
+            ret = UNEXPECTED_RRROR;
+          }
+          break;
+        case STMT_UPDATE_STATE:
+          if (token == END_P || token == DELIMITER) {
+            // When the termination symbol appears, it jumps out of the loop
+            state = STMT_END_SUCCESS;
           }
           break;
         case ERROR_STATE:
@@ -17706,8 +17739,8 @@ int obsql_mysql_multi_values_parse(ParseResult *p)
           break;
       }
     } /* end while */
-    if (INS_END_SUCCESS != state) {
-      ret = -1;
+    if (STMT_END_SUCCESS != state) {
+      ret = UNEXPECTED_RRROR;
     }
   }
   return ret;

@@ -21,6 +21,7 @@
 #include "share/stat/ob_dbms_stats_history_manager.h"
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
 #include "share/stat/ob_index_stats_estimator.h"
+#include "pl/sys_package/ob_dbms_stats.h"
 namespace oceanbase {
 using namespace pl;
 namespace common {
@@ -828,6 +829,8 @@ int ObDbmsStatsExecutor::update_stat_online(ObExecContext &ctx,
   } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
     //update history
     LOG_WARN("failed to update last modified count", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), param))) {
+    LOG_WARN("fail to update stat cache", K(ret));
   } else {
     // should reuse stats out-side this function.
   }

@@ -32,8 +32,7 @@ public:
                               common::ObIAllocator &allocator,
                               table::ObTableLoadArray<common::ObString> &column_names);
   static int get_schema_version(uint64_t tenant_id, uint64_t table_id, int64_t &schema_version);
-  static int check_constraints(uint64_t tenant_id,
-                               share::schema::ObSchemaGetterGuard &schema_guard,
+  static int check_constraints(share::schema::ObSchemaGetterGuard &schema_guard,
                                const share::schema::ObTableSchema *table_schema);
 public:
   ObTableLoadSchema();

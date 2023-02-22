@@ -498,7 +498,7 @@ void ObAggRow::reuse()
   }
 }
 
-int ObAggRow::init(const ObTableAccessParam &param)
+int ObAggRow::init(const ObTableAccessParam &param, const int64_t batch_size)
 {
   int ret = OB_SUCCESS;
   const common::ObIArray<share::schema::ObColumnParam *> *out_cols_param = param.iter_param_.get_col_params();
@@ -567,7 +567,7 @@ int ObAggRow::init(const ObTableAccessParam &param)
               OB_ISNULL(cell = new(buf) ObMinMaxAggCell(is_min, col_idx, col_param, expr, allocator_))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("Failed to alloc memroy for agg cell", K(ret), K(i));
-          } else if (OB_FAIL(static_cast<ObMinMaxAggCell*>(cell)->init(param.op_, col_expr, ObAggregatedStore::BATCH_SIZE))) {
+          } else if (OB_FAIL(static_cast<ObMinMaxAggCell*>(cell)->init(param.op_, col_expr, batch_size))) {
             LOG_WARN("Failed to init ObMinMaxAggCell", K(ret), KPC(cell));
           } else if (OB_FAIL(agg_cells_.push_back(cell))) {
             LOG_WARN("Failed to push back agg cell", K(ret), K(i));
@@ -631,7 +631,7 @@ int ObAggregatedStore::init(const ObTableAccessParam &param)
         K(param.aggregate_exprs_->count()), K(param.iter_param_.agg_cols_project_->count()));
   } else if (OB_FAIL(ObBlockBatchedRowStore::init(param))) {
     LOG_WARN("Failed to init ObBlockBatchedRowStore", K(ret));
-  } else if (OB_FAIL(agg_row_.init(param))) {
+  } else if (OB_FAIL(agg_row_.init(param, batch_size_))) {
     LOG_WARN("Failed to init agg cells", K(ret));
   } else if (OB_FAIL(check_agg_in_row_mode(param.iter_param_))) {
     LOG_WARN("Failed to check agg in row mode", K(ret));

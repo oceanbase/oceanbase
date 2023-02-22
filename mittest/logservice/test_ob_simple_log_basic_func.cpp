@@ -109,6 +109,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, restart_and_clear_tmp_files)
   int ret = OB_SUCCESS;
   guard.click("mkdir");
   EXPECT_EQ(OB_ERR_UNEXPECTED, restart_paxos_groups());
+  CLOG_LOG(INFO, "after restart_paxos_groups after exist tmp dir");
   guard.click("restart");
   const std::string rm_dir_2 = "rm -rf " + dir_2;
   system(rm_dir_2.c_str());
@@ -117,6 +118,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, restart_and_clear_tmp_files)
     PALF_LOG(ERROR, "restart_paxos_groups failed", K(ret));
   } else {
     {
+      CLOG_LOG(INFO, "after restart_paxos_groups after remove tmp dir");
       guard.click("restart");
       bool result = false;
       EXPECT_EQ(OB_SUCCESS,
@@ -136,6 +138,34 @@ TEST_F(TestObSimpleLogClusterBasicFunc, restart_and_clear_tmp_files)
       guard.click("submit_log");
       EXPECT_EQ(OB_ITER_END, read_log(leader1));
       guard.click("read_log");
+    }
+    // 验证tenant下有临时文件的场景，该临时文件需要归还给log_pool
+    {
+      PalfHandleImplGuard leader1;
+      int64_t leader_idx1 = 0;
+      EXPECT_EQ(OB_SUCCESS, get_leader(id, leader1, leader_idx1));
+      std::string palf_log_dir = leader1.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.log_dir_;
+      ObISimpleLogServer *i_server = get_cluster()[0];
+      ObSimpleLogServer *server = dynamic_cast<ObSimpleLogServer*>(i_server);
+      std::string log_pool = server->log_block_pool_.log_pool_path_;
+      const block_id_t min_block_id = server->log_block_pool_.min_block_id_;
+      char src[1024] = {'\0'};
+      char dest[1024] = {'\0'};
+      block_id_to_tmp_string(10000, dest, 1024);
+      block_id_to_string(min_block_id, src, 1024);
+      std::string src_str = log_pool + "/" + src;
+      std::string dest_str = palf_log_dir + "/" + dest;
+      std::string mv_system = "mv " + src_str + " " + dest_str;
+      system(mv_system.c_str());
+      bool result1 = false;
+      EXPECT_EQ(OB_SUCCESS,
+                common::FileDirectoryUtils::is_exists(dest_str.c_str(), result1));
+      EXPECT_EQ(true, result1);
+      leader1.reset();
+      EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+      EXPECT_EQ(OB_SUCCESS,
+                common::FileDirectoryUtils::is_exists(dest_str.c_str(), result1));
+      EXPECT_EQ(false, result1);
     }
     EXPECT_EQ(OB_SUCCESS, remove_dir());
     EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());

@@ -307,7 +307,7 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
     LOG_WARN("get tenant config failed", K(tenant_id), K(ret));
   } else if (OB_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(tenant_id, has_dropped))) {
     LOG_WARN("failed to check tenant has been dropped", K(tenant_id));
-  } else if (!has_dropped) {
+  } else if (!has_dropped && ObTimeUtility::current_time() - config->get_create_timestamp() < RECYCLE_LATENCY) {
     LOG_WARN("tenant still exist, try to delete tenant config later...", K(tenant_id));
   } else {
     static const int DEL_TRY_TIMES = 30;

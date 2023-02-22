@@ -37,7 +37,7 @@ ObTenantConfig::ObTenantConfig(uint64_t tenant_id)
     : tenant_id_(tenant_id), current_version_(INITIAL_TENANT_CONF_VERSION),
       mutex_(),
       update_task_(), system_config_(), config_mgr_(nullptr),
-      lock_(ObLatchIds::CONFIG_LOCK), is_deleting_(false)
+      lock_(ObLatchIds::CONFIG_LOCK), is_deleting_(false), create_timestamp_(0L)
 {
 }
 
@@ -45,6 +45,7 @@ int ObTenantConfig::init(ObTenantConfigMgr *config_mgr)
 {
   int ret = OB_SUCCESS;
   config_mgr_ = config_mgr;
+  create_timestamp_ = ObTimeUtility::current_time();
   if (OB_FAIL(system_config_.init())) {
     LOG_ERROR("init system config failed", K(ret));
   } else if (OB_FAIL(update_task_.init(config_mgr, this))) {

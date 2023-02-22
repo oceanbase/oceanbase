@@ -81,7 +81,7 @@ int ObExprJsonPretty::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta
       ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
     }
     LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
-  } else if (OB_FAIL(j_base->print(j_buf, true, true, 0, true))) {
+  } else if (OB_FAIL(j_base->print(j_buf, true, true, 0))) {
     LOG_WARN("fail to print json", K(ret), K(type), K(j_str), K(j_in_type));
   }
 

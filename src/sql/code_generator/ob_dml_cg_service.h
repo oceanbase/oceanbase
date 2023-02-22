@@ -92,6 +92,10 @@ public:
                                  const IndexDMLInfo &index_dml_info,
                                  ObIArray<ObRawExpr*> &part_key_exprs);
 
+  int table_unique_key_for_conflict_checker(ObLogDelUpd &op,
+                                            const IndexDMLInfo &index_dml_info,
+                                            ObIArray<ObRawExpr*> &rowkey_exprs);
+
   int get_heap_table_part_exprs(const ObLogicalOperator &op,
                                 const IndexDMLInfo &index_dml_info,
                                 ObIArray<ObRawExpr*> &part_key_exprs);

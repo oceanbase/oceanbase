@@ -107,6 +107,9 @@ private:
   int update_global_merge_info_after_merge(const int64_t expected_epoch);
 
   int do_update_freeze_service_epoch(const int64_t latest_epoch);
+  int update_epoch_in_memory_and_reload();
+  int get_epoch_with_retry(int64_t &freeze_service_epoch);
+  int do_update_and_reload(const int64_t epoch);
   bool is_primary_service() const { return is_primary_service_; }
 
   int update_all_tablets_report_scn(const uint64_t global_broadcast_scn_val);

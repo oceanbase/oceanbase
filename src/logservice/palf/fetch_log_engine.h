@@ -54,7 +54,7 @@ public:
   const LSN &get_start_lsn() const { return start_lsn_; }
   int64_t get_log_size() const { return log_size_; }
   int64_t get_log_count() const { return log_count_; }
-  int64_t get_accepted_mode_meta() const { return accepted_mode_pid_; }
+  int64_t get_accepted_mode_pid() const { return accepted_mode_pid_; }
 
   TO_STRING_KV(K_(timestamp_us), K_(id), K_(server), K_(fetch_type), K_(proposal_id),
                K_(prev_lsn), K_(start_lsn), K_(log_size), K_(log_count), K_(accepted_mode_pid));

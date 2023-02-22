@@ -461,7 +461,7 @@ int ObExprJsonQuery::set_result(ObObjType dst_type,
   if (dst_type == ObVarcharType || dst_type == ObLongTextType) {
     ObJsonBuffer jbuf(allocator);
     ObString res_string;
-    if (OB_FAIL(jb_res->print(jbuf, true, pretty_type > 0, 0, true))) {
+    if (OB_FAIL(jb_res->print(jbuf, true, pretty_type > 0))) {
       LOG_WARN("json binary to string failed", K(ret));
     } else if (jbuf.empty()) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

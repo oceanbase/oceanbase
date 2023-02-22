@@ -34,10 +34,17 @@ class ObTxDataHashMap {
 private:
   static const int64_t MAX_CONCURRENCY = 32;
   static const int64_t MAX_CONCURRENCY_MASK = MAX_CONCURRENCY - 1;
+public:
+  static const int64_t MIN_BUCKETS_CNT = 65536; /* 1 << 16 (MOD_MASK = 0xFFFF) 1MB */
+  static const int64_t DEFAULT_BUCKETS_CNT = 1048576; /* 1 << 20 (MOD_MASK = 0xFFFFF) 16MB */
+  static const int64_t MAX_BUCKETS_CNT = 16777216; /* 1 << 24 (MOD_MASK = 0xFFFFFF) 256MB */
+  static constexpr double LOAD_FACTORY_MAX_LIMIT = 0.7;
+  static constexpr double LOAD_FACTORY_MIN_LIMIT = 0.2;
 
 public:
-  ObTxDataHashMap(const uint64_t buckets_cnt)
-      : BUCKETS_CNT(buckets_cnt),
+  ObTxDataHashMap(ObIAllocator &allocator, const uint64_t buckets_cnt)
+      : allocator_(allocator),
+        BUCKETS_CNT(buckets_cnt),
         BUCKETS_MOD_MASK(buckets_cnt - 1),
         buckets_(nullptr),
         total_cnt_(0) {}
@@ -67,7 +74,16 @@ public:
     return ATOMIC_LOAD(&total_cnt_);
   }
 
-private:
+  OB_INLINE double load_factory() const
+  {
+    if (BUCKETS_CNT <= 0) {
+      return 0;
+    } else {
+      return double(total_cnt_) / double(BUCKETS_CNT);
+    }
+  }
+
+public:
   struct ObTxDataHashHeader {
     ObTxData *next_;
     ObTxData *hot_cache_val_;
@@ -86,6 +102,7 @@ private:
   };
 
 private:
+  ObIAllocator &allocator_;
   const int64_t BUCKETS_CNT;
   const int64_t BUCKETS_MOD_MASK;
   ObTxDataHashHeader *buckets_;

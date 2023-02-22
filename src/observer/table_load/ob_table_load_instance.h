@@ -14,7 +14,6 @@ namespace observer
 {
 class ObTableLoadParam;
 class ObTableLoadTableCtx;
-class ObTableLoadCoordinator;
 class ObTableLoadExecCtx;
 
 class ObTableLoadInstance
@@ -23,14 +22,13 @@ class ObTableLoadInstance
 public:
   ObTableLoadInstance();
   ~ObTableLoadInstance();
-  int init(observer::ObTableLoadParam &param,
-      const oceanbase::common::ObIArray<int64_t> &idx_array,
-      observer::ObTableLoadExecCtx *execute_ctx);
   void destroy();
+  int init(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array,
+           ObTableLoadExecCtx *execute_ctx);
+  int write(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
   int commit(table::ObTableLoadResultInfo &result_info);
   int px_commit_data();
   int px_commit_ddl();
-  int write(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
   sql::ObLoadDataStat *get_job_stat() const { return job_stat_; }
   void update_job_stat_parsed_rows(int64_t parsed_rows)
   {
@@ -41,20 +39,33 @@ public:
     ATOMIC_AAF(&job_stat_->parsed_bytes_, parsed_bytes);
   }
 private:
+  int create_table_ctx(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array);
+  int begin();
+  int start_trans();
   int check_trans_committed();
   int check_merged();
 private:
+  struct TransCtx
+  {
+  public:
+    void reset()
+    {
+      trans_id_.reset();
+      next_sequence_no_array_.reset();
+    }
+  public:
+    table::ObTableLoadTransId trans_id_;
+    table::ObTableLoadArray<uint64_t> next_sequence_no_array_;
+  };
+private:
   static const int64_t DEFAULT_SEGMENT_ID = 1;
-  common::ObIAllocator *allocator_;
   ObTableLoadExecCtx *execute_ctx_;
+  common::ObIAllocator *allocator_;
+  sql::ObSQLSessionInfo *session_info_;
   ObTableLoadTableCtx *table_ctx_;
-  ObTableLoadCoordinator *coordinator_;
-  table::ObTableLoadTransId trans_id_;
-  table::ObTableLoadArray<uint64_t> next_sequence_no_array_;
   sql::ObLoadDataStat *job_stat_;
-  bool px_mode_;
-  bool online_opt_stat_gather_;
-  uint64_t sql_mode_;
+  TransCtx trans_ctx_;
+  bool is_committed_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadInstance);
 };

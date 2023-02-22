@@ -378,14 +378,16 @@ int ObDataAccessService::do_async_remote_das_task(
   FLTSpanGuard(do_async_remote_das_task);
   ObSQLSessionInfo *session = das_ref.get_exec_ctx().get_my_session();
   ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
-  int64_t timeout = plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time();
-#ifdef ERRSIM
-  int inject_timeout = -OB_E(EventTable::EN_DAS_SIMULATE_ASYNC_RPC_TIMEOUT) OB_SUCCESS;
-  if (OB_SUCCESS != inject_timeout) {
-    LOG_INFO("das async rpc simulate timeout", K(inject_timeout));
-    timeout = inject_timeout - 10;
+  int64_t timeout_ts = plan_ctx->get_timeout_timestamp();
+  int64_t current_ts = ObTimeUtility::current_time();
+  int64_t timeout = timeout_ts - current_ts;
+  int64_t simulate_timeout = - EVENT_CALL(EventTable::EN_DAS_SIMULATE_ASYNC_RPC_TIMEOUT);
+  if (OB_UNLIKELY(simulate_timeout > 0)) {
+    LOG_INFO("das async rpc simulate timeout", K(simulate_timeout),
+             K(timeout), K(timeout_ts), K(current_ts));
+    timeout = simulate_timeout;
+    timeout_ts = current_ts + timeout;
   }
-#endif
   uint64_t tenant_id = session->get_rpc_tenant_id();
   ObIDASTaskOp *task_op = task_arg.get_task_op();
   common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task_arg.get_task_ops();
@@ -399,7 +401,7 @@ int ObDataAccessService::do_async_remote_das_task(
   ObDASRemoteInfo::get_remote_info() = &remote_info;
   ObIDASTaskResult *op_result = nullptr;
   ObRpcDasAsyncAccessCallBack *das_async_cb = nullptr;
-  if (OB_FAIL(das_ref.allocate_async_das_cb(das_async_cb, task_ops))) {
+  if (OB_FAIL(das_ref.allocate_async_das_cb(das_async_cb, task_ops, timeout_ts))) {
     LOG_WARN("failed to allocate das async cb", K(ret));
   }
   // prepare op result in advance avoiding racing condition.

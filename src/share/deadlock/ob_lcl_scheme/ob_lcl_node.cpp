@@ -325,6 +325,19 @@ int ObLCLNode::activate_all()
   #undef PRINT_WRAPPER
 }
 
+int ObLCLNode::get_block_list(common::ObIArray<ObDependencyResource> &cur_list) const
+{
+  #define PRINT_WRAPPER KR(ret), K(*this)
+  int ret = OB_SUCCESS;
+  DETECT_TIME_GUARD(100_ms);
+  LockGuard lock_guard(lock_);
+  if (OB_FAIL(cur_list.assign(block_list_))) {
+    DETECT_LOG_(WARN, "fail to get block list", PRINT_WRAPPER);
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 int ObLCLNode::replace_block_list(const ObIArray<ObDependencyResource> &new_list)
 {
   #define PRINT_WRAPPER KR(ret), K(*this), K(new_list)
@@ -483,9 +496,7 @@ int ObLCLNode::broadcast_(const BlockList &list,
                  lclv,
                  public_label,
                  ObClockGenerator::getRealClock());
-    if (CLICK() && OB_FAIL(MTL(ObDeadLockDetectorMgr*)->sender_thread_.cache_msg(list.at(idx), msg))) {
-      DETECT_LOG_(WARN, "cache message failed", KR(ret), K(msg), K(list), K(list), K(*this), K(lbt()));
-    }
+    MTL(ObDeadLockDetectorMgr*)->sender_thread_.cache_msg(list.at(idx), msg);
   }
   
   return ret;
@@ -528,15 +539,6 @@ int ObLCLNode::process_lcl_message(const ObLCLMessage &lcl_msg)
       }
       ret = OB_SUCCESS;
     }
-
-    if (INVALID_VALUE != lclv_snapshot &&
-        public_label_snapshot.is_valid() &&
-        !blocklist_snapshot.empty()) {
-      CLICK();
-      (void)broadcast_(blocklist_snapshot, lclv_snapshot, public_label_snapshot);
-      DETECT_LOG_(TRACE, "receive lcl msg and keep broadcastiing", KR(ret), K(lcl_msg), K(*this));
-    }
-
     if (detected_flag) {
       CLICK();
       ObDeadLockCollectInfoMessage collect_info_message;
@@ -815,8 +817,7 @@ int ObLCLNode::push_state_to_downstreams_with_lock_()
       DETECT_LOG_(WARN, "not waiting", K(*this), K_(last_report_waiting_for_period));
     } else {
       int64_t detector_id = private_label_.get_id();
-      DETECT_LOG_(INFO, "waiting for",
-                        KP(this), K(detector_id), K_(self_key), K(blocklist_snapshot));
+      DETECT_LOG_(INFO, "waiting for", K_(self_key), K(blocklist_snapshot), KPC(this));
     }
 
     if (!parent_list_.empty()) {
@@ -840,7 +841,7 @@ int ObLCLNode::push_state_to_downstreams_with_lock_()
 void ObLCLNode::update_lcl_period_if_necessary_with_lock_()
 {
   int ret = OB_SUCCESS;
-  DETECT_TIME_GUARD(100_us);
+  DETECT_TIME_GUARD(10_ms);
   int64_t current_ts = ObClockGenerator::getRealClock();
   int64_t new_period_ = current_ts / PERIOD;
   int64_t timeout_ts = 0;
@@ -866,7 +867,7 @@ bool ObLCLNode::if_phase_match_(const int64_t ts,
   int64_t my_phase = ts / PHASE_TIME;
   int64_t msg_phase = msg.get_send_ts() / PHASE_TIME;
 
-  DETECT_TIME_GUARD(100_us);
+  DETECT_TIME_GUARD(10_ms);
   if (my_phase != msg_phase) {
     ret = false;
   }
@@ -886,7 +887,7 @@ void ObLCLNode::PushStateTask::runTimerTask()
                               lcl_node_.timeout_ts_ + 10_min :
                               lcl_node_.created_time_ + 1_hour;
   if (current_ts > warn_threshold_ts) {
-    DETECT_LOG(ERROR, "long lived lcl node, maybe leaked", K(*this));
+    DETECT_LOG(WARN, "long lived lcl node, maybe leaked", K(*this));
   }
   if (false == ATOMIC_LOAD(&lcl_node_.is_timer_task_canceled_)) {
     if (expected_executed_ts > current_ts) {

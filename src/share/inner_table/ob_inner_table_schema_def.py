@@ -8047,6 +8047,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+# table_id = 11117: used for __all_virtual_tablet_stat on column_store branch
 
 
 
@@ -8434,6 +8435,8 @@ def_table_schema(
       ('ref', 'int'),
       ('is_active', 'varchar:MAX_COLUMN_YES_NO_LENGTH'),
       ('contain_uncommitted_row', 'varchar:MAX_COLUMN_YES_NO_LENGTH'),
+      ('nested_offset', 'int'),
+      ('nested_size', 'int'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -25845,6 +25848,8 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+# 21370: GV$OB_TABLET_STATS
+# 21371: V$OB_TABLET_STATS
 
 
 

@@ -382,6 +382,7 @@ private:
                                 const LSN &prev_lsn,
                                 const LSN &lsn,
                                 const LogWriteBuf &log_write_buf);
+  bool need_execute_fetch_(const FetchTriggerType &fetch_trigger_type);
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
@@ -473,6 +474,7 @@ private:
   LSN last_fetch_end_lsn_;
   int64_t last_fetch_max_log_id_;
   LSN last_fetch_committed_end_lsn_;
+  FetchTriggerType last_fetch_trigger_type_;
   // ---------------- fetch log info end --------------------------
   // used to record synchronization points for each replica
   mutable common::ObSpinLock match_lsn_map_lock_;
@@ -484,7 +486,7 @@ private:
   mutable int64_t larger_log_warn_time_;
   mutable int64_t log_life_long_warn_time_;
   mutable int64_t lc_cb_get_warn_time_;
-  mutable int64_t fetch_dst_invalid_warn_time_;
+  mutable int64_t fetch_failure_print_time_;
   common::ObThreadLease commit_log_handling_lease_;  // thread lease for handling committed logs
   common::ObThreadLease submit_log_handling_lease_;  // thread lease for handling committed logs
   // last_renew_leader_ts in fetch_log

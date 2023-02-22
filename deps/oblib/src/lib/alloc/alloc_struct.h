@@ -157,7 +157,7 @@ struct AChunk {
   OB_INLINE char *blk_data(const ABlock *block) const;
   OB_INLINE void mark_unused_blk_offset_bit(int offset);
   OB_INLINE void unmark_unused_blk_offset_bit(int offset);
-
+  OB_INLINE bool is_all_blks_unused();
   union {
     uint32_t MAGIC_CODE_;
     struct {
@@ -359,6 +359,20 @@ void AChunk::unmark_blk_offset_bit(int offset)
 void AChunk::unmark_unused_blk_offset_bit(int offset)
 {
   unused_blk_bs_.unset(offset);
+}
+
+bool AChunk::is_all_blks_unused()
+{
+  bool ret = false;
+  if (0 != washed_size_) {
+    auto blk_bs = blk_bs_;
+    blk_bs.combine(unused_blk_bs_,
+          [](int64_t left, int64_t right) { return (left ^ right); });
+    ret = -1 == blk_bs.min_bit_ge(0);
+  } else {
+    ret = -1 == blk_bs_.min_bit_ge(1);
+  }
+  return ret;
 }
 
 ABlock *AChunk::offset2blk(int offset) const

@@ -287,7 +287,7 @@ int ObFreezeInfoManager::set_freeze_info()
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
-  } else if (GCTX.schema_service_->get_tenant_refreshed_schema_version(tenant_id_, tenant_schema_version)) {
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_refreshed_schema_version(tenant_id_, tenant_schema_version))) {
     LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K_(tenant_id));
   } else {
     ObFreezeInfoProxy freeze_info_proxy(tenant_id_);

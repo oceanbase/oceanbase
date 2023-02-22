@@ -2261,7 +2261,7 @@ int ObOptSelectivity::get_like_sel(const OptTableMetas &table_metas,
              ObOptEstUtils::is_calculable_expr(*pattern, params->count()) &&
              ObOptEstUtils::is_calculable_expr(*escape, params->count())) {
     bool is_start_with = false;
-    if (static_cast<const ObColumnRefRawExpr *>(variable)->is_lob_column()) {
+    if (is_lob_storage(variable->get_data_type())) {
       // no statistics for lob type, use default selectivity
       selectivity = DEFAULT_CLOB_LIKE_SEL;
     } else if (OB_FAIL(ObOptEstUtils::if_expr_start_with_patten_sign(params, pattern, escape,

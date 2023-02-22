@@ -120,11 +120,15 @@ int ObDirectLoadMemLoader::work()
   }
 
   if (OB_SUCC(ret)) {
-    if (chunk != nullptr) {
-      if (OB_FAIL(close_chunk(chunk))) {
-        LOG_WARN("fail to close chunk", KR(ret));
-      }
+    if (chunk != nullptr && OB_FAIL(close_chunk(chunk))) {
+      LOG_WARN("fail to close chunk", KR(ret));
     }
+  }
+
+  if (chunk != nullptr) {
+    chunk->~ChunkType();
+    ob_free(chunk);
+    chunk = nullptr;
   }
 
   return ret;

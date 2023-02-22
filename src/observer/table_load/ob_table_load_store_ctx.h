@@ -36,12 +36,13 @@ class ObTableLoadErrorRowHandler;
 
 class ObTableLoadStoreCtx
 {
+static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
 public:
   ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadStoreCtx();
-  int init(int64_t ddl_task_id,
-           const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
-           const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
+  int init(
+    const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
+    const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }

@@ -123,6 +123,7 @@ ob_set_subtarget(ob_server table
   table/ob_htable_filter_operator.cpp
   table/ob_htable_filter_parser.cpp
   table/ob_htable_filters.cpp
+  table/ob_table_filter.cpp
   table/ob_htable_utils.cpp
   table/ob_table_batch_execute_processor.cpp
   table/ob_table_end_trans_cb.cpp
@@ -147,6 +148,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_cache.cpp
   table/ob_table_session_pool.cpp
   table/ob_table_op_wrapper.cpp
+  table/ob_table_query_common.cpp
 )
 
 ob_set_subtarget(ob_server table_load

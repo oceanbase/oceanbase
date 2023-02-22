@@ -119,10 +119,14 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_unverified)
 
     if (OB_SUCC(ret)) {
       if (uncompacted_tables.count() > 0) {
-        // Note: uncompacted tables are caused by truncate table. ignore these uncomapted tables.
-        // otherwise, major compaction cannot finish forever in case of truncate table.
+        // Note: uncompacted tables are caused by truncate table. mark these uncomapted tables as
+        // verified. Ptherwise, major compaction cannot finish forever due to uncompacted tables.
+        // Moreover, if uncompacted tables are index tables, data_tables can not start to verify
+        // checksum with these uncompacted index_tables.
         // https://work.aone.alibaba-inc.com/issue/47565111
-        FLOG_INFO("ignore uncompacted tables", "uncompacted cnt", uncompacted_tables.count(), K(uncompacted_tables));
+        if (OB_FAIL(mark_uncompacted_tables_as_verified(uncompacted_tables))) {
+          LOG_WARN("fail to mark uncompacted tables as verified", KR(ret), K(uncompacted_tables));
+        }
       }
       exist_unverified = unverified_tables.count() > 0;
       if (exist_unverified) {
@@ -629,6 +633,25 @@ int ObMajorMergeProgressChecker::is_replica_in_ls_member_list(
         break;
       }
     }
+  }
+  return ret;
+}
+
+int ObMajorMergeProgressChecker::mark_uncompacted_tables_as_verified(
+    const ObIArray<ObTableCompactionInfo> &uncompacted_tables)
+{
+  int ret = OB_SUCCESS;
+  FOREACH_CNT_X(table, uncompacted_tables, OB_SUCCESS == ret) {
+    ObTableCompactionInfo table_compaction_info;
+    const uint64_t table_id = table->table_id_;
+    table_compaction_info.table_id_ = table_id;
+    table_compaction_info.set_verified();
+    if (OB_FAIL(table_compaction_map_.set_refactored(table_id, table_compaction_info, true/*overwrite*/))) {
+      LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(table_compaction_info));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("succ to mark uncompacted tables as verified", K(uncompacted_tables));
   }
   return ret;
 }

@@ -101,6 +101,10 @@ class ObGroupName : public ObResMgrVarcharValue
 {
 public:
   ObGroupName() {}
+  int assign(const ObGroupName &other)
+  {
+    return ObResMgrVarcharValue::assign(other);
+  }
 };
 
 class ObTenantFunctionKey {

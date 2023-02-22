@@ -1534,7 +1534,10 @@ int ObRawExprResolverImpl::check_name_type(ObQualifiedName &q_name,
   if ((OB_SUCC(ret) && !check_success)
       || (OB_ERR_INVOKE_STATIC_BY_INSTANCE != ret && OB_FAIL(ret))) {
     ret = OB_SUCCESS;
-    CK (q_name.access_idents_.count() <= 3 && q_name.access_idents_.count() >= 1);
+    if (!(q_name.access_idents_.count() <= 3 && q_name.access_idents_.count() >= 1)) {
+      ret = OB_WRONG_COLUMN_NAME;
+      LOG_WARN("check name type failed", K(ret), K(q_name));
+    }
     if (3 == q_name.access_idents_.count()) {
       OX (q_name.database_name_ = q_name.access_idents_.at(0).access_name_);
       OX (q_name.tbl_name_ = q_name.access_idents_.at(1).access_name_);
@@ -4022,11 +4025,15 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
     } else if (T_FUN_ORA_JSON_OBJECTAGG == node->type_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
         sub_expr = NULL;
+        ObString def_val(7, "default");
         if (OB_ISNULL(node->children_[i])) {
           // do nothing
         } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[i], sub_expr)))) {
           LOG_WARN("fail to recursive resolve expr list item", K(ret));
-        } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
+        } else if ((i == 4) && (0 == def_val.case_compare(node->children_[i]->raw_text_))) {
+          (static_cast<ObConstRawExpr *>(sub_expr))->set_scale(1);
+        }
+        if (OB_SUCC(ret) && OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
           LOG_WARN("fail to add param expr to agg expr", K(ret));
         }
       } // end for
@@ -5371,7 +5378,7 @@ int ObRawExprResolverImpl::process_json_exists_node(const ParseNode *node, ObRaw
           ObRawExpr *para_expr = NULL;
           CK(OB_NOT_NULL(node->children_[i]->children_[name_idx]));
           OZ(SMART_CALL(recursive_resolve(node->children_[i]->children_[name_idx], para_expr)));
-          if (name_idx % 2 == 0 && para_expr->get_expr_type() == T_REF_QUERY) {
+          if (OB_NOT_NULL(para_expr) && name_idx % 2 == 0 && para_expr->get_expr_type() == T_REF_QUERY) {
             ret = OB_ERR_INVALID_VARIABLE_IN_JSON_PATH;
             LOG_USER_ERROR(OB_ERR_INVALID_VARIABLE_IN_JSON_PATH);
           } else {

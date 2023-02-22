@@ -426,87 +426,55 @@ int ObTableQuerySyncP::init_tb_ctx(ObTableCtx &ctx)
 int ObTableQuerySyncP::execute_query()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator *allocator = query_session_->get_allocator();
+  ObIAllocator *allocator = query_session_->get_allocator();
   ObTableQuerySyncCtx &query_ctx = query_session_->get_query_ctx();
   ObTableQuery &query = query_session_->get_query();
+  ObTableApiSpec *spec = nullptr;
+  ObTableApiExecutor *executor = nullptr;
   ObTableCtx &tb_ctx = query_ctx.tb_ctx_;
   ObTableApiScanRowIterator &row_iter = query_ctx.row_iter_;
-  ObHTableFilterOperator *htable_result_iter = nullptr;
-  ObNormalTableQueryResultIterator *normal_result_iter = nullptr;
   ObTableQueryResultIterator *result_iter = nullptr;
-  bool is_htable = query.get_htable_filter().is_valid();
+  bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
 
-  // 1. create result iterator
-  if (is_htable) {
-    if (OB_FAIL(ObTableService::check_htable_query_args(query))) {
-      LOG_WARN("fail to check htable query args", K(ret));
-    } else {
-      htable_result_iter = OB_NEWx(ObHTableFilterOperator, (allocator), query, result_);
-      if (OB_ISNULL(htable_result_iter)) {
-        LOG_WARN("fail to alloc htable query result iterator", K(ret));
-      } else if (htable_result_iter->parse_filter_string(allocator)) {
-        LOG_WARN("fail to parse htable filter string", K(ret));
-      } else {
-        result_iter = htable_result_iter;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      // hbase model, compress the result packet
-      ObCompressorType compressor_type = INVALID_COMPRESSOR;
-      if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
-          GCONF.tableapi_transport_compress_func, compressor_type))) {
-        compressor_type = INVALID_COMPRESSOR;
-      } else if (NONE_COMPRESSOR == compressor_type) {
-        compressor_type = INVALID_COMPRESSOR;
-      }
-      this->set_result_compress_type(compressor_type);
-      ret = OB_SUCCESS; // reset ret
-    }
+  // 1. create scan executor
+  if (OB_FAIL(ObTableSpecCgService::generate<TABLE_API_EXEC_SCAN>(*allocator, tb_ctx, spec))) {
+    LOG_WARN("fail to generate scan spec", K(ret), K(tb_ctx));
+  } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
+    LOG_WARN("fail to generate executor", K(ret), K(tb_ctx));
   } else {
-    normal_result_iter = OB_NEWx(ObNormalTableQueryResultIterator, (allocator), query, result_);
-    if (OB_ISNULL(normal_result_iter)) {
-      LOG_WARN("fail to alloc normal query result iterator", K(ret));
-    } else {
-      result_iter = normal_result_iter;
-    }
+    query_ctx.executor_ = static_cast<ObTableApiScanExecutor*>(executor);
+    query_ctx.spec_ = spec;
   }
 
-  // 2. create scan executor
+  // 2. create result iterator
   if (OB_SUCC(ret)) {
-    ObTableApiSpec *spec = nullptr;
-    ObTableApiExecutor *executor = nullptr;
-    if (OB_FAIL(ObTableSpecCgService::generate<TABLE_API_EXEC_SCAN>(*allocator, tb_ctx, spec))) {
-      LOG_WARN("fail to generate scan spec", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
-      LOG_WARN("fail to generate executor", K(ret), K(tb_ctx));
-    } else {
-      query_ctx.executor_ = static_cast<ObTableApiScanExecutor*>(executor);
-      query_ctx.spec_ = spec;
-    }
-  }
-
-  // 3. set scan row iter to result iterator
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(row_iter.open(query_ctx.executor_))) {
+    if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(*allocator,
+                                                                  query,
+                                                                  is_hkv,
+                                                                  result_,
+                                                                  tb_ctx,
+                                                                  result_iter))) {
+      LOG_WARN("fail to generate query result iterator", K(ret));
+    } else if (OB_FAIL(row_iter.open(query_ctx.executor_))) {
       LOG_WARN("fail to open scan row iterator", K(ret));
     } else {
-      if (is_htable) {
-        htable_result_iter->set_scan_result(&row_iter);
-        ObHColumnDescriptor desc;
-        const ObString &comment = tb_ctx.get_table_schema()->get_comment_str();
-        if (OB_FAIL(desc.from_string(comment))) {
-          LOG_WARN("fail to parse hcolumn_desc from comment string", K(ret), K(comment));
-        } else if (desc.get_time_to_live() > 0) {
-          htable_result_iter->set_ttl(desc.get_time_to_live());
+      result_iter->set_scan_result(&row_iter);
+      // hbase model, compress the result packet
+      if (is_hkv) {
+        ObCompressorType compressor_type = INVALID_COMPRESSOR;
+        if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
+            GCONF.tableapi_transport_compress_func, compressor_type))) {
+          compressor_type = INVALID_COMPRESSOR;
+        } else if (NONE_COMPRESSOR == compressor_type) {
+          compressor_type = INVALID_COMPRESSOR;
         }
-      } else {
-        normal_result_iter->set_scan_result(&row_iter);
+        this->set_result_compress_type(compressor_type);
+        ret = OB_SUCCESS; // reset ret
       }
     }
   }
 
-  // 4. do scan and save result iter
+  // 3. do scan and save result iter
   if (OB_SUCC(ret)) {
     ObTableQueryResult *one_result = nullptr;
     query_session_->set_result_iterator(result_iter);
@@ -567,10 +535,14 @@ int ObTableQuerySyncP::query_scan_without_init()
 {
   int ret = OB_SUCCESS;
   ObTableQueryResultIterator *result_iter = query_session_->get_result_iterator();
+  ObTableQuerySyncCtx &query_ctx = query_session_->get_query_ctx();
+  ObTableCtx &tb_ctx = query_ctx.tb_ctx_;
 
   if (OB_ISNULL(result_iter)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected null result iterator", K(ret));
+  } else if (OB_FAIL(result_.assign_property_names(tb_ctx.get_query_col_names()))) {
+    LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));
   } else {
     ObTableQueryResult *query_result = nullptr;
     result_iter->set_one_result(&result_);  // set result_ as container
@@ -640,11 +612,7 @@ int ObTableQuerySyncP::try_process()
       }
       ret = tmp_ret;
     } else if (result_.is_end_) {
-      // destroy session后session中的allocator_析构，导致session.query_的select columns内存被回收
-      // 因此需要深拷出来
-      if (OB_FAIL(deep_copy_result_property_names())) {
-        LOG_WARN("fail to deep copy result property names", K(ret));
-      } else if (OB_FAIL(destory_query_session(false))) {
+      if (OB_FAIL(destory_query_session(false))) {
         LOG_WARN("fail to destory query session", K(ret), K(query_session_id_));
       }
     } else {
@@ -689,29 +657,6 @@ int ObTableQuerySyncP::check_query_type()
             arg_.query_type_ != table::ObQueryOperationType::QUERY_NEXT){
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid query operation type", K(ret), K(arg_.query_type_));
-  }
-  return ret;
-}
-
-int ObTableQuerySyncP::deep_copy_result_property_names()
-{
-  int ret = OB_SUCCESS;
-  ObTableQuery &query = query_session_->get_query();
-  ObTableQueryResultIterator *result_iterator = query_session_->get_result_iterator();
-  if ((OB_NOT_NULL(result_iterator))) {
-    const ObIArray<ObString> &select_columns = query.get_select_columns();
-    ObTableQueryResult *one_result = result_iterator->get_one_result();
-    if (OB_NOT_NULL(one_result)) {
-      one_result->reset_property_names();
-      for (int64_t i = 0; OB_SUCC(ret) && i < select_columns.count(); i++) {
-        ObString select_column;
-        if (OB_FAIL(ob_write_string(allocator_, select_columns.at(i), select_column))) {
-          LOG_WARN("Fail to deep copy select column", K(ret), K(select_columns.at(i)));
-        } else if (OB_FAIL(one_result->add_property_name(select_column))) {
-          LOG_WARN("fail to add property name", K(ret), K(select_column));
-        }
-      }
-    }
   }
   return ret;
 }

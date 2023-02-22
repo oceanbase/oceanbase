@@ -157,6 +157,8 @@ int ObIncrementalStatEstimator::write_all_opt_stats_by_dircet_load(
     LOG_WARN("failed to batch write history stats", K(ret));
   } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
     LOG_WARN("failed to update last modified count", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), param))) {
+    LOG_WARN("fail to update stat cache", K(ret));
   } else {/*do nothing*/}
   return ret;
 }

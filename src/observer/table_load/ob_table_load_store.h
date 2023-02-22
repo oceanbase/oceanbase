@@ -24,10 +24,9 @@ public:
   ObTableLoadStore(ObTableLoadTableCtx *ctx);
   static int init_ctx(
     ObTableLoadTableCtx *ctx,
-    int64_t ddl_task_id,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
-  static int abort_ctx(ObTableLoadTableCtx *ctx);
+  static void abort_ctx(ObTableLoadTableCtx *ctx);
   int init();
 private:
   static int abort_active_trans(ObTableLoadTableCtx *ctx);

@@ -210,7 +210,7 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
     int64_t table_row_cnt = 0;
     int64_t table_avg_len = 0;
     int64_t col_cnt =
-      param_.is_fast_heap_table_ ? param_.schema_column_count_ - 1 : param_.schema_column_count_;
+      param_.is_heap_table_ ? param_.schema_column_count_ - 1 : param_.schema_column_count_;
     ObOptTableStat *table_stat = nullptr;
     ObOptDmlStat dml_stat;
     StatLevel stat_level;
@@ -227,7 +227,7 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
       LOG_WARN("fail to allocate table stat", KR(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
-        int64_t col_id = param_.is_fast_heap_table_ ? i + 1 : i;
+        int64_t col_id = param_.is_heap_table_ ? i + 1 : i;
         int64_t row_count = 0;
         int64_t avg_len = 0;
         ObOptColumnStat *col_stat = nullptr;

@@ -433,18 +433,20 @@ int ObAccessService::check_read_allowed_(
     }
     // If this select is for foreign key check,
     // we should get tx_id and tx_desc for deadlock detection.
-    if (scan_param.is_for_foreign_check_) {
-      if (scan_param.tx_id_.is_valid()) {
-        ctx.mvcc_acc_ctx_.tx_id_ = scan_param.tx_id_;
-      } else {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("foreign key check need scan_param.tx_id_ valid", K(ret), K(scan_param.tx_id_));
-      }
-      if (OB_NOT_NULL(scan_param.trans_desc_) && scan_param.trans_desc_->is_valid()) {
-        ctx.mvcc_acc_ctx_.tx_desc_ = scan_param.trans_desc_;
-      } else {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("foreign key check need scan_param.trans_desc_ valid", K(ret), KPC(scan_param.trans_desc_));
+    if (OB_SUCC(ret)) {
+      if (scan_param.is_for_foreign_check_) {
+        if (scan_param.tx_id_.is_valid()) {
+          ctx.mvcc_acc_ctx_.tx_id_ = scan_param.tx_id_;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("foreign key check need scan_param.tx_id_ valid", K(ret), K(scan_param.tx_id_));
+        }
+        if (OB_NOT_NULL(scan_param.trans_desc_) && scan_param.trans_desc_->is_valid()) {
+          ctx.mvcc_acc_ctx_.tx_desc_ = scan_param.trans_desc_;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("foreign key check need scan_param.trans_desc_ valid", K(ret), KPC(scan_param.trans_desc_));
+        }
       }
     }
   }

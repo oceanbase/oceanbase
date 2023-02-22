@@ -113,7 +113,7 @@ public:
   //for rpc use
   int get_xa_ctx(const ObTransID &trans_id, bool &alloc, ObXACtx *&xa_ctx);
   int revert_xa_ctx(ObXACtx *xa_ctx);
-  int start_stmt(const ObXATransID &xid, ObTxDesc &tx_desc);
+  int start_stmt(const ObXATransID &xid, const uint32_t session_id, ObTxDesc &tx_desc);
   int end_stmt(const ObXATransID &xid, ObTxDesc &tx_desc);
   int handle_terminate_for_xa_branch(const ObXATransID &xid,
                                      ObTxDesc *tx_desc,

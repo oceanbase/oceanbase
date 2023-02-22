@@ -287,6 +287,10 @@ int ObTransService::register_commit_retry_task_(ObTxDesc &tx, int64_t max_delay)
     TRANS_LOG(WARN, "register commit retry task fail", K(ret), K(delay), K(tx));
   }
 #endif
+  ObTransTraceLog &tlog = tx.get_tlog();
+  REC_TRANS_TRACE_EXT(&tlog, register_timeout_task, OB_Y(ret),
+                      OB_ID(arg), delay,
+                      OB_ID(ref), tx.get_ref());
   return ret;
 }
 
@@ -294,8 +298,9 @@ int ObTransService::register_commit_retry_task_(ObTxDesc &tx, int64_t max_delay)
 int ObTransService::unregister_commit_retry_task_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
+  const bool is_registered = tx.commit_task_.is_registered();
 
-  if (!tx.commit_task_.is_registered()) {
+  if (!is_registered) {
     // task has not been scheduled, it has't ref to txDesc
     TRANS_LOG(INFO, "task canceled", K(tx));
   } else if (OB_SUCC(timer_.unregister_timeout_task(tx.commit_task_))) {
@@ -310,8 +315,12 @@ int ObTransService::unregister_commit_retry_task_(ObTxDesc &tx)
     TRANS_LOG(TRACE, "timeout task not scheduled, deregistered", K(tx));
   } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
   } else {
-    TRANS_LOG(WARN, "deregister timeout task fail", K(tx));
+    TRANS_LOG(WARN, "deregister timeout task fail", K(ret), K(tx));
   }
+  ObTransTraceLog &tlog = tx.get_tlog();
+  REC_TRANS_TRACE_EXT(&tlog, unregister_timeout_task, OB_Y(ret),
+                      OB_ID(arg), is_registered,
+                      OB_ID(ref), tx.get_ref());
 
   return ret;
 }
@@ -324,6 +333,7 @@ int ObTransService::unregister_commit_retry_task_(ObTxDesc &tx)
 int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
 {
   int ret = OB_SUCCESS;
+  int32_t ref_cnt = 0;
   // remember tx_id because tx maybe cleanout and reused
   // in this function's following steps.
   auto tx_id = tx.tx_id_;
@@ -365,6 +375,7 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
         }
       }
     }
+    ref_cnt = tx.get_ref();
     tx.lock_.unlock();
     cb_executed = tx.execute_commit_cb();
   }
@@ -372,7 +383,11 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   // it not safe and meaningless to access tx after commit_cb
   // has been called, the tx may has been reused or release
   // in the commit_cb
-  TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id), K(cb_executed));
+  ObTransTraceLog &tlog = tx.get_tlog();
+  REC_TRANS_TRACE_EXT(&tlog, handle_timeout, OB_Y(ret),
+                      OB_ID(arg), delay,
+                      OB_ID(ref), tx.get_ref());
+  TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id), K(ref_cnt), K(cb_executed));
   return ret;
 }
 
@@ -428,6 +443,7 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
                                              const SCN commit_version)
 {
   int ret = OB_SUCCESS;
+  int32_t ref_cnt_0 = tx.get_ref();
   bool commit_fin = true;
   ObTxDesc::State state = ObTxDesc::State::INVL;
   int commit_out = OB_SUCCESS;
@@ -511,8 +527,10 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
 #ifndef NDEBUG
   TRANS_LOG(INFO, "handle tx commit result", K(ret), K(tx), K(commit_fin), K(result));
 #else
-  if (OB_FAIL(ret) || (OB_SUCCESS != result) || (ObClockGenerator::getClock() - tx.commit_ts_) > 5 * 1000 * 1000) {
-    TRANS_LOG(INFO, "handle tx commit result", K(ret), K(tx), K(commit_fin), K(result));
+  if (OB_FAIL(ret)
+      || (OB_SUCCESS != result && OB_TRANS_COMMITED != result)
+      || (ObClockGenerator::getClock() - tx.commit_ts_) > 5 * 1000 * 1000) {
+    TRANS_LOG(INFO, "handle tx commit result", K(ret), K(ref_cnt_0), K(tx), K(commit_fin), K(result));
   }
 #endif
   ObTransTraceLog &tlog = tx.get_tlog();
@@ -520,8 +538,11 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
                       OB_ID(arg), result,
                       OB_ID(is_finish), commit_fin,
                       OB_ID(result), commit_out,
+                      OB_ID(state), tx.state_,
+                      OB_ID(tag1), ref_cnt_0,
+                      OB_ID(ref), tx.get_ref(),
                       OB_ID(commit_version), commit_version,
-                      OB_ID(state), tx.state_);
+                      OB_ID(thread_id), GETTID());
   return ret;
 }
 
@@ -2324,7 +2345,7 @@ int ObTransService::recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx)
     tx->tenant_id_ = tx_info.tenant_id_;
     tx->cluster_id_ = tx_info.cluster_id_;
     tx->cluster_version_ = tx_info.cluster_version_;
-    tx->addr_ = tx_info.addr_;
+    tx->addr_ = tx_info.addr_; /*origin scheduler addr*/
     tx->tx_id_ = tx_info.tx_id_;
     tx->isolation_ = tx_info.isolation_;
     tx->access_mode_ = tx_info.access_mode_;

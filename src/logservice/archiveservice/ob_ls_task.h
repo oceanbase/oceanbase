@@ -150,7 +150,7 @@ private:
     ~ArchiveDest();
 
   public:
-    void init(const LSN &piece_min_lsn, const LSN &lsn, const int64_t file_id,
+    int init(const LSN &piece_min_lsn, const LSN &lsn, const int64_t file_id,
         const int64_t file_offset, const share::ObArchivePiece &piece,
         const share::SCN &max_archived_scn, const bool is_log_gap_exist,
         ObArchiveAllocator *allocator);
@@ -192,7 +192,6 @@ private:
     LogFileTuple       max_fetch_info_;
     ObArchiveLogFetchTask *wait_send_task_array_[MAX_FETCH_TASK_NUM];
     int64_t             wait_send_task_count_;
-    int64_t            seq_no_;
     ObArchiveTaskStatus *send_task_queue_;
 
     ObArchiveAllocator *allocator_;
@@ -203,7 +202,7 @@ private:
 
 private:
   bool is_task_stale_(const ArchiveWorkStation &station) const;
-  void update_unlock_(const StartArchiveHelper &helper, ObArchiveAllocator *allocator);
+  int update_unlock_(const StartArchiveHelper &helper, ObArchiveAllocator *allocator);
 
 private:
   ObLSID id_;

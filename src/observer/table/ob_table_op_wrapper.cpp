@@ -18,6 +18,8 @@
 #include "ob_htable_utils.h"
 #include "ob_htable_filter_operator.h"
 #include "ob_table_insert_up_executor.h"
+#include "ob_table_query_common.h"
+
 namespace oceanbase
 {
 namespace table
@@ -40,7 +42,7 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("fail to execute", K(ret));
+      LOG_WARN("fail to execute", K(ret), K(tb_ctx));
     }
   }
 
@@ -175,6 +177,7 @@ int ObTableOpWrapper::process_get_with_spec(ObTableCtx &tb_ctx,
     ret = COVER_SUCC(tmp_ret);
   }
   spec->destroy_executor(executor);
+  ObTableApiUtil::replace_ret_code(ret);
   return ret;
 }
 
@@ -297,48 +300,39 @@ int ObHTableDeleteExecutor::build_range(ObTableQuery &query)
 int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator tmp_allocator;
   ObTableApiScanRowIterator row_iter;
   ObTableQueryResultIterator *result_iter = nullptr;
-  ObHTableFilterOperator *htable_result_iter = nullptr;
   ObTableQueryResult tmp_result;
   ObTableQueryResult *one_result = nullptr;
   ObTableApiExecutor *child = nullptr;
-  if (OB_ISNULL(htable_result_iter = OB_NEWx(ObHTableFilterOperator, (&allocator), query, tmp_result))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to alloc htable query result iterator", K(ret));
-  } else if (OB_FAIL(htable_result_iter->parse_filter_string(&allocator))) {
-    LOG_WARN("failed to parse htable filter string", K(ret));
+
+  if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(tmp_allocator,
+                                                                query,
+                                                                true, /* is_hkv */
+                                                                tmp_result,
+                                                                tb_ctx_,
+                                                                result_iter))) {
+    LOG_WARN("fail to generate query result iterator", K(ret));
   } else if (OB_ISNULL(child = const_cast<ObTableApiExecutor *>(executor_->get_child()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scan executor is null", K(ret));
   } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor *>(child)))) {
     LOG_WARN("fail to open scan row iterator", K(ret));
   } else {
-    result_iter = htable_result_iter;
-    htable_result_iter->set_scan_result(&row_iter);
-    ObHColumnDescriptor desc;
-    const ObString &comment = tb_ctx_.get_table_schema()->get_comment_str();
-    if (OB_FAIL(desc.from_string(comment))) {
-      LOG_WARN("fail to parse hcolumn_desc from comment string", K(ret), K(comment));
-    } else if (desc.get_time_to_live() > 0) {
-      htable_result_iter->set_ttl(desc.get_time_to_live());
+    result_iter->set_scan_result(&row_iter);
+    if (OB_FAIL(result_iter->get_next_result(one_result))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next result", K(ret));
+      }
+    } else if (OB_ISNULL(one_result)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("one_result is NULL", K(ret));
+    } else if (FALSE_IT(one_result->rewind())) {
+      // do nothing
+    } else if (OB_FAIL(delete_rows(*one_result))) {
+      LOG_WARN("fail to delete rows", K(ret));
     }
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(result_iter->get_next_result(one_result))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to get next result", K(ret));
-    }
-  } else if (OB_ISNULL(one_result)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("one_result is NULL", K(ret));
-  } else if (FALSE_IT(one_result->rewind())) {
-    // do nothing
-  } else if (OB_FAIL(delete_rows(*one_result))) {
-    LOG_WARN("fail to delete rows", K(ret));
   }
 
   int tmp_ret = OB_SUCCESS;

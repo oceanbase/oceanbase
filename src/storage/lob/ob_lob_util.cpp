@@ -36,7 +36,7 @@ int ObLobAccessParam::set_lob_locator(common::ObLobLocatorV2 *lob_locator)
   } else if (!lob_locator->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("lob locator is invalid", K(ret), KPC(lob_locator));
-  } else if (!(lob_locator->is_persist_lob() || lob_locator->is_full_temp_lob())) {
+  } else if (!(lob_locator->is_lob_disk_locator() || lob_locator->is_persist_lob() || lob_locator->is_full_temp_lob())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("lob locator type is invalid", K(ret), KPC(lob_locator));
   } else if (OB_FAIL(lob_locator->get_disk_locator(disk_locator))) {

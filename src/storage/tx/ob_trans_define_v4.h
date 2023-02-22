@@ -257,6 +257,10 @@ class ObTxSavePoint
 private:
   enum class T { INVL= 0, SAVEPOINT= 1, SNAPSHOT= 2, STASH= 3 } type_;
   int64_t scn_;
+  /* The savepoint should be unique to the session,
+    and the session id is required to distinguish the
+    savepoint for the multi-branch scenario of xa */
+  uint32_t session_id_;
   union {
     ObTxReadSnapshot *snapshot_;
     common::ObFixedLengthString<128> name_;
@@ -268,7 +272,7 @@ public:
   ObTxSavePoint &operator=(const ObTxSavePoint &a);
   void release();
   void rollback();
-  int init(const int64_t scn, const ObString &name, const bool stash = false);
+  int init(const int64_t scn, const ObString &name, const uint32_t session_id, const bool stash = false);
   void init(ObTxReadSnapshot *snapshot);
   bool is_savepoint() const { return type_ == T::SAVEPOINT || type_ == T::STASH; }
   bool is_snapshot() const { return type_ == T::SNAPSHOT; }
@@ -518,6 +522,7 @@ public:
                K_(flags_.BLOCK),
                K_(flags_.REPLICA),
                K_(can_elr),
+               K_(savepoints),
                K_(cflict_txs),
                K_(abort_cause),
                K_(commit_expire_ts),
@@ -543,6 +548,7 @@ public:
   ObTxAccessMode get_access_mode() const { return access_mode_; }
   bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY; }
   bool is_clean() const { return parts_.empty(); }
+  bool is_shadow() const  { return flags_.SHADOW_; }
   bool is_explicit() const { return flags_.EXPLICIT_; }
   void set_with_temporary_table() { flags_.WITH_TEMP_TABLE_ = true; }
   bool with_temporary_table() const { return flags_.WITH_TEMP_TABLE_; }

@@ -210,7 +210,7 @@ private:
       common::ObArray<share::ObLSLeaderLocation> &leaders);
 private:
   static const int64_t OB_LOCATION_CACHE_BUCKET_NUM = 512;
-  static const int64_t RENEW_LS_LOCATION_INTERVAL_US = 100 * 1000L; // 100ms
+  static const int64_t RENEW_LS_LOCATION_INTERVAL_US = 1000 * 1000L; // 1s
   static const int64_t RENEW_LS_LOCATION_BY_RPC_INTERVAL_US = 1000 * 1000L; // 1s
   static const int64_t DUMP_CACHE_INTERVAL_US = 10 * 1000 * 1000L; // 10s
 

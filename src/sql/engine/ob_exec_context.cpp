@@ -124,7 +124,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     is_ps_prepare_stage_(false),
     register_op_id_(OB_INVALID_ID),
     tmp_alloc_used_(false),
-    table_direct_insert_ctx_()
+    table_direct_insert_ctx_(),
+    errcode_(OB_SUCCESS)
 {
 }
 
@@ -181,6 +182,7 @@ ObExecContext::~ObExecContext()
     temp_expr_ctx_map_.destroy();
   }
   update_columns_ = nullptr;
+  errcode_ = OB_SUCCESS;
 }
 
 void ObExecContext::clean_resolve_ctx()

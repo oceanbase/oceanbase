@@ -65,6 +65,7 @@ void ObLCNodeFactory::destroy_cache_node(ObILibCacheNode* node)
   }
   // regardless of whether before_cache_evicted succeeds or fails, the cache node
   // will be evicted. so ignore the error code here
+  ret = OB_SUCCESS;
   lib::MemoryContext entity = node->get_mem_context();
   WITH_CONTEXT(entity) { node->~ObILibCacheNode(); }
   node = NULL;

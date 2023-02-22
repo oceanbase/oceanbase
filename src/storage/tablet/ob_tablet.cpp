@@ -1207,13 +1207,11 @@ int ObTablet::inner_get_all_sstables(common::ObIArray<ObITable *> &sstables) con
   return ret;
 }
 
-int ObTablet::get_sstables_size(int64_t &used_size) const
+int ObTablet::get_sstables_size(int64_t &used_size, const bool ignore_shared_block) const
 {
   int ret = OB_SUCCESS;
   common::ObSArray<ObITable *> sstables;
   bool multi_version = false;
-  int64_t mem_block_cnt = 0;
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -1227,23 +1225,21 @@ int ObTablet::get_sstables_size(int64_t &used_size) const
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable is null", K(ret), K(*this), K(i));
       } else if (FALSE_IT(sstable = static_cast<ObSSTable *> (table))) {
+      } else if (sstable->is_small_sstable() && ignore_shared_block) {
+        // skip small sstables
       } else {
         const ObSSTableBasicMeta &basic_meta = sstable->get_meta().get_basic_meta();
         if (multi_version && sstable->is_major_sstable()) {
-          mem_block_cnt -= basic_meta.get_total_use_old_macro_block_count();
+          used_size -= basic_meta.get_total_use_old_macro_block_count() * sstable->get_macro_read_size();
         } else if (sstable->is_major_sstable()) {
           multi_version = true;
         }
-        mem_block_cnt += basic_meta.get_total_macro_block_count();
+        used_size += basic_meta.get_total_macro_block_count() * sstable->get_macro_read_size();
       }
     }
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (tablet_meta_.has_next_tablet_ && OB_FAIL(
-        next_tablet_guard_.get_obj()->get_sstables_size(used_size))) {
+    if (OB_SUCC(ret) && tablet_meta_.has_next_tablet_ && OB_FAIL(
+        next_tablet_guard_.get_obj()->get_sstables_size(used_size, true /*ignore shared block*/))) {
       LOG_WARN("failed to get size of tablets on the list", K(ret), K(used_size));
-    } else {
-      used_size += mem_block_cnt * common::OB_DEFAULT_MACRO_BLOCK_SIZE;
     }
   }
   return ret;

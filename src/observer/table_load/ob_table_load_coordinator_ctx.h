@@ -11,7 +11,6 @@
 #include "observer/table_load/ob_table_load_partition_calc.h"
 #include "observer/table_load/ob_table_load_partition_location.h"
 #include "observer/table_load/ob_table_load_schema.h"
-#include "observer/table_load/ob_table_load_redef_table.h"
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
 
@@ -29,7 +28,7 @@ class ObTableLoadCoordinatorCtx
 public:
   ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadCoordinatorCtx();
-  int init(sql::ObSQLSessionInfo *session_info, const common::ObIArray<int64_t> &idx_array);
+  int init(const common::ObIArray<int64_t> &idx_array, uint64_t user_id);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
@@ -91,9 +90,6 @@ public:
                               common::ObIAllocator &allocator) const;
   int check_exist_trans(bool &is_exist) const;
   int check_exist_committed_trans(bool &is_exist) const;
-  int commit();
-  int abort();
-  int64_t get_ddl_task_id() const;
 private:
   int generate_credential(uint64_t user_id);
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
@@ -140,7 +136,6 @@ private:
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;
   common::ObSEArray<ObTableLoadTransCtx *, 64> commited_trans_ctx_array_;
-  ObTableLoadRedefTable redef_table_;
   bool is_inited_;
 };
 

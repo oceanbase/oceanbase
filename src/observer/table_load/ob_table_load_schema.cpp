@@ -122,8 +122,7 @@ int ObTableLoadSchema::get_schema_version(uint64_t tenant_id, uint64_t table_id,
   return ret;
 }
 
-int ObTableLoadSchema::check_constraints(uint64_t tenant_id,
-                                         ObSchemaGetterGuard &schema_guard,
+int ObTableLoadSchema::check_constraints(ObSchemaGetterGuard &schema_guard,
                                          const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;

@@ -296,7 +296,7 @@ ObjectMgr::Stat ObjectMgr::get_stat()
       };
 }
 
-bool ObjectMgr::check_has_unfree(const char **first_label)
+bool ObjectMgr::check_has_unfree()
 {
   bool has_unfree = false;
   for (uint64_t idx = 0; idx < ATOMIC_LOAD(&sub_cnt_) && !has_unfree; idx++) {
@@ -304,7 +304,7 @@ bool ObjectMgr::check_has_unfree(const char **first_label)
     if (OB_ISNULL(sub_mgr)) {
       // do nothing
     } else {
-      has_unfree = sub_mgr->check_has_unfree(first_label);
+      has_unfree = sub_mgr->check_has_unfree();
     }
   }
   return has_unfree;

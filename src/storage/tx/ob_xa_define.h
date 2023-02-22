@@ -33,6 +33,8 @@ extern const int64_t XA_INNER_TABLE_TIMEOUT;
 
 extern const bool ENABLE_NEW_XA;
 
+static const ObString PL_XA_IMPLICIT_SAVEPOINT = "__PL_XA_IMPLICIT_SAVEPOINT";
+
 class ObXATransState
 {
 public:
@@ -229,7 +231,18 @@ struct ObXABranchInfo
   int64_t end_flag_;
 };
 
+struct ObXAStmtInfo
+{
+  ObXAStmtInfo() : xid_(), is_first_stmt_(true) {}
+  ObXAStmtInfo(const ObXATransID xid) : xid_(xid), is_first_stmt_(true) {}
+  ~ObXAStmtInfo() {}
+  TO_STRING_KV(K_(xid), K_(is_first_stmt));
+  ObXATransID xid_;
+  bool is_first_stmt_;
+};
+
 typedef common::ObSEArray<ObXABranchInfo, 4> ObXABranchInfoArray;
+typedef common::ObSEArray<ObXAStmtInfo, 1> ObXAStmtInfoArray;
 
 class ObXATimeoutTask : public ObITimeoutTask
 {

@@ -16,10 +16,9 @@
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
-#include "ob_table_service.h"
 #include "ob_table_context.h"
 #include "ob_table_scan_executor.h"
-
+#include "ob_table_query_common.h"
 namespace oceanbase
 {
 
@@ -94,7 +93,7 @@ private:
   bool in_use_;
   uint64_t timeout_ts_;
   common::ObObjectID tenant_id_;
-  ObTableQuery query_; // deep copy from arg_.query_
+  table::ObTableQuery query_; // deep copy from arg_.query_
   table::ObTableQueryResultIterator *result_iterator_;
   ObArenaAllocator allocator_;
   ObTableQuerySyncCtx query_ctx_;
@@ -212,7 +211,6 @@ private:
   int check_query_type();
   int init_tb_ctx(table::ObTableCtx &ctx);
   int execute_query();
-  int deep_copy_result_property_names();
 
 private:
   int64_t result_row_count_;

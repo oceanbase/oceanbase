@@ -1126,6 +1126,8 @@ int ObLogPlan::generate_semi_join_detectors(const ObIArray<SemiInfo*> &semi_info
         if (OB_ISNULL(expr = info->semi_conditions_.at(j))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(expr));
+        } else if (OB_FAIL(adjust_expr_with_onetime(expr))) {
+          LOG_WARN("failed to try replace onetime subquery", K(ret));
         } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
           LOG_WARN("failed to add members", K(ret));
         } else if (OB_FAIL(detector->join_info_.where_conditions_.push_back(expr))) {

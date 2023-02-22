@@ -247,6 +247,10 @@ int ObMemtableCtx::write_auth(const bool exclusive)
       ret = OB_ERR_READ_ONLY_TRANSACTION;
       TRANS_LOG(ERROR, "WriteAuth: readonly trans not support update operation",
                 "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K(ret));
+    } else if (!ATOMIC_LOAD(&is_master_)) {
+      ret = OB_NOT_MASTER;
+      TRANS_LOG(WARN, "WriteAuth: trans is already not master",
+                "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K(ret));
     } else if (OB_SUCCESS != ATOMIC_LOAD(&end_code_)) {
       ret = ATOMIC_LOAD(&end_code_);
       TRANS_LOG(WARN, "WriteAuth: trans is already end", K(ret),
@@ -257,10 +261,6 @@ int ObMemtableCtx::write_auth(const bool exclusive)
       ret = OB_TRANS_KILLED;
       TRANS_LOG(WARN, "WriteAuth: trans is already end", K(ret),
                 "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K_(end_code));
-    } else if (!ATOMIC_LOAD(&is_master_)) {
-      ret = OB_NOT_MASTER;
-      TRANS_LOG(WARN, "WriteAuth: trans is already not master",
-                "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K(ret));
     } else if (lock_succ) {
       // all check passed after lock succ
       break;
@@ -312,9 +312,9 @@ int ObMemtableCtx::write_lock_yield()
 void ObMemtableCtx::on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id)
 {
   mtstat_.on_wlock_retry();
-  if (log_conflict_interval_.reach()) {
-    TRANS_LOG_RET(WARN, OB_SUCCESS, "mvcc_write conflict", K(key), "tx_id", get_tx_id(), K(conflict_tx_id), KPC(this));
-  }
+  #define USING_LOG_PREFIX TRANS
+  FLOG_INFO("mvcc_write conflict", K(key), "tx_id", get_tx_id(), K(conflict_tx_id), KPC(this));
+  #undef USING_LOG_PREFIX
 }
 
 void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,

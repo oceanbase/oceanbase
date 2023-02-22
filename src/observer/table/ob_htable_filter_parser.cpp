@@ -35,7 +35,7 @@ ObHTableFilterParser::~ObHTableFilterParser()
   destroy();
 }
 
-int ObHTableFilterParser::init(common::ObArenaAllocator* allocator)
+int ObHTableFilterParser::init(common::ObIAllocator* allocator)
 {
   int ret = OB_SUCCESS;
   if (nullptr != scanner_ || nullptr != allocator_) {

@@ -26,12 +26,12 @@ class ObTableLoadBeginRequest final
   OB_UNIS_VERSION(1);
 public:
   ObTableLoadBeginRequest() {}
-
+  TO_STRING_KV(K_(table_name), K_(config), K_(timeout));
+public:
   ObString credential_;
   ObString table_name_;
   ObTableLoadConfig config_;
-
-  TO_STRING_KV(K_(table_name), K_(config));
+  int64_t timeout_;
 };
 
 class ObTableLoadBeginResult final
@@ -40,13 +40,15 @@ class ObTableLoadBeginResult final
 public:
   ObTableLoadBeginResult()
     : table_id_(common::OB_INVALID_ID),
+      task_id_(0),
       status_(ObTableLoadStatusType::NONE),
       error_code_(common::OB_SUCCESS)
   {
   }
-  TO_STRING_KV(K_(table_id), K_(column_names), K_(status), K_(error_code));
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(column_names), K_(status), K_(error_code));
 public:
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadArray<ObString> column_names_;
   ObTableLoadStatusType status_;
   int32_t error_code_;
@@ -56,28 +58,43 @@ class ObTableLoadPreBeginPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadPreBeginPeerRequest() : table_id_(0), target_table_id_(0), column_count_(0), ddl_task_id_(0), px_mode_(0) {}
-  ObString credential_;
-  uint64_t table_id_;
-  uint64_t target_table_id_;
-  ObTableLoadConfig config_;
-  uint64_t column_count_;
-  ObTableLoadArray<ObTableLoadLSIdAndPartitionId> partition_id_array_;//orig table
-  ObTableLoadArray<ObTableLoadLSIdAndPartitionId> target_partition_id_array_;//FIXME: target table
-  sql::ObLoadDupActionType dup_action_;
-  int64_t ddl_task_id_;
-  bool px_mode_;
-  bool online_opt_stat_gather_;
+  ObTableLoadPreBeginPeerRequest()
+    : table_id_(common::OB_INVALID_ID),
+      column_count_(0),
+      dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
+      px_mode_(false),
+      online_opt_stat_gather_(false),
+      dest_table_id_(common::OB_INVALID_ID),
+      task_id_(0),
+      schema_version_(0)
+  {
+  }
   TO_STRING_KV(K_(table_id),
-               K_(target_table_id),
                K_(config),
                K_(column_count),
-               K_(partition_id_array),
-               K_(target_partition_id_array),
                K_(dup_action),
-               K_(ddl_task_id),
                K_(px_mode),
-               K_(online_opt_stat_gather));
+               K_(online_opt_stat_gather),
+               K_(dest_table_id),
+               K_(task_id),
+               K_(schema_version),
+               K_(partition_id_array),
+               K_(target_partition_id_array));
+public:
+  ObString credential_;
+  uint64_t table_id_;
+  ObTableLoadConfig config_;
+  uint64_t column_count_;
+  sql::ObLoadDupActionType dup_action_;
+  bool px_mode_;
+  bool online_opt_stat_gather_;
+  // ddl param
+  uint64_t dest_table_id_;
+  int64_t task_id_;
+  int64_t schema_version_;
+  // partition info
+  ObTableLoadArray<ObTableLoadLSIdAndPartitionId> partition_id_array_;//orig table
+  ObTableLoadArray<ObTableLoadLSIdAndPartitionId> target_partition_id_array_;//FIXME: target table
 };
 
 class ObTableLoadPreBeginPeerResult final
@@ -95,12 +112,12 @@ class ObTableLoadConfirmBeginPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadConfirmBeginPeerRequest() {}
-
+  ObTableLoadConfirmBeginPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
+public:
   ObString credential_;
   uint64_t table_id_;
-
-  TO_STRING_KV(K_(table_id));
+  int64_t task_id_;
 };
 
 class ObTableLoadConfirmBeginPeerResult final
@@ -122,11 +139,12 @@ class ObTableLoadFinishRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadFinishRequest() : table_id_(common::OB_INVALID_ID) {}
-  TO_STRING_KV(K_(table_id));
+  ObTableLoadFinishRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
 };
 
 class ObTableLoadFinishResult final
@@ -143,11 +161,12 @@ class ObTableLoadPreMergePeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadPreMergePeerRequest() : table_id_(common::OB_INVALID_ID) {}
-  TO_STRING_KV(K_(table_id), K_(committed_trans_id_array));
+  ObTableLoadPreMergePeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(committed_trans_id_array));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadArray<ObTableLoadTransId> committed_trans_id_array_;
 };
 
@@ -165,11 +184,12 @@ class ObTableLoadStartMergePeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadStartMergePeerRequest() : table_id_(common::OB_INVALID_ID) {}
-  TO_STRING_KV(K_(table_id));
+  ObTableLoadStartMergePeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
 };
 
 class ObTableLoadStartMergePeerResult final
@@ -190,11 +210,12 @@ class ObTableLoadCommitRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadCommitRequest() : table_id_(common::OB_INVALID_ID) {}
+  ObTableLoadCommitRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
   TO_STRING_KV(K_(table_id));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
 };
 
 class ObTableLoadCommitResult final
@@ -213,11 +234,12 @@ class ObTableLoadCommitPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadCommitPeerRequest() : table_id_(common::OB_INVALID_ID) {}
-  TO_STRING_KV(K_(table_id));
+  ObTableLoadCommitPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
 };
 
 class ObTableLoadCommitPeerResult final
@@ -240,12 +262,12 @@ class ObTableLoadAbortRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadAbortRequest() : table_id_(common::OB_INVALID_ID) {}
-
+  ObTableLoadAbortRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
+public:
   ObString credential_;
   uint64_t table_id_;
-
-  TO_STRING_KV(K_(table_id));
+  int64_t task_id_;
 };
 
 class ObTableLoadAbortResult final
@@ -263,12 +285,12 @@ class ObTableLoadAbortPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadAbortPeerRequest() : table_id_(common::OB_INVALID_ID) {}
-
+  ObTableLoadAbortPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
+public:
   ObString credential_;
   uint64_t table_id_;
-
-  TO_STRING_KV(K_(table_id));
+  int64_t task_id_;
 };
 
 class ObTableLoadAbortPeerResult final
@@ -290,11 +312,12 @@ class ObTableLoadGetStatusRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadGetStatusRequest() : table_id_(common::OB_INVALID_ID) {}
-  TO_STRING_KV(K_(table_id));
+  ObTableLoadGetStatusRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
 };
 
 class ObTableLoadGetStatusResult final
@@ -315,11 +338,12 @@ class ObTableLoadGetStatusPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadGetStatusPeerRequest() : table_id_(common::OB_INVALID_ID) {}
-  TO_STRING_KV(K_(table_id));
+  ObTableLoadGetStatusPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
 };
 
 class ObTableLoadGetStatusPeerResult final
@@ -345,16 +369,22 @@ class ObTableLoadRequest final
   OB_UNIS_VERSION(1);
 public:
   ObTableLoadRequest()
-    : table_id_(common::OB_INVALID_ID), session_id_(0), sequence_no_(common::OB_INVALID_ID) {}
-
+    : table_id_(common::OB_INVALID_ID),
+      task_id_(0),
+      session_id_(0),
+      sequence_no_(common::OB_INVALID_ID)
+  {
+  }
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id), K_(session_id), K_(sequence_no),
+               K(payload_.length()));
+public:
   ObString credential_;  //这个里面会包含tenant_id, database等信息
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
   int32_t session_id_;    // 从1开始
   uint64_t sequence_no_;  // 从1开始
   ObString payload_; //里面包的是ObTableLoadObjArray / ObTableLoadStrArray / Raw String
-
-  TO_STRING_KV(K_(table_id), K_(trans_id), K_(session_id), K_(sequence_no), K(payload_.length()));
 };
 
 class ObTableLoadResult final
@@ -374,17 +404,18 @@ class ObTableLoadPeerRequest final
 public:
   ObTableLoadPeerRequest()
     : table_id_(common::OB_INVALID_ID),
+      task_id_(0),
       session_id_(0),
       sequence_no_(common::OB_INVALID_ID) {}
-
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id), K_(session_id), K_(sequence_no));
+public:
   ObString credential_;  //这个里面会包含tenant_id, database等信息
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
   int32_t session_id_;    // 从1开始
   uint64_t sequence_no_;  // 从1开始
   ObString payload_; //里面包的是ObTableLoadObjArray
-
-  TO_STRING_KV(K_(table_id), K_(trans_id), K_(session_id), K_(sequence_no));
 };
 
 class ObTableLoadPeerResult final
@@ -406,11 +437,12 @@ class ObTableLoadStartTransRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadStartTransRequest() : table_id_(common::OB_INVALID_ID) {}
-  TO_STRING_KV(K_(table_id), K_(segment_id));
+  ObTableLoadStartTransRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(segment_id));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadSegmentID segment_id_;
 };
 
@@ -433,13 +465,13 @@ class ObTableLoadPreStartTransPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadPreStartTransPeerRequest() : table_id_(common::OB_INVALID_ID) {}
-
+  ObTableLoadPreStartTransPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id));
+public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
-
-  TO_STRING_KV(K_(table_id), K_(trans_id));
 };
 
 class ObTableLoadPreStartTransPeerResult final
@@ -458,13 +490,13 @@ class ObTableLoadConfirmStartTransPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadConfirmStartTransPeerRequest() : table_id_(common::OB_INVALID_ID) {}
-
+  ObTableLoadConfirmStartTransPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id));
+public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
-
-  TO_STRING_KV(K_(table_id), K_(trans_id));
 };
 
 class ObTableLoadConfirmStartTransPeerResult final
@@ -486,13 +518,13 @@ class ObTableLoadFinishTransRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadFinishTransRequest() : table_id_(common::OB_INVALID_ID) {}
-
+  ObTableLoadFinishTransRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id));
+public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
-
-  TO_STRING_KV(K_(table_id), K_(trans_id));
 };
 
 class ObTableLoadFinishTransResult final
@@ -510,13 +542,13 @@ class ObTableLoadPreFinishTransPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadPreFinishTransPeerRequest() : table_id_(common::OB_INVALID_ID) {}
-
+  ObTableLoadPreFinishTransPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id));
+public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
-
-  TO_STRING_KV(K_(table_id), K_(trans_id));
 };
 
 class ObTableLoadPreFinishTransPeerResult final
@@ -535,13 +567,13 @@ class ObTableLoadConfirmFinishTransPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadConfirmFinishTransPeerRequest() : table_id_(common::OB_INVALID_ID) {}
-
+  ObTableLoadConfirmFinishTransPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id));
+public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
-
-  TO_STRING_KV(K_(table_id), K_(trans_id));
 };
 
 class ObTableLoadConfirmFinishTransPeerResult final
@@ -563,13 +595,13 @@ class ObTableLoadAbandonTransRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadAbandonTransRequest() : table_id_(common::OB_INVALID_ID) {}
-
+  ObTableLoadAbandonTransRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id));
+public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
-
-  TO_STRING_KV(K_(table_id), K_(trans_id));
 };
 
 class ObTableLoadAbandonTransResult final
@@ -587,13 +619,13 @@ class ObTableLoadAbandonTransPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadAbandonTransPeerRequest() : table_id_(common::OB_INVALID_ID) {}
-
+  ObTableLoadAbandonTransPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id));
+public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
-
-  TO_STRING_KV(K_(table_id), K_(trans_id));
 };
 
 class ObTableLoadAbandonTransPeerResult final
@@ -615,11 +647,12 @@ class ObTableLoadGetTransStatusRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadGetTransStatusRequest() : table_id_(common::OB_INVALID_ID) {}
-  TO_STRING_KV(K_(table_id), K_(trans_id));
+  ObTableLoadGetTransStatusRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
 };
 
@@ -641,11 +674,12 @@ class ObTableLoadGetTransStatusPeerRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadGetTransStatusPeerRequest() : table_id_(common::OB_INVALID_ID) {}
-  TO_STRING_KV(K_(table_id), K_(trans_id));
+  ObTableLoadGetTransStatusPeerRequest() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(trans_id));
 public:
   ObString credential_;
   uint64_t table_id_;
+  int64_t task_id_;
   ObTableLoadTransId trans_id_;
 };
 

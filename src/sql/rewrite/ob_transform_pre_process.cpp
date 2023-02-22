@@ -6749,9 +6749,6 @@ int ObTransformPreProcess::transform_for_ins_batch_stmt(ObDMLStmt *batch_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("batch_stmt or inner_view_stmt is null", K(ret), K(batch_stmt));
   } else if (FALSE_IT(insert_stmt = static_cast<ObInsertStmt*>(batch_stmt))) {
-  } else if (insert_stmt->is_insert_up() || insert_stmt->is_replace()) {
-    ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-    LOG_WARN("insert on duplicate key and replace is not support batch now", K(ret), KPC(batch_stmt));
   } else if (insert_stmt->value_from_select()) {
     ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
     LOG_TRACE("insert select stmt not supported batch exec opt", K(ret), KPC(batch_stmt));
@@ -6922,7 +6919,7 @@ int ObTransformPreProcess::transform_for_batch_stmt(ObDMLStmt *batch_stmt, bool 
     } else if (OB_FAIL(transform_for_upd_del_batch_stmt(batch_stmt, inner_view_stmt, trans_happened))) {
       LOG_WARN("fail to transform upd or del batch stmt", K(ret));
     }
-  } else if (stmt_type == stmt::T_INSERT) {
+  } else if (stmt_type == stmt::T_INSERT || stmt_type == stmt::T_REPLACE) {
     // insert的改写
     ObSQLSessionInfo *session_info = NULL;
     if (OB_ISNULL(session_info = ctx_->session_info_)) {

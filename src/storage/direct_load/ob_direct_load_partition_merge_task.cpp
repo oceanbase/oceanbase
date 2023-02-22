@@ -147,7 +147,7 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-  if (merge_param_->is_fast_heap_table_ ) {
+  if (merge_param_->is_heap_table_ ) {
     for (int64_t i = 0; OB_SUCC(ret) && i < merge_param_->table_data_desc_.column_count_; i++) {
       const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i + 1);

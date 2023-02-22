@@ -42,10 +42,10 @@ namespace storage
 
 class ObBlockMetaTree
 {
-  typedef keybtree::ObKeyBtree<blocksstable::ObDatumRowkeyWrapper, const blocksstable::ObDataMacroBlockMeta *> KeyBtree;
-  typedef keybtree::BtreeIterator<blocksstable::ObDatumRowkeyWrapper, const blocksstable::ObDataMacroBlockMeta *> BtreeIterator;
-  typedef keybtree::BtreeNodeAllocator<blocksstable::ObDatumRowkeyWrapper, const blocksstable::ObDataMacroBlockMeta *> BtreeNodeAllocator;
-  typedef keybtree::BtreeRawIterator<blocksstable::ObDatumRowkeyWrapper, const blocksstable::ObDataMacroBlockMeta *> BtreeRawIterator;
+  typedef keybtree::ObKeyBtree<blocksstable::ObDatumRowkeyWrapper, blocksstable::ObDataMacroBlockMeta *> KeyBtree;
+  typedef keybtree::BtreeIterator<blocksstable::ObDatumRowkeyWrapper, blocksstable::ObDataMacroBlockMeta *> BtreeIterator;
+  typedef keybtree::BtreeNodeAllocator<blocksstable::ObDatumRowkeyWrapper, blocksstable::ObDataMacroBlockMeta *> BtreeNodeAllocator;
+  typedef keybtree::BtreeRawIterator<blocksstable::ObDatumRowkeyWrapper, blocksstable::ObDataMacroBlockMeta *> BtreeRawIterator;
 public:
   ObBlockMetaTree();
   virtual ~ObBlockMetaTree();
@@ -55,7 +55,7 @@ public:
            const int64_t cluster_version);
   void destroy();
   int insert_macro_block(const ObDDLMacroHandle &macro_handle,
-                         const blocksstable::ObDatumRowkeyWrapper &rowkey,
+                         const blocksstable::ObDatumRowkey *rowkey,
                          const blocksstable::ObDataMacroBlockMeta *meta);
   int locate_range(const blocksstable::ObDatumRange &range,
                    const blocksstable::ObStorageDatumUtils &datum_utils,
@@ -65,12 +65,14 @@ public:
                    int64_t &end_idx);
   int get_index_block_row_header(const int64_t idx,
                                  const blocksstable::ObIndexBlockRowHeader *&header,
-                                 blocksstable::ObDatumRowkey &endkey);
+                                 const blocksstable::ObDatumRowkey *&endkey);
   int get_macro_block_meta(const int64_t idx,
                            blocksstable::ObDataMacroBlockMeta &macro_meta);
   int64_t get_macro_block_cnt() const { return macro_blocks_.count(); }
   int get_last_rowkey(const blocksstable::ObDatumRowkey *&last_rowkey);
   int build_sorted_rowkeys();
+  int get_sorted_meta_array(ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array) const;
+  int exist(const blocksstable::ObDatumRowkey *rowkey, bool &is_exist);
   const blocksstable::ObDataStoreDesc &get_data_desc() const { return data_desc_; }
   TO_STRING_KV(K(is_inited_), K(macro_blocks_.count()), K(arena_.total()), K(data_desc_), K(sorted_rowkeys_.count()));
 private:
@@ -136,7 +138,6 @@ public:
       K_(is_freezed), K_(is_closed),
       K_(last_freezed_scn), K_(min_scn), K_(max_scn), K_(freeze_scn),
       K_(pending_cnt), K_(cluster_version), K_(ref_cnt),
-      KP_(sstable_index_builder), KP_(index_block_rebuilder), K_(is_rebuilder_closed),
       K_(block_meta_tree));
 private:
   int insert_block_meta_tree(const ObDDLMacroHandle &macro_handle,
@@ -163,9 +164,6 @@ private:
   share::SCN freeze_scn_; // ddl kv refuse data larger than freeze log ts, freeze_log_ts >= max_log_ts
   int64_t pending_cnt_; // the amount of kvs that are replaying
   int64_t cluster_version_;
-  blocksstable::ObSSTableIndexBuilder *sstable_index_builder_;
-  blocksstable::ObIndexBlockRebuilder *index_block_rebuilder_;
-  bool is_rebuilder_closed_;
   ObBlockMetaTree block_meta_tree_;
 };
 

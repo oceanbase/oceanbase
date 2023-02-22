@@ -3534,6 +3534,11 @@ TEST_F(TestBatchExecute, update_table_with_index_by_lowercase_rowkey)
   the_table = NULL;
 }
 
+// create table if not exists single_get_test
+// (C1 bigint primary key,
+// C2 double,
+// C3 varchar(100) default 'hello world')
+// PARTITION BY KEY(C1) PARTITIONS 16
 TEST_F(TestBatchExecute, single_get)
 {
   OB_LOG(INFO, "begin single_get");
@@ -3574,8 +3579,6 @@ TEST_F(TestBatchExecute, single_get)
   ObObj null_obj;
   entity->reset();
   ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
-  ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
-  ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
   table_operation = ObTableOperation::retrieve(*entity);
   ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
   result_entity = NULL;
@@ -3584,7 +3587,9 @@ TEST_F(TestBatchExecute, single_get)
   ASSERT_EQ(ObTableOperationType::GET, r.type());
   ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
   ASSERT_EQ(0, result_entity->get_rowkey_size());
-  ASSERT_EQ(2, result_entity->get_properties_count());
+  ASSERT_EQ(3, result_entity->get_properties_count());
+  ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, value));
+  ASSERT_EQ(key, value);
   ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
   ASSERT_EQ(c2_value, value.get_double());
   ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
@@ -4503,7 +4508,10 @@ TEST_F(TestBatchExecute, replace_unique_key)
 }
 
 // create table if not exists single_insert_up_test
-// (C1 bigint primary key, C2 double, C3 varchar(100) default 'hello world') PARTITION BY KEY(C1) PARTITIONS 16
+// (C1 bigint primary key,
+//  C2 double,
+//  C3 varchar(100) default 'hello world',
+//  UNIQUE KEY idx_c2 (C2)) PARTITION BY KEY(C1) PARTITIONS 16
 TEST_F(TestBatchExecute, single_insert_up)
 {
   OB_LOG(INFO, "begin single_insert_up");
@@ -4523,6 +4531,7 @@ TEST_F(TestBatchExecute, single_insert_up)
   key.set_int(key_key);
 
   // insert_or_update C2: insert
+  // [1], [1.1], ['hello world']
   {
     entity->reset();
     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
@@ -4562,11 +4571,64 @@ TEST_F(TestBatchExecute, single_insert_up)
     ASSERT_TRUE(str == c3_value);
   }
 
-  // insert_or_update C2: update
+  // insert_or_update C2: insert
+  // [2], [2.2], ['hello world']
   {
+    ObObj key;
+    int key_key = 2;
+    key.set_int(key_key);
     entity->reset();
     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
     double c2_value = 2.2;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+
+  // get
+  {
+    ObObj null_obj;
+    ObObj key;
+    int key_key = 2;
+    key.set_int(key_key);
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+    ASSERT_EQ(2.2, value.get_double());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ObString c3_value = ObString::make_string("hello world");
+    ASSERT_TRUE(str == c3_value);
+  }
+
+  // current has 2 rows
+  // [1], [1.1], ['hello world']
+  // [2], [2.2], ['hello world']
+
+
+  // insert_or_update C2: update -----> rowkey conflict
+  // [1], [3.3], ['hello world']
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    double c2_value = 3.3;
     value.set_double(c2_value);
     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
     ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
@@ -4594,7 +4656,104 @@ TEST_F(TestBatchExecute, single_insert_up)
     ASSERT_EQ(0, result_entity->get_rowkey_size());
     ASSERT_EQ(2, result_entity->get_properties_count());
     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-    ASSERT_EQ(2.2, value.get_double());
+    ASSERT_EQ(3.3, value.get_double());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
+    ObString c3_value = ObString::make_string("hello world");
+    ASSERT_TRUE(str == c3_value);
+  }
+
+  // current has 2 rows
+  // [1], [3.3], ['hello world']
+  // [2], [2.2], ['hello world']
+
+  // insert_or_update C2: update again ----->unique key confilct
+  // [3], [3.3], ['hello world']
+  {
+    ObObj key;
+    int key_key = 3;
+    key.set_int(key_key);
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    double c2_value = 3.3;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+
+  // get
+  {
+    ObObj key;
+    int key_key = 3;
+    key.set_int(key_key);
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(0, result_entity->get_properties_count());
+  }
+
+  // current has 2 rows
+  // [1], [3.3], ['hello world']
+  // [2], [2.2], ['hello world']
+
+  // insert_or_update C2: update again ----->rowkey & unique key confilct
+  // [3], [2.2], ['hello world']
+  {
+    ObObj key;
+    int key_key = 3;
+    key.set_int(key_key);
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    double c2_value = 2.2;
+    value.set_double(c2_value);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
+    // TODO:@linjing 和sql行为不一致
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(result_entity->is_empty());
+  }
+
+  // current has 2 rows
+  // [1], [3.3], ['hello world']
+  // [2], [2.2], ['hello world']
+
+  // get
+  {
+    ObObj null_obj;
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+    ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(0, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::GET, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_EQ(0, result_entity->get_rowkey_size());
+    ASSERT_EQ(2, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
+    ASSERT_EQ(3.3, value.get_double());
     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
     ObString str;
     ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
@@ -4791,6 +4950,39 @@ TEST_F(TestBatchExecute, table_query_with_secondary_index)
 
     ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
     ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("idx_c3")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    int64_t i = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_properties_values(properties_values));
+      ASSERT_EQ(3, properties_values.count());
+      ASSERT_EQ(++i, properties_values.at(0).get_int());
+      ASSERT_EQ(++i, properties_values.at(1).get_int());
+      ASSERT_EQ(++i, properties_values.at(2).get_int());
+      properties_values.reset();
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(result_cnt, expect_query_cnt);
+  }
+
+  {
+    // case 5: has no select column in query
+    query.reset();
+    ObObj pk_objs_start[2];
+    pk_objs_start[0].set_int(0);
+    pk_objs_start[1].set_min_value();
+    ObObj pk_objs_end[2];
+    pk_objs_end[0].set_max_value();
+    pk_objs_end[1].set_max_value();
+    ObNewRange range;
+    range.start_key_.assign(pk_objs_start, 2);
+    range.end_key_.assign(pk_objs_end, 2);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
     int64_t result_cnt = 0;
     int64_t i = 0;
@@ -5103,8 +5295,8 @@ TEST_F(TestBatchExecute, multi_insert)
     ASSERT_TRUE(batch_operation.is_same_type());
     ASSERT_TRUE(batch_operation.is_same_properties_names());
     ObTableBatchOperationResult result;
-    // 存在一个冲突，全部回滚
-    ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, the_table->batch_execute(batch_operation, result));
+    // 冲突，但是非atomic，其他行可以写入
+    ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
   }
 }
 
@@ -9372,7 +9564,8 @@ TEST_F(TestBatchExecute, query_sync_multi_task)
 }
 
 // the table should be single partition for this case:
-// create table if not exists batch_operation_with_same_keys_test (C1 bigint primary key, C2 bigint, C3 varchar(100))
+// create table if not exists batch_operation_with_same_keys_test
+// (C1 bigint primary key, C2 bigint, C3 varchar(100))
 TEST_F(TestBatchExecute, batch_operation_with_same_keys)
 {
   OB_LOG(INFO, "begin batch_operation_with_duplicated_keys");
@@ -9538,6 +9731,2205 @@ TEST_F(TestBatchExecute, batch_operation_with_same_keys)
   // teardown
   service_client_->free_table(the_table);
   the_table = NULL;
+}
+
+
+// create table if not exists query_with_filter (C1 bigint primary key, C2 bigint default null, C3 varchar(100) default null, C4 double default 0);
+TEST_F(TestBatchExecute, table_query_with_filter)
+{
+  // setup
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("query_with_filter"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableOperationResult r;
+  ObITableEntity *entity = NULL;
+  const ObITableEntity *result_entity = NULL;
+  ObTableOperation table_operation;
+  ObTableEntityIterator *iter = nullptr;
+  entity = entity_factory.alloc();
+  ASSERT_TRUE(NULL != entity);
+  ObString s1 = ObString::make_string("hello c++");
+  ObString s2 = ObString::make_string("hello java");
+  ObString C4 = ObString::make_string("C4");
+  //prepare data
+  const int64_t batch_size = 100;
+  for (int64_t i = 1; i <= batch_size; ++i) {
+    entity->reset();
+    ObObj key, value;
+    key.set_int(i);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_int(i);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    value.set_double(1.0 * i);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, value));
+    if (i % 2 == 0) {
+      value.set_varchar(s1);
+    } else {
+      value.set_varchar(s2);
+    }
+    value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    table_operation = ObTableOperation::insert(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+  }
+  //scan
+  ObTableQuery query;
+  {
+    // case 1: normal case
+    fprintf(stderr, "case 1: normal query\n");
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_min_value();
+    ObObj pk_objs_end;
+    pk_objs_end.set_max_value();
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(result_cnt, batch_size);
+  } // end case 1
+  {
+    // case 2: normal case filter C3='hello c++'
+    fprintf(stderr, "case 2: TableCompareFilter(=, 'C3:hello c++')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_min_value();
+    ObObj pk_objs_end;
+    pk_objs_end.set_max_value();
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:hello c++')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(0, v3.get_varchar().compare("hello c++"));
+      // fprintf(stderr, "(%ld, %ld,%ld,%s)\n", result_cnt, v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(result_cnt, batch_size/2);
+  } // end case 2
+  {
+    // case 3: normal case filter C2=50
+    fprintf(stderr, "case 3: TableCompareFilter(=, 'C2:50')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(30);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(100);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C2:50')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(50, v2.get_int());
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(1, result_cnt);
+  } // end case 3
+  {
+    // case 4: normal case filter C2>=50
+    fprintf(stderr, "case 4: TableCompareFilter(>=, 'C2:50')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(30);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(55);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(>=, 'C2:50')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_GE(v2.get_int(), 50);
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(6, result_cnt);
+  } // end case 4
+  {
+    // case 5: normal case filter C2 < 50
+    fprintf(stderr, "case 5: TableCompareFilter(<, 'C2:50')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(40);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(55);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(<, 'C2:50')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_LE(v2.get_int(), 50);
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(10, result_cnt);
+  } // end case 5
+  {
+    // case 6: bad filter case, filter column is not in select columns
+    fprintf(stderr, "case 6: select columns {C1, C3}, filter_string=TableCompareFilter(<, 'C2:50')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(40);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(55);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(<, 'C2:50')")));
+    int ret = the_table->execute_query(query, iter);
+    ASSERT_NE(OB_SUCCESS, ret);
+    // fprintf(stderr, "query ret=%d\n", ret);
+  } // end case 6
+  {
+    // case 7: bad filter case, data type error
+    fprintf(stderr, "case 7: data type bad case, filter_string=TableCompareFilter(=, 'C4:50')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C4));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(40);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(55);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C4:50')")));
+    int ret = the_table->execute_query(query, iter);
+    ASSERT_NE(OB_SUCCESS, ret);
+    // fprintf(stderr, "query ret=%d\n", ret);
+  } // end case 7
+  {
+    // case 8: more than one `:` in filter string
+    // fprintf(stderr, "case 8: more than one `:` in filter string, filter_string=TableCompareFilter(=, 'C3:hello:c++')\n");
+    // data update
+    for (int64_t i = 1; i <= batch_size; ++i) {
+      entity->reset();
+      ObObj key, value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      if (i % 2 == 0) {
+        value.set_varchar("hello:c++");
+      } else {
+        value.set_varchar("hello:java");
+      }
+      value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+      table_operation = ObTableOperation::update(*entity);
+      ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+      ASSERT_EQ(1, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    }
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C4));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(11);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(20);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:hello:c++')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(5, result_cnt);
+  } // end case 8
+  {
+    // case 9: int border value
+    fprintf(stderr, "case 9 int border value\n");
+    // data update
+    for (int64_t i = 1; i <= batch_size; ++i) {
+      entity->reset();
+      ObObj key, value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      if (i % 2 == 0) {
+        value.set_int(INT64_MAX);
+      } else {
+        value.set_int(INT64_MIN);
+      }
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+      table_operation = ObTableOperation::update(*entity);
+      ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+      ASSERT_EQ(1, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::UPDATE, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    }
+    fprintf(stderr, "case 9-1 filter_string=TableCompareFilter(>=, 'C2:9223372036854775807')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C4));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(1);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(20);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(>=, 'C2:9223372036854775807')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(10, result_cnt);
+    fprintf(stderr, "case 9-2 filter_string=TableCompareFilter(<, 'C2:9223372036854775807')\n");
+    query.reset();
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C4));
+
+    pk_objs_start.set_int(1);
+    pk_objs_end.set_int(20);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(<, 'C2:9223372036854775807')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(10, result_cnt);
+    fprintf(stderr, "case 9-3 filter_string=TableCompareFilter(<, 'C2:-9223372036854775807')\n");
+    query.reset();
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C4));
+    pk_objs_start.set_int(1);
+    pk_objs_end.set_int(20);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(<, 'C2:-9223372036854775807')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(10, result_cnt);
+    fprintf(stderr, "case 9-4 filter_string=TableCompareFilter(<, 'C2:9223372036854775808'), trigeer border problem\n");
+    query.reset();
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C4));
+    pk_objs_start.set_int(1);
+    pk_objs_end.set_int(20);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(<, 'C2:9223372036854775808')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(10, result_cnt);
+    fprintf(stderr, "case 9-5 filter_string=TableCompareFilter(>, 'C2:-9223372036854775809'), trigeer border problem\n");
+    query.reset();
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C4));
+    pk_objs_start.set_int(1);
+    pk_objs_end.set_int(20);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(>, 'C2:-9223372036854775809')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(10, result_cnt);
+  } // end case 9
+  {
+    // case 10 check stirng upper/lower
+    fprintf(stderr, "case 10 check stirng upper/lower, filter string=TableCompareFilter(=, 'C3:hello:JAVA')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(31);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(40);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:hello:JAVA')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(0, v3.get_varchar().compare("hello:java"));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(5, result_cnt);
+  } // end case 10
+  {
+    // case 11 empty string compare, filter_string=TableCompareFilter(=, 'C3:')
+    fprintf(stderr, "case 11 empty string compare, filter_string=TableCompareFilter(=, 'C3:')\n");
+    // insert some data
+    for (int64_t i = 101; i <= 120; ++i) {
+      entity->reset();
+      ObObj key, value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      value.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+      value.set_double(1.0 * i);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, value));
+      if (i % 2 == 0) {
+        value.set_varchar(s1);
+      } else {
+        value.set_varchar("");
+      }
+      value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+      table_operation = ObTableOperation::insert(*entity);
+      ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+      ASSERT_EQ(1, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    }
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(101);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(110);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(0, v3.get_varchar().compare(""));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(5, result_cnt);
+  } // end case 11
+  {
+    // case 12 string non-equality
+    fprintf(stderr, "case 12 string non-equality, filter_string=TableCompareFilter(>, 'C3:g')\n");
+    // insert some data
+    for (int64_t i = 121; i <= 140; ++i) {
+      entity->reset();
+      ObObj key, value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      value.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+      value.set_double(1.0 * i);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, value));
+      std::string s;
+      s.push_back('a' + (i - 121));
+      value.set_varchar(s.c_str());
+      value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+      table_operation = ObTableOperation::insert(*entity);
+      ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+      ASSERT_EQ(1, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    }
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(121);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(130);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(>, 'C3:g')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(3, result_cnt);
+  } // end case 12
+  {
+    // case 13 null field
+    fprintf(stderr, "case 13 null field\n");
+    // insert some data
+    for (int64_t i = 141; i <= 160; ++i) {
+      entity->reset();
+      ObObj key, value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      if (i % 2 != 0) {
+        value.set_int(i);
+        ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+      }
+      if (i % 2 == 0) {
+        value.set_varchar("hello world");
+        value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+      }
+      table_operation = ObTableOperation::insert(*entity);
+      ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+      ASSERT_EQ(1, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    }
+    fprintf(stderr, "case 13-1 filter_string=TableCompareFilter(!=, 'C3:hello world')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(141);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(150);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(!=, 'C3:hello world')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
+    ASSERT_EQ(0, result_cnt);
+    fprintf(stderr, "case 13-2 filter_string=TableCompareFilter(!=, 'C3:155')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    pk_objs_start.set_int(151);
+    pk_objs_end.set_int(160);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(!=, 'C2:155')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(4, result_cnt);
+    fprintf(stderr, "case 13-3 filter_string=TableCompareFilter(>, 'C2:155')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    pk_objs_start.set_int(151);
+    pk_objs_end.set_int(160);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(>, 'C2:155')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(2, result_cnt);
+  } // end case 13
+  {
+    // case 14 compare string contains '\''
+    fprintf(stderr, "case 14 compare string contains `'`\n");
+    // insert some data
+    for (int64_t i = 171; i <= 190; ++i) {
+      entity->reset();
+      ObObj key, value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      value.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+      if (i % 2 == 0) {
+        value.set_varchar("hello'quote");
+        value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+      }
+      table_operation = ObTableOperation::insert(*entity);
+      ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+      ASSERT_EQ(1, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    }
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(171);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(180);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:hello\'quote')")));
+    ASSERT_EQ(OB_ERR_PARSER_SYNTAX, the_table->execute_query(query, iter));
+  } // end case 14
+  {
+    // case 15 filter and
+    fprintf(stderr, "case 15 filter list\n");
+    fprintf(stderr, "case 15-1 filter_string=TableCompareFilter(=, 'C3:hello c++') && TableCompareFilter(>, 'C2:110')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(101);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(120);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:hello c++') && TableCompareFilter(>, 'C2:110')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(5, result_cnt);
+    fprintf(stderr, "case 15-2 filter_string=TableCompareFilter(>, 'C2:170') && TableCompareFilter(<=, 'C2:180')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    pk_objs_start.set_int(170);
+    pk_objs_end.set_int(190);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(>, 'C2:170') && TableCompareFilter(<=, 'C2:180')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(10, result_cnt);
+    fprintf(stderr, "case 15-3 filter_string=TableCompareFilter(>=, 'C3:d') && TableCompareFilter(<, 'C3:p')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    pk_objs_start.set_int(121);
+    pk_objs_end.set_int(140);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(>=, 'C3:d') && TableCompareFilter(<, 'C3:p')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(('p'-'d'), result_cnt);
+    fprintf(stderr, "case 15-4 filter_string=TableCompareFilter(<, 'C3:d') && TableCompareFilter(>, 'C3:p')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    pk_objs_start.set_int(121);
+    pk_objs_end.set_int(140);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(<, 'C3:d') && TableCompareFilter(>, 'C3:p')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(0, result_cnt);
+    fprintf(stderr, "case 15-5 filter_string=TableCompareFilter(<, 'C3:d') || TableCompareFilter(>, 'C3:p')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    pk_objs_start.set_int(121);
+    pk_objs_end.set_int(140);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(<, 'C3:d') || TableCompareFilter(>, 'C3:p')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(7, result_cnt);
+    fprintf(stderr, "case 15-6 filter_string=TableCompareFilter(>, 'C2:110') || TableCompareFilter(!=, 'C3:')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    pk_objs_start.reset();
+    pk_objs_end.reset();
+    range.reset();
+    pk_objs_start.set_int(101);
+    pk_objs_end.set_int(120);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(>, 'C2:110') || TableCompareFilter(!=, 'C3:')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(15, result_cnt);
+  } // end case 15
+  {
+    // case 16 is/is_not comparator
+    fprintf(stderr, "case 16 is/is_not comparator\n");
+    // insert some data
+    for (int64_t i = 191; i <= 200; ++i) {
+      entity->reset();
+      ObObj key, value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      value.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+      if (i % 2 == 0) {
+        value.set_varchar("hello world");
+        value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+      }
+      table_operation = ObTableOperation::insert(*entity);
+      ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+      ASSERT_EQ(1, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    }
+    fprintf(stderr, "case 16-1 filter_string=TableCompareFilter(IS, 'C3:')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(191);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(200);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(IS, 'C3:')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_TRUE(v3.is_null());
+      // fprintf(stderr, "(%ld,%ld)\n", v1.get_int(), v2.get_int());
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(5, result_cnt);
+    fprintf(stderr, "case 16-2 filter_string=TableCompareFilter(IS_NOT, 'C3:')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    pk_objs_start.set_int(191);
+    pk_objs_end.set_int(200);
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(IS_NOT, 'C3:')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_TRUE(!v3.is_null());
+      // fprintf(stderr, "(%ld,%ld)\n", v1.get_int(), v2.get_int());
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(5, result_cnt);
+  } // end case 16
+  {
+    // case 17 query with filter and limit
+    fprintf(stderr, "case 17 query with filter and limit\n");
+    // insert some data
+    for (int64_t i = 201; i <= 210; ++i) {
+      entity->reset();
+      ObObj key, value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      value.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+      if (i % 2 == 0) {
+        value.set_varchar("hello world");
+        value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+      }
+      table_operation = ObTableOperation::insert(*entity);
+      ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+      ASSERT_EQ(1, r.get_affected_rows());
+      ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    }
+    fprintf(stderr, "case 17-1 filter_string=TableCompareFilter(=, 'C3:hello world')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(201);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(210);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_offset(1));
+    ASSERT_EQ(OB_SUCCESS, query.set_limit(2));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:hello world')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int expect_c1_values[] =  {204, 206};
+    int expect_c2_values[] =  {204, 206};
+    for (int i = 0; i < ARRAYSIZEOF(expect_c1_values); i++) {
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, iter->get_next_entity(result_entity));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(v1.get_int(), expect_c1_values[i]);
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
+      ASSERT_EQ(v2.get_int(), expect_c2_values[i]);
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_EQ(v3.get_string(), "hello world");
+      // fprintf(stderr, "(%ld,%ld)\n", v1.get_int(), v2.get_int());
+    }
+    ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
+  } // end case 17
+  // teardown
+  iter = nullptr;
+  service_client_->free_table(the_table);
+  the_table = NULL;
+}
+
+
+// create table if not exists query_and_mutate (
+//    C1 bigint primary key,
+//    C2 bigint default null,
+//    C3 varchar(100) default null,
+//    C4 double default 0
+//    );
+TEST_F(TestBatchExecute, table_query_and_mutate)
+{
+  // setup
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("query_and_mutate"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableOperationResult r;
+  ObITableEntity *entity = NULL;
+  const ObITableEntity *result_entity = NULL;
+  ObTableOperation table_operation;
+  entity = entity_factory.alloc();
+  ASSERT_TRUE(NULL != entity);
+  ObString s1 = ObString::make_string("hello c++");
+  ObString s2 = ObString::make_string("hello java");
+  ObString C4 = ObString::make_string("C4");
+  //prepare data
+  const int64_t batch_size = 100;
+  for (int64_t i = 1; i <= batch_size; ++i) {
+    entity->reset();
+    ObObj key, value;
+    key.set_int(i);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_int(i);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    value.set_double(1.0 * i);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, value));
+    if (i % 2 == 0) {
+      value.set_varchar(s1);
+    } else {
+      value.set_varchar(s2);
+    }
+    value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    table_operation = ObTableOperation::insert(*entity);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::INSERT, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+  }
+  the_table->set_entity_type(ObTableEntityType::ET_KV);
+  ObTableQueryAndMutate query_and_mutate;
+  ObTableQuery &query = query_and_mutate.get_query();
+  ObTableBatchOperation &mutations = query_and_mutate.get_mutations();
+
+  // case 1: simple mutate
+  {
+    ObObj pk_start, pk_end, value;
+    ObNewRange range;
+    ObTableQueryAndMutateResult result;
+    pk_start.set_int(10);
+    pk_end.set_int(15);
+    range.start_key_.assign(&pk_start, 1);
+    range.end_key_.assign(&pk_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    value.set_int(666666);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ASSERT_EQ(OB_SUCCESS, mutations.update(*entity));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query_and_mutate(query_and_mutate, result));
+    fprintf(stderr, "affect rows=%ld\n", result.affected_rows_);
+    ObTableQueryResult &query_result = result.affected_entity_;
+    const ObITableEntity *query_entity = NULL;
+    int64_t res_cnt = 0;
+    while (OB_SUCC(query_result.get_next_entity(query_entity))) {
+      res_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(res_cnt, result.affected_rows_);
+  }
+  // case 2: query empty
+  {
+    query.reset();
+    mutations.reset();
+    ObObj pk_start, pk_end, value;
+    ObNewRange range;
+    ObTableQueryAndMutateResult result;
+    pk_start.set_int(1000);
+    pk_end.set_int(2000);
+    range.start_key_.assign(&pk_start, 1);
+    range.end_key_.assign(&pk_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    value.set_int(666666);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ASSERT_EQ(OB_SUCCESS, mutations.update(*entity));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query_and_mutate(query_and_mutate, result));
+    ASSERT_EQ(0, result.affected_rows_);
+  }
+  // case 3: with filter query
+  {
+    // 3-1 TableCompareFilter(=, 'C2:20')
+    query.reset();
+    mutations.reset();
+    ObObj pk_start, pk_end, value;
+    ObNewRange range;
+    ObTableQueryAndMutateResult result;
+    pk_start.set_int(16);
+    pk_end.set_int(20);
+    range.start_key_.assign(&pk_start, 1);
+    range.end_key_.assign(&pk_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C2:18')")));
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    value.set_int(55555);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ASSERT_EQ(OB_SUCCESS, mutations.update(*entity));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query_and_mutate(query_and_mutate, result));
+    ASSERT_GT(result.affected_rows_, 0);
+    fprintf(stderr, "3-1 affect rows=%ld\n", result.affected_rows_);
+    ObTableQueryResult &query_result = result.affected_entity_;
+    const ObITableEntity *query_entity = NULL;
+    int64_t res_cnt = 0;
+    while (OB_SUCC(query_result.get_next_entity(query_entity))) {
+      res_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(res_cnt, result.affected_rows_);
+    // 3-2 filter_string=TableCompareFilter(=, 'C3:hello c++') && TableCompareFilter(>, 'C2:24')
+    query.reset();
+    mutations.reset();
+    pk_start.reset();
+    pk_end.reset();
+    value.reset();
+    range.reset();
+    entity->reset();
+    res_cnt = 0;
+    ret = OB_SUCCESS;
+
+    pk_start.set_int(21);
+    pk_end.set_int(30);
+    range.start_key_.assign(&pk_start, 1);
+    range.end_key_.assign(&pk_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:hello c++') && TableCompareFilter(>, 'C2:24')")));
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    value.set_varchar("hello c++++");
+    value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ASSERT_EQ(OB_SUCCESS, mutations.update(*entity));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query_and_mutate(query_and_mutate, result));
+    ASSERT_GT(result.affected_rows_, 0);
+    fprintf(stderr, "3-2 affect rows=%ld\n", result.affected_rows_);
+    while (OB_SUCC(query_result.get_next_entity(query_entity))) {
+      res_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(res_cnt, result.affected_rows_);
+    // 3-3 filter_string=TableCompareFilter(<, 'C2:25') || TableCompareFilter(>, 'C2:35')
+    query.reset();
+    mutations.reset();
+    pk_start.reset();
+    pk_end.reset();
+    value.reset();
+    range.reset();
+    entity->reset();
+    res_cnt = 0;
+    ret = OB_SUCCESS;
+    pk_start.set_int(21);
+    pk_end.set_int(40);
+    range.start_key_.assign(&pk_start, 1);
+    range.end_key_.assign(&pk_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(<, 'C2:25') || TableCompareFilter(>, 'C2:35')")));
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    value.set_varchar("big wish");
+    value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ASSERT_EQ(OB_SUCCESS, mutations.update(*entity));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query_and_mutate(query_and_mutate, result));
+    ASSERT_GT(result.affected_rows_, 0);
+    fprintf(stderr, "3-3 affect rows=%ld\n", result.affected_rows_);
+    while (OB_SUCC(query_result.get_next_entity(query_entity))) {
+      res_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(res_cnt, result.affected_rows_);
+  }
+  // case 4: incrment, append, delete
+  {
+    // 4-1 increment
+    query.reset();
+    mutations.reset();
+    ObObj pk_start, pk_end, value;
+    ObNewRange range;
+    ObTableQueryAndMutateResult result;
+    pk_start.set_int(41);
+    pk_end.set_int(50);
+    range.start_key_.assign(&pk_start, 1);
+    range.end_key_.assign(&pk_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C2:48')")));
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    value.set_int(1000);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
+    ASSERT_EQ(OB_SUCCESS, mutations.increment(*entity));
+    ObTableQueryResult &query_result = result.affected_entity_;
+    const ObITableEntity *query_entity = NULL;
+    int64_t res_cnt = 0;
+    // 4-3 delete
+    query.reset();
+    mutations.reset();
+    pk_start.reset();
+    pk_end.reset();
+    value.reset();
+    range.reset();
+    entity->reset();
+    res_cnt = 0;
+    ret = OB_SUCCESS;
+
+    pk_start.set_int(61);
+    pk_end.set_int(70);
+    range.start_key_.assign(&pk_start, 1);
+    range.end_key_.assign(&pk_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:hello c++') && TableCompareFilter(>, 'C2:24')")));
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    ASSERT_EQ(OB_SUCCESS, mutations.del(*entity));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query_and_mutate(query_and_mutate, result));
+    ASSERT_GT(result.affected_rows_, 0);
+    fprintf(stderr, "4-3 affect rows=%ld\n", result.affected_rows_);
+    while (OB_SUCC(query_result.get_next_entity(query_entity))) {
+      res_cnt++;
+      ObObj v1, v2, v3;
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
+      ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(res_cnt, result.affected_rows_);
+    // 4-4 batch
+  }
+  service_client_->free_table(the_table);
+  the_table = NULL;
+}
+
+/*
+ * CREATE TABLE atomic_batch_ops (
+ *   c1 bigint not null,
+ *   c2 varchar(128) not null,
+ *   c3 varbinary(1024) default null,
+ *   c4 int not null default -1,
+ *   primary key(c1),
+ *   UNIQUE KEY idx_c2c4 (`c2`, `c4`)
+ * )
+ */
+TEST_F(TestBatchExecute, atomic_batch_ops)
+{
+  ObTable *table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("atomic_batch_ops"), table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableBatchOperationResult result;
+  ObITableEntity *entity = NULL;
+  ObTableBatchOperation table_batch_operation;
+  ObTableRequestOptions req_options;
+
+  // ObString C1 = ObString::make_string("C1");
+  ObString C2 = ObString::make_string("C2");
+  ObString C3 = ObString::make_string("C3");
+  ObString C4 = ObString::make_string("C4");
+
+  // set atomic batch false
+  req_options.set_batch_operation_as_atomic(false);
+  req_options.set_returning_affected_rows(true);
+
+  // multi insert
+  // CRITICAL ERROR
+  // +----+-------+-------+----+
+  // | C1 | c2    | c3    | c4 |
+  // +----+-------+-------+----+
+  // |  5 | hello | world |  1 |
+  // |  6 | hello | world |  1 |
+  // +----+-------+-------+----+
+  {
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+
+    ObObj key, c2_value, c3_value, c4_value;
+
+    key.set_int(5);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    c2_value.set_varchar(ObString::make_string("hello"));
+    c2_value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    c3_value.set_varbinary(ObString::make_string("world"));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    c4_value.set_int(1);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+
+    // duplicate uk insert
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    key.set_int(6);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(2, result.count());
+    for (int64_t i = 0; i < result.count(); i++) {
+      const ObTableOperationResult &r = result.at(i);
+      if (0 == i) {
+        ASSERT_EQ(OB_SUCCESS, r.get_errno());
+        ASSERT_EQ(1, r.get_affected_rows());
+      } else {
+        ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, r.get_errno());
+      }
+    }
+
+    // multi get
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    ObObj null_obj;
+    for (int64_t i = 5; i <= 6; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, null_obj));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.retrieve(*entity));
+    }
+
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(2, result.count());
+    for (int64_t i = 0; i < result.count(); ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      const ObITableEntity *result_entity = NULL;
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_TRUE(NULL != result_entity);
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+
+      ObObj c2_obj, c3_obj, c4_obj;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, c2_obj));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, c3_obj));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, c4_obj));
+
+      ObObj val2, val3, val4;
+      val2.set_varchar(ObString::make_string("hello"));
+      val2.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      val3.set_varbinary(ObString::make_string("world"));
+      val4.set_int(1);
+      ASSERT_EQ(val2, c2_obj);
+      ASSERT_EQ(val3, c3_obj);
+      ASSERT_EQ(val4, c4_obj);
+    }
+  }
+
+  // multi delete
+  {
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    for (int64_t i = 5; i <= 6; i++) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.del(*entity));
+    }
+    // 当前的数据
+    // +----+-------+------------------+----+
+    // | c1 | c2    | cast(c3 as char) | c4 |
+    // +----+-------+------------------+----+
+    // |  5 | hello | world            |  1 |
+    // |  6 | hello | world            |  1 |
+    // +----+-------+------------------+----+
+    // 删唯一索引的时候会报错4377，因为c2,c4联合唯一索引有两条一模一样的数据，第二次删除会找不到记录，第一次已经删完。
+    ASSERT_EQ(OB_ERR_DEFENSIVE_CHECK, table->batch_execute(table_batch_operation, req_options, result));
+  }
+
+  // delete again
+  {
+    entity->reset();
+    ObObj key;
+    key.set_int(5);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ObTableOperation table_operation = ObTableOperation::del(*entity);
+    ObTableOperationResult r;
+    ASSERT_EQ(OB_SUCCESS, table->execute(table_operation, r));
+
+    entity->reset();
+    key.set_int(6);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    table_operation = ObTableOperation::del(*entity);
+    // 第二条还是删不掉，遗留成为脏数据
+    // +----+-------+------------------+----+
+    // | c1 | c2    | cast(c3 as char) | c4 |
+    // +----+-------+------------------+----+
+    // |  6 | hello | world            |  1 |
+    // +----+-------+------------------+----+
+    ASSERT_EQ(OB_ERR_DEFENSIVE_CHECK, table->execute(table_operation, r));
+  }
+
+  // multi_insert
+  // +----+-------+-------+----+
+  // | C1 | c2    | c3    | c4 |
+  // +----+-------+-------+----+
+  // |  1 | hello | world |  1 |
+  // |  2 | hello | world |  2 |
+  // +----+-------+-------+----+
+  {
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    for (int i = 1; i < 3; i++) {
+      entity = entity_factory.alloc();
+
+      ObObj key, c2_value, c3_value, c4_value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      c2_value.set_varchar(ObString::make_string("hello"));
+      c2_value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+      c3_value.set_varbinary(ObString::make_string("world"));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+      c4_value.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+    }
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(2, result.count());
+    for (int64_t i = 0; i < result.count(); i++) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(1, r.get_affected_rows());
+    }
+  }
+
+  // multi_update
+  // CRITICAL ERROR
+  // +----+-------+------------------+----+
+  // | c1 | c2    | cast(c3 as char) | c4 |
+  // +----+-------+------------------+----+
+  // |  1 | hello | world            |  1 |
+  // |  2 | hello | world            |  1 |
+  // |  6 | hello | world            |  1 |
+  // +----+-------+------------------+----+
+  {
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    entity = entity_factory.alloc();
+    ObObj key, c4_val;
+    key.set_int(2);
+    c4_val.set_int(1);
+
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_val));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.update(*entity));
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(1, result.count());
+    for (int64_t i = 0; i < result.count(); i++) {
+      const ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, r.get_errno());
+    }
+  }
+
+  // reset data
+  // +----+-------+-------+----+
+  // | C1 | c2    | c3    | c4 |
+  // +----+-------+-------+----+
+  // |  1 | hello | world |  1 |
+  // |  2 | hello | world |  2 |
+  // +----+-------+-------+----+
+  {
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    for (int64_t i = 1; i <= 2; i++) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.del(*entity));
+    }
+
+    for (int i = 1; i <= 2; i++) {
+      entity = entity_factory.alloc();
+      ObObj key, c2_value, c3_value, c4_value;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      c2_value.set_varchar(ObString::make_string("hello"));
+      c2_value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+      c3_value.set_varbinary(ObString::make_string("world"));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+      c4_value.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+    }
+
+    ASSERT_EQ(OB_ERR_DEFENSIVE_CHECK, table->batch_execute(table_batch_operation, req_options, result));
+  }
+
+  // set atomic batch true
+  req_options.set_batch_operation_as_atomic(true);
+
+  // current
+  // +----+-------+------------------+----+
+  // | c1 | c2    | cast(c3 as char) | c4 |
+  // +----+-------+------------------+----+
+  // |  1 | hello | world            |  1 |
+  // |  2 | hello | world            |  1 |
+  // |  6 | hello | world            |  1 |
+  // +----+-------+------------------+----+
+
+  // multi insert
+  {
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    ObObj key, c1_value, c2_value, c3_value, c4_value;
+    c2_value.set_varchar(ObString::make_string("hello"));
+    c2_value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    c3_value.set_varbinary(ObString::make_string("world"));
+    c4_value.set_int(1);
+    for (int64_t i = 11; i < 13; i++) {
+      entity = entity_factory.alloc();
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+    }
+    ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(0, result.count());
+
+    // get
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    ObObj null_obj;
+    for (int64_t i = 11; i <= 12; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, null_obj));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.retrieve(*entity));
+    }
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(2, result.count());
+    for (int64_t i = 0; i < result.count(); i++) {
+      ObTableOperationResult &r = result.at(i);
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ObITableEntity *result_entity;
+      ASSERT_TRUE(OB_SUCC(r.get_entity(result_entity)));
+      ASSERT_TRUE(result_entity->is_empty());
+    }
+  }
+
+  // multi update
+  {
+    // prepare data
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    ObObj key, c1_value, c2_value, c3_value, c4_value;
+    c2_value.set_varchar(ObString::make_string("hello"));
+    c2_value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    c3_value.set_varbinary(ObString::make_string("world"));
+    for (int64_t i = 11; i < 13; i++) {
+      entity = entity_factory.alloc();
+      key.set_int(i);
+      c4_value.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+    }
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(2, result.count());
+
+    // update
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    entity = entity_factory.alloc();
+    key.set_int(12);
+    c4_value.set_int(11);
+
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.update(*entity));
+    ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, table->batch_execute(table_batch_operation, req_options, result));
+    for (int i = 0; i < result.count(); i++) {
+      ObTableOperationResult &r = result.at(i);
+      ObITableEntity *result_entity;
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      fprintf(stderr, "errno: %d, is empty: %d, type: %d\n", r.get_errno(), result_entity->is_empty(), r.type());
+    }
+    ASSERT_EQ(0, result.count());
+  }
+
+  // multi insert_or_update
+  {
+    // clear
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    for (int64_t i = 11; i < 13; i++) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.del(*entity));
+    }
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    entity = entity_factory.alloc();
+    ObObj key, c1_value, c2_value, c3_value, c4_value;
+    key.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    c2_value.set_varchar(ObString::make_string("hello"));
+    c2_value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    c3_value.set_varbinary(ObString::make_string("world"));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    c4_value.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert_or_update(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(13);
+    c4_value.set_int(13);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert_or_update(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(13);
+    c4_value.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert_or_update(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(12);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert_or_update(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(14);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert_or_update(*entity));
+
+    // ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(0, result.count());
+  }
+
+  // multi append
+  {
+    // clear
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    for (int64_t i = 11; i <= 14; i++) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.del(*entity));
+    }
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+
+    // prepare
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    entity = entity_factory.alloc();
+    ObObj key, c1_value, c2_value, c3_value, c4_value;
+    key.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    c2_value.set_varchar(ObString::make_string("hello"));
+    c2_value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    c3_value.set_varbinary(ObString::make_string("world"));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    c4_value.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(12);
+    c2_value.set_varchar(ObString::make_string("he"));
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(13);
+    c2_value.set_varchar(ObString::make_string("hell"));
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(3, result.count());
+
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    entity = entity_factory.alloc();
+    key.set_int(12);
+    c2_value.set_varchar(ObString::make_string("llo"));
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.append(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(13);
+    c2_value.set_varchar(ObString::make_string("o"));
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.append(*entity));
+
+    ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(0, result.count());
+
+    // get
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    ObObj null_obj;
+    for (int64_t i = 11; i <= 13; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, null_obj));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.retrieve(*entity));
+    }
+
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(3, result.count());
+    for (int64_t i = 0; i < result.count(); ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      const ObITableEntity *result_entity = NULL;
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_TRUE(NULL != result_entity);
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+
+      ObObj c2_obj, c3_obj, c4_obj;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, c2_obj));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, c3_obj));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, c4_obj));
+
+      ObObj val2, val3, val4;
+      val3.set_varbinary(ObString::make_string("world"));
+      val4.set_int(11);
+      switch (i) {
+        case 10: {
+          val2.set_varchar(ObString::make_string("hello"));
+          val2.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+          ASSERT_EQ(val2, c2_obj);
+          ASSERT_EQ(val3, c3_obj);
+          ASSERT_EQ(val4, c4_obj);
+          break;
+        }
+
+        case 11: {
+          val2.set_varchar(ObString::make_string("he"));
+          val2.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+          ASSERT_EQ(val2, c2_obj);
+          ASSERT_EQ(val3, c3_obj);
+          ASSERT_EQ(val4, c4_obj);
+          break;
+        }
+
+        case 12: {
+          val2.set_varchar(ObString::make_string("hell"));
+          val2.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+          ASSERT_EQ(val2, c2_obj);
+          ASSERT_EQ(val3, c3_obj);
+          ASSERT_EQ(val4, c4_obj);
+          break;
+        }
+      }
+    }
+  }
+
+  // multi increment
+  {
+    // clear
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    for (int64_t i = 11; i <= 14; i++) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.del(*entity));
+    }
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+
+    // prepare
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    entity = entity_factory.alloc();
+    ObObj key, c1_value, c2_value, c3_value, c4_value;
+    key.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    c2_value.set_varchar(ObString::make_string("hello"));
+    c2_value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    c3_value.set_varbinary(ObString::make_string("world"));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    c4_value.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(12);
+    c4_value.set_int(12);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(13);
+    c4_value.set_int(13);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    entity = entity_factory.alloc();
+    key.set_int(12);
+    c4_value.set_int(19);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.increment(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(13);
+    c4_value.set_int(18);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.increment(*entity));
+
+    ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(0, result.count());
+
+    // get
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    ObObj null_obj;
+    for (int64_t i = 11; i <= 13; ++i) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, null_obj));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, null_obj));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, null_obj));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.retrieve(*entity));
+    }
+
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(3, result.count());
+    for (int64_t i = 0; i < result.count(); ++i) {
+      const ObTableOperationResult &r = result.at(i);
+      const ObITableEntity *result_entity = NULL;
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(ObTableOperationType::GET, r.type());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      ASSERT_TRUE(NULL != result_entity);
+      ASSERT_EQ(0, result_entity->get_rowkey_size());
+
+      ObObj c2_obj, c3_obj, c4_obj;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, c2_obj));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, c3_obj));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, c4_obj));
+
+      ObObj val2, val3, val4;
+      val2.set_varchar(ObString::make_string("hello"));
+      val2.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      val3.set_varbinary(ObString::make_string("world"));
+      switch (i) {
+        case 10: {
+          val4.set_int(11);
+          ASSERT_EQ(val2, c2_obj);
+          ASSERT_EQ(val3, c3_obj);
+          ASSERT_EQ(val4, c4_obj);
+          break;
+        }
+
+        case 11: {
+          val4.set_int(2);
+          ASSERT_EQ(val2, c2_obj);
+          ASSERT_EQ(val3, c3_obj);
+          ASSERT_EQ(val4, c4_obj);
+          break;
+        }
+
+        case 12: {
+          val4.set_int(3);
+          ASSERT_EQ(val2, c2_obj);
+          ASSERT_EQ(val3, c3_obj);
+          ASSERT_EQ(val4, c4_obj);
+          break;
+        }
+      }
+    }
+  }
+
+  // batch
+  {
+    // clear
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    for (int64_t i = 11; i <= 14; i++) {
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ObObj key;
+      key.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.del(*entity));
+    }
+    ASSERT_EQ(OB_SUCCESS, table->batch_execute(table_batch_operation, req_options, result));
+
+    table_batch_operation.reset();
+    entity_factory.free_and_reuse();
+    result.reuse();
+    entity = entity_factory.alloc();
+    ObObj key, c1_value, c2_value, c3_value, c4_value;
+    key.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    c2_value.set_varchar(ObString::make_string("hello"));
+    c2_value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    c3_value.set_varbinary(ObString::make_string("world"));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    c4_value.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+
+    // entity = entity_factory.alloc();
+    // key.set_int(2);
+    // ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    // ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+    // ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+    // ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    // ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+
+    for (int64_t i = 13; i <= 15; i++) {
+      entity = entity_factory.alloc();
+      key.set_int(i);
+      c4_value.set_int(i);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, c2_value));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, c3_value));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+      ASSERT_EQ(OB_SUCCESS, table_batch_operation.insert(*entity));
+    }
+
+    entity = entity_factory.alloc();
+    key.set_int(13);
+    c4_value.set_int(12);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.increment(*entity));
+
+    entity = entity_factory.alloc();
+    key.set_int(14);
+    c4_value.set_int(11);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, c4_value));
+    ASSERT_EQ(OB_SUCCESS, table_batch_operation.increment(*entity));
+
+    ASSERT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, table->batch_execute(table_batch_operation, req_options, result));
+    ASSERT_EQ(0, result.count());
+  }
+
+  service_client_->free_table(table);
+  table = NULL;
 }
 
 int main(int argc, char **argv)

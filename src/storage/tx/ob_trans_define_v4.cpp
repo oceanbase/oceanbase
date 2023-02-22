@@ -54,7 +54,7 @@ ObTxIsolationLevel tx_isolation_from_str(const ObString &s)
 }
 
 ObTxSavePoint::ObTxSavePoint()
-  : type_(T::INVL), scn_(0), name_() {}
+  : type_(T::INVL), scn_(0), session_id_(0), name_() {}
 
 ObTxSavePoint::ObTxSavePoint(const ObTxSavePoint &a)
 {
@@ -65,9 +65,14 @@ ObTxSavePoint &ObTxSavePoint::operator=(const ObTxSavePoint &a)
 {
   type_ = a.type_;
   scn_ = a.scn_;
+  session_id_ = a.session_id_;
   switch(type_) {
   case T::SAVEPOINT:
-  case T::STASH: name_ = a.name_; break;
+  case T::STASH: {
+    name_ = a.name_;
+    session_id_ = a.session_id_;
+    break;
+  }
   case T::SNAPSHOT: snapshot_ = a.snapshot_; break;
   default: break;
   }
@@ -84,6 +89,7 @@ void ObTxSavePoint::release()
   type_ = T::INVL;
   snapshot_ = NULL;
   scn_ = 0;
+  session_id_ = 0;
 }
 
 void ObTxSavePoint::rollback()
@@ -101,7 +107,7 @@ void ObTxSavePoint::init(ObTxReadSnapshot *snapshot)
   scn_ = snapshot->core_.scn_;
 }
 
-int ObTxSavePoint::init(int64_t scn, const ObString &name, const bool stash)
+int ObTxSavePoint::init(int64_t scn, const ObString &name, const uint32_t session_id, const bool stash)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(name_.assign(name))) {
@@ -113,6 +119,7 @@ int ObTxSavePoint::init(int64_t scn, const ObString &name, const bool stash)
   } else {
     type_ = stash ? T::STASH : T::SAVEPOINT;
     scn_ = scn;
+    session_id_ = session_id;
   }
   return ret;
 }
@@ -129,6 +136,7 @@ DEF_TO_STRING(ObTxSavePoint)
   }
   J_COMMA();
   J_KV(K_(scn));
+  J_KV(K_(session_id));
   J_OBJ_END();
   return pos;
 }

@@ -37,7 +37,8 @@ int64_t ObTxDataMemtable::PERIODICAL_SELECT_INTERVAL_NS = 1000LL * 1000LL * 1000
 
 int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
                            SliceAllocator *slice_allocator,
-                           ObTxDataMemtableMgr *memtable_mgr)
+                           ObTxDataMemtableMgr *memtable_mgr,
+                           const int64_t buckets_cnt)
 {
   int ret = OB_SUCCESS;
 
@@ -50,7 +51,7 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
   } else if (OB_FAIL(ObITable::init(table_key))) {
     STORAGE_LOG(WARN, "ObITable::init fail", KR(ret), K(table_key), KPC(memtable_mgr));
   } else if (FALSE_IT(init_arena_allocator_())) {
-  } else if (OB_FAIL(init_tx_data_map_())) {
+  } else if (OB_FAIL(init_tx_data_map_(buckets_cnt))) {
     STORAGE_LOG(WARN, "init tx data map failed.", KR(ret), K(table_key), KPC(memtable_mgr));
   } else if (OB_FAIL(buf_.reserve(common::OB_MAX_VARCHAR_LENGTH))) {
     STORAGE_LOG(WARN, "reserve space for tx data memtable failed.", KR(ret), K(table_key), KPC(memtable_mgr));
@@ -81,7 +82,7 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
   return ret;
 }
 
-int ObTxDataMemtable::init_tx_data_map_()
+int ObTxDataMemtable::init_tx_data_map_(const int64_t buckets_cnt)
 {
   int ret = OB_SUCCESS;
 
@@ -90,7 +91,13 @@ int ObTxDataMemtable::init_tx_data_map_()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "allocate memory of tx_data_map_ failed", KR(ret));
   } else {
-    tx_data_map_ = new (data_map_ptr) TxDataMap(1 << 20/*2097152*/);
+    int64_t real_buckets_cnt = buckets_cnt;
+    if (real_buckets_cnt < ObTxDataHashMap::MIN_BUCKETS_CNT) {
+      real_buckets_cnt = ObTxDataHashMap::MIN_BUCKETS_CNT;
+    } else if (real_buckets_cnt > ObTxDataHashMap::MAX_BUCKETS_CNT) {
+      real_buckets_cnt = ObTxDataHashMap::MAX_BUCKETS_CNT;
+    }
+    tx_data_map_ = new (data_map_ptr) TxDataMap(arena_allocator_, real_buckets_cnt);
     if (OB_FAIL(tx_data_map_->init())) {
       STORAGE_LOG(WARN, "tx_data_map_ init failed", KR(ret));
     }
@@ -102,8 +109,8 @@ void ObTxDataMemtable::init_arena_allocator_()
 {
   ObMemAttr attr;
   attr.tenant_id_ = MTL_ID();
-  attr.label_ = "TX_DATA_TABLE";
-  attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
+  attr.label_ = "MEMTABLE_ARENA";
+  attr.ctx_id_ = ObCtxIds::TX_DATA_TABLE;
   arena_allocator_.set_attr(attr);
 }
 
@@ -1139,7 +1146,7 @@ void ObTxDataMemtable::TEST_reset_tx_data_map_()
 {
   int ret = OB_SUCCESS;
   tx_data_map_ = nullptr;
-  init_tx_data_map_();
+  init_tx_data_map_(ObTxDataHashMap::DEFAULT_BUCKETS_CNT);
 }
 
 

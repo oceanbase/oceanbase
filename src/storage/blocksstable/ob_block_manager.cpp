@@ -162,7 +162,6 @@ int ObBlockManager::init(
   } else if (OB_ISNULL(io_device) || OB_UNLIKELY(block_size < ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, ", K(ret), KP(io_device), K(block_size));
-  } else if (FALSE_IT(timer_.set_run_wrapper(MTL_CTX()))) {
   } else if (OB_FAIL(timer_.init("BlkMgr"))) {
     LOG_WARN("fail to init timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT, ObLatchIds::BLOCK_MANAGER_LOCK))) {
@@ -1414,11 +1413,6 @@ void ObBlockManager::InspectBadBlockTask::inspect_bad_block()
         std::max(GCONF._data_storage_io_timeout * 1,
                  max_check_count_per_round * DEFAULT_IO_WAIT_TIME_MS * 1000);
     const int64_t begin_time = ObTimeUtility::current_time();
-#ifdef ERRSIM
-    const int64_t access_time_interval = 0;
-#else
-    const int64_t access_time_interval = ACCESS_TIME_INTERVAL;
-#endif
     int64_t check_count = 0;
 
     for (int64_t i = 0;

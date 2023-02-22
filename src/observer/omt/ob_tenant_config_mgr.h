@@ -166,6 +166,7 @@ public:
   OB_UNIS_VERSION(1);
 
 private:
+  static const int64_t RECYCLE_LATENCY = 30L * 60L * 1000L * 1000L;
   ObTenantConfigMgr();
   bool inited_;
   common::ObAddr self_;

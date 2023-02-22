@@ -608,7 +608,7 @@ int ObStorageDatumUtils::init(const ObIArray<share::schema::ObColDesc> &col_desc
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObStorageDatumUtils init twice", K(ret), K(*this));
-  } else if (OB_UNLIKELY(schema_rowkey_cnt < 0 || schema_rowkey_cnt >= OB_MAX_ROWKEY_COLUMN_NUMBER
+  } else if (OB_UNLIKELY(schema_rowkey_cnt < 0 || schema_rowkey_cnt > OB_MAX_ROWKEY_COLUMN_NUMBER
                   || schema_rowkey_cnt > col_descs.count())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init storage datum utils", K(ret), K(col_descs), K(schema_rowkey_cnt));

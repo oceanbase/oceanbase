@@ -39,8 +39,10 @@ public:
   int create_das_ctdef(ObDASOpType op_type, ObDASBaseCtDef *&ctdef);
   int create_das_rtdef(ObDASOpType op_type, ObDASBaseRtDef *&rtdef);
   int create_das_async_cb(const common::ObSEArray<ObIDASTaskOp *, 2> &task_ops,
-      const ObMemAttr &attr, ObDASRef &das_ref,
-      ObRpcDasAsyncAccessCallBack *&async_cb);
+                          const ObMemAttr &attr,
+                          ObDASRef &das_ref,
+                          ObRpcDasAsyncAccessCallBack *&async_cb,
+                          int64_t timeout_ts);
   static int create_das_ctdef(ObDASOpType op_type, common::ObIAllocator &alloc, ObDASBaseCtDef *&ctdef);
   static int create_das_rtdef(ObDASOpType op_type, common::ObIAllocator &alloc, ObDASBaseRtDef *&rtdef);
   template <typename CtDef>

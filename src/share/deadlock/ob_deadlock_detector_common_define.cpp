@@ -211,8 +211,9 @@ ObDependencyResource& ObDependencyResource::operator=(const ObDependencyResource
 uint64_t ObDependencyResource::hash() const
 {
   uint64_t hash_val = 0;
-  hash_val = murmurhash(&addr_, sizeof(addr_), hash_val);
-  hash_val = murmurhash(&user_key_, sizeof(user_key_), hash_val);
+  hash_val = addr_.hash();
+  uint64_t key_hash = user_key_.hash();
+  hash_val = murmurhash(&key_hash, sizeof(key_hash), hash_val);
   return hash_val;
 }
 
@@ -225,6 +226,8 @@ bool ObDependencyResource::operator<(const ObDependencyResource &rhs) const
 {
   if (addr_ < rhs.addr_) {
     return true;
+  } else if (addr_ > rhs.addr_) {
+    return false;
   } else {
     if (user_key_ < rhs.user_key_) {
       return true;

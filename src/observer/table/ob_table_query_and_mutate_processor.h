@@ -16,13 +16,13 @@
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
-#include "ob_table_service.h"
 #include "ob_table_context.h"
 #include "ob_table_scan_executor.h"
 #include "ob_table_update_executor.h"
 #include "ob_table_insert_executor.h"
 #include "ob_table_cache.h"
 #include "ob_table_op_wrapper.h"
+#include "ob_table_query_common.h"
 
 
 namespace oceanbase
@@ -69,21 +69,48 @@ private:
   int execute_htable_increment(table::ObTableApiSpec &scan_spec);
   int execute_htable_insert(const table::ObITableEntity &new_entity);
   int execute_htable_put(const table::ObITableEntity &new_entity);
-  int generate_query_result(table::ObTableApiScanRowIterator &row_iter,
-                            table::ObTableQueryResultIterator *&result_iter);
-  int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
-  int check_rowkey_and_generate_mutations(
-      ObTableQueryResult &one_row,
-      ObTableBatchOperation *&mutations);
-  // rewrite htable query to avoid lock too much rows for update
-  int rewrite_htable_query_if_need(const ObTableOperation &mutaion, ObTableQuery &query);
-  DISALLOW_COPY_AND_ASSIGN(ObTableQueryAndMutateP);
+  int execute_htable_mutation(table::ObTableQueryResultIterator *result_iterator,
+                              int64_t &affected_rows);
+  int execute_table_mutation(table::ObTableQueryResultIterator *result_iterator,
+                             int64_t &affected_rows);
+  int execute_one_mutation(table::ObTableQueryResult &one_result,
+                           const common::ObIArray<common::ObString> &names,
+                           int64_t &affected_rows);
+  int get_rowkey_column_names(common::ObIArray<common::ObString> &names);
+private:
+  template<int TYPE>
+  int process_dml_op(const table::ObITableEntity &new_entity, int64_t &affected_rows)
+  {
+    int ret = OB_SUCCESS;
+    table::ObTableBatchOperation &mutations = arg_.query_and_mutate_.get_mutations();
+    const table::ObTableOperation &mutation = mutations.at(0);
+
+    SMART_VAR(table::ObTableCtx, tb_ctx, allocator_) {
+      table::ObTableApiSpec *spec = nullptr;
+      table::ObTableApiExecutor *executor = nullptr;
+      table::ObTableOperationResult op_result;
+      if (OB_FAIL(init_tb_ctx(tb_ctx,
+                              mutation.type(),
+                              new_entity))) {
+        SERVER_LOG(WARN, "fail to init table ctx", K(ret));
+      } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
+        SERVER_LOG(WARN, "fail to init trans", K(ret), K(tb_ctx));
+      } else if (OB_FAIL(table::ObTableOpWrapper::process_op<TYPE>(tb_ctx, op_result))) {
+        SERVER_LOG(WARN, "fail to process insert op", K(ret));
+      } else {
+        affected_rows = op_result.get_affected_rows();
+      }
+    }
+
+    return ret;
+  }
 private:
   common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
 
   table::ObTableQueryResult one_result_;
+  DISALLOW_COPY_AND_ASSIGN(ObTableQueryAndMutateP);
 };
 } // end namespace observer
 } // end namespace oceanbase

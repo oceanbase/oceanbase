@@ -324,6 +324,7 @@ share::SCN ObFreezerStat::get_freeze_snapshot_version()
 int ObFreezerStat::deep_copy_to(ObFreezerStat &other)
 {
   int ret = OB_SUCCESS;
+  other.reset();
   ObSpinLockGuard guard(lock_);
   other.set_tablet_id(tablet_id_);
   other.set_is_force(is_force_);

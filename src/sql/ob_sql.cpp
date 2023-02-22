@@ -1143,7 +1143,10 @@ int ObSql::set_timeout_for_pl(ObSQLSessionInfo &session_info, int64_t &abs_timeo
 {
   int ret = OB_SUCCESS;
   int64_t query_timeout;
-  if (OB_FAIL(session_info.get_query_timeout(query_timeout))) {
+  if (THIS_WORKER.is_timeout()) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("already timeout", K(ret), K(abs_timeout_us), K(THIS_WORKER.get_timeout_ts()));
+  } else if (OB_FAIL(session_info.get_query_timeout(query_timeout))) {
     // do nothing
   } else {
     OX (abs_timeout_us = session_info.get_query_start_time() > 0

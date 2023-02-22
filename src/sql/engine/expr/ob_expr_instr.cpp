@@ -136,14 +136,21 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
   ObString haystack_data;
   ObString needle_data;
   int64_t needle_char_len = 0;
+  int64_t haystack_char_len = 0;
+  int64_t abs_pos_int = (pos_int > 0) ? (pos_int) : (-pos_int);
   if (OB_FAIL(haystack_iter.init(0, NULL, &calc_alloc))) {
     LOG_WARN("init haystack_iter failed ", K(ret), K(haystack_iter));
+  } else if (OB_FAIL(haystack_iter.get_char_len(haystack_char_len))) {
+    LOG_WARN("get haystack char len failed ", K(ret), K(haystack_iter));
   } else if (OB_FAIL(needle_iter.init(0, NULL, &calc_alloc))) {
     LOG_WARN("init needle_iter failed ", K(ret), K(needle_iter));
   } else if (OB_FAIL(needle_iter.get_full_data(needle_data))) {
     LOG_WARN("get needle data failed ", K(ret), K(needle_iter));
   } else if (OB_FAIL(needle_iter.get_char_len(needle_char_len))) {
-    LOG_WARN("init lob str iter failed ", K(ret), K(needle_iter));
+    LOG_WARN("get needle char len failed ", K(ret), K(needle_iter));
+  } else if (haystack_char_len - abs_pos_int < needle_char_len) {
+    // pattern length is bigger than content, just return zero
+    idx = 0;
   } else {
     if (haystack_iter.is_outrow_lob()) {
       haystack_iter.set_reserved_len(static_cast<size_t>(needle_char_len) - 1);

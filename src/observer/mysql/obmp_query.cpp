@@ -336,6 +336,9 @@ int ObMPQuery::process()
               if (i > 0) {
                 session.get_raw_audit_record().exec_timestamp_.multistmt_start_ts_
                                                               = ObTimeUtility::current_time();
+                // before handle multi-stmt's followers, re-calc the txn_free_route's baseline
+                // in order to capture accurate state changed by current stmt
+                session.prep_txn_free_route_baseline();
               }
               need_disconnect = true;
               //FIXME qianfu NG_TRACE_EXT(set_disconnect, OB_ID(disconnect), true, OB_ID(pos), "multi stmt begin");

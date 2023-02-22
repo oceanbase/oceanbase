@@ -57,9 +57,9 @@ ObTableLoadStoreCtx::~ObTableLoadStoreCtx()
   destroy();
 }
 
-int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
-                              const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
-                              const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
+int ObTableLoadStoreCtx::init(
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -71,9 +71,9 @@ int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
   } else {
     ObDirectLoadInsertTableParam insert_table_param;
     insert_table_param.table_id_ = ctx_->param_.table_id_;
-    insert_table_param.schema_version_ = ctx_->schema_.schema_version_;
+    insert_table_param.schema_version_ = ctx_->ddl_param_.schema_version_;
     insert_table_param.snapshot_version_ = ObTimeUtil::current_time_ns();
-    insert_table_param.ddl_task_id_ = ddl_task_id;
+    insert_table_param.ddl_task_id_ = ctx_->ddl_param_.task_id_;
     insert_table_param.execution_id_ = 1; //仓氐说暂时设置为1，不然后面检测过不了
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_id_array.count(); ++i) {
       const ObLSID &ls_id = partition_id_array[i].ls_id_;
@@ -90,8 +90,6 @@ int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
       }
     }
     if (OB_SUCC(ret)) {
-      is_multiple_mode_ = (!ctx_->schema_.is_heap_table_ && ctx_->param_.need_sort_) ||
-                          ls_partition_ids_.count() > ObDirectLoadTableStore::MAX_BUCKET_CNT;
       table_data_desc_.rowkey_column_num_ =
         (!ctx_->schema_.is_heap_table_ ? ctx_->schema_.rowkey_column_count_ : 0);
       table_data_desc_.column_count_ = ctx_->param_.column_count_;
@@ -124,6 +122,22 @@ int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
         table_data_desc_.mem_chunk_size_ = mem_chunk_size;
         table_data_desc_.heap_table_mem_chunk_size_ = wa_mem_limit / ctx_->param_.session_count_;
         LOG_INFO("table_data_desc init end", K(table_data_desc_));
+      }
+      if (OB_SUCC(ret)) {
+        if (table_data_desc_.is_heap_table_) {
+          int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE);
+          if (ls_partition_ids_.count() <= bucket_cnt) {
+            is_fast_heap_table_ = true;
+          } else {
+            is_multiple_mode_ = true;
+          }
+        } else {
+          int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ *
+                                               (table_data_desc_.sstable_index_block_size_ +
+                                                table_data_desc_.sstable_data_block_size_));
+          is_multiple_mode_ = ctx_->param_.need_sort_ || ls_partition_ids_.count() > bucket_cnt;
+        }
+        LOG_INFO("multiple_mode is inited", K(is_multiple_mode_), K(is_fast_heap_table_));
       }
     }
     if (OB_FAIL(ret)) {
@@ -198,19 +212,15 @@ int ObTableLoadStoreCtx::init(int64_t ddl_task_id,
     else if (ctx_->schema_.has_identity_column_ && OB_FAIL(init_sequence())) {
       LOG_WARN("fail to init sequence", KR(ret));
     }
-    if (OB_SUCC(ret)) {
-      if (!is_multiple_mode_ && ctx_->schema_.is_heap_table_) {
-        is_fast_heap_table_ = true;
-        if (OB_ISNULL(fast_heap_table_ctx_ =
-                        OB_NEWx(ObDirectLoadFastHeapTableContext, (&allocator_)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to new ObDirectLoadFastHeapTableContext", KR(ret));
-        } else if (OB_FAIL(fast_heap_table_ctx_->init(ctx_->param_.tenant_id_,
-                                                      ls_partition_ids_,
-                                                      target_ls_partition_ids_,
-                                                      ctx_->param_.session_count_))) {
-          LOG_WARN("fail to init fast heap table ctx", KR(ret));
-        }
+    if (OB_SUCC(ret) && is_fast_heap_table_) {
+      if (OB_ISNULL(fast_heap_table_ctx_ =
+                      OB_NEWx(ObDirectLoadFastHeapTableContext, (&allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObDirectLoadFastHeapTableContext", KR(ret));
+      } else if (OB_FAIL(fast_heap_table_ctx_->init(ctx_->param_.tenant_id_, ls_partition_ids_,
+                                                    target_ls_partition_ids_,
+                                                    ctx_->param_.session_count_))) {
+        LOG_WARN("fail to init fast heap table ctx", KR(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -533,21 +543,16 @@ int ObTableLoadStoreCtx::generate_autoinc_params(AutoincParam &autoinc_param)
 int ObTableLoadStoreCtx::init_sequence()
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ctx_->param_.tenant_id_;
+  const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
   share::schema::ObSchemaGetterGuard table_schema_guard;
   share::schema::ObSchemaGetterGuard sequence_schema_guard;
   const ObSequenceSchema *sequence_schema = nullptr;
-  uint64_t tenant_id = ctx_->param_.tenant_id_;
   const ObTableSchema *target_table_schema = nullptr;
   uint64_t sequence_id = OB_INVALID_ID;
-  if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_,
-                                                  ctx_->param_.target_table_id_,
-                                                  table_schema_guard, target_table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(ctx_->param_.tenant_id_),
-                                         K(ctx_->param_.target_table_id_));
-  } else if (OB_ISNULL(target_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not exist", KR(ret), K(tenant_id),
-             K(ctx_->param_.target_table_id_));
+  if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, table_schema_guard,
+                                                  target_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else {
     //ddl对于identity是建表的时候进行自增值同步，对于sequence参数初始化得用隐藏表table id的table schema
     for (ObTableSchema::const_column_iterator iter = target_table_schema->column_begin();

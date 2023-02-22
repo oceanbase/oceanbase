@@ -763,10 +763,12 @@ int ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(ObTabletHandle &tab
     } else {
       ret = OB_SUCCESS;
     }
-  } else if (kv_mgr_handle.is_valid() && kv_mgr_handle.get_obj()->can_schedule_major_compaction(tablet_handle.get_obj()->get_tablet_meta())) {
+  } else if (kv_mgr_handle.is_valid()) {
     ObDDLTableMergeDagParam param;
-    if (OB_FAIL(kv_mgr_handle.get_obj()->get_ddl_major_merge_param(param))) {
-      LOG_WARN("get ddl major merge param failed", K(ret));
+    if (OB_FAIL(kv_mgr_handle.get_obj()->get_ddl_major_merge_param(tablet_handle.get_obj()->get_tablet_meta(), param))) {
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("failed to get ddl major merge param", K(ret));
+      }
     } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
         LOG_WARN("schedule ddl merge dag failed", K(ret), K(param));
@@ -1017,7 +1019,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
             ls,
             *tablet,
             major_frozen_scn,
-            true/*schedule_with_memtable*/))) {
+            true/*scheduler_called*/))) {
           if (OB_EAGAIN != ret) {
             LOG_WARN("failed to schedule medium", K(tmp_ret), K(ls_id), K(tablet_id));
           }
@@ -1125,7 +1127,6 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
             ObTimeUtility::fast_current_time(),
             "schedule_stats",
             schedule_stats_);
-        schedule_stats_.clear_tablet_cnt();
       }
     }
 
@@ -1154,6 +1155,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
 
     LOG_INFO("finish schedule all tablet merge", K(merge_version), K(schedule_stats_), K(tenant_merge_finish),
         K(merged_version_));
+    schedule_stats_.clear_tablet_cnt();
   }
   return ret;
 }

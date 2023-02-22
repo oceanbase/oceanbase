@@ -410,6 +410,7 @@ int ObMicroBlockRowGetter::get_not_exist_row(const ObDatumRowkey &rowkey, const 
       LOG_WARN("fail to reserve datum row", K(ret), KPC(read_info));
     } else {
       row_.count_ = rowkey.get_datum_cnt();
+      row_.row_flag_.reset();
       row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
       //TODO maybe we do not need to copy the rowkey datum
       for (int64_t i = 0; i < rowkey.get_datum_cnt(); i++) {
