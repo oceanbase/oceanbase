@@ -1734,7 +1734,7 @@ int ObMemtable::row_relocate(const bool for_replay, const bool need_lock_for_wri
         tg.click();
         if (OB_FAIL(mvcc_engine_.append_kv(
                 ctx, &stored_key, value, for_replay, new_locked, sql_no, is_sequential_relocate))) {
-          TRANS_LOG(WARN, "rew relocate append kv error", K(ret), K(ctx), K(stored_key), K(value));
+          TRANS_LOG(WARN, "row relocate append kv error", K(ret), K(ctx), K(stored_key), K(value));
         }
         tg.click();
       }
