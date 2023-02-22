@@ -149,7 +149,7 @@ DEF_TIME(schema_history_expire_time, OB_CLUSTER_PARAMETER, "7d", "[1m, 30d]",
 DEF_STR_WITH_CHECKER(default_compress_func, OB_CLUSTER_PARAMETER, "zstd_1.3.8",
                      common::ObConfigCompressFuncChecker,
                      "default compress function name for create new table, "
-                     "values: none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0, zstd_1.3.8",
+                     "values: none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0, zstd_1.3.8, qpl",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(default_row_format, OB_CLUSTER_PARAMETER, "dynamic",
