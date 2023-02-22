@@ -24,11 +24,11 @@
 #include "zstd/ob_zstd_stream_compressor.h"
 #include "zstd_1_3_8/ob_zstd_compressor_1_3_8.h"
 #include "zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.h"
-
-namespace oceanbase
-{
-namespace common
-{
+#if defined(__x86_64__)
+  #include "qpl/ob_qpl_compressor.h"
+#endif 
+namespace oceanbase {
+namespace common {
 
 class ObCompressorPool
 {
@@ -68,6 +68,9 @@ private:
   ObZlibCompressor zlib_compressor;
   zstd::ObZstdCompressor zstd_compressor;
   zstd_1_3_8::ObZstdCompressor_1_3_8 zstd_compressor_1_3_8;
+#if defined(__x86_64__)
+  ObQPLCompressor qpl_compressor;
+#endif
 
   //stream compressor
   ObLZ4StreamCompressor lz4_stream_compressor;
