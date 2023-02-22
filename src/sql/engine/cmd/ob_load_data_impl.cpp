@@ -1633,7 +1633,7 @@ int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
         ret = found ? box.server_last_available_ts.update(addr, curr_time)
                     : box.server_last_available_ts.insert(addr, curr_time);
         if (OB_FAIL(ret)) {
-          LOG_WARN("failt to update server_last_available_ts",
+          LOG_WARN("failed to update server_last_available_ts",
                    K(ret), K(addr), K(found), K(is_leader_changed));
         }
       }
@@ -2763,7 +2763,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       LOG_WARN("fail to init generator", K(ret));
     } else if (OB_FAIL(generator.set_params(insert_stmt_head_buff, load_args.file_cs_type_,
                                             session->get_sql_mode()))) {
-      LOG_WARN("fail to set pararms", K(ret));
+      LOG_WARN("fail to set params", K(ret));
     } else if (OB_FAIL(copy_exprs_for_shuffle_task(ctx, load_stmt, insert_infos,
                                                    generator.get_field_exprs(),
                                                    generator.get_insert_exprs()))) {
