@@ -731,10 +731,10 @@ public:
       /*
     if (OB_SUCC(ret) && need_replaced_to_loaded_data_from_file) {
       raw_expr = c_expr;
-      ObLoadDataReplacedExprInfo varable_info;
-      varable_info.replaced_expr = c_expr;
-      varable_info.correspond_file_field_idx = idx;
-      if (OB_FAIL(generator.add_file_column_replace_info(varable_info))) {
+      ObLoadDataReplacedExprInfo variable_info;
+      variable_info.replaced_expr = c_expr;
+      variable_info.correspond_file_field_idx = idx;
+      if (OB_FAIL(generator.add_file_column_replace_info(variable_info))) {
         LOG_WARN("push back replaced variable infos array failed", K(ret));
       }
     }
@@ -807,7 +807,7 @@ int ObLoadDataSPImpl::gen_load_table_column_desc(ObExecContext &ctx,
   // step 1: add c1 and c2
   //     the first column of file will be written to t1.c1, so c1 will be added to the generator
   //     similarly, the second column to t1.c2 which also will be added to the generator
-  // step 2: add c3 (calced by the first assign)
+  // step 2: add c3 (calculated by the first assign)
   //     @a, @b is not match column name, but their data will produce c3 by the "SET" clause,
   //     in result, c3 will be added
   //     in addition, replace expr @a with a const string expr which refer to a column from file
@@ -977,7 +977,7 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
   auto free_frag = [&] (ObTabletID tablet_id, ObDataFrag *frag) -> bool
   {
     if (OB_NOT_NULL(frag)) {
-      handle->datafrag_mgr.distory_datafrag(frag);
+      handle->datafrag_mgr.destory_datafrag(frag);
     }
     return true;
   };
@@ -1114,7 +1114,7 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
                 frag = new_frag;
                 frag->shuffle_task_id = task_id;
               } else {
-                handle->datafrag_mgr.distory_datafrag(new_frag);
+                handle->datafrag_mgr.destory_datafrag(new_frag);
               }
             }
           }
@@ -1633,7 +1633,7 @@ int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
         ret = found ? box.server_last_available_ts.update(addr, curr_time)
                     : box.server_last_available_ts.insert(addr, curr_time);
         if (OB_FAIL(ret)) {
-          LOG_WARN("failt to update server_last_available_ts",
+          LOG_WARN("failed to update server_last_available_ts",
                    K(ret), K(addr), K(found), K(is_leader_changed));
         }
       }
@@ -2039,7 +2039,7 @@ int ObPartDataFragMgr::free_frags()
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < frag_free_list_.count(); ++i) {
-    data_frag_mgr_.distory_datafrag(frag_free_list_[i]);
+    data_frag_mgr_.destory_datafrag(frag_free_list_[i]);
   }
   frag_free_list_.reuse();
   return ret;
@@ -2054,7 +2054,7 @@ int ObPartDataFragMgr::clear()
     //do nothing
   } else {
     while (OB_SUCC(ret) && OB_EAGAIN != queue_.pop(link)) {
-      data_frag_mgr_.distory_datafrag(static_cast<ObDataFrag *>(link));
+      data_frag_mgr_.destory_datafrag(static_cast<ObDataFrag *>(link));
     }
   }
   return ret;
@@ -2261,7 +2261,7 @@ int ObDataFragMgr::create_datafrag(ObDataFrag *&frag, int64_t min_len) {
   return ret;
 }
 
-void ObDataFragMgr::distory_datafrag(ObDataFrag *frag) {
+void ObDataFragMgr::destory_datafrag(ObDataFrag *frag) {
   if (OB_ISNULL(frag)) {
     //do nothing
   } else {
@@ -2763,7 +2763,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       LOG_WARN("fail to init generator", K(ret));
     } else if (OB_FAIL(generator.set_params(insert_stmt_head_buff, load_args.file_cs_type_,
                                             session->get_sql_mode()))) {
-      LOG_WARN("fail to set pararms", K(ret));
+      LOG_WARN("fail to set params", K(ret));
     } else if (OB_FAIL(copy_exprs_for_shuffle_task(ctx, load_stmt, insert_infos,
                                                    generator.get_field_exprs(),
                                                    generator.get_insert_exprs()))) {

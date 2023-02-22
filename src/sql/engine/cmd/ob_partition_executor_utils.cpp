@@ -235,7 +235,7 @@ int check_list_value_duplicate(T **partition_array,
             !ObSQLUtils::is_same_type_for_compare(tmp_row.get_cell(z).get_meta(),
                                                   row.get_cell(z).get_meta())) {
           ret = OB_ERR_PARTITION_VALUE_ERROR;
-          LOG_WARN("partiton value should have same meta info", K(ret), K(tmp_row), K(row), K(j));
+          LOG_WARN("partition value should have same meta info", K(ret), K(tmp_row), K(row), K(j));
         }
       }
       if (OB_SUCC(ret) && tmp_row == row) {
@@ -477,7 +477,7 @@ int ObPartitionExecutorUtils::set_range_part_high_bound(ObExecContext &ctx,
   ObSEArray<ObObj, OB_DEFAULT_ARRAY_SIZE> range_partition_obj;
   if (is_subpart && OB_UNLIKELY(!stmt.use_def_sub_part())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("subpart shoud be template", K(ret));
+    LOG_WARN("subpart should be template", K(ret));
   } else if (is_subpart && (OB_ISNULL(subpartition_array))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subpartition_array is NULL", K(ret));
@@ -633,7 +633,7 @@ int ObPartitionExecutorUtils::check_increasing_range_value(T **array,
               && !rowkey_cur->get_obj_ptr()[j].is_max_value()
               && !rowkey_last->get_obj_ptr()[j].is_max_value()) {
             ret = OB_ERR_PARTITION_VALUE_ERROR;
-            LOG_WARN("partiton value should have same meta info", K(ret), K(*rowkey_cur), K(*rowkey_last), K(j));
+            LOG_WARN("partition value should have same meta info", K(ret), K(*rowkey_cur), K(*rowkey_last), K(j));
           }
         }
       }
@@ -1221,7 +1221,7 @@ int ObPartitionExecutorUtils::set_list_part_rows(ObExecContext &ctx,
       table_schema.get_def_sub_part_num() : table_schema.get_first_part_num();
   if (is_subpart && OB_UNLIKELY(!stmt.use_def_sub_part())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("subpart shoud be template", K(ret));
+    LOG_WARN("subpart should be template", K(ret));
   } else if (is_subpart && (OB_ISNULL(subpartition_array))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null subpartition_array", K(ret));

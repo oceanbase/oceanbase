@@ -483,7 +483,7 @@ int ObVariableSetExecutor::set_user_variable(const ObObj &val,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else if (OB_FAIL(switch_to_session_variable(expr_ctx, val, sess_var))) {
-    LOG_WARN("fail to stiwch to session variablee", K(ret), K(val));
+    LOG_WARN("fail to switch to session variable", K(ret), K(val));
   } else if (OB_FAIL(session->replace_user_variable(*ctx, variable_name, sess_var))) {
     LOG_WARN("set variable to session plan failed", K(ret), K(variable_name));
   } else {
@@ -502,7 +502,7 @@ int ObVariableSetExecutor::set_user_variable(const ObObj &val,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else if (OB_FAIL(switch_to_session_variable(val, sess_var))) {
-    LOG_WARN("fail to stiwch to session variablee", K(ret), K(val));
+    LOG_WARN("fail to switch to session variable", K(ret), K(val));
   } else if (OB_FAIL(session->replace_user_variable(variable_name, sess_var))) {
     LOG_WARN("set variable to session plan failed", K(ret), K(variable_name));
   } else {
@@ -738,15 +738,15 @@ int ObVariableSetExecutor::global_variable_timezone_formalize(ObExecContext &ctx
   int32_t sec_val = 0;
   int ret_more = OB_SUCCESS;
   bool check_timezone_valid = false;
-  bool is_oralce_mode = false;
+  bool is_oracle_mode = false;
   ObSQLSessionInfo *session = ctx.get_my_session();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get session info", K(ret), K(session));
   } else {
-    is_oralce_mode = is_oracle_compatible(session->get_sql_mode());
+    is_oracle_mode = is_oracle_compatible(session->get_sql_mode());
     ObString str = in_val.get_string();
-    if (OB_FAIL(ObTimeConverter::str_to_offset(str, sec_val, ret_more, is_oralce_mode, check_timezone_valid))) {
+    if (OB_FAIL(ObTimeConverter::str_to_offset(str, sec_val, ret_more, is_oracle_mode, check_timezone_valid))) {
       if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
         LOG_WARN("fail to convert time zone", K(sec_val), K(ret));
       } else {
@@ -994,7 +994,7 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
           } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
             if (my_session->need_restore_auto_commit()) {
               ret = OB_OP_NOT_ALLOW;
-              LOG_WARN("not allow to set autocomit off", K(ret), K(xid));
+              LOG_WARN("not allow to set autocommit off", K(ret), K(xid));
             } else {
               LOG_INFO("set autocommit off in dblink trans", K(ret), K(xid));
             }

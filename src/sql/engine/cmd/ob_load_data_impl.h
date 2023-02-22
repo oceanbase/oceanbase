@@ -228,7 +228,7 @@ public:
   int get_part_datafrag(ObTabletID tablet_id, ObPartDataFragMgr *&part_datafrag_mgr);
   int64_t get_total_part_cnt() { return total_part_cnt_; }
   int create_datafrag(ObDataFrag *&frag, int64_t min_len);
-  void distory_datafrag(ObDataFrag *frag);
+  void destory_datafrag(ObDataFrag *frag);
   int free_unused_datafrag();
   int clear_all_datafrag();
   common::ObIArray<ObTabletID> &get_tablet_ids() { return tablet_ids_; }

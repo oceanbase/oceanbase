@@ -39,7 +39,7 @@ int ObDDLExecutorUtil::handle_session_exception(ObSQLSessionInfo &session)
     LOG_WARN("session is killed", K(ret));
   } else if (GCTX.is_standby_cluster()) {
     ret = OB_SESSION_KILLED;
-    LOG_INFO("cluster switchoverd, kill session", KR(ret));
+    LOG_INFO("cluster switchover, kill session", KR(ret));
   }
   return ret;
 }
@@ -94,7 +94,7 @@ int ObDDLExecutorUtil::wait_ddl_finish(
 
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(handle_session_exception(session))) {
-          LOG_WARN("session exeception happened", K(ret), K(is_support_cancel));
+          LOG_WARN("session exception happened", K(ret), K(is_support_cancel));
           if (is_support_cancel && OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
             LOG_WARN("cancel ddl task failed", K(tmp_ret));
             ret = OB_SUCCESS;
@@ -246,7 +246,7 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(handle_session_exception(session))) {
-          LOG_WARN("session exeception happened", K(ret));
+          LOG_WARN("session exception happened", K(ret));
           if (OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
             LOG_WARN("cancel ddl task failed", K(tmp_ret));
             ret = OB_SUCCESS;
