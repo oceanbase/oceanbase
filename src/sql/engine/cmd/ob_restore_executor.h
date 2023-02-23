@@ -27,6 +27,7 @@ public:
   virtual ~ObPhysicalRestoreTenantExecutor();
   int execute(ObExecContext &ctx, ObPhysicalRestoreTenantStmt &stmt);
 private:
+  int sync_wait_tenant_created_(ObExecContext &ctx, const ObString &tenant_name);
   int physical_restore_preview(ObExecContext &ctx, ObPhysicalRestoreTenantStmt &stmt);
 };
 } //end namespace sql
