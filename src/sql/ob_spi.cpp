@@ -5449,6 +5449,22 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             LOG_WARN("read result error", K(ret));
           }
         }
+        if (OB_SUCC(ret)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < bulk_tables.count(); ++i) {
+            ObPLCollection *table = bulk_tables.at(i);
+            CK (OB_NOT_NULL(table));
+            if (OB_SUCC(ret) && table->get_count() > 0) {
+              if (implicit_cursor == NULL || !implicit_cursor->get_in_forall()) {
+                // only clear table data, do not reset collection allocator,
+                // because fetch rows already copy to collection allocator, in store_result only do shadow copy.
+                table->set_count(0);
+                table->set_first(OB_INVALID_INDEX);
+                table->set_last(OB_INVALID_INDEX);
+                table->set_data(NULL);
+              }
+            }
+          }
+        }
         if (OB_SUCC(ret) && row_count > 0) { // 累积存储在pl table里
           OZ (store_result(bulk_tables, row_count, type_count, tmp_result,
                           NULL == implicit_cursor ? false : implicit_cursor->get_in_forall()));
