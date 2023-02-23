@@ -1658,6 +1658,17 @@ int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStoreHand
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret), K(tenant_id));
   } else {
+    SpinRLockGuard guard(lock_);
+    if (OB_FAIL(tenant_file_stores_.get_refactored(tenant_id, handle))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        STORAGE_LOG(DEBUG, "ObTmpFileStore get tenant store failed", K(ret), K(tenant_id));
+      } else {
+        STORAGE_LOG(WARN, "ObTmpFileStore get tenant store failed", K(ret), K(tenant_id));
+      }
+    }
+  }
+
+  if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
     SpinWLockGuard guard(lock_);
     if (OB_FAIL(tenant_file_stores_.get_refactored(tenant_id, handle))) {
       if (OB_HASH_NOT_EXIST == ret) {
