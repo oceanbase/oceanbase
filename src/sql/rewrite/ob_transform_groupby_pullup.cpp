@@ -674,6 +674,8 @@ int ObTransformGroupByPullup::get_trans_view(ObDMLStmt *stmt, ObSelectStmt *&vie
 int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelper &helper)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> view_select_exprs;
+  ObSEArray<ObRawExpr *, 4> stmt_column_exprs;
   ObSEArray<ObRawExpr *, 4> view_columns;
   ObSEArray<ObRawExpr *, 4> stmt_columns;
   ObSEArray<ObRawExpr *, 4> unique_exprs;
@@ -716,13 +718,17 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
     if (OB_ISNULL(select_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null select expr", K(ret));
-    } else if (!select_expr->has_flag(CNT_AGG)) {
-      //do nothing
     } else if (OB_FALSE_IT(column_id = i + OB_APP_MIN_COLUMN_ID)) {
     } else if (OB_ISNULL(col_expr = stmt->get_column_expr_by_id(table_item->table_id_, column_id))) {
       //未引用的，直接删除
       if (OB_FAIL(removed_idx.add_member(i))) {
         LOG_WARN("failed to add remove idx", K(ret));
+      }
+    } else if (!select_expr->has_flag(CNT_AGG)) {
+      if (OB_FAIL(view_select_exprs.push_back(select_expr))) {
+        LOG_WARN("failed to push back select expr", K(ret));
+      } else if (OB_FAIL(stmt_column_exprs.push_back(col_expr))) {
+        LOG_WARN("failed to push back column expr", K(ret));
       }
     } else if (OB_FAIL(aggr_select.push_back(select_expr))) {
       LOG_WARN("failed to push back select expr", K(ret));
@@ -754,16 +760,34 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
                                                                 view_columns,
                                                                 stmt_columns))) {
       LOG_WARN("failed to create view columns", K(ret));
+    } else if (OB_UNLIKELY(view_columns.count() != stmt_columns.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("view columns count mismatch", K(view_columns), K(stmt_columns), K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < view_columns.count(); ++i) {
+      if (OB_ISNULL(view_columns.at(i)) || OB_ISNULL(stmt_columns.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null view column", K(ret));
+      } else if (ObOptimizerUtil::find_item(view_select_exprs, view_columns.at(i))) {
+        // do nothing
+      } else if (OB_FAIL(view_select_exprs.push_back(view_columns.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(stmt_column_exprs.push_back(stmt_columns.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret)) {
     ObRawExprCopier copier(*ctx_->expr_factory_);
     ObArray<ObRawExpr *> uncopy_list;
+    ObArray<ObRawExpr *> subquery_exprs;
     //拉出select aggr items, group by exprs、aggr items、having exprs
-    if (OB_FAIL(copier.add_replaced_expr(view_columns, stmt_columns))) {
+    if (OB_FAIL(append(subquery_exprs, subquery->get_subquery_exprs()))) {
+      LOG_WARN("failed to append exprs", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::except_exprs(subquery_exprs, view_select_exprs, uncopy_list))) {
+      LOG_WARN("failed to except exprs", K(ret));
+    } else if (OB_FAIL(copier.add_replaced_expr(view_select_exprs, stmt_column_exprs))) {
       LOG_WARN("failed to add replaced expr", K(ret));
-    } else if (OB_FAIL(append(uncopy_list, subquery->get_subquery_exprs()))) {
-      LOG_WARN("failed to append uncopy list", K(ret));
     } else if (OB_FAIL(copier.copy_on_replace(subquery->get_group_exprs(),
                                               subquery->get_group_exprs(),
                                               NULL,
