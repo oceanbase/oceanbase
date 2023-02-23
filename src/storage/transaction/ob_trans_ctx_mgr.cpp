@@ -4219,6 +4219,10 @@ int ObPartTransCtxMgr::iterate_trans_stat_without_partition(ObTransStatIterator&
     tg.click();
     TRANS_LOG(DEBUG, "ObTransStatIterator set ready success");
   }
+  // ignore retcode when virtual table access error
+  if (OB_PARTITION_NOT_EXIST == ret || OB_EAGAIN == ret) {
+    ret = OB_SUCCESS;
+  }
 
   return ret;
 }
@@ -4242,6 +4246,10 @@ int ObPartTransCtxMgr::print_all_trans_ctx(const ObPartitionKey& partition)
   } else {
     const bool verbose = true;
     ctx_mgr->print_all_ctx(ObPartitionTransCtxMgr::MAX_HASH_ITEM_PRINT, verbose);
+  }
+  // ignore retcode when virtual table access error
+  if (OB_PARTITION_NOT_EXIST == ret || OB_EAGAIN == ret) {
+    ret = OB_SUCCESS;
   }
 
   return ret;
@@ -4269,6 +4277,10 @@ int ObPartTransCtxMgr::iterate_trans_lock_stat(
   } else {
     TRANS_LOG(DEBUG, "ObTransLockStatIterator set ready success", K(partition));
   }
+  // ignore retcode when virtual table access error
+  if (OB_PARTITION_NOT_EXIST == ret || OB_EAGAIN == ret) {
+    ret = OB_SUCCESS;
+  }
 
   return ret;
 }
@@ -4294,6 +4306,10 @@ int ObPartTransCtxMgr::iterate_trans_result_info_in_TRIM(
     TRANS_LOG(WARN, "iterate transaction result info stat error", KR(ret), K(partition));
   } else {
     TRANS_LOG(DEBUG, "ObTransResultInfoStatIterator set ready success", K(partition));
+  }
+  // ignore retcode when virtual table access error
+  if (OB_PARTITION_NOT_EXIST == ret || OB_EAGAIN == ret) {
+    ret = OB_SUCCESS;
   }
 
   return ret;
@@ -4321,6 +4337,10 @@ int ObPartTransCtxMgr::iterate_duplicate_partition_stat(
     TRANS_LOG(WARN, "iterate duplicate partition stat error", KR(ret), K(partition));
   } else {
     TRANS_LOG(DEBUG, "iterate duplicate partition stat success", K(partition));
+  }
+  // ignore retcode when virtual table access error
+  if (OB_PARTITION_NOT_EXIST == ret || OB_EAGAIN == ret) {
+    ret = OB_SUCCESS;
   }
 
   return ret;
