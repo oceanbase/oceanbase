@@ -705,6 +705,7 @@ int ObQueryRange::check_graph_type()
     int64_t depth = -1;
     int64_t column_count = column_count_;
     bool is_terminated = false;
+    bool is_phy_rowid_key_part = false;
     for (ObKeyPart *cur = table_graph_.key_part_head_; !is_terminated && NULL != cur; cur = cur->and_next_) {
       if (cur->pos_.offset_ != (++depth)) {
         table_graph_.is_precise_get_ = false;
@@ -717,7 +718,7 @@ int ObQueryRange::check_graph_type()
       } else if (!cur->is_equal_condition()) {
         table_graph_.is_precise_get_ = false;
       } else {
-        // do nothing
+        is_phy_rowid_key_part = cur->is_phy_rowid_key_part();
       }
       if (OB_SUCC(ret) && !is_terminated) {
         if (is_strict_in_graph(cur)) {
@@ -735,7 +736,7 @@ int ObQueryRange::check_graph_type()
       max_pos = is_terminated ? max_pos : depth + 1;
       if (OB_FAIL(remove_precise_range_expr(max_pos))) {
         LOG_WARN("remove precise range expr failed", K(ret));
-      } else if (table_graph_.is_precise_get_ && depth != column_count - 1) {
+      } else if (table_graph_.is_precise_get_ && depth != column_count - 1 && !is_phy_rowid_key_part) {
         table_graph_.is_precise_get_ = false;
       }
     }
@@ -4246,6 +4247,7 @@ int ObQueryRange::generate_single_range(ObSearchState &search_state,
     LOG_ERROR("alloc memory for end_obj failed", K(ret));
   } else {
     int64_t max_pred_index = search_state.max_exist_index_;
+    column_num = search_state.is_phy_rowid_range_ ? 1 : column_num;//physcial rowid range just use only one column
     for (int i = 0; OB_SUCC(ret) && i < column_num; i++) {
       new(start + i) ObObj();
       new(end + i) ObObj();
