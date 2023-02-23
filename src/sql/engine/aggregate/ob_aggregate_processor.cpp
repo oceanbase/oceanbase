@@ -2625,6 +2625,7 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
 
 int ObAggregateProcessor::extend_concat_str_buf(
   const ObString &pad_str,
+  const ObCollationType cs_type,
   const int64_t pos,
   const int64_t group_concat_cur_row_num,
   int64_t &append_len,
@@ -2664,7 +2665,18 @@ int ObAggregateProcessor::extend_concat_str_buf(
         LOG_WARN("result of string concatenation is too long", K(ret),
                 K(pad_str.length()), K(pos), K(concat_str_max_len_));
       } else {
-        LOG_USER_WARN(OB_ERR_CUT_VALUE_GROUP_CONCAT, group_concat_cur_row_num + 1);
+        int64_t well_formed_len = 0;
+        int32_t well_formed_error = 0;
+        if (OB_FAIL(ObCharset::well_formed_len(cs_type,
+                                               pad_str.ptr(),
+                                               append_len,
+                                               well_formed_len,
+                                               well_formed_error))) {
+          LOG_WARN("invalid string for charset", K(ret), K(cs_type), K(pad_str));
+        } else {
+          append_len = well_formed_len;
+          LOG_USER_WARN(OB_ERR_CUT_VALUE_GROUP_CONCAT, group_concat_cur_row_num + 1);
+        }
       }
     }
   }
@@ -2905,6 +2917,7 @@ int ObAggregateProcessor::collect_aggr_result(
         int64_t group_concat_cur_row_num = 0;
         bool first_item_printed = false;
         const int64_t group_concat_param_count = aggr_info.group_concat_param_count_;
+        const ObCollationType cs_type = aggr_info.expr_->datum_meta_.cs_type_;
         while(OB_SUCC(ret)
               && !buf_is_full
               && OB_SUCC(extra->get_next_row(storted_row))) {
@@ -2921,7 +2934,7 @@ int ObAggregateProcessor::collect_aggr_result(
             if (group_concat_cur_row_num != 0) {
               int64_t append_len = sep_str.length();
               if (OB_FAIL(extend_concat_str_buf(
-                  sep_str, pos, group_concat_cur_row_num, append_len, buf_is_full))) {
+                  sep_str, cs_type, pos, group_concat_cur_row_num, append_len, buf_is_full))) {
                 LOG_WARN("failed to extend concat str buf", K(ret));
               } else if (cur_concat_buf_len_ < append_len + pos) {
                 ret = OB_ERR_UNEXPECTED;
@@ -2936,7 +2949,7 @@ int ObAggregateProcessor::collect_aggr_result(
             for (int64_t i = 0; OB_SUCC(ret) && !buf_is_full && i < group_concat_param_count; ++i) {
               const ObString cell_string = storted_row->cells()[i].get_string();
               int64_t append_len = cell_string.length();
-              if (OB_FAIL(extend_concat_str_buf(cell_string, pos,
+              if (OB_FAIL(extend_concat_str_buf(cell_string, cs_type, pos,
                   group_concat_cur_row_num, append_len, buf_is_full))) {
                 LOG_WARN("failed to extend concat str buf", K(ret));
               } else if (cur_concat_buf_len_ < append_len + pos) {

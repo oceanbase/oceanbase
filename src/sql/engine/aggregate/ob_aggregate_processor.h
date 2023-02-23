@@ -738,6 +738,7 @@ private:
     const ObAggrInfo &aggr_info,
     const int64_t max_cnt);
   int extend_concat_str_buf(const ObString &pad_str,
+                            const ObCollationType cs_type,
                             const int64_t pos,
                             const int64_t group_concat_cur_row_num,
                             int64_t &append_len,
