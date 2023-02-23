@@ -38,7 +38,7 @@ void* __attribute__((weak)) alloc_worker()
 // static variables
 RLOCAL(Worker*, Worker::self_);
 
-Worker::Worker() : allocator_(nullptr), req_flag_(false), worker_level_(INT32_MAX), curr_request_level_(0), group_id_(0)
+Worker::Worker() : allocator_(nullptr), req_flag_(false), worker_level_(INT32_MAX), curr_request_level_(0), group_id_(0), rpc_stat_srv_(nullptr)
 {}
 
 bool Worker::sched_wait()

@@ -101,7 +101,7 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, Handle* handle, const ObRpcOpts&
     rpc::RpcStatPiece piece;
     piece.size_ = payload;
     piece.time_ = ObTimeUtility::current_time() - req.pkt()->get_timestamp();
-    RPC_STAT(pcode, piece);
+    RPC_STAT(pcode, tenant_id_, piece);
 
     ObReqTransport::Result<ObRpcPacket> r;
     if (OB_FAIL(send_request(req, r))) {
@@ -148,7 +148,7 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, Handle* handle, const ObRpcOpts&
       piece.is_timeout_ = true;
     }
   }
-  RPC_STAT(pcode, piece);
+  RPC_STAT(pcode, tenant_id_, piece);
 
   return ret;
 }

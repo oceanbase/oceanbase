@@ -6656,6 +6656,7 @@ def_table_schema(
       ('queue_time', 'int'),
       ('process_time', 'int'),
       ('ilast_timestamp', 'timestamp'),
+      ('dcount', 'int'),
   ],
     partition_columns = ['svr_ip', 'svr_port'],
 )
@@ -11726,7 +11727,8 @@ SELECT
     WAIT_TIME,
     QUEUE_TIME,
     PROCESS_TIME,
-    ILAST_TIMESTAMP AS LAST_TIMESTAMP
+    ILAST_TIMESTAMP AS LAST_TIMESTAMP,
+    DCOUNT
 FROM
     oceanbase.__all_virtual_obrpc_stat
 WHERE

@@ -1620,7 +1620,7 @@ int ObInnerTableSchema::gv_obrpc_incoming_schema(ObTableSchema &table_schema)
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     TENANT_ID,     SVR_IP AS IP,     SVR_PORT AS PORT,     PCODE,     PCODE_NAME,     ICOUNT AS COUNT,     ISIZE AS TOTAL_SIZE,     NET_TIME,     WAIT_TIME,     QUEUE_TIME,     PROCESS_TIME,     ILAST_TIMESTAMP AS LAST_TIMESTAMP FROM     oceanbase.__all_virtual_obrpc_stat WHERE         EFFECTIVE_TENANT_ID()=1     OR         TENANT_ID=EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     TENANT_ID,     SVR_IP AS IP,     SVR_PORT AS PORT,     PCODE,     PCODE_NAME,     ICOUNT AS COUNT,     ISIZE AS TOTAL_SIZE,     NET_TIME,     WAIT_TIME,     QUEUE_TIME,     PROCESS_TIME,     ILAST_TIMESTAMP AS LAST_TIMESTAMP,     DCOUNT FROM     oceanbase.__all_virtual_obrpc_stat WHERE         EFFECTIVE_TENANT_ID()=1     OR         TENANT_ID=EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

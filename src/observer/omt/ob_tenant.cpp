@@ -29,6 +29,10 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/resource_manager/ob_resource_manager.h"
+#include "sql/dtl/ob_dtl_fc_server.h"
+#include "common/ob_smart_var.h"
+#include "rpc/obrpc/ob_rpc_packet.h"
+#include "lib/container/ob_array_iterator.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -288,6 +292,48 @@ void ObResourceGroup::check_worker_count(ObThWorker& w)
   }
 }
 
+int64_t RpcStatInfo::to_string(char *buf, const int64_t len) const
+{
+  int64_t pos = 0;
+  int ret = OB_SUCCESS;
+  struct PcodeDcount{
+    obrpc::ObRpcPacketCode pcode_;
+    int64_t dcount_;
+    bool operator <(const PcodeDcount &other) const { return dcount_ > other.dcount_; }
+    int64_t to_string(char* buf, const int64_t len) const { UNUSED(buf); UNUSED(len); return 0L; }
+  };
+  SMART_VAR(ObArray<PcodeDcount>, pd_array) {
+    obrpc::ObRpcPacketSet &set = obrpc::ObRpcPacketSet::instance();
+    for (int64_t pcode_idx = 0; (OB_SUCCESS == ret) && (pcode_idx < obrpc::ObRpcPacketSet::THE_PCODE_COUNT); pcode_idx++) {
+      PcodeDcount pd_item;
+      RpcStatItem item;
+      if (OB_FAIL(rpc_stat_srv_.get(pcode_idx, item))) {
+        //continue
+      } else if (item.dcount_ != 0) {
+        pd_item.pcode_ = set.pcode_of_idx(pcode_idx);
+        pd_item.dcount_ = item.dcount_;
+        if (OB_FAIL(pd_array.push_back(pd_item))) {
+          //break
+        }
+      }
+    }
+    if (OB_SUCC(ret) && pd_array.size() > 0) {
+      std::make_heap(pd_array.begin(), pd_array.end());
+      std::sort_heap(pd_array.begin(), pd_array.end());
+      for (int i = 0; i < min(5, pd_array.size()); i++) {
+        databuff_printf(buf, len, pos, " pcode=0x%x:cnt=%ld",
+          pd_array.at(i).pcode_, pd_array.at(i).dcount_);
+      }
+    }
+  }
+  for (int64_t pcode_idx = 0; pcode_idx < obrpc::ObRpcPacketSet::THE_PCODE_COUNT; pcode_idx++) {
+    RpcStatPiece piece;
+    piece.reset_dcount_ = true;
+    rpc_stat_srv_.add(pcode_idx, piece);
+  }
+  return pos;
+}
+
 ObTenant::ObTenant(
     const int64_t id, const int64_t times_of_workers, ObWorkerPool& worker_pool, ObCgroupCtrl& cgroup_ctrl)
     : ObTenantBase(id),
@@ -330,6 +376,7 @@ ObTenant::ObTenant(
       worker_pool_(worker_pool),
       lock_(),
       group_map_(nullptr),
+      rpc_stat_info_(nullptr),
       cgroup_ctrl_(cgroup_ctrl),
       disable_user_sched_(false),
       idle_us_(0),
@@ -373,6 +420,9 @@ int ObTenant::init()
     LOG_WARN("alloc ObMultiLevelQueue failed", K(ret), K(*this));
   } else if (OB_FAIL(multi_level_queue_->init(common::ObServerConfig::get_instance().tenant_task_queue_size))) {
     LOG_WARN("ObMultiLevelQueue init failed", K(ret), K_(id), K(*this));
+  } else if (nullptr == (rpc_stat_info_ = OB_NEW(RpcStatInfo, ObModIds::OMT_TENANT, id_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc RpcStatService failed", K(ret), K(*this));
   }
   stopped_ = false;
   if (cgroup_ctrl_.is_valid() && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.create_tenant_cgroup(id_))) {
@@ -407,6 +457,9 @@ int ObTenant::init()
   }
   if (OB_SUCCESS != ret && nullptr != multi_level_queue_) {
     common::ob_delete(multi_level_queue_);
+  }
+  if (OB_SUCCESS != ret && nullptr != rpc_stat_info_) {
+    common::ob_delete(rpc_stat_info_);
   }
   return ret;
 }

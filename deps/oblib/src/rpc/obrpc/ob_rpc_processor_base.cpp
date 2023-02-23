@@ -507,7 +507,10 @@ void ObRpcProcessorBase::cleanup()
     piece.wait_time_ = get_enqueue_timestamp() - get_receive_timestamp();
     piece.queue_time_ = get_run_timestamp() - get_enqueue_timestamp();
     piece.process_time_ = common::ObTimeUtility::current_time() - get_run_timestamp();
-    RPC_STAT(static_cast<ObRpcPacketCode>(m_get_pcode()), piece);
+    if (0 == tenant_id_) {
+      RPC_OBRPC_LOG(WARN, "tenant_id of rpc_pkt is 0");
+    }
+    RPC_STAT(static_cast<ObRpcPacketCode>(m_get_pcode()), tenant_id_, piece);
   }
 }
 

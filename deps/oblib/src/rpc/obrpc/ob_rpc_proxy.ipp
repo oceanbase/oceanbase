@@ -40,7 +40,7 @@ void ObRpcProxy::AsyncCB<pcodeStruct>::do_first()
       piece.failed_ = true;
     }
   }
-  RPC_STAT(pcodeStruct::PCODE, piece);
+  RPC_STAT(pcodeStruct::PCODE, tenant_id_,  piece);
 }
 
 template <class pcodeStruct>
@@ -417,7 +417,7 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input& args, Out& result, 
       piece.is_timeout_ = true;
     }
   }
-  RPC_STAT(pcode, piece);
+  RPC_STAT(pcode, tenant_id_, piece);
 
   return ret;
 }
@@ -503,7 +503,7 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input& args, Handle* handl
       piece.is_timeout_ = true;
     }
   }
-  RPC_STAT(pcode, piece);
+  RPC_STAT(pcode, tenant_id_, piece);
 
   return ret;
 }
@@ -551,7 +551,7 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, Output& result, Handle* handle, 
       rpc::RpcStatPiece piece;
       piece.size_ = 0;
       piece.time_ = ObTimeUtility::current_time() - req.pkt()->get_timestamp();
-      RPC_STAT(pcode, piece);
+      RPC_STAT(pcode, tenant_id_, piece);
 
       const char* buf = r.pkt()->get_cdata();
       int64_t len = r.pkt()->get_clen();
@@ -595,7 +595,7 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, Output& result, Handle* handle, 
       piece.is_timeout_ = true;
     }
   }
-  RPC_STAT(pcode, piece);
+  RPC_STAT(pcode, tenant_id_, piece);
 
   return ret;
 }

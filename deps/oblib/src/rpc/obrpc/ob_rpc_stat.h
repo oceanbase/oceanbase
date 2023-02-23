@@ -17,21 +17,15 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/random/ob_random.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "lib/list/ob_dlist.h"
 
 namespace oceanbase {
 namespace rpc {
 struct RpcStatPiece {
   RpcStatPiece()
-      : time_(),
-        size_(),
-        async_(),
-        failed_(),
-        is_timeout_(),
-        is_server_(),
-        net_time_(),
-        wait_time_(),
-        queue_time_(),
-        process_time_()
+      : time_(), size_(), async_(), failed_(), is_timeout_(),
+        is_server_(), net_time_(),
+        wait_time_(), queue_time_(), process_time_(), is_deliver_(false), reset_dcount_(false)
   {}
   int64_t time_;
   int64_t size_;
@@ -45,6 +39,8 @@ struct RpcStatPiece {
   int64_t wait_time_;
   int64_t queue_time_;
   int64_t process_time_;
+  bool is_deliver_;
+  bool reset_dcount_;
 };
 
 struct RpcStatItem {
@@ -84,6 +80,7 @@ struct RpcStatItem {
     queue_time_ += item.queue_time_;
     process_time_ += item.process_time_;
     ilast_ts_ = std::max(ilast_ts_, item.ilast_ts_);
+    dcount_ += item.dcount_;
   }
 
   common::ObSpinLock lock_;
@@ -107,6 +104,7 @@ struct RpcStatItem {
   int64_t queue_time_;
   int64_t process_time_;
   int64_t ilast_ts_;
+  int64_t dcount_;
 };
 
 template <int N>
@@ -136,8 +134,6 @@ public:
   int add(int64_t pidx, const RpcStatPiece& piece);
   int get(int64_t pidx, RpcStatItem& item) const;
 
-  static RpcStatService* instance();
-
 private:
   RpcStatEntry entries_[MAX_PCODE_COUNT];
 };
@@ -145,15 +141,22 @@ private:
 template <int N>
 void RpcStatBulk<N>::add_piece(const RpcStatPiece& piece)
 {
-  const int64_t start = rand_.get(0, N - 1);
-  for (int64_t i = 0;; i++) {
-    const int64_t idx = (i + start) % N;
-    if (common::OB_SUCCESS == items_[idx].lock_.trylock()) {
-      items_[idx].add_piece(piece);
-      if (OB_UNLIKELY(common::OB_SUCCESS != items_[idx].lock_.unlock())) {
-        RPC_LOG(ERROR, "unlock fail");
+  if (piece.reset_dcount_){
+    for (int64_t i = 0; i < N; i++) {
+      // only reset dcount, no need lock
+      items_[i].add_piece(piece);
+    }
+  } else {
+    const int64_t start = rand_.get(0, N - 1);
+    for (int64_t i = 0;; i++) {
+      const int64_t idx = (i + start) % N;
+      if (common::OB_SUCCESS == items_[idx].lock_.trylock()) {
+        items_[idx].add_piece(piece);
+        if (OB_UNLIKELY(common::OB_SUCCESS != items_[idx].lock_.unlock())) {
+          RPC_LOG(ERROR, "unlock fail");
+        }
+        break;
       }
-      break;
     }
   }
 }
@@ -167,24 +170,28 @@ void RpcStatBulk<N>::get_item(RpcStatItem& item) const
   }
 }
 
-// interfaces
-inline void RPC_STAT(obrpc::ObRpcPacketCode pcode, const RpcStatPiece& piece)
+extern RpcStatService *get_stat_srv_by_tenant_id(uint64_t tenant_id);
+
+inline void RPC_STAT(obrpc::ObRpcPacketCode pcode, uint64_t tenant_id, const RpcStatPiece &piece)
 {
-  RpcStatService* srv = RpcStatService::instance();
-  if (NULL != srv) {
+  RpcStatService *srv = nullptr;
+  if ((nullptr == (srv = reinterpret_cast<RpcStatService*>(lib::this_worker().get_rpc_stat_srv())))
+    && (nullptr == (srv = get_stat_srv_by_tenant_id(tenant_id)))) {
+    // cant find rpc_stat_srv_, so do nothing
+  } else {
     const int64_t idx = obrpc::ObRpcPacketSet::instance().idx_of_pcode(pcode);
     srv->add(idx, piece);
   }
 }
 
-inline int RPC_STAT_GET(int64_t idx, RpcStatItem& item)
+inline int RPC_STAT_GET(int64_t idx, uint64_t tenant_id, RpcStatItem &item)
 {
   int ret = common::OB_SUCCESS;
-  RpcStatService* srv = RpcStatService::instance();
-  if (NULL != srv) {
-    srv->get(idx, item);
+  RpcStatService *srv = nullptr;
+  if (nullptr == (srv = get_stat_srv_by_tenant_id(tenant_id))) {
+    ret = common::OB_ENTRY_NOT_EXIST;
   } else {
-    ret = common::OB_NOT_INIT;
+    ret = srv->get(idx, item);
   }
   return ret;
 }

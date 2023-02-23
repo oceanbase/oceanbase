@@ -90,6 +90,9 @@ public:
     return group_id_;
   }
 
+  void set_rpc_stat_srv(void *rpc_stat_srv) { rpc_stat_srv_ = rpc_stat_srv; }
+  void *get_rpc_stat_srv() const { return rpc_stat_srv_; }
+
 public:
   // static variables
   static Worker& self();
@@ -109,6 +112,7 @@ private:
   int32_t worker_level_;
   int32_t curr_request_level_;
   int32_t group_id_;
+  void* rpc_stat_srv_;
 
   DISALLOW_COPY_AND_ASSIGN(Worker);
 };  // end of class Worker

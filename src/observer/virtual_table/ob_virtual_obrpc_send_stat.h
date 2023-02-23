@@ -14,6 +14,7 @@
 #define _OCEABASE_OBSERVER_VIRTUAL_TABLE_OB_VIRTUAL_OBRPC_SEND_STAT_H_
 
 #include "share/ob_virtual_table_iterator.h"
+#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase {
 namespace observer {
@@ -23,8 +24,8 @@ public:
   ObVirtualObRpcSendStat();
   virtual ~ObVirtualObRpcSendStat();
 
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-
+  virtual int inner_get_next_row(common::ObNewRow *&row);
+  virtual void reset();
 private:
   enum CACHE_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
@@ -54,11 +55,16 @@ private:
     WAIT_TIME,
     QUEUE_TIME,
     PROCESS_TIME,
-    ILAST_TIMESTAMP
+    ILAST_TIMESTAMP,
+    DCOUNT
   };
 
   int64_t pcode_idx_;
-};  // end of class ObVirtualObRpcSendStat
+  int tenant_idx_;
+  int tenant_cnt_;
+  omt::TenantIdList tenant_ids_;
+  bool has_start_;
+}; // end of class ObVirtualObRpcSendStat
 
 }  // end of namespace observer
 }  // end of namespace oceanbase

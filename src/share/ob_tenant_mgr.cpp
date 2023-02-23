@@ -23,6 +23,9 @@
 #include "share/allocator/ob_memstore_allocator_mgr.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "observer/ob_server.h"
+#include "lib/alloc/malloc_hook.h"
+#include "rpc/obrpc/ob_rpc_stat.h"
+#include "observer/omt/ob_tenant.h"
 
 int64_t get_virtual_memory_used()
 {
@@ -35,8 +38,25 @@ int64_t get_virtual_memory_used()
   return page_cnt * sysconf(_SC_PAGESIZE);
 }
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+
+namespace rpc
+{
+RpcStatService *get_stat_srv_by_tenant_id(uint64_t tenant_id)
+{
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  omt::ObTenant *tenant = nullptr;
+  RpcStatService *srv = nullptr;
+  if ((nullptr != omt) && (OB_SUCCESS == GCTX.omt_->get_tenant(tenant_id, tenant)) && (nullptr != tenant)) {
+    srv = &(tenant->rpc_stat_info_->rpc_stat_srv_);
+  }
+  return srv;
+}
+}
+
+namespace obrpc
+{
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 using namespace oceanbase::share;

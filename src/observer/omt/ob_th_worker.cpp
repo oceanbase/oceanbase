@@ -447,6 +447,7 @@ void ObThWorker::worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t
                     query_start_time_ = wait_end_time;
                     query_enqueue_time_ = req->get_enqueue_timestamp();
                     last_check_time_ = wait_end_time;
+                    set_rpc_stat_srv(&(tenant_->rpc_stat_info_->rpc_stat_srv_));
                     process_request(*req);
                     query_enqueue_time_ = INT64_MAX;
                     query_start_time_ = INT64_MAX;

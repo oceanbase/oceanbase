@@ -43,6 +43,7 @@ public:
         using_buffer_(NULL),
         send_timestamp_(0),
         pkt_size_(0),
+        tenant_id_(0),
         result_compress_type_(common::INVALID_COMPRESSOR),
         unis_version_(lib::get_unis_global_compat_version())
   {}
@@ -53,6 +54,7 @@ public:
     rpc::frame::ObReqProcessor::set_ob_request(req);
     rpc_pkt_ = &reinterpret_cast<const ObRpcPacket&>(req.get_packet());
     pkt_size_ = rpc_pkt_->get_clen();
+    tenant_id_ = rpc_pkt_->get_tenant_id();
     send_timestamp_ = req.get_send_timestamp();
   }
 
@@ -177,6 +179,7 @@ protected:
 
   int64_t send_timestamp_;
   int64_t pkt_size_;
+  int64_t tenant_id_;
   // compress the result if not INVALID_COMPRESSOR
   common::ObCompressorType result_compress_type_;
   const uint64_t unis_version_;

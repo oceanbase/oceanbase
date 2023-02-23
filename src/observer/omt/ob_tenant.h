@@ -35,6 +35,7 @@
 #include "ob_retry_queue.h"
 #include "lib/utility/ob_query_rate_limiter.h"
 #include "observer/omt/ob_cgroup_ctrl.h"
+#include "rpc/obrpc/ob_rpc_stat.h"
 
 namespace oceanbase {
 namespace observer {
@@ -348,6 +349,18 @@ private:
   bool inited_;
 };
 
+class RpcStatInfo
+{
+public:
+  RpcStatInfo(int64_t tenant_id):
+    tenant_id_(tenant_id)
+  {}
+  ~RpcStatInfo() {}
+  int64_t to_string(char *buf, const int64_t len) const;
+  mutable rpc::RpcStatService rpc_stat_srv_;
+  int64_t tenant_id_;
+};
+
 // Except for get_new_request wakeup_paused_worker recv_request, all
 // other functions aren't thread safe.
 class ObTenant : public share::ObTenantBase {
@@ -432,7 +445,7 @@ public:
       K_(recv_large_req_cnt), K_(tt_large_quries), K_(pop_normal_cnt), K_(actives), "workers", workers_.get_size(),
       "nesting workers", nesting_workers_.get_size(), "lq waiting workers", lq_waiting_workers_.get_size(),
       K_(req_queue), "large queued", large_req_queue_.size(), K_(multi_level_queue), K_(recv_level_rpc_cnt),
-      K_(group_map))
+      K_(group_map), K_(rpc_stat_info))
 public:
   static bool equal(const ObTenant* t1, const ObTenant* t2)
   {
@@ -598,6 +611,7 @@ public:
   WList lq_waiting_workers_;
   WList nesting_workers_;
   GroupMap* group_map_;
+  RpcStatInfo *rpc_stat_info_;
 
   lib::ObMutex workers_lock_;
   lib::ObMutex lq_waiting_workers_lock_;

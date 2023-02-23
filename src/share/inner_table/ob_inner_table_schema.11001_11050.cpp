@@ -17168,6 +17168,21 @@ int ObInnerTableSchema::all_virtual_obrpc_stat_schema(ObTableSchema &table_schem
       false, //is_autoincrement
       false); //is_on_update_for_timestamp
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("dcount", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_func_type(PARTITION_FUNC_TYPE_HASH);
     if (OB_FAIL(table_schema.get_part_option().set_part_expr("hash (addr_to_partition_id(svr_ip, svr_port))"))) {

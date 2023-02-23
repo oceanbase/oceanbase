@@ -1534,6 +1534,7 @@ WAIT_TIME	bigint(20)	NO		NULL
 QUEUE_TIME	bigint(20)	NO		NULL	
 PROCESS_TIME	bigint(20)	NO		NULL	
 LAST_TIMESTAMP	timestamp(6)	NO		NULL	
+DCOUNT	bigint(20)	NO		NULL
 desc oceanbase.gv$obrpc_outgoing;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO		NULL	
@@ -2200,6 +2201,7 @@ WAIT_TIME	bigint(20)	NO
 QUEUE_TIME	bigint(20)	NO			
 PROCESS_TIME	bigint(20)	NO			
 LAST_TIMESTAMP	timestamp(6)	NO			
+DCOUNT	bigint(20)	NO
 desc oceanbase.v$obrpc_outgoing;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO			
@@ -4919,6 +4921,7 @@ wait_time	bigint(20)	NO		NULL
 queue_time	bigint(20)	NO		NULL	
 process_time	bigint(20)	NO		NULL	
 ilast_timestamp	timestamp(6)	NO		NULL	
+dcount	bigint(20)	NO		NULL
 desc oceanbase.__all_virtual_partition_amplification_stat;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

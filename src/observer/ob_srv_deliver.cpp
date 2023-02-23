@@ -173,6 +173,10 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest& req)
     }
   } else if (NULL != tenant) {
     SERVER_LOG(DEBUG, "deliver tenant packet", K(queue), K(tenant->id()));
+    RpcStatPiece piece;
+    piece.is_server_ = true;
+    piece.is_deliver_ = true;
+    RPC_STAT(pkt.get_pcode(), tenant->id(), piece);
     if (OB_FAIL(tenant->recv_request(req))) {
       if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
         LOG_WARN("tenant receive request fail", K(*tenant), K(req));
