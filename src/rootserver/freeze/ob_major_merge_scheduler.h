@@ -152,6 +152,9 @@ private:
   int update_global_merge_info_after_merge(const int64_t expected_epoch);
 
   int do_update_freeze_service_epoch(const int64_t latest_epoch);
+  int update_epoch_in_memory_and_reload();
+  int get_epoch_with_retry(int64_t &freeze_service_epoch);
+  int do_update_and_reload(const int64_t epoch);
 
   void check_merge_interval_time(const bool is_merging);
 
