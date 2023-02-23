@@ -5180,7 +5180,7 @@ int ObLogicalOperator::allocate_dummy_access()
             if (OB_ISNULL(column_schema = index_schema->get_column_schema(column_id))) {
               ret = OB_SCHEMA_ERROR;
               LOG_WARN("Failed to get column schema from index_schema", K(ret), K(column_id));
-            } else if (column_schema->is_virtual_generated_column() || column_schema->is_rowid_pseudo_column()) {
+            } else if (column_schema->is_generated_column() || column_schema->is_rowid_pseudo_column()) {
               column_schema = NULL;
               LOG_DEBUG("got virtual column ignore", K(ret));
             } else {
