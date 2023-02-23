@@ -648,15 +648,16 @@ int ObRestoreService::tenant_restore_finish(const ObPhysicalRestoreJob &job_info
 {
   int ret = OB_SUCCESS;
   ObHisRestoreJobPersistInfo history_info;
+  bool restore_tenant_exist = true;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
-  } else if (OB_FAIL(reset_restore_concurrency_(job_info.get_tenant_id(), job_info))) {
-    LOG_WARN("failed to reset restore concurrency", K(ret), K(job_info));
-  } else if (OB_FAIL(try_get_tenant_restore_history_(job_info, history_info))) {
+  } else if (OB_FAIL(try_get_tenant_restore_history_(job_info, history_info, restore_tenant_exist))) {
     LOG_WARN("failed to get user tenant restory info", KR(ret), K(job_info));
+  } else if (restore_tenant_exist && OB_FAIL(reset_restore_concurrency_(job_info.get_tenant_id(), job_info))) {
+    LOG_WARN("failed to reset restore concurrency", K(ret), K(job_info));
   } else if (share::PHYSICAL_RESTORE_SUCCESS == job_info.get_status()) {
     //restore success
   }
@@ -686,11 +687,12 @@ int ObRestoreService::check_stop() const
 
 int ObRestoreService::try_get_tenant_restore_history_(
     const ObPhysicalRestoreJob &job_info,
-    ObHisRestoreJobPersistInfo &history_info)
+    ObHisRestoreJobPersistInfo &history_info,
+    bool &restore_tenant_exist)
 {
   int ret = OB_SUCCESS;
+  restore_tenant_exist = true;
   ObSchemaGetterGuard schema_guard;
-  bool restore_tenant_exist = true;
   bool tenant_dropped = false;
   ObHisRestoreJobPersistInfo user_history_info; 
   const uint64_t restore_tenant_id = job_info.get_tenant_id();
