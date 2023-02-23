@@ -172,10 +172,7 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr*>& raw_exprs)
         } else {
           memset(buf, 0, sizeof(ObExpr*));
           rt_expr->args_ = buf;
-          if (OB_ISNULL(col_expr->get_dependant_expr())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected error", K(ret));
-          } else if (OB_ISNULL(get_rt_expr(*col_expr->get_dependant_expr()))) {
+          if (OB_ISNULL(get_rt_expr(*col_expr->get_dependant_expr()))) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("expr is null", K(ret));
           } else {

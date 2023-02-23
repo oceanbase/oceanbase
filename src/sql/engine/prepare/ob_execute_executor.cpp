@@ -99,7 +99,6 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
                            false /* is_inner_sql */))) {
               LOG_WARN("failed to prepare stmt", K(stmt.get_prepare_id()), K(stmt.get_prepare_type()), K(ret));
             } else {
-              MEMCPY(ctx.get_sql_ctx()->sql_id_, sql_ctx.sql_id_, (int32_t)sizeof(sql_ctx.sql_id_));
               if (OB_ISNULL(ctx.get_sql_ctx()->schema_guard_)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("schema guard is null");
