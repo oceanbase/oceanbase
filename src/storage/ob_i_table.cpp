@@ -612,8 +612,8 @@ int ObTablesHandleArray::assign(const ObTablesHandleArray &other)
     if (OB_ISNULL(table)) {
       ret = OB_ERR_SYS;
       STORAGE_LOG(WARN, "table must not null", K(ret), K(other));
-    } else if (OB_NOT_NULL(allocator_)) {
-      if (OB_FAIL(add_table(table, allocator_))) {
+    } else if (OB_NOT_NULL(other.allocator_)) {
+      if (OB_FAIL(add_table(table, other.allocator_))) {
         STORAGE_LOG(WARN, "fail to add table", K(ret));
       }
     } else if (OB_FAIL(add_table(table))) {
