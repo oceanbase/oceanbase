@@ -1082,6 +1082,7 @@ int ObIndexBuildTask::clean_on_failed()
                && OB_FAIL(update_index_status_in_schema(*index_schema, ObIndexStatus::INDEX_STATUS_INDEX_ERROR))) {
       LOG_WARN("update index schema failed", K(ret));
     } else if (drop_index_on_failed) {
+      DEBUG_SYNC(CREATE_INDEX_FAILED);
       bool is_trans_end = false;
       int64_t tmp_snapshot_version = 0;
       if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR != index_schema->get_index_status()) {
