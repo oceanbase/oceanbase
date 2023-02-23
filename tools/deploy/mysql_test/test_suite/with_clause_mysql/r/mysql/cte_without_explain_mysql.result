@@ -528,7 +528,7 @@ create view v1 as
  with RECURSIVE qn (foo, bar) as (select 1,1 from dual) select * from qn;
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE VIEW `v1` AS WITH RECURSIVE`qn`(foo, bar) as (select 1 AS `foo`,1 AS `bar`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from  qn	utf8mb4	utf8mb4_general_ci
+v1	CREATE VIEW `v1` AS WITH RECURSIVE `qn`(foo, bar) as (select 1 AS `foo`,1 AS `bar`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from  qn	utf8mb4	utf8mb4_general_ci
 
 select * from v1;
 +-----+-----+
@@ -541,7 +541,7 @@ create view v1 as
  with RECURSIVE qn (foo, bar) as (select 1,1 from t1) select * from qn;
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE VIEW `v1` AS WITH RECURSIVE`qn`(foo, bar) as (select 1 AS `foo`,1 AS `bar` from `cte_st`.`t1`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from  qn	utf8mb4	utf8mb4_general_ci
+v1	CREATE VIEW `v1` AS WITH RECURSIVE `qn`(foo, bar) as (select 1 AS `foo`,1 AS `bar` from `cte_st`.`t1`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from  qn	utf8mb4	utf8mb4_general_ci
 select * from v1;
 +-----+-----+
 | foo | bar |
@@ -588,7 +588,7 @@ select (with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from q
 from dual;
 show create view v;
 View	Create View	character_set_client	collation_connection
-v	CREATE VIEW `v` AS select (WITH RECURSIVE`qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` from  qn) AS `scal_subq`	utf8mb4	utf8mb4_general_ci
+v	CREATE VIEW `v` AS select (WITH RECURSIVE `qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` from  qn) AS `scal_subq`	utf8mb4	utf8mb4_general_ci
 select * from v;
 +----------------+
 | scal_subq      |
@@ -599,7 +599,7 @@ drop view v;
 create view v as select * from (with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from qn)  dt;
 show create view v;
 View	Create View	character_set_client	collation_connection
-v	CREATE VIEW `v` AS select `dt`.`with RECURSIVE` AS `with RECURSIVE` from (WITH RECURSIVE`qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` AS `with RECURSIVE` from  qn) dt	utf8mb4	utf8mb4_general_ci
+v	CREATE VIEW `v` AS select `dt`.`with RECURSIVE` AS `with RECURSIVE` from (WITH RECURSIVE `qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` AS `with RECURSIVE` from  qn) dt	utf8mb4	utf8mb4_general_ci
 select * from v;
 +----------------+
 | with RECURSIVE |

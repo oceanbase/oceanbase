@@ -107,4 +107,128 @@ SELECT * FROM employee_paths ORDER BY name;
 |  692 | Tarek   | 333,692         |
 |  333 | Yasmina | 333             |
 +------+---------+-----------------+
+
+##bugfix: https://work.aone.alibaba-inc.com/issue/42792696
+create table t1_from_cte as (with recursive cte as (select 1 as c union all select c+1 from cte where c < 3) select * from cte);
+create table t2_from_cte as (with recursive cte(c) as (select 1 union all select c+1 from cte where c < 3) select * from cte);
+create table t3_from_cte as (with recursive cte as (select 1 as c union all select c+1 from cte where c < 3) select c as cc from cte);
+
+select * from t1_from_cte;
++------+
+| c    |
++------+
+|    1 |
+|    2 |
+|    3 |
++------+
+select * from t2_from_cte;
++------+
+| c    |
++------+
+|    1 |
+|    2 |
+|    3 |
++------+
+select * from t3_from_cte;
++------+
+| cc   |
++------+
+|    1 |
+|    2 |
+|    3 |
++------+
+
+desc t1_from_cte;
++-------+-----------+------+-----+---------+-------+
+| Field | Type      | Null | Key | Default | Extra |
++-------+-----------+------+-----+---------+-------+
+| c     | bigint(1) | YES  |     | NULL    |       |
++-------+-----------+------+-----+---------+-------+
+desc t2_from_cte;
++-------+-----------+------+-----+---------+-------+
+| Field | Type      | Null | Key | Default | Extra |
++-------+-----------+------+-----+---------+-------+
+| c     | bigint(1) | YES  |     | NULL    |       |
++-------+-----------+------+-----+---------+-------+
+desc t3_from_cte;
++-------+-----------+------+-----+---------+-------+
+| Field | Type      | Null | Key | Default | Extra |
++-------+-----------+------+-----+---------+-------+
+| cc    | bigint(1) | YES  |     | NULL    |       |
++-------+-----------+------+-----+---------+-------+
+
+show create table t1_from_cte;
+Table	Create Table
+t1_from_cte	CREATE TABLE `t1_from_cte` (
+  `c` bigint(1) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+show create table t2_from_cte;
+Table	Create Table
+t2_from_cte	CREATE TABLE `t2_from_cte` (
+  `c` bigint(1) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+show create table t3_from_cte;
+Table	Create Table
+t3_from_cte	CREATE TABLE `t3_from_cte` (
+  `cc` bigint(1) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+
+create view v1_from_cte as (with recursive cte as (select 1 as c union all select c+1 from cte where c < 3) select * from cte);
+create view v2_from_cte as (with recursive cte(c) as (select 1 union all select c+1 from cte where c < 3) select * from cte);
+create view v3_from_cte as (with recursive cte as (select 1 as c union all select c+1 from cte where c < 3) select c as cc from cte);
+
+select * from v1_from_cte;
++------+
+| c    |
++------+
+|    1 |
+|    2 |
+|    3 |
++------+
+select * from v2_from_cte;
++------+
+| c    |
++------+
+|    1 |
+|    2 |
+|    3 |
++------+
+select * from v3_from_cte;
++------+
+| cc   |
++------+
+|    1 |
+|    2 |
+|    3 |
++------+
+
+desc v1_from_cte;
++-------+-----------+------+-----+---------+-------+
+| Field | Type      | Null | Key | Default | Extra |
++-------+-----------+------+-----+---------+-------+
+| c     | bigint(1) | NO   |     |         |       |
++-------+-----------+------+-----+---------+-------+
+desc v2_from_cte;
++-------+-----------+------+-----+---------+-------+
+| Field | Type      | Null | Key | Default | Extra |
++-------+-----------+------+-----+---------+-------+
+| c     | bigint(1) | NO   |     |         |       |
++-------+-----------+------+-----+---------+-------+
+desc v3_from_cte;
++-------+-----------+------+-----+---------+-------+
+| Field | Type      | Null | Key | Default | Extra |
++-------+-----------+------+-----+---------+-------+
+| cc    | bigint(1) | NO   |     |         |       |
++-------+-----------+------+-----+---------+-------+
+
+show create view v1_from_cte;
+View	Create View	character_set_client	collation_connection
+v1_from_cte	CREATE VIEW `v1_from_cte` AS WITH RECURSIVE `cte` as ((select 1 AS `c`) union  all (select (`cte`.`c` + 1) AS `c+1` from `cte` where (`cte`.`c` < 3))) select `cte`.`c` AS `c` from  cte	utf8mb4	utf8mb4_general_ci
+show create view v2_from_cte;
+View	Create View	character_set_client	collation_connection
+v2_from_cte	CREATE VIEW `v2_from_cte` AS WITH RECURSIVE `cte`(c) as ((select 1 AS `1`) union  all (select (`cte`.`c` + 1) AS `c+1` from `cte` where (`cte`.`c` < 3))) select `cte`.`c` AS `c` from  cte	utf8mb4	utf8mb4_general_ci
+show create view v3_from_cte;
+View	Create View	character_set_client	collation_connection
+v3_from_cte	CREATE VIEW `v3_from_cte` AS WITH RECURSIVE `cte` as ((select 1 AS `c`) union  all (select (`cte`.`c` + 1) AS `c+1` from `cte` where (`cte`.`c` < 3))) select `cte`.`c` AS `cc` from  cte	utf8mb4	utf8mb4_general_ci
+
 drop database cte_st;

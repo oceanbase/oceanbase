@@ -825,7 +825,7 @@ int ObSelectStmtPrinter::print_for_update()
 int ObSelectStmtPrinter::print_with()
 {
   int ret = OB_SUCCESS;
-  DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE");
+  DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE ");
   if (OB_SUCC(ret)) {
     const ObSelectStmt* select_stmt = static_cast<const ObSelectStmt*>(stmt_);
     const common::ObIArray<TableItem*>& cte_tables = select_stmt->get_CTE_table_items();
@@ -869,9 +869,9 @@ int ObSelectStmtPrinter::print_cte_define_title(TableItem* cte_table)
   int ret = OB_SUCCESS;
   ObSelectStmt* sub_select_stmt = NULL;
   PRINT_TABLE_NAME(cte_table);
-  if (OB_ISNULL(cte_table->node_->children_[1]) && (TableItem::RECURSIVE_CTE == cte_table->cte_type_)) {
+  if (OB_ISNULL(cte_table) || OB_ISNULL(cte_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the recursive cte must have the colume definition", K(ret));
+    LOG_WARN("unexpect null params", K(ret));
   } else if (OB_NOT_NULL(cte_table->node_->children_[1])) {
     DATA_PRINTF("(");
     sub_select_stmt = cte_table->ref_query_;
@@ -892,7 +892,7 @@ int ObSelectStmtPrinter::print_cte_define_title(TableItem* cte_table)
     }
     DATA_PRINTF(")");
   } else {
-    // do nothing, the normal cte without column alias is OK
+    //do nothing, the normal cte without column alias is OK
   }
   DATA_PRINTF(" as ");
   return ret;

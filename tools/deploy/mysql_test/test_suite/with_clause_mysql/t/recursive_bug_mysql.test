@@ -81,4 +81,48 @@ WITH RECURSIVE employee_paths (id, name, path) AS
       ON ep.id = e.manager_id
 )
 SELECT * FROM employee_paths ORDER BY name;
+
+
+--echo ##bugfix: https://work.aone.alibaba-inc.com/issue/42792696
+
+create table t1_from_cte as (with recursive cte as (select 1 as c union all select c+1 from cte where c < 3) select * from cte);
+create table t2_from_cte as (with recursive cte(c) as (select 1 union all select c+1 from cte where c < 3) select * from cte);
+create table t3_from_cte as (with recursive cte as (select 1 as c union all select c+1 from cte where c < 3) select c as cc from cte);
+
+select * from t1_from_cte;
+select * from t2_from_cte;
+select * from t3_from_cte;
+
+desc t1_from_cte;
+desc t2_from_cte;
+desc t3_from_cte;
+
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1_from_cte;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t2_from_cte;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t3_from_cte;
+
+
+create view v1_from_cte as (with recursive cte as (select 1 as c union all select c+1 from cte where c < 3) select * from cte);
+create view v2_from_cte as (with recursive cte(c) as (select 1 union all select c+1 from cte where c < 3) select * from cte);
+create view v3_from_cte as (with recursive cte as (select 1 as c union all select c+1 from cte where c < 3) select c as cc from cte);
+
+select * from v1_from_cte;
+select * from v2_from_cte;
+select * from v3_from_cte;
+
+desc v1_from_cte;
+desc v2_from_cte;
+desc v3_from_cte;
+
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v1_from_cte;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v2_from_cte;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v3_from_cte;
+
+
 drop database cte_st;
