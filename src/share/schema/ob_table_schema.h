@@ -1094,6 +1094,8 @@ public:
   inline bool has_generated_column() const { return generated_columns_.num_members() > 0; }
   // The table has a generated column that is a partition key.
   bool has_generated_and_partkey_column() const;
+  // Check whether the data table column has prefix index column deps.
+  int check_prefix_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
   int add_base_table_id(uint64_t base_table_id) { return base_table_ids_.push_back(base_table_id); }
   int add_depend_table_id(uint64_t depend_table_id) { return depend_table_ids_.push_back(depend_table_id); }
   int add_depend_mock_fk_parent_table_id(uint64_t depend_table_id) { return depend_mock_fk_parent_table_ids_.push_back(depend_table_id); }
