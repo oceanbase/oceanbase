@@ -44,8 +44,6 @@ function variables_parpare {
   OBCLIENT_BIN=$DEP_PATH/u01/obclient/bin/obclient
   MYSQLTEST_BIN=$DEP_PATH/u01/obclient/bin/mysqltest
 
-  export OBD_HOME=$DEPLOY_PATH
-  export OBD_INSTALL_PRE=$DEP_PATH
   DEFAULT_DEPLOY_NAME_FILE=$OBD_HOME/.obd/.default_deploy
 }
 
@@ -284,7 +282,7 @@ function deploy_cluster {
   then
     config_yaml=$YAML_CONF
   else
-    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml ]]
+    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml && "$(grep config_status .data | awk '{print $2}')" == "UNCHNAGE" ]]
     then
       config_yaml=$OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml
     else
@@ -334,7 +332,12 @@ function deploy_cluster {
     done
   fi
   get_init_sql
+  if [[ "$NEED_FAST_REBOOT" == "1" ]]
+  then
+  obd test mysqltest "$deploy_name" $INIT_FLIES --init-only $CLIENT_BIN_ARGS --fast-reboot
+  else
   obd test mysqltest "$deploy_name" $INIT_FLIES --init-only $CLIENT_BIN_ARGS
+  fi
 }
 
 function get_init_sql {
@@ -554,6 +557,7 @@ function main() {
       --ip ) IPADDRESS="$2"; shift 2 ;;
       --disable-reboot ) DISABLE_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
       --reboot ) NEED_REBOOT="1"; shift ;;
+      --fast-reboot ) NEED_FAST_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
       --cp ) EXEC_CP="1"; shift ;;
       --skip-copy ) SKIP_COPY="1"; shift ;;
       --mini) MINI="1"; shift ;;
@@ -567,9 +571,10 @@ function main() {
   then 
     NEED_REBOOT="1"
   fi
-  if [[ ! -f $DEPLOY_PATH/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
+  if [[ ! -f $OBD_HOME/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $OBD_HOME/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)
+  obd env set OBD_LOCK_MODE 1
   fi
   if [[  "$(grep '"OBD_DEPLOY_BASE_DIR":' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
   then
