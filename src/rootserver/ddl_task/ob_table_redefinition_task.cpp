@@ -249,6 +249,10 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
+  } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
+    is_build_replica_end = true; // switch to fail.
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected snapshot", K(ret), KPC(this));
   }
 
   if (OB_SUCC(ret) && !is_build_replica_end && 0 == build_replica_request_time_) {

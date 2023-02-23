@@ -286,13 +286,14 @@ int ObDDLTask::convert_to_record(
   return ret;
 }
 
-int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
+int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const int ret_code)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool is_cancel = false;
   int real_ret_code = ret_code;
   bool is_tenant_dropped = false;
+  ObDDLTaskStatus real_new_status = new_status;
   const ObDDLTaskStatus old_status = task_status_;
   const bool error_need_retry = OB_SUCCESS != ret_code && is_error_need_retry(ret_code);
   if (OB_TMP_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(trace_id_, is_cancel))) {
@@ -302,11 +303,11 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
     real_ret_code = (OB_SUCCESS == ret_code || error_need_retry) ? OB_CANCELED : ret_code;
   } else if (SUCCESS == old_status || error_need_retry) {
     LOG_INFO("error code found, but execute again", K(ret_code), K(ret_code_), K(old_status), K(new_status), K(err_code_occurence_cnt_));
-    new_status = old_status;
+    real_new_status = old_status;
     real_ret_code = OB_SUCCESS;
   }
   ret_code_ = OB_SUCCESS == ret_code_ ? real_ret_code : ret_code_;
-  ObDDLTaskStatus real_new_status = ret_code_ != OB_SUCCESS ? FAIL : new_status;
+  real_new_status = OB_SUCCESS != real_ret_code ? FAIL : real_new_status;
   ObMySQLTransaction trans;
   ObRootService *root_service = nullptr;
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
@@ -333,11 +334,11 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
       ret_code_ = OB_CANCELED;
     } else if (table_task_status == SUCCESS && old_status != table_task_status) {
       real_new_status = SUCCESS;
-    } else if (old_status == new_status) {
+    } else if (old_status == real_new_status) {
       // do nothing.
     } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(
             trans, tenant_id_, task_id_, static_cast<int64_t>(real_new_status)))) {
-      LOG_WARN("update task status failed", K(ret), K(task_id_), K(new_status));
+      LOG_WARN("update task status failed", K(ret), K(task_id_), K(real_new_status));
     } else if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code(trans, tenant_id_, task_id_, ret_code_))) {
       LOG_WARN("failed to update ret code", K(ret));
     }

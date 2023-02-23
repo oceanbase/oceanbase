@@ -298,7 +298,7 @@ public:
   const ObString &get_ddl_stmt_str() const { return ddl_stmt_str_; }
   int set_ddl_stmt_str(const ObString &ddl_stmt_str);
   int convert_to_record(ObDDLTaskRecord &task_record, common::ObIAllocator &allocator);
-  int switch_status(share::ObDDLTaskStatus new_status, const int ret_code);
+  int switch_status(const share::ObDDLTaskStatus new_status, const int ret_code);
   int refresh_status();
   int refresh_schema_version();
   int remove_task_record();

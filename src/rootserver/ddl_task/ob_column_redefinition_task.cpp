@@ -116,6 +116,10 @@ int ObColumnRedefinitionTask::wait_data_complement(const ObDDLTaskStatus next_ta
   } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
+  } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
+    is_build_replica_end = true; // switch to fail.
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected snapshot", K(ret), KPC(this));
   } else if (!is_sstable_complete_task_submitted_ && OB_FAIL(send_build_single_replica_request())) {
     LOG_WARN("fail to send build single replica request", K(ret));
   } else if (is_sstable_complete_task_submitted_ && OB_FAIL(check_build_single_replica(is_build_replica_end))) {

@@ -704,6 +704,9 @@ int ObIndexBuildTask::wait_data_complement()
     LOG_WARN("not init", K(ret));
   } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
     LOG_WARN("task status not match", K(ret), K(task_status_));
+  } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected snapshot", K(ret), KPC(this));
   }
   bool is_request_end = false;
 
