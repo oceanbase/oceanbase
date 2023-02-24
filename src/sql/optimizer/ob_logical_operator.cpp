@@ -3991,6 +3991,7 @@ void AllocGIContext::reset_info()
 {
   state_ = GIS_NORMAL;
   multi_child_op_above_count_in_dfo_ = 0;
+  alloc_gi_ = false;
 }
 
 AllocGIContext::GIState AllocGIContext::get_state()
