@@ -6115,3 +6115,35 @@ int ObOptimizerUtil::check_pushdown_filter_to_base_table(ObLogPlan& plan, const 
   LOG_TRACE("check pushdown filter to tables", K(table_id), K(can_pushdown));
   return ret;
 }
+
+int ObOptimizerUtil::check_contain_my_exec_param(
+    ObRawExpr *expr, const common::ObIArray<std::pair<int64_t, ObRawExpr *>> &my_exec_params, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  contain = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (!expr->has_flag(CNT_EXEC_PARAM)) {
+    // do nothing
+  } else if (expr->has_flag(IS_EXEC_PARAM)) {
+    const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr *>(expr);
+    int64_t param = const_expr->get_value().get_unknown();
+    contain = NULL != find_exec_param(my_exec_params, param);
+  } else if (expr->is_set_op_expr() || expr->is_query_ref_expr() || expr->is_column_ref_expr()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; !contain && OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_contain_my_exec_param(expr->get_param_expr(i), my_exec_params, contain)))) {
+        LOG_WARN("failed to check contain batch stmt parameter", K(ret));
+      }
+    }
+  }
+  return ret;
+}

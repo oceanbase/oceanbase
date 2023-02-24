@@ -2514,9 +2514,9 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
   2 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
       group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
-  3 - output([VIEW1.c1]), filter(nil), 
+  3 - output([VIEW1.c1]), filter(nil), startup_filter([?]),
       access([VIEW1.c1])
-  4 - output([t1.c1]), filter(nil), startup_filter([?]), 
+  4 - output([t1.c1]), filter(nil),
       access([t1.c1]), partitions(p0), 
       limit(1), offset(nil)
 

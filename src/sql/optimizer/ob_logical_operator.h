@@ -1799,7 +1799,7 @@ public:
   virtual int set_exchange_cnt_post(AdjustSortContext* ctx);
   virtual int allocate_link_post();
   virtual int allocate_startup_expr_post();
-  int allocate_startup_expr_post(int64_t child_idx);
+  virtual int allocate_startup_expr_post(int64_t child_idx);
   int allocate_link_node_above(int64_t child_idx);
 
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx);

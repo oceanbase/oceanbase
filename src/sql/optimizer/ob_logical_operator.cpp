@@ -6824,8 +6824,7 @@ int ObLogicalOperator::allocate_startup_expr_post(int64_t child_idx)
       if (OB_ISNULL(startup_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (startup_exprs.at(i)->has_flag(CNT_ROWNUM) ||
-                 startup_exprs.at(i)->has_flag(CNT_EXEC_PARAM)) {
+      } else if (startup_exprs.at(i)->has_flag(CNT_ROWNUM)) {
         if (OB_FAIL(non_startup_exprs.push_back(startup_exprs.at(i)))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
@@ -6834,8 +6833,7 @@ int ObLogicalOperator::allocate_startup_expr_post(int64_t child_idx)
       }
     }
     if (OB_SUCC(ret)) {
-      if (get_startup_exprs().empty() &&
-          OB_FAIL(add_startup_exprs(new_startup_exprs))) {
+      if (OB_FAIL(append_array_no_dup(get_startup_exprs(), new_startup_exprs))) {
         LOG_WARN("failed to add startup exprs", K(ret));
       } else {
         bool mark_exchange_out = false;

@@ -676,6 +676,9 @@ public:
   static int check_pushdown_filter_to_base_table(ObLogPlan& plan, const uint64_t table_id,
       const ObIArray<ObRawExpr*>& pushdown_filters, const ObIArray<ObRawExpr*>& restrict_infos, bool& can_pushdown);
 
+  static int check_contain_my_exec_param(
+      ObRawExpr *expr, const common::ObIArray<std::pair<int64_t, ObRawExpr *>> &my_exec_params, bool &contain);
+
 private:
   // disallow construct
   ObOptimizerUtil();

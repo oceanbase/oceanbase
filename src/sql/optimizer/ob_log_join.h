@@ -336,6 +336,7 @@ private:
     return SM_NONE != slave_mapping_type_;
   }
   int allocate_startup_expr_post() override;
+  int allocate_startup_expr_post(int64_t child_idx) override;
 private:
   // all join predicates
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> join_conditions_;  // equal join condition, for

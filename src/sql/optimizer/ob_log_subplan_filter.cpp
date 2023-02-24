@@ -710,8 +710,59 @@ int ObLogSubPlanFilter::compute_one_row_info()
 int ObLogSubPlanFilter::allocate_startup_expr_post()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post(first_child))) {
+  if (OB_FAIL(allocate_startup_expr_post(first_child))) {
     LOG_WARN("failed to allocate startup expr post", K(ret));
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::allocate_startup_expr_post(int64_t child_idx)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = get_child(child_idx);
+  if (OB_ISNULL(child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null child", K(ret));
+  } else if (child->get_startup_exprs().empty()) {
+    // do nothing
+  } else {
+    ObSEArray<ObRawExpr *, 4> non_startup_exprs, new_startup_exprs;
+    ObIArray<ObRawExpr *> &startup_exprs = child->get_startup_exprs();
+    ObSEArray<std::pair<int64_t, ObRawExpr *>, 8> my_exec_params;
+    if (OB_FAIL(my_exec_params.assign(onetime_exprs_))) {
+      LOG_WARN("fail to push back onetime exprs", K(ret));
+    } else if (OB_FAIL(append(my_exec_params, exec_params_))) {
+      LOG_WARN("fail to push back exec param exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < startup_exprs.count(); ++i) {
+      if (OB_ISNULL(startup_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (log_op_def::LOG_COUNT == child->get_type() && startup_exprs.at(i)->has_flag(CNT_ROWNUM)) {
+        if (OB_FAIL(non_startup_exprs.push_back(startup_exprs.at(i)))) {
+          LOG_WARN("fail to push back non startup expr", K(ret));
+        }
+      } else if (startup_exprs.at(i)->has_flag(CNT_EXEC_PARAM)) {
+        bool found = false;
+        if (!my_exec_params.empty() &&
+            OB_FAIL(ObOptimizerUtil::check_contain_my_exec_param(startup_exprs.at(i), my_exec_params, found))) {
+          LOG_WARN("fail to check if contain onetime exec param", K(ret));
+        } else if (found && OB_FAIL(non_startup_exprs.push_back(startup_exprs.at(i)))) {
+          LOG_WARN("fail to push back non startup expr", K(ret));
+        } else if (!found && OB_FAIL(new_startup_exprs.push_back(startup_exprs.at(i)))) {
+          LOG_WARN("fail to push back non startup expr", K(ret));
+        }
+      } else if (OB_FAIL(new_startup_exprs.push_back(startup_exprs.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(append_array_no_dup(get_startup_exprs(), new_startup_exprs))) {
+        LOG_WARN("failed to add startup exprs", K(ret));
+      } else if (OB_FAIL(child->get_startup_exprs().assign(non_startup_exprs))) {
+        LOG_WARN("failed to assign exprs", K(ret));
+      }
+    }
   }
   return ret;
 }
