@@ -1609,7 +1609,9 @@ ObDataIndexBlockBuilder::ObDataIndexBlockBuilder()
     meta_row_(),
     data_blocks_cnt_(0),
     meta_block_offset_(0),
-    meta_block_size_(0)
+    meta_block_size_(0),
+    estimate_leaf_block_size_(0),
+    estimate_meta_block_size_(0)
 {
 }
 
@@ -1635,6 +1637,8 @@ void ObDataIndexBlockBuilder::reset()
   data_blocks_cnt_ = 0;
   meta_block_offset_ = 0;
   meta_block_size_ = 0;
+  estimate_leaf_block_size_ = 0;
+  estimate_meta_block_size_ = 0;
   sstable_allocator_ = nullptr;
   ObBaseIndexBlockBuilder::reset();
 }
@@ -1786,6 +1790,10 @@ int ObDataIndexBlockBuilder::append_row(const ObMicroBlockDesc &micro_block_desc
         STORAGE_LOG(DEBUG, "succeed to prevent append_row", K(ret), K(macro_block.get_remain_size()),
             K(cur_data_block_size), K(estimate_meta_block_size), K(remain_size));
       }
+    } else {
+      // only update these two variables when succeeded to append data micro block
+      estimate_leaf_block_size_ = remain_size;
+      estimate_meta_block_size_ = estimate_meta_block_size;
     }
   }
   return ret;
@@ -1926,6 +1934,16 @@ int ObDataIndexBlockBuilder::append_index_micro_block(ObMacroBlock &macro_block,
     STORAGE_LOG(WARN, "fail to build meta block", K(ret));
   } else {
     root_micro_block_desc_->last_macro_size_ = data_offset + leaf_block_size + meta_block_size_;
+  }
+
+  if (OB_FAIL(ret) && OB_BUF_NOT_ENOUGH == ret) {
+    STORAGE_LOG(WARN, "error!!!fail to write leaf/meta block into data macro block",
+        K(ret), K_(estimate_leaf_block_size), K_(estimate_meta_block_size),
+        K(leaf_block_desc), K_(macro_row_desc));
+    STORAGE_LOG(INFO, "print error leaf block");
+    micro_writer_->dump_diagnose_info();
+    STORAGE_LOG(INFO, "print error meta block");
+    meta_block_writer_->dump_diagnose_info();
   }
   clean_status();
   return ret;

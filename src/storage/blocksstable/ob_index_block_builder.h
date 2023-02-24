@@ -339,6 +339,8 @@ private:
   int64_t data_blocks_cnt_;
   int64_t meta_block_offset_;
   int64_t meta_block_size_;
+  int64_t estimate_leaf_block_size_;
+  int64_t estimate_meta_block_size_;
 };
 
 class ObMetaIndexBlockBuilder : public ObBaseIndexBlockBuilder
