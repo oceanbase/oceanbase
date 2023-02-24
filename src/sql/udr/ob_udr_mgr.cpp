@@ -160,6 +160,14 @@ int ObUDRMgr::mtl_init(ObUDRMgr* &node_list)
   return ret;
 }
 
+void ObUDRMgr::mtl_stop(ObUDRMgr* &udr_mgr)
+{
+  if (udr_mgr->inited_) {
+    TG_CANCEL(udr_mgr->tg_id_, udr_mgr->refresh_task_);
+    TG_STOP(udr_mgr->tg_id_);
+  }
+}
+
 void ObUDRMgr::destroy()
 {
   if (!destroyed_) {

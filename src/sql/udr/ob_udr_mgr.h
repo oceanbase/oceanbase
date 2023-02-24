@@ -84,7 +84,8 @@ public:
     tg_id_(-1),
     rule_version_(OB_INIT_REWRITE_RULE_VERSION) {}
   ~ObUDRMgr();
-  static int mtl_init(ObUDRMgr* &node_list);
+  static int mtl_init(ObUDRMgr* &udr_mgr);
+  static void mtl_stop(ObUDRMgr* &udr_mgr);
   void destroy();
   int insert_rule(ObUDRInfo &arg);
   int remove_rule(ObUDRInfo &arg);
