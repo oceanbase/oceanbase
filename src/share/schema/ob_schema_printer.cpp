@@ -3915,6 +3915,25 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
   if (OB_SUCC(ret) && lib::is_oracle_mode() && !clause.empty()) {
     OZ (databuff_printf(buf, buf_len, pos, " %.*s", clause.length(), clause.ptr()));
   }
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    if (routine_info->is_no_sql()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nNO SQL"));
+    } else if (routine_info->is_reads_sql_data()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nREADS SQL DATA"));
+    } else if (routine_info->is_modifies_sql_data()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nMODIFIES SQL DATA"));
+    }
+    OZ (databuff_printf(buf, buf_len, pos, "%s",
+        routine_info->is_deterministic() ? "\nDETERMINISTIC" : ""));
+    OZ (databuff_printf(buf, buf_len, pos, "%s",
+        routine_info->is_invoker_right() ? "\nINVOKER" : ""));
+    if (OB_SUCC(ret) && OB_NOT_NULL(routine_info->get_comment())) {
+      OZ (databuff_printf(buf, buf_len, pos, "\n%s%.*s%s\n","COMMENT `",
+          routine_info->get_comment().length(),
+          routine_info->get_comment().ptr(),
+          "`"));
+    }
+  }
   OZ (databuff_printf(buf, buf_len, pos,
       lib::is_oracle_mode() ? (routine_info->is_aggregate() ? "\nAGGREGATE USING %.*s" : " IS\n%.*s")
                               : " %.*s", body.length(), body.ptr()));

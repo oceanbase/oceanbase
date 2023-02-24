@@ -2183,6 +2183,7 @@ typedef enum ObItemType
   T_OB_DDL_SCHEMA_VERSION,
   T_TG_ORDER,
   T_ODBC_ESCAPE_SEQUENCES,
+  T_SP_DATA_ACCESS,
 
   // column group
   T_COLUMN_GROUP,
