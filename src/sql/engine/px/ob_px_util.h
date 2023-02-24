@@ -172,7 +172,6 @@ private:
       bool asc, ObExecContext &exec_ctx, ObIArray<int64_t> &base_order);
   static int build_dynamic_partition_table_location(common::ObIArray<const ObTableScanSpec*> &scan_ops,
       const ObIArray<ObTableLocation> *table_locations, ObDfo &dfo);
-  static int mark_virtual_table_dfo(common::ObIArray<const ObTableScanSpec*> &scan_ops, ObDfo &dfo);
 
   static int build_dfo_sqc(ObExecContext &ctx,
                            const DASTabletLocList &locations,
@@ -541,6 +540,12 @@ private:
   mutable int64_t last_check_time_;
   // when check dst server not in blacklist, also check its server_start_time_ < query_start_time_;
   int64_t query_start_time_;
+};
+
+class ObVirtualTableErrorWhitelist
+{
+public:
+  static bool should_ignore_vtable_error(int error_code);
 };
 
 }

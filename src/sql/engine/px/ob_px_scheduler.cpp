@@ -300,7 +300,8 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext &ctx,
   } else { /*do nothing.*/ }
   if (OB_SUCC(ret)) {
     sqc->set_thread_finish(true);
-    if (sqc->is_ignore_vtable_error() && OB_SUCCESS != pkt.rc_) {
+    if (sqc->is_ignore_vtable_error() && OB_SUCCESS != pkt.rc_
+        && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(pkt.rc_)) {
        // 如果收到一个sqc finish消息, 如果该sqc涉及虚拟表, 需要忽略所有错误码
        // 如果该dfo是root_dfo的child_dfo, 为了让px走出数据channel的消息循环
        // 需要mock一个eof dtl buffer本地发送至px(实际未经过rpc, attach即可)

@@ -439,7 +439,8 @@ int ObPxCoordOp::init_dfo_mgr(const ObDfoInterruptIdGen &dfo_id_gen, ObDfoMgr &d
                 get_spec(),
                 px_expected,
                 px_admited_worker_count,
-                dfo_id_gen))) {
+                dfo_id_gen,
+                coord_info_))) {
       LOG_WARN("fail init dfo mgr",
                K(px_expected),
                K(query_expected),
