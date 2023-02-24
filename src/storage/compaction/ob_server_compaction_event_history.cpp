@@ -22,7 +22,7 @@ namespace compaction
 {
 
 const char *ObServerCompactionEvent::ObCompactionEventStr[] = {
-    "GET_COMPACTION_INFO",
+    "RECEIVE_BROADCAST_SCN",
     "GET_FREEZE_INFO",
     "WEAK_READ_TS_READY",
     "SCHEDULER_LOOP",
@@ -34,7 +34,7 @@ const char *ObServerCompactionEvent::get_comp_event_str(enum ObCompactionEvent e
 {
   STATIC_ASSERT(static_cast<int64_t>(COMPACTION_EVENT_MAX) == ARRAYSIZEOF(ObCompactionEventStr), "events str len is mismatch");
   const char *str = "";
-  if (event >= COMPACTION_EVENT_MAX || event < GET_COMPACTION_INFO) {
+  if (event >= COMPACTION_EVENT_MAX || event < RECEIVE_BROADCAST_SCN) {
     str = "invalid_type";
   } else {
     str = ObCompactionEventStr[event];

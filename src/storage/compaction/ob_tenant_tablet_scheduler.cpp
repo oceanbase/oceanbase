@@ -523,7 +523,7 @@ int ObTenantTabletScheduler::schedule_merge(const int64_t broadcast_version)
         MTL_ID(),
         MAJOR_MERGE,
         broadcast_version,
-        ObServerCompactionEvent::GET_COMPACTION_INFO,
+        ObServerCompactionEvent::RECEIVE_BROADCAST_SCN,
         schedule_stats_.start_timestamp_,
         "last_merged_version",
         merged_version_);
@@ -1197,6 +1197,7 @@ int ObTenantTabletScheduler::get_min_dependent_schema_version(int64_t &min_schem
 int ObTenantTabletScheduler::update_report_scn_as_ls_leader(ObLS &ls)
 {
   int ret = OB_SUCCESS;
+  const ObLSID &ls_id = ls.get_ls_id();
   ObRole role = INVALID_ROLE;
   const int64_t major_merged_scn = get_inner_table_merged_scn();
   bool need_merge = false;
@@ -1204,10 +1205,11 @@ int ObTenantTabletScheduler::update_report_scn_as_ls_leader(ObLS &ls)
     LOG_WARN("failed to check ls state", K(ret), K(ls_id));
   } else if (!need_merge) {
     // do nothing
-  } else if (OB_FAIL(ls.get_ls_role(role))) {
-    LOG_WARN("failed to get ls role", K(ret), K(ls));
-  } else if (LEADER == role) {
-    const ObLSID &ls_id = ls.get_ls_id();
+  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_palf_role(ls_id, role))) {
+    if (OB_LS_NOT_EXIST != ret) {
+      LOG_WARN("failed to get palf handle role", K(ret), K(ls_id));
+    }
+  } else if (is_leader_by_election(role)) {
     ObSEArray<ObTabletID, 200> tablet_id_array;
     if (OB_FAIL(ls.get_tablet_svr()->get_all_tablet_ids(true/*except_ls_inner_tablet*/, tablet_id_array))) {
       LOG_WARN("failed to get tablet id", K(ret), K(ls_id));

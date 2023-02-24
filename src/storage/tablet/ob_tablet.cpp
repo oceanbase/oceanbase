@@ -2474,11 +2474,8 @@ int ObTablet::get_kept_multi_version_start(
     LOG_WARN("failed to get min medium snapshot", K(ret), K(tablet));
   }
 
-  // for compat, if cluster not upgrade to 4.1, should not consider ls.get_min_reserved_snapshot()
-  uint64_t compat_version = 0;
-  if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
-    LOG_WARN("fail to get data version", K(tmp_ret));
-  } else if (compat_version >= DATA_VERSION_4_1_0_0 && ls.get_min_reserved_snapshot() > 0) {
+  // for compat, if receive ls_reserved_snapshot clog, should consider ls.get_min_reserved_snapshot()
+  if (ls.get_min_reserved_snapshot() > 0) {
     ls_min_reserved_snapshot = ls.get_min_reserved_snapshot();
   }
   if (OB_SUCC(ret)) {
