@@ -200,8 +200,13 @@ int ObDDLSingleReplicaExecutor::check_build_end(bool &is_end, int64_t &ret_code)
         need_schedule |= build_infos.at(i).need_schedule();
       }
       if (OB_SUCC(ret) && build_infos.count() == succ_cnt) {
+        if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(
+              tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+          LOG_WARN("fail to check sstable checksum_report_finish",
+            K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
+        }
         is_end = true;
-        ret_code = OB_SUCCESS;
+        ret_code = ret;
       }
     }
   }

@@ -367,6 +367,11 @@ public:
       const int64_t schema_version,
       const int64_t scn,
       bool &need_exec_new_inner_sql);
+  static int check_finish_report_checksum(
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const int64_t execution_id,
+      const uint64_t ddl_task_id);
 
 private:
 
