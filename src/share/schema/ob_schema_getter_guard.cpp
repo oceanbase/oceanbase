@@ -2542,7 +2542,10 @@ int ObSchemaGetterGuard::verify_table_read_only(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   const ObString &db_name = need_priv.db_;
   const ObString &table_name = need_priv.table_;
+  const ObPrivSet &priv_set = need_priv.priv_set_;
   const ObTableSchema *table_schema = NULL;
+  const ObPrivSet &read_only_privs = OB_PRIV_SELECT | OB_PRIV_SHOW_VIEW | OB_PRIV_SHOW_DB |
+                                     OB_PRIV_READ;
   // FIXME: is it right?
   const bool is_index = false;
   if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
@@ -2550,7 +2553,7 @@ int ObSchemaGetterGuard::verify_table_read_only(const uint64_t tenant_id,
   } else if (OB_FAIL(get_table_schema(tenant_id, db_name, table_name, is_index, table_schema))) {
     LOG_WARN("get table schema failed", KR(ret), K(tenant_id), K(db_name), K(table_name));
   } else if (NULL != table_schema) {
-    if (table_schema->is_read_only()) {
+    if (table_schema->is_read_only() && OB_PRIV_HAS_OTHER(priv_set, read_only_privs)) {
       ret = OB_ERR_TABLE_READ_ONLY;
       LOG_USER_ERROR(OB_ERR_TABLE_READ_ONLY, db_name.length(), db_name.ptr(),
                      table_name.length(), table_name.ptr());
