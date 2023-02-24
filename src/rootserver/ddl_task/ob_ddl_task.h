@@ -171,10 +171,16 @@ public:
       int64_t &task_status,
       int64_t &execution_id);
 
-  static int get_all_record(
+  static int get_ddl_task_record(
+      const int64_t task_id,
+      common::ObMySQLProxy &proxy,
+      common::ObIAllocator &allocator,
+      ObDDLTaskRecord &record);
+  static int get_all_ddl_task_record(
       common::ObMySQLProxy &proxy,
       common::ObIAllocator &allocator,
       common::ObIArray<ObDDLTaskRecord> &records);
+
   static int check_task_id_exist(
       common::ObMySQLProxy &proxy,
       const int64_t task_id,
@@ -185,7 +191,7 @@ public:
      common::ObIAllocator &allocator,
      const uint64_t table_id,
      bool &is_building);
-  
+
   static int check_has_long_running_ddl(
      common::ObMySQLProxy *proxy,
      const uint64_t tenant_id,
@@ -219,11 +225,16 @@ private:
       ObDDLTaskRecord &task_record);
 
   static int64_t get_record_id(share::ObDDLType ddl_type, int64_t origin_id);
-
   static int kill_inner_sql(
       common::ObMySQLProxy &proxy,
       const uint64_t tenant_id,
       const uint64_t session_id);
+
+  static int get_task_record(
+      const ObSqlString &sql_string,
+      common::ObMySQLProxy &proxy,
+      common::ObIAllocator &allocator,
+      common::ObIArray<ObDDLTaskRecord> &records);
 };
 
 class ObDDLWaitTransEndCtx

@@ -289,7 +289,7 @@ int ObDDLTaskQueue::update_task_process_schedulable(const int64_t task_id)
   return ret;
 }
 
-int ObDDLTaskQueue::abort_task(const int64_t task_id, common::ObMySQLProxy &mysql_proxy)
+int ObDDLTaskQueue::abort_task(const int64_t task_id)
 {
   int ret = OB_SUCCESS;
   share::ObTaskId trace_id;
@@ -302,20 +302,7 @@ int ObDDLTaskQueue::abort_task(const int64_t task_id, common::ObMySQLProxy &mysq
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(task_id));
   } else if (OB_FAIL(task_id_map_.get_refactored(task_id, ddl_task))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      bool exist = false;
-      if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(mysql_proxy, task_id, exist))) {
-        LOG_WARN("check task id exist fail", K(ret));
-      } else {
-        if (exist) {
-          ret = OB_EAGAIN;
-          LOG_INFO("entry exist, the ddl scheduler hasn't recovered the task yet", K(ret), K(task_id));
-        } else {
-          ret = OB_ENTRY_NOT_EXIST;
-          LOG_WARN("this task does not exist in the hash table", K(ret), K(task_id));
-        }
-      }
-    }
+    ret = OB_HASH_NOT_EXIST == ret ? OB_ENTRY_NOT_EXIST : ret;
     LOG_WARN("get from task map failed", K(ret), K(task_id));
   } else if (OB_ISNULL(ddl_task)) {
     ret = OB_ERR_UNEXPECTED;
@@ -896,8 +883,22 @@ int ObDDLScheduler::abort_redef_table(const int64_t task_id)
   if (OB_UNLIKELY(task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(task_id));
-  } else if (OB_FAIL(task_queue_.abort_task(task_id, root_service_->get_sql_proxy()))) {
-    LOG_WARN("abort redef table task failed", K(ret));
+  } else if (OB_FAIL(task_queue_.abort_task(task_id))) {
+    LOG_WARN("abort redef table task failed", K(ret), K(task_id));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      bool exist = false;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
+        LOG_WARN("check task id exist fail", K(tmp_ret), K(task_id));
+      } else {
+        if (exist) {
+          ret = OB_EAGAIN;
+          LOG_INFO("entry exist, the ddl scheduler hasn't recovered the task yet", K(ret), K(task_id));
+        } else {
+          LOG_WARN("this task does not exist in the hash table", K(ret), K(task_id));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -945,6 +946,18 @@ int ObDDLScheduler::copy_table_dependents(const int64_t task_id,
             return ret;
           }))) {
         LOG_WARN("failed to modify task", K(ret));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id, root_service_->get_sql_proxy(), allocator, task_record))) {
+            LOG_WARN("get single ddl task failed", K(tmp_ret), K(task_id));
+          } else if (OB_TMP_FAIL(schedule_ddl_task(task_record))) {
+            LOG_WARN("failed to schedule ddl task", K(tmp_ret), K(task_record));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(redefinition_task.init(task_record))) {
         LOG_WARN("init table redefinition task failed", K(ret));
       } else if (OB_FAIL(redefinition_task.set_trace_id(task_record.trace_id_))) {
@@ -977,7 +990,21 @@ int ObDDLScheduler::copy_table_dependents(const int64_t task_id,
                                                                     is_copy_triggers,
                                                                     is_copy_foreign_keys,
                                                                     is_ignore_errors))) {
-                LOG_WARN("update task process setting failed", K(ret));
+                if (OB_ENTRY_NOT_EXIST == ret) {
+                  bool exist = false;
+                  int tmp_ret = OB_SUCCESS;
+                  if (OB_TMP_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
+                    LOG_WARN("check task id exist fail", K(tmp_ret), K(task_id));
+                  } else {
+                    if (exist) {
+                      ret = OB_EAGAIN;
+                      LOG_INFO("entry exist, the ddl scheduler hasn't recovered the task yet", K(ret), K(task_id));
+                    } else {
+                      LOG_WARN("this task does not exist in the hash table", K(ret), K(task_id));
+                    }
+                  }
+                }
+                LOG_WARN("update task copy deps setting failed", K(ret), K(task_id));
               }
             }
           }
@@ -1025,6 +1052,17 @@ int ObDDLScheduler::finish_redef_table(const int64_t task_id, const uint64_t ten
             return ret;
           }))) {
         LOG_WARN("failed to modify task", K(ret));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          int tmp_ret = OB_SUCCESS;
+          ObSqlString sql_string;
+          if (OB_TMP_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id, root_service_->get_sql_proxy(), allocator, task_record))) {
+            LOG_WARN("get single ddl task failed", K(tmp_ret), K(task_id));
+          } else if (OB_TMP_FAIL(schedule_ddl_task(task_record))) {
+            LOG_WARN("failed to schedule ddl task", K(tmp_ret), K(task_record));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
       } else if (OB_FAIL(redefinition_task.init(task_record))) {
         LOG_WARN("init table redefinition task failed", K(ret));
       } else if (OB_FAIL(redefinition_task.set_trace_id(task_record.trace_id_))) {
@@ -1048,7 +1086,21 @@ int ObDDLScheduler::finish_redef_table(const int64_t task_id, const uint64_t ten
             }
             if (OB_SUCC(ret)) {
               if (OB_FAIL(task_queue_.update_task_process_schedulable(task_id))) {
-                LOG_WARN("update task process setting failed", K(ret));
+                if (OB_ENTRY_NOT_EXIST == ret) {
+                  bool exist = false;
+                  int tmp_ret = OB_SUCCESS;
+                  if (OB_TMP_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
+                    LOG_WARN("check task id exist fail", K(tmp_ret), K(task_id));
+                  } else {
+                    if (exist) {
+                      ret = OB_EAGAIN;
+                      LOG_INFO("entry exist, the ddl scheduler hasn't recovered the task yet", K(ret), K(task_id));
+                    } else {
+                      LOG_WARN("this task does not exist in the hash table", K(ret), K(task_id));
+                    }
+                  }
+                }
+                LOG_WARN("update task process schedulable failed", K(task_id));
               }
             }
           }
@@ -1479,11 +1531,12 @@ int ObDDLScheduler::recover_task()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
+    ObSqlString sql_string;
     ObArray<ObDDLTaskRecord> task_records;
     ObArenaAllocator allocator(lib::ObLabel("DdlTasRecord"));
     share::schema::ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
-    if (OB_FAIL(ObDDLTaskRecordOperator::get_all_record(root_service_->get_sql_proxy(), allocator, task_records))) {
-      LOG_WARN("get all task records failed", K(ret));
+    if (OB_FAIL(ObDDLTaskRecordOperator::get_all_ddl_task_record(root_service_->get_sql_proxy(), allocator, task_records))) {
+      LOG_WARN("get task record failed", K(ret), K(sql_string));
     }
     LOG_INFO("start processing ddl recovery", K(task_records));
     for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
