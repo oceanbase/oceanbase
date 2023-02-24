@@ -1676,7 +1676,7 @@ int ObLobQueryP::process_read()
     ObLobAccessParam param;
     param.scan_backward_ = arg_.scan_backward_;
     param.from_rpc_ = true;
-    ObLobQueryIter *iter;
+    ObLobQueryIter *iter = nullptr;
     if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
         arg_.len_, ObStorageRpcProxy::STREAM_RPC_TIMEOUT, arg_.lob_locator_))) {
       LOG_WARN("failed to build lob param", K(ret));
@@ -1703,6 +1703,10 @@ int ObLobQueryP::process_read()
       if (ret == OB_ITER_END) {
         ret = OB_SUCCESS;
       }
+    }
+    if (OB_NOT_NULL(iter)) {
+      iter->reset();
+      common::sop_return(ObLobQueryIter, iter);
     }
   }
   return ret;
