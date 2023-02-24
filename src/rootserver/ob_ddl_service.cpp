@@ -15791,6 +15791,8 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
           // previous step succeeds, no need to unbind
         }
         if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(lock_table(trans, new_hidden_table_schema))) {
+          LOG_WARN("fail to lock_table", KR(ret), K(new_hidden_table_schema));
         } else if (OB_FAIL(drop_table_in_trans(schema_guard,
                                         new_hidden_table_schema,
                                         false,
