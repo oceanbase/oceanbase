@@ -1215,6 +1215,7 @@ bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
   int64_t max_pos = -1;
   int64_t depth = ignore_head ? key_part_head.pos_.offset_ - 1 : -1;
   bool is_terminated = false;
+  bool is_phy_rowid_key_part = false;
   for (const ObKeyPart *cur = &key_part_head; !is_terminated && NULL != cur; cur = cur->and_next_) {
     if (cur->is_in_key()) {
       if (cur->in_keypart_->is_strict_in_ &&
@@ -1238,7 +1239,7 @@ bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
     } else if (!cur->is_equal_condition()) {
       is_precise_get = false;
     } else {
-      // do nothing
+      is_phy_rowid_key_part = cur->is_phy_rowid_key_part();
     }
     if (!is_terminated) {
       if (is_strict_in_graph(cur)) {
@@ -1256,7 +1257,7 @@ bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
   }
 
   max_precise_pos = is_terminated ? max_pos : depth + 1;
-  if (is_precise_get && depth != column_count_ - 1) {
+  if (is_precise_get && depth != column_count_ - 1 && !is_phy_rowid_key_part) {
     is_precise_get = false;
   }
   return is_precise_get;
@@ -6257,6 +6258,7 @@ int ObQueryRange::generate_single_range(ObSearchState &search_state,
     LOG_ERROR("alloc memory for end_obj failed", K(ret));
   } else {
     int64_t max_pred_index = search_state.max_exist_index_;
+    column_num = search_state.is_phy_rowid_range_ ? 1 : column_num;//physcial rowid range just use only one column
     for (int i = 0; OB_SUCC(ret) && i < column_num; i++) {
       new(start + i) ObObj();
       new(end + i) ObObj();
