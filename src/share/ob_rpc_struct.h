@@ -6354,18 +6354,19 @@ public:
     const share::SCN &recovery_until_scn);
   bool is_valid() const {
     return OB_INVALID_TENANT_ID != exec_tenant_id_
-           && is_valid_(type_, recovery_until_scn_);
+           && is_valid(type_, recovery_until_scn_);
   }
+  static bool is_valid(const RecoverType &type, const share::SCN &recovery_until_scn) {
+    return ((RecoverType::UNTIL == type && recovery_until_scn.is_valid_and_not_min())
+               || (RecoverType::CANCEL == type && recovery_until_scn.is_min()));
+  }
+
   int assign(const ObRecoverTenantArg &other);
   void set_stmt_str(const ObString &stmt_str) { stmt_str_ = stmt_str; }
 
   TO_STRING_KV(K_(exec_tenant_id), K_(tenant_name), K_(type), K_(recovery_until_scn), K_(stmt_str));
 
 private:
-  bool is_valid_(const RecoverType type, const share::SCN &recovery_until_scn) const {
-    return ((RecoverType::UNTIL == type && recovery_until_scn.is_valid_and_not_min())
-               || (RecoverType::CANCEL == type && recovery_until_scn.is_min()));
-  }
 
 #define Property_declare_var(variable_type, variable_name)\
 private:\

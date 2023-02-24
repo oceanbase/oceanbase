@@ -5527,7 +5527,7 @@ int ObRecoverTenantArg::init(
     const SCN &recovery_until_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == exec_tenant_id || !is_valid_(type, recovery_until_scn))) {
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == exec_tenant_id || !is_valid(type, recovery_until_scn))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(exec_tenant_id), K(type), K(recovery_until_scn));
   } else {

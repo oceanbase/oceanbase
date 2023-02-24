@@ -306,6 +306,9 @@ int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy 
                K(first_proposal_id), K(second_proposal_id),
                K(ls_recovery_stat));
     }
+    LOG_TRACE("tenant update ls recovery stat", KR(ret), K(role),
+              K(first_proposal_id), K(second_proposal_id),
+              K(ls_recovery_stat));
 
   }
   return ret;

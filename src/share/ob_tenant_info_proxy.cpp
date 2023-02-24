@@ -24,6 +24,7 @@
 #include "common/ob_timeout_ctx.h"//ObTimeoutCtx
 #include "rootserver/ob_root_utils.h"//ObRootUtils
 #include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
+#include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -552,6 +553,7 @@ int ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
   ObTimeoutCtx ctx;
   ObLSRecoveryStatOperator ls_recovery_operator;
   ObLSRecoveryStat sys_ls_recovery;
+  ObLogRestoreSourceMgr restore_source_mgr;
 
   if (!is_user_tenant(tenant_id) || OB_INVALID_VERSION == switchover_epoch) {
     ret = OB_INVALID_ARGUMENT;
@@ -582,7 +584,13 @@ int ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "state changed, check sync_scn and switchover status, recover is");
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect updating one row", KR(ret), K(affected_rows), K(sql));
+    LOG_WARN("expect updating one row", KR(ret), K(affected_rows),
+             K(switchover_epoch), K(recovery_until_scn), K(sql));
+  // update __all_log_restore_source
+  } else if (OB_FAIL(restore_source_mgr.init(tenant_id, &trans))) {
+    LOG_WARN("failed to init restore_source_mgr", KR(ret), K(tenant_id), K(recovery_until_scn));
+  } else if (OB_FAIL(restore_source_mgr.update_recovery_until_scn(recovery_until_scn))) {
+    LOG_WARN("failed to update_recovery_until_scn", KR(ret), K(tenant_id), K(recovery_until_scn));
   }
 
   int64_t cost = ObTimeUtility::current_time() - begin_time;
@@ -595,7 +603,7 @@ int ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
 
 int ObAllTenantInfoProxy::update_tenant_status(
     const uint64_t tenant_id,
-    ObISQLClient *proxy,
+    common::ObMySQLTransaction &trans,
     const ObTenantRole new_role,
     const ObTenantSwitchoverStatus &old_status,
     const ObTenantSwitchoverStatus &new_status,
@@ -612,9 +620,9 @@ int ObAllTenantInfoProxy::update_tenant_status(
   int64_t affected_rows = 0;
   ObTimeoutCtx ctx;
   int64_t new_switchover_epoch = OB_INVALID_VERSION;
+  ObLogRestoreSourceMgr restore_source_mgr;
 
-  if (OB_UNLIKELY(OB_ISNULL(proxy)
-    || !is_user_tenant(tenant_id)
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id)
     || !new_role.is_valid()
     || !old_status.is_valid()
     || !new_status.is_valid()
@@ -625,7 +633,7 @@ int ObAllTenantInfoProxy::update_tenant_status(
     || !recovery_until_scn.is_valid_and_not_min()
     || OB_INVALID_VERSION == old_switchover_epoch)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant_info is invalid", KR(ret), KP(proxy), K(tenant_id), K(new_role), K(old_status),
+    LOG_WARN("tenant_info is invalid", KR(ret), K(tenant_id), K(new_role), K(old_status),
                 K(new_status), K(sync_scn), K(replayable_scn), K(readable_scn), K(recovery_until_scn),
                 K(old_switchover_epoch));
   } else if (OB_FAIL(get_new_switchover_epoch_(old_switchover_epoch, old_status, new_status,
@@ -656,7 +664,7 @@ int ObAllTenantInfoProxy::update_tenant_status(
                 replayable_scn.get_val_for_inner_table_field(),
                 readable_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql));
-  } else if (OB_FAIL(proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
   } else if (0 == affected_rows) {
     ret = OB_NEED_RETRY;
@@ -664,6 +672,11 @@ int ObAllTenantInfoProxy::update_tenant_status(
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expect updating one row", KR(ret), K(affected_rows), K(sql));
+  // update __all_log_restore_source
+  } else if (OB_FAIL(restore_source_mgr.init(tenant_id, &trans))) {
+    LOG_WARN("failed to init restore_source_mgr", KR(ret), K(tenant_id), K(recovery_until_scn));
+  } else if (OB_FAIL(restore_source_mgr.update_recovery_until_scn(recovery_until_scn))) {
+    LOG_WARN("failed to update_recovery_until_scn", KR(ret), K(tenant_id), K(recovery_until_scn));
   }
 
   ObAllTenantInfo tenant_info;

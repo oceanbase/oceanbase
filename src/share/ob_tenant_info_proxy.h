@@ -211,7 +211,7 @@ public:
    */
   static int update_tenant_status(
     const uint64_t tenant_id,
-    ObISQLClient *proxy,
+    common::ObMySQLTransaction &trans,
     const ObTenantRole new_role,
     const ObTenantSwitchoverStatus &old_status,
     const ObTenantSwitchoverStatus &new_status,
