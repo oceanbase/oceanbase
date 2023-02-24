@@ -855,8 +855,9 @@ int ObRereplication::remove_permanent_offline_replicas(int64_t& task_cnt)
 
       FOR_BEGIN_END_E(r, *(*p), ts.all_replica_, OB_SUCCESS == ret)
       {
-        if (r->is_in_service() && ObReplicaTypeCheck::is_paxos_replica_V2(r->replica_type_) &&
-            !(*p)->in_physical_restore() && r->server_->permanent_offline_) {
+        // remove replica not in service
+        if (ObReplicaTypeCheck::is_paxos_replica_V2(r->replica_type_) && !(*p)->in_physical_restore() &&
+            r->server_->permanent_offline_) {
           if (!ts.has_leader_while_member_change(*(*p), r->server_->server_, ignore_is_in_spliting)) {
             LOG_WARN("can't remove member, may lost leaser", "partition", *(*p), "replica", *r);
           } else if (r->is_in_blacklist(ObRebalanceTaskType::MEMBER_CHANGE, r->server_->server_, tenant_stat_)) {
