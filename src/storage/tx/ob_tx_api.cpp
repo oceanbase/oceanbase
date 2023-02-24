@@ -1774,7 +1774,9 @@ int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, co
           TRANS_LOG(WARN, "need rollback", K(ret), K(global_tx_type), K(xid));
         }
       }
-    } else {
+    } else if (tx.is_xa_tightly_couple()) {
+      // loosely couple mode txn-route use session_id to detect xa-start node's alive
+      // so, can not overwrite session_id
       tx.set_sessid(session_id);
     }
     if (OB_FAIL(ret) && registed) {

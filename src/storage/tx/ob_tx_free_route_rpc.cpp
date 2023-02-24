@@ -80,6 +80,7 @@ int ObTxFreeRouteCheckAliveRespP::kill_session_()
   sql::ObSQLSessionInfo *session = NULL;
   if (OB_SUCC(guard.get_session(session))) {
     if (session->get_is_in_retry()) {
+      // TODO: only kill session when it is idle
     } else if (OB_FAIL(GCTX.session_mgr_->kill_session(*session))) {
       TRANS_LOG(WARN, "kill session fail", K(ret));
     }
@@ -95,9 +96,10 @@ int ObTxFreeRouteCheckAliveRespP::release_session_tx_()
   if (OB_FAIL(guard.get_session(session))) {
   } else if (session->get_is_in_retry()) {
     // skip quit txn if session in Query Retry
+  } else if (OB_FAIL(session->try_lock_query())) {
+  } else if (OB_FAIL(session->try_lock_thread_data())) {
+    session->unlock_query();
   } else {
-    sql::ObSQLSessionInfo::LockGuard query_lock_guard(session->get_query_lock());
-    sql::ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     auto &ctx = session->get_txn_free_route_ctx();
     auto &tx_desc = session->get_tx_desc();
     if (ctx.get_local_version() != arg_.request_id_) {
@@ -124,6 +126,8 @@ int ObTxFreeRouteCheckAliveRespP::release_session_tx_()
         TRANS_LOG(INFO, "[txn free route] release tx success");
       }
     }
+    session->unlock_query();
+    session->unlock_thread_data();
   }
   return ret;
 }
