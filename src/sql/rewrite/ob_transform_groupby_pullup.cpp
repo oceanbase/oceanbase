@@ -721,7 +721,9 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
     } else if (OB_FALSE_IT(column_id = i + OB_APP_MIN_COLUMN_ID)) {
     } else if (OB_ISNULL(col_expr = stmt->get_column_expr_by_id(table_item->table_id_, column_id))) {
       //未引用的，直接删除
-      if (OB_FAIL(removed_idx.add_member(i))) {
+      if (!select_expr->has_flag(CNT_AGG)) {
+        // do nothing
+      } else if (OB_FAIL(removed_idx.add_member(i))) {
         LOG_WARN("failed to add remove idx", K(ret));
       }
     } else if (!select_expr->has_flag(CNT_AGG)) {
