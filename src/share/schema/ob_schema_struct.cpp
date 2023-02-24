@@ -3002,7 +3002,6 @@ int ObPartitionSchema::assign_partition_schema(const ObPartitionSchema &src_sche
   int ret = OB_SUCCESS;
   if (this != &src_schema) {
     reuse_partition_schema();
-    int ret = OB_SUCCESS;
     part_level_ = src_schema.part_level_;
     partition_schema_version_ = src_schema.partition_schema_version_;
     partition_status_ = src_schema.partition_status_;
