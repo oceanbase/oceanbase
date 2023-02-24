@@ -59,6 +59,7 @@ public:
      last_macro_size_(0) {}
   ~ObIndexMicroBlockDesc() = default;
   TO_STRING_KV(K_(last_key), K_(data_column_cnt), K_(data_blocks_cnt),
+       K_(meta_block_offset), K_(meta_block_size), K_(last_macro_size),
        KPC_(data_write_ctx), KP(macro_metas_));
   ObDatumRowkey last_key_;
   int64_t data_column_cnt_;
@@ -386,6 +387,14 @@ public:
       common::ObIAllocator &allocator,
       ObDataMacroBlockMeta *&macro_meta);
 private:
+  static int inner_get_macro_meta(
+      const char *buf,
+      const int64_t size,
+      const MacroBlockId &macro_id,
+      common::ObIAllocator &allocator,
+      ObDataMacroBlockMeta *&macro_meta,
+      int64_t &meta_block_offset,
+      int64_t &meta_block_size);
   static int get_meta_block_and_read_info(
       const char *buf,
       const int64_t buf_size,

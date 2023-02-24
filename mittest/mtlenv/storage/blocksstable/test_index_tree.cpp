@@ -1114,6 +1114,25 @@ TEST_F(TestIndexTree, test_single_row_desc)
   ObSSTableMergeRes res;
   sstable_builder.optimization_mode_ = ObSSTableIndexBuilder::ObSpaceOptimizationMode::DISABLE;
   OK(sstable_builder.close(data_desc.row_column_count_, res));
+
+  // test rebuild sstable
+  ObSSTableIndexBuilder sstable_builder2;
+  prepare_index_builder(index_desc, sstable_builder2);
+  ObIndexBlockRebuilder rebuilder;
+  OK(rebuilder.init(sstable_builder2));
+  ObMacroBlockHandle macro_handle;
+  macro_handle.reset();
+  ObMacroBlockReadInfo info;
+  const int64_t macro_block_size = 2 * 1024 * 1024;
+  info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+  info.offset_ = 0;
+  info.size_ = macro_block_size;
+  info.macro_block_id_ = res.data_block_ids_[0];
+  OK(ObBlockManager::read_block(info, macro_handle));
+  OK(rebuilder.append_macro_row(macro_handle.get_buffer(), macro_handle.get_data_size(), info.macro_block_id_));
+  OK(rebuilder.close());
+  ObSSTableMergeRes res2;
+  OK(sstable_builder2.close(res.data_column_cnt_, res2));
 }
 
 TEST_F(TestIndexTree, test_data_block_checksum)
