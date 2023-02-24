@@ -63,11 +63,18 @@ int ObMallocSampleInfo::inner_get_next_row(ObNewRow *&row)
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    if (it_ != malloc_sample_map_.end()) {
+
+  for (; OB_SUCC(ret) && it_ != malloc_sample_map_.end(); ++it_) {
+    if (is_sys_tenant(effective_tenant_id_) || effective_tenant_id_ == it_->first.tenant_id_) {
       if (OB_FAIL(fill_row(row))) {
         SERVER_LOG(WARN, "failed to fill row", K(ret));
       }
+      break;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (it_ != malloc_sample_map_.end()) {
       ++it_;
     } else {
       ret = OB_ITER_END;
@@ -82,7 +89,7 @@ int ObMallocSampleInfo::fill_row(ObNewRow *&row)
   if (OB_ISNULL(cells = cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
-  } else if (is_sys_tenant(effective_tenant_id_) || effective_tenant_id_ == it_->first.tenant_id_) {
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
       const uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
