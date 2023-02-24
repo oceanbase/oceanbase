@@ -1229,6 +1229,10 @@ public:
                                                 const ObSelectStmt &inner_stmt,
                                                 common::ObIArray<ObRawExpr*> &select_exprs);
 
+  static int convert_set_op_expr_to_select_expr(const common::ObIArray<ObRawExpr*> &set_op_exprs,
+                                                const ObSelectStmt &inner_stmt,
+                                                common::ObIArray<ObRawExpr*> &select_exprs);
+
   /**
    * @brief convert_select_expr_to_column_expr
    * 将视图的select expr转换为outer stmt对应的column expr

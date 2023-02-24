@@ -3105,6 +3105,29 @@ bool ObRawExprUtils::is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exp
   return is_all_column;
 }
 
+int ObRawExprUtils::extract_set_op_exprs(const ObRawExpr *raw_expr,
+                                         common::ObIArray<ObRawExpr*> &set_op_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(raw_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid raw expr", K(ret), K(raw_expr));
+  } else if (raw_expr->is_set_op_expr()) {
+    if (OB_FAIL(add_var_to_array_no_dup(set_op_exprs, const_cast<ObRawExpr*>(raw_expr)))) {
+      LOG_WARN("failed to append expr", K(ret));
+    }
+  } else {
+    int64_t N = raw_expr->get_param_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      if (OB_FAIL(SMART_CALL(extract_set_op_exprs(raw_expr->get_param_expr(i),
+                                                  set_op_exprs)))) {
+        LOG_WARN("failed to extract set op exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
                                          ObIArray<ObRawExpr*> &column_exprs,
                                          bool need_pseudo_column)
