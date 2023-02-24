@@ -44,7 +44,7 @@ int ObDDLSingleReplicaExecutor::build(const ObDDLSingleReplicaExecutorParam &par
     task_id_ = param.task_id_;
     execution_id_ = param.execution_id_;
     parallelism_ = param.parallelism_;
-    cluster_version_ = param.cluster_version_;
+    data_format_version_ = param.data_format_version_;
 
     common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
     common::ObIArray<ObTabletID> &tablet_ids = source_tablet_ids_;
@@ -118,7 +118,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
           arg.task_id_ = task_id_;
           arg.parallelism_ = parallelism_;
           arg.execution_id_ = execution_id_;
-          arg.cluster_version_ = cluster_version_;
+          arg.data_format_version_ = data_format_version_;
           arg.tablet_task_id_ = tablet_task_ids_.at(i);
           if (OB_FAIL(location_service->get(tenant_id_, arg.source_tablet_id_,
                   expire_renew_time, is_cache_hit, ls_id))) {

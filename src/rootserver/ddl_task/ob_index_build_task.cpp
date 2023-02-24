@@ -312,6 +312,7 @@ int ObIndexBuildTask::init(
     const int64_t snapshot_version /* = 0 */)
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_data_format_version = 0;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -336,6 +337,8 @@ int ObIndexBuildTask::init(
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("fail to get table schema", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_format_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
     is_global_index_ = index_schema->is_global_index_table();
     is_unique_index_ = index_schema->is_unique_index();
@@ -355,7 +358,7 @@ int ObIndexBuildTask::init(
     parent_task_id_ = parent_task_id;
     task_version_ = OB_INDEX_BUILD_TASK_VERSION;
     start_time_ = ObTimeUtility::current_time();
-    cluster_version_ = GET_MIN_CLUSTER_VERSION();
+    data_format_version_ = tenant_data_format_version;
     if (OB_SUCC(ret)) {
       task_status_ = static_cast<ObDDLTaskStatus>(task_status);
     }
@@ -1458,7 +1461,7 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
     LOG_WARN("serialize create index arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, check_unique_snapshot_);
-    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, cluster_version_);
+    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, data_format_version_);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ddl_tracing_.serialize(buf, buf_len, pos))) {
         LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
@@ -1483,7 +1486,7 @@ int ObIndexBuildTask::deserlize_params_from_message(const char *buf, const int64
     LOG_WARN("deep copy create index arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_);
-    LST_DO_CODE(OB_UNIS_DECODE, parallelism_, cluster_version_);
+    LST_DO_CODE(OB_UNIS_DECODE, parallelism_, data_format_version_);
     if (OB_SUCC(ret) && pos < data_len) {
       if (OB_FAIL(ddl_tracing_.deserialize(buf, data_len, pos))) {
         LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
@@ -1499,6 +1502,6 @@ int64_t ObIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i64(check_unique_snapshot_)
       + serialization::encoded_length_i64(task_version_)
       + serialization::encoded_length_i64(parallelism_)
-      + serialization::encoded_length_i64(cluster_version_)
+      + serialization::encoded_length_i64(data_format_version_)
       + ddl_tracing_.get_serialize_size();
 }

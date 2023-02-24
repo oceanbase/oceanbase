@@ -131,7 +131,7 @@ public:
   ObTabletDDLParam();
   ~ObTabletDDLParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(commit_scn), K_(snapshot_version), K_(cluster_version));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(commit_scn), K_(snapshot_version), K_(data_format_version));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -139,7 +139,7 @@ public:
   share::SCN start_scn_;
   share::SCN commit_scn_;
   int64_t snapshot_version_;
-  int64_t cluster_version_;
+  int64_t data_format_version_;
 };
 
 class ObTabletDDLUtil
@@ -148,7 +148,7 @@ public:
   static int prepare_index_data_desc(const share::ObLSID &ls_id,
                                      const ObTabletID &tablet_id,
                                      const int64_t snapshot_version,
-                                     const int64_t cluster_version,
+                                     const int64_t ddl_format_version,
                                      const blocksstable::ObSSTable *first_ddl_sstable,
                                      blocksstable::ObDataStoreDesc &data_desc);
 

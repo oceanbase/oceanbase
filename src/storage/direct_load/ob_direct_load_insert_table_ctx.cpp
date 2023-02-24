@@ -91,7 +91,7 @@ int ObDirectLoadInsertTableContext::init(const ObDirectLoadInsertTableParam &par
     table_insert_param.write_major_ = true;
     table_insert_param.execution_id_ = param.execution_id_;
     table_insert_param.ddl_task_id_ = param.ddl_task_id_;
-    table_insert_param.cluster_version_ = 1;
+    table_insert_param.data_format_version_ = 1;
     for (int64_t i = 0; i < param.ls_partition_ids_.count(); ++i) {
       const ObTableLoadLSIdAndPartitionId &ls_partition_id = param.ls_partition_ids_.at(i);
       if (OB_FAIL(table_insert_param.ls_tablet_ids_.push_back(

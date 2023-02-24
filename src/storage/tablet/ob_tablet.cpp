@@ -2173,7 +2173,7 @@ int ObTablet::build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_pa
     mig_tablet_param.max_sync_storage_schema_version_ = tablet_meta_.max_sync_storage_schema_version_;
     mig_tablet_param.max_serialized_medium_scn_ = tablet_meta_.max_serialized_medium_scn_;
     mig_tablet_param.ddl_execution_id_ = tablet_meta_.ddl_execution_id_;
-    mig_tablet_param.ddl_cluster_version_ = tablet_meta_.ddl_cluster_version_;
+    mig_tablet_param.ddl_data_format_version_ = tablet_meta_.ddl_data_format_version_;
     mig_tablet_param.ddl_commit_scn_ = tablet_meta_.ddl_commit_scn_;
     mig_tablet_param.report_status_.reset();
 
@@ -2655,7 +2655,7 @@ int ObTablet::start_ddl_if_need()
     if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*this,
                                                        table_key,
                                                        start_scn,
-                                                       tablet_meta_.ddl_cluster_version_,
+                                                       tablet_meta_.ddl_data_format_version_,
                                                        tablet_meta_.ddl_execution_id_,
                                                        tablet_meta_.ddl_checkpoint_scn_))) {
       LOG_WARN("start ddl kv manager failed", K(ret), K(table_key), K(tablet_meta_));

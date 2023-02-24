@@ -52,7 +52,7 @@ public:
   int init(const share::ObLSID &ls_id,
            const ObITable::TableKey &table_key,
            const share::SCN &ddl_start_scn,
-           const int64_t cluster_version);
+           const int64_t data_format_version);
   void destroy();
   int insert_macro_block(const ObDDLMacroHandle &macro_handle,
                          const blocksstable::ObDatumRowkey *rowkey,
@@ -117,7 +117,7 @@ public:
            const share::SCN &ddl_start_scn,
            const int64_t snapshot_version,
            const share::SCN &last_freezed_scn,
-           const int64_t cluster_version);
+           const int64_t data_format_version);
   void reset();
   int set_macro_block(const ObDDLMacroBlock &macro_block);
 
@@ -137,7 +137,7 @@ public:
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id), K_(ddl_start_scn), K_(snapshot_version),
       K_(is_freezed), K_(is_closed),
       K_(last_freezed_scn), K_(min_scn), K_(max_scn), K_(freeze_scn),
-      K_(pending_cnt), K_(cluster_version), K_(ref_cnt),
+      K_(pending_cnt), K_(data_format_version), K_(ref_cnt),
       K_(block_meta_tree));
 private:
   int insert_block_meta_tree(const ObDDLMacroHandle &macro_handle,
@@ -163,7 +163,7 @@ private:
   share::SCN max_scn_; // the max log ts of macro blocks
   share::SCN freeze_scn_; // ddl kv refuse data larger than freeze log ts, freeze_log_ts >= max_log_ts
   int64_t pending_cnt_; // the amount of kvs that are replaying
-  int64_t cluster_version_;
+  int64_t data_format_version_;
   ObBlockMetaTree block_meta_tree_;
 };
 

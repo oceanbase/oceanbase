@@ -473,7 +473,7 @@ int ObTabletDDLUtil::check_data_integrity(const ObTablesHandleArray &ddl_sstable
 }
 
 ObTabletDDLParam::ObTabletDDLParam()
-  : tenant_id_(0), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), commit_scn_(SCN::min_scn()), snapshot_version_(0), cluster_version_(0)
+  : tenant_id_(0), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), commit_scn_(SCN::min_scn()), snapshot_version_(0), data_format_version_(0)
 {
 
 }
@@ -491,13 +491,13 @@ bool ObTabletDDLParam::is_valid() const
     && start_scn_.is_valid_and_not_min()
     && commit_scn_.is_valid() && commit_scn_ != SCN::max_scn()
     && snapshot_version_ > 0
-    && cluster_version_ >= 0;
+    && data_format_version_ >= 0;
 }
 
 int ObTabletDDLUtil::prepare_index_data_desc(const share::ObLSID &ls_id,
                                              const ObTabletID &tablet_id,
                                              const int64_t snapshot_version,
-                                             const int64_t cluster_version,
+                                             const int64_t data_format_version,
                                              const ObSSTable *first_ddl_sstable,
                                              ObDataStoreDesc &data_desc)
 {
@@ -506,9 +506,9 @@ int ObTabletDDLUtil::prepare_index_data_desc(const share::ObLSID &ls_id,
   ObLSService *ls_service = MTL(ObLSService *);
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
-  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || cluster_version < 0)) {
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(cluster_version));
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(data_format_version));
   } else if (OB_ISNULL(ls_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("ls service is null", K(ret), K(ls_id));
@@ -524,7 +524,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(const share::ObLSID &ls_id,
                                     tablet_id,
                                     MAJOR_MERGE,
                                     snapshot_version,
-                                    cluster_version))) {
+                                    data_format_version))) {
     LOG_WARN("init data store desc failed", K(ret), K(tablet_id));
   } else {
     if (nullptr != first_ddl_sstable) {
@@ -583,7 +583,7 @@ int ObTabletDDLUtil::create_ddl_sstable(const ObTabletDDLParam &ddl_param,
   } else if (OB_FAIL(ObTabletDDLUtil::prepare_index_data_desc(ddl_param.ls_id_,
                                                               ddl_param.table_key_.tablet_id_,
                                                               ddl_param.table_key_.version_range_.snapshot_version_,
-                                                              ddl_param.cluster_version_,
+                                                              ddl_param.data_format_version_,
                                                               first_ddl_sstable,
                                                               data_desc))) {
       LOG_WARN("prepare data store desc failed", K(ret), K(ddl_param));
@@ -593,7 +593,7 @@ int ObTabletDDLUtil::create_ddl_sstable(const ObTabletDDLParam &ddl_param,
   } else if (FALSE_IT(sstable_index_builder = new (buf) ObSSTableIndexBuilder)) {
   } else if (OB_FAIL(sstable_index_builder->init(data_desc,
                                                  nullptr, // macro block flush callback
-                                                 ObSSTableIndexBuilder::DISABLE))) {
+                                                 ddl_param.table_key_.is_major_sstable() ? ObSSTableIndexBuilder::AUTO : ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("init sstable index builder failed", K(ret), K(data_desc));
   } else if (OB_ISNULL(buf = arena.alloc(sizeof(ObIndexBlockRebuilder)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -750,7 +750,7 @@ int ObTabletDDLUtil::update_ddl_table_store(const ObTabletDDLParam &ddl_param,
                                                 ddl_param.table_key_.is_major_sstable(), // update_with_major_flag
                                                 ddl_param.table_key_.is_major_sstable()); // need report checksum
       table_store_param.ddl_info_.keep_old_ddl_sstable_ = !ddl_param.table_key_.is_major_sstable();
-      table_store_param.ddl_info_.ddl_cluster_version_ = ddl_param.cluster_version_;
+      table_store_param.ddl_info_.data_format_version_ = ddl_param.data_format_version_;
       table_store_param.ddl_info_.ddl_commit_scn_ = ddl_param.commit_scn_;
       if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {
         LOG_WARN("failed to update tablet table store", K(ret), K(ddl_param.table_key_), K(table_store_param));
@@ -775,7 +775,7 @@ int ObTabletDDLUtil::compact_ddl_sstable(const ObIArray<ObITable *> &ddl_sstable
   if (OB_UNLIKELY(!ddl_param.is_valid() || ddl_sstables.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_param), K(ddl_sstables.count()));
-  } else if (OB_FAIL(meta_tree.init(ddl_param.ls_id_, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.cluster_version_))) {
+  } else if (OB_FAIL(meta_tree.init(ddl_param.ls_id_, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.data_format_version_))) {
     LOG_WARN("init meta tree failed", K(ret), K(ddl_param));
   } else {
     ObDatumRowkey last_rowkey;

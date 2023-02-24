@@ -301,7 +301,7 @@ public:
   ~ObDDLTableStoreParam() = default;
   bool is_valid() const;
   TO_STRING_KV(K_(keep_old_ddl_sstable), K_(ddl_start_scn), K_(ddl_commit_scn), K_(ddl_checkpoint_scn),
-      K_(ddl_snapshot_version), K_(ddl_execution_id), K_(ddl_cluster_version));
+      K_(ddl_snapshot_version), K_(ddl_execution_id), K_(data_format_version));
 public:
   bool keep_old_ddl_sstable_;
   share::SCN ddl_start_scn_;
@@ -309,7 +309,7 @@ public:
   share::SCN ddl_checkpoint_scn_;
   int64_t ddl_snapshot_version_;
   int64_t ddl_execution_id_;
-  int64_t ddl_cluster_version_;
+  int64_t data_format_version_;
 };
 
 struct ObUpdateTableStoreParam

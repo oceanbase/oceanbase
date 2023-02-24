@@ -322,25 +322,25 @@ DEFINE_GET_SERIALIZE_SIZE(ObDDLClogHeader)
 }
 
 ObDDLStartLog::ObDDLStartLog()
-  : table_key_(), cluster_version_(0), execution_id_(-1)
+  : table_key_(), data_format_version_(0), execution_id_(-1)
 {
 }
 
-int ObDDLStartLog::init(const ObITable::TableKey &table_key, const int64_t cluster_version, const int64_t execution_id)
+int ObDDLStartLog::init(const ObITable::TableKey &table_key, const int64_t data_format_version, const int64_t execution_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || cluster_version_ < 0)) {
+  if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version_ < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(cluster_version));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(data_format_version));
   } else {
     table_key_ = table_key;
-    cluster_version_ = cluster_version;
+    data_format_version_ = data_format_version;
     execution_id_ = execution_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, cluster_version_, execution_id_);
+OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_);
 
 ObDDLRedoLog::ObDDLRedoLog()
   : redo_info_()

@@ -36,7 +36,7 @@ public:
   ObTabletDDLKvMgr();
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
-  int ddl_start(ObTablet &tablet, const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t cluster_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
+  int ddl_start(ObTablet &tablet, const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
   int ddl_commit(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
   int schedule_ddl_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool is_replay); // try wait build major sstable
   int wait_ddl_merge_success(const share::SCN &start_scn, const share::SCN &commit_scn);
@@ -79,7 +79,7 @@ public:
   int get_rec_scn(share::SCN &rec_scn);
   void prepare_info_for_checksum_report(const uint64_t table_id, const int64_t ddl_task_id) { table_id_ = table_id; ddl_task_id_ = ddl_task_id; }
   TO_STRING_KV(K_(is_inited), K_(success_start_scn), K_(ls_id), K_(tablet_id), K_(table_key),
-      K_(cluster_version), K_(start_scn), K_(commit_scn), K_(max_freeze_scn),
+      K_(data_format_version), K_(start_scn), K_(commit_scn), K_(max_freeze_scn),
       K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));
 
 private:
@@ -103,7 +103,7 @@ private:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   ObITable::TableKey table_key_;
-  int64_t cluster_version_;
+  int64_t data_format_version_;
   share::SCN start_scn_;
   share::SCN commit_scn_;
   share::SCN max_freeze_scn_;

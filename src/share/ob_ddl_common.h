@@ -323,10 +323,10 @@ public:
   static int64_t get_default_ddl_rpc_timeout();
   static int64_t get_default_ddl_tx_timeout();
 
-  static int get_ddl_cluster_version(
+  static int get_data_format_version(
      const uint64_t tenant_id,
      const uint64_t task_id,
-     int64_t &ddl_cluster_version);
+     int64_t &data_format_version);
 
 private:
   static int generate_column_name_str(

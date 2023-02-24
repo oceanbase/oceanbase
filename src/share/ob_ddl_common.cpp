@@ -1035,10 +1035,10 @@ int64_t ObDDLUtil::get_default_ddl_tx_timeout()
 }
 
 
-int ObDDLUtil::get_ddl_cluster_version(
+int ObDDLUtil::get_data_format_version(
     const uint64_t tenant_id,
     const uint64_t task_id,
-    int64_t &ddl_cluster_version)
+    int64_t &data_format_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0
@@ -1070,7 +1070,7 @@ int ObDDLUtil::get_ddl_cluster_version(
             if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
-              ddl_cluster_version = task.get_cluster_version();
+              data_format_version = task.get_data_format_version();
             }
           }
         } else {
@@ -1078,7 +1078,7 @@ int ObDDLUtil::get_ddl_cluster_version(
             if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
-              ddl_cluster_version = task.get_cluster_version();
+              data_format_version = task.get_data_format_version();
             }
           }
         }

@@ -266,7 +266,7 @@ public:
   int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
   int start_ddl_redo(const ObITable::TableKey &table_key,
                      const int64_t execution_id,
-                     const int64_t ddl_cluster_version,
+                     const int64_t data_format_version,
                      ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int end_ddl_redo_and_create_ddl_sstable(ObLSHandle &ls_handle,
                                           const ObITable::TableKey &table_key,
