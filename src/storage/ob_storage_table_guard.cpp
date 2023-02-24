@@ -103,7 +103,8 @@ ObStorageTableGuard::~ObStorageTableGuard()
       }
     }
 
-    if (REACH_TIME_INTERVAL(100 * 1000L)) {
+    if (REACH_TIME_INTERVAL(100 * 1000L) &&
+        sleep_time > 0) {
       int64_t cost_time = ObTimeUtility::current_time() - init_ts_;
       LOG_INFO("throttle situation", K(sleep_time), K(time), K(seq), K(for_replay_), K(cost_time));
     }

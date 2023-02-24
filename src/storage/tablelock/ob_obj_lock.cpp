@@ -462,7 +462,7 @@ int ObOBJLock::fast_lock(
                                lock_mode_in_same_trans,
                                need_retry,
                                conflict_tx_set))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_EAGAIN != ret) {
         LOG_WARN("try fast lock failed", KR(ret), K(lock_op));
       }
     } else {
