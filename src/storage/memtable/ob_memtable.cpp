@@ -1404,7 +1404,7 @@ int ObMemtable::inc_unsubmitted_cnt()
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
-  int64_t unsubmitted_cnt = ATOMIC_AAF(&unsubmitted_cnt_, 1);
+  int64_t unsubmitted_cnt = inc_unsubmitted_cnt_();
   TRANS_LOG(DEBUG, "inc_unsubmitted_cnt", K(ls_id), KPC(this), K(lbt()));
 
   if (ATOMIC_LOAD(&unset_active_memtable_logging_blocked_)) {
@@ -1430,22 +1430,20 @@ int ObMemtable::dec_unsubmitted_cnt()
   // get unsubmitted_cnt 1
   //                             dec unsubmitted_cnt to 0
   // -----------------------------------------------------
-  // get old_unsubmitted_cnt to ensure only one thread can unset logging_blocked
-  int64_t old_unsubmitted_cnt = ATOMIC_SAF(&unsubmitted_cnt_, 1);
+  int64_t old_unsubmitted_cnt = dec_unsubmitted_cnt_();
 
   // must maintain the order of getting variables to avoid concurrency problems
   // is_frozen_memtable() can affect wirte_ref_cnt
   // write_ref_cnt can affect unsubmitted_cnt and unsynced_cnt
   bool is_frozen = is_frozen_memtable();
   int64_t write_ref_cnt = get_write_ref();
-  int64_t new_unsubmitted_cnt = ATOMIC_LOAD(&unsubmitted_cnt_);
+  int64_t new_unsubmitted_cnt = get_unsubmitted_cnt();
   TRANS_LOG(DEBUG, "dec_unsubmitted_cnt", K(ls_id), KPC(this), K(lbt()));
 
   if (OB_UNLIKELY(old_unsubmitted_cnt < 0)) {
     TRANS_LOG(ERROR, "unsubmitted_cnt not match", K(ret), K(ls_id), KPC(this));
   } else if (is_frozen &&
              0 == write_ref_cnt &&
-             0 == old_unsubmitted_cnt &&
              0 == new_unsubmitted_cnt) {
     (void)unset_logging_blocked_for_active_memtable();
     TRANS_LOG(INFO, "memtable log submitted", K(ret), K(ls_id), KPC(this));
@@ -1470,17 +1468,15 @@ int64_t ObMemtable::dec_write_ref()
   // get unsubmitted_cnt 1
   //                             dec unsubmitted_cnt to 0
   // -----------------------------------------------------
-  // get old_write_ref_cnt to ensure only one thread can unset logging_blocked
-  int64_t old_write_ref_cnt = ATOMIC_SAF(&write_ref_cnt_, 1);
+  int64_t old_write_ref_cnt = dec_write_ref_();
 
   // must maintain the order of getting variables to avoid concurrency problems
   // is_frozen_memtable() can affect wirte_ref_cnt
   // write_ref_cnt can affect unsubmitted_cnt and unsynced_cnt
   bool is_frozen = is_frozen_memtable();
-  int64_t new_write_ref_cnt = ATOMIC_LOAD(&write_ref_cnt_);
+  int64_t new_write_ref_cnt = get_write_ref();
   int64_t unsubmitted_cnt = get_unsubmitted_cnt();
   if (is_frozen &&
-      0 == old_write_ref_cnt &&
       0 == new_write_ref_cnt &&
       0 == unsubmitted_cnt) {
     (void)unset_logging_blocked_for_active_memtable();
@@ -1495,8 +1491,8 @@ int64_t ObMemtable::dec_write_ref()
 
 void ObMemtable::inc_unsynced_cnt()
 {
-  ATOMIC_AAF(&unsynced_cnt_, 1);
-  TRANS_LOG(DEBUG, "inc_unsynced_cnt", K(ls_id), KPC(this), K(lbt()));
+  int64_t unsynced_cnt = inc_unsynced_cnt_();
+  TRANS_LOG(DEBUG, "inc_unsynced_cnt", K(ls_id), K(unsynced_cnt), KPC(this), K(lbt()));
 }
 
 int ObMemtable::dec_unsynced_cnt()
@@ -1504,21 +1500,19 @@ int ObMemtable::dec_unsynced_cnt()
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
 
-  // get old_unsynced_cnt to ensure only one thread can resolve boundary
-  int64_t old_unsynced_cnt = ATOMIC_SAF(&unsynced_cnt_, 1);
+  int64_t old_unsynced_cnt = dec_unsynced_cnt_();
 
   // must maintain the order of getting variables to avoid concurrency problems
   // is_frozen_memtable() can affect wirte_ref_cnt
   // write_ref_cnt can affect unsubmitted_cnt and unsynced_cnt
   bool is_frozen = is_frozen_memtable();
   int64_t write_ref_cnt = get_write_ref();
-  int64_t new_unsynced_cnt = ATOMIC_LOAD(&unsynced_cnt_);
+  int64_t new_unsynced_cnt = get_unsynced_cnt();
   TRANS_LOG(DEBUG, "dec_unsynced_cnt", K(ls_id), KPC(this), K(lbt()));
   if (OB_UNLIKELY(old_unsynced_cnt < 0)) {
     TRANS_LOG(ERROR, "unsynced_cnt not match", K(ret), K(ls_id), KPC(this));
   } else if (is_frozen &&
              0 == write_ref_cnt &&
-             0 == old_unsynced_cnt &&
              0 == new_unsynced_cnt) {
     resolve_right_boundary();
     TRANS_LOG(INFO, "[resolve_right_boundary] dec_unsynced_cnt", K(ls_id), KPC(this));
@@ -1550,6 +1544,36 @@ void ObMemtable::resolve_left_boundary_for_active_memtable()
       ob_usleep(100);
     }
   } while (OB_FAIL(ret));
+}
+
+int64_t ObMemtable::inc_write_ref_()
+{
+  return ATOMIC_AAF(&write_ref_cnt_, 1);
+}
+
+int64_t ObMemtable::dec_write_ref_()
+{
+  return ATOMIC_SAF(&write_ref_cnt_, 1);
+}
+
+int64_t ObMemtable::inc_unsubmitted_cnt_()
+{
+  return ATOMIC_AAF(&unsubmitted_cnt_, 1);
+}
+
+int64_t ObMemtable::dec_unsubmitted_cnt_()
+{
+  return ATOMIC_SAF(&unsubmitted_cnt_, 1);
+}
+
+int64_t ObMemtable::inc_unsynced_cnt_()
+{
+  return ATOMIC_AAF(&unsynced_cnt_, 1);
+}
+
+int64_t ObMemtable::dec_unsynced_cnt_()
+{
+  return ATOMIC_SAF(&unsynced_cnt_, 1);
 }
 
 void ObMemtable::inc_unsubmitted_and_unsynced_cnt()

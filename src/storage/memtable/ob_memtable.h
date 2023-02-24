@@ -345,7 +345,7 @@ public:
   inline void set_write_barrier() { write_barrier_ = true; }
   inline void unset_write_barrier() { write_barrier_ = false; }
   inline void set_read_barrier() { read_barrier_ = true; }
-  virtual int64_t inc_write_ref() override { return ATOMIC_AAF(&write_ref_cnt_, 1); }
+  virtual int64_t inc_write_ref() override { return inc_write_ref_(); }
   virtual int64_t dec_write_ref() override;
   virtual int64_t get_write_ref() const override { return ATOMIC_LOAD(&write_ref_cnt_); }
   inline void set_is_tablet_freeze() { is_tablet_freeze_ = true; }
@@ -472,7 +472,10 @@ public:
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
                        K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version), K_(migration_clog_checkpoint_scn),
                        K_(is_tablet_freeze), K_(is_force_freeze), K_(contain_hotspot_row),
-                       K_(read_barrier), K_(is_flushed), K_(freeze_state));
+                       K_(read_barrier), K_(is_flushed), K_(freeze_state),
+                       K_(mt_stat_.frozen_time), K_(mt_stat_.ready_for_flush_time),
+                       K_(mt_stat_.create_flush_dag_time), K_(mt_stat_.release_time),
+                       K_(mt_stat_.last_print_time));
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
   int mvcc_write_(storage::ObStoreCtx &ctx,
@@ -526,6 +529,12 @@ private:
                                const int64_t last_compact_cnt,
                                const int64_t total_trans_node_count);
   bool ready_for_flush_();
+  int64_t inc_write_ref_();
+  int64_t dec_write_ref_();
+  int64_t inc_unsubmitted_cnt_();
+  int64_t dec_unsubmitted_cnt_();
+  int64_t inc_unsynced_cnt_();
+  int64_t dec_unsynced_cnt_();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
   bool is_inited_;

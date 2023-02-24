@@ -705,6 +705,8 @@ private:
   void handle_trans_ask_state_(const SCN &snapshot);
   int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id);
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
+  int check_and_submit_redo_log_(bool &try_submit);
+  int submit_redo_log_for_freeze_(bool &try_submit);
 protected:
   // for xa
   virtual bool is_sub2pc() const override

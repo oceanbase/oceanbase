@@ -1519,8 +1519,6 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
   int ret = OB_SUCCESS;
   ObTimeGuard tg("submit_redo_log", 100000);
   bool try_submit = false;
-  bool is_tx_committing = false;
-  bool final_log_submitting = false;
 
   if (is_freeze) {
     bool need_submit = !is_logging_blocked();
@@ -1528,20 +1526,8 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
       // spin lock
       CtxLockGuard guard(lock_);
       tg.click();
-      ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, true);
-
-      is_tx_committing = ObTxState::INIT != get_downstream_state();
-      final_log_submitting = final_log_cb_.is_valid();
-      if (!is_tx_committing && !final_log_submitting) {
-        (void)mt_ctx_.merge_multi_callback_lists_for_immediate_logging();
-        ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
-        if (OB_SUCC(ret) || OB_BLOCK_FROZEN == ret) {
-          ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG);
-        }
-        try_submit = true;
-      }
+      ret = submit_redo_log_for_freeze_(try_submit);
       tg.click();
-      ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, false);
       if (try_submit) {
         REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, OB_Y(ret), OB_ID(arg2), is_freeze,
                              OB_ID(used), tg.get_diff(), OB_ID(ctx_ref), get_ref());
@@ -1558,15 +1544,7 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
   } else {
     CtxLockGuard guard(lock_, false);
     tg.click();
-
-    is_tx_committing = ObTxState::INIT != get_downstream_state();
-    final_log_submitting = final_log_cb_.is_valid();
-
-    if (!is_tx_committing && !final_log_submitting) {
-      (void)mt_ctx_.merge_multi_callback_lists_for_immediate_logging();
-      ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
-      try_submit = true;
-    }
+    ret = check_and_submit_redo_log_(try_submit);
     tg.click();
     if (try_submit) {
       REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, OB_Y(ret), OB_ID(arg2), is_freeze,
@@ -1579,6 +1557,37 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
   } else {
     clear_block_frozen_memtable();
   }
+
+  return ret;
+}
+
+int ObPartTransCtx::check_and_submit_redo_log_(bool &try_submit)
+{
+  int ret = OB_SUCCESS;
+  bool is_tx_committing = ObTxState::INIT != get_downstream_state();
+  bool final_log_submitting = final_log_cb_.is_valid();
+
+  if (!is_tx_committing && !final_log_submitting) {
+    (void)mt_ctx_.merge_multi_callback_lists_for_immediate_logging();
+    ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
+    try_submit = true;
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::submit_redo_log_for_freeze_(bool &try_submit)
+{
+  int ret = OB_SUCCESS;
+
+  ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, true);
+  if (OB_FAIL(check_and_submit_redo_log_(try_submit))) {
+    TRANS_LOG(WARN, "fail to submit redo log for freeze", K(ret));
+  }
+  if (try_submit && (OB_SUCC(ret) || OB_BLOCK_FROZEN == ret)) {
+    ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG);
+  }
+  ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, false);
 
   return ret;
 }
