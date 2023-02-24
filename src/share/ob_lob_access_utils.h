@@ -145,7 +145,7 @@ public:
 
   int get_current_block(ObString &str);
 
-  int get_full_data(ObString &data_str);
+  int get_full_data(ObString &data_str, ObIAllocator *allocator = nullptr);
 
   int get_inrow_or_outrow_prefix_data(ObString &data_str,
                                       uint32_t prefix_char_len = DEAFULT_LOB_PREFIX_CHAR_LEN);
@@ -183,7 +183,7 @@ public:
                                                  bool need_deep_copy = false);
 
 private:
-  int get_outrow_lob_full_data();
+  int get_outrow_lob_full_data(ObIAllocator *allocator = nullptr);
   int get_first_block(ObString &str);
   int get_next_block_inner(ObString &str);
   int get_outrow_prefix_data(uint32_t prefix_char_len);

@@ -111,7 +111,8 @@ int ObTextStringIter::init(uint32_t buffer_len,
 
 static int init_lob_access_param(storage::ObLobAccessParam &param,
                                  ObLobTextIterCtx *lob_iter_ctx,
-                                 ObCollationType cs_type)
+                                 ObCollationType cs_type,
+                                 ObIAllocator *allocator = nullptr)
 {
   int ret = OB_SUCCESS;
   int64_t query_timeout = 0;
@@ -156,7 +157,10 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
     param.sql_mode_ = (lob_iter_ctx->session_ == NULL) ? SMO_DEFAULT : lob_iter_ctx->session_->get_sql_mode();
 
     param.tablet_id_ = ObTabletID(location_info->tablet_id_);
-    param.allocator_ = lob_iter_ctx->alloc_;
+    if (allocator == nullptr) {
+      allocator = lob_iter_ctx->alloc_;
+    }
+    param.allocator_ = allocator;
     int64_t disk_loc_handle_size = disk_loc_str.length();
     param.lob_common_ = disk_loc;
     param.handle_size_ = disk_loc_handle_size;
@@ -176,7 +180,7 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
   return ret;
 }
 
-int ObTextStringIter::get_outrow_lob_full_data()
+int ObTextStringIter::get_outrow_lob_full_data(ObIAllocator *allocator /*nullptr*/ )
 {
   int ret = OB_SUCCESS;
   storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
@@ -190,7 +194,7 @@ int ObTextStringIter::get_outrow_lob_full_data()
     COMMON_LOG(WARN, "Lob: get lob manager failed.", K(ret));
   } else { // outrow persist lob
     storage::ObLobAccessParam param;
-    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_))) {
+    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_, allocator))) {
       param.len_ = (ctx_->total_access_len_ == 0 ? param.byte_size_ : ctx_->total_access_len_);
 
       if (!param.ls_id_.is_valid() || !param.tablet_id_.is_valid()) {
@@ -291,7 +295,7 @@ int ObTextStringIter::get_current_block(ObString &str)
   return ret;
 }
 
-int ObTextStringIter::get_full_data(ObString &data_str)
+int ObTextStringIter::get_full_data(ObString &data_str, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (!is_init_ || state_ != TEXTSTRING_ITER_INIT) {
@@ -309,7 +313,7 @@ int ObTextStringIter::get_full_data(ObString &data_str)
     }
   } else {
     // outrow lob, read full data into a inrow local tmp lob currently
-    if (OB_FAIL(get_outrow_lob_full_data())) {
+    if (OB_FAIL(get_outrow_lob_full_data(allocator))) {
       COMMON_LOG(WARN, "Lob: get lob outrow data failed", K(ret));
     } else {
       data_str.assign_ptr(ctx_->buff_, ctx_->content_byte_len_);
