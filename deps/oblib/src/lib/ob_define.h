@@ -518,7 +518,7 @@ const int64_t OB_TRACE_STAT_BUFFER_SIZE= 200; //200
 
 
 const int64_t OB_MAX_VERSION_COUNT = 32;// max version count
-const int64_t OB_MAX_VERSION_COUNT_FOR_MERGE = 16;
+const int64_t OB_MAX_VERSION_COUNT_FOR_MERGE = 4;
 const int64_t OB_EASY_HANDLER_COST_TIME = 10 * 1000; // 10ms
 const int64_t OB_EASY_MEMORY_LIMIT = 4L << 30; // 4G
 
