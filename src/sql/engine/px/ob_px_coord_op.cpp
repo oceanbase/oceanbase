@@ -866,6 +866,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
     msg_loop_.set_tenant_id(ctx.get_my_session()->get_effective_tenant_id());
     msg_loop_.set_interm_result(enable_px_batch_rescan());
     msg_loop_.set_process_query_time(ctx_.get_my_session()->get_process_query_time());
+    msg_loop_.set_query_timeout_ts(ctx_.get_physical_plan_ctx()->get_timeout_timestamp());
     // root dfo 的 receive channel sets 在本机使用，不需要通过  DTL 发送
     // 直接注册到 msg_loop 中收取数据即可
     int64_t cnt = task_channels_.count();
@@ -937,6 +938,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
     msg_loop_.set_tenant_id(ctx.get_my_session()->get_effective_tenant_id());
     msg_loop_.set_interm_result(enable_px_batch_rescan());
     msg_loop_.set_process_query_time(ctx_.get_my_session()->get_process_query_time());
+    msg_loop_.set_query_timeout_ts(ctx_.get_physical_plan_ctx()->get_timeout_timestamp());
     // root dfo 的 receive channel sets 在本机使用，不需要通过  DTL 发送
     // 直接注册到 msg_loop 中收取数据即可
     int64_t cnt = task_channels_.count();

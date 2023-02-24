@@ -17,6 +17,7 @@
 #include "share/diagnosis/ob_sql_monitor_statname.h"
 #include "share/ob_server_blacklist.h"
 #include "observer/omt/ob_th_worker.h"
+#include "share/ob_occam_time_guard.h"
 
 using namespace oceanbase::common;
 
@@ -47,7 +48,9 @@ ObDtlChannelLoop::ObDtlChannelLoop()
       eof_channel_cnt_(0),
       loop_times_(0),
       begin_wait_time_(0),
-      process_query_time_(0)
+      process_query_time_(0),
+      last_dump_channel_time_(0),
+      query_timeout_ts_(0)
 {
   op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS_AFTER_DATA;
   op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS;
@@ -78,7 +81,9 @@ ObDtlChannelLoop::ObDtlChannelLoop(ObMonitorNode &op_monitor_info)
       eof_channel_cnt_(0),
       loop_times_(0),
       begin_wait_time_(0),
-      process_query_time_(0)
+      process_query_time_(0),
+      last_dump_channel_time_(0),
+      query_timeout_ts_(0)
 {
   op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS_AFTER_DATA;
   op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS;
@@ -268,6 +273,32 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
     }
 
     ++loop_times_;
+    if ((loop_times_ & (INTERRUPT_CHECK_TIMES - 1)) == 0) {
+      last_dump_channel_time_ = last_dump_channel_time_ < process_query_time_ ? process_query_time_ : last_dump_channel_time_;
+      int64_t curr_time = ::oceanbase::common::ObTimeUtility::current_time();
+      if (OB_UNLIKELY(curr_time - last_dump_channel_time_ >= static_cast<int64_t> (100_s))) {
+        last_dump_channel_time_ = curr_time;
+        LOG_WARN("dump channel loop info for query which active for more than 100 seconds", K(process_query_time_), K(curr_time), K(timeout), K(timeout_), K(query_timeout_ts_));
+        int64_t idx = -1;
+        int64_t last_in_msg_time = INT64_MAX;
+        // Find a channel that has not received data for the longest time
+        for (int64_t i = 0; i < chans_.count(); ++i) {
+          if (nullptr != chans_.at(i)) {
+            ObDtlBasicChannel *channel = static_cast<ObDtlBasicChannel *> (chans_.at(i));
+            if (channel->get_op_metric().get_last_in_ts() < last_in_msg_time) {
+              last_in_msg_time = channel->get_op_metric().get_last_in_ts();
+              idx = i;
+            }
+          }
+        }
+        if (-1 == idx) {
+          LOG_WARN("no channel exists");
+        } else {
+          ObDtlBasicChannel *channel = static_cast<ObDtlBasicChannel *> (chans_.at(idx));
+          LOG_WARN("dump channel info for query which active for more than 100 seconds", K(idx), K(channel->get_id()), K(channel->get_peer_id()), K(channel->get_peer()), K(channel->get_op_metric()));
+        }
+      }
+    }
     if (ignore_interrupt_) {
       // do nothing.
     } else if ((loop_times_ & (INTERRUPT_CHECK_TIMES - 1)) == 0 && OB_UNLIKELY(IS_INTERRUPTED())) {
@@ -328,7 +359,14 @@ int ObDtlChannelLoop::process_channels(ObIDltChannelLoopPred *pred, int64_t &nth
       LOG_WARN("unexpect next idx", K(next_idx_), K(chan_cnt), K(ret));
     } else {
       chan = chans_[next_idx_];
-      if (nullptr == pred || pred->pred_process(next_idx_, chan)) {
+      if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
+            share::ObCascadMember(chan->get_peer(), GCONF.cluster_id), true,
+            get_process_query_time()))) {
+        ret = OB_RPC_CONNECT_ERROR;
+        LOG_WARN("peer no in communication, maybe crashed", K(ret), K(chan->get_peer()),
+                  K(static_cast<int64_t>(GCONF.cluster_id)));
+        break;
+      } else if (nullptr == pred || pred->pred_process(next_idx_, chan)) {
         if (OB_SUCC(chan->process1(&process_func_, 0, last_row_in_buffer))) {
           nth_channel = next_idx_;
           first_data_get_ = true;

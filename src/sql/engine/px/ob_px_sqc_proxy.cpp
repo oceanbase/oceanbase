@@ -132,6 +132,7 @@ int ObPxSQCProxy::link_sqc_qc_channel(ObPxRpcInitSqcArgs &sqc_arg)
     const ObDtlBasicChannel *basic_channel = static_cast<ObDtlBasicChannel*>(sqc.get_sqc_channel());
     sqc_ctx_.msg_loop_.set_tenant_id(basic_channel->get_tenant_id());
     sqc_ctx_.msg_loop_.set_process_query_time(get_process_query_time());
+    sqc_ctx_.msg_loop_.set_query_timeout_ts(get_query_timeout_ts());
     LOG_TRACE("register sqc-qc channel", K(sqc));
   }
   return ret;
@@ -623,6 +624,15 @@ int64_t ObPxSQCProxy::get_process_query_time()
   int64_t res = 0;
   if (OB_NOT_NULL(sqc_arg_.exec_ctx_) && OB_NOT_NULL(sqc_arg_.exec_ctx_->get_my_session())) {
     res = sqc_arg_.exec_ctx_->get_my_session()->get_process_query_time();
+  }
+  return res;
+}
+
+int64_t ObPxSQCProxy::get_query_timeout_ts()
+{
+  int64_t res = 0;
+  if (OB_NOT_NULL(sqc_arg_.exec_ctx_) && OB_NOT_NULL(sqc_arg_.exec_ctx_->get_physical_plan_ctx())) {
+    res = sqc_arg_.exec_ctx_->get_physical_plan_ctx()->get_timeout_timestamp();
   }
   return res;
 }

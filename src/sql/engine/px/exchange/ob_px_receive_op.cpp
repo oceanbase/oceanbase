@@ -254,6 +254,7 @@ int ObPxReceiveOp::init_channel(
     loop.register_processor(px_row_msg_proc)
         .register_interrupt_processor(interrupt_proc);
     loop.set_process_query_time(ctx_.get_my_session()->get_process_query_time());
+    loop.set_query_timeout_ts(ctx_.get_physical_plan_ctx()->get_timeout_timestamp());
     ObPxSQCProxy *ch_provider = reinterpret_cast<ObPxSQCProxy *>(recv_input.get_ch_provider());
     int64_t batch_id = ctx_.get_px_batch_id();
     const bool use_interm_result = ch_provider->get_recieve_use_interm_result();
@@ -826,6 +827,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
       ret = get_rows_from_channels(row_cnt, timeout_ts - get_timestamp());
       if (OB_SUCCESS == ret) {
         metric_.mark_first_out();
+        metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
         LOG_DEBUG("Got one row from channel", K(ret));
         break; // got one row
       } else if (OB_ITER_END == ret) {
@@ -833,7 +835,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
           op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
           op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
         }
-        metric_.mark_last_out();
+        metric_.mark_eof();
         LOG_TRACE("Got eof row from channel", K(ret));
         break;
       } else if (OB_EAGAIN == ret) {

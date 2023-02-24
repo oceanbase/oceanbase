@@ -332,6 +332,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
     loop_.register_processor(dfc_unblock_msg_proc_)
         .register_interrupt_processor(interrupt_proc_);
     loop_.set_process_query_time(ctx_.get_my_session()->get_process_query_time());
+    loop_.set_query_timeout_ts(ctx_.get_physical_plan_ctx()->get_timeout_timestamp());
     bool use_interm_result = false;
     int64_t px_batch_id = ctx_.get_px_batch_id();
     ObPxSQCProxy *sqc_proxy = NULL;

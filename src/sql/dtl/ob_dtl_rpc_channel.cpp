@@ -256,8 +256,9 @@ int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
         if (buffer->is_data_msg()) {
           metric_.mark_first_in();
           if (buffer->is_eof()) {
-            metric_.mark_last_in();
+            metric_.mark_eof();
           }
+          metric_.set_last_in_ts(::oceanbase::common::ObTimeUtility::current_time());
         }
         IGNORE_RETURN recv_sem_.signal();
         if (msg_watcher_ != nullptr) {
@@ -338,8 +339,9 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer *&buf)
       if (is_first) {
         metric_.mark_first_out();
       }
+      metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
       if (is_eof) {
-        metric_.mark_last_out();
+        metric_.mark_eof();
         set_eof();
       }
     }
