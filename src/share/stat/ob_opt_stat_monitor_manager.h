@@ -68,8 +68,8 @@ public:
   virtual ~ObOptStatMonitorCheckTask() {}
   int init(int tg_id);
   virtual void runTimerTask() override;
-private:
   const static int64_t CHECK_INTERVAL = 900L * 1000L * 1000L; // 15min
+private:
   bool is_inited_;
 };
 

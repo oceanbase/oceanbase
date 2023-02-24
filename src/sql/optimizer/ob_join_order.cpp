@@ -10722,15 +10722,14 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
         }
       }
 
-      // 2. try to estimate the whole memtable
+      // 2. if the table row count is 0, we try refine it.
       if (OB_SUCC(ret) && table_meta_info_.table_row_count_ <= 0) {
-        if (origin_part_cnt > 1) {
-          // do nothing
-        } else if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(
-                      OPT_CTX, *table_partition_info_, table_meta_info_))) {
+        if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(OPT_CTX,
+                                                                         *table_partition_info_,
+                                                                         table_meta_info_))) {
           LOG_WARN("failed to estimate full table rowcount", K(ret));
         } else {
-          LOG_TRACE("total rowcount, mem-table without stats", K(table_meta_info_.table_row_count_));
+          LOG_TRACE("succeed to estimate full table rowcount", K(table_meta_info_.table_row_count_));
         }
       }
 

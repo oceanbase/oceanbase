@@ -694,5 +694,15 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
   }
   return ret;
 }
+
+int ObOptStatManager::get_table_rowcnt(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       const ObIArray<ObTabletID> &all_tablet_ids,
+                                       const ObIArray<ObLSID> &all_ls_ids,
+                                       int64_t &table_rowcnt)
+{
+  return stat_service_.get_table_rowcnt(tenant_id, table_id, all_tablet_ids, all_ls_ids, table_rowcnt);
+}
+
 }
 }

@@ -180,6 +180,12 @@ public:
 
   int handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
 
+  int get_table_rowcnt(const uint64_t tenant_id,
+                       const uint64_t table_id,
+                       const ObIArray<ObTabletID> &all_tablet_ids,
+                       const ObIArray<share::ObLSID> &all_ls_ids,
+                       int64_t &table_rowcnt);
+
   static ObOptStatManager &get_instance()
   {
     static ObOptStatManager instance_;

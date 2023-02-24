@@ -45,6 +45,12 @@ public:
   int erase_column_stat(const ObOptColumnStat::Key &key);
 
   ObOptStatSqlService &get_sql_service() { return sql_service_; }
+
+  int get_table_rowcnt(const uint64_t tenant_id,
+                       const uint64_t table_id,
+                       const ObIArray<ObTabletID> &all_tablet_ids,
+                       const ObIArray<share::ObLSID> &all_ls_ids,
+                       int64_t &table_rowcnt);
 private:
   /**
     * 接口load_and_put_cache(key, handle)的实现，外部不应该直接调用这个函数
@@ -57,6 +63,12 @@ private:
   int init_key_column_stats(ObIAllocator &allocator,
                             ObIArray<const ObOptColumnStat::Key*> &keys,
                             ObIArray<ObOptKeyColumnStat> &key_column_stats);
+
+  int load_table_rowcnt_and_put_cache(const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      const ObIArray<ObTabletID> &all_tablet_ids,
+                                      const ObIArray<share::ObLSID> &all_ls_ids,
+                                      int64_t &table_rowcnt);
 protected:
   bool inited_;
   static const int64_t DEFAULT_TAB_STAT_CACHE_PRIORITY = 1;
