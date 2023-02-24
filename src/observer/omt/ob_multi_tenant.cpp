@@ -964,6 +964,9 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     bucket_lock_.unlock(bucket_lock_idx);
   }
 
+  if (OB_FAIL(ret)) {
+    malloc_allocator->recycle_tenant_allocator(tenant_id);
+  }
   FLOG_INFO("finish create new tenant", K(ret), K(tenant_id), K(write_slog), K(create_step), K(bucket_lock_idx));
 
   return ret;
