@@ -68,15 +68,15 @@ int ObSqlPlanMgr::init(uint64_t tenant_id)
   } else if (OB_FALSE_IT(plan_real_info_mgr_=new(buf)ObPlanRealInfoMgr(get_allocator()))) {
   } else if (OB_FAIL(plan_real_info_mgr_->init(tenant_id, queue_size))) {
     LOG_WARN("failed to init plan real info manager", K(ret));
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::ReqMemEvict,
-                                      tg_id_))) {
-    SERVER_LOG(WARN, "create failed", K(ret));
-  } else if (OB_FAIL(TG_START(tg_id_))) {
-    SERVER_LOG(WARN, "init timer fail", K(ret));
-  } else if (OB_FAIL(task_.init(this))) {
-    SERVER_LOG(WARN, "fail to init sql plan timer task", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(tg_id_, task_, EVICT_INTERVAL, true))) {
-    SERVER_LOG(WARN, "start eliminate task failed", K(ret));
+  // } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::ReqMemEvict,
+  //                                     tg_id_))) {
+  //   SERVER_LOG(WARN, "create failed", K(ret));
+  // } else if (OB_FAIL(TG_START(tg_id_))) {
+  //   SERVER_LOG(WARN, "init timer fail", K(ret));
+  // } else if (OB_FAIL(task_.init(this))) {
+  //   SERVER_LOG(WARN, "fail to init sql plan timer task", K(ret));
+  // } else if (OB_FAIL(TG_SCHEDULE(tg_id_, task_, EVICT_INTERVAL, true))) {
+  //   SERVER_LOG(WARN, "start eliminate task failed", K(ret));
   } else {
     inited_ = true;
     destroyed_ = false;
@@ -145,25 +145,25 @@ int ObSqlPlanMgr::get_mem_limit(int64_t &mem_limit)
   // default mem limit
   mem_limit = static_cast<int64_t>(SQL_PLAN_MEM_FACTOR * tenant_mem_limit);
   // get mem_percentage from session info
-  ObArenaAllocator alloc;
-  ObObj obj_val;
-  int64_t mem_pct = 0;
-  if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(tenant_id_,
-                                                          alloc,
-                                                          ObDataTypeCastParams(),
-                                                          ObString(share::OB_SV_SQL_PLAN_MEMORY_PERCENTAGE),
-                                                          obj_val))) {
-    LOG_WARN("failed to get global sys variable", K(tenant_id_), K(ret));
-  } else if (OB_FAIL(obj_val.get_int(mem_pct))) {
-    LOG_WARN("failed to get int", K(ret), K(obj_val));
-  } else if (mem_pct < 0 || mem_pct > 100) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid value of sql plan mem percentage", K(ret), K(mem_pct));
-  } else {
-    mem_limit = static_cast<int64_t>(tenant_mem_limit * mem_pct / 100.0);
-    LOG_DEBUG("tenant sql plan memory limit", K_(tenant_id),
-             K(tenant_mem_limit), K(mem_pct), K(mem_limit));
-  }
+  // ObArenaAllocator alloc;
+  // ObObj obj_val;
+  // int64_t mem_pct = 0;
+  // if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(tenant_id_,
+  //                                                         alloc,
+  //                                                         ObDataTypeCastParams(),
+  //                                                         ObString(share::OB_SV_SQL_PLAN_MEMORY_PERCENTAGE),
+  //                                                         obj_val))) {
+  //   LOG_WARN("failed to get global sys variable", K(tenant_id_), K(ret));
+  // } else if (OB_FAIL(obj_val.get_int(mem_pct))) {
+  //   LOG_WARN("failed to get int", K(ret), K(obj_val));
+  // } else if (mem_pct < 0 || mem_pct > 100) {
+  //   ret = OB_INVALID_ARGUMENT;
+  //   LOG_WARN("invalid value of sql plan mem percentage", K(ret), K(mem_pct));
+  // } else {
+  //   mem_limit = static_cast<int64_t>(tenant_mem_limit * mem_pct / 100.0);
+  //   LOG_DEBUG("tenant sql plan memory limit", K_(tenant_id),
+  //            K(tenant_mem_limit), K(mem_pct), K(mem_limit));
+  // }
   return ret;
 }
 
@@ -174,7 +174,9 @@ int ObSqlPlanMgr::init_plan_table_manager(ObPlanItemMgr* &plan_table_mgr)
   plan_table_mgr = NULL;
   int64_t evict_high_level = 0;
   int64_t evict_low_level = 0;
-  if (OB_FAIL(task_.calc_evict_mem_level(evict_low_level, evict_high_level))) {
+  if (1 == 1) {
+    //do nothing
+  } else if (OB_FAIL(task_.calc_evict_mem_level(evict_low_level, evict_high_level))) {
     LOG_WARN("fail to get sql plan evict memory level", K(ret));
   } else if (evict_high_level <= allocator_.allocated()) {
     //do nothing

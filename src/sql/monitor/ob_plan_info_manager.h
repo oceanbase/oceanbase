@@ -3,8 +3,8 @@
 //   zhenling.zzg
 // this file defines interface of plan real info manager
 
-#ifndef SRC_OBSERVER_PLAN_REAL_INFO_MGR_H_
-#define SRC_OBSERVER_PLAN_REAL_INFO_MGR_H_
+#ifndef SRC_OBSERVER_PLAN_INFO_MGR_H_
+#define SRC_OBSERVER_PLAN_INFO_MGR_H_
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "observer/mysql/ob_ra_queue.h"
 #include "lib/task/ob_timer.h"
@@ -238,4 +238,4 @@ private:
 
 
 
-#endif /* SRC_OBSERVER_PLAN_REAL_INFO_MGR_H_ */
+#endif /* SRC_OBSERVER_PLAN_INFO_MGR_H_ */

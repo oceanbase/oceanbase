@@ -942,18 +942,18 @@ int ObOperator::submit_op_monitor_node()
         LOG_DEBUG("debug monitor", K(spec_.id_));
       }
     }
-    ObSqlPlanMgr *sql_plan_mgr = MTL(ObSqlPlanMgr*);
-    ObPlanRealInfoMgr *plan_info = NULL;
-    if (NULL != sql_plan_mgr) {
-      plan_info = sql_plan_mgr->get_plan_real_info_mgr();
-    }
-    if (plan_info && spec_.plan_ && spec_.plan_->need_record_plan_info()) {
-      IGNORE_RETURN plan_info->handle_plan_info(spec_.id_,
-                                                spec_.plan_->get_sql_id_string(),
-                                                spec_.plan_->get_plan_id(),
-                                                spec_.plan_->get_plan_hash_value(),
-                                                op_monitor_info_);
-    }
+    // ObSqlPlanMgr *sql_plan_mgr = MTL(ObSqlPlanMgr*);
+    // ObPlanRealInfoMgr *plan_info = NULL;
+    // if (NULL != sql_plan_mgr) {
+    //   plan_info = sql_plan_mgr->get_plan_real_info_mgr();
+    // }
+    // if (plan_info && spec_.plan_ && spec_.plan_->need_record_plan_info()) {
+    //   IGNORE_RETURN plan_info->handle_plan_info(spec_.id_,
+    //                                             spec_.plan_->get_sql_id_string(),
+    //                                             spec_.plan_->get_plan_id(),
+    //                                             spec_.plan_->get_plan_hash_value(),
+    //                                             op_monitor_info_);
+    // }
   }
   IGNORE_RETURN try_deregister_rt_monitor_node();
   return ret;

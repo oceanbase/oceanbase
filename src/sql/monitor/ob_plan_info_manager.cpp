@@ -10,7 +10,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/thread/thread_mgr.h"
 #include "common/object/ob_object.h"
-#include "ob_plan_real_info_manager.h"
+#include "ob_plan_info_manager.h"
 #include "lib/ob_running_mode.h"
 #include "util/easy_time.h"
 #include "lib/rc/ob_rc.h"

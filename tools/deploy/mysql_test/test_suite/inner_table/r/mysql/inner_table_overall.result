@@ -578,9 +578,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12356	__all_virtual_rls_attribute	2	201001	1
 12357	__all_virtual_rls_attribute_history	2	201001	1
 12358	__all_virtual_tenant_mysql_sys_agent	2	201001	1
-12359	__all_virtual_sql_plan	2	201001	1
-12360	__all_virtual_plan_table	2	201001	1
-12361	__all_virtual_plan_real_info	2	201001	1
 12362	__all_virtual_core_table	2	201001	1
 12364	__all_virtual_ls_arb_replica_task	2	201001	1
 12365	__all_virtual_ls_arb_replica_task_history	2	201001	1
@@ -852,10 +849,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21338	DBA_OB_DATABASE_PRIVILEGE	1	201001	1
 21339	CDB_OB_DATABASE_PRIVILEGE	1	201001	1
 21340	DBA_OB_USER_DEFINED_RULES	1	201001	1
-21341	GV$OB_SQL_PLAN	1	201001	1
-21342	V$OB_SQL_PLAN	1	201001	1
-21343	GV$OB_PLAN_REAL_INFO	1	201001	1
-21344	V$OB_PLAN_REAL_INFO	1	201001	1
 21345	DBA_OB_CLUSTER_EVENT_HISTORY	1	201001	1
 21346	PARAMETERS	1	201002	1
 21347	TABLE_PRIVILEGES	1	201002	1
