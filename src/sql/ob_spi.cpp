@@ -3315,6 +3315,9 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
             }
             if (OB_NOT_NULL(spi_result)) {
               spi_result->end_cursor_stmt(ctx, ret);
+              if (!need_destruct && OB_SUCCESS != ret) {
+                need_destruct = true;
+              }
             }
             if (need_destruct) {
               spi_result->~ObSPIResultSet();
