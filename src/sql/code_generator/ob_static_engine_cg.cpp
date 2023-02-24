@@ -5628,9 +5628,14 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpe
     LOG_ERROR("wrong number of children", K(ret), K(op.get_num_of_child()));
   }
   if (OB_SUCC(ret) && op.is_range_dist_parallel()) {
-    OZ(fill_sort_info(op.get_rd_sort_keys(), spec.rd_sort_collations_, rd_expr));
-    OZ(fill_sort_funcs(spec.rd_sort_collations_, spec.rd_sort_cmp_funcs_, rd_expr));
-    OZ(append(all_expr, rd_expr));
+    ObSEArray<OrderItem, 8> rd_sort_keys;
+    if (OB_FAIL(op.get_rd_sort_keys(rd_sort_keys))) {
+      LOG_WARN("Get unexpected null", K(ret));
+    } else {
+      OZ(fill_sort_info(rd_sort_keys, spec.rd_sort_collations_, rd_expr));
+      OZ(fill_sort_funcs(spec.rd_sort_collations_, spec.rd_sort_cmp_funcs_, rd_expr));
+      OZ(append(all_expr, rd_expr));
+    }
   }
 
   if (OB_FAIL(ret)) {
