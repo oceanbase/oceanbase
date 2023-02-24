@@ -755,6 +755,7 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
     } else { \
       meta.set_ext(); \
       res_type.set_meta(meta); \
+      res_type.set_extend_type(pl_type.get_type());\
       res_type.set_udt_id(pl_type.get_user_type_id()); \
     } \
   }
