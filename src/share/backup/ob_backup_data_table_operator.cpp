@@ -1062,25 +1062,22 @@ int ObBackupTabletToLSOperator::do_parse_tablet_ls_pairs_(const ObIArray<share::
     common::hash::ObHashMap<ObLSID, ObArray<ObTabletID>> &tablet_to_ls, ObTabletID &max_tablet_id)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObTabletID> tablet_ids;
   ObTabletID tmp_max_tablet_id(ObTabletID::MIN_USER_TABLET_ID);
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ls_pairs.count(); ++i) {
-    tablet_ids.reset();
     const ObTabletLSPair &tablet_ls_pair = tablet_ls_pairs.at(i);
+    ObLSID ls_id = tablet_ls_pair.get_ls_id();
     tmp_max_tablet_id = std::max(tmp_max_tablet_id.id(), tablet_ls_pair.get_tablet_id().id());
-    if (OB_FAIL(tablet_to_ls.get_refactored(tablet_ls_pair.get_ls_id(), tablet_ids))) {
-      if (ret == OB_HASH_NOT_EXIST) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to get ls id", K(ret));
+    ObArray<ObTabletID> *tablet_ids = nullptr;
+    if (OB_ISNULL(tablet_ids = tablet_to_ls.get(ls_id))) {
+      ObArray<ObTabletID> cur_tablet_ids;
+      if (OB_FAIL(cur_tablet_ids.push_back(tablet_ls_pair.get_tablet_id()))) {
+        LOG_WARN("failed to push back tablet ls pair", K(ret));
+      } else if (OB_FAIL(tablet_to_ls.set_refactored(tablet_ls_pair.get_ls_id(), cur_tablet_ids, 1))) {
+        LOG_WARN("failed to set ls id", K(ret));
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tablet_ids.push_back(tablet_ls_pair.get_tablet_id()))) {
+    } else if (OB_FAIL(tablet_ids->push_back(tablet_ls_pair.get_tablet_id()))) {
       LOG_WARN("fail to append tablet ids", K(ret));
-    } else if (OB_FAIL(tablet_to_ls.set_refactored(tablet_ls_pair.get_ls_id(), tablet_ids, 1))) {
-      LOG_WARN("failed to set ls id", K(ret));
-    }  
+    }
   }
   if (OB_SUCC(ret)) {
     max_tablet_id = tmp_max_tablet_id;

@@ -672,6 +672,7 @@ int ObBackupSetTaskMgr::do_check_inc_tablets_(
 {
   int ret = OB_SUCCESS;
   ObAddr dst_server;
+  const int64_t batch_size = 2048;
   if (!ls_id.is_valid() || inc_tablets.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(ls_id), K(inc_tablets));
@@ -682,12 +683,17 @@ int ObBackupSetTaskMgr::do_check_inc_tablets_(
     arg.tenant_id_ = set_task_attr_.tenant_id_;
     arg.ls_id_ = ls_id;
     arg.backup_scn_ = backup_scn;
-    if (OB_FAIL(append(arg.tablet_ids_, inc_tablets))) {
-      LOG_WARN("[DATA_BACKUP]append inc tablets", K(ret), K(inc_tablets));
-    } else if (OB_FAIL(rpc_proxy_->to(dst_server).check_not_backup_tablet_create_scn(arg))) {
-      LOG_WARN("[DATA_BACKUP]fail to send backup check tablet rpc", K(ret), K(arg), K(dst_server));
-    } else {
-      FLOG_INFO("[DATA_BACKUP]succeed send backup check tablet rpc", K(arg), K(dst_server));
+    ARRAY_FOREACH(inc_tablets, i) {
+      arg.tablet_ids_.reset();
+      if (OB_FAIL(arg.tablet_ids_.push_back(inc_tablets.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (arg.tablet_ids_.count() == batch_size || inc_tablets.count() - 1 == i) {
+        if (OB_FAIL(rpc_proxy_->to(dst_server).check_not_backup_tablet_create_scn(arg))) {
+          LOG_WARN("[DATA_BACKUP]fail to send backup check tablet rpc", K(ret), K(arg), K(dst_server));
+        } else {
+          FLOG_INFO("[DATA_BACKUP]succeed send backup check tablet rpc", K(arg), K(dst_server));
+        }
+      }
     }
   }
   return ret;
