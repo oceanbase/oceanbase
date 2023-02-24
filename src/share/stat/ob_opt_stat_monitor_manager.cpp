@@ -169,11 +169,12 @@ ObOptStatMonitorManager &ObOptStatMonitorManager::get_instance()
 
 int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &ctx,
                                                             const bool is_flush_col_usage,
-                                                            const bool is_flush_dml_stat)
+                                                            const bool is_flush_dml_stat,
+                                                            const bool ignore_failed)
 {
   int ret = OB_SUCCESS;
   int64_t timeout = -1;
-  ObSEArray<ObServerLocality, 8> all_server_arr;
+  ObSEArray<ObServerLocality, 4> all_server_arr;
   bool has_read_only_zone = false; // UNUSED;
   if (OB_ISNULL(ctx.get_my_session()) ||
       OB_ISNULL(GCTX.srv_rpc_proxy_) ||
@@ -189,6 +190,7 @@ int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &
                                                                   has_read_only_zone))) {
       LOG_WARN("fail to get server locality", K(ret));
     } else {
+      ObSEArray<ObServerLocality, 4> failed_server_arr;
       for (int64_t i = 0; OB_SUCC(ret) && i < all_server_arr.count(); i++) {
         if (!all_server_arr.at(i).is_active()
             || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
@@ -202,9 +204,15 @@ int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &
                                                   .timeout(timeout)
                                                   .by(ctx.get_my_session()->get_rpc_tenant_id())
                                                   .flush_local_opt_stat_monitoring_info(arg))) {
-          LOG_WARN("failed to flush opt stat monitoring info", K(ret));
+          LOG_WARN("failed to flush opt stat monitoring info caused by unknow error",
+                                                K(ret), K(all_server_arr.at(i).get_addr()), K(arg));
+          //ignore flush cache failed, TODO @jiangxiu.wt can aduit it and flush cache manually later.
+          if (ignore_failed && OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
         }
       }
+      LOG_TRACE("flush database monitoring info cache", K(arg), K(failed_server_arr), K(all_server_arr));
     }
   }
   return ret;

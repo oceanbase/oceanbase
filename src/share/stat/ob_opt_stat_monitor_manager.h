@@ -149,7 +149,8 @@ public:
 public:
   static int flush_database_monitoring_info(sql::ObExecContext &ctx,
                                             const bool is_flush_col_usage = true,
-                                            const bool is_flush_dml_stat = true);
+                                            const bool is_flush_dml_stat = true,
+                                            const bool ignore_failed = true);
   int update_opt_stat_monitoring_info(const bool with_check);
   int update_opt_stat_monitoring_info(const obrpc::ObFlushOptStatArg &arg);
   int update_local_cache(uint64_t tenant_id, common::ObIArray<ColumnUsageArg> &args);
