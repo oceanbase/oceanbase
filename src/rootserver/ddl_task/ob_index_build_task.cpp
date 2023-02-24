@@ -1465,11 +1465,6 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, check_unique_snapshot_);
     LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, data_format_version_);
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ddl_tracing_.serialize(buf, buf_len, pos))) {
-        LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
-      }
-    }
   }
   return ret;
 }
@@ -1490,11 +1485,6 @@ int ObIndexBuildTask::deserlize_params_from_message(const char *buf, const int64
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_);
     LST_DO_CODE(OB_UNIS_DECODE, parallelism_, data_format_version_);
-    if (OB_SUCC(ret) && pos < data_len) {
-      if (OB_FAIL(ddl_tracing_.deserialize(buf, data_len, pos))) {
-        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
-      }
-    }
   }
   return ret;
 }
@@ -1505,6 +1495,5 @@ int64_t ObIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i64(check_unique_snapshot_)
       + serialization::encoded_length_i64(task_version_)
       + serialization::encoded_length_i64(parallelism_)
-      + serialization::encoded_length_i64(data_format_version_)
-      + ddl_tracing_.get_serialize_size();
+      + serialization::encoded_length_i64(data_format_version_);
 }

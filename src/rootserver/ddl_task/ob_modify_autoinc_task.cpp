@@ -594,8 +594,6 @@ int ObModifyAutoincTask::serialize_params_to_message(char *buf, const int64_t bu
     LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
-  } else if (OB_FAIL(ddl_tracing_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
   }
   return ret;
 }
@@ -613,20 +611,13 @@ int ObModifyAutoincTask::deserlize_params_from_message(const char *buf, const in
     LOG_WARN("serialize table failed", K(ret));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
-  } else {
-    if (pos < data_len) {
-      if (OB_FAIL(ddl_tracing_.deserialize(buf, data_len, pos))) {
-        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
-      }
-    }
   }
   return ret;
 }
 
 int64_t ObModifyAutoincTask::get_serialize_param_size() const
 {
-  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_)
-    + ddl_tracing_.get_serialize_size();
+  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_);
 }
 
 void ObModifyAutoincTask::flt_set_task_span_tag() const

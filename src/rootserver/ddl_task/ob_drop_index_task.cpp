@@ -414,8 +414,6 @@ int ObDropIndexTask::serialize_params_to_message(char *buf, const int64_t buf_si
     LOG_WARN("invalid arg", K(ret), KP(buf), K(buf_size));
   } else if (OB_FAIL(drop_index_arg_.serialize(buf, buf_size, pos))) {
     LOG_WARN("serialize failed", K(ret));
-  } else if (OB_FAIL(ddl_tracing_.serialize(buf, buf_size, pos))) {
-    LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
   }
   return ret;
 }
@@ -431,19 +429,13 @@ int ObDropIndexTask::deserlize_params_from_message(const char *buf, const int64_
     LOG_WARN("deserialize failed", K(ret));
   } else if (OB_FAIL(deep_copy_index_arg(allocator_, tmp_drop_index_arg, drop_index_arg_))) {
     LOG_WARN("deep copy drop index arg failed", K(ret));
-  } else {
-    if (pos < buf_size) {
-      if (OB_FAIL(ddl_tracing_.deserialize(buf, buf_size, pos))) {
-        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
-      }
-    }
   }
   return ret;
 }
 
 int64_t ObDropIndexTask::get_serialize_param_size() const
 {
-  return drop_index_arg_.get_serialize_size() + ddl_tracing_.get_serialize_size();
+  return drop_index_arg_.get_serialize_size();
 }
 
 void ObDropIndexTask::flt_set_task_span_tag() const
