@@ -553,6 +553,49 @@ int ObOperator::check_stack_once()
   return ret;
 }
 
+int ObOperator::output_expr_sanity_check()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < spec_.output_.count(); ++i) {
+    ObDatum *datum = NULL;
+    const ObExpr *expr = spec_.output_[i];
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, expr is nullptr", K(ret));
+    } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
+      LOG_WARN("evaluate expression failed", K(ret));
+    } else {
+      SANITY_CHECK_RANGE(datum->ptr_, datum->len_);
+    }
+  }
+  return ret;
+}
+
+int ObOperator::output_expr_sanity_check_batch()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < spec_.output_.count(); ++i) {
+    const ObExpr *expr = spec_.output_[i];
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, expr is nullptr", K(ret));
+    } else if (OB_FAIL(expr->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
+      LOG_WARN("evaluate expression failed", K(ret));
+    } else if (!expr->is_batch_result()){
+      const ObDatum &datum = expr->locate_expr_datum(eval_ctx_);
+      SANITY_CHECK_RANGE(datum.ptr_, datum.len_);
+    } else {
+      const ObDatum *datums = expr->locate_batch_datums(eval_ctx_);
+      for (int64_t j = 0; j < brs_.size_; j++) {
+        if (!brs_.skip_->at(j)) {
+          SANITY_CHECK_RANGE(datums[j].ptr_, datums[j].len_);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // copy from ob_phy_operator.cpp
 int ObOperator::open()
 {
@@ -958,8 +1001,8 @@ int ObOperator::get_next_row()
               "op_id", spec_.id_);
           }
         } else {
+          bool filtered = false;
           if (!spec_.filters_.empty()) {
-            bool filtered = false;
             if (OB_FAIL(filter_row(filtered))) {
               LOG_WARN("filter row failed", K(ret), "type", spec_.type_, "op", op_name());
             } else {
@@ -968,6 +1011,13 @@ int ObOperator::get_next_row()
               }
             }
           }
+#ifdef ENABLE_SANITY
+          if (OB_SUCC(ret) && !filtered) {
+            if (OB_FAIL(output_expr_sanity_check())) {
+              LOG_WARN("output expr sanity check failed", K(ret));
+            }
+          }
+#endif
         }
         break;
       }
@@ -1067,11 +1117,11 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         if (OB_SUCC(ret) && (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_)) {
           IGNORE_RETURN try_register_rt_monitor_node(brs_.size_);
         }
+        bool all_filtered = false;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(try_check_status_by_rows(brs_.size_))) {
           LOG_WARN("check status failed", K(ret));
         } else if (!spec_.filters_.empty()) {
-          bool all_filtered = false;
           if (OB_FAIL(filter_batch_rows(spec_.filters_,
                                         *brs_.skip_,
                                         brs_.size_,
@@ -1084,6 +1134,13 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
             continue;
           }
         }
+#ifdef ENABLE_SANITY
+        if (OB_SUCC(ret) && !all_filtered) {
+          if (OB_FAIL(output_expr_sanity_check_batch())) {
+            LOG_WARN("output expr sanity check batch failed", K(ret));
+          }
+        }
+#endif
         break;
       }
 

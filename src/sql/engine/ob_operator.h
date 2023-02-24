@@ -565,6 +565,8 @@ private:
   int submit_op_monitor_node();
   bool match_rt_monitor_condition(int64_t rows);
   int check_stack_once();
+  int output_expr_sanity_check();
+  int output_expr_sanity_check_batch();
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;
