@@ -92,6 +92,10 @@ private:
   void run1();
   void do_thread_task_();
 
+  int try_consume_send_task_();
+
+  int do_consume_send_task_();
+
   // 消费task status, 为日志流级别send_task队列, 目前为单线程消费单个日志流
   int get_send_task_(ObArchiveSendTask *&task, bool &exist);
 

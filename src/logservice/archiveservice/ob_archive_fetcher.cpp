@@ -299,6 +299,10 @@ void ObArchiveFetcher::do_thread_task_()
       ARCHIVE_LOG(WARN, "handle single task failed", K(ret));
     }
   }
+
+  if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+    ARCHIVE_LOG(INFO, "ObArchiveFetcher is running", "thread_index", get_thread_idx());
+  }
 }
 
 int ObArchiveFetcher::handle_single_task_()
