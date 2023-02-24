@@ -271,7 +271,8 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
       need_add_tx = true;
     } else {
       // update
-      if (tx->state_ != ObTxDesc::State::IDLE) {
+      // NOTE: for XA join/resume will cause `static state` re-synced
+      if (tx->state_ != ObTxDesc::State::IDLE && !tx->is_xa_trans()) {
         ret = OB_ERR_UNEXPECTED;
         ObSpinLockGuard guard(tx->lock_);
         TRANS_LOG(ERROR, "txn static update must with IDLE state", K(ret), K(session_id), KPC(tx));
