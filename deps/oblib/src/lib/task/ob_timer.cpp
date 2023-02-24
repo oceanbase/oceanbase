@@ -125,7 +125,7 @@ void ObTimer::destroy()
       ObMonitor<Mutex>::Lock guard(monitor_);
       for (int64_t i = 0; i < tasks_num_; ++i) {
         tokens_[i].task->cancelCallBack();
-        ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr); 
+        ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr);
       }
       tasks_num_ = 0;
     }
@@ -261,7 +261,7 @@ int ObTimer::cancel(const ObTimerTask &task)
     }
     if (pos != -1) {
       tokens_[pos].task->cancelCallBack();
-      ATOMIC_STORE(&(tokens_[pos].task->timer_), nullptr); 
+      ATOMIC_STORE(&(tokens_[pos].task->timer_), nullptr);
       memmove(&tokens_[pos], &tokens_[pos + 1],
               sizeof(tokens_[0]) * (tasks_num_ - pos - 1));
       --tasks_num_;
@@ -276,7 +276,7 @@ void ObTimer::cancel_all()
   ObMonitor<Mutex>::Lock guard(monitor_);
   for (int64_t i = 0; i < tasks_num_; ++i) {
     tokens_[i].task->cancelCallBack();
-    ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr); 
+    ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr);
   }
   tasks_num_ = 0;
   OB_LOG(INFO, "cancel all", KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_));
@@ -391,7 +391,7 @@ void ObTimer::run1()
         ObTimerMonitor::get_instance().end_task(thread_id_, end_time);
       }
 
-      if (elapsed_time > 1000 * 1000) {
+      if (elapsed_time > ELAPSED_TIME_LOG_THREASHOLD) {
         OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "timer task cost too much time", "task", to_cstring(*token.task),
             K(start_time), K(end_time), K(elapsed_time), KP(this), K_(thread_id));
       }
