@@ -2454,6 +2454,8 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     } else if (OB_FAIL(stmt.formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
+    } else if (OB_FAIL(stmt.formalize_stmt_expr_reference())) {
+      LOG_WARN("failed to formalize stmt expr reference", K(ret));
     }
   }
   // 12. ignore for temp table optimization
