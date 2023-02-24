@@ -41,7 +41,7 @@ int ObDDLServerClient::create_hidden_table(const obrpc::ObCreateHiddenTableArg &
     LOG_WARN("failed to create hidden table", KR(ret), K(arg));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  } else if (OB_FAIL(wait_table_lock(arg.tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
+  } else if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
     LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     int tmp_ret = OB_SUCCESS;
     obrpc::ObAbortRedefTableArg abort_redef_table_arg;
@@ -71,7 +71,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
     LOG_WARN("failed to start redef table", KR(ret), K(arg));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  } else if (OB_FAIL(wait_table_lock(arg.orig_tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
+  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
     LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     int tmp_ret = OB_SUCCESS;
     obrpc::ObAbortRedefTableArg abort_redef_table_arg;
@@ -86,7 +86,6 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
   }
   return ret;
 }
-
 int ObDDLServerClient::copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -188,7 +187,7 @@ int ObDDLServerClient::build_ddl_single_replica_response(const obrpc::ObDDLBuild
   return ret;
 }
 
-int ObDDLServerClient::wait_table_lock(const uint64_t tenant_id, const int64_t task_id, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session)
+int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const int64_t task_id, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   const int64_t retry_interval = 100 * 1000;

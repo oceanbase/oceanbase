@@ -800,7 +800,8 @@ int ObTableRedefinitionTask::repending(const share::ObDDLTaskStatus next_task_st
 
 bool ObTableRedefinitionTask::check_task_status_before_pending(const share::ObDDLTaskStatus task_status)
 {
-  return task_status == ObDDLTaskStatus::PREPARE || task_status == ObDDLTaskStatus::WAIT_TRANS_END || task_status == ObDDLTaskStatus::LOCK_TABLE;
+  return task_status == ObDDLTaskStatus::PREPARE || task_status == ObDDLTaskStatus::WAIT_TRANS_END
+         || task_status == ObDDLTaskStatus::LOCK_TABLE || task_status == ObDDLTaskStatus::CHECK_TABLE_EMPTY;
 }
 
 int ObTableRedefinitionTask::process()
@@ -825,18 +826,18 @@ int ObTableRedefinitionTask::process()
         }
         break;
       case ObDDLTaskStatus::LOCK_TABLE:
-        if (OB_FAIL(lock_table(ObDDLTaskStatus::REPENDING))) {
+        if (OB_FAIL(lock_table(ObDDLTaskStatus::CHECK_TABLE_EMPTY))) {
           LOG_WARN("fail to lock table", K(ret));
         }
         break;
-      case ObDDLTaskStatus::REPENDING:
-        if (OB_FAIL(repending(ObDDLTaskStatus::CHECK_TABLE_EMPTY))) {
-          LOG_WARN("fail to repending", K(ret));
+      case ObDDLTaskStatus::CHECK_TABLE_EMPTY:
+        if (OB_FAIL(check_table_empty(ObDDLTaskStatus::REPENDING))) {
+          LOG_WARN("fail to check table empty", K(ret));
         }
         break;
-      case ObDDLTaskStatus::CHECK_TABLE_EMPTY:
-        if (OB_FAIL(check_table_empty(ObDDLTaskStatus::REDEFINITION))) {
-          LOG_WARN("fail to check table empty", K(ret));
+      case ObDDLTaskStatus::REPENDING:
+        if (OB_FAIL(repending(ObDDLTaskStatus::REDEFINITION))) {
+          LOG_WARN("fail to repending", K(ret));
         }
         break;
       case ObDDLTaskStatus::REDEFINITION:
