@@ -160,7 +160,7 @@ int ObExprFormat::calc_result_type(ObExprResType &type, ObExprResType *type_arra
         }
         case ObVarcharType:
         case ObCharType: {
-          int32_t length = type_array[0].get_length();
+          int32_t length = ori_type.get_length();
           if (length <= MAX_VARCHAR_BUFFER_SIZE) {
             type.set_varchar();
             int64_t max_sep_count = (length / 3) + /*decimals*/1 + /*sign*/1;
