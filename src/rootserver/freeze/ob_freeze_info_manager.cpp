@@ -211,13 +211,13 @@ int ObFreezeInfoManager::get_global_broadcast_scn(SCN &global_broadcast_scn) con
   return ret;
 }
 
-int ObFreezeInfoManager::adjust_global_merge_info()
+int ObFreezeInfoManager::adjust_global_merge_info(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(merge_info_mgr_)) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("merge info mgr is null", KR(ret));
-  } else if (OB_FAIL(merge_info_mgr_->adjust_global_merge_info())) {
+  } else if (OB_FAIL(merge_info_mgr_->adjust_global_merge_info(expected_epoch))) {
     LOG_WARN("fail to adjust global merge info", KR(ret), K_(tenant_id));
   }
   return ret;

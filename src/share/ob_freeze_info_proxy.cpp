@@ -169,6 +169,42 @@ int ObFreezeInfoProxy::get_freeze_info_larger_or_equal_than(
   return ret;
 }
 
+int ObFreezeInfoProxy::get_max_frozen_scn_smaller_or_equal_than(
+    ObISQLClient &sql_proxy,
+    const SCN &compaction_scn,
+    SCN &max_frozen_scn)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_UNLIKELY(!compaction_scn.is_valid() || (compaction_scn < SCN::base_scn()))) {
+    LOG_WARN("invalid argument", KR(ret), K(compaction_scn));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = nullptr;
+      const uint64_t compaction_scn_val = compaction_scn.get_val_for_inner_table_field();
+      if (OB_FAIL(sql.assign_fmt("SELECT MAX(frozen_scn) as value FROM %s WHERE frozen_scn <= %lu",
+          OB_ALL_FREEZE_INFO_TNAME, compaction_scn_val))) {
+        LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K(compaction_scn));
+      } else if (OB_FAIL(sql_proxy.read(res, tenant_id_, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(sql), K_(tenant_id));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", KR(ret), K(sql), K_(tenant_id));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("get next result failed", KR(ret), K_(tenant_id), K(sql));
+      } else {
+        uint64_t max_frozen_scn_val = UINT64_MAX;
+        EXTRACT_UINT_FIELD_MYSQL(*result, "value", max_frozen_scn_val, uint64_t);
+        if (FAILEDx(max_frozen_scn.convert_for_inner_table_field(max_frozen_scn_val))) {
+          LOG_WARN("fail to convert uint64_t to SCN", KR(ret), K(max_frozen_scn_val));
+        }
+      }
+    }
+  }
+  LOG_INFO("finish to get freeze_info", KR(ret), K_(tenant_id), K(sql));
+  return ret;
+}
+
 int ObFreezeInfoProxy::set_freeze_info(
     ObISQLClient &sql_proxy,
     const ObSimpleFrozenStatus &frozen_status)
