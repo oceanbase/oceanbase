@@ -269,7 +269,11 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
                K(stmt_fmt_pos), K(stmt_fmt_next_param_pos));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (link_stmt_pos >= stmt_buf_len_ && OB_FAIL(extend_stmt_buf(link_stmt_pos + 1))) {
+      LOG_WARN("failed to extend stmt buf", K(ret), K(link_stmt_pos), K(stmt_buf_len_));
+  } else {
     stmt_buf_[link_stmt_pos++] = 0;
     LOG_DEBUG("succ to combine link sql", K(stmt_buf_), K(link_stmt_pos));
     if (DBLINK_DRV_OB == link_type_) {
