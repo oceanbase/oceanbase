@@ -25,6 +25,7 @@ namespace sql
         : ObLogicalOperator(plan),
         single_part_parallel_(false),
         range_dist_parallel_(false),
+        rd_sort_keys_cnt_(0),
         rd_pby_sort_cnt_(0)
     {}
     virtual ~ObLogWindowFunction() {}
@@ -54,15 +55,17 @@ namespace sql
     void set_ragne_dist_parallel(bool v) { range_dist_parallel_ = v; }
     bool is_range_dist_parallel() const { return range_dist_parallel_; }
     int get_winfunc_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
-    int set_rd_sort_keys(const common::ObIArray<OrderItem> &sort_keys)
+    int get_rd_sort_keys(common::ObIArray<OrderItem> &rd_sort_keys);
+    int set_sort_keys(const common::ObIArray<OrderItem> &sort_keys)
     {
-      return rd_sort_keys_.assign(sort_keys);
+      return sort_keys_.assign(sort_keys);
     }
-    const common::ObIArray<OrderItem> &get_rd_sort_keys() const
+    const common::ObIArray<OrderItem> &get_sort_keys() const
     {
-      return rd_sort_keys_;
+      return sort_keys_;
     }
 
+    void set_rd_sort_keys_cnt(const int64_t cnt) { rd_sort_keys_cnt_ = cnt; }
     void set_rd_pby_sort_cnt(const int64_t cnt) { rd_pby_sort_cnt_ = cnt; }
     int64_t get_rd_pby_sort_cnt() const { return rd_pby_sort_cnt_; }
 
@@ -93,8 +96,10 @@ namespace sql
     // 3. Only the following functions supported: rank,dense_rank,sum,count,min,max
     bool range_dist_parallel_;
 
-    // sort keys for range distributed parallel.
-    common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> rd_sort_keys_;
+    // sort keys needed for window function
+    common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
+    // sort keys count for range distributed parallel.
+    int64_t rd_sort_keys_cnt_;
     // the first %rd_pby_sort_cnt_ of %rd_sort_keys_ is the partition by of window function.
     int64_t rd_pby_sort_cnt_;
 

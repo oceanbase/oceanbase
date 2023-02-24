@@ -1133,7 +1133,8 @@ int ObSelectLogPlan::allocate_topk_for_merge_group_plan(ObLogicalOperator *&top)
 int ObSelectLogPlan::allocate_window_function_as_top(const ObIArray<ObWinFunRawExpr *> &win_exprs,
                                                      const bool match_parallel,
                                                      const bool is_partition_wise,
-                                                     const ObIArray<OrderItem> &range_dist_keys,
+                                                     const ObIArray<OrderItem> &sort_keys,
+                                                     const int64_t range_dist_keys_cnt,
                                                      const int64_t range_dist_pby_prefix,
                                                      ObLogicalOperator *&top)
 {
@@ -1148,14 +1149,14 @@ int ObSelectLogPlan::allocate_window_function_as_top(const ObIArray<ObWinFunRawE
     LOG_ERROR("allocate memory for ObLogWindowFunction failed", K(ret));
   } else if (OB_FAIL(append(window_function->get_window_exprs(), win_exprs))) {
     LOG_WARN("failed to add window expr", K(ret));
-  } else if (!range_dist_keys.empty()
-             && OB_FAIL(window_function->set_rd_sort_keys(range_dist_keys))) {
+  } else if (OB_FAIL(window_function->set_sort_keys(sort_keys))) {
     LOG_WARN("set range distribution sort keys failed", K(ret));
   } else {
-    if (!range_dist_keys.empty()) {
+    if (range_dist_keys_cnt > 0) {
       window_function->set_ragne_dist_parallel(true);
       window_function->set_rd_pby_sort_cnt(range_dist_pby_prefix);
     }
+    window_function->set_rd_sort_keys_cnt(range_dist_keys_cnt);
     window_function->set_single_part_parallel(match_parallel);
     window_function->set_is_partition_wise(is_partition_wise);
     window_function->set_child(ObLogicalOperator::first_child, top);
@@ -4484,7 +4485,7 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
   bool single_part_parallel = false;
   bool is_partition_wise = false;
   double pby_ndv = 1.0;
-  ObSEArray<OrderItem, 8> range_dist_keys;
+  int64_t range_dist_keys_cnt = 0;
   int64_t range_dist_pby_prefix = 0;
   bool range_distribution = false;
   LOG_DEBUG("try create merge distribute function plan", K(dist_method), K(sort_keys), K(winfunc_exprs));
@@ -4496,6 +4497,7 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
     if (WinDistAlgo::RANGE == dist_method
         || WinDistAlgo::LIST == dist_method) {
       int64_t pby_oby_prefix = 0;
+      ObSEArray<OrderItem, 8> range_dist_keys;
       // al range distribute window function has the same pby, pby+oby sort prefix
       OZ(get_winfunc_pby_oby_sort_prefix(top,
                                          winfunc_exprs.at(0),
@@ -4505,6 +4507,7 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
       for (int64_t i = 0; OB_SUCC(ret) && i < pby_oby_prefix; i++) {
         OZ(range_dist_keys.push_back(sort_keys.at(i)));
       }
+      range_dist_keys_cnt = pby_oby_prefix;
       need_sort = false;
       prefix_pos = 0;
       OZ(ObOptimizerUtil::check_need_sort(range_dist_keys,
@@ -4551,7 +4554,8 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
       OZ(allocate_window_function_as_top(winfunc_exprs,
                                          single_part_parallel,
                                          is_partition_wise,
-                                         range_dist_keys,
+                                         sort_keys,
+                                         range_dist_keys_cnt,
                                          range_dist_pby_prefix,
                                          top));
     // hash distribution
@@ -4573,7 +4577,8 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
       OZ(allocate_window_function_as_top(winfunc_exprs,
                                          single_part_parallel,
                                          is_partition_wise,
-                                         range_dist_keys,
+                                         sort_keys,
+                                         range_dist_keys_cnt,
                                          range_dist_pby_prefix,
                                          top));
     // single partition parallel or serialize
@@ -4594,7 +4599,8 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
       OZ(allocate_window_function_as_top(winfunc_exprs,
                                          single_part_parallel,
                                          is_partition_wise,
-                                         range_dist_keys,
+                                         sort_keys,
+                                         range_dist_keys_cnt,
                                          range_dist_pby_prefix,
                                          top));
     }
@@ -4621,7 +4627,7 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
   bool is_partition_wise = false;
-  const ObArray<OrderItem> range_dist_keys;
+  const int64_t range_dist_keys_cnt = 0;
   const int64_t range_dist_pby_prefix = 0;
   LOG_DEBUG("create hash window function plan", K(part_cnt), K(sort_keys), K(adjusted_winfunc_exprs));
   if (OB_ISNULL(top) || OB_UNLIKELY(partition_exprs.empty())) {
@@ -4646,7 +4652,8 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
     } else if (OB_FAIL(allocate_window_function_as_top(adjusted_winfunc_exprs,
                                                        false, /* match_parallel */
                                                        is_partition_wise,
-                                                       range_dist_keys,
+                                                       sort_keys,
+                                                       range_dist_keys_cnt,
                                                        range_dist_pby_prefix,
                                                        top))) {
       LOG_WARN("failed to allocate window function above top", K(ret));
@@ -4668,7 +4675,8 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
   } else if (OB_FAIL(allocate_window_function_as_top(adjusted_winfunc_exprs,
                                                      false, /* match_parallel */
                                                      is_partition_wise,
-                                                     range_dist_keys,
+                                                     sort_keys,
+                                                     range_dist_keys_cnt,
                                                      range_dist_pby_prefix,
                                                      top))) {
     LOG_WARN("failed to allocate window function as top", K(ret));

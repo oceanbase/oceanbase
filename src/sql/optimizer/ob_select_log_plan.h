@@ -552,7 +552,8 @@ private:
   int allocate_window_function_as_top(const ObIArray<ObWinFunRawExpr *> &win_exprs,
                                       const bool match_parallel,
                                       const bool is_partition_wise,
-                                      const ObIArray<OrderItem> &range_dist_keys,
+                                      const ObIArray<OrderItem> &sort_keys,
+                                      const int64_t range_dist_keys_cnt,
                                       const int64_t range_dist_pby_prefix,
                                       ObLogicalOperator *&top);
 
