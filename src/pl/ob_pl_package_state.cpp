@@ -160,13 +160,14 @@ void ObPLPackageState::reset(ObSQLSessionInfo *session_info)
   changed_vars_.reset();
   for (int64_t i = 0; i < types_.count(); ++i) {
     if (!vars_.at(i).is_ext()) {
-    } else if (PL_NESTED_TABLE_TYPE == types_.at(i)
-      || PL_ASSOCIATIVE_ARRAY_TYPE == types_.at(i)
-      || PL_VARRAY_TYPE == types_.at(i)) {
-      ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(vars_.at(i).get_ext());
-      if (OB_NOT_NULL(coll)
-          && OB_NOT_NULL(dynamic_cast<ObPLCollAllocator *>(coll->get_allocator()))) {
-        coll->get_allocator()->reset();
+    } else if (PL_RECORD_TYPE == types_.at(i)
+               || PL_NESTED_TABLE_TYPE == types_.at(i)
+               || PL_ASSOCIATIVE_ARRAY_TYPE == types_.at(i)
+               || PL_VARRAY_TYPE == types_.at(i)
+               || PL_OPAQUE_TYPE == types_.at(i)) {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(ObUserDefinedType::destruct_obj(vars_.at(i), session_info))) {
+        LOG_WARN("failed to destruct composte obj", K(ret));
       }
     } else if (PL_CURSOR_TYPE == types_.at(i)) {
       ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(vars_.at(i).get_ext());
