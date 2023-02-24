@@ -481,7 +481,8 @@ private:
   int update_parts_(const ObTxPartList &list);
   void implicit_start_tx_();
   bool acq_commit_cb_lock_if_need_();
-  bool in_tx_or_has_state_();
+  bool has_extra_state_() const;
+  bool in_tx_or_has_extra_state_() const;
   bool in_tx_for_free_route_();
   void print_trace_() const;
 public:
@@ -602,7 +603,7 @@ public:
   bool is_in_tx() const { return state_ > State::IDLE; }
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
-  bool in_tx_or_has_state();
+  bool in_tx_or_has_extra_state();
   bool in_tx_for_free_route();
   const ObTransID &get_tx_id() const { return tx_id_; }
   ObITxCallback *get_end_tx_cb() { return commit_cb_; }

@@ -434,17 +434,19 @@ void ObTxDesc::print_trace()
   }
 }
 
-bool ObTxDesc::in_tx_or_has_state()
+bool ObTxDesc::in_tx_or_has_extra_state()
 {
   ObSpinLockGuard guard(lock_);
-  return in_tx_or_has_state_();
+  return in_tx_or_has_extra_state_();
 }
 
-bool ObTxDesc::in_tx_or_has_state_()
+bool ObTxDesc::in_tx_or_has_extra_state_() const
 {
-  if (is_in_tx()) {
-    return true;
-  }
+  return is_in_tx() || has_extra_state_();
+}
+
+bool ObTxDesc::has_extra_state_() const
+{
   if (snapshot_version_.is_valid()) {
     return true;
   }
@@ -466,7 +468,7 @@ bool ObTxDesc::in_tx_for_free_route()
 bool ObTxDesc::in_tx_for_free_route_()
 {
   return (addr_.is_valid() && (addr_ != GCONF.self_addr_)) // txn free route temporary node
-    || in_tx_or_has_state_();
+    || in_tx_or_has_extra_state_();
 }
 
 bool ObTxDesc::contain_savepoint(const ObString &sp)

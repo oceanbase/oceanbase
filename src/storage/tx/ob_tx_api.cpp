@@ -1024,7 +1024,10 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
       break;
     case ObTxDesc::State::IMPLICIT_ACTIVE:
       tx.release_implicit_savepoint(savepoint);
-      if (!tx.flags_.REPLICA_ && !tx.has_implicit_savepoint() && tx.active_scn_ >= savepoint) {
+      if (!tx.flags_.REPLICA_             // on tx start node
+          && !tx.has_implicit_savepoint() // to first savepoint
+          && tx.active_scn_ >= savepoint  // rollback all dirty state
+          && !tx.has_extra_state_()) {    // hasn't explicit savepoint or serializable snapshot
         reset_tx = true;
       } else {
         normal_rollback = true;
@@ -1091,6 +1094,7 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                       OB_Y(ret), OB_Y(savepoint), OB_Y(expire_ts),
                       OB_ID(time_used), elapsed_us,
                       OB_ID(arg), (void*)extra_touched_ls,
+                      OB_ID(tag1), reset_tx,
                       OB_ID(opid), tx.op_sn_,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());

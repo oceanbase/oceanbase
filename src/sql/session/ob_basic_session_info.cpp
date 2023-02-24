@@ -539,7 +539,7 @@ int ObBasicSessionInfo::switch_tenant(uint64_t effective_tenant_id)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(ret), K(effective_tenant_id));
   } else if (OB_NOT_NULL(tx_desc_) && effective_tenant_id != effective_tenant_id_) {
-    if (tx_desc_->in_tx_or_has_state()) {
+    if (tx_desc_->in_tx_or_has_extra_state()) {
       ret = OB_NOT_SUPPORTED;
       // only inner-SQL goes switch_tenant and may fall into such state
       // print out error to easy trouble-shot
