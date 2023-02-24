@@ -114,8 +114,10 @@ OB_INLINE int ObResultSet::open_plan()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObPxAdmission::enter_query_admission(my_session_,
                                                        get_exec_context(),
+                                                       get_stmt_type(),
                                                        *get_physical_plan()))) {
         // query is not admitted to run
+        // Note: explain statement's phy plan is target query's plan, don't enable admission test
         LOG_DEBUG("Query is not admitted to run, try again", K(ret));
       } else if (THIS_WORKER.is_timeout()) {
         // packet有可能在队列里面呆的时间过长，到这里已经超时，
@@ -717,7 +719,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
       SQL_LOG(WARN, "fail to close executor", K(ret), K(close_ret));
     }
 
-    ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), *get_physical_plan());
+    ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), get_stmt_type(), *get_physical_plan());
     // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
     if ((OB_SUCCESS == close_ret)
         && (OB_SUCCESS == errcode || OB_ITER_END == errcode)
