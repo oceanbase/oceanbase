@@ -52,7 +52,9 @@ bool ObPackageStateVersion::operator ==(const ObPackageStateVersion &other)
 {
   bool b_ret = true;
   if (package_version_ != other.package_version_
-      || package_body_version_ != other.package_body_version_) {
+      || (package_body_version_ != OB_INVALID_VERSION
+          && other.package_body_version_ != OB_INVALID_VERSION
+          && package_body_version_ != other.package_body_version_)) {
     b_ret = false;
   }
   return b_ret;
@@ -180,6 +182,7 @@ void ObPLPackageState::reset(ObSQLSessionInfo *session_info)
   types_.reset();
   vars_.reset();
   inner_allocator_.reset();
+  cursor_allocator_.reset();
 }
 
 int ObPLPackageState::set_package_var_val(const int64_t var_idx, const ObObj &value)
@@ -198,6 +201,10 @@ int ObPLPackageState::set_package_var_val(const int64_t var_idx, const ObObj &va
         LOG_WARN("failed to alloc memory for pacakge var", K(ret), K(buf));
       }
       OZ (vars_.at(var_idx).deep_copy(value, buf, value.get_deep_copy_size(), pos));
+    } else if (value.is_pl_extend()) {
+      ObObj copy;
+      OZ (ObUserDefinedType::deep_copy_obj(inner_allocator_, value, copy));
+      OX (vars_.at(var_idx) = copy);
     } else {
       vars_.at(var_idx) = value;
     }

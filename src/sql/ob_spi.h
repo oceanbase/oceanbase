@@ -205,6 +205,13 @@ public:
                            const ObSqlExpression *expr,
                            const int64_t result_idx,
                            ObObjParam *result);
+
+  static int spi_calc_subprogram_expr(pl::ObPLExecCtx *ctx,
+                                      uint64_t package_id,
+                                      uint64_t routine_id,
+                                      int64_t expr_idx,
+                                      ObObjParam *result);
+
   static int spi_calc_package_expr(pl::ObPLExecCtx *ctx,
                            uint64_t package_id,
                            int64_t expr_idx,
@@ -805,6 +812,15 @@ private:
                                     const ObSqlExpression &expr,
                                     ObIArray<ObObj> &src_array,
                                     ObIArray<ObObj> &dst_array);
+
+  static int prepare_cursor_parameters(pl::ObPLExecCtx *ctx,
+                                    ObSQLSessionInfo &session_info,
+                                    uint64_t package_id,
+                                    uint64_t routine_id,
+                                    ObCusorDeclareLoc loc,
+                                    const int64_t *formal_param_idxs,
+                                    const ObSqlExpression **actual_param_exprs,
+                                    int64_t cursor_param_count);
 };
 
 }

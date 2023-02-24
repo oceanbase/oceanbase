@@ -821,6 +821,41 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::spi_calc_subprogram_expr(ObPLExecCtx *ctx,
+                                           uint64_t package_id,
+                                           uint64_t routine_id,
+                                           int64_t expr_idx,
+                                           ObObjParam *result)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  ObPLExecState *state = NULL;
+  ObSqlExpression *expr = NULL;
+  CK (OB_NOT_NULL(exec_ctx = ctx->exec_ctx_));
+  CK (OB_NOT_NULL(session_info = exec_ctx->get_my_session()));
+  OZ (ObPLContext::get_exec_state_from_local(*session_info, package_id, routine_id, state));
+  CK (OB_NOT_NULL(state));
+  CK (OB_NOT_NULL(exec_ctx = state->get_exec_ctx().exec_ctx_));
+  CK (OB_NOT_NULL(expr = state->get_function().get_default_expr(expr_idx)));
+  if (OB_SUCC(ret)) {
+    ExecCtxBak exec_ctx_bak;
+    OX (exec_ctx_bak.backup(*exec_ctx));
+    OX (exec_ctx->set_physical_plan_ctx(&(state->get_physical_plan_ctx())));
+    if (OB_SUCC(ret) && state->get_function().get_expr_op_size() > 0)  {
+      OZ (exec_ctx->init_expr_op(state->get_function().get_expr_op_size()));
+    }
+    OZ (state->get_function().get_frame_info().pre_alloc_exec_memory(*exec_ctx));
+    OZ (spi_calc_expr(&(state->get_exec_ctx()), expr, OB_INVALID_ID, result), KPC(expr));
+    if (state->get_function().get_expr_op_size() > 0) {
+      exec_ctx->reset_expr_op();
+      exec_ctx->get_allocator().free(exec_ctx->get_expr_op_ctx_store());
+    }
+    exec_ctx_bak.restore(*exec_ctx);
+  }
+  return ret;
+}
+
 int ObSPIService::spi_calc_package_expr(ObPLExecCtx *ctx,
                                         uint64_t package_id, 
                                         int64_t expr_idx,
@@ -2986,6 +3021,68 @@ int ObSPIService::dbms_dynamic_open(ObPLExecCtx *pl_ctx,
   return ret;
 }
 
+int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
+                                            ObSQLSessionInfo &session_info,
+                                            uint64_t package_id,
+                                            uint64_t routine_id,
+                                            ObCusorDeclareLoc loc,
+                                            const int64_t *formal_param_idxs,
+                                            const ObSqlExpression **actual_param_exprs,
+                                            int64_t cursor_param_count)
+{
+  int ret = OB_SUCCESS;
+
+  ObObjParam dummy_result;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < cursor_param_count; ++i) {
+
+    CK (OB_NOT_NULL(actual_param_exprs[i]));
+    OX (dummy_result.reset());
+    OX (dummy_result.ObObj::reset());
+    OZ (spi_calc_expr(ctx, actual_param_exprs[i], OB_INVALID_INDEX, &dummy_result),
+                K(i), K(cursor_param_count), KPC(actual_param_exprs[i]), K(dummy_result));
+
+    if (OB_SUCC(ret) && dummy_result.is_pl_mock_default_param()) {
+      ObSqlExpression *actual_param_expr = NULL;
+      if (DECL_PKG == loc) {
+        OZ (spi_calc_package_expr(ctx, package_id, dummy_result.get_int(), &dummy_result));
+      } else {
+        OZ (spi_calc_subprogram_expr(ctx, package_id, routine_id, dummy_result.get_int(), &dummy_result));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (DECL_PKG == loc) {
+      OZ (spi_set_package_variable(ctx, package_id, formal_param_idxs[i], dummy_result));
+    } else if (DECL_SUBPROG == loc) {
+      OZ (ObPLContext::set_subprogram_var_from_local(
+        session_info, package_id, routine_id, formal_param_idxs[i], dummy_result));
+    } else {
+      int64_t result_idx = formal_param_idxs[i];
+      CK (DECL_LOCAL == loc);
+      CK (result_idx >= 0 && result_idx < ctx->params_->count());
+      if (OB_SUCC(ret)) {
+        ObObjParam &param = ctx->params_->at(result_idx);
+        bool is_ref_cursor = param.is_ref_cursor_type();
+        if (!dummy_result.is_ext()) {
+          dummy_result.ObObj::set_scale(param.get_meta().get_scale());
+          dummy_result.set_accuracy(ctx->params_->at(result_idx).get_accuracy());
+          param = dummy_result;
+          param.set_is_ref_cursor_type(is_ref_cursor);
+          param.set_param_meta();
+        } else if (!is_ref_cursor) {
+          int64_t orig_udt_id = ctx->params_->at(result_idx).get_udt_id();
+          ctx->params_->at(result_idx) = dummy_result;
+          ctx->params_->at(result_idx).set_udt_id(orig_udt_id);
+          ctx->params_->at(result_idx).set_param_meta();
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                                   const char *sql,
                                   uint64_t id,
@@ -3016,13 +3113,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     LOG_WARN("Argument passed in is NULL", K(ctx), K(sql), K(id), K(type), K(sql_param_exprs), K(sql_param_count), K(ret));
   } else if (OB_FAIL(spi_get_cursor_info(ctx, package_id, routine_id, cursor_index, cursor, cursor_var, loc))) {
     LOG_WARN("failed to get cursor info", K(ret), K(cursor_index));
-  // } else if (OB_ISNULL(cursor)) {
-  // } else if (!cursor_var.is_ext()) {
-  //   ret = OB_INVALID_ARGUMENT;
-  //   LOG_WARN("cursor var in is null", K(ret));
   } else if (OB_FAIL(cursor_open_check(ctx, package_id, routine_id,
                                            cursor_index, cursor, cursor_var, loc))) {
-    // ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cursor info not init", K(ret), K(cursor));
   } else if (cursor->isopen()) {
     ret = OB_ER_SP_CURSOR_ALREADY_OPEN;
@@ -3042,29 +3134,9 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
         LOG_WARN("cursor params in not valid",
                  K(cursor_param_count), K(formal_param_idxs), K(actual_param_exprs), K(ret));
       } else {
-        ObObjParam dummy_result;
-        for (int64_t i = 0; OB_SUCC(ret) && i < cursor_param_count; ++i) {
-          CK (OB_NOT_NULL(actual_param_exprs[i]));
-          OX (dummy_result.reset());
-          OX (dummy_result.ObObj::reset());
-          OZ (spi_calc_expr(
-              ctx,
-              actual_param_exprs[i],
-              DECL_LOCAL == loc ? formal_param_idxs[i] : OB_INVALID_INDEX,
-              &dummy_result),
-              i, cursor_param_count, *actual_param_exprs[i], dummy_result);
-          if (OB_SUCC(ret)) {
-            if (DECL_PKG == loc) {
-              OZ (spi_set_package_variable(ctx, package_id, formal_param_idxs[i], dummy_result));
-            } else if (DECL_SUBPROG == loc) {
-              OZ (ObPLContext::set_subprogram_var_from_local(*session_info,
-                                                             package_id,
-                                                             routine_id,
-                                                             formal_param_idxs[i],
-                                                             dummy_result));
-            } else { /* do nothing */ }
-          }
-        }
+        OZ (prepare_cursor_parameters(
+          ctx, *session_info, package_id,
+          routine_id, loc, formal_param_idxs, actual_param_exprs, cursor_param_count));
       }
 
       if (OB_SUCC(ret) && DECL_SUBPROG == loc) {

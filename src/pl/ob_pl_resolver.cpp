@@ -5923,7 +5923,7 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
             ObConstRawExpr *default_expr = NULL;
             OZ (ObRawExprUtils::build_const_int_expr(expr_factory_, ObIntType, 0, default_expr));
             CK (OB_NOT_NULL(default_expr));
-            OZ(default_expr->add_flag(IS_PL_MOCK_DEFAULT_EXPR));
+            OZ (default_expr->add_flag(IS_PL_MOCK_DEFAULT_EXPR));
             OZ (func.add_expr(default_expr));
             OZ (resolve_cparam_without_assign(default_expr, i, func, params, expr_idx));
           }
@@ -5933,9 +5933,14 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
           int64_t default_idx = static_cast<ObPLVar *>(formal_param)->get_default();
           if (OB_UNLIKELY(-1 == default_idx)) {
             ret = OB_ERR_SP_WRONG_ARG_NUM;
-            LOG_WARN("actual param expr is null", K(formal_param), K(ret));
+            LOG_WARN("actual param expr is null", KPC(formal_param), KPC(static_cast<ObPLVar *>(formal_param)), K(ret));
           } else {
-            OX (expr_idx.at(i) = default_idx);
+            ObConstRawExpr *default_expr = NULL;
+            OZ (ObRawExprUtils::build_const_int_expr(expr_factory_, ObIntType, default_idx, default_expr));
+            CK (OB_NOT_NULL(default_expr));
+            OZ (default_expr->add_flag(IS_PL_MOCK_DEFAULT_EXPR));
+            OZ (func.add_expr(default_expr));
+            OZ (resolve_cparam_without_assign(default_expr, i, func, params, expr_idx));
           }
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -6725,8 +6730,10 @@ int ObPLResolver::resolve_cursor_actual_params(
         OZ (iparams.push_back(const_cast<ObPLVar*>(var)));
       } else if (cursor->get_routine_id() != stmt->get_namespace()->get_routine_id()) {
         // not package cursor, not local cursor, must be subprogram cursor.
-        OZ (stmt->get_namespace()->get_cursor_var(
-          cursor->get_package_id(), cursor->get_routine_id(), cursor->get_index(), var));
+        OZ (stmt->get_namespace()->get_subprogram_var(cursor->get_package_id(),
+                                                      cursor->get_routine_id(),
+                                                      params_list.at(i),
+                                                      var));
         CK (OB_NOT_NULL(var));
         OZ (iparams.push_back(const_cast<ObPLVar*>(var)));
       } else {

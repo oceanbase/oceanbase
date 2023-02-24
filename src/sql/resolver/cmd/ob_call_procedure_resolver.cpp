@@ -99,7 +99,7 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
       OZ (ObRawExprUtils::build_const_int_expr(
         *(params_.expr_factory_), ObIntType, 0, default_expr));
       CK (OB_NOT_NULL(default_expr));
-      OZ(default_expr->add_flag(IS_PL_MOCK_DEFAULT_EXPR));
+      OZ (default_expr->add_flag(IS_PL_MOCK_DEFAULT_EXPR));
       OX (params.at(i) = default_expr);
     }
   }
