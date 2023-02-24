@@ -185,7 +185,7 @@ int ObArchiveSender::push_task_status(ObArchiveTaskStatus *task_status)
   } else if (OB_FAIL(task_queue_.push(task_status))) {
     ARCHIVE_LOG(WARN, "push fail", K(ret), KPC(task_status));
   } else {
-    ARCHIVE_LOG(INFO, "push succ", KPC(task_status));
+    ARCHIVE_LOG(INFO, "push succ", KP(task_status));
   }
   return ret;
 }
@@ -261,7 +261,6 @@ void ObArchiveSender::do_thread_task_()
     } else if (! task_exist) {
     } else if (FALSE_IT(handle(*task, consume_status))) {
     } else {
-      ARCHIVE_LOG(TRACE, "after handle task", KPC(task), K(consume_status));
       switch (consume_status) {
         case TaskConsumeStatus::DONE:
           break;
@@ -546,7 +545,9 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
   int64_t file_offset = 0;
   share::ObBackupPath path;
   ObBackupPathString uri;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
+  const int64_t log_size = static_cast<int64_t>((task.get_end_lsn() - task.get_start_lsn()));
+  const int64_t buf_size = task.get_buf_size();
   const ObArchivePiece &pre_piece = arg.tuple_.get_piece();
   const ObArchivePiece &piece = task.get_piece();
   const ArchiveWorkStation &station = task.get_station();
@@ -601,7 +602,7 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
 
   // 8. 统计
   if (OB_SUCC(ret)) {
-    statistic(task, common::ObTimeUtility::current_time() - start_ts);
+    statistic(log_size, buf_size, common::ObTimeUtility::current_time() - start_ts);
   }
   return ret;
 }
@@ -821,15 +822,15 @@ int ObArchiveSender::free_residual_task_()
   return ret;
 }
 
-void ObArchiveSender::statistic(const ObArchiveSendTask &task, const int64_t cost_ts)
+void ObArchiveSender::statistic(const int64_t log_size, const int64_t buf_size, const int64_t cost_ts)
 {
   static __thread int64_t SEND_LOG_LSN_SIZE;
   static __thread int64_t SEND_BUF_SIZE;
   static __thread int64_t SEND_TASK_COUNT;
   static __thread int64_t SEND_COST_TS;
 
-  SEND_LOG_LSN_SIZE += static_cast<int64_t>((task.get_end_lsn() - task.get_start_lsn()));
-  SEND_BUF_SIZE += task.get_buf_size();
+  SEND_LOG_LSN_SIZE += log_size;
+  SEND_BUF_SIZE += buf_size;
   SEND_TASK_COUNT++;
   SEND_COST_TS += cost_ts;
 

@@ -218,7 +218,7 @@ int ObArchiveFetcher::submit_log_fetch_task(ObArchiveLogFetchTask *task)
     RETRY_FUNC_ON_ERROR(OB_SIZE_OVERFLOW, has_set_stop(), task_queue_, push, task);
   }
   if (OB_SUCC(ret)) {
-    ARCHIVE_LOG(INFO, "submit log fetch task succ", KPC(task));
+    ARCHIVE_LOG(INFO, "submit log fetch task succ", KP(task));
   }
   return ret;
 }
@@ -355,7 +355,7 @@ int ObArchiveFetcher::handle_log_fetch_task_(ObArchiveLogFetchTask &task)
   PalfHandleGuard palf_handle_guard;
   TmpMemoryHelper helper(unit_size_, allocator_);
   ObArchiveSendTask *send_task = NULL;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
   const ArchiveWorkStation &station = task.get_station();
   ArchiveKey key = station.get_round();
   LSN commit_lsn;
@@ -389,7 +389,7 @@ int ObArchiveFetcher::handle_log_fetch_task_(ObArchiveLogFetchTask &task)
   } else if (OB_FAIL(submit_fetch_log_(task, submit_log))) {
     ARCHIVE_LOG(WARN, "submit send task failed", K(ret), KPC(send_task));
   } else {
-    ARCHIVE_LOG(INFO, "handle log fetch task succ", K(task));
+    ARCHIVE_LOG(INFO, "handle log fetch task succ", K(id));
   }
 
   // 0. task submit to sort queue, do nothing
@@ -766,7 +766,7 @@ int ObArchiveFetcher::submit_fetch_log_(ObArchiveLogFetchTask &task, bool &submi
         ARCHIVE_LOG(WARN, "push fetch log failed", K(ret), K(task));
       } else {
         submitted = true;
-        ARCHIVE_LOG(INFO, "push fetch log succ", K(task));
+        ARCHIVE_LOG(INFO, "push fetch log succ", KP(&task));
       }
     }
   }
@@ -895,6 +895,7 @@ int ObArchiveFetcher::submit_residual_log_fetch_task_(ObArchiveLogFetchTask &tas
   const ObArchivePiece &cur_piece = task.get_piece();
   const LSN &start_offset = task.get_start_offset();
   const LSN &cur_offset = task.get_cur_offset();
+  const ObLSID id = task.get_ls_id();
 
   if (OB_UNLIKELY(cur_piece.is_valid() && cur_offset == start_offset)) {
     ret = OB_INVALID_ARGUMENT;
@@ -902,7 +903,7 @@ int ObArchiveFetcher::submit_residual_log_fetch_task_(ObArchiveLogFetchTask &tas
   } else if (OB_FAIL(task_queue_.push(&task))) {
     ARCHIVE_LOG(WARN, "push task failed", K(ret), K(task));
   } else {
-    ARCHIVE_LOG(INFO, "submit residual log fetch task succ", K(task));
+    ARCHIVE_LOG(INFO, "submit residual log fetch task succ", KP(&task));
   }
   return ret;
 }
@@ -913,7 +914,7 @@ int ObArchiveFetcher::submit_send_task_(ObArchiveSendTask *send_task)
   if (OB_FAIL(archive_sender_->submit_send_task(send_task))) {
     ARCHIVE_LOG(WARN, "submit send task failed", K(ret), KPC(send_task));
   } else {
-    ARCHIVE_LOG(INFO, "submit send task succ");
+    ARCHIVE_LOG(INFO, "submit send task succ", KP(send_task));
   }
   return ret;
 }

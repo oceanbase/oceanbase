@@ -175,7 +175,7 @@ private:
   bool is_retry_ret_code_(const int ret_code) const;
   bool is_ignore_ret_code_(const int ret_code) const;
 
-  void statistic(const ObArchiveSendTask &task, const int64_t cost_ts);
+  void statistic(const int64_t log_size, const int64_t buf_size, const int64_t cost_ts);
 
   int try_free_send_task_();
   int do_free_send_task_();
