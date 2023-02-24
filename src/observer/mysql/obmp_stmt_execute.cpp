@@ -1970,6 +1970,7 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
   OZ (pl_type->deserialize(*(ctx_.schema_guard_), allocator, charset, cs_type, ncs_type,
         tz_info, data, reinterpret_cast<char *>(param.get_ext()), param_size,
         param_pos));
+  OX (param.set_need_to_check_extend_type(true));
   return ret;
 }
 
