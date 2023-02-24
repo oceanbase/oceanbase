@@ -757,7 +757,7 @@ ObMySQLRequestManager* ObSQLSessionInfo::get_request_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == request_manager_) {
-    MTL_SWITCH(get_effective_tenant_id()) {
+    MTL_SWITCH(get_priv_tenant_id()) {
       request_manager_ = MTL(obmysql::ObMySQLRequestManager*);
     }
   }
