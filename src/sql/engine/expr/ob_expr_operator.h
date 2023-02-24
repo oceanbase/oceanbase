@@ -1218,10 +1218,6 @@ public:
 
   static int eval_pl_udt_compare(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
-protected:
-  static bool is_int_cmp_const_str(const ObExprResType *type1,
-                                   const ObExprResType *type2,
-                                   common::ObObjType &cmp_type);
   OB_INLINE static common::ObCmpOp get_cmp_op(const ObExprOperatorType type) {
     /*
      * maybe we can use associative array(table lookup) to get a better
@@ -1278,6 +1274,10 @@ protected:
     return cmp_op;
   }
 
+protected:
+  static bool is_int_cmp_const_str(const ObExprResType *type1,
+                                   const ObExprResType *type2,
+                                   common::ObObjType &cmp_type);
   OB_INLINE static bool is_expected_cmp_ret(const common::ObCmpOp cmp_op,
                                             const int cmp_ret)
   {

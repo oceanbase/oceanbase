@@ -169,11 +169,12 @@ int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null child expr", K(ret), K(i));
       } else {
+        const ObObjMeta &param_meta = child->get_result_meta();
         need_check = child->is_const_expr();
-        if (need_check) {
-          const ObObjMeta &param_meta = child->get_result_meta();
-          need_check = param_meta.is_null() ||
-            (col_meta.get_type() == param_meta.get_type() && col_meta.get_collation_type() == param_meta.get_collation_type());
+        if (need_check && !param_meta.is_null()) {
+          const ObCmpOp cmp_op = sql::ObRelationalExprOperator::get_cmp_op(raw_expr->get_expr_type());
+          obj_cmp_func cmp_func = nullptr;
+          need_check = ObObjCmpFuncs::can_cmp_without_cast(col_meta, param_meta, cmp_op, cmp_func);
         }
       }
     }
