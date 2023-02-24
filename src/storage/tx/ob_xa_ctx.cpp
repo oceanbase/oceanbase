@@ -1820,6 +1820,8 @@ int ObXACtx::create_xa_savepoint_if_need_(const ObXATransID &xid, const uint32_t
         if (info.is_first_stmt_) {
           if (OB_FAIL(MTL(transaction::ObTransService *)->create_explicit_savepoint(*tx_desc_, PL_XA_IMPLICIT_SAVEPOINT, session_id))) {
             TRANS_LOG(WARN, "create xa savepoint fail", K(ret), K(xid), K(session_id), K(*this));
+          } else {
+            TRANS_LOG(INFO, "create pl xa savepoint success", K(ret), K(xid), K(session_id), K(*this));
           }
           info.is_first_stmt_ = false;
         }

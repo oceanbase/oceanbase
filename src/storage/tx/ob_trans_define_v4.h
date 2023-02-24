@@ -523,7 +523,6 @@ public:
                K_(flags_.BLOCK),
                K_(flags_.REPLICA),
                K_(can_elr),
-               K_(savepoints),
                K_(cflict_txs),
                K_(abort_cause),
                K_(commit_expire_ts),
