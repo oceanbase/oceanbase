@@ -67,11 +67,11 @@ static int get_default_net_thread_count()
   int cpu_num = get_cpu_num();
 
   if (cpu_num <= 4) {
-    cnt = 2;
+    cnt = 1;
   } else if (cpu_num <= 8) {
-    cnt = 3;
+    cnt = 2;
   } else if (cpu_num <= 16) {
-    cnt = 5;
+    cnt = 4;
   } else if (cpu_num <= 32) {
     cnt = 7;
   } else {
