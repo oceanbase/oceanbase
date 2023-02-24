@@ -115,7 +115,7 @@ int ObLogMetaDataReplayer::replay(
             LOG_ERROR("handle_ddl_trans_ failed", KR(ret), K(tenant_id), K(start_timestamp_ns), K(tenant_info),
                 KPC(part_trans_task));
           }
-        } else if (part_trans_task->is_ls_table_trans()) {
+        } else if (part_trans_task->is_ls_op_trans()) {
           if (OB_FAIL(handle_ls_op_trans_(start_timestamp_ns, tenant_info, *part_trans_task, replay_info_stat))) {
             LOG_ERROR("handle_ls_op_trans_ failed", KR(ret), K(tenant_id), K(start_timestamp_ns), K(tenant_info),
                 KPC(part_trans_task));
@@ -196,7 +196,7 @@ int ObLogMetaDataReplayer::handle_ls_op_trans_(
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(! part_trans_task.is_ls_table_trans())) {
+  if (OB_UNLIKELY(! part_trans_task.is_ls_op_trans())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("PartTransTask is not ls op trans, unexpected", KR(ret), K(part_trans_task));
   } else {

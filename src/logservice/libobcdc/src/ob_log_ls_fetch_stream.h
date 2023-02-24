@@ -249,6 +249,15 @@ private:
       const common::ObAddr &svr,
       const int64_t timeout);
   // handle if found misslog while read_log_
+  //
+  // @param [in] log_entry         LogEntry
+  // @param [in] org_missing_info  MissingLogInfo
+  // @param [in] tsi               TransStatInfo
+  // @param [out] fail_reason      KickOutReason
+  //
+  // @retval OB_SUCCESS                   success
+  // @retval OB_NEED_RETRY                RPC failed, need retry
+  // @retval other error code             fail
   int handle_log_miss_(
       palf::LogEntry &log_entry,
       IObCDCPartTransResolver::MissingLogInfo &org_missing_info,

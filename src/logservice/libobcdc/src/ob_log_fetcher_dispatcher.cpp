@@ -35,6 +35,7 @@ namespace libobcdc
 {
 
 ObLogFetcherDispatcher::ObLogFetcherDispatcher() :
+    IObLogFetcherDispatcher(FetcherDispatcherType::CDC_DIS_TYPE),
     inited_(false),
     sys_ls_handler_(NULL),
     committer_(NULL),
@@ -108,7 +109,7 @@ int ObLogFetcherDispatcher::dispatch(PartTransTask &task, volatile bool &stop_fl
         ret = dispatch_global_ls_heartbeat_(task, stop_flag);
         break;
 
-      case PartTransTask::TASK_TYPE_LS_TABLE:
+      case PartTransTask::TASK_TYPE_LS_OP_TRANS:
         ret = dispatch_ls_table_op_(task, stop_flag);
         break;
 

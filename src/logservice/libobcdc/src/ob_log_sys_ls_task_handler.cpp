@@ -237,7 +237,7 @@ int ObLogSysLsTaskHandler::push(PartTransTask *task, const int64_t timeout)
     ret = OB_NOT_INIT;
     LOG_ERROR("invalid DDL parser", KR(ret), K(ddl_parser_));
   } else if (OB_UNLIKELY(! task->is_ddl_trans()
-      && ! task->is_ls_table_trans()
+      && ! task->is_ls_op_trans()
       && ! task->is_sys_ls_heartbeat()
       && !task->is_sys_ls_offline_task())) {
     ret = OB_NOT_SUPPORTED;
@@ -341,7 +341,7 @@ int ObLogSysLsTaskHandler::handle_task_(PartTransTask &task,
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! task.is_ddl_trans()
-      && ! task.is_ls_table_trans()
+      && ! task.is_ls_op_trans()
       && ! task.is_sys_ls_heartbeat()
       && ! task.is_sys_ls_offline_task())) {
     ret = OB_NOT_SUPPORTED;
