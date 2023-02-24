@@ -6256,8 +6256,13 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
 
   // 3. prepare to allocate the third group by
   if (OB_SUCC(ret)) {
-    const bool is_scalar_aggr = group_by_exprs.empty() && rollup_exprs.empty();
-    third_aggr_algo = is_scalar_aggr ? SCALAR_AGGREGATE : second_aggr_algo;
+    if (helper.is_scalar_group_by_) {
+      third_aggr_algo = SCALAR_AGGREGATE;
+    } else if (group_by_exprs.empty()) {
+      third_aggr_algo = MERGE_AGGREGATE;
+    } else {
+      third_aggr_algo = second_aggr_algo;
+    }
     third_rollup_status = !rollup_exprs.empty() ? ROLLUP_COLLECTOR : NONE_ROLLUP;
     third_exch_info.is_rollup_hybrid_ = !rollup_exprs.empty();
 
@@ -6643,15 +6648,20 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
   ObLogicalOperator *best_plan = NULL;
+  const ObSelectStmt* stmt = NULL;
   ObSEArray<ObRawExpr*, 4> group_rollup_exprs;
   bool push_group = false;
   groupby_helper.force_use_hash_ = get_log_plan_hint().use_hash_aggregate();
   groupby_helper.force_use_merge_ = get_log_plan_hint().use_merge_aggregate();
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
-  } else if (OB_ISNULL(best_plan)) {
+  } else if (OB_ISNULL(best_plan) ||
+             OB_ISNULL(get_stmt()) ||
+             OB_UNLIKELY(!get_stmt()->is_select_stmt()) ||
+             OB_ISNULL(stmt = static_cast<const ObSelectStmt*>(get_stmt()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FALSE_IT(groupby_helper.is_scalar_group_by_ = stmt->is_scala_group_by())) {
   } else if (OB_FAIL(append(group_rollup_exprs, group_exprs)) ||
              OB_FAIL(append(group_rollup_exprs, rollup_exprs))) {
     LOG_WARN("failed to append group rollup exprs", K(ret));
