@@ -32,14 +32,6 @@ private:
     return std::isalnum(c) || c == '+' || c == '/';
   }
 
-  static inline bool my_base64_decoder_skip_spaces(char c)
-  {
-    if (FROM_BASE64_TABLE[(uint8_t)c] != -2) {
-      return false;
-    }
-
-    return true;
-  }
   static const int64_t SOFT_NEW_LINE_STR_POS = 19;
 
 public:
@@ -51,6 +43,15 @@ public:
   static int64_t needed_decoded_length(const int64_t buf_size)
   {
     return (buf_size / 4) * 3;
+  }
+
+  static inline bool my_base64_decoder_skip_spaces(char c)
+  {
+    if (FROM_BASE64_TABLE[(uint8_t)c] != -2) {
+      return false;
+    }
+
+    return true;
   }
 
   static int encode(const uint8_t *input, const int64_t input_len, char *output, const int64_t output_len, int64_t &pos,

@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace sql {
 
 ObExprFromBase64::ObExprFromBase64(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_FROM_BASE64, N_FROM_BASE64, 1, NOT_ROW_DIMENSION)
+    : ObStringExprOperator(alloc, T_FUN_SYS_FROM_BASE64, N_FROM_BASE64, 1)
 {}
 
 ObExprFromBase64::~ObExprFromBase64()
@@ -47,11 +47,7 @@ int ObExprFromBase64::calc(ObObj &result, const ObObj &obj, ObIAllocator *alloca
       int64_t buf_len = base64_needed_decoded_length(in_raw_len);
       int64_t pos = 0;
       char *output_buf = static_cast<char *>(allocator->alloc(buf_len));
-      if (OB_ISNULL(output_buf)) {
-        LOG_WARN("output_buf is null", K(ret), K(buf_len), K(in_raw_len));
-        result.set_null();
-      } else if (OB_FAIL(ObBase64Encoder::decode(
-                     buf, in_raw_len, reinterpret_cast<uint8_t *>(output_buf), buf_len, pos, true))) {
+      if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len, reinterpret_cast<uint8_t *>(output_buf), buf_len, pos, true))) {
         if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
           ret = OB_SUCCESS;
           result.set_null();
@@ -131,19 +127,15 @@ int ObExprFromBase64::eval_from_base64(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else {
     const ObString &in_raw = arg->get_string();
     ObLength in_raw_len = in_raw.length();
-    if (OB_UNLIKELY(in_raw_len == 0)) {
+    const char *buf = in_raw.ptr();
+    if (NULL == buf) {
       res.set_string(nullptr, 0);
     } else {
-      const char *buf = in_raw.ptr();
-      char *output_buf = nullptr;
+      char *output_buf = NULL;
       int64_t buf_len = base64_needed_decoded_length(in_raw_len);
       int64_t pos = 0;
       output_buf = static_cast<char *>(exec_ctx->get_allocator().alloc(buf_len));
-      if (OB_ISNULL(output_buf)) {
-        LOG_WARN("output_buf is null", K(ret), K(buf_len), K(in_raw_len));
-        res.set_null();
-      } else if (OB_FAIL(ObBase64Encoder::decode(
-                     buf, in_raw_len, reinterpret_cast<uint8_t *>(output_buf), buf_len, pos, true))) {
+      if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len, reinterpret_cast<uint8_t *>(output_buf), buf_len, pos, true))) {
         if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
           ret = OB_SUCCESS;
           res.set_null();

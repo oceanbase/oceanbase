@@ -23,8 +23,7 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 
-ObExprToBase64::ObExprToBase64(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_BASE64, N_TO_BASE64, 1, NOT_ROW_DIMENSION)
+ObExprToBase64::ObExprToBase64(ObIAllocator &alloc) : ObStringExprOperator(alloc, T_FUN_SYS_TO_BASE64, N_TO_BASE64, 1)
 {}
 
 ObExprToBase64::~ObExprToBase64()

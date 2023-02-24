@@ -382,7 +382,29 @@ int ObBase64Encoder::decode(const char *input, const int64_t input_len, uint8_t 
     int64_t &pos, bool skip_spaces)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(input) || OB_ISNULL(output) || OB_UNLIKELY(input_len < 0 || output_len < 0 || pos < 0)) {
+  bool all_skipped = false;
+  if (OB_ISNULL(input) || OB_UNLIKELY(input_len < 0 || output_len < 0 || pos < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    _OB_LOG(WARN,
+        "invalid argument input=%p, output=%p, input_len=%ld, output_len=%ld, pos=%ld",
+        input,
+        output,
+        input_len,
+        output_len,
+        pos);
+  } else if (skip_spaces) {
+    all_skipped = true;
+    for (int64_t i = 0; all_skipped && i < input_len; ++i) {
+      if (!ObBase64Encoder::my_base64_decoder_skip_spaces(input[i])) {
+        all_skipped = false;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (all_skipped) {
+    // return empty string
+    pos = 0;
+  } else if (OB_ISNULL(output)) {
     ret = OB_INVALID_ARGUMENT;
     _OB_LOG(WARN,
         "invalid argument input=%p, output=%p, input_len=%ld, output_len=%ld, pos=%ld",
@@ -405,10 +427,8 @@ int ObBase64Encoder::decode(const char *input, const int64_t input_len, uint8_t 
     int64_t skipped_spaces = 0;
     for(; OB_SUCC(ret) && iter_input < (input + input_len) && '=' != *iter_input; iter_input++) {
       if (OB_UNLIKELY(!is_base64_char(*iter_input))) {
-        if (skip_spaces) {
-          if (my_base64_decoder_skip_spaces(*iter_input)) {
-            ++skipped_spaces;
-          }
+        if (skip_spaces && my_base64_decoder_skip_spaces(*iter_input)) {
+          ++skipped_spaces;
         } else {
           ret = OB_INVALID_ARGUMENT;
           _OB_LOG(WARN, "invalid base64 char, cur_idx=%ld, char=%c", iter_input - input, *iter_input);
@@ -431,27 +451,28 @@ int ObBase64Encoder::decode(const char *input, const int64_t input_len, uint8_t 
       }
     }  // for end
     int64_t cur_idx = iter_input - input;
-    for (const char *iter = iter_input; iter < input + input_len; iter++) {
-      if (skip_spaces) {
-        if (my_base64_decoder_skip_spaces(*iter)) {
-          ++skipped_spaces;
-        }
-      } else {
-        // all the rest chars must be '='
-        if (OB_UNLIKELY('=' != *iter)) {
-          ret = OB_INVALID_ARGUMENT;
-        }
+    int64_t cur_valid_len = iter_input - input - skipped_spaces;
+    for (const char *iter = iter_input; OB_SUCC(ret) && iter < input + input_len; iter++) {
+      // all the rest chars must be '='
+      if (skip_spaces && my_base64_decoder_skip_spaces(*iter)) {
+        skipped_spaces++;
+      } else if (OB_UNLIKELY('=' != *iter)) {
+        ret = OB_INVALID_ARGUMENT;
       }
     }  // end for
-    if (skip_spaces) {
+    if (OB_FAIL(ret)) {
+    } else if (!skip_spaces) {
+      if (OB_UNLIKELY((cur_idx + 3 <= input_len))) {
+        // only last char or last two chars can be '='
+        ret = OB_INVALID_ARGUMENT;
+      }
+    } else {
       int64_t valid_len = input_len - skipped_spaces;
-      if (valid_len % 4 != 0 || valid_len < 4 || cur_idx + 3 <= valid_len) {
+      if (valid_len % 4 != 0 || cur_valid_len + 3 <= valid_len) {
         ret = OB_INVALID_ARGUMENT;
       }
     }
-    if (OB_UNLIKELY((cur_idx + 3 <= input_len) && !skip_spaces)) {
-      // only last char or last two chars can be '='
-      ret = OB_INVALID_ARGUMENT;
+    if (OB_FAIL(ret)) {
     } else if (i > 0) {
       for (int k = 0; k < i; k++) {
         uint8_array_4[k] = BASE64_VALUES[uint8_array_4[k]];
