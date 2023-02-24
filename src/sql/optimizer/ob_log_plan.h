@@ -1333,7 +1333,7 @@ public:
                             CalcPartIdType calc_id_type,
                             ObRawExpr *&expr);
 
-  int candi_allocate_material();
+  int candi_allocate_for_update_material();
 
   int allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops);
 

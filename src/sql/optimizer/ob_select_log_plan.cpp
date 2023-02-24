@@ -3623,21 +3623,15 @@ int ObSelectLogPlan::allocate_plan_top()
       }
     }
 
-    //allocate temp-table transformation if needed.
-    if (OB_SUCC(ret) && !get_optimizer_context().get_temp_table_infos().empty() && is_final_root_plan()) {
-      if (OB_FAIL(candi_allocate_temp_table_transformation())) {
-        LOG_WARN("failed to allocate transformation operator", K(ret));
-      } else {
-        LOG_TRACE("succeed to allocate temp-table transformation",
-            K(candidates_.candidate_plans_.count()));
-      }
-    }
-
     // allocate root exchange
     if (OB_SUCC(ret) && is_final_root_plan()) {
       // allocate material if there is for update.
-      if (optimizer_context_.has_for_update() && OB_FAIL(candi_allocate_material())) {
+      if (optimizer_context_.has_for_update() && OB_FAIL(candi_allocate_for_update_material())) {
         LOG_WARN("failed to allocate material", K(ret));
+        //allocate temp-table transformation if needed.
+      } else if (!get_optimizer_context().get_temp_table_infos().empty() &&
+                 OB_FAIL(candi_allocate_temp_table_transformation())) {
+        LOG_WARN("failed to allocate transformation operator", K(ret));
       } else if (OB_FAIL(candi_allocate_root_exchange())) {
         LOG_WARN("failed to allocate root exchange", K(ret));
       } else {
