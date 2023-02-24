@@ -5454,6 +5454,7 @@ def_table_schema(
 # 448 : __all_backup_transferring_tablets
 
 # 449 : __all_wait_for_partition_split_tablet
+# 450 : __all_external_table_file
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -11405,6 +11406,7 @@ def_table_schema(
 )
 
 # 12370: __all_virtual_wait_for_partition_split_tablet
+# 12371: __all_virtual_external_table_file
 
 #
 # 余留位置
@@ -11686,6 +11688,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15289'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290', all_def_keywords['__all_virtual_archive_dest_status'])))
 
 # 15291: __all_virtual_backup_transferring_tablets
+# 15292: __all_virtual_external_table_file
 
 ################################################################################
 # System View (20000,30000]
