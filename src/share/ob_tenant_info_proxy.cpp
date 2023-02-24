@@ -554,10 +554,17 @@ int ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
   ObLSRecoveryStatOperator ls_recovery_operator;
   ObLSRecoveryStat sys_ls_recovery;
   ObLogRestoreSourceMgr restore_source_mgr;
+  uint64_t compat_version = 0;
 
   if (!is_user_tenant(tenant_id) || OB_INVALID_VERSION == switchover_epoch) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(switchover_epoch));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Tenant COMPATIBLE is below 4.1.0.0, update tenant recovery_until_scn is not suppported",
+             KR(ret), K(compat_version));
   } else if (OB_UNLIKELY(!recovery_until_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("recovery_until_scn invalid", KR(ret), K(recovery_until_scn));

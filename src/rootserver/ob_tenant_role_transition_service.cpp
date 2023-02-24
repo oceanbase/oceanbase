@@ -239,6 +239,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
 
   DEBUG_SYNC(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY);
 
+  LOG_INFO("start to do_prepare_flashback_for_switch_to_primary_", KR(ret), K_(tenant_id));
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else if (OB_UNLIKELY(!tenant_info.is_prepare_flashback_for_switch_to_primary_status())) {
@@ -947,6 +949,8 @@ int ObTenantRoleTransitionService::check_sync_to_latest_(const uint64_t tenant_i
   bool sys_ls_sync_to_latest = false;
   share::ObLSStatusInfo ls_status;
 
+  LOG_INFO("start to check_sync_to_latest", KR(ret), K(tenant_id), K(tenant_info));
+
   if (!is_user_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
@@ -1017,6 +1021,8 @@ int ObTenantRoleTransitionService::get_checkpoints_by_rpc_(const uint64_t tenant
 {
   int ret = OB_SUCCESS;
   checkpoints.reset();
+
+  LOG_INFO("start to get_checkpoints_by_rpc_", KR(ret), K(tenant_id), K(check_sync_to_latest), K(status_info_array));
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), KP(sql_proxy_));
   } else if (!is_user_tenant(tenant_id) || 0 >= status_info_array.count()) {

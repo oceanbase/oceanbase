@@ -89,6 +89,7 @@ int ObPrimaryStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
   ObSchemaGetterGuard schema_guard;
   const char *alter_cluster_event = arg.get_alter_type_str();
   const ObSimpleTenantSchema *tenant_schema = nullptr;
+  uint64_t compat_version = 0;
   CLUSTER_EVENT_ADD_CONTROL_START(ret, alter_cluster_event, "stmt_str", arg.get_stmt_str());
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
@@ -97,6 +98,12 @@ int ObPrimaryStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
     LOG_WARN("invalid arg", K(arg), KR(ret));
   } else if (OB_FAIL(get_target_tenant_id(arg.get_tenant_name(), arg.get_exec_tenant_id(), switch_tenant_id))) {
     LOG_WARN("failed to get_target_tenant_id", KR(ret), K(switch_tenant_id), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(switch_tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(switch_tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Tenant COMPATIBLE is below 4.1.0.0, switch tenant is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.1.0.0, switch tenant is");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("failed to get schema guard", KR(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_info(switch_tenant_id, tenant_schema))) {
@@ -234,6 +241,7 @@ int ObPrimaryStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg
   int64_t begin_time = ObTimeUtility::current_time();
   uint64_t tenant_id = OB_INVALID_ID;
   const char *alter_cluster_event = "recover_tenant";
+  uint64_t compat_version = 0;
   CLUSTER_EVENT_ADD_CONTROL_START(ret, alter_cluster_event, "stmt_str", arg.get_stmt_str());
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
@@ -242,6 +250,12 @@ int ObPrimaryStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg
     LOG_WARN("invalid arg", K(arg), KR(ret));
   } else if (OB_FAIL(get_target_tenant_id(arg.get_tenant_name(), arg.get_exec_tenant_id(), tenant_id))) {
     LOG_WARN("failed to get_target_tenant_id", KR(ret), K(tenant_id), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Tenant COMPATIBLE is below 4.1.0.0, recover tenant is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.1.0.0, recover tenant is");
   } else if (OB_FAIL(do_recover_tenant(tenant_id, share::NORMAL_SWITCHOVER_STATUS, arg.get_type(),
                                        arg.get_recovery_until_scn()))) {
     LOG_WARN("failed to do_recover_tenant", KR(ret), K(tenant_id), K(arg));
