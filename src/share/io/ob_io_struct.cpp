@@ -859,7 +859,7 @@ int ObIOSender::init(const int64_t sender_index)
     is_inited_ = true;
     sender_req_count_ = 0;
     sender_index_ = sender_index;
-    LOG_INFO("io sender init succ", KCSTRING(lbt()));
+    LOG_INFO("io sender init succ", KCSTRING(lbt()), K(sender_index));
   }
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1338,6 +1338,7 @@ void ObIOSender::pop_and_submit()
     } else {
       if (OB_FAIL(submit(*req))) {
         if (OB_EAGAIN == ret) {
+          LOG_INFO("IOChannel submit failed, re_submit req", K(ret), K(*req));
           req->dec_ref("phyqueue_dec"); // ref for io queue
           ObIORequest &re_req = *req;
           if (OB_FAIL(enqueue_request(re_req))) {
@@ -1405,6 +1406,10 @@ int ObIOSender::submit(ObIORequest &req)
     } else {
       time_guard.click("device_submit");
     }
+  }
+  if (time_guard.get_diff() > 100000) {// 100ms
+    //print req
+    LOG_INFO("submit_request cost too much time", K(ret), K(time_guard), K(req));
   }
   return ret;
 }
@@ -1475,7 +1480,7 @@ void ObIOScheduler::destroy()
   }
   for (int64_t i = 0; i < senders_.count(); ++i) {
     senders_.at(i)->wait();
-  }  
+  }
   for (int64_t i = 0; i < senders_.count(); ++i) {
     ObIOSender *&tmp_sender = senders_.at(i);
     if (OB_NOT_NULL(tmp_sender)) {
@@ -1512,7 +1517,7 @@ void ObIOScheduler::stop()
   }
 }
 
-int ObIOScheduler::schedule_request(ObTenantIOClock &io_clock, ObIORequest &req)
+int ObIOScheduler::schedule_request(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
   RequestHolder holder(&req);
@@ -2813,10 +2818,15 @@ void ObIOFaultDetector::handle(void *task)
       timeout_ms = min(left_timeout_ms, min(MAX_IO_RETRY_TIMEOUT_MS, max(timeout_ms * 2, MIN_IO_RETRY_TIMEOUT_MS)));
       if (timeout_ms > 0) {
         // do retry io
-        if (OB_FAIL(OB_IO_MANAGER.read(retry_task->io_info_, handle, timeout_ms))) {
+        if (OB_FAIL(OB_IO_MANAGER.detect_read(retry_task->io_info_, handle, timeout_ms))) {
           if (OB_TIMEOUT == ret) {
             LOG_WARN("ObIOManager::read failed", K(ret), K(retry_task->io_info_), K(timeout_ms));
             ret = OB_SUCCESS;
+          } else if (OB_EAGAIN == ret) { //maybe channel is busy, wait and retry
+            ob_usleep(100 * 1000); // 100ms
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("ObIOManager::retry read request failed", K(ret), K(retry_task->io_info_));
           }
         } else {
           is_retry_succ = true;

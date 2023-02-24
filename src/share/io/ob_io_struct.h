@@ -276,7 +276,7 @@ public:
   int start();
   void stop();
   void accumulate(const ObIORequest &req);
-  int schedule_request(ObTenantIOClock &io_clock, ObIORequest &req);
+  int schedule_request(ObIORequest &req);
   int init_group_queues(const uint64_t tenant_id, const int64_t group_num);
   int update_group_queues(const uint64_t tenant_id, const int64_t group_num);
   int remove_phyqueues(const uint64_t tenant_id);

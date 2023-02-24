@@ -48,6 +48,8 @@ public:
 
   int pwrite(ObIOInfo &info, int64_t &write_size);
   
+  int detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms);
+
   // config related, thread safe
   int set_io_config(const ObIOConfig &conf);
   const ObIOConfig &get_io_config() const;
@@ -111,6 +113,7 @@ public:
   void stop();
   bool is_working() const;
   int inner_aio(const ObIOInfo &info, ObIOHandle &handle);
+  int detect_aio(const ObIOInfo &info, ObIOHandle &handle);
   int enqueue_callback(ObIORequest &req);
   ObTenantIOClock *get_io_clock() { return io_clock_; }
   ObIOUsage &get_io_usage() { return io_usage_; }
