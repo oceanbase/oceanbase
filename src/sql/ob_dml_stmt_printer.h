@@ -34,7 +34,7 @@ namespace sql
 
 #define PRINT_TABLE_NAME_NORMAL(table_item)                                 \
   do {                                                                		  \
-    ObString database_name = table_item->synonym_name_.empty() ?            \
+    ObString database_name = table_item->synonym_db_name_.empty() ?         \
                             ( table_item->is_link_table() ?                 \
                               table_item->link_database_name_ :             \
                               table_item->database_name_ ) :                 \
