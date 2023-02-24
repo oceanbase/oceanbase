@@ -219,6 +219,8 @@ bool ObDataAccessService::can_fast_fail(const ObIDASTaskOp &task_op) const
   if (OB_ISNULL(GCTX.schema_service_)) {
     LOG_ERROR("invalid schema service", KR(ret));
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
+    // tenant could be deleted
+    bret = true;
     LOG_WARN("get tenant schema guard fail", KR(ret), K(MTL_ID()));
   } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
     LOG_WARN("failed to get table schema", KR(ret));
