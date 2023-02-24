@@ -545,7 +545,7 @@ int ObArchiveSender::do_compensate_piece_(const ObLSID &id,
 {
   int ret = OB_SUCCESS;
   share::ObBackupPath prefix;
-  if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_dir_path(backup_dest, station.get_round().dest_id_,
+  if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_log_dir_path(backup_dest, station.get_round().dest_id_,
       station.get_round().round_, next_piece_id, id, prefix))) {
     ARCHIVE_LOG(WARN, "get piece ls dir path failed", K(ret), K(id), K(next_piece_id), K(station));
   } else {
@@ -665,7 +665,7 @@ int ObArchiveSender::build_archive_prefix_if_needed_(const ObLSID &id,
   share::ObBackupPath prefix;
   if (pre_piece.is_valid() && pre_piece == cur_piece && piece_dir_exist) {
     // just skip
-  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_dir_path(backup_dest, station.get_round().dest_id_,
+  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_log_dir_path(backup_dest, station.get_round().dest_id_,
       station.get_round().round_, cur_piece.get_piece_id(), id, prefix))) {
     ARCHIVE_LOG(WARN, "get piece ls dir path failed", K(ret), K(id),
         K(cur_piece), K(station), K(backup_dest));

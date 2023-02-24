@@ -80,8 +80,8 @@ public:
       const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
       const SCN &end_scn, ObBackupPath &path);
 
-  // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]
-  static int get_piece_ls_dir_path(const ObBackupDest &dest, const int64_t dest_id, 
+  // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/log/
+  static int get_piece_ls_log_dir_path(const ObBackupDest &dest, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path);
 
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/ls_file_info.obarc
@@ -96,7 +96,7 @@ public:
   static int get_tenant_archive_piece_infos_file_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, ObBackupPath &path);
 
-  // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/[file_id].obarc
+  // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/log/[file_id].obarc
   static int get_ls_archive_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id, const int64_t file_id, ObBackupPath &path);
 
@@ -109,6 +109,12 @@ public:
   static int get_ls_meta_record_path(const ObBackupDest &dest, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
       const ObArchiveLSMetaType &meta_type, const int64_t file_id, ObBackupPath &path);
+
+private:
+  // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/
+  static int get_piece_ls_dir_path_(const ObBackupDest &dest, const int64_t dest_id,
+      const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path);
+
 private:
 
   static const char * const ROUNDS_DIR_PATH;
