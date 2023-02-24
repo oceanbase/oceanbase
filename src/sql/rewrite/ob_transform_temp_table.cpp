@@ -504,16 +504,13 @@ int ObTransformTempTable::inner_extract_common_subquery_as_cte(ObDMLStmt &root_s
     //对每组相似stmt创建temp table
     for (int64_t i = 0; OB_SUCC(ret) && i < compare_info.count(); ++i) {
       StmtCompareHelper &helper = compare_info.at(i);
-      bool is_valid = false;
       OPT_TRACE("try to materialize:", helper.stmt_);
       if (!helper.hint_force_stmt_set_.empty() &&
           !helper.hint_force_stmt_set_.is_equal(helper.similar_stmts_)) {
         //hint forbid, do nothing
         OPT_TRACE("hint reject transform");
-      } else if (OB_FAIL(check_stmt_can_materialize(helper.stmt_, is_valid))) {
-        LOG_WARN("failed to check stmt is valid", K(ret));
       } else if (helper.hint_force_stmt_set_.empty() && 
-                (helper.similar_stmts_.count() < 2 || !is_valid)) {
+                (helper.similar_stmts_.count() < 2)) {
         //do nothing
       } else if (OB_FAIL(create_temp_table(helper))) {
         LOG_WARN("failed to create temp table", K(ret));
@@ -700,6 +697,7 @@ int ObTransformTempTable::remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts)
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 8> new_stmts;
   bool has_rownum = false;
+  bool is_valid = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
     ObSelectStmt *subquery = stmts.at(i);
     if (OB_ISNULL(subquery)) {
@@ -710,6 +708,10 @@ int ObTransformTempTable::remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts)
     } else if (has_rownum) {
       //do nothing
     } else if (ObOptimizerUtil::find_item(ctx_->temp_table_ignore_stmts_, subquery)) {
+      //do nothing
+    } else if (OB_FAIL(check_stmt_can_materialize(subquery, is_valid))) {
+      LOG_WARN("failed to check stmt is valid", K(ret));
+    } else if (!is_valid) {
       //do nothing
     } else if (OB_FAIL(new_stmts.push_back(subquery))) {
       LOG_WARN("failed to push back stmt", K(ret));
