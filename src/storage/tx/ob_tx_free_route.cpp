@@ -160,34 +160,45 @@ inline int ObTransService::txn_state_update_verify_by_version_(const ObTxnFreeRo
   ObTxnFreeRouteFlag flag;                                              \
   ObTransID tx_id;                                                      \
   int64_t global_version;                                               \
-  if (OB_FAIL(OB_E(EventTable::EN_TX_FREE_ROUTE_UPDATE_STATE_ERROR, session_id) OB_SUCCESS)) { \
-    TRANS_LOG(ERROR, "inject failure", K(ret), KPC(tx), K(session_id)); \
-  } else if (OB_FAIL(decode(buf, len, pos, tx_id))) {                   \
-    TRANS_LOG(ERROR, "decode tx_id fail", K(ret));                      \
-  } else if (OB_FAIL(decode(buf, len, pos, global_version))) {          \
-    TRANS_LOG(ERROR, "decode global_version fail", K(ret));             \
-  } else if (OB_FAIL(decode(buf, len, pos, flag.v_))) {                 \
-    TRANS_LOG(ERROR, "decode flag fail", K(ret));                       \
-  } else if (OB_FAIL(txn_state_update_verify_by_version_(ctx, global_version))) { \
-  } else if (ctx.global_version_ < global_version) {                    \
-    ctx.global_version_ = global_version;                               \
+  {                                                                     \
+    int64_t tmp_tx_id = 0;                                              \
+    if (OB_FAIL(OB_E(EventTable::EN_TX_FREE_ROUTE_UPDATE_STATE_ERROR, session_id) OB_SUCCESS)) { \
+      TRANS_LOG(ERROR, "inject failure", K(ret), KPC(tx), K(session_id)); \
+    } else if (OB_FAIL(decode_i64(buf, len, pos, &tmp_tx_id))) {        \
+      TRANS_LOG(ERROR, "decode tx_id fail", K(ret));                    \
+    } else if (FALSE_IT(tx_id = ObTransID(tmp_tx_id))) {                \
+    } else if (OB_FAIL(decode_i64(buf, len, pos, &global_version))) {   \
+      TRANS_LOG(ERROR, "decode global_version fail", K(ret));           \
+    } else if (OB_FAIL(decode_i8(buf, len, pos, &flag.v_))) {           \
+      TRANS_LOG(ERROR, "decode flag fail", K(ret));                     \
+    } else if (OB_FAIL(txn_state_update_verify_by_version_(ctx, global_version))) { \
+    } else if (!tx_id.is_valid()) {                                     \
+      ret = OB_ERR_UNEXPECTED;                                          \
+      TRANS_LOG(ERROR, "tx id is invalid", K(ret));                     \
+    } else if (ctx.global_version_ < global_version) {                  \
+      ctx.global_version_ = global_version;                             \
+    }                                                                   \
   }
+
 
 #define ENCODE_HEADER()                                                 \
   if (OB_FAIL(OB_E(EventTable::EN_TX_FREE_ROUTE_ENCODE_STATE_ERROR, session_id) OB_SUCCESS)) { \
     TRANS_LOG(ERROR, "inject failure", K(ret), KPC(tx), K(session_id)); \
-  } else if (OB_FAIL(encode(buf, len, pos, ctx.tx_id_))) {              \
+  } else if (!ctx.tx_id_.is_valid()) {                                  \
+    ret = OB_ERR_UNEXPECTED;                                            \
+    TRANS_LOG(ERROR, "tx_id is invalid", K(ret), K(ctx));               \
+  } else if (OB_FAIL(encode_i64(buf, len, pos, ctx.tx_id_.get_id()))) { \
     TRANS_LOG(WARN, "encode tx_id fail", K(ret));                       \
-  } else if (OB_FAIL(encode(buf, len, pos, ctx.global_version_))) {     \
+  } else if (OB_FAIL(encode_i64(buf, len, pos, ctx.global_version_))) { \
     TRANS_LOG(WARN, "encode global_version fail", K(ret));              \
-  } else if (OB_FAIL(encode(buf, len, pos, ctx.flag_.v_))) {            \
+  } else if (OB_FAIL(encode_i8(buf, len, pos, ctx.flag_.v_))) {         \
     TRANS_LOG(WARN, "encode flag fail", K(ret));                        \
   }
 
 #define ENCODE_HEADER_LENGTH()                                          \
-  int64_t l = encoded_length(ctx.tx_id_)                                \
-    + encoded_length(ctx.global_version_)                               \
-    + encoded_length(ctx.flag_.v_)
+  int64_t l = encoded_length_i64(ctx.tx_id_.get_id())                   \
+    + encoded_length_i64(ctx.global_version_)                           \
+    + encoded_length_i8(ctx.flag_.v_)
 
 int ObTransService::txn_free_route__update_static_state(const uint32_t session_id,
                                                         ObTxDesc *&tx,
