@@ -144,7 +144,7 @@ typedef struct _ParseNode
       uint32_t is_empty_ : 1; // 表示是否缺省该节点，1表示缺省，0表示没有缺省, opt_asc_desc节点中使用到
       uint32_t is_multiset_ : 1; // for cast(multiset(...) as ...)
       uint32_t is_forbid_anony_parameter_ : 1; // 1 表示禁止匿名块参数化
-      uint32_t is_input_quoted : 1; // indicate name_ob input whether with double quote
+      uint32_t is_input_quoted_ : 1; // indicate name_ob input whether with double quote
       uint32_t reserved_;
     };
   };

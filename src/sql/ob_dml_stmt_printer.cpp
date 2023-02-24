@@ -663,7 +663,12 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
       if (i > 0) {
         DATA_PRINTF(", ");
       }
-      DATA_PRINTF("%.*s ", LEN_AND_PTR(col_info.col_name_));
+      if (col_info.is_name_quoted_) {
+        DATA_PRINTF("\"%.*s\" ", LEN_AND_PTR(col_info.col_name_));
+      } else {
+        DATA_PRINTF("%.*s ", LEN_AND_PTR(col_info.col_name_));
+      }
+
       if (OB_FAIL(ret)) {
       } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_ORDINALITY)) {
         DATA_PRINTF(" for ordinality");
