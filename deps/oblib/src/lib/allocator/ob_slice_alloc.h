@@ -257,6 +257,33 @@ private:
   FList flist_ CACHE_ALIGNED;
 };
 
+
+/******************************************** debug code *********************************************/
+
+#ifdef ENABLE_DEBUG_LOG
+#define OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
+// #define OB_RECORD_ALL_LBT_IN_THIS_ALLOCATOR
+#endif
+
+#ifdef OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
+#define OB_SLICE_LBT_BUFF_LENGTH 128
+#endif
+
+#ifdef OB_RECORD_ALL_LBT_IN_THIS_ALLOCATOR
+#define GEN_RECORD_ALL_LBT_IN_THIS_ALLOCATOR_CODE                            \
+  do {                                                                       \
+    if (is_leak_debug_ && OB_NOT_NULL(ret)) {                                \
+      void *slice_ptr = (void *)(ret + 1);                                   \
+      char *lbt_buf = (char *)slice_ptr + isize_ - OB_SLICE_LBT_BUFF_LENGTH; \
+      lbt(lbt_buf, OB_SLICE_LBT_BUFF_LENGTH);                                \
+    }                                                                        \
+  } while (0);
+#else
+#define GEN_RECORD_ALL_LBT_IN_THIS_ALLOCATOR_CODE
+#endif
+
+/******************************************** debug code *********************************************/
+
 class ObSliceAlloc
 {
 public:
@@ -354,6 +381,7 @@ public:
       }
     }
 
+    GEN_RECORD_ALL_LBT_IN_THIS_ALLOCATOR_CODE
     return NULL == ret? NULL: (void*)(ret + 1);
 #endif
   }
@@ -462,7 +490,42 @@ protected:
   Sync blk_ref_[MAX_REF_NUM];
   BlockAlloc &blk_alloc_;
   void* tmallocator_;
+
+/******************************************** debug code *********************************************/
+
+#ifdef OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
+
+public:
+  // use this function after initiating slice allocator
+  void enable_leak_debug()
+  {
+    new (this) ObSliceAlloc(isize_ + 128, attr_, bsize_, blk_alloc_, NULL);
+    is_leak_debug_ = true;
+    LIB_LOG(INFO, "leak debug mode! allocate extra 128 bytes memory for lbt record", K(is_leak_debug_));
+  }
+
+  void *alloc(const bool record_alloc_lbt)
+  {
+    void *ret = alloc();
+    if (record_alloc_lbt && is_leak_debug_ && OB_NOT_NULL(ret)) {
+      char *lbt_buf = (char *)ret + isize_ - OB_SLICE_LBT_BUFF_LENGTH;
+      lbt(lbt_buf, OB_SLICE_LBT_BUFF_LENGTH);
+    }
+    return ret;
+  }
+
+private:
+  bool is_leak_debug_ = false;
+
+#endif
+
+#undef OB_SLICE_LBT_BUFF_LENGTH
+#undef OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
+/******************************************** debug code *********************************************/
+
 };
+
+
 }; // end namespace common
 }; // end namespace oceanbase
 #endif /* OCEANBASE_ALLOCATOR_OB_SLICE_ALLOC_H_ */
