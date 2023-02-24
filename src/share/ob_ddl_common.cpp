@@ -1001,7 +1001,10 @@ int ObDDLUtil::get_ddl_rpc_timeout(const int64_t tenant_id, const int64_t table_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(get_tablet_count(tenant_id, table_id, tablet_count))) {
-    LOG_WARN("get tablet count failed", K(ret));
+    ret = OB_SUCCESS; // force succ
+    tablet_count = 0;
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_ddl_rpc_timeout(tablet_count, ddl_rpc_timeout_us))) {
     LOG_WARN("get ddl rpc timeout failed", K(ret));
   }
