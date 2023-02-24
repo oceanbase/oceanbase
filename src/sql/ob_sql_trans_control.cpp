@@ -837,8 +837,10 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   OZ (get_tx_service(session, txs), *session);
   // plain select stmt don't require txn descriptor
   if (OB_SUCC(ret) && !is_plain_select) {
-    ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback);
     CK (OB_NOT_NULL(tx_desc));
+    ObTransID tx_id_before_rollback;
+    OX (tx_id_before_rollback = tx_desc->get_tx_id());
+    OX (ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback));
     auto &tx_result = session->get_trans_result();
     if (OB_FAIL(ret)) {
     } else if (tx_result.is_incomplete()) {
@@ -853,6 +855,15 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
       auto &touched_ls = tx_result.get_touched_ls();
       OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls),
           savepoint, stmt_expire_ts, touched_ls);
+    }
+    // this may happend cause tx may implicit aborted
+    // (for example: first write sql of implicit started trans meet lock conflict)
+    // and if associated detector is created, must clean it also
+    if (OB_NOT_NULL(tx_desc) && tx_desc->get_tx_id() != tx_id_before_rollback) {
+      ObTransDeadlockDetectorAdapter::
+      unregister_from_deadlock_detector(tx_id_before_rollback,
+                                        ObTransDeadlockDetectorAdapter::
+                                        UnregisterPath::TX_ROLLBACK_IN_END_STMT);
     }
   }
   // call end stmt hook

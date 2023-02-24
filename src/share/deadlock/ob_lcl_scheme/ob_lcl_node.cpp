@@ -519,7 +519,6 @@ int ObLCLNode::process_lcl_message(const ObLCLMessage &lcl_msg)
     int64_t diff = current_ts - lcl_msg.get_send_ts();
     if (diff > PHASE_TIME / 3) {
       DETECT_LOG_(WARN, "phase not match", K(diff), K(current_ts), K(*this));
-      ret = OB_ERR_UNEXPECTED;
     }
   } else {
     {
