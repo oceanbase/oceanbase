@@ -4,8 +4,12 @@ export DEPLOY_PATH=$DIR/tools/deploy
 DEP_PATH=$DIR/deps/3rd
 export OBD_BIN=${_OBD_BIN:-$DEP_PATH/usr/bin/obd}
 alias obd="${OBD_BIN}"
-export OBD_HOME=$DIR/tools/deploy
-export OBD_INSTALL_PRE=$DEP_PATH
+export OBD_HOME=${_OBD_HOME:-$DIR/tools/deploy}
+export OBD_INSTALL_PRE=${_OBD_INSTALL_PRE:-$DEP_PATH}
+
+if [ ${_OBD_PROFILE} ]; then
+    source ${_OBD_PROFILE}
+fi
 
 if [ -f $OBD_INSTALL_PRE/etc/profile.d/obd.sh ] 
 then
