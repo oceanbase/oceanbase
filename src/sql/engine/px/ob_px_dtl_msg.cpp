@@ -35,7 +35,7 @@ OB_SERIALIZE_MEMBER((ObPxBloomFilterChInfo, dtl::ObDtlChTotalInfo), filter_id_);
 OB_SERIALIZE_MEMBER((ObPxBloomFilterChSet, dtl::ObDtlChSet), filter_id_, sqc_id_);
 OB_SERIALIZE_MEMBER(ObPxCreateBloomFilterChannelMsg, sqc_count_, sqc_id_, ch_set_info_);
 OB_SERIALIZE_MEMBER(ObPxBloomFilterData, filter_, tenant_id_, filter_id_,
-                    server_id_, execution_id_, bloom_filter_count_);
+                    server_id_, px_sequence_id_, bloom_filter_count_);
 OB_SERIALIZE_MEMBER(ObPxDmlRowInfo, row_match_count_, row_duplicated_count_, row_deleted_count_);
 OB_SERIALIZE_MEMBER(ObPxTabletRange, tablet_id_, range_cut_, range_weights_);
 

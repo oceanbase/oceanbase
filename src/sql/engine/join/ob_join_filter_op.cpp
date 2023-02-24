@@ -243,7 +243,7 @@ int ObJoinFilterOp::inner_open()
     bf_key_.init(ctx_.get_my_session()->get_effective_tenant_id(),
                  MY_SPEC.filter_id_,
                  MY_SPEC.server_id_,
-                 ctx_.get_my_session()->get_current_execution_id()  ,
+                 op_input->get_px_sequence_id(),
                  op_input->task_id_);
     if (MY_SPEC.is_use_mode()) {
       //在ctx中创建expr ctx, 并初始化bloom filter key
@@ -554,7 +554,7 @@ int ObJoinFilterOp::mark_rpc_filter()
     filter_data->tenant_id_ = bf_key_.tenant_id_;
     filter_data->server_id_ = MY_SPEC.server_id_;
     filter_data->filter_id_ = MY_SPEC.filter_id_;
-    filter_data->execution_id_ = bf_key_.execution_id_;
+    filter_data->px_sequence_id_ = bf_key_.px_sequence_id_;
     filter_data->bloom_filter_count_ = 0;
     bf_ctx.filter_data_ = filter_data;
     bf_ctx.filter_ready_ = true;
