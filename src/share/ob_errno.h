@@ -258,7 +258,7 @@ constexpr int OB_NOT_ALLOW_REMOVING_LEADER = -4386;
 constexpr int OB_NEED_SWITCH_CONSUMER_GROUP = -4387;
 constexpr int OB_ERR_REMOTE_SCHEMA_NOT_FULL = -4390;
 constexpr int OB_DDL_SSTABLE_RANGE_CROSS = -4391;
-constexpr int OB_DISK_CORRUPTED = -4392;
+constexpr int OB_DISK_HUNG = -4392;
 constexpr int OB_ERR_OBSERVER_START = -4393;
 constexpr int OB_ERR_OBSERVER_STOP = -4394;
 constexpr int OB_ERR_OBSERVICE_START = -4395;
@@ -2047,7 +2047,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TOO_MUCH_TIME__USER_ERROR_MSG "Porcessing time is too long"
 #define OB_ERR_REMOTE_SCHEMA_NOT_FULL__USER_ERROR_MSG "Schema of remote server is not refreshed yet"
 #define OB_DDL_SSTABLE_RANGE_CROSS__USER_ERROR_MSG "ddl sstable version range cross"
-#define OB_DISK_CORRUPTED__USER_ERROR_MSG "disk is corrupted"
+#define OB_DISK_HUNG__USER_ERROR_MSG "disk is hung"
 #define OB_ERR_OBSERVER_START__USER_ERROR_MSG "observer start process failure"
 #define OB_ERR_OBSERVER_STOP__USER_ERROR_MSG "observer stop process failure"
 #define OB_ERR_OBSERVICE_START__USER_ERROR_MSG "observice start process has failure"
@@ -4073,7 +4073,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4389, Porcessing time is too long"
 #define OB_ERR_REMOTE_SCHEMA_NOT_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4390, Schema of remote server is not refreshed yet"
 #define OB_DDL_SSTABLE_RANGE_CROSS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4391, ddl sstable version range cross"
-#define OB_DISK_CORRUPTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4392, disk is corrupted"
+#define OB_DISK_HUNG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4392, disk is hung"
 #define OB_ERR_OBSERVER_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4393, observer start process failure"
 #define OB_ERR_OBSERVER_STOP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4394, observer stop process failure"
 #define OB_ERR_OBSERVICE_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4395, observice start process has failure"

@@ -4257,17 +4257,17 @@ static const _error _error_OB_DDL_SSTABLE_RANGE_CROSS = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4391, ddl sstable version range cross",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4391, ddl sstable version range cross"
 };
-static const _error _error_OB_DISK_CORRUPTED = {
-      .error_name            = "OB_DISK_CORRUPTED",
+static const _error _error_OB_DISK_HUNG = {
+      .error_name            = "OB_DISK_HUNG",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
-      .str_error             = "disk is corrupted",
-      .str_user_error        = "disk is corrupted",
+      .str_error             = "disk is hung",
+      .str_user_error        = "disk is hung",
       .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4392, disk is corrupted",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4392, disk is corrupted"
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4392, disk is hung",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4392, disk is hung"
 };
 static const _error _error_OB_ERR_OBSERVER_START = {
       .error_name            = "OB_ERR_OBSERVER_START",
@@ -24657,7 +24657,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_TOO_MUCH_TIME] = &_error_OB_ERR_TOO_MUCH_TIME;
     _errors[-OB_ERR_REMOTE_SCHEMA_NOT_FULL] = &_error_OB_ERR_REMOTE_SCHEMA_NOT_FULL;
     _errors[-OB_DDL_SSTABLE_RANGE_CROSS] = &_error_OB_DDL_SSTABLE_RANGE_CROSS;
-    _errors[-OB_DISK_CORRUPTED] = &_error_OB_DISK_CORRUPTED;
+    _errors[-OB_DISK_HUNG] = &_error_OB_DISK_HUNG;
     _errors[-OB_ERR_OBSERVER_START] = &_error_OB_ERR_OBSERVER_START;
     _errors[-OB_ERR_OBSERVER_STOP] = &_error_OB_ERR_OBSERVER_STOP;
     _errors[-OB_ERR_OBSERVICE_START] = &_error_OB_ERR_OBSERVICE_START;
