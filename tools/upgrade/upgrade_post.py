@@ -1599,6 +1599,7 @@
 #'-h, --host=name     Connect to host.\n' +\
 #'-P, --port=name     Port number to use for connection.\n' +\
 #'-u, --user=name     User for login.\n' +\
+#'-t, --timeout=name  Cmd/Query/Inspection execute timeout(s).\n' +\
 #'-p, --password=name Password to use when connecting to server. If password is\n' +\
 #'                    not given it\'s empty string "".\n' +\
 #'-m, --module=name   Modules to run. Modules should be a string combined by some of\n' +\
@@ -1661,6 +1662,7 @@
 #Option('h', 'host', True, False),\
 #Option('P', 'port', True, False),\
 #Option('u', 'user', True, False),\
+#Option('t', 'timeout', True, False, 0),\
 #Option('p', 'password', True, False, ''),\
 ## 要跑哪个模块，默认全跑
 #Option('m', 'module', True, False, 'all'),\
@@ -1757,6 +1759,12 @@
 #  global g_opts
 #  for opt in g_opts:
 #    if 'password' == opt.get_long_name():
+#      return opt.get_value()
+#
+#def get_opt_timeout():
+#  global g_opts
+#  for opt in g_opts:
+#    if 'timeout' == opt.get_long_name():
 #      return opt.get_value()
 #
 #def get_opt_module():
@@ -1914,7 +1922,6 @@
 #      fail_list.append("""still has restore job, upgrade is not allowed temporarily""")
 #  logging.info('check restore job success')
 #
-#
 #def check_is_primary_zone_distributed(primary_zone_str):
 #  semicolon_pos = len(primary_zone_str)
 #  for i in range(len(primary_zone_str)):
@@ -1958,8 +1965,13 @@
 #     error_msg ="upgrade checker failed with " + str(len(fail_list)) + " reasons: " + ", ".join(['['+x+"] " for x in fail_list])
 #     raise MyError(error_msg)
 #
+#def set_query_timeout(query_cur, timeout):
+#  if timeout != 0:
+#    sql = """set @@session.ob_query_timeout = {0}""".format(timeout * 1000 * 1000)
+#    query_cur.exec_sql(sql)
+#
 ## 开始升级前的检查
-#def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
+#def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
 #  try:
 #    conn = mysql.connector.connect(user = my_user,
 #                                   password = my_passwd,
@@ -1971,6 +1983,7 @@
 #    cur = conn.cursor(buffered=True)
 #    try:
 #      query_cur = Cursor(cur)
+#      set_query_timeout(query_cur, timeout)
 #      check_observer_version(query_cur, upgrade_params)
 #      check_data_version(query_cur)
 #      check_paxos_replica(query_cur)
@@ -2013,9 +2026,10 @@
 #      port = int(get_opt_port())
 #      user = get_opt_user()
 #      password = get_opt_password()
-#      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\"',\
+#      timeout = int(get_opt_timeout())
+#      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
 #          host, port, user, password, log_filename)
-#      do_check(host, port, user, password, upgrade_params)
+#      do_check(host, port, user, password, timeout, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
 #      raise e
@@ -2345,11 +2359,8 @@
 #
 ## 3. 检查schema是否刷新成功
 #def check_schema_status(query_cur, timeout):
-#  sql = """select count(*) from __all_server a left join __all_virtual_server_schema_info b on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port where b.svr_ip is null"""
-#  check_until_timeout(query_cur, sql, 0, timeout)
-#
-#  sql = """select count(*) from __all_virtual_server_schema_info a join __all_virtual_server_schema_info b on a.tenant_id = b.tenant_id where a.refreshed_schema_version != b.refreshed_schema_version or a.refreshed_schema_version <= 1"""
-#  check_until_timeout(query_cur, sql, 0, timeout)
+#  sql = """select if (a.cnt = b.cnt, 1, 0) as passed from (select count(*) as cnt from oceanbase.__all_virtual_server_schema_info where refreshed_schema_version > 1 and refreshed_schema_version % 8 = 0) as a join (select count(*) as cnt from oceanbase.__all_server join oceanbase.__all_tenant) as b"""
+#  check_until_timeout(query_cur, sql, 1, timeout)
 #
 #def check_until_timeout(query_cur, sql, value, timeout):
 #  times = timeout / 10
@@ -2362,7 +2373,7 @@
 #      logging.info("check value is {0} success".format(value))
 #      break
 #    else:
-#      logging.info("value is {0}, expected value is {0}, not matched".format(results[0][0], value))
+#      logging.info("value is {0}, expected value is {1}, not matched".format(results[0][0], value))
 #
 #    times -= 1
 #    if times == -1:
