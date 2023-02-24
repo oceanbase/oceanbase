@@ -534,6 +534,10 @@ void ObServer::destroy()
     disk_usage_report_task_.destroy();
     FLOG_INFO("tenant disk usage report task destroyed");
 
+    FLOG_INFO("begin to destroy tmp file manager");
+    ObTmpFileManager::get_instance().destroy();
+    FLOG_INFO("tmp file manager destroyed");
+
     FLOG_INFO("begin to destroy ob server block mgr");
     OB_SERVER_BLOCK_MGR.destroy();
     FLOG_INFO("ob server block mgr destroyed");
@@ -541,10 +545,6 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy store cache");
     OB_STORE_CACHE.destroy();
     FLOG_INFO("store cache destroyed");
-
-    FLOG_INFO("begin to destroy tmp file manager");
-    ObTmpFileManager::get_instance().destroy();
-    FLOG_INFO("tmp file manager destroyed");
 
     FLOG_INFO("begin to destroy ObDagWarningHistoryManager");
     ObDagWarningHistoryManager::get_instance().destroy();
