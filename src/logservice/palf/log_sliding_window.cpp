@@ -37,7 +37,7 @@ namespace palf
 
 bool UpdateMatchLsnFunc::operator()(const common::ObAddr &server, LsnTsInfo &value)
 {
-  bool bool_ret = false;
+  bool bool_ret = true;
   if (!value.is_valid()) {
     bool_ret = false;
   } else if (value.lsn_ <= new_end_lsn_) {
@@ -113,10 +113,10 @@ LogSlidingWindow::LogSlidingWindow()
     is_rebuilding_(false),
     last_rebuild_lsn_(),
     last_record_end_lsn_(PALF_INITIAL_LSN_VAL),
-    fs_cb_cost_stat_("[PALF STAT FS CB]", 2 * 1000 * 1000),
-    log_life_time_stat_("[PALF STAT LOG LIFETIME]", 2 * 1000 * 1000),
-    log_submit_wait_stat_("[PALF STAT LOG SUBMIT WAIT]", 2 * 1000 * 1000),
-    log_submit_to_slide_cost_stat_("[PALF STAT LOG SLIDE WAIT]", 2 * 1000 * 1000),
+    fs_cb_cost_stat_("[PALF STAT FS CB]", PALF_STAT_PRINT_INTERVAL_US),
+    log_life_time_stat_("[PALF STAT LOG LIFETIME]", PALF_STAT_PRINT_INTERVAL_US),
+    log_submit_wait_stat_("[PALF STAT LOG SUBMIT WAIT]", PALF_STAT_PRINT_INTERVAL_US),
+    log_submit_to_slide_cost_stat_("[PALF STAT LOG SLIDE WAIT]", PALF_STAT_PRINT_INTERVAL_US),
     group_log_stat_time_us_(OB_INVALID_TIMESTAMP),
     accum_log_cnt_(0),
     accum_group_log_size_(0),
@@ -984,13 +984,13 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
               const common::ObRole role = state_mgr_->get_role();
               const int64_t total_log_cnt = ATOMIC_AAF(&accum_log_cnt_, log_cnt);
               const int64_t total_group_log_size = ATOMIC_AAF(&accum_group_log_size_, group_log_size);
-              if (palf_reach_time_interval(2 * 1000 * 1000, group_log_stat_time_us_)) {
+              if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, group_log_stat_time_us_)) {
                 const int64_t total_group_log_cnt = tmp_log_id - last_record_group_log_id_;
                 if (total_group_log_cnt > 0) {
                   const int64_t avg_log_batch_cnt = total_log_cnt / total_group_log_cnt;
                   const int64_t avg_group_log_size = total_group_log_size / total_group_log_cnt;
                   PALF_LOG(INFO, "[PALF STAT GROUP LOG INFO]", K_(palf_id), K_(self), "role", role_to_string(role),
-                      K(total_group_log_cnt), K(avg_log_batch_cnt), K(avg_group_log_size));
+                      K(total_group_log_cnt), K(avg_log_batch_cnt), K(total_group_log_size), K(avg_group_log_size));
                 }
                 ATOMIC_STORE(&accum_log_cnt_, 0);
                 ATOMIC_STORE(&accum_group_log_size_, 0);
@@ -1553,7 +1553,7 @@ int LogSlidingWindow::try_advance_committed_lsn_(const LSN &end_lsn)
       }
     }
     PALF_LOG(TRACE, "try_advance_committed_lsn_ success", K_(palf_id), K_(self), K_(committed_end_lsn));
-    if (palf_reach_time_interval(2 * 1000 * 1000, end_lsn_stat_time_us_)) {
+    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, end_lsn_stat_time_us_)) {
       LSN curr_end_lsn;
       get_committed_end_lsn_(curr_end_lsn);
       PALF_LOG(INFO, "[PALF STAT COMMITTED LOG SIZE]", K_(palf_id), K_(self), "committed size", curr_end_lsn.val_ - last_record_end_lsn_.val_);

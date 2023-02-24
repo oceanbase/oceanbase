@@ -77,6 +77,7 @@ const int64_t LEADER_DEFAULT_GROUP_BUFFER_SIZE = 1 << 25;                       
 const int64_t MAX_ALLOWED_SKEW_FOR_REF_US = 3600L * 1000 * 1000;          // 1h
 // follower's group buffer size is 8MB larger than leader's.
 const int64_t FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE = LEADER_DEFAULT_GROUP_BUFFER_SIZE + 8 * 1024 * 1024L;
+const int64_t PALF_STAT_PRINT_INTERVAL_US = 1 * 1000 * 1000L;
 const int64_t PALF_RECONFIRM_FETCH_MAX_LSN_INTERVAL = 1 * 1000 * 1000;
 const int64_t PALF_FETCH_LOG_INTERVAL_US = 2 * 1000 * 1000L;                 // 2s
 const int64_t PALF_FETCH_LOG_RENEW_LEADER_INTERVAL_US = 5 * 1000 * 1000;            // 5s
