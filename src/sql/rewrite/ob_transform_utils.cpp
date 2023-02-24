@@ -6208,6 +6208,15 @@ int ObTransformUtils::create_set_stmt(ObTransformerCtx *ctx,
   } else {
     if (ObSelectStmt::UNION != set_type || is_distinct) {
       temp_stmt->assign_set_distinct();
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
+        if (OB_ISNULL(child_stmts.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null stmt", K(ret));
+        } else if (child_stmts.at(i)->get_select_items().empty() &&
+                   OB_FAIL(create_dummy_select_item(*child_stmts.at(i), ctx))) {
+          LOG_WARN("failed to create dummy select", K(ret));
+        }
+      }
     } else {
       temp_stmt->assign_set_all();
     }
@@ -6215,7 +6224,8 @@ int ObTransformUtils::create_set_stmt(ObTransformerCtx *ctx,
     temp_stmt->assign_set_op(set_type);
     temp_stmt->set_calc_found_rows(child_stmt->is_calc_found_rows());
     // adjust statement id after set query_ctx and set_type
-    if (OB_FAIL(temp_stmt->adjust_statement_id(ctx->allocator_,
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(temp_stmt->adjust_statement_id(ctx->allocator_,
                                                ctx->src_qb_name_,
                                                ctx->src_hash_val_))) {
       LOG_WARN("failed to adjust statement id", K(ret), K(child_stmt));
