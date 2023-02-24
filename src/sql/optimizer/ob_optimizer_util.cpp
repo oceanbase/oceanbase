@@ -7971,6 +7971,36 @@ int ObOptimizerUtil::expr_calculable_by_exprs(const ObRawExpr *src_expr,
   return ret;
 }
 
+int ObOptimizerUtil::check_contain_my_exec_param(ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  contain = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (!expr->has_flag(CNT_DYNAMIC_PARAM)) {
+    //do nothing
+  } else if (expr->is_exec_param_expr()) {
+    const ObExecParamRawExpr *exec_expr = static_cast<const ObExecParamRawExpr*>(expr);
+    contain = find_exec_param(my_exec_params, exec_expr);
+  } else if (expr->is_set_op_expr() || expr->is_query_ref_expr() || expr->is_column_ref_expr()) {
+    //do nothing
+  } else {
+    for (int64_t i = 0; !contain && OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_contain_my_exec_param(expr->get_param_expr(i), my_exec_params, contain)))) {
+        LOG_WARN("failed to check contain batch stmt parameter", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 /* get the smallest set from which all exprs can be evaluated */
 int ObOptimizerUtil::get_minset_of_exprs(const ObIArray<ObRawExpr *> &src_exprs, ObIArray<ObRawExpr *> &min_set) {
   int ret = OB_SUCCESS;
