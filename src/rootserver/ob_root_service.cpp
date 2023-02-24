@@ -8090,7 +8090,6 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
 
   int64_t current_timestamp = ObTimeUtility::current_time();
   int64_t start_ts = ObTimeUtility::current_time();
-  const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000; // prevent to recovery to a certain time in the future
   int64_t job_id = OB_INVALID_ID;
   int64_t refreshed_schema_version = OB_INVALID_VERSION;
   ObSchemaGetterGuard schema_guard;
@@ -8119,11 +8118,6 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore tenant when restore_concurrency is 0 not allowed", KR(ret));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore tenant when restore_concurrency is 0");
-    //TODO check has standby cluster
-  } else if (arg.restore_scn_.convert_to_ts() + RESTORE_TIMESTAMP_DETA >= current_timestamp) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("restore_timestamp is too new", K(ret), K(current_timestamp), K(arg));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "need retry later, restore timestamp is too new");
   } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
                      OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail to get sys tenant's schema guard", KR(ret));
