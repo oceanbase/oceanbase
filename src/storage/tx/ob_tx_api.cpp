@@ -1024,7 +1024,7 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
       break;
     case ObTxDesc::State::IMPLICIT_ACTIVE:
       tx.release_implicit_savepoint(savepoint);
-      if (!tx.has_implicit_savepoint() && tx.active_scn_ >= savepoint) {
+      if (!tx.flags_.REPLICA_ && !tx.has_implicit_savepoint() && tx.active_scn_ >= savepoint) {
         reset_tx = true;
       } else {
         normal_rollback = true;
