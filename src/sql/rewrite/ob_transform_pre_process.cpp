@@ -5617,14 +5617,8 @@ int ObTransformPreProcess::transform_rownum_as_limit_offset(
   //bool is_rownum_gen_col_happened = false;
   bool is_rownum_happened = false;
   bool is_generated_rownum_happened = false;
-  bool invalid_for_dblink = false;
   trans_happened = false;
-  if (OB_FAIL(ObTransformUtils::check_stmt_from_one_dblink(stmt, invalid_for_dblink))) {
-    LOG_WARN("failed to check if all tables from one dblink", K(ret));
-  } else if (invalid_for_dblink) {
-    // do not transform,
-    // for compatibility with Oracle before 12c
-  } else if (OB_FAIL(transform_common_rownum_as_limit(stmt, is_rownum_happened))) {
+  if (OB_FAIL(transform_common_rownum_as_limit(stmt, is_rownum_happened))) {
     LOG_WARN("failed to transform common rownum as limit", K(ret));
   } else if (OB_FAIL(transform_generated_rownum_as_limit(parent_stmts, stmt,
                                                          is_generated_rownum_happened))) {

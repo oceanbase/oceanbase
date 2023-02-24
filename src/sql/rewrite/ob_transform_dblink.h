@@ -151,6 +151,8 @@ private:
 
   int formalize_select_item(ObDMLStmt *stmt);
 
+  int extract_limit(ObDMLStmt *stmt, ObDMLStmt *&dblink_stmt);
+
   virtual int need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
                              const int64_t current_level,
                              const ObDMLStmt &stmt,

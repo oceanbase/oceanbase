@@ -93,7 +93,6 @@ int ObTransformSimplifyLimit::check_need_add_limit_to_semi_right_table(ObDMLStmt
   need_add = true;
   TableItem *right_table = NULL;
   ObSelectStmt *ref_query = NULL;
-  bool from_one_dblink = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(semi_info) ||
       OB_ISNULL(right_table = stmt->get_table_item_by_id(semi_info->right_table_id_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -105,12 +104,6 @@ int ObTransformSimplifyLimit::check_need_add_limit_to_semi_right_table(ObDMLStmt
     LOG_WARN("unexpected null", K(ret), K(ref_query));
   } else if (NULL != ref_query->get_limit_expr() ||
              NULL != ref_query->get_limit_percent_expr()) {
-    need_add = false;
-  } else if (OB_FAIL(ObTransformUtils::check_stmt_from_one_dblink(ref_query, from_one_dblink))) {
-    LOG_WARN("failed to check if all tables from one dblink", K(ret));
-  } else if (from_one_dblink) {
-    // do not transform,
-    // for compatibility with Oracle before 12c
     need_add = false;
   }
   if (OB_SUCC(ret)) {

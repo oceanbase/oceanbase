@@ -1629,8 +1629,6 @@ public:
                                             ObWinFunRawExpr &win_expr,
                                             ObRawExpr* order_expr);
 
-  static int check_stmt_from_one_dblink(ObDMLStmt *stmt, bool &from_one_dblink);
-
   static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
                                              bool &is_valid);
 
@@ -1669,6 +1667,12 @@ public:
                                 ObIArray<ObRawExpr *> *rollup_exprs = NULL,
                                 ObIArray<ObRawExpr *> *having_exprs = NULL,
                                 ObIArray<OrderItem> *order_items = NULL);
+
+  /* Push all content of the parent stmt into an inline view,
+     and keep the ptr of the parent stmt  */
+  static int pack_stmt(ObTransformerCtx *ctx,
+                       ObSelectStmt *parent_stmt,
+                       ObSelectStmt **child_stmt_ptr = NULL);
 
   static int generate_select_list(ObTransformerCtx *ctx,
                                   ObDMLStmt *stmt,
