@@ -38,11 +38,11 @@
 // ::rollback to savepoint::
 //   1. advance In-Transaction-Clock to establish operation relation of Rollback-After-Write
 // -------------------------------------------------------------------------------------------
-#define TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE \
+#define TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(end_txn)                \
   do {                                                                  \
     bool inv = false;                                                   \
     if (tx.is_xa_trans()) {                                             \
-      inv = tx.xa_start_addr_ != self_;                                 \
+      inv = end_txn ? tx.addr_ != self_ : tx.xa_start_addr_ != self_;   \
     } else {                                                            \
       inv = tx.addr_ != self_;                                          \
     }                                                                   \
@@ -270,7 +270,7 @@ int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param)
 
 int ObTransService::rollback_tx(ObTxDesc &tx)
 {
-  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE
+  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(true)
   int ret = OB_SUCCESS;
   TX_STAT_ROLLBACK_INC
   ObSpinLockGuard guard(tx.lock_);
@@ -405,7 +405,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
                                      ObITxCallback &cb,
                                      const ObString *trace_info)
 {
-  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE
+  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(true)
   int ret = OB_SUCCESS;
   tx.lock_.lock();
   if (tx.commit_ts_ <= 0) {
