@@ -148,7 +148,9 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
     LOG_WARN("get needle data failed ", K(ret), K(needle_iter));
   } else if (OB_FAIL(needle_iter.get_char_len(needle_char_len))) {
     LOG_WARN("get needle char len failed ", K(ret), K(needle_iter));
-  } else if (haystack_char_len - abs_pos_int < needle_char_len) {
+  } else if ((needle_char_len < 1) ||
+             (haystack_char_len - abs_pos_int + 1 < needle_char_len)) {
+    // pattern is empty string, just return zero
     // pattern length is bigger than content, just return zero
     idx = 0;
   } else {

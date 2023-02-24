@@ -2298,9 +2298,9 @@ int ObLobManager::write_outrow_inner(ObLobAccessParam& param, ObLobQueryIter *it
       // prepare write iter
       ObLobMetaWriteIter write_iter(read_buf, param.allocator_, ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE);
       if (OB_FAIL(write_iter.open(param, iter, read_buf, padding_size, post_data, remain_buf, seq_id_st, seq_id_ed))) {
-        LOG_WARN("failed to open meta writer", K(ret));
+        LOG_WARN("failed to open meta writer", K(ret), K(write_iter), K(meta_iter), K(found_begin), K(found_end));
       } else if (OB_FAIL(write_outrow_result(param, write_iter))) {
-        LOG_WARN("failed to write outrow result", K(ret));
+        LOG_WARN("failed to write outrow result", K(ret), K(write_iter), K(meta_iter), K(found_begin), K(found_end));
       }
       write_iter.close();
     }
@@ -2810,7 +2810,11 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
     ObLobMetaInfo new_meta_row = result.meta_result_.info_;
     char* tmp_buf = tmp_buff.ptr();
     ObString read_data;
-    read_data.assign_buffer(tmp_buf, result.meta_result_.info_.byte_len_);
+    if (param.is_fill_zero_) {
+      read_data.assign_buffer(tmp_buf, result.meta_result_.info_.byte_len_);
+    } else {
+      read_data = result.meta_result_.info_.lob_data_;
+    }
 
     // save variable
     uint32_t tmp_st = result.meta_result_.st_;
@@ -2822,7 +2826,7 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
     if (OB_ISNULL(tmp_buf)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tmp buffer is null.", K(ret), K(tmp_buff));
-    } else if (OB_FAIL(get_real_data(param, result, read_data))) {
+    } else if (param.is_fill_zero_ && OB_FAIL(get_real_data(param, result, read_data))) {
       LOG_WARN("failed to write data to read buf.", K(ret), K(result));
     } else {
       result.meta_result_.st_ = tmp_st;
@@ -2876,10 +2880,15 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
             read_data.set_length(read_data.length() - by_len + fill_char_len);
             new_meta_row.byte_len_ = read_data.length();
           } else {
-            new_meta_row.byte_len_ -= (by_len);
-            new_meta_row.char_len_ -= (local_end - local_begin);
-            MEMMOVE(read_data.ptr() + by_st, read_data.ptr() + (by_st + by_len), piece_byte_len - (by_st + by_len));
-            read_data.assign_ptr(read_data.ptr(), read_data.length() - by_len);
+            read_data.assign_buffer(tmp_buf, result.meta_result_.info_.byte_len_);
+            if (OB_FAIL(get_real_data(param, result, read_data))) {
+              LOG_WARN("failed to write data to read buf.", K(ret), K(result));
+            } else {
+              new_meta_row.byte_len_ -= (by_len);
+              new_meta_row.char_len_ -= (local_end - local_begin);
+              MEMMOVE(read_data.ptr() + by_st, read_data.ptr() + (by_st + by_len), piece_byte_len - (by_st + by_len));
+              read_data.assign_ptr(read_data.ptr(), read_data.length() - by_len);
+            }
           }
         } else {
           del_piece = true;
@@ -2928,10 +2937,15 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
             read_data.set_length(fill_char_len + read_data.length() - by_len);
             new_meta_row.byte_len_ = read_data.length();
           } else {
-            new_meta_row.char_len_ = piece_char_len - local_end;
-            new_meta_row.byte_len_ = read_data.length() - by_len;
-            MEMMOVE(read_data.ptr(), read_data.ptr() + by_len, read_data.length() - by_len);
-            read_data.assign_ptr(read_data.ptr(), read_data.length() - by_len);
+            read_data.assign_buffer(tmp_buf, result.meta_result_.info_.byte_len_);
+            if (OB_FAIL(get_real_data(param, result, read_data))) {
+              LOG_WARN("failed to write data to read buf.", K(ret), K(result));
+            } else {
+              new_meta_row.char_len_ = piece_char_len - local_end;
+              new_meta_row.byte_len_ = read_data.length() - by_len;
+              MEMMOVE(read_data.ptr(), read_data.ptr() + by_len, read_data.length() - by_len);
+              read_data.assign_ptr(read_data.ptr(), read_data.length() - by_len);
+            }
           }
         }
       }

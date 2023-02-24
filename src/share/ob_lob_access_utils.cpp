@@ -1133,7 +1133,7 @@ int ObTextStringResult::fill(int64_t pos, int c, int64_t len)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Lob: append content length too long", K(this), K(pos), K(len), K(ret));
     } else {
-      MEMSET(buffer_ + pos, c, len);
+      MEMSET(buffer_ + pos_ + pos, c, len);
     }
   } else {
     ret = OB_NOT_IMPLEMENT;
