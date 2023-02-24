@@ -56,7 +56,8 @@ Thread::Thread(Runnable runnable, int64_t stack_size)
       stack_addr_(nullptr),
 #endif
       stack_size_(stack_size),
-      stop_(true)
+      stop_(true),
+      join_concurrency_(0)
 {}
 
 Thread::~Thread()
@@ -170,6 +171,9 @@ void Thread::wait()
 {
   int ret = OB_SUCCESS;
   if (pth_ != 0) {
+    if (2 <= ATOMIC_AAF(&join_concurrency_, 1)) {
+      abort();
+    }
     if (OB_FAIL(pthread_join(pth_, nullptr))) {
       LOG_ERROR("pthread_join failed", K(ret), K(errno));
 #ifndef OB_USE_ASAN
@@ -182,6 +186,9 @@ void Thread::wait()
     pid_ = 0;
     tid_ = 0;
     runnable_ = nullptr;
+    if (1 <= ATOMIC_AAF(&join_concurrency_, -1)) {
+      abort();
+    }
   }
 }
 
