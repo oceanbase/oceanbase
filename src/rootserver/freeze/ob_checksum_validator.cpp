@@ -567,7 +567,11 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
             if (OB_CHECKSUM_ERROR == ret) {
               check_ret = ret;
             }
-            ret = OB_SUCCESS;  // ignore ret, and continue check next table_schema
+            if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret) {
+              // do not ignore ret, therefore not continue to check next table_schema
+            } else {
+              ret = OB_SUCCESS; // ignore ret, and continue to check next table_schema
+            }
           }
         }  // end for loop
 
