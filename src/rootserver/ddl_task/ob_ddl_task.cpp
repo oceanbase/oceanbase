@@ -2656,6 +2656,9 @@ int ObDDLTaskRecordOperator::get_task_record(const ObSqlString &sql_string,
             LOG_WARN("push back failed", K(record));
           }
         }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
