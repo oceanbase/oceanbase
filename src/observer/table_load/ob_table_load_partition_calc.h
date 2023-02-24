@@ -49,7 +49,7 @@ private:
               common::ObIAllocator &allocator) const;
   int get_partition_by_row(common::ObIArray<common::ObNewRow> &part_rows,
                            common::ObIArray<table::ObTableLoadPartitionId> &partition_ids) const;
-private:
+public:
   struct IndexAndType
   {
     IndexAndType() : index_(-1) {}
@@ -57,6 +57,10 @@ private:
     const share::schema::ObColumnSchemaV2 *column_schema_;
     TO_STRING_KV(K_(index), KP_(column_schema));
   };
+public:
+  table::ObTableLoadArray<IndexAndType> rowkey_obj_index_;
+  common::ObTimeZoneInfo tz_info_;
+  ObTableLoadTimeConverter time_cvrt_;
 private:
   // data members
   uint64_t tenant_id_;
@@ -69,9 +73,6 @@ private:
   sql::ObSqlCtx sql_ctx_;
   sql::ObExecContext exec_ctx_;
   sql::ObTableLocation table_location_;
-  table::ObTableLoadArray<IndexAndType> rowkey_obj_index_;
-  common::ObTimeZoneInfo tz_info_;
-  ObTableLoadTimeConverter time_cvrt_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadPartitionCalc);
 };

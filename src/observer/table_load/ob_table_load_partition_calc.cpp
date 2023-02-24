@@ -238,12 +238,6 @@ int ObTableLoadPartitionCalc::get_row(const ObTableLoadObjRow &obj_row, int32_t 
     if (OB_UNLIKELY(obj_index >= length)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid length", KR(ret), K(obj_index), K(length));
-    } else if (index_and_type.column_schema_->is_identity_column() && obj_row.cells_[obj_index].is_null()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("partition column with identity cannot be null", KR(ret), K(index_and_type.column_schema_->get_column_name()));
-    } else if (index_and_type.column_schema_->is_autoincrement() && obj_row.cells_[obj_index].is_null()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("partition column with auto_increment cannot be null", KR(ret), K(index_and_type.column_schema_->get_column_name()));
     } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, index_and_type.column_schema_,
                                                     obj_row.cells_[obj_index], rowkey_objs[i]))) {
       LOG_WARN("fail to cast obj", KR(ret));
