@@ -34,7 +34,10 @@ namespace omt {
  class ObPxPools;
  class ObTenant;
 }
-namespace obmysql { class ObMySQLRequestManager; }
+namespace obmysql {
+  class ObMySQLRequestManager;
+  class ObSqlNioServer;
+}
 namespace sql {
   namespace dtl { class ObTenantDfc; }
   class ObTenantSqlMemoryManager;
@@ -131,6 +134,7 @@ namespace rootserver
 namespace observer
 {
   class ObTenantMetaChecker;
+  class QueueThread;
   class ObTableLoadService;
 }
 
@@ -192,6 +196,7 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       rootserver::ObPrimaryMajorFreezeService*,      \
       rootserver::ObRestoreMajorFreezeService*,      \
       observer::ObTenantMetaChecker*,                \
+      observer::QueueThread *,                       \
       storage::ObStorageHAHandlerService*,           \
       rootserver::ObTenantRecoveryReportor*,         \
       rootserver::ObTenantInfoLoader*,         \

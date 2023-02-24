@@ -14,6 +14,7 @@
 
 #include "io/easy_io.h"
 #include "rpc/frame/ob_net_easy.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
 
 #include "lib/ob_define.h"
 #include "lib/utility/utility.h"
@@ -796,15 +797,20 @@ int ObNetEasy::start()
     LOG_ERROR("eio is NULL, not inited", K(is_inited_), KP_(rpc_eio), KP_(mysql_eio), KP_(batch_rpc_eio), K(ret));
   }
 
+  // TODO: rpc_port_ might not in use
+  global_ob_listener = &rpc_listener_;
   if (OB_SUCC(ret) && rpc_port_ > 0) {
-    if (OB_FAIL(rpc_listener_.listen_create(rpc_port_))) {
-      LOG_ERROR("create listen failed", K(ret));
-    } else if (OB_FAIL(rpc_listener_.start())) {
-      LOG_ERROR("oblistener start failed!", K(rpc_port_), K(ret));
-    } else if (OB_FAIL(ObNetKeepAlive::get_instance().start())) {
-      LOG_ERROR("oblistener start failed!", K(rpc_port_), K(ret));
+    if (!global_poc_server.has_start()) {
+      if (OB_FAIL(rpc_listener_.listen_create(rpc_port_))) {
+        LOG_ERROR("create listen failed", K(ret));
+      } else if (OB_FAIL(rpc_listener_.start())) {
+        LOG_ERROR("oblistener start failed!", K(rpc_port_), K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObNetKeepAlive::get_instance().start())) {
+      LOG_ERROR("ObNetKeepAlive start failed!", K(rpc_port_), K(ret));
     } else {
-      LOG_INFO("oblistener start!", K(rpc_port_));
+      LOG_INFO("ObNetKeepAlive start!", K(rpc_port_));
     }
   }
 

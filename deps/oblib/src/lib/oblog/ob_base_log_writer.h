@@ -116,7 +116,7 @@ protected:
 
   SimpleCond* log_write_cond_;
   SimpleCond* log_flush_cond_;
-  char thread_name_[PR_SET_NAME];
+  const char* thread_name_;
 };
 
 }

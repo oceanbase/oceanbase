@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "lib/alloc/memory_dump.h"
+#include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/stat/ob_di_cache.h"
 #include "observer/omt/ob_multi_tenant.h"
@@ -26,7 +27,9 @@
 #include "observer/virtual_table/ob_all_virtual_sys_stat.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_tenant_mgr.h"
+#include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "share/scheduler/ob_sys_task_stat.h"
+#include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_ctx_mgr_v4.h"
 #include "storage/tx/ob_trans_service.h"
@@ -64,10 +67,12 @@ public:
   void *alloc(const int64_t size) override
   {
     void *ret = nullptr;
-    if (0 != size) {
-      ret = ::mmap(nullptr, size + 8, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-      *static_cast<uint64_t *>(ret) = size;
-      ret = (char*)ret + 8;
+    if (0 != size && ObLuaHandler::get_instance().memory_usage() + size + 8 < ObLuaHandler::LUA_MEMORY_LIMIT) {
+      if (OB_NOT_NULL(ret = ::mmap(nullptr, size + 8, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+        *static_cast<uint64_t *>(ret) = size;
+        ret = (char*)ret + 8;
+        ObLuaHandler::get_instance().memory_update(size + 8);
+      }
     }
     return ret;
   }
@@ -80,10 +85,20 @@ public:
   {
     if (OB_NOT_NULL(ptr)) {
       const uint64_t size = *(uint64_t *)((char *)ptr - 8);
+      ObLuaHandler::get_instance().memory_update(- 8 - size);
       ::munmap((void *)((char *)ptr - 8), size);
     }
   }
 };
+}
+
+static ObFIFOAllocator &get_global_allocator()
+{
+  static ObFIFOAllocator allocator;
+  if (OB_UNLIKELY(!allocator.is_inited())) {
+    IGNORE_RETURN allocator.init(&LuaAllocator::get_instance(), (1 << 13) - 8, default_memattr, 0, 0, INT64_MAX);
+  }
+  return allocator;
 }
 }
 
@@ -91,6 +106,7 @@ static constexpr const char *usage_str =
 "API List:\n\n"
 "string = usage()\n"
 "print_to_client(arg1, arg2...)\n"
+"int = now()\n"
 "{int, int, ...} = get_tenant_id_list()\n"
 "int = get_tenant_mem_limit(int)\n"
 "int = get_tenant_sysstat_by_id(int, int)\n"
@@ -108,7 +124,15 @@ static constexpr const char *usage_str =
 "{{row1}, {row2}, ...} = select_disk_stat()\n"
 "{{row1}, {row2}, ...} = select_tenant_memory_info()\n"
 "string = show_log_probe()\n"
-"int = set_log_probe(string)\n";
+"int = set_log_probe(string)\n"
+"{{row1}, {row2}, ...} = select_mem_leak_checker_info()\n"
+"{{row1}, {row2}, ...} = select_compaction_diagnose_info()\n"
+"{{row1}, {row2}, ...} = select_dag_warning_history()\n"
+"{{row1}, {row2}, ...} = select_server_schema_info()\n"
+"{{row1}, {row2}, ...} = select_schema_slot()\n"
+"{{row1}, {row2}, ...} = dump_thread_info()\n"
+"{{row1}, {row2}, ...} = select_malloc_sample_info()\n"
+;
 
 class LuaVtableGenerator
 {
@@ -376,6 +400,19 @@ int print_to_client(lua_State* L)
   }
   APIRegister::get_instance().append("\n");
   return 0;
+}
+
+// int = now()
+int now(lua_State* L)
+{
+  int argc = lua_gettop(L);
+  if (0 != argc) {
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "call get_tenant_id_list() failed, bad arguments count, should be 0.");
+    lua_pushinteger(L, 0);
+  } else {
+    lua_pushinteger(L, common::ObTimeUtility::fast_current_time());
+  }
+  return 1;
 }
 
 // list = get_tenant_id_list()
@@ -1055,28 +1092,28 @@ int select_trans_stat(lua_State *L)
       static constexpr int64_t OB_MIN_BUFFER_SIZE = 128;
       std::vector<const char*> columns = {
         "tenant_id",
+        "tx_type",
+        "tx_id",
         "session_id",
         "scheduler_addr",
-        "trans_type",
-        "trans_id",
-        "has_decided",
+        "is_decided",
         "ls_id",
         "participants",
-        "ctx_create_time",
+        "tx_ctx_create_time",
         "expired_time",
         "ref_cnt",
         "last_op_sn",
         "pending_write",
         "state",
-        "part_trans_action",
-        "trans_ctx_addr",
+        "part_tx_action",
+        "tx_ctx_addr",
         "mem_ctx_id",
         "pending_log_size",
         "flushed_log_size",
-        "role",
+        "role_state",
         "is_exiting",
         "coord",
-        "last_request_time",
+        "last_request_ts",
         "gtrid",
         "bqual",
         "format_id"
@@ -1086,17 +1123,17 @@ int select_trans_stat(lua_State *L)
         gen.next_row();
         // tenant_id
         gen.next_column(tx_stat.tenant_id_);
+        // tx_type
+        gen.next_column(tx_stat.tx_type_);
+        // tx_id
+        gen.next_column(tx_stat.tx_id_.get_id());
         // session_id
         gen.next_column(tx_stat.session_id_);
         // scheduler_addr
-        char addr_buf[32];
-        tx_stat.scheduler_addr_.to_string(addr_buf, 32);
+        char addr_buf[MAX_IP_PORT_LENGTH + 8];
+        tx_stat.scheduler_addr_.to_string(addr_buf, MAX_IP_PORT_LENGTH + 8);
         gen.next_column(addr_buf);
-        // trans_type
-        gen.next_column(tx_stat.tx_type_);
-        // trans_id
-        gen.next_column(tx_stat.tx_id_.get_id());
-        // has_decided
+        // is_decided
         gen.next_column(tx_stat.has_decided_);
         // ls_id
         gen.next_column(tx_stat.ls_id_.id());
@@ -1106,13 +1143,13 @@ int select_trans_stat(lua_State *L)
           tx_stat.participants_.to_string(participants_buffer, OB_MAX_BUFFER_SIZE);
           gen.next_column(participants_buffer);
         } else {
-          gen.next_column("NULL");
+          ret = iter.get_next(tx_stat);
         }
-        // ctx_create_time
+        // tx_ctx_create_time
         gen.next_column(tx_stat.tx_ctx_create_time_);
         // expired_time
         gen.next_column(tx_stat.tx_expired_time_);
-        // refer
+        // ref_cnt
         gen.next_column(tx_stat.ref_cnt_);
         // last_op_sn
         gen.next_column(tx_stat.last_op_sn_);
@@ -1120,17 +1157,17 @@ int select_trans_stat(lua_State *L)
         gen.next_column(tx_stat.pending_write_);
         // state
         gen.next_column(tx_stat.state_);
-        // part_trans_action
+        // part_tx_action
         gen.next_column(tx_stat.part_tx_action_);
-        // trans_ctx_addr
-        gen.next_column((int64_t)tx_stat.tx_ctx_addr_);
+        // tx_ctx_addr
+        gen.next_column((uint64_t)tx_stat.tx_ctx_addr_);
         // mem_ctx_id
-        lua_pushinteger(L, 0);
+        gen.next_column(-1);
         // pending_log_size
-        lua_pushinteger(L, tx_stat.pending_log_size_);
+        gen.next_column(tx_stat.pending_log_size_);
         // flushed_log_size
-        lua_pushinteger(L, tx_stat.flushed_log_size_);
-        // role
+        gen.next_column(tx_stat.flushed_log_size_);
+        // role_state
         gen.next_column(tx_stat.role_state_);
         // is_exiting
         gen.next_column(tx_stat.is_exiting_);
@@ -1148,9 +1185,9 @@ int select_trans_stat(lua_State *L)
         gen.row_end();
         ret = iter.get_next(tx_stat);
       }
-      if (OB_ITER_END != ret) {
-        OB_LOG(ERROR, "iter failed", K(ret));
-      }
+    }
+    if (OB_FAIL(ret) && OB_ITER_END != ret) {
+      OB_LOG(ERROR, "iter failed", K(ret));
     }
   }
   return 1;
@@ -1357,17 +1394,17 @@ int select_dump_tenant_info(lua_State *L)
       // unit_max_cpu
       gen.next_column(t.unit_max_cpu_);
       // slice
-      gen.next_column(t.slice_);
+      gen.next_column(0);
       // remain_slice
-      gen.next_column(t.slice_remain_);
+      gen.next_column(0);
       // token_cnt
       gen.next_column(t.token_cnt_);
       // ass_token_cnt
-      gen.next_column(t.ass_token_cnt_);
+      gen.next_column(t.worker_count());
       // lq_tokens
-      gen.next_column(t.lq_tokens_);
+      gen.next_column(0);
       // used_lq_tokens
-      gen.next_column(t.used_lq_tokens_);
+      gen.next_column(0);
       // stopped
       gen.next_column(t.stopped_);
       // idle_us
@@ -1387,11 +1424,11 @@ int select_dump_tenant_info(lua_State *L)
       // recv_large_queries
       gen.next_column(t.tt_large_quries_);
       // actives
-      gen.next_column(t.actives_);
+      gen.next_column(t.workers_.get_size());
       // workers
       gen.next_column(t.workers_.get_size());
       // lq_warting_workers
-      gen.next_column(t.lq_waiting_workers_.get_size());
+      gen.next_column(0);
       // req_queue_total_size
       gen.next_column(t.req_queue_.size());
       // queue_0
@@ -1407,8 +1444,7 @@ int select_dump_tenant_info(lua_State *L)
       // queue_5
       gen.next_column(t.req_queue_.queue_size(5));
       // large_queued
-      gen.next_column(t.large_req_queue_.size());
-
+      gen.next_column(t.lq_retry_queue_size());
       gen.row_end();
       return OB_SUCCESS;
     };
@@ -1492,6 +1528,447 @@ int select_tenant_memory_info(lua_State *L)
       gen.row_end();
     }
     diagnose::free(tenant_ids);
+  }
+  return 1;
+}
+
+// list{list, list...} = select_mem_leak_checker_info()
+int select_mem_leak_checker_info(lua_State *L)
+{
+  int argc = lua_gettop(L);
+  ObMemLeakChecker* leak_checker = &get_mem_leak_checker();
+  if (argc > 1) {
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call select_mem_leak_checker_info() failed, bad arguments count, should be less than 2.");
+    lua_pushnil(L);
+  } else if (OB_ISNULL(leak_checker)) {
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "leak checker is null");
+    lua_pushnil(L);
+  } else {
+    int ret = OB_SUCCESS;
+    ObMemLeakChecker::mod_info_map_t info_map;
+    if (OB_FAIL(info_map.create(10000))) {
+      OB_LOG(ERROR, "failed to create hashmap", K(ret));
+    } else if (OB_FAIL(leak_checker->load_leak_info_map(info_map))) {
+      OB_LOG(ERROR, "failed to collection leak info", K(ret));
+    } else {
+      std::vector<const char*> columns = {
+        "mod_name",
+        "mod_type",
+        "alloc_count",
+        "alloc_size",
+        "back_trace"
+      };
+      LuaVtableGenerator gen(L, columns);
+      for (auto it = info_map->begin(); it != info_map->end() && !gen.is_end(); ++it) {
+        gen.next_row();
+        // mod_name
+        gen.next_column(leak_checker->get_str());
+        // mod_type
+        gen.next_column("user");
+        // alloc_count
+        gen.next_column(it->second.first);
+        // alloc_size
+        gen.next_column(it->second.second);
+        // back_trace
+        gen.next_column(it->first.bt_);
+
+        gen.row_end();
+      }
+    }
+  }
+  return 1;
+}
+
+// list{list, list...} = select_compaction_diagnose_info()
+int select_compaction_diagnose_info(lua_State *L)
+{
+  int argc = lua_gettop(L);
+  if (argc > 1) {
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call select_compaction_diagnose_info() failed, bad arguments count, should be less than 2.");
+    lua_pushnil(L);
+  } else {
+    int ret = OB_SUCCESS;
+    compaction::ObCompactionDiagnoseIterator diagnose_info_iter;
+    // OB_SYS_TENANT_ID means dump all
+    if (OB_FAIL(diagnose_info_iter.open(OB_SYS_TENANT_ID))) {
+      OB_LOG(ERROR, "Fail to open suggestion iter", K(ret));
+      lua_pushnil(L);
+    } else {
+      std::vector<const char*> columns = {
+        "tenant_id",
+        "merge_type",
+        "ls_id",
+        "tablet_id",
+        "status",
+        "create_time",
+        "diagnose_info"
+      };
+      LuaVtableGenerator gen(L, columns);
+      compaction::ObCompactionDiagnoseInfo diagnose_info;
+      while (OB_SUCC(diagnose_info_iter.get_next_info(diagnose_info)) && !gen.is_end()) {
+        gen.next_row();
+        // tenant_id
+        gen.next_column(diagnose_info.tenant_id_);
+        // merge_type
+        gen.next_column(merge_type_to_str(diagnose_info.merge_type_));
+        // ls_id
+        gen.next_column(diagnose_info.ls_id_);
+        // tablet_id
+        gen.next_column(diagnose_info.tablet_id_);
+        // status
+        gen.next_column(diagnose_info.get_diagnose_status_str(diagnose_info.status_));
+        // create_time
+        gen.next_column(diagnose_info.timestamp_);
+        // diagnose_info
+        gen.next_column(diagnose_info.diagnose_info_);
+
+        gen.row_end();
+      }
+      if (OB_FAIL(ret) && OB_ITER_END != ret) {
+        OB_LOG(ERROR, "Fail to get next suggestion info", K(ret));
+      }
+    }
+  }
+  return 1;
+}
+
+// list{list, list...} = select_dag_warning_history()
+int select_dag_warning_history(lua_State *L)
+{
+  int argc = lua_gettop(L);
+  if (argc > 1) {
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call select_dag_warning_history() failed, bad arguments count, should be less than 2.");
+    lua_pushnil(L);
+  } else {
+    int ret = OB_SUCCESS;
+    share::ObDagWarningInfoIterator dag_warning_info_iter;
+    // OB_SYS_TENANT_ID means dump all
+    if (OB_FAIL(dag_warning_info_iter.open(OB_SYS_TENANT_ID))) {
+      OB_LOG(ERROR, "Fail to open merge info iter", K(ret));
+      lua_pushnil(L);
+    } else {
+      std::vector<const char*> columns = {
+        "tenant_id",
+        "task_id",
+        "module",
+        "type",
+        "ret",
+        "status",
+        "gmt_create",
+        "gmt_modified",
+        "retry_cnt",
+        "warning_info"
+      };
+      LuaVtableGenerator gen(L, columns);
+      share::ObDagWarningInfo dag_warning_info;
+      while (OB_SUCC(dag_warning_info_iter.get_next_info(dag_warning_info)) && !gen.is_end()) {
+        gen.next_row();
+        // tenant_id
+        gen.next_column(dag_warning_info.tenant_id_);
+        // task_id
+        {
+          char task_id_buf[common::OB_TRACE_STAT_BUFFER_SIZE];
+          int64_t n = dag_warning_info.task_id_.to_string(task_id_buf, sizeof(task_id_buf));
+          if (n < 0 || n >= sizeof(task_id_buf)) {
+            ret = OB_BUF_NOT_ENOUGH;
+          } else {
+            gen.next_column(task_id_buf);
+          }
+        }
+        // module
+        gen.next_column(share::ObIDag::get_dag_module_str(dag_warning_info.dag_type_));
+        // type
+        gen.next_column(share::ObIDag::get_dag_type_str(dag_warning_info.dag_type_));
+        // ret
+        gen.next_column(common::ob_error_name(dag_warning_info.dag_ret_));
+        // status
+        gen.next_column(ObDagWarningInfo::get_dag_status_str(dag_warning_info.dag_status_));
+        // gmt_create
+        gen.next_column(dag_warning_info.gmt_create_);
+        // gmt_modified
+        gen.next_column(dag_warning_info.gmt_modified_);
+        // retry_cnt
+        gen.next_column(dag_warning_info.retry_cnt_);
+        // warning_info
+        gen.next_column(dag_warning_info.warning_info_);
+
+        gen.row_end();
+      }
+    }
+  }
+  return 1;
+}
+
+// list{list, list...} = select_server_schema_info()
+int select_server_schema_info(lua_State *L)
+{
+  int argc = lua_gettop(L);
+  if (argc > 1) {
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call select_server_schema_info() failed, bad arguments count, should be less than 2.");
+    lua_pushnil(L);
+  } else {
+    int ret = OB_SUCCESS;
+    const static int64_t DEFAULT_TENANT_NUM = 10;
+    ObSEArray<uint64_t, DEFAULT_TENANT_NUM> tenant_ids;
+    share::schema::ObSchemaGetterGuard guard;
+    auto& schema_service = OBSERVER.get_root_service().get_schema_service();
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+      OB_LOG(ERROR, "fail to get schema guard", K(ret));
+      lua_pushnil(L);
+    } else if (OB_FAIL(guard.get_tenant_ids(tenant_ids))) {
+      OB_LOG(ERROR, "fail to get tenant_ids", K(ret));
+      lua_pushnil(L);
+    } else {
+      std::vector<const char*> columns = {
+        "tenant_id",
+        "refreshed_schema_version",
+        "received_schema_version",
+        "schema_count",
+        "schema_size",
+        "min_sstable_schema_version"
+      };
+      LuaVtableGenerator gen(L, columns);
+      for (uint64_t idx = 0; idx < tenant_ids.count() && !gen.is_end(); ++idx) {
+        const uint64_t tenant_id = tenant_ids[idx];
+        int64_t refreshed_schema_version = OB_INVALID_VERSION;
+        int64_t received_schema_version = OB_INVALID_VERSION;
+        int64_t schema_count = OB_INVALID_ID;
+        int64_t schema_size = OB_INVALID_ID;
+        if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
+          OB_LOG(ERROR, "fail to get tenant refreshed schema version", K(ret), K(tenant_id), K(refreshed_schema_version));
+        } else if (OB_FAIL(schema_service.get_tenant_received_broadcast_version(tenant_id, received_schema_version))) {
+          OB_LOG(ERROR, "fail to get tenant receieved schema version", K(ret), K(tenant_id), K(received_schema_version));
+        } else {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = schema_service.get_tenant_schema_guard(tenant_id, guard))) {
+            OB_LOG(ERROR, "fail to get schema guard", K(tmp_ret), K(tenant_id));
+          } else if (OB_SUCCESS != (tmp_ret = guard.get_schema_count(tenant_id, schema_count))) {
+            OB_LOG(ERROR, "fail to get schema count", K(tmp_ret), K(tenant_id));
+          } else if (OB_SUCCESS != (tmp_ret = guard.get_schema_size(tenant_id, schema_size))) {
+            OB_LOG(ERROR, "fail to get schema size", K(tmp_ret), K(tenant_id));
+          }
+          gen.next_row();
+          // tenant_id
+          gen.next_column(tenant_id);
+          // refreshed_schema_version
+          gen.next_column(refreshed_schema_version);
+          // received_schema_version
+          gen.next_column(received_schema_version);
+          // schema_count
+          gen.next_column(schema_count);
+          // schema_size
+          gen.next_column(schema_size);
+          // min_sstable_schema_version
+          gen.next_column(OB_INVALID_VERSION);
+
+          gen.row_end();
+        }
+      }
+    }
+  }
+  return 1;
+}
+
+// list{list, list...} = select_schema_slot()
+int select_schema_slot(lua_State *L)
+{
+  int argc = lua_gettop(L);
+  if (argc > 1) {
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call select_schema_slot() failed, bad arguments count, should be less than 2.");
+    lua_pushnil(L);
+  } else {
+    int ret = OB_SUCCESS;
+    auto& schema_service = OBSERVER.get_root_service().get_schema_service();
+    const static int64_t DEFAULT_TENANT_NUM = 10;
+    ObSEArray<uint64_t, DEFAULT_TENANT_NUM> tenant_ids;
+    if (OB_FAIL(schema_service.get_schema_store_tenants(tenant_ids))) {
+      OB_LOG(ERROR, "fail to get schema store tenants", K(ret));
+      lua_pushnil(L);
+    } else {
+      std::vector<const char*> columns = {
+        "tenant_id",
+        "slot_id",
+        "schema_version",
+        "schema_count",
+        "total_ref_cnt",
+        "ref_info"
+      };
+      LuaVtableGenerator gen(L, columns);
+      for (int64_t idx = 0; idx < tenant_ids.count() && !gen.is_end(); ++idx) {
+        const static int64_t DEFAULT_SLOT_NUM = 32;
+        ObSEArray<ObSchemaSlot, DEFAULT_SLOT_NUM> schema_slot_infos;
+        uint64_t tenant_id = tenant_ids[idx];
+        if (OB_FAIL(schema_service.get_tenant_slot_info(get_global_allocator(), tenant_id, schema_slot_infos))) {
+          OB_LOG(ERROR, "fail to get tenant slot info", K(ret), K(tenant_id));
+        } else {
+          for (int64_t slot_idx = 0; slot_idx < schema_slot_infos.count() && !gen.is_end(); ++slot_idx) {
+            auto& schema_slot = schema_slot_infos.at(slot_idx);
+            gen.next_row();
+            // tenant_id
+            gen.next_column(schema_slot.get_tenant_id());
+            // slot_id
+            gen.next_column(schema_slot.get_slot_id());
+            // schema_version
+            gen.next_column(schema_slot.get_schema_version());
+            // schema_count
+            gen.next_column(schema_slot.get_schema_count());
+            // total_ref_cnt
+            gen.next_column(schema_slot.get_ref_cnt());
+            // ref_info
+            if (OB_NOT_NULL(schema_slot.get_mod_ref_infos().ptr())) {
+              gen.next_column(schema_slot.get_mod_ref_infos());
+            } else {
+              gen.next_column("");
+            }
+
+            gen.row_end();
+          }
+        }
+        for (int64_t slot_idx = 0; slot_idx < schema_slot_infos.count(); ++slot_idx) {
+          auto* ptr = schema_slot_infos.at(slot_idx).get_mod_ref_infos().ptr();
+          if (OB_NOT_NULL(ptr)) {
+            get_global_allocator().free((void*)ptr);
+          }
+          schema_slot_infos.at(slot_idx).reset();
+        }
+        schema_slot_infos.reset();
+      }
+    }
+  }
+  return 1;
+}
+
+// list{list, list...} = dump_threads_info()
+int dump_thread_info(lua_State *L)
+{
+  int argc = lua_gettop(L);
+  if (argc > 1) {
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call dump_thread_info() failed, bad arguments count, should be less than 2.");
+  } else {
+    std::vector<const char*> columns = {
+      "tname",
+      "tid",
+      "thread_base",
+      "loop_ts",
+      "lock_addr",
+      "lock_val",
+      "wait_addr",
+      "wait_val",
+      "is_blocking",
+      "has_req"
+    };
+    LuaVtableGenerator gen(L, columns);
+    int64_t tname_offset = (int64_t)ob_get_tname() - (int64_t)pthread_self();
+    int64_t tid_offset = (int64_t)(&get_tid_cache()) - (int64_t)pthread_self();
+    int64_t loop_ts_offset = (int64_t)(&oceanbase::lib::Thread::loop_ts_) - (int64_t)pthread_self();
+    int64_t lock_offset = (int64_t)(&ObLatch::current_lock) - (int64_t)pthread_self();
+    int64_t wait_offset = (int64_t)(&ObLatch::current_wait) - (int64_t)pthread_self();
+    int64_t worker_offset = (int64_t)(&oceanbase::lib::Worker::self_) - (int64_t)pthread_self();
+    for(auto* header = g_stack_mgr.begin(); header != g_stack_mgr.end() && !gen.is_end(); header = header->next_) {
+      auto* thread_base = (char*)(header->pth_);
+      if (OB_NOT_NULL(thread_base)) {
+        // avoid SMART_CALL stack
+        char* tname = thread_base + tname_offset;
+        int64_t tid = *(int64_t*)(thread_base + tid_offset);
+        int64_t loop_ts = *(int64_t*)(thread_base + loop_ts_offset);
+        uint32_t* lock_addr = *(uint32_t**)(thread_base + lock_offset);
+        uint32_t* wait_addr = *(uint32_t**)(thread_base + wait_offset);
+        auto* worker_self = *(Worker**)(thread_base + worker_offset);
+        char addr[32];
+        gen.next_row();
+        // tname
+        gen.next_column(tname);
+        // tid
+        gen.next_column(tid);
+        // thread_base
+        snprintf(addr, 32, "%p", thread_base);
+        gen.next_column(addr);
+        // loop_ts
+        gen.next_column(loop_ts);
+        // lock_addr
+        // lock_val
+        if (OB_NOT_NULL(lock_addr)) {
+          snprintf(addr, 32, "%p", lock_addr);
+          gen.next_column(addr);
+          gen.next_column(*lock_addr);
+        } else {
+          gen.next_column("NULL");
+          gen.next_column("NULL");
+        }
+        // wait_addr
+        // wait_val
+        if (OB_NOT_NULL(wait_addr)) {
+          snprintf(addr, 32, "%p", wait_addr);
+          gen.next_column(addr);
+          gen.next_column(*wait_addr);
+        } else {
+          gen.next_column("NULL");
+          gen.next_column("NULL");
+        }
+        // is_blocking
+        // has_req
+        if (OB_NOT_NULL(worker_self)) {
+          gen.next_column(worker_self->is_blocking());
+          gen.next_column(worker_self->has_req_flag());
+        } else {
+          gen.next_column("NULL");
+          gen.next_column("NULL");
+        }
+
+        gen.row_end();
+      }
+    }
+  }
+  return 1;
+}
+
+// list{list, list...} = select_malloc_sample_info()
+int select_malloc_sample_info(lua_State *L)
+{
+  int ret = OB_SUCCESS;
+  int argc = lua_gettop(L);
+  ObMallocSampleMap malloc_sample_map;
+  if (argc > 1) {
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call select_malloc_sample_info() failed, bad arguments count, should be less than 2.");
+    lua_pushnil(L);
+  } else if (OB_FAIL(malloc_sample_map.create(1000, "MallocInfoMap", "MallocInfoMap"))) {
+    OB_LOG(ERROR, "failed to create hashmap", K(ret));
+  } else if (OB_FAIL(ObMemoryDump::get_instance().load_malloc_sample_map(malloc_sample_map))) {
+    OB_LOG(ERROR, "failed to create memory info map", K(ret));
+  } else {
+    std::vector<const char*> columns = {
+      "tenant_id",
+      "ctx_id",
+      "mod_name",
+      "back_trace",
+      "ctx_name",
+      "alloc_count",
+      "alloc_bytes"
+    };
+    LuaVtableGenerator gen(L, columns);
+    for (auto it = malloc_sample_map.begin(); it != malloc_sample_map.end() && !gen.is_end(); ++it) {
+      gen.next_row();
+      // tenant_id
+      gen.next_column(it->first.tenant_id_);
+      // ctx_id
+      gen.next_column(it->first.ctx_id_);
+      // mod_name
+      gen.next_column(it->first.label_);
+      // back_trace
+      {
+        char bt[512];
+        parray(bt, sizeof(bt), (int64_t*)*&(it->first.bt_), it->first.bt_size_);
+        gen.next_column(bt);
+      }
+      // ctx_name
+      gen.next_column(get_global_ctx_info().get_ctx_name(it->first.ctx_id_));
+      // alloc_count
+      gen.next_column(it->second.alloc_count_);
+      // alloc_bytes
+      gen.next_column(it->second.alloc_bytes_);
+
+      gen.row_end();
+    }
   }
   return 1;
 }
@@ -1582,40 +2059,15 @@ int summary_each_eio_info(char *buf, int &pos, int buf_len, easy_io_t *eio, cons
   return ret;
 }
 
-static ObFIFOAllocator &get_global_allocator()
-{
-  static ObFIFOAllocator allocator;
-  if (OB_UNLIKELY(!allocator.is_inited())) {
-    allocator.init(&LuaAllocator::get_instance(), (1 << 13) - 8, default_memattr, 0, 0, INT64_MAX);
-  }
-  return allocator;
-}
-
 void *diagnose::alloc(const int size)
 {
-  void *ret = nullptr;
-  if (0 == size) {
-    // do nothing
-  } else if (ObLuaHandler::get_instance().memory_usage() + size + 8 < ObLuaHandler::LUA_MEMORY_LIMIT) {
-    if (OB_NOT_NULL(ret = get_global_allocator().alloc(size + 8))) {
-      *static_cast<uint64_t *>(ret) = size;
-      ret = (char*)ret + 8;
-      ObLuaHandler::get_instance().memory_update(size + 8);
-    } else {
-      OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "lua memory alloc failed", K(size), K(get_global_allocator().total()));
-    }
-  } else {
-    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "lua memory usage over limit", K(size));
-  }
-  return ret;
+  return get_global_allocator().alloc(size);
 }
 
 void diagnose::free(void *ptr)
 {
   if (OB_NOT_NULL(ptr)) {
-    const uint64_t size = *(uint64_t *)((char *)ptr - 8);
-    ObLuaHandler::get_instance().memory_update(- 8 - size);
-    get_global_allocator().free((void *)((char *)ptr - 8));
+    get_global_allocator().free(ptr);
   }
 }
 
@@ -1623,6 +2075,7 @@ void APIRegister::register_api(lua_State* L)
 {
   lua_register(L, "usage", usage);
   lua_register(L, "print_to_client", print_to_client);
+  lua_register(L, "now", now);
   lua_register(L, "get_tenant_id_list", get_tenant_id_list);
   lua_register(L, "get_tenant_mem_limit", get_tenant_mem_limit);
   lua_register(L, "get_tenant_sysstat_by_id", get_tenant_sysstat_by_id);
@@ -1641,6 +2094,13 @@ void APIRegister::register_api(lua_State* L)
   lua_register(L, "select_tenant_memory_info", select_tenant_memory_info);
   lua_register(L, "set_log_probe", set_log_probe);
   lua_register(L, "show_log_probe", show_log_probe);
+  lua_register(L, "select_mem_leak_checker_info", select_mem_leak_checker_info);
+  lua_register(L, "select_compaction_diagnose_info", select_compaction_diagnose_info);
+  lua_register(L, "select_dag_warning_history", select_dag_warning_history);
+  lua_register(L, "select_server_schema_info", select_server_schema_info);
+  lua_register(L, "select_schema_slot", select_schema_slot);
+  lua_register(L, "dump_thread_info", dump_thread_info);
+  lua_register(L, "select_malloc_sample_info", select_malloc_sample_info);
 }
 
 int APIRegister::flush()

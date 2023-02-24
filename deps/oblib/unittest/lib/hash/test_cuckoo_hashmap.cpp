@@ -11,6 +11,7 @@
  */
 
 #include "gtest/gtest.h"
+#include "lib/allocator/page_arena.h"
 #include "lib/hash/ob_cuckoo_hashmap.h"
 #include "lib/hash/ob_hashmap.h"
 

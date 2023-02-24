@@ -184,6 +184,19 @@ private:
     }
     return ret;
   }
+
+public:
+  template <typename T>
+  static void* common_alloc(const int64_t size, const ObMemAttr &attr,
+                            ObTenantCtxAllocator& ta, T &allocator);
+
+  template <typename T>
+  static void* common_realloc(const void *ptr, const int64_t size,
+                              const ObMemAttr &attr, ObTenantCtxAllocator& ta,
+                              T &allocator);
+
+  static void common_free(void *ptr);
+
 private:
   ObTenantResourceMgrHandle resource_handle_;
   int64_t ref_cnt_;

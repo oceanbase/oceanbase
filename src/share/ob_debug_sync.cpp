@@ -982,7 +982,7 @@ ObDebugSync &ObDebugSync::instance()
 
 ObDSActionArray *ObDebugSync::thread_local_actions() const
 {
-  return GET_TSI_MULT(ObDSActionArray, TSI_COMMON_DEBUG_SYNC_ARRAY);
+  return GET_TSI(ObDSActionArray);
 }
 
 ObDSActionArray &ObDebugSync::rpc_spread_actions() const

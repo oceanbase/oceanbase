@@ -15,6 +15,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <codecvt>
+#include "lib/allocator/page_arena.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"

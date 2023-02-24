@@ -225,7 +225,10 @@ private:
   int get_group_info_by_group_id(const uint64_t tenant_id,
                                  int64_t group_id,
                                  share::ObGroupName &group_name);
-
+  enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
+  int which_type_dir_(const char *curr_path, int &result);
+  int remove_dir_(const char *curr_dir);
+  int recursion_remove_group_(const char *curr_path);
 };
 
 }  // share

@@ -15,9 +15,7 @@
 
 #include <cstdint>
 #include "lib/ob_define.h"
-#include "lib/allocator/page_arena.h"
 #include "lib/rc/context.h"
-#include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/runtime.h"
 
 namespace oceanbase
@@ -26,9 +24,7 @@ namespace rpc { class ObRequest; }
 namespace sql { class ObSQLSessionInfo; }
 namespace lib
 {
-using common::ObArenaAllocator;
 using common::ObIAllocator;
-using common::ObFIFOAllocator;
 
 class Worker
 {
@@ -41,6 +37,16 @@ public:
 
   virtual Status check_wait();
   virtual int check_status() { check_wait(); return common::OB_SUCCESS; }
+  virtual int check_large_query_quota() { return common::OB_SUCCESS; }
+  // check if retry disabled for the query
+  virtual bool can_retry() const { return false; }
+  // Set retry flag so that scheduler will reprocess this request then
+  virtual void set_need_retry() {}
+  // It's used to check whether query need retry. Whenever worker has
+  // observed this query need retry, it should stop processing this
+  // query immediately.
+  virtual bool need_retry() const { return false; }
+  virtual void resume() {}
 
   // This function is called before worker waiting for some resources
   // and starting to give cpu out so that Multi-Tenancy would be aware
@@ -61,135 +67,84 @@ public:
   //   2. false  the worker hasn't right to go ahead
   bool sched_run(int64_t waittime=0);
 
-  ObIAllocator &get_sql_arena_allocator() ;
+  OB_INLINE ObIAllocator& get_sql_arena_allocator() { return CURRENT_CONTEXT->get_arena_allocator(); }
   ObIAllocator &get_allocator() ;
 
-  void set_req_flag(const rpc::ObRequest *cur_request);
-  bool has_req_flag();
-  const rpc::ObRequest *get_cur_request();
+  void set_req_flag(const rpc::ObRequest *cur_request) { cur_request_ = cur_request; }
+  bool has_req_flag() { return OB_NOT_NULL(cur_request_); }
+  const rpc::ObRequest *get_cur_request() { return cur_request_; }
 
-  void set_worker_level(const int32_t level) { worker_level_ = level; }
-  int32_t get_worker_level() const { return worker_level_; }
+  OB_INLINE void set_is_blocking(bool v) { is_blocking_ = v; }
+  OB_INLINE bool is_blocking() { return is_blocking_; }
 
-  void set_curr_request_level(const int32_t level) { curr_request_level_ = level; }
-  int32_t get_curr_request_level() const { return curr_request_level_; }
+  OB_INLINE void set_worker_level(const int32_t level) { worker_level_ = level; }
+  OB_INLINE int32_t get_worker_level() const { return worker_level_; }
 
-  void set_group_id(int32_t group_id) { group_id_ = group_id; }
-  int32_t get_group_id() const { return group_id_; }
+  OB_INLINE void set_curr_request_level(const int32_t level) { curr_request_level_ = level; }
+  OB_INLINE int32_t get_curr_request_level() const { return curr_request_level_; }
 
-  void set_rpc_stat_srv(void *rpc_stat_srv) { rpc_stat_srv_ = rpc_stat_srv; }
-  void *get_rpc_stat_srv() const { return rpc_stat_srv_; }
+  OB_INLINE void set_group_id(int32_t group_id) { group_id_ = group_id; }
+  OB_INLINE int32_t get_group_id() const { return group_id_; }
 
-  virtual int check_large_query_quota()
-  {
-    return common::OB_SUCCESS;
-  }
+  OB_INLINE void set_rpc_stat_srv(void *rpc_stat_srv) { rpc_stat_srv_ = rpc_stat_srv; }
+  OB_INLINE void *get_rpc_stat_srv() const { return rpc_stat_srv_; }
 
-  static void set_compatibility_mode(CompatMode mode);
-  static CompatMode get_compatibility_mode();
-
-  bool is_timeout_ts_valid()
-  { return INT64_MAX != timeout_ts_;}
-  void set_timeout_ts(int64_t timeout_ts) { timeout_ts_ = timeout_ts; }
-  int64_t get_timeout_ts() const { return timeout_ts_; }
-  void set_ntp_offset(int64_t offset) { ntp_offset_ = offset; }
-  int64_t get_ntp_offset() const { return ntp_offset_; }
+  OB_INLINE bool is_timeout_ts_valid() { return INT64_MAX != timeout_ts_;}
+  OB_INLINE void set_timeout_ts(int64_t timeout_ts) { timeout_ts_ = timeout_ts; }
+  OB_INLINE int64_t get_timeout_ts() const { return timeout_ts_; }
+  OB_INLINE void set_ntp_offset(int64_t offset) { ntp_offset_ = offset; }
+  OB_INLINE int64_t get_ntp_offset() const { return ntp_offset_; }
   int64_t get_timeout_remain() const;
   bool is_timeout() const;
 
-  void set_rpc_tenant(uint64_t tenant_id) { rpc_tenant_id_ = tenant_id; }
-  void reset_rpc_tenant() { rpc_tenant_id_ = 0; }
-  uint64_t get_rpc_tenant() const { return rpc_tenant_id_; }
-
-  ObIAllocator &ssstore_allocator();
-  ObFIFOAllocator &ssstore_fifo_allocator();
-
-  void set_tidx(int64_t tidx);
-  void unset_tidx();
-  int64_t get_tidx() const;
-
-  // It's called when current query can't been retry, maybe some
-  // shared states have been published such as part of result has been
-  // sent to client, operation is doing or even has done and can't
-  // restart easily. It doesn't mean this query won't retry, but
-  // indicates following retry flag setting is forbade,
-  virtual void disable_retry();
-  // check if retry disabled for the query
-  virtual bool can_retry() const;
-  // Set retry flag so that scheduler will reprocess this request then
-  virtual void set_need_retry();
-  // It's used to check whether query need retry. Whenever worker has
-  // observed this query need retry, it should stop processing this
-  // query immediately.
-  virtual bool need_retry() const;
-
-  // Set large token expired timestamp.
-  //
-  // Worker prefer process large queries than normal queries until
-  // token expires, that is the timestamp is larger than now.
-  void set_large_token_expired(int64_t timestamp);
-
-  // Get large token expired timestamp.
-  int64_t get_large_token_expired() const;
+  OB_INLINE void set_rpc_tenant(uint64_t tenant_id) { rpc_tenant_id_ = tenant_id; }
+  OB_INLINE void reset_rpc_tenant() { rpc_tenant_id_ = 0; }
+  OB_INLINE uint64_t get_rpc_tenant() const { return rpc_tenant_id_; }
 
   // check wait is disabled if f is true
-  void set_disable_wait_flag(bool f);
-  bool get_disable_wait_flag() const;
-
-  common::ObDLinkNode<Worker*> worker_node_;
-  common::ObDLinkNode<Worker*> lq_worker_node_;
-  common::ObDLinkNode<Worker*> lq_waiting_worker_node_;
-  common::ObLink wpool_link_;
-
-  virtual void resume() {}
+  void set_disable_wait_flag(bool f) { disable_wait_ = f; }
+  bool get_disable_wait_flag() const { return disable_wait_; }
 
   void set_sql_throttle_current_priority(int64_t st_current_priority)
   { st_current_priority_ = st_current_priority; }
   void reset_sql_throttle_current_priority()
   { set_sql_throttle_current_priority(100); }
 
-  void set_session(sql::ObSQLSessionInfo* session)
-  {
-    session_ = session;
-  }
+  OB_INLINE void set_session(sql::ObSQLSessionInfo* session) { session_ = session; }
+
+public:
+  static void set_compatibility_mode(CompatMode mode);
+  static CompatMode get_compatibility_mode();
+  static Worker& self();
 
 public:
   static __thread Worker *self_;
 
 public:
-  // static variables
-  static Worker& self();
-
+  common::ObDLinkNode<Worker*> worker_node_;
 protected:
   // 线程运行时内存从此分配器分配
   // 初始tenant_id=500, 在处理request时，tenant_id被更新成request的租户id
   // 可单独指定ctx_id, 此ctx_id保持不变
   ObIAllocator *allocator_;
+  int64_t st_current_priority_;
+  sql::ObSQLSessionInfo *session_;
 private:
   const rpc::ObRequest *cur_request_;
+  // whether worker is in blocking
+  bool is_blocking_;
 
   int32_t worker_level_;
   int32_t curr_request_level_;
   int32_t group_id_;
   void *rpc_stat_srv_;
 
-protected:
-  int64_t st_current_priority_;
-  sql::ObSQLSessionInfo *session_;
-
-private:
   int64_t timeout_ts_;
 
   //ingnore net time, equal to (receive_ts - send_ts).
   int64_t ntp_offset_;
 
   uint64_t rpc_tenant_id_;
-
-  // worker index in its tenant
-  int64_t tidx_;
-
-  // timestamp when large token expires.
-  int64_t large_token_expired_;
 
   // Used to prevent the thread holding the lock from being suspended by check_wait
   bool disable_wait_;
@@ -206,79 +161,6 @@ inline Worker &Worker::self()
     self_ = reinterpret_cast<Worker*>(alloc_worker());
   }
   return *self_;
-}
-
-inline void Worker::set_tidx(int64_t tidx)
-{
-  tidx_ = tidx;
-}
-
-inline void Worker::unset_tidx()
-{
-  tidx_ = -1;
-}
-
-inline int64_t Worker::get_tidx() const
-{
-  return tidx_;
-}
-
-inline void Worker::disable_retry()
-{
-}
-
-inline bool Worker::can_retry() const
-{
-  return false;
-}
-
-inline void Worker::set_need_retry()
-{
-}
-
-inline bool Worker::need_retry() const
-{
-  return false;
-}
-
-inline void Worker::set_large_token_expired(int64_t timestamp)
-{
-  large_token_expired_ = timestamp;
-}
-
-inline int64_t Worker::get_large_token_expired() const
-{
-  return large_token_expired_;
-}
-
-inline void Worker::set_disable_wait_flag(bool f)
-{
-  disable_wait_ = f;
-}
-
-inline bool Worker::get_disable_wait_flag() const
-{
-  return disable_wait_;
-}
-
-inline void Worker::set_req_flag(const rpc::ObRequest *cur_request)
-{
-  cur_request_ = cur_request;
-}
-
-inline bool Worker::has_req_flag()
-{
-  return (NULL != cur_request_);
-}
-
-inline const rpc::ObRequest *Worker::get_cur_request()
-{
-  return cur_request_;
-}
-
-inline ObIAllocator &Worker::get_sql_arena_allocator()
-{
-  return CURRENT_CONTEXT->get_arena_allocator();
 }
 
 inline ObIAllocator &Worker::get_allocator()
@@ -365,15 +247,15 @@ inline bool is_mysql_mode()
   return get_compat_mode() == Worker::CompatMode::MYSQL;
 }
 
-inline void Worker::set_compatibility_mode(Worker::CompatMode mode)
+OB_INLINE void Worker::set_compatibility_mode(Worker::CompatMode mode)
 {
   set_compat_mode(mode);
 }
-inline Worker::CompatMode Worker::get_compatibility_mode()
+
+OB_INLINE Worker::CompatMode Worker::get_compatibility_mode()
 {
   return get_compat_mode();
 }
-
 
 } // end of namespace lib
 } // end of namespace oceanbase

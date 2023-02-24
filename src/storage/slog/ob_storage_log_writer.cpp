@@ -689,7 +689,7 @@ void ObStorageLogWriter::ObSLogWriteRunner::wait()
 void ObStorageLogWriter::ObSLogWriteRunner::run1()
 {
   STORAGE_REDO_LOG(INFO, "ObSLogWriteRunner run", K(tg_id_), K(is_inited_));
-  lib::set_thread_name_inner(log_writer_->get_thread_name());
+  lib::set_thread_name(log_writer_->get_thread_name());
   log_writer_->flush_log();
 }
 

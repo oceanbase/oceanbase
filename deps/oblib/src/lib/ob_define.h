@@ -2166,7 +2166,6 @@ enum ObTraceGranularity
 #define DIO_ALIGN_SIZE 4096
 #define DIO_READ_ALIGN_SIZE 4096
 #define DIO_ALLOCATOR_CACHE_BLOCK_SIZE (OB_DEFAULT_MACRO_BLOCK_SIZE + DIO_READ_ALIGN_SIZE)
-#define CORO_INIT_PRIORITY 120
 #define MALLOC_INIT_PRIORITY 128
 #define NORMAL_INIT_PRIORITY (MALLOC_INIT_PRIORITY + 1)
 
@@ -2343,22 +2342,22 @@ OB_INLINE int64_t ob_gettid()
   return tid;
 }
 
-OB_INLINE uint64_t &ob_get_tenant_id()
+OB_INLINE uint64_t& ob_get_tenant_id()
 {
-  RLOCAL_INLINE(uint64_t, tenant_id);
+  thread_local uint64_t tenant_id = 0;;
   return tenant_id;
 }
 
-OB_INLINE char *ob_get_tname()
+OB_INLINE char* ob_get_tname()
 {
-  struct TNameBuf {
-    TNameBuf() {
-      snprintf(v_, oceanbase::OB_THREAD_NAME_BUF_LEN, "%s", "");
-    }
-    char v_[oceanbase::OB_THREAD_NAME_BUF_LEN];
-  };
-  RLOCAL_INLINE(TNameBuf, tname);
-  return tname.v_;
+  thread_local char tname[oceanbase::OB_THREAD_NAME_BUF_LEN] = {0};
+  return tname;
+}
+
+OB_INLINE const char*& ob_get_origin_thread_name()
+{
+  thread_local const char* tname = nullptr;
+  return tname;
 }
 
 // There are many clusters in arbitration server, we need a field identify the different clusters.

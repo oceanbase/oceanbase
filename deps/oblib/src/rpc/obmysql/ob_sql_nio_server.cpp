@@ -24,8 +24,17 @@ int ObSqlNioServer::start(int port, rpc::frame::ObReqDeliver* deliver, int n_thr
   int ret = OB_SUCCESS;
   if (OB_FAIL(io_handler_.init(deliver))) {
     LOG_WARN("handler init fail", K(ret));
-  } else if (OB_FAIL(nio_.start(port, &io_handler_, n_thread))) {
+  } else if (OB_FAIL(nio_.start(port, &io_handler_, n_thread, tenant_id_))) {
     LOG_WARN("sql nio start fail", K(ret));
+  }
+  return ret;
+}
+
+int ObSqlNioServer::set_thread_count(const int thread_num)
+{
+  int ret = OB_SUCCESS;
+  if(thread_num != get_nio()->get_thread_count()){
+    ret = nio_.set_thread_count(thread_num);
   }
   return ret;
 }

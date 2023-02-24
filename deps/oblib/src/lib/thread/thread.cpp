@@ -30,7 +30,8 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
-TLOCAL(Thread *, Thread::current_thread_) = nullptr;
+thread_local int64_t Thread::loop_ts_ = 0;
+thread_local Thread* Thread::current_thread_ = nullptr;
 int64_t Thread::total_thread_count_ = 0;
 
 Thread &Thread::current()

@@ -76,7 +76,7 @@ ObDISessionCache &ObDISessionCache::get_instance()
 int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session_collect)
 {
   int ret = OB_SUCCESS;
-  ObRandom *random = ObDITls<ObRandom>::get_instance();
+  ObRandom *random = GET_TSI(ObRandom);
   ObSessionBucket &bucket = di_map_[session_id % OB_MAX_SERVER_SESSION_CNT];
   while (1) {
     bucket.lock_.rdlock();
@@ -227,7 +227,7 @@ int ObDIThreadTenantCache::get_node(uint64_t tenant_id, ObDITenantCollect *&tena
   int ret = OB_SUCCESS;
   if (OB_ISNULL(tenant_collect = tenant_cache_.get_node(tenant_id, tenant_collect))) {
     if (nullptr == extend_tenant_cache_) {
-      extend_tenant_cache_ = ObDITls<ObDIBaseTenantCache<MAX_TENANT_NUM_PER_SERVER>>::get_instance();
+      extend_tenant_cache_ = GET_TSI(ObDIBaseTenantCache<MAX_TENANT_NUM_PER_SERVER>);
     }
     if (nullptr != extend_tenant_cache_) {
       tenant_collect = extend_tenant_cache_->get_node(tenant_id, tenant_collect);

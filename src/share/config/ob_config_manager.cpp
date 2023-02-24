@@ -84,7 +84,7 @@ int ObConfigManager::reload_config()
     LOG_WARN("reload ssl config for net frame fail", K(ret));
   } else if (OB_FAIL(OBSERVER.get_rl_mgr().reload_config())) {
     LOG_WARN("reload config for ratelimit manager fail", K(ret));
-  } else if (OB_FAIL(OBSERVER.get_net_frame().reload_mysql_login_thread_config())) {
+  } else if (OB_FAIL(OBSERVER.get_net_frame().reload_sql_thread_config())) {
     LOG_WARN("reload config for mysql login thread count failed", K(ret));
   } else if (OB_FAIL(ObTdeEncryptEngineLoader::get_instance().reload_config())) {
     LOG_WARN("reload config for tde encrypt engine fail", K(ret));

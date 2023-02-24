@@ -40,7 +40,11 @@ public:
   void logical_stop();
   void logical_wait();
   void wait() override; // wait running task stoped
-  bool has_set_stop() const override { return ATOMIC_LOAD(&stop_); };
+  bool has_set_stop() const override
+  {
+    IGNORE_RETURN lib::Thread::update_loop_ts();
+    return ATOMIC_LOAD(&stop_);
+  }
 
   // destroy thread
   int destroy();

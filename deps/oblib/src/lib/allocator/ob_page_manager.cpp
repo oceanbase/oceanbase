@@ -32,6 +32,7 @@ ObPageManagerCenter &ObPageManagerCenter::get_instance()
 int ObPageManagerCenter::register_pm(ObPageManager &pm)
 {
   int ret = OB_SUCCESS;
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   lib::ObMutexGuard guard(mutex_);
   rb_tree_.insert(&pm);
   pm.has_register_ = true;
@@ -42,6 +43,7 @@ int ObPageManagerCenter::register_pm(ObPageManager &pm)
 
 void ObPageManagerCenter::unregister_pm(ObPageManager &pm)
 {
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   lib::ObMutexGuard guard(mutex_);
   pm.has_register_ = false;
   rb_tree_.remove(&pm);
@@ -57,7 +59,7 @@ int ObPageManagerCenter::print_tenant_stat(int64_t tenant_id, char *buf,
                                            int64_t len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   lib::ObMutexGuard guard(mutex_);
   int64_t sum_used = 0;
   int64_t sum_hold = 0;
@@ -74,6 +76,7 @@ AChunk *ObPageManagerCenter::alloc_from_thread_local_cache(int64_t tenant_id, in
   int tmpret = OB_SUCCESS;
   AChunk *ret = nullptr;
   const int RETRY_LIMIT = 10;
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   for (int retry = 0; retry < RETRY_LIMIT && OB_EAGAIN == (tmpret = mutex_.trylock()); ++retry) {
     sched_yield();
   }

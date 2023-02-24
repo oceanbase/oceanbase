@@ -1679,7 +1679,12 @@ int ObTransService::start_epoch_(ObTxDesc &tx)
     TRANS_LOG(INFO, "tx start new epoch", K(ret), K(tx));
   }
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, start_epoch, OB_Y(ret), OB_ID(opid), tx.op_sn_);
+  int tlog_truncate_cnt = 0;
+  if (OB_SUCC(ret) && tlog.count() > 50) {
+    tlog_truncate_cnt = tlog.count() - 10;
+    tlog.set_count(10);
+  }
+  REC_TRANS_TRACE_EXT(&tlog, start_epoch, OB_Y(ret), OB_ID(opid), tx.op_sn_, OB_ID(tag1), tlog_truncate_cnt);
   return ret;
 }
 

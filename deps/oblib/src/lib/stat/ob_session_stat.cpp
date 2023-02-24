@@ -40,7 +40,7 @@ ObSessionStatEstGuard::ObSessionStatEstGuard(const uint64_t tenant_id, const uin
     prev_session_id_(0)
 {
   if (oceanbase::lib::is_diagnose_info_enabled()) {
-    buffer_ = ObDITls<ObSessionDIBuffer>::get_instance();
+    buffer_ = GET_TSI(ObSessionDIBuffer);
     if (NULL != buffer_) {
       prev_tenant_id_ = buffer_->get_tenant_id();
       if (NULL != (buffer_->get_curr_session())) {
@@ -67,9 +67,5 @@ ObSessionStatEstGuard::~ObSessionStatEstGuard()
   }
 }
 
-void  __attribute__((constructor(101))) init_SessionDIBuffer()
-{
-  oceanbase::common::ObDITls<ObSessionDIBuffer>::get_instance();
-}
 } /* namespace common */
 } /* namespace oceanbase */

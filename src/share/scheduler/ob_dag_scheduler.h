@@ -15,6 +15,7 @@
 
 #include "lib/ob_define.h"
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
+#include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/list/ob_dlink_node.h"

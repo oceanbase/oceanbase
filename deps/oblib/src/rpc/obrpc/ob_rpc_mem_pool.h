@@ -21,11 +21,12 @@ namespace obrpc
 class ObRpcMemPool
 {
 public:
-  enum { RPC_POOL_PAGE_SIZE = 1<<16 };
+  enum { RPC_POOL_PAGE_SIZE = (1<<14) - 128};
   struct Page;
-  ObRpcMemPool(): last_(NULL) {}
+  explicit ObRpcMemPool(): last_(NULL), tenant_id_(OB_INVALID_TENANT_ID), mem_label_("RpcDefault") {}
+  explicit ObRpcMemPool(int64_t tenant_id, const char* label): last_(NULL), tenant_id_(tenant_id), mem_label_(label) {}
   ~ObRpcMemPool() { destroy(); }
-  static ObRpcMemPool* create(int64_t sz);
+  static ObRpcMemPool* create(int64_t tenant_id, const char* label, int64_t req_sz);
   void* alloc(int64_t sz);
   void reuse();
   void destroy();
@@ -33,6 +34,8 @@ private:
   void add_page(Page* page);
 private:
   Page* last_;
+  int64_t tenant_id_;
+  const char* mem_label_;
 };
 
 }; // end namespace obrpc

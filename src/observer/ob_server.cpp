@@ -1550,7 +1550,6 @@ int ObServer::init_config()
       }
     }
   }
-  get_unis_global_compat_version() = GET_MIN_CLUSTER_VERSION();
   lib::g_runtime_enabled = true;
 
   return ret;

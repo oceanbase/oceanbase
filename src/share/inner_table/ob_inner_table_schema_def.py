@@ -11321,7 +11321,29 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_core_table',
   keywords = all_def_keywords['__all_core_table']))
 
-# 12363: __all_virtual_malloc_sample_info
+def_table_schema(
+  owner = 'tushicheng.tsc',
+  table_name     = '__all_virtual_malloc_sample_info',
+  table_id       = '12363',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('ctx_id', 'int'),
+  ('mod_name', 'varchar:OB_MAX_CHAR_LENGTH'),
+  ('back_trace', 'varchar:DEFAULT_BUF_LENGTH'),
+  ('ctx_name', 'varchar:OB_MAX_CHAR_LENGTH'),
+  ('alloc_count', 'int'),
+  ('alloc_bytes', 'int'),
+  ],
+  vtable_route_policy = 'distributed',
+  partition_columns = ['svr_ip', 'svr_port'],
+)
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12364',

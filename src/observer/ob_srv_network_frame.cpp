@@ -15,6 +15,8 @@
 #include "observer/ob_srv_network_frame.h"
 #include "rpc/obmysql/ob_sql_nio_server.h"
 #include "observer/mysql/obsm_conn_callback.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
+#include "src/share/rc/ob_tenant_base.h"
 
 #include "share/config/ob_server_config.h"
 #include "share/ob_rpc_share.h"
@@ -160,7 +162,12 @@ int ObSrvNetworkFrame::init()
   } else if (hp_io_cnt > 0 && OB_FAIL(net_.high_prio_rpc_net_register(rpc_handler_, high_prio_rpc_transport_))) {
     LOG_ERROR("high prio rpc net register fail", K(ret));
   } 
-    else {
+  else {
+    if (OB_FAIL(obrpc::global_poc_server.start(rpc_port, io_cnt, &deliver_))) {
+      LOG_ERROR("poc rpc server start fail", K(ret));
+    } else {
+      LOG_INFO("poc rpc server start successfully");
+    }
     share::set_obrpc_transport(rpc_transport_);
     batch_rpc_transport_->set_bucket_count(opts.batch_rpc_io_cnt_);
     LOG_INFO("init rpc network frame successfully",
@@ -182,16 +189,23 @@ int ObSrvNetworkFrame::start()
   int ret = net_.start();
   if (OB_SUCC(ret)) {
     if (enable_new_sql_nio()) {
-      obmysql::global_sql_nio_server = OB_NEW(obmysql::ObSqlNioServer, "SqlNio", obmysql::global_sm_conn_callback, mysql_handler_);
+      obmysql::global_sql_nio_server =
+          OB_NEW(obmysql::ObSqlNioServer, "SqlNio",
+                 obmysql::global_sm_conn_callback, mysql_handler_);
       if (NULL == obmysql::global_sql_nio_server) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("allocate memory for global_sql_nio_server failed", K(ret));
       } else {
-        int net_thread_count = atoi(getenv("sql_nio_thread_count")?:"0")?: (int)(GCONF.net_thread_count);
-        if (0 == net_thread_count) {
-          net_thread_count = get_default_net_thread_count();
+        int sql_net_thread_count = (int)GCONF.sql_net_thread_count;
+        if (sql_net_thread_count == 0) {
+          if (GCONF.net_thread_count == 0) {
+            sql_net_thread_count = get_default_net_thread_count();
+          } else {
+            sql_net_thread_count = GCONF.net_thread_count;
+          }
         }
-        if(OB_FAIL(obmysql::global_sql_nio_server->start(GCONF.mysql_port, &deliver_, net_thread_count))) {
+        if (OB_FAIL(obmysql::global_sql_nio_server->start(
+                GCONF.mysql_port, &deliver_, sql_net_thread_count))) {
           LOG_ERROR("sql nio server start failed", K(ret));
         }
       }
@@ -229,6 +243,8 @@ int ObSrvNetworkFrame::reload_config()
     LOG_WARN("Failed to set easy keepalive.");
   } else if (OB_FAIL(net_.update_rpc_tcp_keepalive_params(user_timeout))) {
     LOG_WARN("Failed to set rpc tcp keepalive parameters.");
+  } else if (OB_FAIL(obrpc::global_poc_server.update_tcp_keepalive_params(user_timeout))) {
+    LOG_WARN("Failed to set pkt-nio rpc tcp keepalive parameters.");
   } else if (OB_FAIL(net_.update_sql_tcp_keepalive_params(user_timeout, enable_tcp_keepalive,
                                                           tcp_keepidle, tcp_keepintvl,
                                                           tcp_keepcnt))) {

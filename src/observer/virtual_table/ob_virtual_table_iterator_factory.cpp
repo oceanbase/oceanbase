@@ -52,6 +52,7 @@
 #include "observer/virtual_table/ob_all_virtual_session_stat.h"
 #include "observer/virtual_table/ob_all_disk_stat.h"
 #include "observer/virtual_table/ob_mem_leak_checker_info.h"
+#include "observer/virtual_table/ob_all_virtual_malloc_sample_info.h"
 #include "observer/virtual_table/ob_all_latch.h"
 #include "observer/virtual_table/ob_all_data_type_class_table.h"
 #include "observer/virtual_table/ob_all_data_type_table.h"
@@ -1289,6 +1290,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               object_pool->set_allocator(&allocator);
               object_pool->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(object_pool);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_MALLOC_SAMPLE_INFO_TID: {
+            ObMallocSampleInfo *malloc_sample_info = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObMallocSampleInfo, malloc_sample_info))) {
+              malloc_sample_info->set_allocator(&allocator);
+              vt_iter = static_cast<ObVirtualTableIterator *>(malloc_sample_info);
             }
             break;
           }

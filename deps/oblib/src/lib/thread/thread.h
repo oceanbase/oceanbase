@@ -14,6 +14,7 @@
 #define CORO_THREAD_H
 
 #include <functional>
+#include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_macro_utils.h"
 
 namespace oceanbase {
@@ -48,10 +49,24 @@ public:
 
   bool has_set_stop() const;
 
+  OB_INLINE static int64_t update_loop_ts(int64_t t)
+  {
+    int64_t ret = loop_ts_;
+    loop_ts_ = t;
+    return ret;
+  }
+
+  OB_INLINE static int64_t update_loop_ts()
+  {
+    return update_loop_ts(common::ObTimeUtility::fast_current_time());
+  }
+public:
+  static thread_local int64_t loop_ts_;
+
 private:
   static void* __th_start(void *th);
   void destroy_stack();
-  static TLOCAL(Thread *, current_thread_);
+  static thread_local Thread* current_thread_;
 
 private:
   static int64_t total_thread_count_;
@@ -80,6 +95,7 @@ OB_INLINE pid_t Thread::get_tid() const
 
 OB_INLINE bool Thread::has_set_stop() const
 {
+  IGNORE_RETURN update_loop_ts();
   return stop_;
 }
 

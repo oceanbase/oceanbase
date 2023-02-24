@@ -15,6 +15,7 @@
 #include "ob_server_reload_config.h"
 #include "lib/alloc/alloc_func.h"
 #include "lib/alloc/ob_malloc_allocator.h"
+#include "lib/alloc/ob_malloc_sample_struct.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "share/scheduler/ob_dag_scheduler.h"
@@ -150,7 +151,10 @@ int ObServerReloadConfig::operator()()
 #ifdef OB_USE_ASAN
     __MemoryContext__::set_enable_asan_allocator(GCONF.enable_asan_for_memory_context);
 #endif
-
+#if defined(__x86_64__)
+    ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
+                                     GCONF._min_malloc_sample_interval);
+#endif
     ObIOConfig io_config;
     int64_t cpu_cnt = GCONF.cpu_count;
     if (cpu_cnt <= 0) {
@@ -261,7 +265,6 @@ int ObServerReloadConfig::operator()()
   share::ObTaskController::get().set_diag_per_error_limit(
       GCONF.diag_syslog_per_error_limit.get_value());
 
-  get_unis_global_compat_version() = GET_MIN_CLUSTER_VERSION();
   lib::g_runtime_enabled = true;
 
   common::ObKVGlobalCache::get_instance().reload_wash_interval();

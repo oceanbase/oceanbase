@@ -865,6 +865,7 @@ public:
   static int all_virtual_rls_attribute_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_mysql_sys_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_core_table_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_malloc_sample_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_arb_replica_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_arb_replica_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_archive_dest_status_schema(share::schema::ObTableSchema &table_schema);
@@ -2904,6 +2905,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_rls_attribute_history_schema,
   ObInnerTableSchema::all_virtual_tenant_mysql_sys_agent_schema,
   ObInnerTableSchema::all_virtual_core_table_schema,
+  ObInnerTableSchema::all_virtual_malloc_sample_info_schema,
   ObInnerTableSchema::all_virtual_ls_arb_replica_task_schema,
   ObInnerTableSchema::all_virtual_ls_arb_replica_task_history_schema,
   ObInnerTableSchema::all_virtual_archive_dest_status_schema,
@@ -4264,6 +4266,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_PLAN_TID,
   OB_ALL_VIRTUAL_SHOW_TRACE_TID,
   OB_ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT_TID,
+  OB_ALL_VIRTUAL_MALLOC_SAMPLE_INFO_TID,
   OB_ALL_VIRTUAL_LS_ARB_REPLICA_TASK_TID,
   OB_ALL_VIRTUAL_LS_ARB_REPLICA_TASK_HISTORY_TID,
   OB_ALL_VIRTUAL_ARCHIVE_DEST_STATUS_TID,
@@ -6174,6 +6177,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_PLAN_TNAME,
   OB_ALL_VIRTUAL_SHOW_TRACE_TNAME,
   OB_ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT_TNAME,
+  OB_ALL_VIRTUAL_MALLOC_SAMPLE_INFO_TNAME,
   OB_ALL_VIRTUAL_LS_ARB_REPLICA_TASK_TNAME,
   OB_ALL_VIRTUAL_LS_ARB_REPLICA_TASK_HISTORY_TNAME,
   OB_ALL_VIRTUAL_ARCHIVE_DEST_STATUS_TNAME,
@@ -7607,6 +7611,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_DML_STATS_TID,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TID,
   OB_ALL_VIRTUAL_TABLET_COMPACTION_INFO_TID,
+  OB_ALL_VIRTUAL_MALLOC_SAMPLE_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -9797,11 +9802,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 230;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 574;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 575;
 const int64_t OB_SYS_VIEW_COUNT = 654;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1463;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1464;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1466;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1467;
 
 } // end namespace share
 } // end namespace oceanbase

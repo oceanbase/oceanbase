@@ -365,6 +365,42 @@ void ObListener::do_work()
   return;
 }
 
+int ObListener::do_one_event(int accept_fd) {
+  int err = 0;
+  int tmp_ret = OB_SUCCESS;
+  uint64_t client_magic = 0;
+  uint8_t index = 0;
+  io_threads_pipefd_pool_t *pipefd_pool = NULL;
+
+  if (OB_TMP_FAIL(read_client_magic(accept_fd, client_magic, index))) {
+    index = compatible_balance_assign(pipefd_pool);
+    trace_connection_info(accept_fd);
+    if (OB_TMP_FAIL(connection_redispatch(accept_fd, pipefd_pool, index))) {
+      close(accept_fd);
+    }
+    pipefd_pool = NULL;
+  } else {
+    for (int i = 0; i < MAX_PROTOCOL_TYPE_SIZE; i++) {
+      if (io_wrpipefd_map_[i].used && io_wrpipefd_map_[i].magic == client_magic) {
+        pipefd_pool = &(io_wrpipefd_map_[i].ioth_wrpipefd_pool);
+      }
+    }
+
+    trace_connection_info(accept_fd);
+
+    if (OB_ISNULL(pipefd_pool)) { /* high_prio_rpc_eio exist or not is decided by configuration */
+      index = compatible_balance_assign(pipefd_pool);
+    } else {
+      RPC_LOG(INFO, "dispatch to", K(client_magic), K(index));
+    }
+    if(OB_TMP_FAIL(connection_redispatch(accept_fd, pipefd_pool, index))) {
+      close(accept_fd);
+    }
+    pipefd_pool = NULL;
+  }
+  return err;
+}
+
  uint8_t ObListener::compatible_balance_assign(io_threads_pipefd_pool_t  * &pipefd_pool)
  {
    static uint8_t ioth_index_inc = 0;

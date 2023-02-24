@@ -212,6 +212,7 @@ void ObMaintainDepInfoTaskQueue::run2()
   } else {
     ObAddr zero_addr;
     while (!stop_) {
+      IGNORE_RETURN lib::Thread::update_loop_ts();
       if (REACH_TIME_INTERVAL(6 * 1000 * 1000)) {
         if (0 == queue_.size() && 0 != view_info_set_.size()) {
           LOG_WARN("queue size not match", K(queue_.size()), K(view_info_set_.size()));

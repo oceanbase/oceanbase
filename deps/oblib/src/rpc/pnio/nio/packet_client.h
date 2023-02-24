@@ -1,0 +1,60 @@
+typedef struct pktc_req_t pktc_req_t;
+typedef struct pktc_cb_t pktc_cb_t;
+typedef void (*pktc_flush_cb_func_t)(pktc_req_t* req);
+typedef void (*pktc_resp_cb_func_t)(pktc_cb_t* cb, const char* resp, int64_t sz);
+
+struct pktc_cb_t {
+  dlink_t sk_dlink;
+  link_t hash_link;
+  uint64_t id;
+  dlink_t timer_dlink;
+  int64_t expire_us;
+  pktc_resp_cb_func_t resp_cb;
+  int errcode;
+};
+
+struct pktc_req_t {
+  struct pktc_sk_t* sk; // for debug
+  int16_t categ_id;
+  PNIO_DELAY_WARN(int64_t ctime_us);
+  pktc_flush_cb_func_t flush_cb;
+  pktc_cb_t* resp_cb;
+  addr_t dest;
+  link_t link;
+  str_t msg;
+};
+
+typedef struct pktc_t pktc_t;
+extern int64_t pktc_init(pktc_t* io, eloop_t* ep, uint64_t dispatch_id);
+extern int pktc_post(pktc_t* io, pktc_req_t* req);
+
+typedef struct pktc_sk_t {
+  SOCK_COMMON;
+  dlink_t list_link;
+  struct pktc_t* pc; // for debug
+  link_t hash;
+  addr_t dest;
+  write_queue_t wq;
+  ibuffer_t ib;
+  dlink_t cb_head;
+  int64_t user_keepalive_timeout;
+} pktc_sk_t;
+
+typedef struct pktc_sf_t {
+  SOCK_FACTORY_COMMON;
+} pktc_sf_t;
+
+typedef struct pktc_t {
+  eloop_t* ep;
+  uint64_t dispatch_id;
+  pktc_sf_t sf;
+  evfd_t evfd;
+  sc_queue_t req_queue;
+  timerfd_t cb_timerfd;
+  time_wheel_t cb_tw;
+  dlink_t sk_list;
+  hash_t sk_map;
+  link_t sk_table[1024];
+  hash_t cb_map;
+  link_t cb_table[1<<16];
+} pktc_t;

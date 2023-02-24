@@ -70,11 +70,11 @@ int ObAllVirtualDumpTenantInfo::inner_get_next_row(common::ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 6:
           //slice
-          cells[i].set_double(t.slice_);
+          cells[i].set_double(0);
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
           //slice_remain
-          cells[i].set_double(t.slice_remain_);
+          cells[i].set_double(0);
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           //token_cnt
@@ -82,15 +82,15 @@ int ObAllVirtualDumpTenantInfo::inner_get_next_row(common::ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 9:
           //ass_token_cnt
-          cells[i].set_int(t.ass_token_cnt_);
+          cells[i].set_int(t.worker_count());
           break;
         case OB_APP_MIN_COLUMN_ID + 10:
           //lq_tokens
-          cells[i].set_int(t.lq_tokens_);
+          cells[i].set_int(0);
           break;
         case OB_APP_MIN_COLUMN_ID + 11:
           //used_lq_tokens
-          cells[i].set_int(t.used_lq_tokens_);
+          cells[i].set_int(0);
           break;
         case OB_APP_MIN_COLUMN_ID + 12:
           //stopped
@@ -130,7 +130,7 @@ int ObAllVirtualDumpTenantInfo::inner_get_next_row(common::ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 21:
           //actives
-          cells[i].set_int(t.actives_);
+          cells[i].set_int(t.workers_.get_size());
           break;
         case OB_APP_MIN_COLUMN_ID + 22:
           //workers
@@ -138,7 +138,7 @@ int ObAllVirtualDumpTenantInfo::inner_get_next_row(common::ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 23:
           //lq_waiting_workers
-          cells[i].set_int(t.lq_waiting_workers_.get_size());
+          cells[i].set_int(0);
           break;
         case OB_APP_MIN_COLUMN_ID + 24:
           //req_queue_total_size
@@ -170,7 +170,7 @@ int ObAllVirtualDumpTenantInfo::inner_get_next_row(common::ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 31:
           //large_queued
-          cells[i].set_int(t.large_req_queue_.size());
+          cells[i].set_int(t.lq_retry_queue_size());
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

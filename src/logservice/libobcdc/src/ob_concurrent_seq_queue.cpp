@@ -32,10 +32,10 @@ static struct timespec make_timespec(int64_t us)
   ts.tv_nsec = 1000 * (us % 1000000);
   return ts;
 }
-#define futex(...) syscall(SYS_futex,__VA_ARGS__)
+
 inline int futex_wake(volatile int *p, int val)
 {
-  return static_cast<int>(futex((int *)p, FUTEX_WAKE_PRIVATE, val, NULL, NULL, 0));
+  return static_cast<int>(futex((uint *)p, FUTEX_WAKE_PRIVATE, val, NULL));
 }
 // 0: Woken up by FUTEX_WAKE
 // ETIMEDOUT: Timeout

@@ -25,6 +25,7 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "ob_tenant.h"
 #include "rpc/ob_request.h"
+#include "rpc/obmysql/ob_sql_nio_server.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/ob_disk_usage_reporter.h"
 #include "storage/slog/ob_storage_log.h"
@@ -32,6 +33,7 @@
 #include "share/schema/ob_tenant_schema_service.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "observer/mysql/ob_mysql_request_manager.h"
+#include "observer/mysql/obsm_conn_callback.h"
 #include "sql/dtl/ob_dtl_fc_server.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/das/ob_das_id_service.h"
@@ -246,6 +248,43 @@ static int init_compat_mode(lib::Worker::CompatMode &compat_mode)
   return ret;
 }
 
+static int start_sql_nio_server(ObSqlNioServer *&sql_nio_server)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObSrvNetworkFrame *net_frame = GCTX.net_frame_;
+  sql_nio_server = OB_NEW(obmysql::ObSqlNioServer, "SqlNio",
+                          obmysql::global_sm_conn_callback,
+                          net_frame->get_mysql_handler(), tenant_id);
+  if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
+    if (NULL == sql_nio_server) {
+      ret = OB_NOT_INIT;
+      LOG_ERROR("sql_nio_server init failed", K(ret));
+    } else {
+      int net_thread_count = 0;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (tenant_config.is_valid()) {
+        net_thread_count = tenant_config->tenant_sql_net_thread_count;
+      }
+      if (0 == net_thread_count) {
+        ObTenant *tenant = NULL;
+        GCTX.omt_->get_tenant(tenant_id, tenant);
+        net_thread_count =
+            NULL == tenant ? 1 : std::max((int)tenant->unit_min_cpu(), 1);
+      }
+      sql_nio_server->get_nio()->set_run_wrapper(MTL_CTX());
+      if (OB_FAIL(sql_nio_server->start(-1, &net_frame->get_deliver(),
+                                        net_thread_count))) {
+        LOG_WARN("sql nio server start failed", K(ret));
+      } else {
+        LOG_INFO("tenant sql_nio_server mtl_start success", K(ret),
+                 K(tenant_id));
+      }
+    }
+  }
+  return ret;
+}
+
 template<typename T>
 static int server_obj_pool_mtl_new(common::ObServerObjectPool<T> *&pool)
 {
@@ -257,6 +296,46 @@ static int server_obj_pool_mtl_new(common::ObServerObjectPool<T> *&pool)
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
   } else {
     ret = pool->init();
+  }
+  return ret;
+}
+
+static int init_mysql_queue(QueueThread *&qthread)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  qthread = OB_NEW(QueueThread, ObModIds::OB_RPC, "MysqlQueueTh", tenant_id);
+  if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
+    if (OB_ISNULL(qthread)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::MysqlQueueTh,
+                                        qthread->tg_id_))) {
+      LOG_WARN("mysql queue init failed", K(ret), K(tenant_id),
+               K(qthread->tg_id_));
+    } else {
+      qthread->queue_.set_qhandler(
+          &GCTX.net_frame_->get_deliver().get_qhandler());
+      ret = TG_SET_RUNNABLE_AND_START(qthread->tg_id_, qthread->thread_);
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(qthread)) {
+      int sql_thread_count = 0;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (tenant_config.is_valid()) {
+        sql_thread_count = tenant_config->tenant_sql_login_thread_count;
+      }
+      if (0 == sql_thread_count) {
+        ObTenant *tenant = NULL;
+        GCTX.omt_->get_tenant(tenant_id, tenant);
+        sql_thread_count =
+            NULL == tenant ? 1 : std::max((int)tenant->unit_min_cpu(), 1);
+      }
+      qthread->set_thread_count(sql_thread_count);
+      LOG_INFO("tenant mysql_queue mtl_init success", K(ret), K(tenant_id));
+    } else {
+      LOG_WARN("tenant mysql_queue mtl_init fail", K(ret), K(tenant_id),
+               K(qthread->tg_id_));
+    }
   }
   return ret;
 }
@@ -367,6 +446,12 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObPlanCache::mtl_init, nullptr, ObPlanCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObPsCache::mtl_init, nullptr, ObPsCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(server_obj_pool_mtl_new<ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObPartTransCtx>);
+    if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
+      MTL_BIND2(nullptr, init_mysql_queue, nullptr, mtl_stop_default,
+                mtl_wait_default, mtl_destroy_default);
+      // MTL_BIND2(nullptr, nullptr, start_sql_nio_server, mtl_stop_default,
+      //           mtl_wait_default, mtl_destroy_default);
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -1415,6 +1500,8 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &try_clock_succ)
       }
       ObTenant *removed_tenant_tmp = nullptr;
       SpinWLockGuard guard(lock_);
+      // This locking should be held after tenant->wait
+      // because there maybe locking during tenant thread stopping.
 
       if (OB_FAIL(tenants_.remove_if(tenant_id, compare_with_tenant_id, equal_with_tenant_id, removed_tenant_tmp))) {
         LOG_WARN("fail to remove tenant", K(tenant_id), K(ret));
@@ -1989,33 +2076,12 @@ int ObMultiTenant::get_tenant_cpu(
   return ret;
 }
 
-void ObMultiTenant::set_group_sug_token()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(lock_tenant_list())) {
-    LOG_ERROR("fail to lock tenant list", K(ret));
-  } else {
-    for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
-      //set suggestion token for each tenant, all tenant use the fixed token.
-      if (!(*it)->has_stopped()) { // skip stopped tenant
-        ObTenantConfigGuard tenant_config(TENANT_CONF((*it)->id()));
-        (*it)->set_sug_token(std::max(1L, static_cast<int64_t>((*it)->unit_min_cpu() *
-          (tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4))));
-      }
-    }
-    if (OB_FAIL(unlock_tenant_list())) {
-      LOG_ERROR("fail to unlock tenant list");
-    }
-  }
-}
-
 void ObMultiTenant::run1()
 {
   lib::set_thread_name("MultiTenant");
   while (!has_set_stop()) {
     {
       SpinRLockGuard guard(lock_);
-      set_group_sug_token();
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
           LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
@@ -2061,6 +2127,110 @@ int ObMultiTenant::check_if_unit_id_exist(const uint64_t unit_id, bool &exist)
     } else if (tenant->get_unit_id() == unit_id) {
       exist = true;
       break;
+    }
+  }
+  return ret;
+}
+
+int obmysql::sql_nio_add_cgroup(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
+      nullptr != GCTX.cgroup_ctrl_ &&
+      OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
+    ret = GCTX.cgroup_ctrl_->add_thread_to_cgroup(syscall(__NR_gettid),
+                                                  tenant_id, OBCG_SQL_NIO);
+  }
+  return ret;
+}
+
+int ObSrvNetworkFrame::reload_tenant_sql_thread_config(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  ObTenant *tenant = NULL;
+  GCTX.omt_->get_tenant(tenant_id, tenant);
+
+  // reload tenant_sql_login_thread_count
+  int sql_login_thread_count = 0;
+  if (tenant_config.is_valid()) {
+    sql_login_thread_count = tenant_config->tenant_sql_login_thread_count;
+  }
+  if (0 == sql_login_thread_count) {
+    sql_login_thread_count =
+        NULL == tenant ? 1 : std::max((int)tenant->unit_min_cpu(), 1);
+  }
+  MTL_SWITCH(tenant_id) {
+    if (OB_FAIL(MTL(QueueThread *)->set_thread_count(sql_login_thread_count))) {
+      LOG_WARN("update tenant_sql_login_thread_count fail", K(ret));
+    }
+  }
+
+  // // reload tenant_sql_net_thread_count
+  // int sql_net_thread_count = 0;
+  // if (tenant_config.is_valid()) {
+  //   sql_net_thread_count = tenant_config->tenant_sql_net_thread_count;
+  //   if (0 == sql_net_thread_count) {
+  //     sql_net_thread_count =
+  //         NULL == tenant ? 1 : std::max((int)tenant->unit_min_cpu(), 1);
+  //   }
+  //   MTL_SWITCH(tenant_id) {
+  //     ObSqlNioServer *sql_nio_server = MTL(ObSqlNioServer *);
+  //     int cur_sql_net_thread_count =
+  //         sql_nio_server->get_nio()->get_thread_count();
+  //     if (sql_net_thread_count < cur_sql_net_thread_count) {
+  //       LOG_WARN("decrease tenant_sql_net_thread_count not allowed", K(ret),
+  //                K(sql_net_thread_count), K(cur_sql_net_thread_count));
+  //       tenant_config->tenant_sql_net_thread_count = cur_sql_net_thread_count;
+  //     } else if (OB_FAIL(
+  //                    sql_nio_server->set_thread_count(sql_net_thread_count))) {
+  //       LOG_WARN("update tenant_sql_net_thread_count fail", K(ret),
+  //                K(sql_net_thread_count));
+  //     }
+  //   }
+
+    return ret;
+  }
+
+int ObSrvNetworkFrame::reload_sql_thread_config()
+{
+  int ret = OB_SUCCESS;
+  int cnt = deliver_.get_mysql_login_thread_count_to_set(
+      GCONF.sql_login_thread_count);
+  if (OB_FAIL(deliver_.set_mysql_login_thread_count(cnt))) {
+    LOG_WARN("update sql_login_thread_count error", K(ret));
+  }
+
+  int sql_net_thread_count = (int)GCONF.sql_net_thread_count;
+  if (sql_net_thread_count == 0) {
+    if (GCONF.net_thread_count == 0) {
+      sql_net_thread_count = get_default_net_thread_count();
+    } else {
+      sql_net_thread_count = GCONF.net_thread_count;
+    }
+  }
+
+  if (OB_NOT_NULL(obmysql::global_sql_nio_server)) {
+    int cur_sql_net_thread_count =
+        obmysql::global_sql_nio_server->get_nio()->get_thread_count();
+    if (sql_net_thread_count < cur_sql_net_thread_count) {
+      LOG_WARN("decrease sql_net_thread_count not allowed", K(ret),
+               K(sql_net_thread_count), K(cur_sql_net_thread_count));
+      GCONF.sql_net_thread_count = cur_sql_net_thread_count;
+    } else if (OB_FAIL(obmysql::global_sql_nio_server->set_thread_count(
+                   sql_net_thread_count))) {
+      LOG_WARN("update sql_net_thread_count error", K(ret));
+    }
+  }
+
+  if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
+    omt::TenantIdList ids;
+    GCTX.omt_->get_tenant_ids(ids);
+    for (int64_t i = 0; i < ids.size(); i++) {
+      int tenant_id = ids[i];
+      if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
+        reload_tenant_sql_thread_config(tenant_id);
+      }
     }
   }
   return ret;

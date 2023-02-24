@@ -171,5 +171,12 @@ int set_meta_obj_limit(uint64_t tenant_id, int64_t meta_obj_pct_lmt)
   return set_ctx_limit(tenant_id, common::ObCtxIds::META_OBJ_CTX_ID, ctx_limit);
 }
 
+int set_rpc_limit(uint64_t tenant_id, int64_t rpc_pct_lmt)
+{
+  const int64_t tenant_limit = get_tenant_memory_limit(tenant_id);
+  const int64_t rpc_lmt = (tenant_limit / 100) * rpc_pct_lmt;
+  return set_ctx_limit(tenant_id, common::ObCtxIds::RPC_CTX_ID, rpc_lmt);
+}
+
 } // end of namespace lib
 } // end of namespace oceanbase

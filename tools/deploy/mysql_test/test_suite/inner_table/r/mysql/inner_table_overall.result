@@ -579,6 +579,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12357	__all_virtual_rls_attribute_history	2	201001	1
 12358	__all_virtual_tenant_mysql_sys_agent	2	201001	1
 12362	__all_virtual_core_table	2	201001	1
+12363	__all_virtual_malloc_sample_info	2	201001	1
 12364	__all_virtual_ls_arb_replica_task	2	201001	1
 12365	__all_virtual_ls_arb_replica_task_history	2	201001	1
 12366	__all_virtual_archive_dest_status	2	201001	1

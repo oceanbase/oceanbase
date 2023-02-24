@@ -587,7 +587,7 @@ void ObDDLScheduler::run1()
     int ret = OB_SUCCESS;
     ObDDLTask *task = nullptr;
     ObDDLTask *first_retry_task = nullptr;
-    (void)prctl(PR_SET_NAME, "DDLTaskExecutor", 0, 0, 0);
+    lib::set_thread_name("DDLTaskExecutor");
     while (!has_set_stop()) {
       THIS_WORKER.set_worker_level(1);
       THIS_WORKER.set_curr_request_level(1);

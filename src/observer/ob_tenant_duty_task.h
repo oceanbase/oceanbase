@@ -51,6 +51,7 @@ private:
   int update_tenant_ctx_memory_throttle(uint64_t tenant_id);
   // Read tenant work area memory settings from tenant system variables.
   int read_tenant_wa_percentage(uint64_t tenant_id, int64_t &pctg);
+  int update_tenant_rpc_percentage(uint64_t tenant_id);
 private:
   common::ObArenaAllocator allocator_;
 };

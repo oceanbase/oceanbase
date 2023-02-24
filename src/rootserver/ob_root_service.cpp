@@ -10093,8 +10093,6 @@ void ObRootService::update_cpu_quota_concurrency_in_memory_()
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
     tenant_config->cpu_quota_concurrency = MAX(10, tenant_config->cpu_quota_concurrency);
   }
-  // update now
-  GCTX.omt_->set_group_sug_token();
 }
 
 int ObRootService::set_cpu_quota_concurrency_config_()

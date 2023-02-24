@@ -110,9 +110,9 @@ ob_set_subtarget(ob_server omt
   omt/ob_tenant_timezone.cpp
   omt/ob_tenant_timezone_mgr.cpp
   omt/ob_th_worker.cpp
-  omt/ob_worker_pool.cpp
   omt/ob_worker_processor.cpp
   omt/ob_multi_tenant_operator.cpp
+  omt/ob_tenant_hook.cpp
   omt/ob_tenant_srs_mgr.cpp
   omt/ob_tenant_srs.cpp
 )
@@ -230,6 +230,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_transaction_checkpoint.cpp
   virtual_table/ob_all_virtual_checkpoint.cpp
   virtual_table/ob_all_virtual_macro_block_marker_status.cpp
+  virtual_table/ob_all_virtual_malloc_sample_info.cpp
   virtual_table/ob_all_virtual_memory_context_stat.cpp
   virtual_table/ob_all_virtual_memory_info.cpp
   virtual_table/ob_all_virtual_memstore_info.cpp

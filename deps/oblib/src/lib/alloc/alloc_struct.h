@@ -237,6 +237,7 @@ struct AObject {
     struct {
       struct {
         uint8_t on_leak_check_ : 1;
+        uint8_t on_malloc_sample_ : 1;
       };
     };
   };
@@ -475,7 +476,8 @@ char *ABlock::data() const
 AObject::AObject()
     : MAGIC_CODE_(FREE_AOBJECT_MAGIC_CODE),
       nobjs_(0), nobjs_prev_(0), obj_offset_(0),
-      alloc_bytes_(0), tenant_id_(0)
+      alloc_bytes_(0), tenant_id_(0),
+      on_leak_check_(false), on_malloc_sample_(false)
 {
 }
 

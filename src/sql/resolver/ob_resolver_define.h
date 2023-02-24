@@ -126,11 +126,12 @@ inline const char *get_scope_name(const ObStmtScope &scope)
 
 //don't use me in other place
 enum { CSTRING_BUFFER_LEN = 1024 };
+
 inline char *get_sql_string_buffer()
 {
   char *ret = nullptr;
   const int64_t BUF_COUNT = 8;
-  char *buf = reinterpret_cast<char *>(GET_TSI(char[BUF_COUNT*CSTRING_BUFFER_LEN]));
+  char *buf = reinterpret_cast<char *>(GET_TSI(ByteBuf<BUF_COUNT*CSTRING_BUFFER_LEN>));
   RLOCAL_INLINE(uint32_t, cur_buf_idx);
   if (OB_LIKELY(buf != nullptr)) {
     char (&BUFFERS)[BUF_COUNT][CSTRING_BUFFER_LEN]

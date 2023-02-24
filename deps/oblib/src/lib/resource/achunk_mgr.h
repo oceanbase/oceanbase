@@ -22,6 +22,7 @@
 #include "lib/atomic/ob_atomic.h"
 #include "lib/ob_define.h"
 #include "lib/lock/ob_mutex.h"
+#include "lib/ob_lib_config.h"
 
 namespace oceanbase
 {
@@ -70,6 +71,7 @@ public:
   {
     bool bret = false;
     if (count() < max_chunk_cache_cnt_) {
+      ObDisableDiagnoseGuard disable_diagnose_guard;
       if (with_mutex_) {
         mutex_.lock();
       }
@@ -97,6 +99,7 @@ public:
   {
     AChunk *chunk = NULL;
     if (!OB_ISNULL(header_)) {
+      ObDisableDiagnoseGuard disable_diagnose_guard;
       if (with_mutex_) {
         mutex_.lock();
       }

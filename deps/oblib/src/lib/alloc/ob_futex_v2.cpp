@@ -16,16 +16,15 @@
 #include <linux/futex.h>
 #include "lib/ob_abort.h"
 
-#define futex(...) syscall(SYS_futex,__VA_ARGS__)
 inline int futex_v2_wake(volatile int *p, int val)
 {
-    return static_cast<int>(futex((int *)p, FUTEX_WAKE_PRIVATE, val, NULL, NULL, 0));
+    return static_cast<int>(futex((uint *)p, FUTEX_WAKE_PRIVATE, val, NULL));
 }
 
 inline int futex_v2_wait(volatile int *p, int val, const timespec *timeout)
 {
   int ret = 0;
-  if (0 != futex((int *)p, FUTEX_WAIT_PRIVATE, val, timeout, NULL, 0)) {
+  if (0 != futex((uint *)p, FUTEX_WAIT_PRIVATE, val, timeout)) {
     ret = errno;
   }
   return ret;

@@ -294,6 +294,7 @@ void ObTimer::run1()
     set_thread_name("ObTimer");
   }
   while (true) {
+    IGNORE_RETURN lib::Thread::update_loop_ts();
     {
       ObMonitor<Mutex>::Lock guard(monitor_);
       static const int64_t STATISTICS_INTERVAL_US = 600L * 1000 * 1000; // 10m

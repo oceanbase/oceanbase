@@ -555,7 +555,7 @@ ObDiagnoseSessionInfo *ObDiagnoseSessionInfo::get_local_diagnose_info()
   if (lib::is_diagnose_info_enabled()) {
     ObDISessionCollect *collect = NULL;
     ObSessionDIBuffer *buffer = NULL;
-    buffer = ObDITls<ObSessionDIBuffer>::get_instance();
+    buffer = GET_TSI(ObSessionDIBuffer);
     if (NULL != buffer) {
       collect = buffer->get_curr_session();
       if (NULL != collect) {
@@ -656,7 +656,7 @@ ObDiagnoseTenantInfo *ObDiagnoseTenantInfo::get_local_diagnose_info()
   if (lib::is_diagnose_info_enabled()) {
     ObDITenantCollect *collect = NULL;
     ObSessionDIBuffer *buffer = NULL;
-    buffer = ObDITls<ObSessionDIBuffer>::get_instance();
+    buffer = GET_TSI(ObSessionDIBuffer);
     if (NULL != buffer) {
       if (NULL == (collect = buffer->get_curr_tenant())) {
         if (OB_FAIL(buffer->switch_tenant(OB_SYS_TENANT_ID))) {
