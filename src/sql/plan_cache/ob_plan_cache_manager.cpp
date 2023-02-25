@@ -353,9 +353,6 @@ void ObPlanCacheManager::ObPlanCacheEliminationTask::run_plan_cache_task()
           if (OB_FAIL(plan_cache->cache_evict())) {
             SQL_PC_LOG(ERROR, "Plan cache evict failed, please check", K(ret));
           }
-          if (OB_FAIL(plan_cache->asyn_update_baseline())) {
-            SQL_PC_LOG(ERROR, "asyn replace plan baseline failed", K(ret), K(tenant_id));
-          }
           plan_cache->dec_ref_count();
         }
       }

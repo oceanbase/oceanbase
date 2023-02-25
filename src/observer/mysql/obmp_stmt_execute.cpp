@@ -1294,6 +1294,13 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
               result.get_exec_context().get_is_evolution(),
               table_row_count_list);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
+        } else if (ctx_.self_add_plan_ && ctx_.plan_cache_hit_) {
+          // spm evolution plan first execute
+          plan->update_plan_stat(audit_record,
+              true,
+              result.get_exec_context().get_is_evolution(),
+              table_row_count_list);
+          plan->update_cache_access_stat(audit_record.table_scan_stat_);
         }
       }
     }

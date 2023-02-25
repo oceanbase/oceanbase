@@ -42,6 +42,7 @@ public:
   static int cancel_evolve_task(obrpc::ObModifyPlanBaselineArg& arg);
   static int load_baseline(const obrpc::ObLoadPlanBaselineArg& arg, ObPhysicalPlan* plan);
   static int deny_new_plan_as_baseline(ObSpmCacheCtx& spm_ctx);
+  static int64_t calc_spm_timeout_us(const int64_t normal_timeout, const int64_t baseline_exec_time);
 };
 
 } // namespace sql end

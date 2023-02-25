@@ -267,7 +267,9 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       has_fixed_plan_to_check_(false),
       evolution_plan_type_(OB_PHY_PLAN_UNINITIALIZED),
       select_plan_type_(INVALID_TYPE),
-      cur_baseline_not_enable_(false)
+      cur_baseline_not_enable_(false),
+      need_spm_timeout_(false),
+      baseline_exec_time_(0)
   {}
   enum SpmMode {
     MODE_INVALID,
@@ -288,6 +290,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
     STAT_ADD_BASELINE_PLAN,       // add baseline plan to plan cache evolution layer
     STAT_ACCEPT_EVOLUTION_PLAN,   // accept evolution plan as baseline and move it from evolution layer to plan layer 
     STAT_ACCEPT_BASELINE_PLAN,    // move baeline plan from evolution layer to plan layer 
+    STAT_FIRST_EXECUTE_PLAN,
+    STAT_FALLBACK_EXECUTE_PLAN,
     STAT_MAX
   };
   enum SpmSelectPlanType
@@ -327,6 +331,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   ObPhyPlanType evolution_plan_type_;
   SpmSelectPlanType select_plan_type_; // for retry
   bool cur_baseline_not_enable_;
+  bool need_spm_timeout_;
+  int64_t baseline_exec_time_;
 };
 
 struct EvolutionTaskResult

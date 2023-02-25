@@ -744,6 +744,7 @@ void ObQueryRetryCtrl::switch_consumer_group_retry_proc(ObRetryParam &v)
   retry_obj.test(switch_group_retry);
 }
 
+
 /////// For inner SQL only ///////////////
 void ObQueryRetryCtrl::inner_try_lock_row_conflict_proc(ObRetryParam &v)
 {

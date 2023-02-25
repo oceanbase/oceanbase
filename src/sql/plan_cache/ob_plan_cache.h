@@ -49,6 +49,7 @@ class ObPCVSet;
 class ObILibCacheObject;
 class ObPhysicalPlan;
 class ObLibCacheAtomicOp;
+class ObEvolutionPlan;
 
 typedef common::hash::ObHashMap<uint64_t, ObPlanCache *> PlanCacheMap;
 
@@ -327,8 +328,6 @@ public:
   int cache_evict_by_ns(ObLibCacheNameSpace ns);
   template<typename CallBack = ObKVEntryTraverseOp>
   int foreach_cache_evict(CallBack &cb);
-  //asynchronous update plan baseline
-  int asyn_update_baseline();
   void destroy();
   common::ObAddr &get_host() { return host_; }
   void set_host(common::ObAddr &addr) { host_ = addr; }
