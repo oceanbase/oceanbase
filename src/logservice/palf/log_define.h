@@ -101,6 +101,7 @@ const int64_t PALF_SYNC_RPC_TIMEOUT_US = 500 * 1000;                            
 const int64_t PALF_LOG_SYNC_DELAY_THRESHOLD_US = 3 * 1000 * 1000L;                  // 3 s
 constexpr int64_t INVALID_PROPOSAL_ID = INT64_MAX;
 constexpr int64_t PALF_INITIAL_PROPOSAL_ID = 0;
+constexpr char PADDING_LOG_CONTENT_CHAR = '\0';
 
 inline int64_t max_proposal_id(const int64_t a, const int64_t b)
 {
