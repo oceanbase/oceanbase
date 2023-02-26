@@ -68,7 +68,11 @@ public:
   {
     void *ret = nullptr;
     if (0 != size && ObLuaHandler::get_instance().memory_usage() + size + 8 < ObLuaHandler::LUA_MEMORY_LIMIT) {
+#if defined(OB_USE_ASAN) || defined(ENABLE_SANITY)
+      if (OB_NOT_NULL(ret = ::malloc(size + 8))) {
+#else
       if (OB_NOT_NULL(ret = ::mmap(nullptr, size + 8, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+#endif
         *static_cast<uint64_t *>(ret) = size;
         ret = (char*)ret + 8;
         ObLuaHandler::get_instance().memory_update(size + 8);
@@ -86,7 +90,11 @@ public:
     if (OB_NOT_NULL(ptr)) {
       const uint64_t size = *(uint64_t *)((char *)ptr - 8);
       ObLuaHandler::get_instance().memory_update(- 8 - size);
+#if defined(OB_USE_ASAN) || defined(ENABLE_SANITY)
+      ::free(ptr);
+#else
       ::munmap((void *)((char *)ptr - 8), size);
+#endif
     }
   }
 };
