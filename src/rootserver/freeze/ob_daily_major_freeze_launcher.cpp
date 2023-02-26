@@ -37,7 +37,6 @@ ObDailyMajorFreezeLauncher::ObDailyMajorFreezeLauncher()
     already_launch_(false),
     config_(nullptr),
     gc_freeze_info_last_timestamp_(0),
-    gc_tablet_ckm_last_timestamp_(0),
     freeze_info_mgr_(nullptr)
 {
 }
@@ -56,7 +55,6 @@ int ObDailyMajorFreezeLauncher::init(
     tenant_id_ = tenant_id;
     config_ = &config;
     gc_freeze_info_last_timestamp_ = ObTimeUtility::current_time();
-    gc_tablet_ckm_last_timestamp_ = ObTimeUtility::current_time();
     freeze_info_mgr_ = &freeze_info_manager;
     sql_proxy_ = &proxy;
     already_launch_ = false;
@@ -199,12 +197,11 @@ int ObDailyMajorFreezeLauncher::try_gc_tablet_checksum()
   int ret = OB_SUCCESS;
   const int64_t MIN_RESERVED_COUNT = 8;
   int64_t now = ObTimeUtility::current_time();
+  const static int64_t BATCH_DELETE_CNT = 2000;
   
   if (OB_UNLIKELY(IS_NOT_INIT || OB_ISNULL(sql_proxy_))) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(is_inited));
-  } else if ((now - gc_tablet_ckm_last_timestamp_) < MODIFY_GC_INTERVAL) {
-    // nothing
   } else {
     ObMySQLTransaction trans;
     SMART_VAR(ObArray<SCN>, all_compaction_scn) {
@@ -217,7 +214,8 @@ int ObDailyMajorFreezeLauncher::try_gc_tablet_checksum()
         const int64_t snapshot_ver_cnt = all_compaction_scn.count();
         const SCN &gc_snapshot_scn = all_compaction_scn.at(snapshot_ver_cnt - MIN_RESERVED_COUNT - 1);
 
-        if (OB_FAIL(ObTabletChecksumOperator::delete_tablet_checksum_items(trans, tenant_id_, gc_snapshot_scn))) {
+        if (OB_FAIL(ObTabletChecksumOperator::delete_tablet_checksum_items(trans, tenant_id_, gc_snapshot_scn,
+            BATCH_DELETE_CNT))) {
           LOG_WARN("fail to delete tablet checksum items", KR(ret), K_(tenant_id), K(gc_snapshot_scn));
         }
       }
@@ -229,10 +227,6 @@ int ObDailyMajorFreezeLauncher::try_gc_tablet_checksum()
         ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
         LOG_WARN("fail to end trans", "is_commit", OB_SUCCESS == ret, KR(tmp_ret));
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      gc_tablet_ckm_last_timestamp_ = now;
     }
   }
   return ret;

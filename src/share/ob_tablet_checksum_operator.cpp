@@ -494,24 +494,26 @@ int ObTabletChecksumOperator::insert_or_update_tablet_checksum_items_(
 int ObTabletChecksumOperator::delete_tablet_checksum_items(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    const SCN &gc_compaction_scn)
+    const SCN &gc_compaction_scn,
+    const int64_t limit_cnt)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = 0;
   const uint64_t extract_tenant_id = 0;
+  const uint64_t gc_scn_val = gc_compaction_scn.is_valid() ? gc_compaction_scn.get_val_for_inner_table_field() : 0;
   if (OB_UNLIKELY((!is_valid_tenant_id(tenant_id)))
       || (!gc_compaction_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(gc_compaction_scn));
-  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = '%lu' AND compaction_scn <= %lu",
-                                    OB_ALL_TABLET_CHECKSUM_TNAME, extract_tenant_id,
-                                    gc_compaction_scn.is_valid() ? gc_compaction_scn.get_val_for_inner_table_field() : 0))) {
-    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(gc_compaction_scn));
+  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = '%lu' AND compaction_scn <= %lu"
+    " AND NOT (tablet_id=%ld AND ls_id=%ld) limit %ld", OB_ALL_TABLET_CHECKSUM_TNAME, extract_tenant_id,
+    gc_scn_val, ObTabletID::MIN_VALID_TABLET_ID, ObLSID::SYS_LS_ID, limit_cnt))) {
+    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(gc_compaction_scn), K(limit_cnt));
   } else if (OB_FAIL(sql_client.write(tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", KR(ret), K(sql));
   } else {
-    LOG_TRACE("succ to delete tablet checksum items", K(tenant_id), K(gc_compaction_scn), K(affected_rows));
+    LOG_INFO("succ to delete tablet checksum items", K(tenant_id), K(gc_compaction_scn), K(affected_rows), K(limit_cnt));
   }
   return ret;
 }

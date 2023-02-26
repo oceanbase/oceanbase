@@ -64,7 +64,6 @@ private:
   bool already_launch_;
   common::ObServerConfig *config_;
   int64_t gc_freeze_info_last_timestamp_;
-  int64_t gc_tablet_ckm_last_timestamp_;
   ObFreezeInfoManager *freeze_info_mgr_;
 
   DISALLOW_COPY_AND_ASSIGN(ObDailyMajorFreezeLauncher);
