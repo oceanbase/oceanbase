@@ -18,6 +18,12 @@
 using namespace oceanbase;
 using namespace oceanbase::common;
 
+bool g_malloc_hook_inited = false;
+void init_malloc_hook()
+{
+  g_malloc_hook_inited = true;
+}
+
 uint64_t up_align(uint64_t x, uint64_t align)
 {
   return (x + (align - 1)) & ~(align - 1);
@@ -66,7 +72,7 @@ void *ob_malloc_hook(size_t size, const void *)
   size_t real_size = size + Header::SIZE;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
-  if (OB_UNLIKELY(in_hook())) {
+  if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook())) {
     if (MAP_FAILED == (tmp_ptr = ::mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
       tmp_ptr = nullptr;
     }
@@ -109,7 +115,7 @@ void *ob_realloc_hook(void *ptr, size_t size, const void *caller)
   size_t real_size = size + Header::SIZE;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
-  if (OB_UNLIKELY(in_hook())) {
+  if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook())) {
     if (MAP_FAILED == (tmp_ptr = ::mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
       tmp_ptr = nullptr;
     }
@@ -148,7 +154,7 @@ void *ob_memalign_hook(size_t alignment, size_t size, const void *)
     size_t real_size = 2 * MAX(alignment, Header::SIZE) + size;
     void *tmp_ptr = nullptr;
     bool from_mmap = false;
-    if (OB_UNLIKELY(in_hook())) {
+    if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook())) {
       if (MAP_FAILED == (tmp_ptr = ::mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
         tmp_ptr = nullptr;
       }
@@ -198,5 +204,3 @@ size_t malloc_usable_size(void *ptr)
 }
 
 EXTERN_C_END
-
-void init_malloc_hook() {}
