@@ -1731,11 +1731,8 @@ int ObService::detect_master_rs_ls(
   } else if (replica.is_strong_leader()) {
     // case 2 : replica is leader, do not use in_service to check whether it is leader or not
     //          use in_service could lead to bad case: https://yuque.antfin.com/ob/rootservice/pbw2qw
-    const ObLSReplica *leader = NULL;
-
-    // FIXME: Need Use in memory table operator to fill log stream info
-    if (OB_FAIL(ls_info.init_by_replica(replica))) {
-      LOG_WARN("init by replica failed", KR(ret), K(replica));
+    if (OB_FAIL(generate_master_rs_ls_info_(replica, ls_info))) {
+      LOG_WARN("generate master rs ls info failed", KR(ret), K(replica), K(ls_info));
     } else if (OB_FAIL(result.init(ObRole::LEADER, master_rs, replica, ls_info))) {
       LOG_WARN("fail to init result", KR(ret), K(master_rs), K(replica), K(ls_info));
     }
@@ -1746,6 +1743,68 @@ int ObService::detect_master_rs_ls(
     result.reset(); // only ls info is invalid
     if (OB_FAIL(result.init(ObRole::FOLLOWER, master_rs, replica, ls_info))) {
       LOG_WARN("fail to init result", KR(ret), K(master_rs), K(replica), K(ls_info));
+    }
+  }
+  return ret;
+}
+
+// Use the local leader replica as ls_info by default, while trying to get full ls info from inmemory ls table.
+// If proposal_id and server of inmemory leader and cur_leader are same, ls_info = cur_leader + inmemory followers.
+int ObService::generate_master_rs_ls_info_(
+    const share::ObLSReplica &cur_leader,
+    share::ObLSInfo &ls_info)
+{
+  int ret = OB_SUCCESS;
+  ls_info.reset();
+  ObInMemoryLSTable *inmemory_ls_table = NULL;
+  const ObLSReplica *inmemory_leader = NULL;
+  ObLSInfo inmemory_ls_info;
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(gctx_.lst_operator_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!cur_leader.is_valid()
+      || !cur_leader.is_strong_leader()
+      || cur_leader.get_server() != gctx_.self_addr())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid current leader", KR(ret), K(cur_leader), "self_addr", gctx_.self_addr());
+  } else if (OB_FAIL(ls_info.init_by_replica(cur_leader))) {
+    LOG_WARN("init by replica failed", KR(ret), K(cur_leader));
+  } else if (OB_ISNULL(inmemory_ls_table = gctx_.lst_operator_->get_inmemory_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inmemory ls_table is null", KR(ret), KP(inmemory_ls_table));
+  } else if (OB_UNLIKELY(!inmemory_ls_table->is_inited())) {
+    // if RS is not started, inmemory_ls_table may be uninitialized
+  } else if (OB_FAIL(inmemory_ls_table->get(
+      GCONF.cluster_id,
+      OB_SYS_TENANT_ID,
+      SYS_LS,
+      share::ObLSTable::DEFAULT_MODE,
+      inmemory_ls_info))) {
+    LOG_WARN("failed to get in memory sys tenant ls info", KR(ret), K(inmemory_ls_info));
+  } else if (OB_FAIL(inmemory_ls_info.find_leader(inmemory_leader))) {
+    if (OB_ENTRY_NOT_EXIST == ret) { // ls replica hasn't been reported to memory
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to find leader in inmemory_ls_info", KR(ret), K(inmemory_ls_info));
+    }
+  } else if (OB_ISNULL(inmemory_leader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("leader replica can not be null", KR(ret), K(inmemory_ls_info));
+  } else if (inmemory_leader->get_proposal_id() != cur_leader.get_proposal_id()
+      || inmemory_leader->get_server() != cur_leader.get_server()) {
+    // do not use unreliable inmemory ls info
+  } else {
+    ARRAY_FOREACH(inmemory_ls_info.get_replicas(), idx) {
+      const ObLSReplica &replica = inmemory_ls_info.get_replicas().at(idx);
+      if (!replica.is_strong_leader()) {
+        if (OB_FAIL(ls_info.add_replica(replica))) {
+          LOG_WARN("add replica failed", KR(ret), K(replica), K(ls_info), K(inmemory_ls_info));
+        }
+      }
+    }
+    if (FAILEDx(ls_info.update_replica_status())) {
+      LOG_WARN("update replica status failed", KR(ret),
+          K(ls_info), K(cur_leader), K(inmemory_ls_info));
     }
   }
   return ret;

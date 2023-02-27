@@ -238,6 +238,9 @@ private:
   int check_server_empty(const obrpc::ObCheckServerEmptyArg &arg, const bool wait_log_scan, bool &server_empty);
   int tenant_freeze(const uint64_t tenant_id);
   int tablet_freeze(const uint64_t tenant_id, const common::ObTabletID &tablet_id);
+  int generate_master_rs_ls_info_(
+      const share::ObLSReplica &cur_leader,
+      share::ObLSInfo &ls_info);
 private:
   bool inited_;
   bool in_register_process_;

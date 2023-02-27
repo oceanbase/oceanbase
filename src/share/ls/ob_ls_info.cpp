@@ -250,7 +250,6 @@ bool ObLSReplica::is_equal_for_report(const ObLSReplica &other) const
       && role_ == other.role_
       && member_list_is_equal(member_list_, other.member_list_)
       && replica_type_ == other.replica_type_
-      && proposal_id_ == other.proposal_id_
       && replica_status_ == other.replica_status_
       && restore_status_ == other.restore_status_
       && property_ == other.property_
@@ -258,6 +257,11 @@ bool ObLSReplica::is_equal_for_report(const ObLSReplica &other) const
       && zone_ == other.zone_
       && paxos_replica_number_ == other.paxos_replica_number_) {
     is_equal = true;
+  }
+  // only proposal_id of leader is meaningful
+  // proposal_id of follower will be set to 0 in reporting process
+  if (is_equal && ObRole::LEADER == role_) {
+    is_equal = (proposal_id_ == other.proposal_id_);
   }
   return is_equal;
 }

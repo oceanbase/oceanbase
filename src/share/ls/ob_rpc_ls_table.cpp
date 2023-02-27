@@ -238,7 +238,7 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
            && start_idx <= end_idx
            && end_idx < server_list.count()
            && OB_ISNULL(leader)) {
-      LOG_INFO("[RPC_LS] do detect master rs", K(cluster_id), K(start_idx), K(end_idx), K(server_list));
+      LOG_TRACE("[RPC_LS] do detect master rs", K(cluster_id), K(start_idx), K(end_idx), K(server_list));
       if (OB_FAIL(do_detect_master_rs_ls_(cluster_id, start_idx, end_idx,
                                                  server_list, ls_info))) {
         LOG_WARN("fail to detect master rs", KR(ret), K(cluster_id),
@@ -246,7 +246,7 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
       } else {
         int tmp_ret = ls_info.find_leader(leader);
         if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(leader)) {
-          LOG_INFO("[RPC_LS] get master rs", KR(ret), K(cluster_id), "addr", leader->get_server());
+          LOG_TRACE("[RPC_LS] get master rs", KR(ret), K(cluster_id), "addr", leader->get_server());
         }
         start_idx = end_idx + 1;
         end_idx = server_list.count() - 1;

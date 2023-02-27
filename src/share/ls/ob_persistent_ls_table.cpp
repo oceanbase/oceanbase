@@ -503,7 +503,7 @@ int ObPersistentLSTable::set_role_(
     LOG_WARN("convert leader_server ip to string failed", KR(ret), K(leader_server));
   } else if (OB_FAIL(sql.assign_fmt(
         "UPDATE %s "
-        "SET gmt_modified = now(6), role = ("
+        "SET role = ("
         "CASE WHEN svr_ip = '%s' AND svr_port = %d THEN %d "
         "ELSE %d end), proposal_id = ("
         "CASE WHEN svr_ip = '%s' AND svr_port = %d THEN proposal_id "
@@ -536,13 +536,10 @@ int ObPersistentLSTable::update_replica_(
     LOG_WARN("fill dml splicer failed", KR(ret), K(replica));
   } else {
     ObDMLExecHelper exec(sql_client, sql_tenant_id);
-    if (OB_FAIL(dml.add_gmt_modified())) {
-      LOG_WARN("add gmt modified to dml sql failed", KR(ret));
-    } else if (OB_FAIL(exec.exec_insert_update(table_name, dml, affected_rows))) {
+    if (OB_FAIL(exec.exec_insert_update(table_name, dml, affected_rows))) {
       //insert_update means if row exist update, if not exist insert
       LOG_WARN("execute update failed", KR(ret), K(replica));
-    } else if (is_zero_row(affected_rows) || affected_rows > 2) {
-      // only insert on duplicate key update (insert_update) check affected single row
+    } else if (OB_UNLIKELY(affected_rows < 0 || affected_rows > 2)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected affected_rows", KR(ret), K(affected_rows));
     }
