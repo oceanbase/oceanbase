@@ -568,6 +568,7 @@ int ObLogRestoreHandler::check_restore_to_newest(share::SCN &end_scn, share::SCN
   end_scn = SCN::min_scn();
   archive_scn = SCN::min_scn();
   SCN restore_scn = SCN::min_scn();
+  CLOG_LOG(INFO, "start check restore to newest", K(id_));
   {
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
@@ -591,11 +592,19 @@ int ObLogRestoreHandler::check_restore_to_newest(share::SCN &end_scn, share::SCN
 
   if (OB_SUCC(ret) && NULL != piece_context) {
     palf::LSN archive_lsn;
-    if (OB_FAIL(palf_handle_.get_end_scn(end_scn))) {
-      CLOG_LOG(WARN, "get end scn failed", K(ret), K(id_));
+    palf::LSN end_lsn;
+    if (OB_FAIL(palf_handle_.get_end_lsn(end_lsn))) {
+      CLOG_LOG(WARN, "get end lsn failed", K(id_));
+    } else if (OB_FAIL(palf_handle_.get_end_scn(end_scn))) {
+      CLOG_LOG(WARN, "get end scn failed", K(id_));
     } else if (OB_FAIL(piece_context->get_max_archive_log(archive_lsn, archive_scn))) {
-      CLOG_LOG(WARN, "get max archive log failed", K(ret), K(id_));
+      CLOG_LOG(WARN, "get max archive log failed", K(id_));
     } else {
+      if (archive_lsn == end_lsn && archive_scn == SCN::min_scn()) {
+        archive_scn = end_scn;
+        CLOG_LOG(INFO, "rewrite archive_scn while end_lsn equals to archive_lsn and archive_scn not got",
+            K(id_), K(archive_lsn), K(archive_scn), K(end_lsn), K(end_scn));
+      }
       CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn));
     }
   }
