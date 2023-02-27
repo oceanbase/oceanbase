@@ -5083,6 +5083,32 @@ int ObLogPlan::compute_repartition_distribution_info(const EqualSets &equal_sets
   return ret;
 }
 
+int ObLogPlan::find_table_scan_with_sharding_info(const ObLogicalOperator &op,
+                                                  const ObShardingInfo *sharding,
+                                                  const ObLogTableScan *&tsc)
+{
+  int ret = OB_SUCCESS;
+  tsc = NULL;
+  if (op.get_strong_sharding() != sharding) {
+    // return null tsc.
+  } else if (LOG_TABLE_SCAN == op.get_type()) {
+    tsc = static_cast<const ObLogTableScan*>(&op);
+  } else {
+    const bool is_subplan_scan = LOG_SUBPLAN_SCAN == op.get_type();
+    for (int64_t i = 0; i < op.get_num_of_child() && NULL == tsc && OB_SUCC(ret); i++) {
+      if (OB_ISNULL(op.get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL((SMART_CALL(find_table_scan_with_sharding_info(*op.get_child(i),
+                  is_subplan_scan ? op.get_child(i)->get_strong_sharding() : sharding,
+                  tsc))))) {
+        LOG_WARN("find table scan failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::get_repartition_table_info(const ObLogicalOperator &op,
                                           ObString &table_name,
                                           uint64_t &ref_table_id,
@@ -5091,37 +5117,9 @@ int ObLogPlan::get_repartition_table_info(const ObLogicalOperator &op,
   int ret = OB_SUCCESS;
   const ObLogicalOperator *cur_op = &op;
   const ObLogTableScan *table_scan = NULL;
-  while (NULL != cur_op) {
-    if (LOG_TABLE_SCAN == cur_op->get_type()) {
-      table_scan = static_cast<const ObLogTableScan*>(cur_op);
-      cur_op = NULL;
-    } else if (LOG_SUBPLAN_SCAN == cur_op->get_type()) {
-      cur_op = cur_op->get_child(0);
-    } else if (OB_NOT_NULL(cur_op->get_strong_sharding())) {
-      const ObLogicalOperator *child = NULL;
-      for (int64_t i = 0; i < cur_op->get_num_of_child() && NULL == child; i++) {
-        if (LOG_EXCHANGE == cur_op->get_child(i)->get_type()) {
-          /**
-          *                 JOIN(1)
-          *                   |
-          *             --------------
-          *             |            |
-          *           EXCHANGE    TABLE SCAN
-          *             |
-          *            ...
-          *   sharding of exchange, table scan and join are same.
-          *   We should choose the second branch.
-          */
-        } else if (cur_op->get_child(i)->get_strong_sharding() == cur_op->get_strong_sharding()) {
-          child = cur_op->get_child(i);
-        }
-      }
-      cur_op = child;
-    } else {
-      cur_op = NULL;
-    }
-  }
-  if (OB_ISNULL(table_scan)) {
+  if (OB_FAIL(find_table_scan_with_sharding_info(op, op.get_strong_sharding(), table_scan))) {
+    LOG_WARN("find table scan failed", K(ret));
+  } else if (OB_ISNULL(table_scan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {

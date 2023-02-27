@@ -641,7 +641,9 @@ public:
                                                            const ObIArray<ObLogicalOperator*> &subquery_ops,
                                                            const ObIArray<ObExecParamRawExpr *> &params,
                                                            ObExchangeInfo &exch_info);
-
+  int find_table_scan_with_sharding_info(const ObLogicalOperator &op,
+                                         const ObShardingInfo *sharding,
+                                         const ObLogTableScan *&tsc);
   int get_repartition_table_info(const ObLogicalOperator &op,
                                  ObString &table_name,
                                  uint64_t &ref_table_id,
