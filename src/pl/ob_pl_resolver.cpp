@@ -12811,6 +12811,7 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
   if (OB_SUCC(ret) && OB_INVALID_INDEX == index) {
     ObIAllocator &allocator = resolve_ctx_.allocator_;
     ObString sql;
+    ObString ps_sql;
     ObRecordType *row_desc = NULL;
     ObPLDataType cursor_type;
     if (OB_NOT_NULL(cursor.get_row_desc())) {
@@ -12824,6 +12825,7 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
     }
     OX (index = OB_INVALID_INDEX);
     OZ (ob_write_string(allocator, cursor.get_sql(), sql));
+    OZ (ob_write_string(allocator, cursor.get_ps_sql(), ps_sql));
     OZ (cursor_type.deep_copy(allocator, cursor.get_cursor_type()));
     ObSEArray<int64_t, 4> sql_params;
 
@@ -12853,7 +12855,7 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
                                           cursor.get_index(),
                                           sql,
                                           sql_params,
-                                          cursor.get_ps_sql(),
+                                          ps_sql,
                                           cursor.get_stmt_type(),
                                           cursor.is_for_update(),
                                           cursor.has_hidden_rowid(),

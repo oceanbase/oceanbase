@@ -909,9 +909,11 @@ int ObPLCompiler::generate_package_cursors(
       LOG_WARN("package ast cursor is null", K(ret), K(i), K(ast_cursor));
     } else {
       ObString sql;
+      ObString ps_sql;
       ObRecordType *row_desc = NULL;
       ObPLDataType cursor_type;
       OZ (ob_write_string(package.get_allocator(), ast_cursor->get_sql(), sql));
+      OZ (ob_write_string(package.get_allocator(), ast_cursor->get_ps_sql(), ps_sql));
       if (OB_SUCC(ret) && OB_NOT_NULL(ast_cursor->get_row_desc())) {
         row_desc = static_cast<ObRecordType *>(package.get_allocator().alloc(sizeof(ObRecordType)));
         if (OB_ISNULL(row_desc)) {
@@ -939,7 +941,7 @@ int ObPLCompiler::generate_package_cursors(
                                   ast_cursor->get_index(),//代表在Package符号表中的位置
                                   sql,//Cursor Sql
                                   sql_params,//Cursor参数表达式
-                                  ast_cursor->get_ps_sql(),
+                                  ps_sql,
                                   ast_cursor->get_stmt_type(),
                                   ast_cursor->is_for_update(),
                                   ast_cursor->has_hidden_rowid(),
