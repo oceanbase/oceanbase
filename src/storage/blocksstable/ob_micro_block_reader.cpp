@@ -709,7 +709,7 @@ int ObMicroBlockReader::get_row_count(
     const common::ObIArray<int32_t> &cols_index = read_info_->get_columns_index();
     int64_t col_idx = cols_index.at(col);
     ObStorageDatum datum;
-    for (int64_t i = 0; i < row_cap; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
       row_idx = row_ids[i];
       if (OB_UNLIKELY(row_idx < 0 || row_idx >= header_->row_count_)) {
         ret = OB_ERR_UNEXPECTED;
