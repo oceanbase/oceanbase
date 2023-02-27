@@ -44,7 +44,8 @@ ObLogDelUpd::ObLogDelUpd(ObLogPlan& plan)
       table_location_uncertain_(false),
       pdml_partition_id_expr_(NULL),
       pdml_is_returning_(false),
-      need_alloc_part_id_expr_(false)
+      need_alloc_part_id_expr_(false),
+      is_nested_execution_(false)
 {}
 
 int ObLogDelUpd::add_table_columns_to_ctx(ObAllocExprContext& ctx)
@@ -468,7 +469,9 @@ int ObLogDelUpd::allocate_exchange_post_non_pdml(AllocExchContext* ctx)
       ObExchangeInfo exch_info;
       if (OB_FAIL(child->allocate_exchange(ctx, exch_info))) {
         LOG_WARN("allocate exchange failed", K(ret));
-      } else { /*do nothing*/
+      } else if (is_nested_execution_ &&
+                 OB_FAIL(allocate_material_below(first_child))) {
+        LOG_WARN("fail to allocate material below", K(ret));
       }
     }
     if (OB_SUCC(ret) && opt_ctx.get_session_info()->use_static_typing_engine() &&
@@ -509,7 +512,9 @@ int ObLogDelUpd::allocate_exchange_post_non_pdml(AllocExchContext* ctx)
     ObExchangeInfo exch_info;
     if (OB_FAIL(child->allocate_exchange(ctx, exch_info))) {
       LOG_WARN("allocate exchange failed", K(ret));
-    } else { /*do nothing*/
+    } else if (is_nested_execution_ &&
+               OB_FAIL(allocate_material_below(first_child))) {
+      LOG_WARN("fail to allocate material below", K(ret));
     }
   } else {
     is_partition_wise_ = (NULL != sharding_info_.get_phy_table_location_info());
@@ -1240,13 +1245,14 @@ int ObLogDelUpd::check_multi_table_dml_for_nested_execution(bool& is_needed)
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard* schema_guard = NULL;
   const ObTableSchema* tbl_schema = NULL;
+  bool is_nested_execution = false;
   if (OB_ISNULL(all_table_columns_)) {
     // for update do nothing
   } else if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), KP(get_plan()));
   } else if (get_plan()->get_stmt()->get_query_ctx()->has_pl_udf_) {
-    is_needed = true;
+    is_nested_execution = true;
   } else if (OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard is null");
@@ -1256,7 +1262,11 @@ int ObLogDelUpd::check_multi_table_dml_for_nested_execution(bool& is_needed)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is NULL", K(ret));
   } else if (tbl_schema->get_foreign_key_infos().count() > 0) {
+    is_nested_execution = true;
+  }
+  if (OB_SUCC(ret) && is_nested_execution) {
     is_needed = true;
+    is_nested_execution_ = true;
   }
   return ret;
 }

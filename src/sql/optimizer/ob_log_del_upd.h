@@ -296,6 +296,8 @@ private:
 
 protected:
   bool need_alloc_part_id_expr_;
+  // mark nested execution if there is any trigger/foreign key/udf
+  bool is_nested_execution_;
 };
 }  // namespace sql
 }  // namespace oceanbase
