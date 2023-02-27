@@ -300,7 +300,8 @@ int ObLogSubPlanFilter::get_children_cost_info(double &first_child_refine_card, 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(i));
       } else {
-        double child_card = (i == 0) ? first_child_refine_card / parallel : child->get_card();
+        double first_child_card = ObJoinOrder::calc_single_parallel_rows(first_child_refine_card, parallel);
+        double child_card = (i == 0) ? first_child_card : child->get_card();
         ObBasicCostInfo info(child_card, child->get_cost(), child->get_width(), child->is_exchange_allocated());
         if (OB_FAIL(children_cost_info.push_back(info))) {
           LOG_WARN("push back child's cost info failed", K(ret));

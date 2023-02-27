@@ -3181,6 +3181,18 @@ int ObJoinOrder::get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_co
   return ret;
 }
 
+double ObJoinOrder::calc_single_parallel_rows(double rows, int64_t parallel)
+{
+  double ret = rows;
+  if (rows < parallel) {
+    parallel = rows;
+    //at least one parallel
+    parallel = parallel < 1 ? 1: parallel;
+  }
+  ret = rows / parallel;
+  return ret;
+}
+
 int ObJoinOrder::compute_const_exprs_for_subquery(uint64_t table_id,
                                                   ObLogicalOperator *root)
 {
@@ -5457,7 +5469,7 @@ int JoinPath::cost_nest_loop_join(double left_output_rows,
       right_part_cnt = right_path_->get_sharding()->get_part_cnt();
     }
     if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
-      left_rows = left_rows * server_cnt_ / in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel/server_cnt_);
       right_cost = right_cost * right_out_parallel / server_cnt_;
       right_rows /= server_cnt_;
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo_ ||
@@ -5465,11 +5477,11 @@ int JoinPath::cost_nest_loop_join(double left_output_rows,
       right_rows /= in_parallel;
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_ ||
                DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
-      left_rows /= in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
     } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
       /* do nothing */
     } else {
-      left_rows /= in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
       right_rows /= right_part_cnt;
       right_cost = right_cost * right_out_parallel / right_part_cnt;
     }

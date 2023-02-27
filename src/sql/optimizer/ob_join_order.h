@@ -2207,6 +2207,7 @@ struct NullAwareAntiJoinInfo {
     inline uint64_t get_total_path_num() const { return total_path_num_; }
     int get_join_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
     int get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_conditions);
+    static double calc_single_parallel_rows(double rows, int64_t parallel);
   private:
     static int check_and_remove_is_null_qual(ObLogPlan *plan,
                                              const ObJoinType join_type,
