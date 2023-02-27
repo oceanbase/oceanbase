@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
@@ -147,6 +148,12 @@ int ObPartTransCtx::post_msg_(const ObTwoPhaseCommitMsgType& msg_type,
     Ob2pcCommitRespMsg commit_resp;
     build_tx_common_msg_(receiver, commit_resp);
     commit_resp.commit_version_ = ctx_tx_data_.get_commit_version();
+    if (max_2pc_commit_scn_ != OB_INVALID_TIMESTAMP) {
+      commit_resp.commit_log_scn_ =
+          MAX(max_2pc_commit_scn_, ctx_tx_data_.get_end_log_ts());
+    } else {
+      commit_resp.commit_log_scn_ = ctx_tx_data_.get_end_log_ts();
+    }
     if (OB_FAIL(post_msg_(receiver, commit_resp))) {
       TRANS_LOG(WARN, "rpc post msg failed", K(ret), K(*this), K(receiver), K(msg_type));
     }
@@ -172,6 +179,7 @@ int ObPartTransCtx::post_msg_(const ObTwoPhaseCommitMsgType& msg_type,
   case ObTwoPhaseCommitMsgType::OB_MSG_TX_CLEAR_REQ: {
     Ob2pcClearReqMsg clear_req;
     build_tx_common_msg_(receiver, clear_req);
+    clear_req.max_commit_log_scn_ = MAX(max_2pc_commit_scn_, ctx_tx_data_.get_end_log_ts());
     if (OB_FAIL(post_msg_(receiver, clear_req))) {
       TRANS_LOG(WARN, "rpc post msg failed", K(ret), K(*this), K(receiver), K(msg_type));
     }
@@ -283,7 +291,12 @@ int ObPartTransCtx::post_orphan_msg_(const ObTwoPhaseCommitMsgType &msg_type,
     build_tx_common_msg_(recv_msg,
                          self_addr,
                          clear_req);
-    ret = rpc->post_msg(recv_msg.get_sender_addr(), clear_req);
+    TRANS_LOG(INFO, "print tenant base",K(MTL_ID()),K(MTL(ObTransService*)));
+    if (OB_FAIL(MTL(ObTransService*)->get_max_decided_scn(clear_req.sender_, clear_req.max_commit_log_scn_))) {
+      TRANS_LOG(WARN, "get max get_max_decided_scn failed", K(ret), K(clear_req));
+    } else {
+      ret = rpc->post_msg(recv_msg.get_sender_addr(), clear_req);
+    }
     break;
   }
 
@@ -679,6 +692,7 @@ int ObPartTransCtx::handle_tx_2pc_commit_resp(const Ob2pcCommitRespMsg &msg)
   CtxLockGuard guard(lock_);
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
   uint64_t participant_id = UINT64_MAX;
+  max_2pc_commit_scn_ = MAX(msg.commit_log_scn_, max_2pc_commit_scn_);
 
   if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
     TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
@@ -735,7 +749,16 @@ int ObPartTransCtx::handle_tx_2pc_clear_req(const Ob2pcClearReqMsg &msg)
   CtxLockGuard guard(lock_);
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
 
-  if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
+  if (msg.max_commit_log_scn_ < max_2pc_commit_scn_
+      || msg.max_commit_log_scn_ < ctx_tx_data_.get_end_log_ts()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "unexpected max commit log scn in clear request", K(ret), KPC(this));
+  } else {
+    max_2pc_commit_scn_ = MAX(msg.max_commit_log_scn_, max_2pc_commit_scn_);
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
     TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(handle_2pc_req(msg_type))) {
     TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));

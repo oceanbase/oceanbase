@@ -355,12 +355,14 @@ namespace transaction
     public:
       Ob2pcCommitRespMsg() :
           ObTxMsg(TX_2PC_COMMIT_RESP),
-          commit_version_(OB_INVALID_TIMESTAMP)
+          commit_version_(OB_INVALID_TIMESTAMP),
+          commit_log_scn_(OB_INVALID_TIMESTAMP)
       {}
     public:
       bool is_valid() const;
       int64_t commit_version_;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version));
+      int64_t commit_log_scn_;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version), K_(commit_log_scn));
       OB_UNIS_VERSION(1);
     };
 
@@ -393,10 +395,13 @@ namespace transaction
     {
     public:
       Ob2pcClearReqMsg() :
-          ObTxMsg(TX_2PC_CLEAR_REQ)
+          ObTxMsg(TX_2PC_CLEAR_REQ),
+          max_commit_log_scn_(OB_INVALID_TIMESTAMP)
       {}
     public:
       bool is_valid() const;
+      int64_t max_commit_log_scn_;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(max_commit_log_scn));
       OB_UNIS_VERSION(1);
     };
 

@@ -282,6 +282,7 @@ void ObPartTransCtx::default_init_()
   is_incomplete_replay_ctx_ = false;
   is_submitting_redo_log_for_freeze_ = false;
   start_working_log_ts_ = 0;
+  max_2pc_commit_scn_ = OB_INVALID_TIMESTAMP;
   coord_prepare_info_arr_.reset();
   reserve_allocator_.reset();
   elr_handler_.reset();
@@ -3019,15 +3020,14 @@ int ObPartTransCtx::submit_abort_log_()
   return ret;
 }
 
-int ObPartTransCtx::submit_clear_log_()
-{
+int ObPartTransCtx::submit_clear_log_() {
   int ret = OB_SUCCESS;
   ObTxLogBlock log_block;
   ObTxClearLog clear_log(exec_info_.incremental_participants_);
   ObTxLogCb *log_cb = NULL;
   const int64_t replay_hint = static_cast<int64_t>(trans_id_.get_id());
-  ObTxLogBlockHeader
-    log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_);
+  ObTxLogBlockHeader log_block_header(cluster_id_,
+                                      exec_info_.next_log_entry_no_, trans_id_);
 
   if (OB_FAIL(log_block.init(replay_hint, log_block_header))) {
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
@@ -3047,7 +3047,9 @@ int ObPartTransCtx::submit_clear_log_()
   } else if (OB_FAIL(acquire_ctx_ref_())) {
     TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
   } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                 log_block.get_buf(), log_block.get_size(), 0, log_cb, false))) {
+                 log_block.get_buf(), log_block.get_size(),
+                 MAX(ctx_tx_data_.get_end_log_ts(), max_2pc_commit_scn_),
+                 log_cb, false))) {
     TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
     return_log_cb_(log_cb);
     log_cb = NULL;

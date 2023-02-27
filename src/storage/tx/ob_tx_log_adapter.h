@@ -54,6 +54,7 @@ public:
 
   virtual int get_role(bool &is_leader, int64_t &epoch) = 0;
 
+  virtual int get_max_decided_scn(int64_t &scn) = 0;
 private:
 };
 
@@ -70,6 +71,7 @@ public:
                  const bool need_nonblock);
   int get_role(bool &is_leader, int64_t &epoch);
 
+  int get_max_decided_scn(int64_t &scn);
 private:
   logservice::ObLogHandler *log_handler_;
 };

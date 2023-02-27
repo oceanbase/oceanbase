@@ -86,5 +86,17 @@ int ObLSTxLogAdapter::get_role(bool &is_leader, int64_t &epoch)
   return ret;
 }
 
+int ObLSTxLogAdapter::get_max_decided_scn(int64_t &scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
+  } else {
+    ret = log_handler_->get_max_decided_log_ts_ns(scn);
+  }
+  return ret;
+}
+
 }
 }

@@ -222,6 +222,8 @@ public:
                     const bool is_rollback,
                     const int64_t expire_ts);
   int get_max_commit_version(int64_t &commit_version) const;
+  int get_max_decided_scn(const share::ObLSID &ls_id, int64_t & scn);
+
   #include "ob_trans_service_v4.h"
 private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;

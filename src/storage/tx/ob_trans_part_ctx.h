@@ -753,6 +753,9 @@ private:
   int16_t retain_cause_;
 
   ObTxState upstream_state_;
+
+  int64_t max_2pc_commit_scn_;
+
   ObLSLogInfoArray coord_prepare_info_arr_;
   TransModulePageAllocator reserve_allocator_;
   // tmp scheduler addr is used to post response for the second phase of xa commit/rollback

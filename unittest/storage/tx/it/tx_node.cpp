@@ -97,6 +97,7 @@ ObTxNode::ObTxNode(const int64_t ls_id,
                &rpc_proxy_,
                &schema_service_,
                &server_tracer_));
+  tenant_.set(&txs_);
   memtable_ = create_memtable_(1001);
   {
     ObColDesc col_desc;

@@ -64,6 +64,11 @@ public:
                  ObTxBaseLogCb *cb,
                  const bool need_block);
   int get_role(bool &is_leader, int64_t &epoch);
+  int get_max_decided_scn(int64_t &scn)
+  {
+    scn = OB_INVALID_TIMESTAMP;
+    return OB_SUCCESS;
+  };
 
   void push_all_cbs_();
 public:

@@ -364,6 +364,7 @@ public:
   const static int64_t TASK_QUEUE_CNT = 128;
   ObSpScLinkQueue apply_task_queue_arr[TASK_QUEUE_CNT];
   ObSpScLinkQueue replay_task_queue_arr[TASK_QUEUE_CNT];
+  int64_t max_submit_scn_ =  OB_INVALID_TIMESTAMP;
 
   void run1() {
     while(true) {
@@ -438,6 +439,7 @@ public:
         ApplyCbTask *apply_task = new ApplyCbTask();
         apply_task->replay_hint_ = replay_hint;
         apply_task->cb_ = cb;
+        max_submit_scn_ = MAX(max_submit_scn_, ts);
 
         apply_task_queue_arr[queue_idx].push(apply_task);
         ATOMIC_INC(&inflight_cnt_);
@@ -468,6 +470,47 @@ public:
   int get_role(bool &is_leader, int64_t &epoch) {
     is_leader = true;
     epoch = 1;
+    return OB_SUCCESS;
+  }
+
+  int get_max_decided_scn(int64_t &scn)
+  {
+    int ret = OB_SUCCESS;
+    int64_t min_unreplayed_scn = OB_INVALID_TIMESTAMP;
+    int64_t min_unapplyed_scn = OB_INVALID_TIMESTAMP;
+
+    for (int64_t i = 0; i < TASK_QUEUE_CNT; ++i) {
+      if (!replay_task_queue_arr[i].empty()) {
+        int64_t tmp_scn = static_cast<ReplayCbTask *>(replay_task_queue_arr[i].top())->log_ts_;
+        if (min_unreplayed_scn != OB_INVALID_TIMESTAMP && tmp_scn != OB_INVALID_TIMESTAMP) {
+          min_unreplayed_scn = MIN(tmp_scn, min_unreplayed_scn);
+        } else if (tmp_scn != OB_INVALID_TIMESTAMP) {
+          min_unreplayed_scn = tmp_scn;
+        }
+      }
+    }
+
+    for (int64_t i = 0; i < TASK_QUEUE_CNT; ++i) {
+      if (!apply_task_queue_arr[i].empty()) {
+        int64_t tmp_scn = (static_cast<ObTxBaseLogCb *>(
+                               (static_cast<ApplyCbTask *>(apply_task_queue_arr[i].top()))->cb_))
+                              ->get_log_ts();
+        if (min_unapplyed_scn != OB_INVALID_TIMESTAMP && tmp_scn != OB_INVALID_TIMESTAMP) {
+          min_unapplyed_scn = MIN(tmp_scn, min_unapplyed_scn);
+        } else if (tmp_scn != OB_INVALID_TIMESTAMP) {
+          min_unapplyed_scn = tmp_scn;
+        }
+      }
+    }
+
+    if (min_unapplyed_scn != OB_INVALID_TIMESTAMP && min_unreplayed_scn != OB_INVALID_TIMESTAMP) {
+      scn = MAX(min_unapplyed_scn, min_unreplayed_scn);
+    } else {
+      scn = max_submit_scn_;
+    }
+    if (scn >= 0) {
+      scn = scn - 1;
+    }
     return OB_SUCCESS;
   }
 

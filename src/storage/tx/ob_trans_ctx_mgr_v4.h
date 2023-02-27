@@ -477,6 +477,8 @@ public:
   // ObPartTransCtx -> ObLSTxCtxMgr, It will be a deadlock with normal order.
   int update_aggre_log_ts_wo_lock(int64_t rec_log_ts);
 
+  int get_max_decided_scn(int64_t & scn);
+
   TO_STRING_KV(KP(this),
                K_(ls_id),
                K_(tenant_id),
@@ -946,6 +948,8 @@ public:
 
   // @param [in] ls_id: the specified ls_id
   int check_scheduler_status(share::ObLSID ls_id);
+
+  int get_max_decided_scn(const share::ObLSID &ls_id, int64_t & scn);
 
 private:
   int create_ls_(const int64_t tenant_id,
