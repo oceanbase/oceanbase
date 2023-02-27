@@ -44,8 +44,6 @@ function variables_parpare {
   OBCLIENT_BIN=$DEP_PATH/u01/obclient/bin/obclient
   MYSQLTEST_BIN=$DEP_PATH/u01/obclient/bin/mysqltest
 
-  export OBD_HOME=$DEPLOY_PATH
-  export OBD_INSTALL_PRE=$DEP_PATH
   DEFAULT_DEPLOY_NAME_FILE=$OBD_HOME/.obd/.default_deploy
 }
 
@@ -578,7 +576,7 @@ function main() {
   then 
     NEED_REBOOT="1"
   fi
-  if [[ ! -f $DEPLOY_PATH/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
+  if [[ ! -f $OBD_HOME/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $OBD_HOME/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)
   obd env set OBD_LOCK_MODE 1
