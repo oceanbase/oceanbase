@@ -27,6 +27,7 @@
 #include "log_group_entry.h"            // LogGroupEntry
 #include "log_meta_entry.h"             // LogMetaEntry
 #include "log_iterator_storage.h"       // LogIteratorStorage
+#include "log_checksum.h"               // LogChecksum
 
 namespace oceanbase
 {
@@ -60,11 +61,21 @@ public:
   // @retval
   //   OB_SUCCESS.
   //   OB_INVALID_DATA.
-  //   OB_ITER_END, has iterated to the end of block.
-  //   OB_NEED_RETRY, the data in cache is not integrity, and the integrity data has been truncate from disk,
-  //                  need read data from storage eagin.(data in cache will not been clean up, therefore,
-  //                  user need used a new iterator to read data again)
-  //   OB_ERR_OUT_LOWER_BOUND, block has been recycled
+  //   OB_ITER_END
+  //       - has iterated to the end of block.
+  //   OB_NEED_RETRY
+  //      - the data in cache is not integrity, and the integrity data has been truncate from disk,
+  //        need read data from storage eagin.(data in cache will not been clean up, therefore,
+  //        user need used a new iterator to read data again)
+  //      - if the end_lsn get from get_file_end_lsn is smaller than 'log_tail_' of LogStorage, and it's
+  //        not the exact boundary of LogGroupEntry(for PalgGroupeBufferIterator, or LogEntry for PalfBufferIterator),
+  //        OB_NEED_RETRY may be return.
+  //
+  //   OB_ERR_OUT_LOWER_BOUND
+  //      - block has been recycled
+  //   OB_CHECKSUM_ERROR
+  //      - the accumlate checksum calc by accum_checksum_ and the data checksum of LogGroupEntry is not
+  //        same as the accumlate checksum of LogGroupEntry
   int next(const share::SCN &replayable_point_scn);
 
   // param[in] replayable point scn, iterator will ensure that no log will return when the log scn is greater than
@@ -87,7 +98,6 @@ public:
   //  OB_SUCCESS
   //  OB_INVALID_DATA
   //  OB_ITER_END
-  //  OB_ITER_END
   //  NB: if the last write option success, but the data has been
   //       corrupted, we also regard it as the last write option is
   //       not atomic.
@@ -100,7 +110,7 @@ public:
 
   TO_STRING_KV(KP(buf_), K_(next_round_pread_size), K_(curr_read_pos), K_(curr_read_buf_start_pos),
       K_(curr_read_buf_end_pos), KPC(log_storage_), K_(curr_entry_is_raw_write), K_(curr_entry_size),
-      K_(prev_entry_scn), K_(curr_entry), K_(init_mode_version));
+      K_(prev_entry_scn), K_(curr_entry), K_(init_mode_version), K_(accumlate_checksum));
 
 private:
   // @brief get next entry from data storage or cache.
@@ -125,18 +135,23 @@ private:
   int parse_one_entry_();
 
   template <
-    class TMP_ENTRY,
     class ACTUAL_ENTRY>
-  int parse_one_specific_entry_(TMP_ENTRY &entry, ACTUAL_ENTRY &actual_entry)
+  int parse_one_specific_entry_(ACTUAL_ENTRY &actual_entry)
   {
     int ret = OB_SUCCESS;
-    const bool matched_type = std::is_same<ACTUAL_ENTRY, TMP_ENTRY>::value;
+    const bool matched_type = std::is_same<ACTUAL_ENTRY, ENTRY>::value;
     int64_t pos = curr_read_pos_;
     if (true == matched_type) {
-      if (OB_FAIL(entry.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
+      if (OB_FAIL(curr_entry_.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
+      // When curr_entry_ is LogGroupEntry, need check accumlate checksum
+      // and check whether it's raw write
+      } else if (OB_FAIL(handle_each_log_group_entry_(curr_entry_))) {
+        PALF_LOG(WARN, "handle_each_log_group_entry_ failed", KPC(this));
       }
     } else if (OB_FAIL(actual_entry.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
       PALF_LOG(TRACE, "deserialize entry failed", K(ret), KPC(this));
+    } else if (OB_FAIL(handle_each_log_group_entry_(actual_entry))) {
+      PALF_LOG(ERROR, "handle_each_log_group_entry_ failed", KPC(this), K(actual_entry));
     } else {
       ret = OB_EAGAIN;
       advance_read_lsn_(actual_entry.get_payload_offset());
@@ -145,30 +160,6 @@ private:
     }
     return ret;
   }
-
-  template <
-   class ACTUAL_ENTRY>
-  int parse_one_specific_entry_(LogGroupEntry &entry, ACTUAL_ENTRY &actual_entry)
-  {
-    int ret = OB_SUCCESS;
-    const bool matched_type = std::is_same<ACTUAL_ENTRY, LogGroupEntry>::value;
-    int64_t pos = curr_read_pos_;
-    if (true == matched_type) {
-      if (OB_FAIL(entry.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
-      } else {
-        curr_entry_is_raw_write_ = entry.get_header().is_raw_write();
-      }
-    } else if (OB_FAIL(actual_entry.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
-      PALF_LOG(TRACE, "deserialize entry failed", K(ret), KPC(this));
-    } else {
-      ret = OB_EAGAIN;
-      advance_read_lsn_(actual_entry.get_payload_offset());
-      PALF_LOG(TRACE, "advance_read_lsn_ payload offset", K(ret), KPC(this), K(actual_entry), "payload offset",
-          actual_entry.get_payload_offset());
-    }
-    return ret;
-  }
-
 
   int parse_log_block_header_();
 
@@ -183,8 +174,33 @@ private:
   void advance_read_lsn_(const offset_t step);
   void try_clean_up_cache_();
 
+  template <class T>
+  int handle_each_log_group_entry_(const T&entry)
+  {
+    PALF_LOG(TRACE, "T is not LogGroupEntry, do no thing", K(entry));
+    return OB_SUCCESS;
+  }
+
+  template <>
+  int handle_each_log_group_entry_(const LogGroupEntry&entry)
+  {
+    int ret = OB_SUCCESS;
+    PALF_LOG(TRACE, "T is LogGroupEntry, do no thing", K(entry));
+    if (OB_FAIL(verify_accum_checksum_(entry))) {
+      PALF_LOG(ERROR, "verify_accum_checksum_ failed", K(ret), KPC(this), K(entry));
+    } else {
+      curr_entry_is_raw_write_ = entry.get_header().is_raw_write();
+    }
+  return ret;
+  }
+  // @brief: accumlate checksum verify, only verify checkum when accum_checksum_ is not -1.
+  // ret val:
+  //    OB_SUCCESS
+  //    OB_CHECKSUM_ERROR
+  int verify_accum_checksum_(const LogGroupEntry &entry);
+
 private:
-  static constexpr int MAX_READ_TIMES_IN_EACH_NEXT = 2;
+static constexpr int MAX_READ_TIMES_IN_EACH_NEXT = 2;
   // In each `next_entry` round, need read data from `LogStorage` directlly,
   // to amortized reading cost, use `read_buf` to cache the last read result.
   //
@@ -221,6 +237,7 @@ private:
   //
   share::SCN prev_entry_scn_;
   GetModeVersion get_mode_version_;
+  int64_t accumlate_checksum_;
   bool is_inited_;
 };
 
@@ -237,6 +254,7 @@ LogIteratorImpl<ENTRY>::LogIteratorImpl()
     curr_entry_size_(0),
     init_mode_version_(0),
     prev_entry_scn_(),
+    accumlate_checksum_(-1),
     is_inited_(false)
 {
 }
@@ -263,6 +281,7 @@ int LogIteratorImpl<ENTRY>::init(const GetModeVersion &get_mode_version,
     curr_entry_size_ = 0;
     init_mode_version_ = PALF_INITIAL_PROPOSAL_ID;
     get_mode_version_ = get_mode_version;
+    accumlate_checksum_ = -1;
     is_inited_ = true;
     PALF_LOG(TRACE, "LogIteratorImpl init success", K(ret), KPC(this));
   }
@@ -279,6 +298,7 @@ void LogIteratorImpl<ENTRY>::reuse()
   curr_entry_size_ = 0;
   prev_entry_scn_.reset();
   init_mode_version_ = PALF_INITIAL_PROPOSAL_ID;
+  accumlate_checksum_ = -1;
 }
 
 template <class ENTRY>
@@ -294,6 +314,7 @@ void LogIteratorImpl<ENTRY>::destroy()
     curr_read_buf_start_pos_ = 0;
     curr_read_pos_ = 0;
     init_mode_version_ = 0;
+    accumlate_checksum_ = -1;
   }
 }
 
@@ -412,9 +433,8 @@ int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn,
   // Therefore, we should try_clean_up_cache_ in the beginning of each round of next.
   (void) try_clean_up_cache_();
   if (OB_FAIL(get_next_entry_())) {
-    // NB: if get_next_entry_ failed, set 'curr_entry_size_' to 0, ensure 'is_valid'
-    // return false.
     // NB: if the data which has been corrupted, clean cache.
+    // NB: if the accum_checksum_ is not match, return OB_CHECKSUM_ERROR.
     if (OB_INVALID_DATA == ret) {
       PALF_LOG(WARN, "read invalid data, need clean cache", K(ret), KPC(this));
       log_storage_->reuse(log_storage_->get_lsn(curr_read_pos_));
@@ -500,12 +520,31 @@ int LogIteratorImpl<ENTRY>::get_entry(ENTRY &entry, LSN &lsn, bool &is_raw_write
   } else if (OB_FAIL(entry.shallow_copy(curr_entry_))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "shallow_copy failed", K(ret), KPC(this));
-  } else if (false == entry.check_integrity()) {
-    ret = OB_INVALID_DATA;
-    PALF_LOG(WARN, "data has been corrupted, attention!!!", K(ret), KPC(this));
   } else {
     lsn = log_storage_->get_lsn(curr_read_pos_);
     is_raw_write = curr_entry_is_raw_write_;
+  }
+  return ret;
+}
+
+template<class ENTRY>
+int LogIteratorImpl<ENTRY>::verify_accum_checksum_(const LogGroupEntry &entry)
+{
+  int ret = OB_SUCCESS;
+  int64_t data_checksum = -1;
+  int64_t expected_verify_checksum = entry.get_header().get_accum_checksum();
+  if (!entry.check_integrity(data_checksum)) {
+    ret = OB_INVALID_DATA;
+    PALF_LOG(WARN, "invalid data", K(ret), KPC(this), K(entry));
+  } else if (-1 == accumlate_checksum_) {
+    accumlate_checksum_ = expected_verify_checksum;
+    PALF_LOG(INFO, "init accumlate_checksum to first LogGroupEntry", K(entry), KPC(this));
+  } else if (OB_FAIL(LogChecksum::verify_accum_checksum(
+                accumlate_checksum_, data_checksum,
+                expected_verify_checksum, accumlate_checksum_))) {
+    PALF_LOG(ERROR, "verify checksum failed", K(ret), KPC(this), K(entry));
+  } else {
+    PALF_LOG(TRACE, "verify_accum_checksum_ success", K(ret), KPC(this), K(entry));
   }
   return ret;
 }
@@ -529,22 +568,19 @@ int LogIteratorImpl<ENTRY>::parse_one_entry_()
         case LogEntryType::GROUP_ENTRY_HEADER:
           {
               LogGroupEntry entry;
-              ret = parse_one_specific_entry_(curr_entry_, entry);
-              if (true == entry.is_valid()) {
-                curr_entry_is_raw_write_ = entry.get_header().is_raw_write();
-              }
+              ret = parse_one_specific_entry_(entry);
             break;
           }
         case LogEntryType::LOG_ENTRY_HEADER:
           {
             LogEntry entry;
-            ret = parse_one_specific_entry_(curr_entry_, entry);
+            ret = parse_one_specific_entry_(entry);
             break;
           }
         case LogEntryType::LOG_META_ENTRY_HEADER:
           {
             LogMetaEntry entry;
-            ret = parse_one_specific_entry_(curr_entry_, entry);
+            ret = parse_one_specific_entry_(entry);
             break;
           }
         case LogEntryType::LOG_INFO_BLOCK_HEADER:

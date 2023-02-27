@@ -72,24 +72,40 @@ int LogChecksum::verify_accum_checksum(const int64_t data_checksum,
   // This interface is re-entrant.
   // If canlculated checksum is unexpected, the verify_checksum_ won't change.
   int ret = common::OB_SUCCESS;
+  int64_t new_verify_checksum = -1;
+  int64_t old_verify_checksum = verify_checksum_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(verify_accum_checksum(old_verify_checksum, data_checksum, accum_checksum, new_verify_checksum))) {
+    PALF_LOG(ERROR, "verify_accum_checksum failed", K(data_checksum), K(accum_checksum), K(old_verify_checksum));
   } else {
-    const int64_t old_verify_checksum = verify_checksum_;
-    const int64_t new_verify_checksum = common::ob_crc64(verify_checksum_, const_cast<int64_t *>(&data_checksum),
-                                        sizeof(data_checksum));
-    if (new_verify_checksum != accum_checksum) {
-      // Checksum error occurs, verify_checksum_ won't change.
-      ret = common::OB_CHECKSUM_ERROR;
-      LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "log checksum error", "ret", ret, K_(palf_id), K(data_checksum),
-          K(accum_checksum), K(old_verify_checksum), K(new_verify_checksum));
-    } else {
-      // Update verify_checksum_ when checking succeeds.
-      verify_checksum_ = new_verify_checksum;
-      PALF_LOG(TRACE, "verify_accum_checksum success", K(ret), K_(palf_id), K(data_checksum), K(accum_checksum),
-               K_(verify_checksum), K_(accum_checksum));
-    }
+    // Update verify_checksum_ when checking succeeds.
+    verify_checksum_ = new_verify_checksum;
+    PALF_LOG(TRACE, "verify_accum_checksum success", K(ret), K_(palf_id), K(data_checksum), K(accum_checksum),
+             K_(verify_checksum), K_(accum_checksum));
   }
+
+  return ret;
+}
+
+int LogChecksum::verify_accum_checksum(const int64_t old_accum_checksum,
+                                       const int64_t data_checksum,
+                                       const int64_t expected_accum_checksum,
+                                       int64_t &new_accum_checksum)
+{
+
+  int ret = common::OB_SUCCESS;
+  new_accum_checksum = common::ob_crc64(old_accum_checksum, const_cast<int64_t *>(&data_checksum),
+                                        sizeof(data_checksum));
+  if (new_accum_checksum != expected_accum_checksum) {
+    ret = common::OB_CHECKSUM_ERROR;
+    LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "log checksum error", "ret", ret, K(data_checksum),
+        K(expected_accum_checksum), K(old_accum_checksum), K(new_accum_checksum));
+  } else {
+    PALF_LOG(TRACE, "verify_accum_checksum success", K(ret), K(data_checksum),
+        K(expected_accum_checksum), K(old_accum_checksum), K(new_accum_checksum));
+  }
+
   return ret;
 }
 

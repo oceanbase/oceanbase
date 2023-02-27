@@ -382,6 +382,7 @@ bool LogGroupEntryHeader::check_log_checksum_(const char *buf,
     PALF_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "Invalid argument!!!", K(buf), K(data_len), K(group_size_));
   } else if (is_padding_log()) {
     bool_ret = true;
+    group_data_checksum = PADDING_LOG_DATA_CHECKSUM;
     PALF_LOG(INFO, "This is a padding log, no need check log checksum", K(bool_ret), K(data_len));
   } else {
     int64_t pos = 0;
