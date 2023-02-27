@@ -488,14 +488,11 @@ int ObTransformTempTable::inner_extract_common_subquery_as_cte(ObDMLStmt &root_s
     //对每组相似stmt创建temp table
     for (int64_t i = 0; OB_SUCC(ret) && i < compare_info.count(); ++i) {
       StmtCompareHelper &helper = compare_info.at(i);
-      bool is_valid = false;
       if (!helper.hint_force_stmt_set_.empty() &&
           !helper.hint_force_stmt_set_.is_equal(helper.similar_stmts_)) {
         //hint forbid, do nothing
-      } else if (OB_FAIL(check_stmt_can_materialize(helper.stmt_, is_valid))) {
-        LOG_WARN("failed to check stmt is valid", K(ret));
       } else if (helper.hint_force_stmt_set_.empty() && 
-                (helper.similar_stmts_.count() < 2 || !is_valid)) {
+                (helper.similar_stmts_.count() < 2)) {
         //do nothing
       } else if (OB_FAIL(create_temp_table(helper))) {
         LOG_WARN("failed to create temp table", K(ret));
@@ -604,6 +601,9 @@ int ObTransformTempTable::remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts)
                                                                 is_correlated))) {
       LOG_WARN("failed to check is correlated subquery", K(ret));
     } else if (is_correlated) {
+    } else if (OB_FAIL(check_stmt_can_materialize(subquery, is_valid))) {
+      LOG_WARN("failed to check stmt is valid", K(ret));
+    } else if (!is_valid) {
       //do nothing
     } else if (OB_FAIL(new_stmts.push_back(subquery))) {
       LOG_WARN("failed to push back stmt", K(ret));
