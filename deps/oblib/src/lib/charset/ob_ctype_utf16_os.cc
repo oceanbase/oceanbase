@@ -117,7 +117,7 @@ ob_lengthsp_mb2(const ObCharsetInfo *cs __attribute__((unused)),
                 const char *ptr, size_t length)
 {
   const char *end= ptr + length;
-  while (end > ptr + 1 && end[-1] == ' ' && end[-2] == '\0')
+  while (end - ptr > 1 && end[-1] == ' ' && end[-2] == '\0')
     end-= 2;
   return (size_t) (end - ptr);
 }
@@ -129,10 +129,10 @@ static int
 ob_utf16_uni(const ObCharsetInfo *cs __attribute__((unused)),
              ob_wc_t *pwc, const unsigned char *str, const unsigned char *end)
 {
-  if (str + 2 > end) {
+  if (2 > end - str) {
     return OB_CS_TOOSMALL2;
   } else if (OB_UTF16_HIGH_HEAD(*str))  {
-    if (str + 4 > end) {
+    if (4 > end - str) {
       return OB_CS_TOOSMALL4;
     } else if (!OB_UTF16_LOW_HEAD(str[2]))  {
       return OB_CS_ILSEQ;
@@ -153,7 +153,7 @@ ob_uni_utf16(const ObCharsetInfo *cs __attribute__((unused)),
              ob_wc_t wc, unsigned char *str, unsigned char *end)
 {
   if (wc <= 0xFFFF) {
-    if (str + 2 > end) {
+    if (2 > end - str) {
       return OB_CS_TOOSMALL2;
     } else if (OB_UTF16_SURROGATE(wc)) {
       return OB_CS_ILUNI;
@@ -163,7 +163,7 @@ ob_uni_utf16(const ObCharsetInfo *cs __attribute__((unused)),
       return 2;
     }
   } else if (wc <= 0x10FFFF) {
-    if (str + 4 > end) {
+    if (4 > end - str) {
       return OB_CS_TOOSMALL4;
     } else {
       *str++= (unsigned char) ((wc-= 0x10000) >> 18) | 0xD8;
