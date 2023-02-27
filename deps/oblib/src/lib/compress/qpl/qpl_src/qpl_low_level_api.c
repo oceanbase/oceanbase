@@ -10,7 +10,6 @@
 #include "qpl/qpl.h"
 
 #define MAX_IO_THREAD 64
-qpl_path_t execution_path = qpl_path_hardware;
 
 qpl_job *g_qpl_job_pool[MAX_IO_THREAD];
 atomic_bool g_job_lock[MAX_IO_THREAD];
@@ -19,11 +18,13 @@ static unsigned int g_qpl_job_size = 0;
 int QPL_job_pool_init()
 {
     qpl_status  status;
-    status = qpl_get_job_size(execution_path, &g_qpl_job_size);
-    if (status != QPL_STS_OK) {
+    unsigned int qpl_hw_job_size = 0;
+    unsigned int qpl_sw_job_size = 0;
+    if (qpl_get_job_size(qpl_path_hardware, &qpl_hw_job_size) || qpl_get_job_size(qpl_path_software, &qpl_sw_job_size)) {
         QPL_ERROR("QPL:qpl get job size faild %d.\n",status);
         return -1;
     }
+    g_qpl_job_size = (qpl_sw_job_size > qpl_hw_job_size) ? qpl_sw_job_size: qpl_hw_job_size;
 
     for (int i=0; i<MAX_IO_THREAD; i++) {
         g_job_lock[i] = false;
@@ -32,7 +33,7 @@ int QPL_job_pool_init()
             QPL_ERROR("QPL:failed to request memory.\n");
             return -1;
         }
-        status = qpl_init_job(execution_path, g_qpl_job_pool[i]);
+        status = qpl_init_job(qpl_path_hardware, g_qpl_job_pool[i]);
         if (unlikely(status != QPL_STS_OK)) {
             memset(g_qpl_job_pool[i], 0, g_qpl_job_size);
             status = qpl_init_job(qpl_path_software, g_qpl_job_pool[i]);
