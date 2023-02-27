@@ -245,6 +245,7 @@ int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts
 int ObTransService::register_commit_retry_task_(ObTxDesc &tx, const int64_t max_delay)
 {
   int ret = OB_SUCCESS;
+  int saved_ret = OB_SUCCESS;
   int64_t delay = ObTransCtx::MAX_TRANS_2PC_TIMEOUT_US;
   int64_t now = ObClockGenerator::getClock();
   int64_t expire_after = std::min(tx.expire_ts_ - now, tx.commit_expire_ts_ - now);
@@ -258,13 +259,18 @@ int ObTransService::register_commit_retry_task_(ObTxDesc &tx, const int64_t max_
     if (OB_FAIL(timer_.register_timeout_task(tx.commit_task_, delay))) {
       TRANS_LOG(WARN, "register tx retry task fail", KR(ret), K(delay), K(tx));
       tx_desc_mgr_.revert(tx);
+      if (OB_TIMER_TASK_HAS_SCHEDULED == ret) {
+        saved_ret = ret;
+        // rewrite ret
+        ret = OB_SUCCESS;
+      }
     }
   }
 #ifndef NDEBUG
-  TRANS_LOG(INFO, "register commit retry task", K(ret), K(delay), K(tx));
+  TRANS_LOG(INFO, "register commit retry task", K(ret), K(saved_ret), K(delay), K(tx));
 #else
-  if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "register commit retry task fail", K(ret), K(delay), K(tx));
+  if (OB_SUCCESS != ret || OB_SUCCESS != saved_ret) {
+    TRANS_LOG(WARN, "register commit retry task fail", K(ret), K(saved_ret), K(delay), K(tx));
   }
 #endif
   return ret;
@@ -306,41 +312,37 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   int ret = OB_SUCCESS;
   // remember tx_id because tx maybe cleanout and reused
   // in this function's following steps.
+  tx.lock_.lock();
   auto tx_id = tx.tx_id_;
   int64_t now = ObClockGenerator::getClock();
-  if (OB_FAIL(tx.lock_.lock(5000000))) {
-    TRANS_LOG(WARN, "failed to acquire lock in specified time", K(tx));
-    // FIXME: how to handle it without lock protection
+  if (!tx.commit_task_.is_registered()) {
+    TRANS_LOG(INFO, "task canceled", K(tx));
+  } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
+  } else if (tx.flags_.RELEASED_) {
+    TRANS_LOG(INFO, "tx released, cancel commit retry", K(tx));
+  } else if (tx.state_ != ObTxDesc::State::IN_TERMINATE) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "unexpect tx state", K(ret), K_(tx.state), K(tx));
+  } else if (tx.expire_ts_ <= now) {
+    TRANS_LOG(WARN, "tx has timeout", K_(tx.expire_ts), K(tx));
+    handle_tx_commit_result_(tx, OB_TRANS_TIMEOUT);
+  } else if (tx.commit_expire_ts_ <= now) {
+    TRANS_LOG(WARN, "tx commit timeout", K_(tx.commit_expire_ts), K(tx));
+    handle_tx_commit_result_(tx, OB_TRANS_STMT_TIMEOUT);
   } else {
-    if (!tx.commit_task_.is_registered()){
-      TRANS_LOG(INFO, "task canceled", K(tx));
-    } else if (FALSE_IT(timer_.unregister_timeout_task(tx.commit_task_))) {
-    } else if (tx.flags_.RELEASED_) {
-      TRANS_LOG(INFO, "tx released, cancel commit retry", K(tx));
-    } else if (tx.state_ != ObTxDesc::State::IN_TERMINATE) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "unexpect tx state", K(ret), K_(tx.state), K(tx));
-    } else if (tx.expire_ts_ <= now) {
-      TRANS_LOG(WARN, "tx has timeout", K_(tx.expire_ts), K(tx));
-      handle_tx_commit_result_(tx, OB_TRANS_TIMEOUT);
-    } else if (tx.commit_expire_ts_ <= now) {
-      TRANS_LOG(WARN, "tx commit timeout", K_(tx.commit_expire_ts), K(tx));
-      handle_tx_commit_result_(tx, OB_TRANS_STMT_TIMEOUT);
-    } else {
-      ObTxCommitMsg commit_msg;
-      if (OB_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
-        TRANS_LOG(WARN, "build tx commit msg fail", K(ret), K(tx));
-      } else if (OB_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
-        TRANS_LOG(WARN, "post commit msg fail", K(ret), K(tx));
-      }
-      // register again
-      if (OB_FAIL(register_commit_retry_task_(tx))) {
-        TRANS_LOG(WARN, "reregister task fail", K(ret), K(tx));
-      }
+    ObTxCommitMsg commit_msg;
+    if (OB_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
+      TRANS_LOG(WARN, "build tx commit msg fail", K(ret), K(tx));
+    } else if (OB_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
+      TRANS_LOG(WARN, "post commit msg fail", K(ret), K(tx));
     }
-    tx.lock_.unlock();
-    tx.execute_commit_cb();
+    // register again
+    if (OB_FAIL(register_commit_retry_task_(tx))) {
+      TRANS_LOG(WARN, "reregister task fail", K(ret), K(tx));
+    }
   }
+  tx.lock_.unlock();
+  tx.execute_commit_cb();
   // NOTE:
   // it not safe and meaningless to access tx after commit_cb
   // has been called, the tx may has been reused or release
