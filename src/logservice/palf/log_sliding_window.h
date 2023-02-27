@@ -105,14 +105,26 @@ class UpdateMatchLsnFunc
 {
 public:
   UpdateMatchLsnFunc(const LSN &end_lsn, const int64_t new_ack_time_us)
-      : new_end_lsn_(end_lsn), new_ack_time_us_(new_ack_time_us)
+      : new_end_lsn_(end_lsn), old_end_lsn_(), new_ack_time_us_(new_ack_time_us), old_advance_time_us_(OB_INVALID_TIMESTAMP)
   {}
   ~UpdateMatchLsnFunc() {}
   bool operator()(const common::ObAddr &server, LsnTsInfo &value);
-  TO_STRING_KV(K_(new_end_lsn), K_(new_ack_time_us));
+  bool is_advance_delay_too_long() const {
+    bool bool_ret = false;
+    if (old_end_lsn_ < new_end_lsn_
+        && (new_ack_time_us_ - old_advance_time_us_) > MATCH_LSN_ADVANCE_DELAY_THRESHOLD_US) {
+      // Return true when advance delay exceeds 1s.
+      bool_ret = true;
+    }
+    return bool_ret;
+  }
+  TO_STRING_KV(K_(old_end_lsn), K_(new_end_lsn), K_(old_advance_time_us), K_(new_ack_time_us),
+      "advance delay(us)", new_ack_time_us_ - old_advance_time_us_);
 private:
   LSN new_end_lsn_;
+  LSN old_end_lsn_;
   int64_t new_ack_time_us_;
+  int64_t old_advance_time_us_;
 };
 
 class GetLaggedListFunc

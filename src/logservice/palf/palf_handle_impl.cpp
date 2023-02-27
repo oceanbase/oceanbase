@@ -2837,6 +2837,8 @@ int PalfHandleImpl::try_send_committed_info_(const ObAddr &server,
   AccessMode access_mode;
   if (!log_lsn.is_valid() || !log_end_lsn.is_valid() || INVALID_PROPOSAL_ID == log_proposal_id) {
     ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid arguments", K(ret), KPC(this), K(server), K(log_lsn), K(log_end_lsn),
+        K(log_proposal_id));
   } else if (OB_FAIL(mode_mgr_.get_access_mode(access_mode))) {
     PALF_LOG(WARN, "get_access_mode failed", K(ret), KPC(this));
   } else if (AccessMode::APPEND == access_mode) {

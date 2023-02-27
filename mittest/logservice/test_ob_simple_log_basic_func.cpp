@@ -22,6 +22,7 @@
 #include "share/ob_errno.h"
 #define private public
 #include "logservice/palf/log_define.h"
+#include "logservice/palf/lsn_allocator.h"
 #include "share/scn.h"
 #include "logservice/palf/log_rpc_processor.h"
 #include "env/ob_simple_log_cluster_env.h"
@@ -72,6 +73,71 @@ TEST_F(TestObSimpleLogClusterBasicFunc, submit_log)
   guard.click("submit_log2");
   EXPECT_EQ(OB_ITER_END, read_log(leader));
   guard.click("readlog2");
+  guard.click("delete");
+  PALF_LOG(INFO, "end test submit_log", K(id), K(guard));
+}
+
+// test_max_padding_size: 测试padding entry最长的场景(2M+16K+88+4K-1B).
+TEST_F(TestObSimpleLogClusterBasicFunc, test_max_padding_size)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "submit_log");
+  //OB_LOGGER.set_log_level("TRACE");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t create_ts = 100;
+  share::SCN create_scn;
+  create_scn.convert_for_logservice(create_ts);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  ObTimeGuard guard("submit_log", 0);
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
+  guard.click("create");
+  int64_t follower_1_idx = (leader_idx + 1) % ObSimpleLogClusterTestBase::member_cnt_;
+  int64_t follower_2_idx = (leader_idx + 2) % ObSimpleLogClusterTestBase::member_cnt_;
+  block_net(leader_idx, follower_1_idx);
+
+  const int64_t group_entry_header_total_size = LogGroupEntryHeader::HEADER_SER_SIZE + LogEntryHeader::HEADER_SER_SIZE;
+  const int64_t max_valid_group_entry_size = MAX_LOG_BODY_SIZE + group_entry_header_total_size;
+  // padding entry size上限如下，预期不会达到该值，故最大值应该是该值减1Byte
+  const int64_t max_padding_entry_size = max_valid_group_entry_size + CLOG_FILE_TAIL_PADDING_TRIGGER;
+  // 测试写一个最大padding entry的场景
+  // 首先写30条2MB的group log
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 30, leader_idx, (2 * 1024 * 1024 - group_entry_header_total_size)));
+  // 接着写文件尾最后一条有效的group entry, 确保文件剩余空间触发生成最大的padding entry
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, (4 * 1024 * 1024 - MAX_INFO_BLOCK_SIZE - max_valid_group_entry_size - CLOG_FILE_TAIL_PADDING_TRIGGER - group_entry_header_total_size + 1)));
+  // 提交一个2MB+16KB size的log buf, 触发生成padding
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+  // 预期max_lsn为单个block文件size+最大valid group entry size
+  const LSN expected_max_lsn(PALF_BLOCK_SIZE + max_valid_group_entry_size);
+  guard.click("submit_log for max size padding entry finish");
+  CLOG_LOG(INFO, "leader submit log finished", K(expected_max_lsn));
+  while (leader.palf_handle_impl_->get_end_lsn() < expected_max_lsn) {
+    usleep(100 * 1000);
+  }
+  EXPECT_EQ(leader.palf_handle_impl_->get_end_lsn(), expected_max_lsn);
+  guard.click("wait leader end_lsn finish");
+  CLOG_LOG(INFO, "leader wait end_lsn finished", K(expected_max_lsn));
+
+  unblock_net(leader_idx, follower_1_idx);
+  std::vector<PalfHandleImplGuard*> palf_list;
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+  PalfHandleImplGuard &follower_2 = *palf_list[follower_2_idx];
+  while (follower_2.palf_handle_impl_->get_end_lsn() < expected_max_lsn) {
+    usleep(100 * 1000);
+  }
+  EXPECT_EQ(follower_2.palf_handle_impl_->get_end_lsn(), expected_max_lsn);
+  guard.click("wait follower_2 end_lsn finish");
+  CLOG_LOG(INFO, "follower_2 wait end_lsn finished", K(expected_max_lsn));
+
+  PalfHandleImplGuard &follower_1 = *palf_list[follower_1_idx];
+  // follower_1依赖fetch log追日志，但end_lsn无法推到与leader一致
+  // 因为这里committed_end_lsn依赖周期性的keepAlive日志推进
+  while (follower_1.palf_handle_impl_->get_max_lsn() < expected_max_lsn) {
+    usleep(100 * 1000);
+  }
+  guard.click("wait follower_1 max_lsn finish");
+  CLOG_LOG(INFO, "follower_1 wait max_lsn finished", K(expected_max_lsn));
+
+  EXPECT_EQ(OB_SUCCESS, revert_cluster_palf_handle_guard(palf_list));
   guard.click("delete");
   PALF_LOG(INFO, "end test submit_log", K(id), K(guard));
 }

@@ -25,10 +25,12 @@ struct LsnTsInfo
 {
   LSN lsn_;
   int64_t last_ack_time_us_;
-  LsnTsInfo() : lsn_(), last_ack_time_us_(OB_INVALID_TIMESTAMP)
+  int64_t last_advance_time_us_;
+  LsnTsInfo()
+    : lsn_(), last_ack_time_us_(OB_INVALID_TIMESTAMP), last_advance_time_us_(OB_INVALID_TIMESTAMP)
   {}
   LsnTsInfo(const LSN &lsn, const int64_t ack_time_us)
-    : lsn_(lsn), last_ack_time_us_(ack_time_us)
+    : lsn_(lsn), last_ack_time_us_(ack_time_us), last_advance_time_us_(ack_time_us)
   {}
   bool is_valid() const {
     return (lsn_.is_valid() && OB_INVALID_TIMESTAMP != last_ack_time_us_);
@@ -37,13 +39,15 @@ struct LsnTsInfo
   {
     lsn_.reset();
     last_ack_time_us_ = OB_INVALID_TIMESTAMP;
+    last_advance_time_us_ = OB_INVALID_TIMESTAMP;
   }
   void operator=(const LsnTsInfo &val)
   {
     lsn_ = val.lsn_;
     last_ack_time_us_ = val.last_ack_time_us_;
+    last_advance_time_us_ = val.last_advance_time_us_;
   }
-  TO_STRING_KV(K_(lsn), K_(last_ack_time_us));
+  TO_STRING_KV(K_(lsn), K_(last_ack_time_us), K_(last_advance_time_us));
 };
 
 struct LogMemberAckInfo
