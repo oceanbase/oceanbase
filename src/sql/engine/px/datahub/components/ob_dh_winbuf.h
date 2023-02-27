@@ -108,6 +108,10 @@ public:
       : ObPieceMsgCtx(op_id, task_cnt, timeout_ts), received_(0), tenant_id_(tenant_id), whole_msg_()
   {}
   ~ObWinbufPieceMsgCtx() = default;
+  virtual void destroy()
+  {
+    whole_msg_.reset();
+  }
   INHERIT_TO_STRING_KV("meta", ObPieceMsgCtx, K_(received));
   static int alloc_piece_msg_ctx(
       const ObWinbufPieceMsg& pkt, ObExecContext& ctx, int64_t task_cnt, ObPieceMsgCtx*& msg_ctx);
