@@ -52,9 +52,7 @@ bool ObPackageStateVersion::operator ==(const ObPackageStateVersion &other)
 {
   bool b_ret = true;
   if (package_version_ != other.package_version_
-      || (package_body_version_ != OB_INVALID_VERSION
-          && other.package_body_version_ != OB_INVALID_VERSION
-          && package_body_version_ != other.package_body_version_)) {
+      || package_body_version_ != other.package_body_version_) {
     b_ret = false;
   }
   return b_ret;

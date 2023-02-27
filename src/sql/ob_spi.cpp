@@ -837,7 +837,8 @@ int ObSPIService::spi_calc_subprogram_expr(ObPLExecCtx *ctx,
   OZ (ObPLContext::get_exec_state_from_local(*session_info, package_id, routine_id, state));
   CK (OB_NOT_NULL(state));
   CK (OB_NOT_NULL(exec_ctx = state->get_exec_ctx().exec_ctx_));
-  CK (OB_NOT_NULL(expr = state->get_function().get_default_expr(expr_idx)));
+  CK (expr_idx >= 0 && expr_idx < state->get_function().get_expressions().count());
+  CK (OB_NOT_NULL(expr = state->get_function().get_expressions().at(expr_idx)));
   if (OB_SUCC(ret)) {
     ExecCtxBak exec_ctx_bak;
     OX (exec_ctx_bak.backup(*exec_ctx));
