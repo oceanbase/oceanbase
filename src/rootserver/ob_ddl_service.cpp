@@ -18619,6 +18619,9 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
     int64_t refreshed_schema_version = 0;
     if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+    } else if (is_available_index_status(new_status) && !table->is_unavailable_index()) {
+      ret = OB_EAGAIN;
+      LOG_WARN("set index status to available, but previous status is not unavailable, which is not expected behavior", KR(ret), KPC(table), K(new_status));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else if (OB_FAIL(ddl_operator.update_index_status(
