@@ -1534,10 +1534,7 @@ int ObRawExprResolverImpl::check_name_type(ObQualifiedName &q_name,
   if ((OB_SUCC(ret) && !check_success)
       || (OB_ERR_INVOKE_STATIC_BY_INSTANCE != ret && OB_FAIL(ret))) {
     ret = OB_SUCCESS;
-    if (!(q_name.access_idents_.count() <= 3 && q_name.access_idents_.count() >= 1)) {
-      ret = OB_WRONG_COLUMN_NAME;
-      LOG_WARN("check name type failed", K(ret), K(q_name));
-    }
+    CK (q_name.access_idents_.count() <= 3 && q_name.access_idents_.count() >= 1);
     if (3 == q_name.access_idents_.count()) {
       OX (q_name.database_name_ = q_name.access_idents_.at(0).access_name_);
       OX (q_name.tbl_name_ = q_name.access_idents_.at(1).access_name_);

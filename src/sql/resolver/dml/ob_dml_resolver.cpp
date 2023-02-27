@@ -2166,9 +2166,12 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
       LOG_WARN("push back failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr))) {
       LOG_WARN("replace column ref expr failed", K(ret));
-    } else if (expr->is_sys_func_expr() && OB_FAIL(check_col_param_on_expr(expr))) {
-      LOG_WARN("illegal param on func_expr", K(ret));
     } else { /*do nothing*/ }
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(expr) && expr->is_sys_func_expr()
+      && OB_FAIL(check_col_param_on_expr(expr))) {
+    LOG_WARN("illegal param on func_expr", K(ret));
   }
   return ret;
 }
