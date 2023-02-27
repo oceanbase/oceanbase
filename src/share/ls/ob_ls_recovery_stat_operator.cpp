@@ -17,6 +17,7 @@
 #include "share/ob_errno.h"
 #include "share/config/ob_server_config.h"
 #include "share/inner_table/ob_inner_table_schema.h"
+#include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
 #include "lib/string/ob_sql_string.h"//ObSqlString
 #include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTransaction
 #include "common/ob_timeout_ctx.h"
@@ -219,22 +220,18 @@ int ObLSRecoveryStatOperator::update_ls_recovery_stat_in_trans(
         true, old_ls_recovery, trans))) {
     LOG_WARN("failed to get ls current recovery stat", KR(ret), K(ls_recovery));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(ls_recovery.get_tenant_id(), &trans,
-                     true /* for update */, tenant_info))) {
+    true /* for update */, tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(ls_recovery));
-  } else if (OB_UNLIKELY(!tenant_info.is_normal_status())) {
-    ret = OB_NEED_RETRY;
-    LOG_WARN("switchover status is not normal, do not update ls recovery", KR(ret),
-             K(ls_recovery), K(tenant_info));
+  } else if (!tenant_info.get_switchover_status().can_report_recovery_status()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("status can not report recovery status", KR(ret), K(tenant_info));
   } else {
     const SCN sync_scn = ls_recovery.get_sync_scn() > old_ls_recovery.get_sync_scn() ?
         ls_recovery.get_sync_scn() : old_ls_recovery.get_sync_scn();
     const SCN &readable_scn = ls_recovery.get_readable_scn() > old_ls_recovery.get_readable_scn() ?
         ls_recovery.get_readable_scn() : old_ls_recovery.get_readable_scn();
     common::ObSqlString sql;
-    if (ls_recovery.get_ls_id() == share::SYS_LS && tenant_info.get_recovery_until_scn() < sync_scn) {
-      ret = OB_NEED_RETRY;
-      LOG_WARN("can not recovery bigger than recovery_until_scn", KR(ret), K(sync_scn), K(tenant_info));
-    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s SET sync_scn = %lu, readable_scn = "
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET sync_scn = %lu, readable_scn = "
                                "%lu where ls_id = %ld and tenant_id = %lu",
                                OB_ALL_LS_RECOVERY_STAT_TNAME, sync_scn.get_val_for_inner_table_field(),
                                readable_scn.get_val_for_inner_table_field(),
@@ -246,6 +243,7 @@ int ObLSRecoveryStatOperator::update_ls_recovery_stat_in_trans(
   }
   return ret;
 }
+
 int ObLSRecoveryStatOperator::set_ls_offline(const uint64_t &tenant_id,
                                              const share::ObLSID &ls_id,
                                              const ObLSStatus &ls_status,

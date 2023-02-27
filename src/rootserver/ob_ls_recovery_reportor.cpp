@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "rootserver/ob_tenant_recovery_reportor.h"
+#include "rootserver/ob_ls_recovery_reportor.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "rootserver/ob_tenant_role_transition_service.h"//ObTenantRoleTransitionConstants
 #include "storage/tx_storage/ob_ls_service.h" //ObLSService
@@ -36,11 +36,11 @@ using namespace storage;
 using namespace palf;
 namespace rootserver
 {
-int ObTenantRecoveryReportor::mtl_init(ObTenantRecoveryReportor *&ka)
+int ObLSRecoveryReportor::mtl_init(ObLSRecoveryReportor *&ka)
 {
   return ka->init();
 }
-int ObTenantRecoveryReportor::init()
+int ObLSRecoveryReportor::init()
 {
   int ret = OB_SUCCESS;
   lib::ThreadPool::set_run_wrapper(MTL_CTX());
@@ -66,7 +66,7 @@ int ObTenantRecoveryReportor::init()
   }
   return ret;
 }
-void ObTenantRecoveryReportor::destroy()
+void ObLSRecoveryReportor::destroy()
 {
   LOG_INFO("tenant recovery service destory", KPC(this));
   stop();
@@ -76,7 +76,7 @@ void ObTenantRecoveryReportor::destroy()
   sql_proxy_ = NULL;
 }
 
-int ObTenantRecoveryReportor::start()
+int ObLSRecoveryReportor::start()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -94,16 +94,16 @@ int ObTenantRecoveryReportor::start()
   return ret;
 }
 
-void ObTenantRecoveryReportor::stop()
+void ObLSRecoveryReportor::stop()
 {
   logical_stop();
 }
-void ObTenantRecoveryReportor::wait()
+void ObLSRecoveryReportor::wait()
 {
   logical_wait();
 }
 
-void ObTenantRecoveryReportor::wakeup()
+void ObLSRecoveryReportor::wakeup()
 {
    if (OB_NOT_INIT) {
    } else {
@@ -112,7 +112,7 @@ void ObTenantRecoveryReportor::wakeup()
    }
  }
 
-void ObTenantRecoveryReportor::run2()
+void ObLSRecoveryReportor::run2()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -156,7 +156,7 @@ void ObTenantRecoveryReportor::run2()
   }
 }
 
-int ObTenantRecoveryReportor::submit_tenant_refresh_schema_task_()
+int ObLSRecoveryReportor::submit_tenant_refresh_schema_task_()
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
@@ -200,7 +200,7 @@ int ObTenantRecoveryReportor::submit_tenant_refresh_schema_task_()
   }
   return ret;
 }
-int ObTenantRecoveryReportor::update_ls_recovery_stat_()
+int ObLSRecoveryReportor::update_ls_recovery_stat_()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -235,10 +235,7 @@ int ObTenantRecoveryReportor::update_ls_recovery_stat_()
             LOG_WARN("failed to update_ls_replayable_point", KR(tmp_ret), KPC(ls), K(tenant_info));
           }
 
-          if (ls->is_sys_ls()) {
-            // nothing todo
-            // sys ls of user tenant is in ls_recovery
-          } else if (OB_FAIL(update_ls_recovery(ls, sql_proxy_))) {
+          if (OB_FAIL(update_ls_recovery(ls, sql_proxy_))) {
             LOG_WARN("failed to update ls recovery", KR(ret), KPC(ls));
           }
         }
@@ -256,7 +253,7 @@ int ObTenantRecoveryReportor::update_ls_recovery_stat_()
   return ret;
 }
 
-int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy *sql_proxy)
+int ObLSRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy *sql_proxy)
 {
   int ret = OB_SUCCESS;
   logservice::ObLogService *ls_svr = MTL(logservice::ObLogService*);
@@ -272,8 +269,9 @@ int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy 
     ObLSRecoveryStat ls_recovery_stat;
     const ObLSID ls_id = ls->get_ls_id();
     const uint64_t tenant_id = MTL_ID();
-
+    ObMySQLTransaction trans;
     ObLSRecoveryStatOperator ls_recovery;
+    const uint64_t exec_tenant_id = ls_recovery.get_exec_tenant_id(tenant_id);
     if (OB_FAIL(ls_svr->get_palf_role(ls_id, role, first_proposal_id))) {
       LOG_WARN("failed to get first role", KR(ret), K(ls_id), KPC(ls));
     } else if (!is_strong_leader(role)) {
@@ -294,10 +292,31 @@ int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy 
         ret = OB_EAGAIN;
         LOG_INFO("role change, try again", KR(ret), K(role),
                  K(first_proposal_id), K(second_proposal_id), KPC(ls));
-      } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat(ls_recovery_stat,
-                                                             *sql_proxy))) {
+      } else if (OB_FAIL(trans.start(sql_proxy, exec_tenant_id))) {
+        LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(ls_recovery_stat));
+      } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat_in_trans(ls_recovery_stat,
+                                                             trans))) {
         LOG_WARN("failed to update ls recovery stat", KR(ret),
                  K(ls_recovery_stat));
+      } else {
+        //double check sync can not fallback
+        palf::PalfHandleGuard palf_handle_guard;
+        SCN new_scn;
+        if (OB_FAIL(ls_svr->open_palf(ls_id, palf_handle_guard))) {
+          LOG_WARN("failed to open palf", KR(ret), K(ls_id));
+        } else if (OB_FAIL(palf_handle_guard.get_end_scn(new_scn))) {
+          LOG_WARN("failed to get end ts", KR(ret), K(ls_id));
+        } else if (new_scn < sync_scn) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("maybe flashback, can not report sync scn", KR(ret), K(ls_recovery_stat), K(new_scn));
+        }
+      }
+      if (trans.is_started()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+          ret = OB_SUCC(ret) ? tmp_ret : ret;
+        }
       }
     }
     const int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;
@@ -315,27 +334,7 @@ int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy 
 
 }
 
-int ObTenantRecoveryReportor::get_tenant_readable_scn(SCN &readable_scn)
-{
-  int ret = OB_SUCCESS;
-  share::ObAllTenantInfo tenant_info;
-  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
-
-  if (OB_ISNULL(tenant_info_loader)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("mtl pointer is null", KR(ret), KP(tenant_info_loader));
-  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-    LOG_WARN("get_tenant_info failed", K(ret));
-  } else if (OB_UNLIKELY(! tenant_info.is_valid())) {
-    ret = OB_EAGAIN;
-    LOG_WARN("tenant info not valid", K(ret), K(tenant_info));
-  } else {
-    readable_scn = tenant_info.get_standby_scn();
-  }
-  return ret;
-}
-
-int ObTenantRecoveryReportor::update_replayable_point_()
+int ObLSRecoveryReportor::update_replayable_point_()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -352,7 +351,7 @@ int ObTenantRecoveryReportor::update_replayable_point_()
   return ret;
 }
 
-int ObTenantRecoveryReportor::update_replayable_point_from_tenant_info_()
+int ObLSRecoveryReportor::update_replayable_point_from_tenant_info_()
 {
   int ret = OB_SUCCESS;
   logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
@@ -373,7 +372,7 @@ int ObTenantRecoveryReportor::update_replayable_point_from_tenant_info_()
   return ret;
 }
 
-int ObTenantRecoveryReportor::update_replayable_point_from_meta_()
+int ObLSRecoveryReportor::update_replayable_point_from_meta_()
 {
   int ret = OB_SUCCESS;
   SCN replayable_point;
@@ -413,12 +412,10 @@ int ObTenantRecoveryReportor::update_replayable_point_from_meta_()
   return ret;
 }
 
-int ObTenantRecoveryReportor::get_sync_point_(const share::ObLSID &id,
+int ObLSRecoveryReportor::get_sync_point_(const share::ObLSID &id,
     SCN &sync_scn, SCN &read_scn)
 {
   int ret = OB_SUCCESS;
-  palf::AccessMode access_mode;
-  int64_t unused_mode_version;
   palf::PalfHandleGuard palf_handle_guard;
   if (OB_FAIL(MTL(logservice::ObLogService*)->open_palf(id, palf_handle_guard))) {
     LOG_WARN("failed to open palf", KR(ret), K(id));
@@ -432,7 +429,7 @@ int ObTenantRecoveryReportor::get_sync_point_(const share::ObLSID &id,
 }
 
 
-int ObTenantRecoveryReportor::get_readable_scn(const share::ObLSID &id, SCN &readable_scn)
+int ObLSRecoveryReportor::get_readable_scn(const share::ObLSID &id, SCN &readable_scn)
 {
   int ret = OB_SUCCESS;
   storage::ObLSHandle ls_handle;

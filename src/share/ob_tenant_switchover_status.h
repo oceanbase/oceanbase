@@ -33,10 +33,9 @@ public:
     SWITCHING_TO_PRIMARY_STATUS = 2,
     PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_STATUS = 3,
     FLASHBACK_STATUS = 4,
-    PREPARE_SWITCHING_TO_STANDBY_STATUS = 5,
-    SWITCHING_TO_STANDBY_STATUS = 6,
-    PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS = 7,
-    MAX_STATUS = 8
+    SWITCHING_TO_STANDBY_STATUS = 5,
+    PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS = 6,
+    MAX_STATUS = 7
   };
 public:
   ObTenantSwitchoverStatus() : value_(INVALID_STATUS) {}
@@ -49,6 +48,13 @@ public:
   bool is_valid() const { return INVALID_STATUS != value_; }
   ObTenantSwitchoverStatus::Status value() const { return value_; }
   const char* to_str() const;
+  //In the flashback status, the log needs to be truncated,
+  //and sync_scn will fall back, so at this stage,
+  //__all_ls_recovery_stat/__all_tenant_info will not be reported
+  bool can_report_recovery_status() const
+  {
+    return FLASHBACK_STATUS != value_;
+  }
 
   // compare operator
   bool operator == (const ObTenantSwitchoverStatus &other) const { return value_ == other.value_; }
@@ -69,7 +75,6 @@ IS_TENANT_STATUS(NORMAL_STATUS, normal)
 IS_TENANT_STATUS(SWITCHING_TO_PRIMARY_STATUS, switching_to_primary)
 IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_STATUS, prepare_flashback_for_failover_to_primary)
 IS_TENANT_STATUS(FLASHBACK_STATUS, flashback) 
-IS_TENANT_STATUS(PREPARE_SWITCHING_TO_STANDBY_STATUS, prepare_switching_to_standby)
 IS_TENANT_STATUS(SWITCHING_TO_STANDBY_STATUS, switching_to_standby)
 IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS, prepare_flashback_for_switch_to_primary)
 #undef IS_TENANT_STATUS 
@@ -84,7 +89,6 @@ static const ObTenantSwitchoverStatus NORMAL_SWITCHOVER_STATUS(ObTenantSwitchove
 static const ObTenantSwitchoverStatus PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_STATUS);
 static const ObTenantSwitchoverStatus FLASHBACK_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::FLASHBACK_STATUS);
 static const ObTenantSwitchoverStatus SWITCHING_TO_PRIMARY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::SWITCHING_TO_PRIMARY_STATUS);
-static const ObTenantSwitchoverStatus PREP_SWITCHING_TO_STANDBY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::PREPARE_SWITCHING_TO_STANDBY_STATUS);
 static const ObTenantSwitchoverStatus SWITCHING_TO_STANDBY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::SWITCHING_TO_STANDBY_STATUS);
 static const ObTenantSwitchoverStatus PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS);
 

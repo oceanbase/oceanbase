@@ -642,7 +642,6 @@ public:
                                      common::ObIArray<common::ObAddr> &this_server_list,
                                      common::ObIArray<common::ObAddr> &other_server_list,
                                      common::ObIArray<uint64_t> &tenant_ids);
-
 };
 
 class ObClusterInfoGetter

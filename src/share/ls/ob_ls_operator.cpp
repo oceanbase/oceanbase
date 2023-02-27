@@ -116,17 +116,15 @@ bool ObLSAttrOperator::is_valid() const
 
 int ObLSAttrOperator::operator_ls_(
     const ObLSAttr &ls_attr, const common::ObSqlString &sql,
-    const uint64_t target_max_ls_group_id,
-    const ObTenantSwitchoverStatus &working_sw_status)
+    const uint64_t target_max_ls_group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_attr.is_valid()
                    || sql.empty()
-                   || OB_INVALID_ID == target_max_ls_group_id
-                   || !working_sw_status.is_valid())) {
+                   || OB_INVALID_ID == target_max_ls_group_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("operation is invalid", KR(ret), K(ls_attr), K(sql),
-        K(target_max_ls_group_id), K(working_sw_status));
+        K(target_max_ls_group_id));
   } else {
     ObMySQLTransaction trans;
     const bool for_update = true;
@@ -146,10 +144,6 @@ int ObLSAttrOperator::operator_ls_(
       LOG_WARN("failed to load sys ls status", KR(ret));
     } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, proxy_, false /* for_update */, tenant_info))) {
       LOG_WARN("failed to load tenant info", KR(ret), K_(tenant_id));
-    } else if (working_sw_status != tenant_info.get_switchover_status()) {
-      ret = OB_NEED_RETRY;
-      LOG_WARN("tenant not in specified switchover status", K_(tenant_id), K(working_sw_status),
-               K(tenant_info));
     } else if (OB_LS_OP_CREATE_PRE == ls_attr.get_ls_operation_type()) {
       if (OB_LS_NORMAL != sys_ls_attr.get_ls_status()) {
         //for sys ls, need insert_ls, but ls_status is normal
@@ -196,8 +190,7 @@ int ObLSAttrOperator::operator_ls_(
 
 int ObLSAttrOperator::insert_ls(
     const ObLSAttr &ls_attr,
-    const uint64_t max_ls_group_id,
-    const ObTenantSwitchoverStatus &working_sw_status)
+    const uint64_t max_ls_group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_attr.is_valid() || OB_INVALID_ID == max_ls_group_id)) {
@@ -215,7 +208,7 @@ int ObLSAttrOperator::insert_ls(
             ObLSStatusOperator::ls_status_to_str(ls_attr.get_ls_status()), "",
             ls_attr.get_create_scn().get_val_for_inner_table_field()))) {
       LOG_WARN("failed to assign sql", KR(ret), K(ls_attr), K(sql));
-    } else if (OB_FAIL(operator_ls_(ls_attr, sql, max_ls_group_id, working_sw_status))) {
+    } else if (OB_FAIL(operator_ls_(ls_attr, sql, max_ls_group_id))) {
       LOG_WARN("failed to operator ls", KR(ret), K(ls_attr), K(sql));
     }
   }
@@ -224,8 +217,7 @@ int ObLSAttrOperator::insert_ls(
 }
 
 int ObLSAttrOperator::delete_ls(
-    const ObLSID &ls_id, const share::ObLSStatus &old_status,
-    const ObTenantSwitchoverStatus &working_sw_status)
+    const ObLSID &ls_id, const share::ObLSStatus &old_status)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid()
@@ -258,8 +250,7 @@ int ObLSAttrOperator::delete_ls(
                                    ls_attr.get_ls_flag(), ls_attr.get_ls_status(),
                                    operation_type, SCN::base_scn()))) {
         LOG_WARN("failed to init new ls attr", KR(ret), K(ls_id), K(ls_attr), K(operation_type));
-      } else if (OB_FAIL(operator_ls_(new_ls_attr, sql, new_ls_attr.get_ls_group_id(),
-                                      working_sw_status))) {
+      } else if (OB_FAIL(operator_ls_(new_ls_attr, sql, new_ls_attr.get_ls_group_id()))) {
         LOG_WARN("failed to operator ls", KR(ret), K(new_ls_attr), K(sql));
       }
       LOG_INFO("[LS_OPERATOR] delete ls", KR(ret), K(ls_id), K(old_status));
@@ -323,8 +314,7 @@ int ObLSAttrOperator::process_sub_trans_(const ObLSAttr &ls_attr, ObMySQLTransac
 
 int ObLSAttrOperator::update_ls_status(const ObLSID &id,
                                         const share::ObLSStatus &old_status,
-                                        const share::ObLSStatus &new_status,
-                                        const ObTenantSwitchoverStatus &working_sw_status)
+                                        const share::ObLSStatus &new_status)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!id.is_valid()
@@ -353,8 +343,7 @@ int ObLSAttrOperator::update_ls_status(const ObLSID &id,
                                    operation_type, SCN::base_scn()))) {
         LOG_WARN("failed to init new ls attr", KR(ret), K(id), K(ls_attr),
                  K(operation_type));
-      } else if (OB_FAIL(operator_ls_(new_ls_attr, sql, new_ls_attr.get_ls_group_id(),
-                                      working_sw_status))) {
+      } else if (OB_FAIL(operator_ls_(new_ls_attr, sql, new_ls_attr.get_ls_group_id()))) {
         LOG_WARN("failed to operator ls", KR(ret), K(new_ls_attr), K(sql));
       }
       LOG_INFO("[LS_OPERATOR] update ls status", KR(ret), K(ls_attr), K(new_ls_attr));
@@ -546,43 +535,6 @@ int ObLSAttrOperator::get_tenant_gts(const uint64_t &tenant_id, SCN &gts_scn)
     }
   }
   LOG_INFO("[LS_OPERATOR] get tenant gts", KR(ret), K(tenant_id), K(gts_scn));
-  return ret;
-}
-
-int ObLSAttrOperator::get_all_ls_by_order(const bool lock_sys_ls, ObLSAttrIArray &ls_operation_array)
-{
-  int ret = OB_SUCCESS;
-  ls_operation_array.reset();
-  ObMySQLTransaction trans;
-  ObLSAttr sys_ls_attr;
-
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("operation is not valid", KR(ret), "operation", *this);
-  } else if (OB_FAIL(trans.start(proxy_, tenant_id_))) {
-    LOG_WARN("failed to start transaction", KR(ret), K_(tenant_id));
-    /* to get accurate LS list need lock SYS_LS */
-  } else if (lock_sys_ls && OB_FAIL(get_ls_attr(SYS_LS, true /* for_update */, trans, sys_ls_attr))) {
-    LOG_WARN("failed to load sys ls status", KR(ret));
-  } else {
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt(
-                   "select * from %s order by ls_id",
-                   OB_ALL_LS_TNAME))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(sql));
-    } else if (OB_FAIL(exec_read(tenant_id_, sql, trans, this, ls_operation_array))) {
-      LOG_WARN("failed to construct ls attr", KR(ret), K(sql), K_(tenant_id));
-    }
-  }
-
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("failed to end trans", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
-
   return ret;
 }
 

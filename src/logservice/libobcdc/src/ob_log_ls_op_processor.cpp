@@ -38,20 +38,20 @@ int ObLogLSOpProcessor::process_ls_op(
   } else if (OB_ISNULL(tenant = guard.get_tenant())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get tenant fail, tenant is NULL", KR(ret), K(tenant_id));
-  } else if (share::is_ls_create_pre_op(ls_attr.get_ls_operatin_type())) {
+  } else if (share::is_ls_create_pre_op(ls_attr.get_ls_operation_type())) {
     LOG_INFO("[LS_PROCESSOR] ls create pre operation", K(tenant_id), K(lsn), K(start_tstamp_ns), K(ls_attr));
-  } else if (share::is_ls_create_end_op(ls_attr.get_ls_operatin_type())) {
+  } else if (share::is_ls_create_end_op(ls_attr.get_ls_operation_type())) {
     LOG_INFO("[LS_PROCESSOR] ls create end operation", K(tenant_id), K(lsn), K(start_tstamp_ns), K(ls_attr));
     //create new ls;
     if (OB_FAIL(create_new_ls_(tenant, start_tstamp_ns, ls_attr))) {
       LOG_ERROR("failed to create new ls", KR(ret), K(tenant_id), K(lsn), K(start_tstamp_ns), K(ls_attr));
     }
-  } else if (share::is_ls_create_abort_op(ls_attr.get_ls_operatin_type())) {
-  } else if (share::is_ls_drop_pre_op(ls_attr.get_ls_operatin_type())) {
-  } else if (share::is_ls_drop_end_op(ls_attr.get_ls_operatin_type())) {
-  } else if (share::is_ls_tenant_drop_pre_op(ls_attr.get_ls_operatin_type())) {
+  } else if (share::is_ls_create_abort_op(ls_attr.get_ls_operation_type())) {
+  } else if (share::is_ls_drop_pre_op(ls_attr.get_ls_operation_type())) {
+  } else if (share::is_ls_drop_end_op(ls_attr.get_ls_operation_type())) {
+  } else if (share::is_ls_tenant_drop_pre_op(ls_attr.get_ls_operation_type())) {
     //only sys ls
-  } else if (share::is_ls_tenant_drop_op(ls_attr.get_ls_operatin_type())) {
+  } else if (share::is_ls_tenant_drop_op(ls_attr.get_ls_operation_type())) {
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected operation type", KR(ret), K(tenant_id), K(lsn), K(start_tstamp_ns), K(ls_attr));
