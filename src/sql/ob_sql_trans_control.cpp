@@ -513,11 +513,13 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   uint32_t session_id = 0;
   ObTxDesc *tx_desc = NULL;
   bool is_plain_select = false;
+  int64_t nested_level = 0;
+  OX (nested_level = exec_ctx.get_nested_level());
   OX (session_id = session->get_sessid());
   OX (tx_desc = session->get_tx_desc());
   OX (is_plain_select = plan->is_plain_select());
   if (OB_SUCC(ret) && !is_plain_select) {
-    OZ (stmt_setup_savepoint_(session, das_ctx, plan_ctx, txs), session_id, *tx_desc);
+    OZ (stmt_setup_savepoint_(session, das_ctx, plan_ctx, txs, nested_level), session_id, *tx_desc);
   }
 
   OZ (stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs), session_id, *tx_desc);
@@ -574,6 +576,7 @@ bool print_log = false;
              K(has_for_update),
              K(query_start_time),
              K(use_das),
+             K(nested_level),
              KPC(session),
              K(plan),
              "consistency_level_in_plan_ctx", plan_ctx->get_consistency_level(),
@@ -687,14 +690,15 @@ int ObSqlTransControl::stmt_refresh_snapshot(ObExecContext &exec_ctx) {
 int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
                                              ObDASCtx &das_ctx,
                                              ObPhysicalPlanCtx *plan_ctx,
-                                             transaction::ObTransService* txs)
+                                             transaction::ObTransService* txs,
+                                             const int64_t nested_level)
 {
   int ret = OB_SUCCESS;
   ObTxParam &tx_param = plan_ctx->get_trans_param();
   OZ (build_tx_param_(session, tx_param));
   auto &tx = *session->get_tx_desc();
   int64_t savepoint = 0;
-  OZ (txs->create_implicit_savepoint(tx, tx_param, savepoint, true), tx, tx_param);
+  OZ (txs->create_implicit_savepoint(tx, tx_param, savepoint, nested_level == 0), tx, tx_param);
   OX (das_ctx.set_savepoint(savepoint));
   return ret;
 }
