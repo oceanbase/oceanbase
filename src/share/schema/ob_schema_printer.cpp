@@ -266,6 +266,9 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
           }
         }
         if (OB_SUCC(ret) && col->is_generated_column()) {
+          lib::Worker::CompatMode compat_mode = (is_oracle_mode ?
+            lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+          lib::CompatModeGuard tmpCompatModeGuard(compat_mode);
           if (OB_FAIL(print_generated_column_definition(*col, buf, buf_len, table_schema, pos))) {
             SHARE_SCHEMA_LOG(WARN, "print generated column definition fail", K(ret));
           }
