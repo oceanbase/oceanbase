@@ -106,6 +106,7 @@ private:
   int schedule_task(ObTimerTask &task, const int64_t delay, const bool repeate, const bool is_scheduled_immediately);
   DISALLOW_COPY_AND_ASSIGN(ObTimer);
 private:
+  const static int64_t ELAPSED_TIME_LOG_THREASHOLD = 10 * 60 * 1000 * 1000; // 10 mins
   int32_t tasks_num_;
   int64_t max_task_num_;
   int64_t wakeup_time_;
