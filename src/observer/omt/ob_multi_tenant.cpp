@@ -806,11 +806,17 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
 
   tenant = nullptr;
 
+  bool tenant_allocator_created = false;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(malloc_allocator->create_and_add_tenant_allocator(tenant_id))) {
       LOG_ERROR("create and add tenant allocator failed", K(ret), K(tenant_id));
-    } else if (OB_FAIL(update_tenant_memory(tenant_id, meta.unit_.config_.memory_size(), allowed_mem_limit))) {
-      LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
+    } else {
+      tenant_allocator_created = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(update_tenant_memory(tenant_id, meta.unit_.config_.memory_size(), allowed_mem_limit))) {
+        LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -964,13 +970,13 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
       }
     }
   }
+  if (OB_FAIL(ret) && tenant_allocator_created) {
+    malloc_allocator->recycle_tenant_allocator(tenant_id);
+  }
   if (lock_succ) {
     bucket_lock_.unlock(bucket_lock_idx);
   }
 
-  if (OB_FAIL(ret)) {
-    malloc_allocator->recycle_tenant_allocator(tenant_id);
-  }
   FLOG_INFO("finish create new tenant", K(ret), K(tenant_id), K(write_slog), K(create_step), K(bucket_lock_idx));
 
   return ret;
