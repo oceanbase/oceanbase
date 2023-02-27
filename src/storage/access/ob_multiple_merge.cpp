@@ -374,12 +374,12 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
       }
     }
   }
-  if (OB_SUCC(ret) && nullptr != row) {
-    if (OB_FAIL(row->prepare_new_row(out_project_cols_))) {
+  if (OB_SUCC(ret)) {
+    STORAGE_LOG(DEBUG, "chaser debug get next", KPC(row), K(unprojected_row_), K(ret));
+    if (nullptr != row && OB_FAIL(row->prepare_new_row(out_project_cols_))) {
       STORAGE_LOG(WARN, "Failed to prepare new row", K(ret));
     }
   }
-  STORAGE_LOG(DEBUG, "chaser debug get next", KPC(row), K(unprojected_row_), K(ret));
   return ret;
 }
 
