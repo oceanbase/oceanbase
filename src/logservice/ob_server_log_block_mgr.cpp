@@ -98,8 +98,6 @@ int ObServerLogBlockMgr::init(const char *log_disk_base_path)
     CLOG_LOG(ERROR, "Invalid argument", K(ret), KPC(this), KP(log_disk_base_path));
   } else if (OB_FAIL(do_init_(log_disk_base_path))) {
     CLOG_LOG(ERROR, "do_init_ failed", K(ret), KPC(this), K(log_disk_base_path));
-  } else if (OB_FAIL(FileDirectoryUtils::delete_tmp_file_or_directory_at(log_pool_path_))) {
-    CLOG_LOG(ERROR, "delete_tmp_file_or_directory_at failed", K(ret), KPC(this));
   } else if (OB_FAIL(do_load_(log_disk_base_path))) {
     CLOG_LOG(ERROR, "do_load_ failed", K(ret), KPC(this), K(log_disk_base_path));
   } else {
@@ -380,15 +378,16 @@ int ObServerLogBlockMgr::do_load_(const char *log_disk_path)
   int ret = OB_SUCCESS;
   int64_t has_allocated_block_cnt = 0;
   ObTimeGuard time_guard("RestartServerBlockMgr", 1 * 1000 * 1000);
-  if (OB_FAIL(scan_log_disk_dir_(log_disk_path, has_allocated_block_cnt))) {
+  if (OB_FAIL(remove_tmp_file_or_directory_for_tenant_(log_disk_path))) {
+    CLOG_LOG(ERROR, "remove_tmp_file_or_directory_at failed", K(ret), K(log_disk_path));
+  } else if (OB_FAIL(scan_log_disk_dir_(log_disk_path, has_allocated_block_cnt))) {
     CLOG_LOG(ERROR, "scan_log_disk_dir_ failed", K(ret), KPC(this), K(log_disk_path),
              K(has_allocated_block_cnt));
-  } else if (FALSE_IT(time_guard.click("scan_log_disk_dir_"))
+  } else if (FALSE_IT(time_guard.click("scan_log_disk_"))
              || OB_FAIL(scan_log_pool_dir_and_do_trim_())) {
     CLOG_LOG(ERROR, "scan_log_pool_dir_ failed", K(ret), KPC(this), K(log_disk_path));
-  } else if (OB_FAIL(remove_tmp_file_or_directory_for_tenant_(log_disk_path))) {
-    CLOG_LOG(ERROR, "remove_tmp_file_or_directory_at failed", K(ret), K(log_disk_path));
-  } else if (FALSE_IT(time_guard.click("scan_log_pool_dir_")) || OB_FAIL(load_meta_())) {
+  } else if (FALSE_IT(time_guard.click("scan_log_pool_dir_and_do_trim_"))
+             || OB_FAIL(load_meta_())) {
     CLOG_LOG(ERROR, "load_meta_ failed", K(ret), KPC(this), K(log_disk_path));
   } else if (FALSE_IT(time_guard.click("load_meta_"))
              || OB_FAIL(try_continous_to_resize_(has_allocated_block_cnt * BLOCK_SIZE))) {
