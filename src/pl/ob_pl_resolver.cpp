@@ -6580,8 +6580,11 @@ int ObPLResolver::resolve_cursor_formal_param(
           if (default_node->type_ != T_SP_DECL_DEFAULT) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("default node type is unexpected", K(ret));
-          } else if (OB_FAIL(resolve_expr(default_node->children_[0], func, default_expr,
-                                          combine_line_and_col(default_node->stmt_loc_)))) {
+          } else if (OB_FAIL(resolve_expr(default_node->children_[0],
+                                          func, default_expr,
+                                          combine_line_and_col(default_node->stmt_loc_),
+                                          true /*need_add*/,
+                                          &param_type))) {
             LOG_WARN("failed to resolve default expr", K(ret));
           } else if (OB_ISNULL(default_expr)) {
             ret = OB_ERR_UNEXPECTED;
