@@ -516,7 +516,7 @@ int ObPxBloomFilterManager::get_px_bf_for_merge_filter(ObPXBloomFilterHashWrappe
 OB_SERIALIZE_MEMBER(ObPxBFStaticInfo, is_inited_, tenant_id_, filter_id_,
     server_id_, is_shared_, skip_subpart_);
 OB_SERIALIZE_MEMBER(ObPXBloomFilterHashWrapper, tenant_id_, filter_id_,
-    server_id_, execution_id_, task_id_)
+    server_id_, px_sequence_id_, task_id_)
 OB_SERIALIZE_MEMBER(ObPxBFSendBloomFilterArgs, bf_key_, bloom_filter_,
     next_peer_addrs_, expect_bloom_filter_count_,
     current_bloom_filter_count_, expect_phase_count_,

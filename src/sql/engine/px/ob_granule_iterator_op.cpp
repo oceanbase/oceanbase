@@ -34,6 +34,7 @@ ObGIOpInput::ObGIOpInput(ObExecContext &ctx, const ObOpSpec &spec)
     parallelism_(-1),
     worker_id_(common::OB_INVALID_INDEX),
     pump_(nullptr),
+    px_sequence_id_(OB_INVALID_ID),
     deserialize_allocator_(nullptr)
 {}
 
@@ -402,10 +403,11 @@ int ObGranuleIteratorOp::inner_open()
       ret = OB_NOT_INIT;
       LOG_WARN("child_op is null", K(ret));
     } else if (MY_SPEC.bf_info_.is_inited_) {
+      ObGIOpInput *input = static_cast<ObGIOpInput*>(input_);
       bf_key_.init(MY_SPEC.bf_info_.tenant_id_,
           MY_SPEC.bf_info_.filter_id_,
           MY_SPEC.bf_info_.server_id_,
-          ctx_.get_my_session()->get_current_execution_id(),
+          input->get_px_sequence_id(),
           MY_SPEC.bf_info_.is_shared_? 0 : worker_id_);
     } else if (OB_FAIL(prepare_table_scan())) {
       LOG_WARN("prepare table scan failed", K(ret));

@@ -548,6 +548,7 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
         LOG_WARN("the partition-wise join's subplan contain a gi operator", K(*gi), K(ret));
       } else {
         input->set_worker_id(task_id_);
+        input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
         if (gi->pwj_gi()) {
           pw_gi_spec_ = gi;
           on_set_tscs_ = true;
@@ -585,14 +586,15 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
     }
   } else if (IS_PX_BLOOM_FILTER(op.get_type())) {
     ObJoinFilterSpec *filter_spec = reinterpret_cast<ObJoinFilterSpec *>(&op);
-    if (filter_spec->is_shared_join_filter()) {
-      /*do nothing*/
-    } else if (OB_ISNULL(kit->input_)) {
+    if (OB_ISNULL(kit->input_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("operator is NULL", K(ret), K(op.id_), KP(kit));
     } else {
       ObJoinFilterOpInput *input = static_cast<ObJoinFilterOpInput *>(kit->input_);
-      input->set_task_id(task_id_);
+      input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
+      if (!filter_spec->is_shared_join_filter()) {
+        input->set_task_id(task_id_);
+      }
     }
   } else if (PHY_TEMP_TABLE_INSERT == op.type_) {
     ObOperatorKit *kit = ctx.get_operator_kit(op.id_);

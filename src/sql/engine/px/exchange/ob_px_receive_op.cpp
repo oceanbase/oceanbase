@@ -579,7 +579,7 @@ int ObPxReceiveOp::try_send_bloom_filter()
       args.bf_key_.init(sqc_proxy->get_filter_data()->tenant_id_,
           sqc_proxy->get_filter_data()->filter_id_,
           sqc_proxy->get_filter_data()->server_id_,
-          sqc_proxy->get_filter_data()->execution_id_);
+          sqc_proxy->get_filter_data()->px_sequence_id_);
       args.expect_bloom_filter_count_ = sqc_proxy->get_filter_data()->bloom_filter_count_;
       args.current_bloom_filter_count_ = 1;
       args.phase_ = ObSendBFPhase::FIRST_LEVEL;

@@ -225,7 +225,7 @@ int ObPxSubCoord::init_px_bloom_filter_advance(ObExecContext *ctx, ObOpSpec *roo
       ObPxBloomFilter *filter_use = NULL;
       ObPXBloomFilterHashWrapper bf_key;
       bf_key.init(ctx->get_my_session()->get_effective_tenant_id(), filter_op->get_filter_id(),
-                  filter_op->get_server_id(), ctx->get_my_session()->get_current_execution_id());
+                  filter_op->get_server_id(), sqc_arg_.sqc_.get_px_sequence_id());
       if (OB_FAIL(ObPxBloomFilterManager::init_px_bloom_filter(filter_op->get_filter_length(),
                                                                ctx->get_allocator(),
                                                                filter_use))) {
