@@ -203,6 +203,7 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
   }
   sm_conn_unlock_tenant(conn);
   sm_conn_log_close(conn, ret);
+  conn.~ObSMConnection();
 }
 
 int ObSMConnectionCallback::on_disconnect(observer::ObSMConnection& conn)
