@@ -2774,7 +2774,7 @@ int ObSelectResolver::resolve_with_clause(const ParseNode *node, bool same_level
     // do nothing
   } else if (OB_UNLIKELY(node->type_ != T_WITH_CLAUSE_LIST)) {
     //should not be here
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_MISSING_KEYWORD;
     LOG_WARN("resolver with_clause_as met unexpected node type", K_(node->type));
   } else {
     int num_child = node->num_child_;
