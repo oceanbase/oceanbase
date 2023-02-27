@@ -1338,6 +1338,9 @@ public:
                                                     const int64_t cur_dup_table_pos);
 
   static int check_contain_batch_stmt_parameter(ObRawExpr* expr, bool &contain);
+
+  static int check_contain_my_exec_param(ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain);
+
 private:
   //disallow construct
   ObOptimizerUtil();

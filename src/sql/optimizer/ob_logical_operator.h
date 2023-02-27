@@ -1413,7 +1413,7 @@ public:
 
   virtual int allocate_link_post();
   virtual int allocate_startup_expr_post();
-  int allocate_startup_expr_post(int64_t child_idx);
+  virtual int allocate_startup_expr_post(int64_t child_idx);
   int allocate_link_node_above(int64_t child_idx);
   virtual int copy_part_expr_pre(CopyPartExprCtx &ctx);
   int copy_part_expr(CopyPartExprCtx &ctx, ObRawExpr* &calc_part_id_expr);

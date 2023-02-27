@@ -178,6 +178,7 @@ namespace sql
                                    ObPQDistributeMethod::Type &right_dist_method);
     bool is_using_slave_mapping() { return SM_NONE != slave_mapping_type_; }
     int allocate_startup_expr_post() override;
+    int allocate_startup_expr_post(int64_t child_idx) override;
 
     // print outline
     virtual int print_outline(planText &plan);

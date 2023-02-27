@@ -110,6 +110,8 @@ public:
 
   int allocate_startup_expr_post() override;
 
+  int allocate_startup_expr_post(int64_t child_idx) override;
+
   int allocate_subquery_id();
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,

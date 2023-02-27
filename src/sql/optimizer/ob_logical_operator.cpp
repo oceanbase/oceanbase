@@ -4642,8 +4642,7 @@ int ObLogicalOperator::allocate_startup_expr_post(int64_t child_idx)
       if (OB_ISNULL(startup_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (startup_exprs.at(i)->has_flag(CNT_ROWNUM) ||
-                 startup_exprs.at(i)->has_flag(CNT_DYNAMIC_PARAM)) {
+      } else if (startup_exprs.at(i)->has_flag(CNT_ROWNUM)) {
         if (OB_FAIL(non_startup_exprs.push_back(startup_exprs.at(i)))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
@@ -4652,7 +4651,7 @@ int ObLogicalOperator::allocate_startup_expr_post(int64_t child_idx)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(add_startup_exprs(new_startup_exprs))) {
+      if (OB_FAIL(append_array_no_dup(get_startup_exprs(), new_startup_exprs))) {
         LOG_WARN("failed to add startup exprs", K(ret));
       } else {
         //exchange out上面的startup filter保留，用于控制当前dfo提前终止

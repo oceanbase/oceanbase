@@ -815,10 +815,10 @@ Outputs & filters:
   0 - output([t1.c1]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
   1 - output([t1.c1]), filter(nil), rowset=256, 
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
-  2 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), startup_filter([?]), rowset=256
   3 - output([t1.c1]), filter(nil), rowset=256, dop=2
   4 - output([t1.c1]), filter(nil), rowset=256
-  5 - output([t1.c1]), filter(nil), startup_filter([?]), rowset=256, 
+  5 - output([t1.c1]), filter(nil), rowset=256,
       access([t1.c1]), partitions(p[0-4])
   6 - output([1]), filter(nil), rowset=256
   7 - output(nil), filter(nil), rowset=256, dop=2
@@ -864,10 +864,10 @@ Outputs & filters:
   0 - output([t1.c1]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
   1 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(2))]), rowset=256, 
       exec_params_([t1.c1]), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
-  2 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), startup_filter([?]), rowset=256
   3 - output([t1.c1]), filter(nil), rowset=256, dop=2
   4 - output([t1.c1]), filter(nil), rowset=256
-  5 - output([t1.c1]), filter(nil), startup_filter([?]), rowset=256, 
+  5 - output([t1.c1]), filter(nil), rowset=256,
       access([t1.c1]), partitions(p[0-4])
   6 - output([1]), filter(nil), rowset=256
   7 - output(nil), filter(nil), rowset=256, dop=2
