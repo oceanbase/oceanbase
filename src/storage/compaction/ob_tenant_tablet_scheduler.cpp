@@ -1044,6 +1044,9 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
     LOG_WARN("fail to get data version", K(ret));
   } else if (compat_version < DATA_VERSION_4_1_0_0) {
     // do nothing, should not loop tablets
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("compat_version is smaller than DATA_VERSION_4_1_0_0, cannot schedule medium", K(compat_version));
+    }
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get ls iterator", K(ret));
   } else {
