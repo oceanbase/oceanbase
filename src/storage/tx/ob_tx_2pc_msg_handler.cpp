@@ -31,7 +31,7 @@ int ObPartTransCtx::post_msg_(const ObTwoPhaseCommitMsgType& msg_type,
     build_tx_common_msg_(receiver, prepare_redo_req);
     prepare_redo_req.upstream_ = ls_id_;
     prepare_redo_req.xid_ = exec_info_.xid_;
-    // TODO(handora.qc): add app_trace_info
+    prepare_redo_req.app_trace_info_ = trace_info_.get_app_trace_info();
     if (OB_FAIL(post_msg_(receiver, prepare_redo_req))) {
       TRANS_LOG(WARN, "rpc post msg failed", K(ret), K(*this), K(receiver), K(msg_type));
     }
@@ -58,7 +58,7 @@ int ObPartTransCtx::post_msg_(const ObTwoPhaseCommitMsgType& msg_type,
       Ob2pcPrepareReqMsg prepare_req;
       build_tx_common_msg_(receiver, prepare_req);
       prepare_req.upstream_ = ls_id_;
-      // TODO(handora.qc): add app_trace_info
+      prepare_req.app_trace_info_ = trace_info_.get_app_trace_info();
       if (OB_FAIL(post_msg_(receiver, prepare_req))) {
         TRANS_LOG(WARN, "rpc post msg failed", K(ret), K(*this), K(receiver), K(msg_type));
       }
