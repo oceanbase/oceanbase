@@ -256,6 +256,7 @@ int ObTabletChecksumValidator::check_all_table_verification_finished(
             if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
               LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(table_id));
             } else if (OB_ISNULL(table_schema)) {
+              LOG_WARN("table_schema is null", K_(tenant_id), K(table_id), KPC(simple_schema));
             }
             // check whether all tablets of this table finished compaction or not, and
             // execute tablet replica checksum verification if this table has tablet.
@@ -536,6 +537,7 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
             } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
               LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(table_id));
             } else if (OB_ISNULL(table_schema)) {
+              LOG_WARN("table_schema is null", K_(tenant_id), K(table_id), KPC(simple_schema));
             } else if (OB_FAIL(get_table_compaction_info(*table_schema, table_compaction_map, cur_compaction_info))) {
               LOG_WARN("fail to get table compaction info", KR(ret), K(frozen_scn), KPC(table_schema));
             } else if (cur_compaction_info.is_verified()) { // already finished verification, skip it!
@@ -1093,6 +1095,7 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
 {
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
+  bool already_print = false;
 
   const int64_t start_time_us = ObTimeUtil::current_time();
   if (OB_UNLIKELY(!frozen_scn.is_valid() || tablet_compaction_map.empty())) {
@@ -1127,14 +1130,23 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
             } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
               LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(table_id));
             } else if (OB_ISNULL(table_schema)) {
+              LOG_WARN("table_schema is null", K_(tenant_id), K(table_id), KPC(simple_schema));
             } else if (OB_FAIL(get_table_compaction_info(*table_schema, table_compaction_map, cur_compaction_info))) {
               LOG_WARN("fail to get table compaction info", KR(ret), K(frozen_scn), KPC(table_schema));
             } else if (cur_compaction_info.is_index_ckm_verified()
                       || cur_compaction_info.is_verified()) { // already finished verification, skip it!
-            } else if (is_index_table(*simple_schema)) { // for index table, may need to check column checksum
-              if (OB_FAIL(handle_index_table(frozen_scn, cur_compaction_info, table_schema,
-                          simple_schema, schema_guard, table_compaction_map, expected_epoch))) {
-                LOG_WARN("fail to handle index table", KR(ret), K(frozen_scn), K(simple_schema), K(expected_epoch));
+            } else if (simple_schema->is_index_table()) {
+              if (simple_schema->can_read_index()) {
+                // 1. for index table can read, may need to check column checksum
+                if (OB_FAIL(handle_index_table(frozen_scn, cur_compaction_info, table_schema,
+                            simple_schema, schema_guard, table_compaction_map, expected_epoch))) {
+                  LOG_WARN("fail to handle index table", KR(ret), K(frozen_scn), K(simple_schema), K(expected_epoch));
+                }
+              } else { // !simple_schema->can_read_index()
+                // 2. for index table can not read, directly mark it as VERIFIED
+                if (OB_FAIL(handle_table_can_not_verify(table_id, table_compaction_map))) {
+                  LOG_WARN("fail to handle table can not verify", KR(ret));
+                }
               }
             } else {
               if (table_schema->get_index_tid_count() < 1) { // handle data table, meanwhile not have relative index table
@@ -1144,6 +1156,10 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
                   }
                 }
               }
+            }
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(try_print_first_unverified_info(simple_schema, table_schema, table_compaction_map, already_print))) {
+              LOG_WARN("fail to try print first unverified info", KR(tmp_ret), K(table_id));
             }
             if (OB_CHECKSUM_ERROR == ret) {
               check_ret = ret;
@@ -1224,13 +1240,6 @@ int ObIndexChecksumValidator::handle_table_verification_finished(
   return ret;
 }
 
-bool ObIndexChecksumValidator::is_index_table(
-     const ObSimpleTableSchemaV2 &simple_schema)
-{
-  return (simple_schema.is_index_table()
-         && simple_schema.can_read_index());
-}
-
 int ObIndexChecksumValidator::handle_data_table_with_index(
     const volatile bool &stop,
     const SCN &frozen_scn,
@@ -1276,10 +1285,12 @@ int ObIndexChecksumValidator::check_data_table_with_index(
     if (OB_ISNULL(simple_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, simple schema is null", KR(ret), K_(tenant_id));
-    } else if (is_index_table(*simple_schema)) {
+    } else if (simple_schema->is_index_table()) {
       const uint64_t data_table_id = simple_schema->get_data_table_id();
       if (!has_exist_in_array(data_tables_to_update, data_table_id)) {
-        data_tables_to_update.push_back(data_table_id);
+        if (OB_FAIL(data_tables_to_update.push_back(data_table_id))) {
+          LOG_WARN("fail to push back", KR(ret), K(data_table_id));
+        }
       }
     }
   }
@@ -1289,20 +1300,24 @@ int ObIndexChecksumValidator::check_data_table_with_index(
     if (OB_ISNULL(simple_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, simple schema is null", KR(ret), K_(tenant_id));
-    } else if (is_index_table(*simple_schema)) {
-      const uint64_t index_table_id = simple_schema->get_table_id();
-      const uint64_t data_table_id = simple_schema->get_data_table_id();
-      ObTableCompactionInfo index_table_compaction_info;
-      if (OB_FAIL(table_compaction_map.get_refactored(index_table_id, index_table_compaction_info))) {
-        LOG_WARN("fail to get refactored", KR(ret), K(index_table_id));
-      } else if (!index_table_compaction_info.is_index_ckm_verified()
-                 && !index_table_compaction_info.is_verified()) { // index_table is not verified
-        int64_t idx = -1;
-        if (has_exist_in_array(data_tables_to_update, data_table_id, &idx)) {
-          if (OB_FAIL(data_tables_to_update.remove(idx))) {
-            LOG_WARN("fail to remove", KR(ret), K(data_tables_to_update), K(idx));
+    } else if (simple_schema->is_index_table()) {
+      if (simple_schema->can_read_index()) {
+        const uint64_t index_table_id = simple_schema->get_table_id();
+        const uint64_t data_table_id = simple_schema->get_data_table_id();
+        ObTableCompactionInfo index_table_compaction_info;
+        if (OB_FAIL(table_compaction_map.get_refactored(index_table_id, index_table_compaction_info))) {
+          LOG_WARN("fail to get refactored", KR(ret), K(index_table_id));
+        } else if (!index_table_compaction_info.is_index_ckm_verified()
+                  && !index_table_compaction_info.is_verified()) { // index_table is not verified
+          int64_t idx = -1;
+          if (has_exist_in_array(data_tables_to_update, data_table_id, &idx)) {
+            if (OB_FAIL(data_tables_to_update.remove(idx))) {
+              LOG_WARN("fail to remove", KR(ret), K(data_tables_to_update), K(idx));
+            }
           }
         }
+      } else { // !simple_schema->can_read_index()
+        // ignore index table can not read
       }
     }
   }
@@ -1404,6 +1419,72 @@ int ObIndexChecksumValidator::handle_index_table(
             LOG_WARN("fail to handle index table verification finished", KR(ret), K(index_table_id), K(frozen_scn));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIndexChecksumValidator::try_print_first_unverified_info(
+    const ObSimpleTableSchemaV2 *simple_schema,
+    const ObTableSchema *table_schema,
+    const hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    bool &already_print)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(simple_schema) || OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(simple_schema), KP(table_schema));
+  } else if (already_print) { // do nothing. only print infos about the first unverified table
+  } else {
+    const uint64_t table_id = simple_schema->get_table_id();
+    ObTableCompactionInfo cur_compaction_info;
+    if (OB_FAIL(table_compaction_map.get_refactored(table_id, cur_compaction_info))) {
+      LOG_WARN("fail to get table_compaction_info from table_compaction_map", KR(ret), K(table_id));
+    } else if (cur_compaction_info.is_index_ckm_verified() || cur_compaction_info.is_verified()) {
+      // 1. already finished verification, no need to print table compaction info
+    } else {
+      // 2. has not finished verification, need to print table compaction info
+      if (simple_schema->is_index_table()) {
+        // 2.1 index table, print index table compaction info and data table compaction info
+        ObTableCompactionInfo data_compaction_info;
+        const uint64_t data_table_id = simple_schema->get_data_table_id();
+        if (OB_FAIL(table_compaction_map.get_refactored(data_table_id, data_compaction_info))) {
+          LOG_WARN("fail to get table_compaction_info from table_compaction_map", KR(ret), K(data_table_id));
+        } else {
+          LOG_INFO("index table is unverified", K(cur_compaction_info), K(data_compaction_info));
+        }
+      } else {
+        if (table_schema->get_index_tid_count() < 1) {
+          // 2.2 data table without index, print data table compaction info
+          LOG_INFO("data table without index is unverified", K(cur_compaction_info));
+        } else if (table_schema->get_index_tid_count() >= 1) {
+          // 2.3 data table with index, print data table compaction info and index table compaction infos
+          SMART_VARS_2((ObArray<ObAuxTableMetaInfo>, simple_index_infos_array),
+                       (ObArray<ObTableCompactionInfo>, index_table_compaction_infos)) {
+            if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos_array, true))) {
+              LOG_WARN("fail to get simple index infos array", KR(ret), KPC(table_schema));
+            } else {
+              for (int i = 0; OB_SUCC(ret) && (i < simple_index_infos_array.count()); ++i) {
+                ObTableCompactionInfo index_compaction_info;
+                const uint64_t index_table_id = simple_index_infos_array.at(i).table_id_;
+                if (OB_FAIL(table_compaction_map.get_refactored(index_table_id, index_compaction_info))) {
+                  LOG_WARN("fail to get table_compaction_info from table_compaction_map", KR(ret), K(index_table_id));
+                } else {
+                  if (OB_FAIL(index_table_compaction_infos.push_back(index_compaction_info))) {
+                    LOG_WARN("fail to push back", KR(ret), K(index_compaction_info));
+                  }
+                }
+              }
+              if (OB_SUCC(ret)) {
+                LOG_INFO("data table with index is unverified", K(cur_compaction_info), K(index_table_compaction_infos));
+              }
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        already_print = true;
       }
     }
   }
