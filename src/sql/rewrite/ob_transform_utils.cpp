@@ -10453,7 +10453,11 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(ObSelectStmt *&subq
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(subquery->formalize_stmt(session_info))) {
+    if (OB_FAIL(view_stmt->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(subquery->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(subquery->formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     } else {
       LOG_TRACE("succeed to create spj", K(*subquery));
@@ -10659,17 +10663,21 @@ int ObTransformUtils::pullup_correlated_expr(ObRawExpr *expr,
                                             ObIArray<ObRawExpr*> &new_select_list)
 {
   int ret = OB_SUCCESS;
+  bool is_scalar = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
   } else if (expr->is_const_expr()) {
     //do nothing
-  } else if (!expr->get_expr_levels().has_member(level)) {
+  }  else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
+    LOG_WARN("failed to check is scalar expr", K(ret));
+  } else if (is_scalar && !expr->get_expr_levels().has_member(level)) {
     if (OB_FAIL(new_select_list.push_back(expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     }
   } else {
     int64_t N = expr->get_param_count();
+    bool param_correlated = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       if (OB_FAIL(SMART_CALL(pullup_correlated_expr(expr->get_param_expr(i),
                                                     level,
@@ -10794,15 +10802,18 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
                                                   ObIArray<ObRawExpr*> &new_column_list)
 {
   int ret = OB_SUCCESS;
+  bool is_scalar = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
   } else if (expr->is_const_expr()) {
     //do nothing
-  } else if (!expr->get_expr_levels().has_member(level)) {
+  } else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
+    LOG_WARN("failed to check is scalar expr", K(ret));
+  } else if (is_scalar && !expr->get_expr_levels().has_member(level)) {
     if (pos >= new_column_list.count()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect array pos", K(pos), K(new_column_list), K(ret));
+      LOG_WARN("unexpect array pos", KPC(expr), K(pos), K(new_column_list), K(ret));
     } else {
       expr = new_column_list.at(pos);
       ++pos;
@@ -11708,6 +11719,22 @@ int ObTransformUtils::check_table_contain_in_semi(const ObDMLStmt *stmt,
   }
   if (OB_SUCC(ret)) {
     is_contain = table_rel_ids.overlap2(semi_left_rel_ids);
+  }
+  return ret;
+}
+
+int ObTransformUtils::is_scalar_expr(ObRawExpr* expr, bool &is_scalar)
+{
+  int ret = OB_SUCCESS;
+  is_scalar = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (T_OP_ROW == expr->get_expr_type()) {
+    is_scalar = false;
+  } else if (expr->is_query_ref_expr()) {
+    ObQueryRefRawExpr *query_ref = static_cast<ObQueryRefRawExpr*>(expr);
+    is_scalar = (!query_ref->is_set()) && (query_ref->get_output_column() == 1);
   }
   return ret;
 }

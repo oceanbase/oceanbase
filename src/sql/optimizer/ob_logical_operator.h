@@ -1234,8 +1234,6 @@ public:
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs);
   int build_and_put_pack_expr(ObIArray<ObRawExpr*> &output_exprs);
-  int build_and_put_into_outfile_expr(const ObSelectIntoItem *into_item,
-                                      ObIArray<ObRawExpr*> &output_exprs);
   int put_into_outfile_expr(ObRawExpr *into_expr);
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs,

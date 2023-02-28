@@ -570,6 +570,10 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
       LOG_WARN("failed to decorrelate semi conditions", K(ret));
     } else if (OB_FAIL(generate_semi_info(stmt, expr, right_table, semi_conds, info))) {
       LOG_WARN("failed to generate semi info", K(ret));
+    } else if (OB_FAIL(stmt->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(subquery->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(subquery->formalize_stmt(ctx_->session_info_))) {
       LOG_WARN("formalize child stmt failed", K(ret));
     }
@@ -1029,6 +1033,10 @@ int ObWhereSubQueryPullup::pullup_non_correlated_subquery_as_view(ObDMLStmt *stm
     LOG_WARN("failed to generate new condition exprs", K(ret));
   } else if (OB_FAIL(generate_semi_info(stmt, expr, table_item, new_conditions, info))) {
     LOG_WARN("generate semi info failed", K(ret));
+  } else if (OB_FAIL(stmt->adjust_subquery_list())) {
+    LOG_WARN("failed to adjust subquery list", K(ret));
+  } else if (OB_FAIL(subquery->adjust_subquery_list())) {
+    LOG_WARN("failed to adjust subquery list", K(ret));
   } else if (OB_FAIL(subquery->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("formalize child stmt failed", K(ret));
   }

@@ -2315,43 +2315,25 @@ int ObLogicalOperator::build_and_put_pack_expr(ObIArray<ObRawExpr*> &output_expr
   return ret;
 }
 
-int ObLogicalOperator::build_and_put_into_outfile_expr(const ObSelectIntoItem *into_item,
-                                                       ObIArray<ObRawExpr*> &output_exprs)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *child = NULL;
-  ObRawExpr *to_outfile_expr = NULL;
-  uint64_t producer_id = OB_INVALID_ID;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(into_item) || OB_ISNULL(child = get_child(first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_plan()), K(into_item), K(child), K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_to_outfile_expr(
-                                    get_plan()->get_optimizer_context().get_expr_factory(),
-                                    get_plan()->get_optimizer_context().get_session_info(),
-                                    into_item,
-                                    output_exprs,
-                                    to_outfile_expr))) {
-    LOG_WARN("failed to build_to_outfile_expr", K(*into_item), K(ret));
-  } else if (OB_ISNULL(to_outfile_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (FALSE_IT(output_exprs.reuse())) {
-    /*do nothing*/
-  } else if (OB_FAIL(output_exprs.push_back(to_outfile_expr))) {
-    LOG_WARN("failed to push back exprs", K(ret));
-  } else if (ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED == get_phy_plan_type() &&
-             OB_FAIL(put_into_outfile_expr(to_outfile_expr))) {
-    LOG_WARN("failed to push back expr", K(ret));
-  } else { /*do nothing*/ }
-  return ret;
-}
-
 int ObLogicalOperator::put_into_outfile_expr(ObRawExpr *to_outfile_expr)
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *child = NULL;
+  if (LOG_TEMP_TABLE_TRANSFORMATION == get_type()) {
+    child = get_child(get_num_of_child()-1);
+    //find select into
+    bool is_find = false;
+    while (NULL != child && !is_find && 1 == child->get_num_of_child()) {
+      if (child->get_type() == LOG_SELECT_INTO) {
+        is_find = true;
+      }
+      child = child->get_child(first_child);
+    }
+  } else {
+    child = get_child(ObLogicalOperator::first_child);
+  }
   if (OB_ISNULL(to_outfile_expr) ||
-      OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+      OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(to_outfile_expr), K(child), K(ret));
   } else {
@@ -3733,28 +3715,27 @@ int ObLogicalOperator::adjust_plan_root_output_exprs()
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
-  } else if (output_exprs_.empty()) {
+  } else if (output_exprs_.empty() || NULL != get_parent()) {
     /*do nothing*/
   } else if (stmt->is_select_stmt() &&
              FALSE_IT(into_item = static_cast<const ObSelectStmt*>(stmt)->get_select_into())) {
     /*do nothing*/
-  } else if (NULL == get_parent()) {
-    if (NULL != into_item && T_INTO_OUTFILE == into_item->into_type_) {
-      if (OB_FAIL(build_and_put_into_outfile_expr(into_item, output_exprs_))) {
-        LOG_WARN("failed to add into outfile expr to ctx", K(ret));
-      } else {
-        LOG_TRACE("succeed to add into outfile expr to ctx", K(ret));
-      }
-    } else {
-      bool need_pack = false;
-      if (OB_FAIL(check_stmt_can_be_packed(stmt, need_pack))) {
-        LOG_WARN("failed to check stmt can be pack", K(ret));
-      } else if (need_pack && OB_FAIL(build_and_put_pack_expr(output_exprs_))) {
-        LOG_WARN("failed to add pack expr to context", K(ret));
-      }
+  } else if (NULL != into_item && T_INTO_OUTFILE == into_item->into_type_) {
+    if (output_exprs_.count() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected output exprs count", K(ret));
+    } else if (OB_FAIL(put_into_outfile_expr(output_exprs_.at(0)))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else { /*do nothing*/ }
+  } else {
+    bool need_pack = false;
+    if (OB_FAIL(check_stmt_can_be_packed(stmt, need_pack))) {
+      LOG_WARN("failed to check stmt can be pack", K(ret));
+    } else if (need_pack && OB_FAIL(build_and_put_pack_expr(output_exprs_))) {
+      LOG_WARN("failed to add pack expr to context", K(ret));
     }
-    LOG_TRACE("succeed to adjust plan root output exprs", K(output_exprs_));
   }
+  LOG_TRACE("succeed to adjust plan output exprs", K(output_exprs_));
   return ret;
 }
 
@@ -3762,15 +3743,29 @@ int ObLogicalOperator::set_plan_root_output_exprs()
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
-  if (OB_ISNULL(stmt = get_stmt())) {
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
   } else if (stmt->is_select_stmt()) {
     const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt*>(get_stmt());
     bool is_unpivot = (LOG_UNPIVOT == type_ && sel_stmt->is_unpivot_select());
+    ObSelectIntoItem *into_item = sel_stmt->get_select_into();
+    ObRawExpr *to_outfile_expr = NULL;
     if (OB_FAIL(sel_stmt->get_select_exprs(output_exprs_, is_unpivot))) {
       LOG_WARN("failed to get select exprs", K(ret));
-    } else { /*do nothing*/ }
+    } else if (NULL == into_item || T_INTO_OUTFILE != into_item->into_type_) {
+      //do nothing
+    } else if (OB_FAIL(ObRawExprUtils::build_to_outfile_expr(
+                                    get_plan()->get_optimizer_context().get_expr_factory(),
+                                    get_plan()->get_optimizer_context().get_session_info(),
+                                    into_item,
+                                    output_exprs_,
+                                    to_outfile_expr))) {
+      LOG_WARN("failed to build_to_outfile_expr", K(*into_item), K(ret));
+    } else if (OB_FALSE_IT(output_exprs_.reuse())) {
+    } else if (OB_FAIL(output_exprs_.push_back(to_outfile_expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
   } else if (stmt->is_returning()) {
     const ObDelUpdStmt *del_upd_stmt = static_cast<const ObDelUpdStmt *>(stmt);
     if (OB_FAIL(append(output_exprs_, del_upd_stmt->get_returning_exprs()))) {
