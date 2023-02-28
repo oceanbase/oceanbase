@@ -692,13 +692,16 @@ int ObTableModifyOp::inner_close()
       dml_rtctx_.das_ref_.reset();
     }
   }
-  // Release the hash sets created at root ctx for delete distinct check
-  if (OB_SUCC(ret) && get_exec_ctx().is_root_ctx()) {
+  // Release the hash sets created at fk root ctx for delete distinct checks
+  if (OB_SUCC(ret) && get_exec_ctx().is_fk_root_ctx()) {
     DASDelCtxList& del_ctx_list = get_exec_ctx().get_das_ctx().get_das_del_ctx_list();
     DASDelCtxList::iterator iter = del_ctx_list.begin();
     for (;  OB_SUCC(ret)&& iter != del_ctx_list.end(); iter++) {
       DmlRowkeyDistCtx del_ctx = *iter;
-      del_ctx.deleted_rows_->destroy();
+      if (del_ctx.deleted_rows_ != nullptr) {
+        del_ctx.deleted_rows_->destroy();
+        del_ctx.deleted_rows_ = nullptr;
+      }
     }
     del_ctx_list.destroy();
   }

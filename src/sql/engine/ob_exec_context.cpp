@@ -224,25 +224,25 @@ void ObExecContext::reset_op_env()
   }
 }
 
-int ObExecContext::get_root_ctx(ObExecContext* &root_ctx)
+int ObExecContext::get_fk_root_ctx(ObExecContext* &fk_root_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(this->get_parent_ctx())) {
-    root_ctx = this;
-  } else if (get_parent_ctx()->get_pl_stack_ctx() != nullptr && get_parent_ctx()->get_pl_stack_ctx()->in_autonomous()) {
-    root_ctx = this;
-  } else if (OB_FAIL( SMART_CALL(get_parent_ctx()->get_root_ctx(root_ctx)))) {
-    LOG_WARN("failed to get root ctx", K(ret));
+    fk_root_ctx = this;
+  } else if (!this->get_my_session()->is_foreign_key_cascade()) {
+    fk_root_ctx = this;
+  } else if (OB_FAIL(SMART_CALL(get_parent_ctx()->get_fk_root_ctx(fk_root_ctx)))) {
+    LOG_WARN("failed to get fk root ctx", K(ret));
   }
   return ret;
 }
 
-bool ObExecContext::is_root_ctx()
+bool ObExecContext::is_fk_root_ctx()
 {
   bool ret = false;
   if (OB_ISNULL(this->get_parent_ctx())) {
     ret = true;
-  } else if (get_parent_ctx()->get_pl_stack_ctx() != nullptr && get_parent_ctx()->get_pl_stack_ctx()->in_autonomous()) {
+  } else if (!this->get_my_session()->is_foreign_key_cascade()) {
     ret = true;
   }
   return ret;

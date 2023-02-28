@@ -359,7 +359,7 @@ struct SeRowkeyItem
   ObDatum *datums_;
   int64_t cnt_;
 };
-typedef common::hash::ObHashSet<SeRowkeyItem, common::hash::NoPthreadDefendMode> SeRowkeyDistCtx;
+typedef common::hash::ObHashSet<ObRowkey, common::hash::NoPthreadDefendMode> SeRowkeyDistCtx;
 
 //dml base compile info definition
 struct ObDMLBaseCtDef
@@ -595,7 +595,8 @@ public:
       found_rows_(0),
       related_upd_rtdefs_(),
       related_del_rtdefs_(),
-      related_ins_rtdefs_()
+      related_ins_rtdefs_(),
+      table_rowkey_()
   { }
   virtual ~ObUpdRtDef()
   {
@@ -615,6 +616,7 @@ public:
       dlock_rtdef_->~ObDASLockRtDef();
       dlock_rtdef_ = nullptr;
     }
+    table_rowkey_.reset();
   }
   INHERIT_TO_STRING_KV("base_rtdef", ObDMLBaseRtDef,
                        K_(dupd_rtdef),
@@ -637,6 +639,7 @@ public:
   DASUpdRtDefArray related_upd_rtdefs_;
   DASDelRtDefArray related_del_rtdefs_;
   DASInsRtDefArray related_ins_rtdefs_;
+  ObRowkey table_rowkey_;
 };
 
 struct ObMultiLockCtDef
@@ -745,7 +748,8 @@ public:
     : ObDMLBaseRtDef(das_rtdef_),
       das_rtdef_(),
       related_rtdefs_(),
-      se_rowkey_dist_ctx_(nullptr)
+      se_rowkey_dist_ctx_(nullptr),
+      table_rowkey_()
   { }
   virtual ~ObDelRtDef()
   {
@@ -753,6 +757,7 @@ public:
       // se_rowkey_dist_ctx_->destroy();
       se_rowkey_dist_ctx_ = nullptr;
     }
+    table_rowkey_.reset();
   }
   INHERIT_TO_STRING_KV("base_rtdef", ObDMLBaseRtDef,
                        K_(das_rtdef),
@@ -760,6 +765,7 @@ public:
   ObDASDelRtDef das_rtdef_;
   DASDelRtDefArray related_rtdefs_;
   SeRowkeyDistCtx *se_rowkey_dist_ctx_;
+  ObRowkey table_rowkey_;
 };
 struct ObMergeCtDef
 {
@@ -789,7 +795,8 @@ public:
     : ins_rtdef_(),
       upd_rtdef_(),
       del_rtdef_(),
-      rowkey_dist_ctx_(NULL)
+      rowkey_dist_ctx_(NULL),
+      table_rowkey_()
   { }
 
   ~ObMergeRtDef()
@@ -801,6 +808,7 @@ public:
       rowkey_dist_ctx_->destroy();
       rowkey_dist_ctx_ = nullptr;
     }
+    table_rowkey_.reset();
   }
 
   TO_STRING_KV(K_(ins_rtdef),
@@ -811,6 +819,7 @@ public:
   ObUpdRtDef upd_rtdef_;
   ObDelRtDef del_rtdef_;
   SeRowkeyDistCtx *rowkey_dist_ctx_;
+  ObRowkey table_rowkey_;
 };
 
 struct ObReplaceCtDef
