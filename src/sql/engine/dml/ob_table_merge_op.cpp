@@ -481,8 +481,12 @@ int ObTableMergeOp::update_row_das()
     } else if (OB_FAIL(ObDMLService::update_row(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, dml_rtctx_))) {
       LOG_WARN("insert row with das failed", K(ret));
     } else {
-      affected_rows_++;
+      // do nothing
     }
+  }
+
+  if (OB_SUCC(ret)) {
+    affected_rows_++;
   }
   return ret;
 }
