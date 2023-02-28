@@ -457,11 +457,19 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
       }
     }
 
-    node->undo_actions_[node->size_++] = new_undo_action;
-    if (undo_status_list_.undo_node_cnt_ * TX_DATA_SLICE_SIZE > OB_MAX_TX_SERIALIZE_SIZE) {
-      ret = OB_SIZE_OVERFLOW;
-      STORAGE_LOG(WARN, "Too many undo actions. The size of tx data is overflow.", KR(ret),
-                  K(undo_status_list_.undo_node_cnt_), KPC(this));
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(node)) {
+        node->undo_actions_[node->size_++] = new_undo_action;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "node is unexpected nullptr", KR(ret), KPC(this));
+      }
+
+      if (undo_status_list_.undo_node_cnt_ * TX_DATA_SLICE_SIZE > OB_MAX_TX_SERIALIZE_SIZE) {
+        ret = OB_SIZE_OVERFLOW;
+        STORAGE_LOG(WARN, "Too many undo actions. The size of tx data is overflow.", KR(ret),
+                    K(undo_status_list_.undo_node_cnt_), KPC(this));
+      }
     }
   }
 
