@@ -1162,7 +1162,9 @@ int ObOptEstCostModel::cost_table(ObCostTableScanInfo &est_cost_info,
 																	double &index_back_cost)
 {
   int ret = OB_SUCCESS;
-  if (is_virtual_table(est_cost_info.ref_table_id_)) {
+  if (is_virtual_table(est_cost_info.ref_table_id_) &&
+      (est_cost_info.row_est_method_ == RowCountEstMethod::INVALID_METHOD ||
+       est_cost_info.row_est_method_ == RowCountEstMethod::DEFAULT_STAT)) {
     if (OB_FAIL(cost_virtual_table(est_cost_info, cost))) {
       LOG_WARN("failed to estimate virtual table cost", K(ret));
     } else {

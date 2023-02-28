@@ -19894,7 +19894,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             oceanbase.__all_table T
-        WHERE T.TABLE_TYPE IN (0,3,6))
+        WHERE T.TABLE_TYPE IN (0,2,3,6))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -19912,7 +19912,7 @@ def_table_schema(
             oceanbase.__all_part P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,3,6)
+        WHERE T.TABLE_TYPE IN (0,2,3,6)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -19935,7 +19935,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,3,6)
+        WHERE T.TABLE_TYPE IN (0,2,3,6)
     ) V
     JOIN
         oceanbase.__all_database DB
@@ -19994,7 +19994,7 @@ def_table_schema(
             database_id,
             table_id,
             table_name
-      FROM oceanbase.__all_table where table_type in (0,3,6)) T
+      FROM oceanbase.__all_table where table_type in (0,2,3,6)) T
   JOIN
     oceanbase.__all_database db
     ON db.tenant_id = t.tenant_id
@@ -26048,7 +26048,7 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-SELECT /*+NO_USE_NL(T)*/
+SELECT
   CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,
   CAST(T.TABLE_NAME AS VARCHAR2(128)) AS  TABLE_NAME,
   CAST(C.COLUMN_NAME AS VARCHAR2(128)) AS  COLUMN_NAME,
@@ -26262,7 +26262,7 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-SELECT/*+leading(DB,T,C,"STAT")*/
+SELECT
   CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,
   CAST(T.TABLE_NAME AS VARCHAR2(128)) AS  TABLE_NAME,
   CAST(C.COLUMN_NAME AS VARCHAR2(128)) AS  COLUMN_NAME,
@@ -26474,7 +26474,7 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-SELECT /*+NO_USE_NL(T)*/
+SELECT
   CAST(T.TABLE_NAME AS VARCHAR2(128)) AS  TABLE_NAME,
   CAST(C.COLUMN_NAME AS VARCHAR2(128)) AS  COLUMN_NAME,
   CAST(DECODE(C.DATA_TYPE,
@@ -41664,12 +41664,58 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """select
-  OWNER, TABLE_NAME, COLUMN_NAME,
-  NUM_DISTINCT, LOW_VALUE, HIGH_VALUE,
-  DENSITY, NUM_NULLS, NUM_BUCKETS, LAST_ANALYZED,
-  SAMPLE_SIZE, GLOBAL_STATS, USER_STATS,
-  NOTES, AVG_COL_LEN, HISTOGRAM, cast(NULL as VARCHAR2(7)) SCOPE
-  FROM SYS.ALL_TAB_COLS_V$
+  cast(db.database_name as VARCHAR2(128)) as OWNER,
+  cast(t.table_name as VARCHAR2(128)) as  TABLE_NAME,
+  cast(c.column_name as VARCHAR2(128)) as  COLUMN_NAME,
+  cast(stat.distinct_cnt as NUMBER) as  NUM_DISTINCT,
+  cast(stat.min_value as varchar(128)) as  LOW_VALUE,
+  cast(stat.max_value as varchar(128)) as  HIGH_VALUE,
+  cast(stat.density as NUMBER) as  DENSITY,
+  cast(stat.null_cnt as NUMBER) as  NUM_NULLS,
+  cast(stat.bucket_cnt as NUMBER) as  NUM_BUCKETS,
+  cast(stat.last_analyzed as DATE) as  LAST_ANALYZED,
+  cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,
+  CAST(decode(stat.GLOBAL_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS GLOBAL_STATS,
+  CAST(decode(stat.USER_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS USER_STATS,
+  cast(NULL as VARCHAR2(80)) as  NOTES,
+  cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,
+  cast((case when stat.histogram_type = 1 then 'FREQUENCY'
+        when stat.histogram_type = 3 then 'TOP-FREQUENCY'
+        when stat.histogram_type = 4 then 'HYBRID'
+        else NULL end) as VARCHAR2(15)) as HISTOGRAM,
+  cast(NULL as VARCHAR2(7)) SCOPE
+FROM
+    (SELECT TENANT_ID,
+            DATABASE_ID,
+            TABLE_ID,
+            TABLE_NAME
+      FROM SYS.ALL_VIRTUAL_CORE_ALL_TABLE
+    UNION ALL
+       SELECT TENANT_ID,
+              DATABASE_ID,
+              TABLE_ID,
+              TABLE_NAME
+      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+      WHERE table_type in (0,2,3,8,9)) t
+  JOIN
+    SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
+    ON db.tenant_id = t.tenant_id
+    AND db.database_id = t.database_id
+    AND (t.database_id = userenv('SCHEMAID')
+         OR user_can_access_obj(1, t.table_id, t.database_id) = 1)
+    AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+  JOIN
+    SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT c
+    ON c.tenant_id = t.tenant_id
+    AND c.table_id = t.table_id
+  LEFT JOIN
+    SYS.ALL_VIRTUAL_COLUMN_STAT_REAL_AGENT stat
+    ON c.table_id = stat.table_id
+    AND c.column_id = stat.column_id
+    AND stat.object_type = 1
+WHERE
+  c.is_hidden = 0;
 """.replace("\n", " ")
 )
 
@@ -41684,14 +41730,57 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """
-select
-  OWNER, TABLE_NAME, COLUMN_NAME,
-  NUM_DISTINCT, LOW_VALUE, HIGH_VALUE,
-  DENSITY, NUM_NULLS, NUM_BUCKETS, LAST_ANALYZED,
-  SAMPLE_SIZE, GLOBAL_STATS, USER_STATS,
-  NOTES, AVG_COL_LEN, HISTOGRAM, cast(NULL as VARCHAR2(7)) SCOPE
-FROM SYS.DBA_TAB_COLS_V$
+  view_definition = """select
+  cast(db.database_name as VARCHAR2(128)) as OWNER,
+  cast(t.table_name as VARCHAR2(128)) as  TABLE_NAME,
+  cast(c.column_name as VARCHAR2(128)) as  COLUMN_NAME,
+  cast(stat.distinct_cnt as NUMBER) as  NUM_DISTINCT,
+  cast(stat.min_value as varchar(128)) as  LOW_VALUE,
+  cast(stat.max_value as varchar(128)) as  HIGH_VALUE,
+  cast(stat.density as NUMBER) as  DENSITY,
+  cast(stat.null_cnt as NUMBER) as  NUM_NULLS,
+  cast(stat.bucket_cnt as NUMBER) as  NUM_BUCKETS,
+  cast(stat.last_analyzed as DATE) as  LAST_ANALYZED,
+  cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,
+  CAST(decode(stat.GLOBAL_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS GLOBAL_STATS,
+  CAST(decode(stat.USER_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS USER_STATS,
+  cast(NULL as VARCHAR2(80)) as  NOTES,
+  cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,
+  cast((case when stat.histogram_type = 1 then 'FREQUENCY'
+        when stat.histogram_type = 3 then 'TOP-FREQUENCY'
+        when stat.histogram_type = 4 then 'HYBRID'
+        else NULL end) as VARCHAR2(15)) as HISTOGRAM,
+  cast(NULL as VARCHAR2(7)) SCOPE
+FROM
+    (SELECT TENANT_ID,
+            DATABASE_ID,
+            TABLE_ID,
+            TABLE_NAME
+      FROM SYS.ALL_VIRTUAL_CORE_ALL_TABLE
+    UNION ALL
+       SELECT TENANT_ID,
+              DATABASE_ID,
+              TABLE_ID,
+              TABLE_NAME
+      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+      WHERE table_type in (0,2,3,8,9)) t
+  JOIN
+    SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
+    ON db.tenant_id = t.tenant_id
+    AND db.database_id = t.database_id
+    AND t.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+  JOIN
+    SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT c
+    ON c.tenant_id = t.tenant_id
+    AND c.table_id = t.table_id
+  LEFT JOIN
+    SYS.ALL_VIRTUAL_COLUMN_STAT_REAL_AGENT stat
+    ON c.table_id = stat.table_id
+    AND c.column_id = stat.column_id
+    AND stat.object_type = 1
+WHERE
+  c.is_hidden = 0;
 """.replace("\n", " ")
 )
 
@@ -41707,12 +41796,56 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """select
-  TABLE_NAME, COLUMN_NAME,
-  NUM_DISTINCT, LOW_VALUE, HIGH_VALUE,
-  DENSITY, NUM_NULLS, NUM_BUCKETS, LAST_ANALYZED,
-  SAMPLE_SIZE, GLOBAL_STATS, USER_STATS,
-  NOTES, AVG_COL_LEN, HISTOGRAM, cast(NULL as VARCHAR2(7)) SCOPE
-  FROM SYS.USER_TAB_COLS_V$
+  cast(t.table_name as VARCHAR2(128)) as  TABLE_NAME,
+  cast(c.column_name as VARCHAR2(128)) as  COLUMN_NAME,
+  cast(stat.distinct_cnt as NUMBER) as  NUM_DISTINCT,
+  cast(stat.min_value as varchar(128)) as  LOW_VALUE,
+  cast(stat.max_value as varchar(128)) as  HIGH_VALUE,
+  cast(stat.density as NUMBER) as  DENSITY,
+  cast(stat.null_cnt as NUMBER) as  NUM_NULLS,
+  cast(stat.bucket_cnt as NUMBER) as  NUM_BUCKETS,
+  cast(stat.last_analyzed as DATE) as  LAST_ANALYZED,
+  cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,
+  CAST(decode(stat.GLOBAL_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS GLOBAL_STATS,
+  CAST(decode(stat.USER_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS USER_STATS,
+  cast(NULL as VARCHAR2(80)) as  NOTES,
+  cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,
+  cast((case when stat.histogram_type = 1 then 'FREQUENCY'
+        when stat.histogram_type = 3 then 'TOP-FREQUENCY'
+        when stat.histogram_type = 4 then 'HYBRID'
+        else NULL end) as VARCHAR2(15)) as HISTOGRAM,
+  cast(NULL as VARCHAR2(7)) SCOPE
+FROM
+    (SELECT TENANT_ID,
+            DATABASE_ID,
+            TABLE_ID,
+            TABLE_NAME
+      FROM SYS.ALL_VIRTUAL_CORE_ALL_TABLE
+    UNION ALL
+       SELECT TENANT_ID,
+              DATABASE_ID,
+              TABLE_ID,
+              TABLE_NAME
+      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+      WHERE table_type in (0,2,3,8,9)) t
+  JOIN
+    SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
+    ON db.tenant_id = t.tenant_id
+    AND db.database_id = t.database_id
+    AND t.database_id = userenv('SCHEMAID')
+    AND t.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+  JOIN
+    SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT c
+    ON c.tenant_id = t.tenant_id
+    AND c.table_id = t.table_id
+  LEFT JOIN
+    SYS.ALL_VIRTUAL_COLUMN_STAT_REAL_AGENT stat
+    ON c.table_id = stat.table_id
+    AND c.column_id = stat.column_id
+    AND stat.object_type = 1
+WHERE
+  c.is_hidden = 0;
 """.replace("\n", " ")
 )
 

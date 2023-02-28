@@ -4020,20 +4020,22 @@ int ObDbmsStats::parse_granularity_and_method_opt(ObExecContext &ctx,
                                                   ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
+  //virtual table(not include real agent table) doesn't gather histogram.
+  bool is_vt = is_virtual_table(param.table_id_);
   if (OB_FAIL(ObDbmsStatsUtils::parse_granularity(param.granularity_,
                                                   param.need_global_,
                                                   param.need_approx_global_,
                                                   param.need_part_,
                                                   param.need_subpart_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret));
-  } else if (0 == param.method_opt_.case_compare("Z")) {
+  } else if (0 == param.method_opt_.case_compare("Z") && !is_vt) {
     if (OB_FAIL(set_default_column_params(param.column_params_))) {
       LOG_WARN("failed to set default column params", K(ret));
     }
   } else {
     // method_opt => null, do not gather histogram, gather basic column stat
     const char *method_opt_str = "FOR ALL COLUMNS SIZE 1";
-    if (param.method_opt_.empty()) {
+    if (param.method_opt_.empty() || is_vt) {
       param.method_opt_.assign_ptr(method_opt_str, strlen(method_opt_str));
     }
     if (OB_FAIL(ObDbmsStats::parse_method_opt(ctx, param.column_params_, param.method_opt_))) {
@@ -5171,16 +5173,21 @@ int ObDbmsStats::get_all_table_ids_in_database(ObExecContext &ctx,
                                                                      table_schemas))) {
         LOG_WARN("failed to get table schemas in database", K(ret));
       } else {
+        bool is_valid = false;
         for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
           if (OB_ISNULL(table_schemas.at(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret));
-          } else if (!(table_schemas.at(i)->is_user_table() ||
-                       ObDbmsStatsUtils::is_stat_sys_table(stat_param.tenant_id_,
-                                                           table_schemas.at(i)->get_table_id()))) {
+          } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard,
+                                                                   stat_param.tenant_id_,
+                                                                   table_schemas.at(i)->get_table_id(),
+                                                                   is_valid))) {
+            LOG_WARN("failed to check is stat table", K(ret));
+          } else if (!is_valid) {
             // only need following tables:
             // 1. user table
-            // 2. valid sys table and real agent virtual table
+            // 2. valid sys table
+            // 3. valid virtual table
           } else if (OB_FAIL(table_ids.push_back(table_schemas.at(i)->get_table_id()))) {
             LOG_WARN("failed to push back id", K(ret));
           } else {/*do nothing*/}
@@ -5293,16 +5300,21 @@ int ObDbmsStats::get_need_statistics_tables(sql::ObExecContext &ctx,
                                                                      table_schemas))) {
         LOG_WARN("failed to get table schema in database", K(ret));
       } else {
+        bool is_valid = false;
         for (int64_t j = 0; OB_SUCC(ret) && j < table_schemas.count(); ++j) {
           if (OB_ISNULL(table_schema = table_schemas.at(j))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), K(table_schema));
-          } else if (!(table_schema->is_user_table() ||
-                       ObDbmsStatsUtils::is_stat_sys_table(tenant_id,
-                                                           table_schema->get_table_id()))) {
+          } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard,
+                                                                   tenant_id,
+                                                                   table_schema->get_table_id(),
+                                                                   is_valid))) {
+            LOG_WARN("failed to check sy table validity", K(ret));
+          } else if (!is_valid) {
             // only gather statistics for following tables:
             // 1. user table
-            // 2. valid sys table and real agent virtual table
+            // 2. valid sys table
+            // 3. virtual table
           } else {
             StatTable stat_table(database_id, table_schema->get_table_id());
             ObIArray<StatTable> *target_array = NULL;
@@ -5389,7 +5401,10 @@ int ObDbmsStats::get_common_table_stale_percent(sql::ObExecContext &ctx,
                                                 StatTable &stat_table)
 {
   int ret = OB_SUCCESS;
-  uint64_t table_id = table_schema.get_table_id();
+  //if this is virtual table real agent, we need see the real table id modifed count
+  uint64_t table_id = share::is_oracle_mapping_real_virtual_table(table_schema.get_table_id()) ?
+                                   share::get_real_table_mappings_tid(table_schema.get_table_id()) :
+                                   table_schema.get_table_id();
   const int64_t part_id = PARTITION_LEVEL_ZERO == table_schema.get_part_level() ? table_id : -1;
   int64_t inc_modified_count = 0;
   stat_table.incremental_stat_ = false;
@@ -5400,6 +5415,8 @@ int ObDbmsStats::get_common_table_stale_percent(sql::ObExecContext &ctx,
     LOG_WARN("get unexpected error", K(ret), K(table_schema.is_user_table()), K(part_id));
   } else if (!is_table_gather_global_stats(part_id, partition_stat_infos, row_cnt)) {
     stat_table.stale_percent_ = -1.0;
+  } else if (is_virtual_table(table_id)) {//virtual table doesn't see the modfiy count, no need regather
+    stat_table.stale_percent_ = 0.0;
   } else if (OB_FAIL(ObBasicStatsEstimator::estimate_modified_count(ctx,
                                                                     tenant_id,
                                                                     table_id,
@@ -5960,7 +5977,8 @@ int ObDbmsStats::set_param_global_part_id(ObExecContext &ctx,
         // if the table is the data table for index, only need
         param.global_data_part_id_ = static_cast<int64_t>(tmp_part_ids.at(0));
       } else {
-        param.global_part_id_ = static_cast<int64_t>(tmp_part_ids.at(0));
+        param.global_part_id_ = is_virtual_table(target_table_id) ?
+                                         target_table_id : static_cast<int64_t>(tmp_part_ids.at(0));
         param.global_tablet_id_ = tmp_tablet_ids.at(0).id();
       }
     } else {

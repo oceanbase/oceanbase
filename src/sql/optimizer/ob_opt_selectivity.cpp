@@ -3021,7 +3021,8 @@ int ObOptSelectivity::get_column_min_max(const OptTableMetas &table_metas,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(ctx.get_opt_stat_manager()),
                                         K(ctx.get_session_info()));
-      } else if (OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
+      } else if (table_meta->use_opt_stat() &&
+                 OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
                                                                      table_meta->get_ref_table_id(),
                                                                      table_meta->get_all_used_parts(),
                                                                      column_id,

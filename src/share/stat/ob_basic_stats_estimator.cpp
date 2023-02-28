@@ -84,12 +84,12 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
     LOG_WARN("failed to fill sample info", K(ret));
   } else if (dst_opt_stats.count() > 1 &&
              OB_FAIL(fill_group_by_info(allocator, param, extra, calc_part_id_str))) {
-    LOG_WARN("failed to add query sql partition info", K(ret));
+    LOG_WARN("failed to add group by info", K(ret));
   } else if (OB_FAIL(add_stat_item(ObStatRowCount(&param, src_tab_stat)))) {
     LOG_WARN("failed to add row count", K(ret));
   } else if (calc_part_id_str.empty()) {
-    if (OB_FAIL(fill_partition_info(allocator, param, extra))) {
-      LOG_WARN("failed to add query sql parallel info", K(ret));
+    if (!is_virtual_table(param.table_id_) && OB_FAIL(fill_partition_info(allocator, param, extra))) {
+      LOG_WARN("failed to add partition info", K(ret));
     } else if (OB_UNLIKELY(dst_opt_stats.count() != 1) ||
                OB_ISNULL(dst_opt_stats.at(0).table_stat_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -140,17 +140,19 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
   ObSEArray<ObObjectID, 4> partition_ids;
   ObSEArray<EstimateBlockRes, 4> estimate_result;
   hash::ObHashMap<int64_t, int64_t> first_part_idx_map;
-  if (OB_FAIL(get_all_tablet_id_and_object_id(param,
-                                              tablet_ids,
-                                              partition_ids))) {
+  uint64_t table_id = share::is_oracle_mapping_real_virtual_table(param.table_id_) ?
+                              share::get_real_table_mappings_tid(param.table_id_) : param.table_id_;
+  if (is_virtual_table(table_id)) {//virtual table no need estimate block count
+    //do nothing
+  } else if (OB_FAIL(get_all_tablet_id_and_object_id(param, tablet_ids, partition_ids))) {
     LOG_WARN("failed to get all tablet id and object id", K(ret));
-   } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
-              OB_FAIL(first_part_tab_stats.prepare_allocate(param.all_part_infos_.count()))) {
+  } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
+             OB_FAIL(first_part_tab_stats.prepare_allocate(param.all_part_infos_.count()))) {
     LOG_WARN("failed to prepare allocate", K(ret));
   } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
              OB_FAIL(generate_first_part_idx_map(param.all_part_infos_, first_part_idx_map))) {
     LOG_WARN("failed to generate first part idx map", K(ret));
-  } else if (OB_FAIL(do_estimate_block_count(ctx, param.tenant_id_, param.table_id_, tablet_ids,
+  } else if (OB_FAIL(do_estimate_block_count(ctx, param.tenant_id_, table_id, tablet_ids,
                                              partition_ids, estimate_result))) {
     LOG_WARN("failed to do estimate block count", K(ret));
   } else {
