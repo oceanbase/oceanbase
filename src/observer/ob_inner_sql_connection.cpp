@@ -1571,6 +1571,7 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
 
+  TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
   common::ObAddr resource_server_addr; // MYADDR
   share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
   int64_t query_timeout = OB_INVALID_TIMESTAMP;
@@ -1586,9 +1587,8 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("resource_conn_id or resource_svr is invalid", K(ret), K(tenant_id),
              K(get_resource_conn_id()), K(get_resource_svr()));
-  } else if (OB_FAIL(get_session().get_query_timeout(query_timeout))
-             || OB_FAIL(get_session().get_tx_timeout(trx_timeout))) {
-    LOG_WARN("get conn timeout failed", KR(ret), K(get_session()));
+  } else if (OB_FAIL(get_session_timeout_for_rpc(query_timeout, trx_timeout))) {
+    LOG_WARN("fail to get_session_timeout_for_rpc", K(ret), K(query_timeout), K(trx_timeout));
   } else {
     ObInnerSQLTransmitArg arg(MYADDR, get_resource_svr(), tenant_id, get_resource_conn_id(),
                               sql, (ObInnerSQLTransmitArg::InnerSQLOperationType)op_type,
