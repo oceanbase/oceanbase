@@ -325,15 +325,15 @@ bool ObKVCacheStore::wash()
         if (NULL != tenant_wash_info && tenant_wash_info->wash_heap_.mb_cnt_ > 0) {
           wash_mbs(tenant_wash_info->wash_heap_);
           COMMON_LOG(INFO, "Wash memory, ",
-            "tenant_id", wash_iter->first,
-            "cache_size", tenant_wash_info->cache_size_,
-            "lower_mem_limit", tenant_wash_info->lower_limit_,
-            "upper_mem_limit", tenant_wash_info->upper_limit_,
-            "min_wash_size", tenant_wash_info->min_wash_size_,
-            "max_wash_size", tenant_wash_info->max_wash_size_,
-            "mem_usage", lib::get_tenant_memory_hold(wash_iter->first),
-            "reserve_mem", static_cast<int64_t>((static_cast<double>(tenant_wash_info->upper_limit_)) * tenant_reserve_mem_ratio_),
-            "wash_size", tenant_wash_info->wash_size_);
+              "tenant_id", wash_iter->first,
+              "cache_size", tenant_wash_info->cache_size_,
+              "lower_mem_limit", tenant_wash_info->lower_limit_,
+              "upper_mem_limit", tenant_wash_info->upper_limit_,
+              "min_wash_size", tenant_wash_info->min_wash_size_,
+              "max_wash_size", tenant_wash_info->max_wash_size_,
+              "mem_usage", tenant_wash_info->mem_usage_,
+              "reserve_mem", tenant_wash_info->reserve_mem_,
+              "wash_size", tenant_wash_info->wash_size_);
         }
       }
       current_time = ObTimeUtility::current_time();
@@ -912,13 +912,14 @@ bool ObKVCacheStore::compute_tenant_wash_size()
     upper_limit = tenant_wash_info->upper_limit_;
     lower_limit = tenant_wash_info->lower_limit_;
     mem_usage = lib::get_tenant_memory_hold(tenant_id);
+    tenant_wash_info->mem_usage_ = mem_usage;
     if (upper_limit <= 1024L * 1024L * 1024L) {
       reserve_mem = upper_limit / 10;
     } else {
-      reserve_mem = static_cast<int64_t> (1.468 *
-          log(static_cast<double>(upper_limit)/(1024.0 * 1024.0 * 1024.0)) * 1024L * 1024L * 1024L)
-              + 200L * 1024L * 1024L;
+      reserve_mem = log10(static_cast<double>(upper_limit)/(1024.0 * 1024.0 * 1024.0)) * upper_limit / 20
+                    + 100L * 1024L * 1024L;
     }
+    tenant_wash_info->reserve_mem_ = reserve_mem;
 
     //identify min_wash_size
     tenant_wash_info->min_wash_size_ = std::max(0L, mem_usage - upper_limit + reserve_mem);
@@ -1387,6 +1388,8 @@ ObKVCacheStore::TenantWashInfo::TenantWashInfo()
   : cache_size_(0),
     lower_limit_(0),
     upper_limit_(0),
+    mem_usage_(0),
+    reserve_mem_(0),
     max_wash_size_(0),
     min_wash_size_(0),
     wash_size_(0)
@@ -1421,6 +1424,8 @@ void ObKVCacheStore::TenantWashInfo::reuse()
   cache_size_ = 0;
   lower_limit_ = 0;
   upper_limit_= 0;
+  mem_usage_ = 0;
+  reserve_mem_ = 0;
   max_wash_size_ = 0;
   min_wash_size_ = 0;
   wash_size_ = 0;

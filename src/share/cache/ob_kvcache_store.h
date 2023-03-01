@@ -153,6 +153,8 @@ private:
     int64_t cache_size_;
     int64_t lower_limit_;
     int64_t upper_limit_;
+    int64_t mem_usage_;
+    int64_t reserve_mem_;
     int64_t max_wash_size_;
     int64_t min_wash_size_;
     int64_t wash_size_;
