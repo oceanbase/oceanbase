@@ -4454,8 +4454,8 @@ int ObLogPlan::allocate_join_path(JoinPath *join_path,
     if (OB_ISNULL(left_path) || OB_ISNULL(right_path)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(left_path), K(right_path));
-    } else if (OB_FAIL(create_plan_tree_from_path(left_path, left_child)) ||
-               OB_FAIL(create_plan_tree_from_path(right_path, right_child))) {
+    } else if (OB_FAIL(SMART_CALL(create_plan_tree_from_path(left_path, left_child))) ||
+               OB_FAIL(SMART_CALL(create_plan_tree_from_path(right_path, right_child)))) {
       LOG_WARN("failed to create plan tree from path", K(ret));
     } else if (OB_ISNULL(left_child) || OB_ISNULL(right_child)) {
       ret = OB_ERR_UNEXPECTED;
