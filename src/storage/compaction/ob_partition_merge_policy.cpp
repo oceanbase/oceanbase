@@ -891,6 +891,10 @@ int ObPartitionMergePolicy::check_need_major_merge(
         can_merge = last_sstable_snapshot >= freeze_info.freeze_ts;
         if (!can_merge) {
           LOG_TRACE("tablet need merge, but cannot merge now", K(tablet_id), K(merge_version), K(last_sstable_snapshot), K(freeze_info));
+        } else if (freeze_info.freeze_ts < merge_version) {
+          LOG_INFO("can't schedule the latest merge round, choose the older one to schedule",
+              K(ret), K(tablet_id), K(merge_version), K(freeze_info), KPC(latest_major_sstable), K(tablet));
+          merge_version = freeze_info.freeze_ts;
         }
       }
 
