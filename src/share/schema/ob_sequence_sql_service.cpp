@@ -159,7 +159,13 @@ int ObSequenceSqlService::clean_sequence_cache(uint64_t tenant_id, uint64_t sequ
                   .by(tenant_id)
                   .timeout(timeout)
                   .clean_sequence_cache(sequence_id))) {
-        LOG_WARN("clean sequnece cache failed", K(ret), K(sequence_id), K(server_list.at(i)));
+        if (is_timeout_err(ret) || is_server_down_error(ret)) {
+          LOG_WARN("rpc call time out, ignore the error", "server", server_list.at(i),
+                    K(tenant_id), K(sequence_id), K(ret));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("clean sequnece cache failed", K(ret), K(sequence_id), K(server_list.at(i)));
+        }
       }
     }
   }
