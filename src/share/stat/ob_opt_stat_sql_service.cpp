@@ -34,6 +34,7 @@
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_column_stat.h"
 #include "lib/charset/ob_charset.h"
+#include "share/stat/ob_opt_stat_monitor_manager.h"
 
 #define ALL_HISTOGRAM_STAT_COLUMN_NAME "tenant_id, "     \
                                        "table_id, "      \
@@ -2010,6 +2011,113 @@ int ObOptStatSqlService::batch_update_online_col_state(const uint64_t tenant_id,
   }
   return ret;
 }*/
+
+int ObOptStatSqlService::fetch_table_rowcnt(const uint64_t tenant_id,
+                                            const uint64_t table_id,
+                                            const ObIArray<ObTabletID> &all_tablet_ids,
+                                            const ObIArray<share::ObLSID> &all_ls_ids,
+                                            ObIArray<ObOptTableStat> &tstats)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString raw_sql;
+  ObSqlString tablet_list_str;
+  ObSqlString tablet_ls_list_str;
+  uint64_t real_table_id = share::is_oracle_mapping_real_virtual_table(table_id) ?
+                           ObSchemaUtils::get_real_table_mappings_tid(table_id) : table_id;
+  if (OB_FAIL(gen_tablet_list_str(all_tablet_ids, all_ls_ids, tablet_list_str, tablet_ls_list_str))) {
+    LOG_WARN("failed to gen tablet list str", K(ret));
+  } else if (OB_FAIL(raw_sql.append_fmt("select tablet_id, max(row_count) from (select cast(tablet_id as unsigned) as tablet_id, cast(inserts - deletes as signed) as row_count "\
+                                         "from %s where tenant_id = %lu and table_id = %lu and tablet_id in %s union all "\
+                                         "select cast(tablet_id as unsigned) as tablet_id, cast(row_count as signed) as row_count from %s, "\
+                                         "(select frozen_scn from %s order by frozen_scn desc limit 1) where "\
+                                         "tenant_id = %lu and compaction_scn = frozen_scn and (tablet_id, ls_id) in %s) group by tablet_id;",
+                                         share::OB_ALL_MONITOR_MODIFIED_TNAME,
+                                         share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                         share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, real_table_id),
+                                         tablet_list_str.ptr(),
+                                         share::OB_ALL_TABLET_CHECKSUM_TNAME,
+                                         share::OB_ALL_FREEZE_INFO_TNAME,
+                                         share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id,tenant_id),
+                                         tablet_ls_list_str.ptr()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_);
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, raw_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(raw_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else {
+        int64_t expired_time = ObTimeUtility::current_time() + ObOptStatMonitorCheckTask::CHECK_INTERVAL;
+        while (OB_SUCC(ret)) {
+          int64_t tablet_idx = 0;
+          int64_t row_cnt_idx = 1;
+          ObObj tablet_obj;
+          ObObj row_cnt_obj;
+          uint64_t tablet_id = ObTabletID::INVALID_TABLET_ID;
+          int64_t row_cnt = 0;
+          if (OB_FAIL(client_result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("result next failed", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else if (OB_FAIL(client_result->get_obj(tablet_idx, tablet_obj)) ||
+                     OB_FAIL(client_result->get_obj(row_cnt_idx, row_cnt_obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(tablet_obj.get_uint64(tablet_id)) ||
+                     OB_FAIL(row_cnt_obj.get_int(row_cnt))) {
+            LOG_WARN("failed to get int", K(ret), K(tablet_obj), K(row_cnt_obj));
+          } else {
+            ObOptTableStat tstat;
+            tstat.set_table_id(table_id);
+            tstat.set_tablet_id(tablet_id);
+            tstat.set_row_count(row_cnt);
+            tstat.set_stat_expired_time(expired_time);
+            if (OB_FAIL(tstats.push_back(tstat))) {
+              LOG_WARN("failed to push back", K(ret));
+            }
+          }
+        }
+        LOG_TRACE("succeed to fetch table rowcnt", K(tstats), K(raw_sql));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptStatSqlService::gen_tablet_list_str(const ObIArray<ObTabletID> &all_tablet_ids,
+                                             const ObIArray<share::ObLSID> &all_ls_ids,
+                                             ObSqlString &tablet_list_str,
+                                             ObSqlString &tablet_ls_list_str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(all_tablet_ids.empty() || all_tablet_ids.count() != all_ls_ids.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(all_tablet_ids), K(all_ls_ids));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_tablet_ids.count(); ++i) {
+      char prefix = i == 0 ? '(' : ' ';
+      char suffix = i == all_tablet_ids.count() - 1 ? ')' : ',';
+      if (OB_FAIL(tablet_list_str.append_fmt("%c%lu%c",
+                                             prefix,
+                                             all_tablet_ids.at(i).id(),
+                                             suffix))) {
+        LOG_WARN("failed to append fmt", K(ret));
+      } else if (OB_FAIL(tablet_ls_list_str.append_fmt("%c(%lu, %ld)%c",
+                                                       prefix,
+                                                       all_tablet_ids.at(i).id(),
+                                                       all_ls_ids.at(i).id(),
+                                                       suffix))) {
+        LOG_WARN("failed to append fmt", K(ret));
+      } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
 
 } // end of namespace common
 } // end of namespace oceanbase

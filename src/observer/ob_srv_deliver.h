@@ -17,6 +17,7 @@
 #include "lib/thread/thread_mgr_interface.h"
 #include "rpc/frame/ob_req_deliver.h"
 #include "share/ob_thread_pool.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase
@@ -41,28 +42,55 @@ using obrpc::ObRpcSessionHandler;
 class QueueThread
 {
 public:
-  QueueThread(const char *thread_name=nullptr)
-    : thread_(queue_, thread_name)
-  {}
+  QueueThread(const char *thread_name = nullptr,
+              uint64_t tenant_id = common::OB_INVALID_ID)
+      : thread_(queue_, thread_name, tenant_id), tg_id_(0),
+        tenant_id_(tenant_id), n_thread_(0) {}
+
+  ~QueueThread() { destroy(); }
 
 public:
+  int set_thread_count(int thread_cnt) {
+    int ret = OB_SUCCESS;
+    if (thread_cnt != n_thread_) {
+      ret = TG_SET_THREAD_CNT(tg_id_, thread_cnt);
+      n_thread_ = thread_cnt;
+    }
+    return ret;
+  }
+  void stop() { TG_STOP(tg_id_); }
+  void wait() { TG_WAIT(tg_id_); }
+  void destroy() { TG_DESTROY(tg_id_); }
   class Thread : public lib::TGRunnable {
   public:
-    Thread(ObReqQueue &queue, const char *thread_name)
-      : queue_(queue), thread_name_(thread_name)
-    {}
+    Thread(ObReqQueue &queue, const char *thread_name, const uint64_t tenant_id)
+        : queue_(queue), thread_name_(thread_name), tenant_id_(tenant_id) {}
     void run1()
     {
       if (thread_name_ != nullptr) {
         lib::set_thread_name(thread_name_, get_thread_idx());
       }
+      if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
+          tenant_id_ != common::OB_INVALID_ID && nullptr != GCTX.cgroup_ctrl_ &&
+          OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
+        GCTX.cgroup_ctrl_->add_thread_to_cgroup(
+            static_cast<pid_t>(syscall(__NR_gettid)), tenant_id_,
+            share::OBCG_MYSQL_LOGIN);
+      }
       queue_.loop();
     }
+
   private:
     ObReqQueue &queue_;
     const char *thread_name_;
+    const uint64_t tenant_id_;
   } thread_;
   ObReqQueue queue_;
+  int tg_id_;
+
+private:
+  uint64_t tenant_id_;
+  int n_thread_;
 };
 
 class ObSrvDeliver

@@ -58,25 +58,6 @@ int ObPXServerAddrUtil::alloc_by_data_distribution(const ObIArray<ObTableLocatio
   return ret;
 }
 
-int ObPXServerAddrUtil::mark_virtual_table_dfo(common::ObIArray<const ObTableScanSpec*> &scan_ops,
-    ObDfo &dfo)
-{
-  int ret = OB_SUCCESS;
-  bool is_vtable = true;
-  for (int i = 0; i < scan_ops.count() && OB_SUCC(ret); ++i) {
-    if (OB_ISNULL(scan_ops.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("scan ops is null", K(ret));
-    } else if (!is_virtual_table(scan_ops.at(i)->get_ref_table_id())) {
-      is_vtable = false;
-      break;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    dfo.set_ignore_vtable_error(is_vtable && scan_ops.count() > 0);
-  }
-  return ret;
-}
 
 int ObPXServerAddrUtil::build_dynamic_partition_table_location(common::ObIArray<const ObTableScanSpec *> &scan_ops,
       const ObIArray<ObTableLocation> *table_locations, ObDfo &dfo)
@@ -172,9 +153,6 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
                                    ref_table_id,
                                    table_loc));
     } else {
-      if (OB_FAIL(mark_virtual_table_dfo(scan_ops, dfo))) {
-        LOG_WARN("fail to mark virtual table dfo", K(ret));
-      } else
       // 通过TSC或者DML获得当前的DFO的partition对应的location信息
       // 后续利用location信息构建对应的SQC meta
       if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
@@ -311,7 +289,6 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
         sqc.set_fulltree(dfo.is_fulltree());
         sqc.set_qc_server_id(dfo.get_qc_server_id());
         sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
-        sqc.set_ignore_vtable_error(dfo.is_ignore_vtable_error());
         sqc.set_single_tsc_leaf_dfo(dfo.is_single_tsc_leaf_dfo());
         for (auto iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
           if (addrs.at(i) == (*iter)->server_) {
@@ -3534,4 +3511,27 @@ int ObExtraServerAliveCheck::do_check() const
   }
   LOG_DEBUG("server alive do check", K(ret), K(qc_addr_), K(cluster_id_), K(dfo_mgr_));
   return ret;
+}
+
+bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
+{
+  bool should_ignore = false;
+  switch (error_code) {
+    case OB_ALLOCATE_MEMORY_FAILED: {
+      should_ignore = true;
+      break;
+    }
+    case OB_RPC_CONNECT_ERROR: {
+      should_ignore = true;
+      break;
+    }
+    case OB_RPC_SEND_ERROR: {
+      should_ignore = true;
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+  return should_ignore;
 }

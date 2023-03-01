@@ -481,7 +481,8 @@ private:
   int update_parts_(const ObTxPartList &list);
   void implicit_start_tx_();
   bool acq_commit_cb_lock_if_need_();
-  bool in_tx_or_has_state_();
+  bool has_extra_state_() const;
+  bool in_tx_or_has_extra_state_() const;
   bool in_tx_for_free_route_();
   void print_trace_() const;
 public:
@@ -522,7 +523,6 @@ public:
                K_(flags_.BLOCK),
                K_(flags_.REPLICA),
                K_(can_elr),
-               K_(savepoints),
                K_(cflict_txs),
                K_(abort_cause),
                K_(commit_expire_ts),
@@ -592,6 +592,7 @@ public:
   const ObXATransID &get_xid() const { return xid_; }
   bool is_xa_trans() const { return !xid_.empty(); }
   bool is_xa_tightly_couple() const { return xa_tightly_couple_; }
+  void set_xa_start_addr(common::ObAddr &addr) { xa_start_addr_ = addr; }
   common::ObAddr xa_start_addr() const { return xa_start_addr_; }
   void reset_for_xa() { xid_.reset(); xa_ctx_ = NULL; }
   int trans_deep_copy(const ObTxDesc &x);
@@ -601,7 +602,7 @@ public:
   bool is_in_tx() const { return state_ > State::IDLE; }
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
-  bool in_tx_or_has_state();
+  bool in_tx_or_has_extra_state();
   bool in_tx_for_free_route();
   const ObTransID &get_tx_id() const { return tx_id_; }
   ObITxCallback *get_end_tx_cb() { return commit_cb_; }

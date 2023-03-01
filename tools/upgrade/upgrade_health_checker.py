@@ -319,11 +319,8 @@ def check_observer_status(query_cur, zone, timeout):
 
 # 3. 检查schema是否刷新成功
 def check_schema_status(query_cur, timeout):
-  sql = """select count(*) from __all_server a left join __all_virtual_server_schema_info b on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port where b.svr_ip is null"""
-  check_until_timeout(query_cur, sql, 0, timeout)
-
-  sql = """select count(*) from __all_virtual_server_schema_info a join __all_virtual_server_schema_info b on a.tenant_id = b.tenant_id where a.refreshed_schema_version != b.refreshed_schema_version or a.refreshed_schema_version <= 1"""
-  check_until_timeout(query_cur, sql, 0, timeout)
+  sql = """select if (a.cnt = b.cnt, 1, 0) as passed from (select count(*) as cnt from oceanbase.__all_virtual_server_schema_info where refreshed_schema_version > 1 and refreshed_schema_version % 8 = 0) as a join (select count(*) as cnt from oceanbase.__all_server join oceanbase.__all_tenant) as b"""
+  check_until_timeout(query_cur, sql, 1, timeout)
 
 def check_until_timeout(query_cur, sql, value, timeout):
   times = timeout / 10
@@ -336,7 +333,7 @@ def check_until_timeout(query_cur, sql, value, timeout):
       logging.info("check value is {0} success".format(value))
       break
     else:
-      logging.info("value is {0}, expected value is {0}, not matched".format(results[0][0], value))
+      logging.info("value is {0}, expected value is {1}, not matched".format(results[0][0], value))
 
     times -= 1
     if times == -1:

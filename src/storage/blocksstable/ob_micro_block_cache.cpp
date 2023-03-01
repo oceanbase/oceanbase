@@ -171,6 +171,7 @@ int ObMicroBlockCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCac
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate decoder allocator", K(ret));
         } else if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
+          // There must be get_decoder_allocator before GET_TSI_MULT(ObIndexBlockDataTransformer)
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("Fail to get thread local index block data transformer", K(ret));
         } else if (OB_FAIL(transformer->update_index_block(
@@ -1258,7 +1259,12 @@ int ObIndexMicroBlockCache::write_extra_buf(const ObTableReadInfo &read_info,
   int ret = OB_SUCCESS;
 
   ObIndexBlockDataTransformer *transformer = nullptr;
-  if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
+  ObDecoderAllocator* allocator = nullptr;
+  if (OB_ISNULL(allocator = get_decoder_allocator())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate decoder allocator", K(ret));
+  } else if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
+    // There must be get_decoder_allocator before GET_TSI_MULT(ObIndexBlockDataTransformer)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate ObIndexBlockDataTransformer", K(ret));
   } else if (OB_FAIL(transformer->transform(read_info, micro_data, extra_buf, extra_size))) {

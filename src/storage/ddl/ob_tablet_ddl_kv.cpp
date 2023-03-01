@@ -52,14 +52,14 @@ ObBlockMetaTree::~ObBlockMetaTree()
 int ObBlockMetaTree::init(const share::ObLSID &ls_id,
                           const ObITable::TableKey &table_key,
                           const share::SCN &ddl_start_scn,
-                          const int64_t cluster_version)
+                          const int64_t data_format_version)
 {
   int ret = OB_SUCCESS;
   const ObMemAttr mem_attr(MTL_ID(), "BlockMetaTree");
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !table_key.is_valid() || cluster_version <= 0)) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !table_key.is_valid() || data_format_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(table_key));
   } else if (FALSE_IT(arena_.set_attr(mem_attr))) {
@@ -68,10 +68,10 @@ int ObBlockMetaTree::init(const share::ObLSID &ls_id,
   } else if (OB_FAIL(ObTabletDDLUtil::prepare_index_data_desc(ls_id,
                                                               table_key.tablet_id_,
                                                               table_key.get_snapshot_version(),
-                                                              cluster_version,
+                                                              data_format_version,
                                                               nullptr, // first ddl sstable
                                                               data_desc_))) {
-      LOG_WARN("prepare data store desc failed", K(ret), K(ls_id), K(table_key), K(cluster_version));
+      LOG_WARN("prepare data store desc failed", K(ret), K(ls_id), K(table_key), K(data_format_version));
   } else {
     is_inited_ = true;
   }
@@ -430,7 +430,7 @@ int ObBlockMetaTree::get_last_rowkey(const ObDatumRowkey *&last_rowkey)
 ObDDLKV::ObDDLKV()
   : is_inited_(false), ls_id_(), tablet_id_(), ddl_start_scn_(SCN::min_scn()), snapshot_version_(0),
     lock_(), arena_allocator_("DDL_KV"), is_freezed_(false), is_closed_(false), last_freezed_scn_(SCN::min_scn()),
-    min_scn_(SCN::max_scn()), max_scn_(SCN::min_scn()), freeze_scn_(SCN::max_scn()), pending_cnt_(0), cluster_version_(0)
+    min_scn_(SCN::max_scn()), max_scn_(SCN::min_scn()), freeze_scn_(SCN::max_scn()), pending_cnt_(0), data_format_version_(0)
 {
 }
 
@@ -444,7 +444,7 @@ int ObDDLKV::init(const share::ObLSID &ls_id,
                   const SCN &ddl_start_scn,
                   const int64_t snapshot_version,
                   const SCN &last_freezed_scn,
-                  const int64_t cluster_version)
+                  const int64_t data_format_version)
 
 {
   int ret = OB_SUCCESS;
@@ -456,9 +456,9 @@ int ObDDLKV::init(const share::ObLSID &ls_id,
         || !ddl_start_scn.is_valid_and_not_min()
         || snapshot_version <= 0
         || !last_freezed_scn.is_valid_and_not_min()
-        || cluster_version < 0)) {
+        || data_format_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(ddl_start_scn), K(snapshot_version), K(last_freezed_scn), K(cluster_version));
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(ddl_start_scn), K(snapshot_version), K(last_freezed_scn), K(data_format_version));
   } else {
     ObTabletDDLParam ddl_param;
     ddl_param.tenant_id_ = MTL_ID();
@@ -469,9 +469,9 @@ int ObDDLKV::init(const share::ObLSID &ls_id,
     ddl_param.table_key_.version_range_.snapshot_version_ = snapshot_version;
     ddl_param.start_scn_ = ddl_start_scn;
     ddl_param.snapshot_version_ = snapshot_version;
-    ddl_param.cluster_version_ = cluster_version;
+    ddl_param.data_format_version_ = data_format_version;
     ObTabletCreateSSTableParam sstable_param;
-    if (OB_FAIL(block_meta_tree_.init(ls_id, ddl_param.table_key_, ddl_start_scn, cluster_version))) {
+    if (OB_FAIL(block_meta_tree_.init(ls_id, ddl_param.table_key_, ddl_start_scn, data_format_version))) {
       LOG_WARN("init mem index sstable failed", K(ret), K(ddl_param));
     } else if (OB_FAIL(init_sstable_param(ls_id, ddl_param.table_key_, ddl_start_scn, sstable_param))) {
       LOG_WARN("init sstable param failed", K(ret));
@@ -483,9 +483,9 @@ int ObDDLKV::init(const share::ObLSID &ls_id,
       ddl_start_scn_ = ddl_start_scn;
       snapshot_version_ = snapshot_version;
       last_freezed_scn_ = last_freezed_scn;
-      cluster_version_ = cluster_version;
+      data_format_version_ = data_format_version;
       is_inited_ = true;
-      LOG_INFO("ddl kv init success", K(ls_id_), K(tablet_id_), K(ddl_start_scn_), K(snapshot_version_), K(last_freezed_scn_), K(cluster_version_), KP(this));
+      LOG_INFO("ddl kv init success", K(ls_id_), K(tablet_id_), K(ddl_start_scn_), K(snapshot_version_), K(last_freezed_scn_), K(data_format_version_), KP(this));
     }
   }
   return ret;
@@ -507,7 +507,7 @@ void ObDDLKV::reset()
   max_scn_ = SCN::min_scn();
   freeze_scn_ = SCN::max_scn();
   pending_cnt_ = 0;
-  cluster_version_ = 0;
+  data_format_version_ = 0;
   block_meta_tree_.destroy();
   arena_allocator_.reset();
 }
@@ -680,7 +680,7 @@ int ObDDLKV::close()
     ddl_param.table_key_.scn_range_.end_scn_ = freeze_scn_;
     ddl_param.start_scn_ = ddl_start_scn_;
     ddl_param.snapshot_version_ = snapshot_version_;
-    ddl_param.cluster_version_ = cluster_version_;
+    ddl_param.data_format_version_ = data_format_version_;
     if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(ddl_param, meta_array, nullptr/*first_ddl_sstable*/, table_handle))) {
       LOG_WARN("create ddl sstable failed", K(ret), K(ddl_param));
     } else if (OB_FAIL(ObTabletDDLUtil::update_ddl_table_store(ddl_param, table_handle))) {

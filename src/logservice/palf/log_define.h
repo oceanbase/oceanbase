@@ -77,6 +77,7 @@ const int64_t LEADER_DEFAULT_GROUP_BUFFER_SIZE = 1 << 25;                       
 const int64_t MAX_ALLOWED_SKEW_FOR_REF_US = 3600L * 1000 * 1000;          // 1h
 // follower's group buffer size is 8MB larger than leader's.
 const int64_t FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE = LEADER_DEFAULT_GROUP_BUFFER_SIZE + 8 * 1024 * 1024L;
+const int64_t PALF_STAT_PRINT_INTERVAL_US = 1 * 1000 * 1000L;
 const int64_t PALF_RECONFIRM_FETCH_MAX_LSN_INTERVAL = 1 * 1000 * 1000;
 const int64_t PALF_FETCH_LOG_INTERVAL_US = 2 * 1000 * 1000L;                 // 2s
 const int64_t PALF_FETCH_LOG_RENEW_LEADER_INTERVAL_US = 5 * 1000 * 1000;            // 5s
@@ -100,6 +101,7 @@ const int64_t PALF_SYNC_RPC_TIMEOUT_US = 500 * 1000;                            
 const int64_t PALF_LOG_SYNC_DELAY_THRESHOLD_US = 3 * 1000 * 1000L;                  // 3 s
 constexpr int64_t INVALID_PROPOSAL_ID = INT64_MAX;
 constexpr int64_t PALF_INITIAL_PROPOSAL_ID = 0;
+constexpr char PADDING_LOG_CONTENT_CHAR = '\0';
 
 inline int64_t max_proposal_id(const int64_t a, const int64_t b)
 {

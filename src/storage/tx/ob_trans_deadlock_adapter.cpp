@@ -354,7 +354,7 @@ int ObTransDeadlockDetectorAdapter::register_remote_execution_to_deadlock_detect
                                                                on_detect_op,
                                                                on_collect_op,
                                                                ~session_guard->get_tx_desc()->get_active_ts(),
-                                                               500_ms))) {
+                                                               3_s))) {
     DETECT_LOG(WARN, "fail to register deadlock", PRINT_WRAPPER);
   } else {
     MTL(ObDeadLockDetectorMgr*)->set_timeout(self_tx_id, query_timeout);
@@ -640,14 +640,14 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
     ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(ERROR, "session is NULL", PRINT_WRAPPER);
   } else if (session->is_inner()) {
-    // inner session no need register to deadlock
+    DETECT_LOG(INFO, "inner session no need register to deadlock", PRINT_WRAPPER);
   } else if (memtable::TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR) {
-    // will call post_process() in lock_wait_mgr, will register deadlock info there, no need process here
+    DETECT_LOG(INFO, "thread local flag marked local execution, no need register to deadlock here", PRINT_WRAPPER);
   } else if (OB_ISNULL(desc = session->get_tx_desc())) {
     ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(ERROR, "desc in session is NULL", PRINT_WRAPPER);
   } else if (!desc->is_valid()) {
-    // no trans opened, for example:read-only trans
+    DETECT_LOG(INFO, "invalid tx desc no need register to deadlock", PRINT_WRAPPER);
   } else if (is_rollback) {// statment is failed, maybe will try again, check if need register to deadlock detector
     if (session->get_query_timeout_ts() < ObClockGenerator::getCurrentTime()) {
       unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_TIMEOUT);
@@ -665,13 +665,16 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
                                                                                conflict_txs))) {
       DETECT_LOG(WARN, "register or replace list failed", PRINT_WRAPPER);
     } else {
-      desc->reset_conflict_txs();
-      DETECT_LOG(TRACE, "maintain deadlock info when end_stmt", PRINT_WRAPPER);
+      // do nothing, register success or keep retrying
     }
   } else {// statment is done, will not try again, all related deadlock info should be resetted
     unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_DONE);
-    DETECT_LOG(TRACE, "unregister from deadlock detector", KR(ret), K(desc->tid()));
+    DETECT_LOG(INFO, "try unregister from deadlock detector", KR(ret), K(desc->tid()));
   }
+  if (OB_NOT_NULL(desc)) {// whether registered or not, clean conflict info anyway
+    desc->reset_conflict_txs();
+  }
+  DETECT_LOG(INFO, "maintain deadlock info", PRINT_WRAPPER);
   return ret;
   #undef PRINT_WRAPPER
 }

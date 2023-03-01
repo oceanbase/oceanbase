@@ -76,6 +76,10 @@ enum ObRoutineFlag
   SP_FLAG_UDT_CONS = 4096, // this is udt constructor
   SP_FLAG_UDT_ORDER = 8192, // UDT order function
   SP_FLAG_AGGREGATE = 16384,
+  SP_FLAG_NO_SQL = 32768,
+  SP_FLAG_READS_SQL_DATA = 65536,
+  SP_FLAG_MODIFIES_SQL_DATA = 131072,
+  SP_FLAG_CONTAINS_SQL = 262144,
 };
 
 namespace oceanbase
@@ -138,6 +142,14 @@ public:
   virtual bool is_udt_order() const = 0;
   virtual void set_pipelined() = 0;
   virtual bool is_pipelined() const = 0;
+  virtual void set_no_sql() = 0;
+  virtual bool is_no_sql() const = 0;
+  virtual void set_reads_sql_data() = 0;
+  virtual bool is_reads_sql_data() const = 0;
+  virtual void set_modifies_sql_data() = 0;
+  virtual bool is_modifies_sql_data() const = 0;
+  virtual void set_contains_sql() = 0;
+  virtual bool is_contains_sql() const = 0;
 
   TO_STRING_EMPTY();
 };
@@ -452,6 +464,10 @@ public:
   OB_INLINE void set_is_udt_order() { flag_ |= SP_FLAG_UDT_ORDER; }
   OB_INLINE void set_is_udt_map() { flag_ |= SP_FLAG_UDT_MAP; }
   OB_INLINE void set_is_aggregate() { flag_ |= SP_FLAG_AGGREGATE; }
+  OB_INLINE void set_no_sql() { flag_ &= ~SP_FLAG_READS_SQL_DATA; flag_ &= ~SP_FLAG_MODIFIES_SQL_DATA; flag_ |= SP_FLAG_NO_SQL;}
+  OB_INLINE void set_reads_sql_data() { flag_ &= ~SP_FLAG_NO_SQL; flag_ &= ~SP_FLAG_MODIFIES_SQL_DATA; flag_ |= SP_FLAG_READS_SQL_DATA;}
+  OB_INLINE void set_modifies_sql_data() { flag_ &= ~SP_FLAG_NO_SQL; flag_ &= ~SP_FLAG_READS_SQL_DATA; flag_ |= SP_FLAG_MODIFIES_SQL_DATA;}
+  OB_INLINE void set_contains_sql() { flag_ &= ~SP_FLAG_NO_SQL; flag_ &= ~SP_FLAG_READS_SQL_DATA; flag_ &= ~SP_FLAG_MODIFIES_SQL_DATA;}
 
   OB_INLINE bool is_aggregate() const { return SP_FLAG_AGGREGATE == (flag_ & SP_FLAG_AGGREGATE); }
 
@@ -478,6 +494,18 @@ public:
   OB_INLINE bool is_deterministic() const
   {
     return SP_FLAG_DETERMINISTIC == (flag_ & SP_FLAG_DETERMINISTIC);
+  }
+  OB_INLINE bool is_no_sql() const {
+    return SP_FLAG_NO_SQL == (flag_ & SP_FLAG_NO_SQL);
+  }
+  OB_INLINE bool is_reads_sql_data() const {
+    return SP_FLAG_READS_SQL_DATA == (flag_ & SP_FLAG_READS_SQL_DATA);
+  }
+  OB_INLINE bool is_modifies_sql_data() const {
+    return SP_FLAG_MODIFIES_SQL_DATA == (flag_ & SP_FLAG_MODIFIES_SQL_DATA);
+  }
+  OB_INLINE bool is_contains_sql() const {
+    return !(is_no_sql()||is_reads_sql_data()||is_modifies_sql_data());
   }
   OB_INLINE bool is_parallel_enable() const
   {

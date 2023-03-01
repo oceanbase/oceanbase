@@ -539,7 +539,7 @@ int ObBasicSessionInfo::switch_tenant(uint64_t effective_tenant_id)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(ret), K(effective_tenant_id));
   } else if (OB_NOT_NULL(tx_desc_) && effective_tenant_id != effective_tenant_id_) {
-    if (tx_desc_->in_tx_or_has_state()) {
+    if (tx_desc_->in_tx_or_has_extra_state()) {
       ret = OB_NOT_SUPPORTED;
       // only inner-SQL goes switch_tenant and may fall into such state
       // print out error to easy trouble-shot
@@ -3769,38 +3769,56 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       }
     }
-    const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
-    int64_t store_idx = -1;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ids.count(); ++i) {
-      ObBasicSysVar *sys_var = NULL;
-      if (!is_sync_sys_var(ids.at(i))
-          && !tmp_sys_var_inc_info.all_has_sys_var_id(ids.at(i))) {
-        // need set default values
-        if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(ids.at(i), store_idx))) {
-          LOG_WARN("fail to calc sys var store idx", K(ret));
-        } else {
-          if (OB_FAIL(create_sys_var(ids.at(i), store_idx, sys_var))) {
-            LOG_WARN("fail to create sys var", K(ids.at(i)), K(ret));
-          } else if (OB_ISNULL(sys_var)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create sys var is NULL", K(ret));
-          } else {
-            ObObj tmp_obj = ObSysVariables::get_default_value(store_idx);
-            sys_vars_[store_idx]->set_value(tmp_obj);
-            LOG_TRACE("sync sys var set default value", K(ids.at(i)), K(tmp_obj),
-                     K(sessid_), K(proxy_sessid_));
-          }
-        }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sync_default_sys_vars(sys_var_inc_info_, tmp_sys_var_inc_info))) {
+        LOG_WARN("fail to sync default sys vars",K(ret));
+      } else if (OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
+        LOG_WARN("fail to assign sys var delta info",K(ret));
+      } else {
+        //do nothing.
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
-      LOG_WARN("fail to assign sys var delta info",K(ret));
-    } else {
-      //do nothing.
-    }
-    LOG_TRACE("after deserialize sync sys vars", "inc var ids", sys_var_inc_info_.get_all_sys_var_ids(),
-                                          K(sessid_), K(proxy_sessid_));
+    LOG_TRACE("after deserialize sync sys vars", "inc var ids",
+                      sys_var_inc_info_.get_all_sys_var_ids(),
+                      K(sessid_), K(proxy_sessid_));
   }
+  return ret;
+}
+
+// Deserialization scenario, synchronization of default system variables
+int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_,
+                                              SysVarIncInfo tmp_sys_var_inc_info)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
+  int64_t store_idx = -1;
+  ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ids.count(); ++i) {
+    ObBasicSysVar *sys_var = NULL;
+    sys_var_id = ids.at(i);
+    if (!is_sync_sys_var(sys_var_id)
+        && !tmp_sys_var_inc_info.all_has_sys_var_id(sys_var_id)) {
+      // need set default values
+      if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
+        LOG_WARN("fail to calc sys var store idx", K(ret));
+      } else if (OB_FAIL(create_sys_var(ids.at(i), store_idx, sys_var))) {
+        LOG_WARN("fail to create sys var", K(ids.at(i)), K(ret));
+      } else if (OB_ISNULL(sys_var)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("create sys var is NULL", K(ret));
+      } else if (FALSE_IT(sys_vars_[store_idx]->set_value(
+                          ObSysVariables::get_default_value(store_idx)))) {
+        // do nothing.
+      } else if (OB_FAIL(process_session_variable(sys_var_id, sys_vars_[store_idx]->get_value(),
+                                                  false))) {
+        LOG_WARN("process system variable error", K(ret), K(sys_var_id));
+      } else {
+        LOG_TRACE("sync sys var set default value", K(sys_var_id),
+        K(sessid_), K(proxy_sessid_));
+      }
+    }
+  }
+
   return ret;
 }
 

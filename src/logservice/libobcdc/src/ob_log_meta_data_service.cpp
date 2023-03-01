@@ -246,36 +246,29 @@ int ObLogMetaDataService::get_data_dict_in_log_info_in_archive_(
     LOG_ERROR("read_meta_info_in_archive_log_ failed", K(ret), K(start_timestamp_ns),
         K(data_dict_meta_info));
   } else {
-    datadict::ObDataDictMetaInfoItem data_dict_item;
-
-    // TODO: (binary) search a item which is the first one whose snapshot_scn <= start_timestamp_ns
-    // int64_t start = 0, end = item_arr.count()-1;
-    // int64_t cur = (start + end)/2;
-    // while (start <= end) {
-    //   const datadict::ObDataDictMetaInfoItem &cur_item = item_arr.at(cur),
-    //       &start_item = item_arr.at(start), &end_item = item_arr.at(end);
-    //   if (cur_item.snapshot_scn_ > start_timestamp_ns) {
-    //     start = cur+1;
-    //   } else {
-    //     if (cur == 0 || item_arr[cur-1].snapshot_scn_ > start_timestamp_ns) {
-    //       break;
-    //     } else {
-    //       end = cur-1;
-    //     }
-    //   }
-    //   cur = (start + end)/2;
-    // }
     const datadict::DataDictMetaInfoItemArr &item_arr = data_dict_meta_info.get_item_arr();
-    const int64_t cur = 0;
 
     if (item_arr.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("no datadict metainfo item in item_arr, unexpected", KR(ret), K(data_dict_meta_info));
     } else {
-      data_dict_item = item_arr.at(cur);
-      data_dict_in_log_info.reset(data_dict_item.snapshot_scn_,
-          palf::LSN(data_dict_item.start_lsn_),
-          palf::LSN(data_dict_item.end_lsn_));
+      const int64_t item_arr_size = item_arr.count();
+      int64_t target_index = 0;
+      while (target_index < item_arr_size && item_arr.at(target_index).snapshot_scn_ > start_timestamp_ns) {
+        target_index++;
+      }
+
+      if (target_index >= item_arr_size) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_ERROR("not datadict metainfo item older than start_timestamp_ns", K(target_index), K(data_dict_meta_info),
+            K(start_timestamp_ns));
+      } else {
+        datadict::ObDataDictMetaInfoItem data_dict_item;
+        data_dict_item = item_arr.at(target_index);
+        data_dict_in_log_info.reset(data_dict_item.snapshot_scn_,
+            palf::LSN(data_dict_item.start_lsn_),
+            palf::LSN(data_dict_item.end_lsn_));
+      }
     }
   }
 
@@ -304,8 +297,10 @@ int ObLogMetaDataService::read_meta_info_in_archive_log_(
   } else if (OB_FAIL(piece_ctx.init(share::SYS_LS, archive_dest))) {
     LOG_ERROR("piece_ctx init failed", KR(ret), K(archive_dest), K(archive_dest_str));
   } else  {
-    // TODO: step forward a interval to find a more precise MetaInfoItem
-    int64_t get_ls_meta_data_key = start_timestamp_ns; // + DATADICT_META_RECYCLE_INTERVAL_NS;
+    // Assume the recycle interval of data in __all_data_dictionary_in_log is a month
+    constexpr int64_t DATADICT_META_RECYCLE_INTERVAL_NS = 30L * _DAY_ * NS_CONVERSION;
+    // skip half interval to find more precise meta info
+    const int64_t get_ls_meta_data_key = start_timestamp_ns + DATADICT_META_RECYCLE_INTERVAL_NS / 2;
     if (OB_FAIL(start_scn.convert_from_ts(get_ls_meta_data_key/1000L))) {
       LOG_ERROR("convert start_timestamp_ns to start scn failed", KR(ret), K(start_timestamp_ns));
     } else if (OB_FAIL(piece_ctx.get_ls_meta_data(

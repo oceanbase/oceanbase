@@ -467,8 +467,7 @@ public:
                                 bool only_global = false);
 
   // for readonly
-  int verify_read_only(const uint64_t tenant_id,
-                       const ObStmtNeedPrivs &stmt_need_privs);
+  int verify_read_only(const uint64_t tenant_id, const ObStmtNeedPrivs &stmt_need_privs);
   int check_user_access(const ObUserLoginInfo &login_info,
                         ObSessionPrivInfo &s_priv,
                         SSL *ssl_st,

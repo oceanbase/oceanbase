@@ -1577,40 +1577,33 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_ENABLE_RICH_ERROR_MSG; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(217); }
 };
-class ObSysVarObSqlPlanMemoryPercentage : public ObIntSysVar
-{
-public:
-  ObSysVarObSqlPlanMemoryPercentage() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
-  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(218); }
-};
 class ObSysVarLogRowValueOptions : public ObVarcharSysVar
 {
 public:
   ObSysVarLogRowValueOptions() : ObVarcharSysVar(ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_LOG_ROW_VALUE_OPTIONS; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(219); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(218); }
 };
 class ObSysVarObMaxReadStaleTime : public ObIntSysVar
 {
 public:
   ObSysVarObMaxReadStaleTime() : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_MAX_READ_STALE_TIME; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(220); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(219); }
 };
 class ObSysVarOptimizerGatherStatsOnLoad : public ObBoolSysVar
 {
 public:
   ObSysVarOptimizerGatherStatsOnLoad() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(221); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(220); }
 };
 class ObSysVarSetReverseDblinkInfos : public ObVarcharSysVar
 {
 public:
   ObSysVarSetReverseDblinkInfos() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__SET_REVERSE_DBLINK_INFOS; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(222); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(221); }
 };
 
 
@@ -1631,7 +1624,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 126;
+  const static int64_t OB_SYS_VARS_COUNT = 125;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
 
   const static int16_t OB_SPECIFIC_SYS_VAR_ID_OFFSET = 10000;

@@ -1340,7 +1340,7 @@ int ObArchiveStore::get_file_range_in_piece(const int64_t dest_id, const int64_t
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_dir_path(dest, dest_id, round_id, piece_id, ls_id, piece_path))) {
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(dest, dest_id, round_id, piece_id, ls_id, piece_path))) {
     LOG_WARN("get piece ls dir path failed", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else if (OB_FAIL(op.init(this))) {
     LOG_WARN("ObPieceFileListFilter init failed", K(ret));
@@ -1372,7 +1372,7 @@ int ObArchiveStore:: get_file_list_in_piece(const int64_t dest_id, const int64_t
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_dir_path(dest, dest_id, round_id, piece_id, ls_id, piece_path))) {
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(dest, dest_id, round_id, piece_id, ls_id, piece_path))) {
     LOG_WARN("get piece ls dir path failed", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else if (OB_FAIL(op.init(this, &filelist))) {
     LOG_WARN("ObLSFileListOp init failed", K(ret));

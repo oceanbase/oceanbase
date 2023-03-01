@@ -50,6 +50,9 @@ void ObPool<BlockAllocatorT, LockT>::reset()
 {
   BlockHeader *curr = blocklist_;
   BlockHeader *next = NULL;
+  //if (in_use_count_ != 0) {
+  //  LIB_LOG(ERROR, "there was memory leak", K(in_use_count_), K(free_count_), K(total_count_));
+  //}
   while (NULL != curr) {
     next = curr->next_;
     block_allocator_.free(curr);

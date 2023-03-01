@@ -682,15 +682,9 @@ int ObTransformSimplifySubquery::recursive_add_limit_for_exists_expr(ObRawExpr *
         ObSelectStmt *subquery = NULL;
         ObOpRawExpr *op = static_cast<ObOpRawExpr*>(expr);
         ObQueryRefRawExpr *subq_expr = static_cast<ObQueryRefRawExpr *>(op->get_param_expr(0));
-        bool from_one_dblink = false;
         if (OB_ISNULL(subq_expr) || OB_ISNULL(subquery = subq_expr->get_ref_stmt())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null ptr", K(ret), K(subq_expr), K(subquery));
-        } else if (OB_FAIL(ObTransformUtils::check_stmt_from_one_dblink(subquery, from_one_dblink))) {
-          LOG_WARN("failed to check if all tables from one dblink", K(ret));
-        } else if (from_one_dblink) {
-          // do not transform,
-          // for compatibility with Oracle before 12c
         } else if (!subquery->has_limit() && !subquery->is_contains_assignment()) {
           if (OB_FAIL(ObTransformUtils::set_limit_expr(subquery, ctx_))) {
             LOG_WARN("add limit expr failed", K(*subquery), K(ret));

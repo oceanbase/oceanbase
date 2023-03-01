@@ -65,9 +65,9 @@ public:
     PartIds() : global_part_id_(common::OB_INVALID_ID),
                 part_id_(common::OB_INVALID_ID),
                 first_part_id_(common::OB_INVALID_ID) {};
-    ObObjectID global_part_id_;
-    ObObjectID part_id_;
-    ObObjectID first_part_id_; // for two_level partition.
+    int64_t global_part_id_;
+    int64_t part_id_;
+    int64_t first_part_id_; // for two_level partition.
 
     TO_STRING_KV(K(global_part_id_), K(part_id_), K(first_part_id_));
   };

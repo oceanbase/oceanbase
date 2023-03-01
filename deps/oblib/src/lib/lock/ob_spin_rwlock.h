@@ -50,6 +50,7 @@ public:
   inline int unlock() { return latch_.unlock(); }
   inline void rdunlock() { unlock(); }
   inline void wrunlock() { unlock(); }
+  inline void enable_record_stat(bool enable) { latch_.enable_record_stat(enable); }
 private:
   ObLatch latch_;
   uint32_t latch_id_;

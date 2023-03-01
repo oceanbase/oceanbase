@@ -2993,7 +2993,7 @@ int ObDbmsStats::update_stat_cache(const uint64_t rpc_tenant_id,
     LOG_TRACE("update stat cache", K(stat_arg));
     bool evict_plan_failed = false;
     int64_t timeout = -1;
-    ObSEArray<ObServerLocality, 8> all_server_arr;
+    ObSEArray<ObServerLocality, 4> all_server_arr;
     bool has_read_only_zone = false; // UNUSED;
     if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.locality_manager_)) {
       ret = OB_INVALID_ARGUMENT;
@@ -3002,6 +3002,7 @@ int ObDbmsStats::update_stat_cache(const uint64_t rpc_tenant_id,
                                                                          has_read_only_zone))) {
       LOG_WARN("fail to get server locality", K(ret));
     } else {
+      ObSEArray<ObServerLocality, 4> failed_server_arr;
       for (int64_t i = 0; OB_SUCC(ret) && i < all_server_arr.count(); i++) {
         if (!all_server_arr.at(i).is_active()
             || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
@@ -3015,24 +3016,15 @@ int ObDbmsStats::update_stat_cache(const uint64_t rpc_tenant_id,
                                                   .timeout(timeout)
                                                   .by(rpc_tenant_id)
                                                   .update_local_stat_cache(stat_arg))) {
-          // OB_SQL_PC_NOT_EXIST represent evict plan failed
-          if (OB_SQL_PC_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-            evict_plan_failed = true;
-          } else {
-            LOG_WARN("failed to update local stat cache", K(ret));
+          LOG_WARN("failed to update local stat cache caused by unknow error",
+                                           K(ret), K(all_server_arr.at(i).get_addr()), K(stat_arg));
+          //ignore flush cache failed, TODO @jiangxiu.wt can aduit it and flush cache manually later
+          if (OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
-      if (OB_SUCC(ret) && evict_plan_failed) {
-        ret = OB_ERR_DBMS_STATS_PL;
-        LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,
-                       "Evict plan cache failed. SQL execution will use origin plan. " \
-                       "Try flush plan cache manually if you want to generate plan with " \
-                       "latest statistics.");
-      } else {
-        LOG_TRACE("Succeed to update stat cache", K(param), K(stat_arg), K(all_server_arr));
-      }
+      LOG_TRACE("update stat cache", K(param), K(stat_arg), K(failed_server_arr), K(all_server_arr));
     }
   }
   return ret;
@@ -4982,9 +4974,15 @@ int ObDbmsStats::flush_database_monitoring_info(sql::ObExecContext &ctx,
   int ret = OB_SUCCESS;
   UNUSED(params);
   UNUSED(result);
+  bool is_flush_col_usage = true;
+  bool is_flush_dml_stat = true;
+  bool ignore_failed = false;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
-  } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx))) {
+  } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx,
+                                                                             is_flush_col_usage,
+                                                                             is_flush_dml_stat,
+                                                                             ignore_failed))) {
     LOG_WARN("failed to do flush database monitoring info", K(ret));
   }
   return ret;

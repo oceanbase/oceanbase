@@ -363,7 +363,8 @@ int ObRawExprPrinter::print(ObColumnRefRawExpr *expr)
                                                   col_name))) {
       LOG_WARN("fail to convert charset", K(ret));
     } else if (print_params_.for_dblink_) {
-      if (!expr->get_database_name().empty()) {
+      if (!expr->is_cte_generated_column() &&
+          !expr->get_database_name().empty()) {
         DATA_PRINTF("\"%.*s\".", LEN_AND_PTR(expr->get_database_name()));
       }
       if (!expr->get_table_name().empty()) {

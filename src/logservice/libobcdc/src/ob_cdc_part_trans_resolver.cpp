@@ -804,7 +804,8 @@ int ObCDCPartTransResolver::handle_commit_(
       (transaction::TransType)commit_log.get_trans_type(),
       commit_log.get_ls_log_info_arr(),
       lsn,
-      submit_ts))) {
+      submit_ts,
+      part_trans_dispatcher_.is_data_dict_dispatcher()))) {
     LOG_ERROR("commit PartTransTask failed", KR(ret), K_(tls_id), K(tx_id), K(trans_commit_version),
         K(lsn), K(submit_ts), K(commit_log), KPC(part_trans_task));
   }

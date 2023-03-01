@@ -300,13 +300,12 @@ int ObTransformDBlink::reverse_one_link_table(TableItem *table, uint64_t target_
     LOG_WARN("unexpect null table", K(ret));
   } else if (table->is_reverse_link_ && table->is_link_type()) {
     table->is_reverse_link_ = false;
-    if (table->dblink_name_.empty()) {
+    if (OB_FAIL(ob_write_string(*ctx_->allocator_,
+                                table->link_database_name_,
+                                table->database_name_))) {
+      LOG_WARN("failed to write string", K(ret));
+    } else if (table->dblink_name_.empty()) {
       table->type_ = TableItem::BASE_TABLE;
-      if (OB_FAIL(ob_write_string(*ctx_->allocator_,
-                                  table->link_database_name_,
-                                  table->database_name_))) {
-        LOG_WARN("failed to write string", K(ret));
-      }
     }
   } else if (table->is_link_type()) {
     if (table->dblink_id_ == target_dblink_id) {
@@ -420,6 +419,9 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
       LOG_WARN("failed to reverse link table", K(ret));
     } else if (OB_FAIL(formalize_link_table(stmt))) {
       LOG_WARN("failed to formalize link table stmt", K(ret));
+    } else if (lib::is_oracle_mode() &&
+               OB_FAIL(extract_limit(stmt, stmt))) {
+      LOG_WARN("failed to formalize limit", K(ret));
     } else {
       stmt->set_dblink_id(is_reverse_link ? 0 : dblink_id);
       trans_happened = true;
@@ -1197,6 +1199,31 @@ int ObTransformDBlink::formalize_link_table(ObDMLStmt *stmt)
     LOG_WARN("failed to formalize select item", K(ret));
   } else if (OB_FAIL(formalize_column_item(stmt))) {
     LOG_WARN("failed to formalize column item", K(ret));
+  }
+  return ret;
+}
+
+// For compatibility with Oracle before 12c,
+// We can not send the sql with "fetch" clause.
+// So, we perform limit operations locally.
+int ObTransformDBlink::extract_limit(ObDMLStmt *stmt, ObDMLStmt *&dblink_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *child_stmt = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (!stmt->is_select_stmt()
+            || !stmt->has_limit()
+            || stmt->is_fetch_with_ties()
+            || NULL != stmt->get_limit_percent_expr()) {
+    dblink_stmt = stmt;
+  } else if (ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(stmt), &child_stmt)) {
+    LOG_WARN("failed to pack the stmt", K(ret));
+  } else {
+    stmt->set_limit_offset(child_stmt->get_limit_expr(), child_stmt->get_offset_expr());
+    child_stmt->set_limit_offset(NULL, NULL);
+    dblink_stmt = child_stmt;
   }
   return ret;
 }

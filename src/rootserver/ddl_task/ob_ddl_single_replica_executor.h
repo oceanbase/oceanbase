@@ -37,7 +37,7 @@ public:
       task_id_(0),
       parallelism_(0),
       execution_id_(-1),
-      cluster_version_(0)
+      data_format_version_(0)
   {}
   ~ObDDLSingleReplicaExecutorParam() = default;
   bool is_valid() const {
@@ -45,11 +45,11 @@ public:
            && source_tablet_ids_.count() > 0 && dest_tablet_ids_.count() > 0
            && common::OB_INVALID_ID != source_table_id_ && common::OB_INVALID_ID != dest_table_id_
            && schema_version_ > 0 && snapshot_version_ > 0 && task_id_ > 0 && execution_id_ >= 0
-           && cluster_version_ > 0;
+           && data_format_version_ > 0;
   }
   TO_STRING_KV(K_(tenant_id), K_(type), K_(source_tablet_ids), K_(dest_tablet_ids),
                K_(source_table_id), K_(dest_table_id), K_(schema_version),
-               K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id), K_(cluster_version));
+               K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id), K_(data_format_version));
 public:
   uint64_t tenant_id_;
   share::ObDDLType type_;
@@ -62,7 +62,7 @@ public:
   int64_t task_id_;
   int64_t parallelism_;
   int64_t execution_id_;
-  int64_t cluster_version_;
+  int64_t data_format_version_;
 };
 
 class ObDDLSingleReplicaExecutor
@@ -121,7 +121,7 @@ private:
   int64_t task_id_;
   int64_t parallelism_;
   int64_t execution_id_;
-  int64_t cluster_version_;
+  int64_t data_format_version_;
   common::ObArray<ObPartitionBuildInfo> partition_build_stat_;
   common::ObSpinLock lock_;
 };

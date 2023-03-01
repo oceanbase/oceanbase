@@ -160,7 +160,6 @@ public:
 
   void on_alloc(lib::AObject &obj, const ObMemAttr &attr)
   {
-    obj.on_leak_check_ = false;
     if (is_label_check() &&
         label_match(obj) &&
         (tenant_id_ == UINT64_MAX || tenant_id_ == attr.tenant_id_) &&
@@ -187,6 +186,7 @@ public:
     if (is_label_check() &&
         obj.on_leak_check_ &&
         label_match(obj)) {
+      obj.on_leak_check_ = false;
       PtrKey ptr_key;
       ptr_key.ptr_ = obj.data_;
       int ret = OB_SUCCESS;

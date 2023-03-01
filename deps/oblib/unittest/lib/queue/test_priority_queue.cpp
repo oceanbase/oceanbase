@@ -72,7 +72,7 @@ public:
     int err;
     QData* data = NULL;
     if (idx == 0) {
-      err = queue_.pop_high_high((ObLink*&)data, 10000);
+      err = queue_.pop_high((ObLink*&)data, 10000);
     } else {
       err = queue_.pop((ObLink*&)data, 10000);
     }

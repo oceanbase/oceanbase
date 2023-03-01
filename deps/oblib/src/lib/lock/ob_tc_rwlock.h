@@ -148,6 +148,10 @@ public:
         ret = latch_.unlock();
       }
     }
+    if (OB_SUCC(ret)) {
+      // record in try_rdlock will be overwrited by latch_.rdlock, so record again.
+      ObLatch::current_lock = (uint32_t*)&(latch_.lock_);
+    }
     return ret;
   }
   inline bool try_rdlock()
@@ -157,6 +161,7 @@ public:
       get_tcref().inc_ref(&read_ref_);
       if (OB_LIKELY(0 == ATOMIC_LOAD(&write_id_))) {
         locked = true;
+        ObLatch::current_lock = (uint32_t*)&(latch_.lock_);
       } else {
         get_tcref().dec_ref(&read_ref_);
         lcond_.signal();
@@ -168,6 +173,7 @@ public:
   {
     int ret = OB_SUCCESS;
     get_tcref().dec_ref(&read_ref_);
+    ObLatch::current_lock = nullptr;
     lcond_.signal();
     return ret;
   }
@@ -179,6 +185,9 @@ public:
       ATOMIC_STORE(&write_id_, itid);
       get_tcref().sync(&read_ref_);
       int64_t ttl = 0;
+      // although we know that waiting myself is meanless,
+      // but it is helpful for us to understand the lock logic.
+      ObLatch::current_wait = (uint32_t*)&(latch_.lock_);
       while(0 != ATOMIC_LOAD(&read_ref_)
             && (ttl = abs_timeout_us - ObTimeUtility::current_time()) >= 0) {
         lcond_.wait(std::min(ttl, (int64_t)10 * 1000));
@@ -190,6 +199,7 @@ public:
       } else {
         ATOMIC_STORE(&write_id_, itid | WRITE_MASK);
       }
+      ObLatch::current_wait = nullptr;
     }
     return ret;
   }
@@ -250,6 +260,7 @@ public:
       get_tcref().inc_ref(&read_ref_, slot_id);
       if (OB_LIKELY(0 == ATOMIC_LOAD(&write_id_))) {
         locked = true;
+        ObLatch::current_lock = (uint32_t*)&(latch_.lock_);
       } else {
         get_tcref().dec_ref(&read_ref_, slot_id);
         lcond_.signal();
@@ -265,12 +276,17 @@ public:
         ret = latch_.unlock();
       }
     }
+    if (OB_SUCC(ret)) {
+      // record in try_rdlock will be overwrited by latch_.rdlock, so record again.
+      ObLatch::current_lock = (uint32_t*)&(latch_.lock_);
+    }
     return ret;
   }
   inline int rdunlock(int64_t slot_id)
   {
     int ret = OB_SUCCESS;
     get_tcref().dec_ref(&read_ref_, slot_id);
+    ObLatch::current_lock = nullptr;
     lcond_.signal();
     return ret;
   }

@@ -340,6 +340,16 @@ int ObCreatePackageResolver::resolve_functions_spec(const ObPackageInfo &package
       if (pl_routine_info->is_pipelined()) {
         routine_info.set_pipelined();
       }
+      //set data access info
+      if (pl_routine_info->is_no_sql()) {
+        routine_info.set_no_sql();
+      } else if (pl_routine_info->is_reads_sql_data()) {
+        routine_info.set_reads_sql_data();
+      } else if (pl_routine_info->is_modifies_sql_data()) {
+        routine_info.set_modifies_sql_data();
+      } else {
+        routine_info.set_contains_sql();
+      }
       // udt type 相关信息设置
       if (pl_routine_info->is_udt_routine()) {
         routine_info.set_is_udt_udf();

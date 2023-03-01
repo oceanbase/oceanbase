@@ -53,6 +53,7 @@ void ObVirtualChannelInfo::get_info(ObDtlChannel* dtl_ch)
   thread_id_ = ch->get_thread_id();
   owner_mod_ = ch->get_owner_mod();
   peer_ = ch->get_peer();
+  eof_ = metric.get_eof();
 }
 
 int ObVirtualDtlChannelOp::operator()(ObDtlChannel *ch)
@@ -295,6 +296,10 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo &chan_info, ObNewRow *&
       }
       case PEER_PORT: {// OB_APP_MIN_COLUMN_ID + 26
         cells[cell_idx].set_int(chan_info.peer_.get_port());
+        break;
+      }
+      case DTL_EOF: {
+        cells[cell_idx].set_bool(chan_info.eof_);
         break;
       }
       default: {

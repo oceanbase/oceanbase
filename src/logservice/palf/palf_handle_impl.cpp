@@ -67,8 +67,10 @@ PalfHandleImpl::PalfHandleImpl()
     last_record_append_lsn_(PALF_INITIAL_LSN_VAL),
     has_set_deleted_(false),
     palf_env_impl_(NULL),
-    append_cost_stat_("[PALF STAT WRITE LOG]", 2 * 1000 * 1000),
-    flush_cb_cost_stat_("[PALF STAT FLUSH CB]", 2 * 1000 * 1000),
+    append_cost_stat_("[PALF STAT WRITE LOG]", PALF_STAT_PRINT_INTERVAL_US),
+    flush_cb_cost_stat_("[PALF STAT FLUSH CB]", PALF_STAT_PRINT_INTERVAL_US),
+    last_accum_statistic_time_(OB_INVALID_TIMESTAMP),
+    accum_write_log_size_(0),
     replica_meta_lock_(),
     rebuilding_lock_(),
     config_change_lock_(),
@@ -146,6 +148,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
           alloc_mgr, log_rpc, log_io_worker, palf_env_impl, election_timer))) {
     PALF_LOG(WARN, "PalfHandleImpl do_init_mem_ failed", K(ret), K(palf_id));
   } else {
+    last_accum_statistic_time_ = ObTimeUtility::current_time();
     PALF_EVENT("PalfHandleImpl init success", palf_id_, K(ret), K(self), K(access_mode), K(palf_base_info),
         K(replica_type), K(log_dir), K(log_meta), K(palf_epoch));
   }
@@ -385,7 +388,7 @@ int PalfHandleImpl::submit_log(
       }
     } else {
       PALF_LOG(TRACE, "submit_log success", K(ret), KPC(this), K(buf_len), K(lsn), K(scn));
-      if (palf_reach_time_interval(2 * 1000 * 1000, append_size_stat_time_us_)) {
+      if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, append_size_stat_time_us_)) {
         PALF_LOG(INFO, "[PALF STAT APPEND DATA SIZE]", KPC(this), "append size", lsn.val_ - last_record_append_lsn_.val_);
         last_record_append_lsn_ = lsn;
       }
@@ -1580,10 +1583,17 @@ int PalfHandleImpl::inner_append_log(const LSN &lsn,
   } else if (OB_FAIL(log_engine_.append_log(lsn, write_buf, scn))) {
     PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), KPC(this), K(lsn), K(scn));
   } else {
-    const int64_t time_cost = ObTimeUtility::current_time() - begin_ts;
+    const int64_t curr_size = write_buf.get_total_size();
+    const int64_t accum_size = ATOMIC_AAF(&accum_write_log_size_, curr_size);
+    const int64_t now = ObTimeUtility::current_time();
+    const int64_t time_cost = now - begin_ts;
     append_cost_stat_.stat(time_cost);
     if (time_cost >= 5 * 1000) {
       PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "write log cost too much time", K(ret), KPC(this), K(lsn), K(scn), K(time_cost));
+    }
+    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_statistic_time_)) {
+      PALF_LOG(INFO, "[PALF STAT INNER APPEND LOG]", KPC(this), K(accum_size));
+      ATOMIC_STORE(&accum_write_log_size_, 0);
     }
   }
   return ret;
@@ -1601,11 +1611,22 @@ int PalfHandleImpl::inner_append_log(const LSNArray &lsn_array,
   } else if (OB_FAIL(log_engine_.append_log(lsn_array, write_buf_array, scn_array))) {
     PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), KPC(this), K(lsn_array), K(scn_array));
   } else {
-    const int64_t time_cost = ObTimeUtility::current_time() - begin_ts;
+    int64_t count = lsn_array.count();
+    int64_t accum_size = 0, curr_size = 0;
+    for (int64_t i = 0; i < count; i++) {
+      curr_size = write_buf_array[i]->get_total_size();
+      accum_size = ATOMIC_AAF(&accum_write_log_size_, curr_size);
+    }
+    const int64_t now = ObTimeUtility::current_time();
+    const int64_t time_cost = now - begin_ts;
     append_cost_stat_.stat(time_cost);
     if (time_cost > 10 * 1000) {
       PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "write log cost too much time", K(ret), KPC(this), K(lsn_array),
                K(scn_array), K(time_cost));
+    }
+    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_statistic_time_)) {
+      PALF_LOG(INFO, "[PALF STAT INNER APPEND LOG]", KPC(this), K(accum_size));
+      ATOMIC_STORE(&accum_write_log_size_, 0);
     }
   }
   return ret;
@@ -3010,8 +3031,7 @@ int PalfHandleImpl::submit_fetch_log_resp_(const common::ObAddr &server,
   LogWriteBuf write_buf;
   // NB: 'curr_group_entry' generates by PalfGroupBufferIterator, the memory is safe before next();
   const char *buf = curr_group_entry.get_data_buf() - curr_group_entry.get_header().get_serialize_size();
-  // buf_len ignores padding entry's data_len
-  const int64_t buf_len = curr_group_entry.get_group_size_without_padding_data();
+  const int64_t buf_len = curr_group_entry.get_group_entry_size();
   int64_t pos = 0;
   const int64_t curr_log_proposal_id = curr_group_entry.get_header().get_log_proposal_id();
   if (OB_FAIL(write_buf.push_back(buf, buf_len))) {

@@ -95,6 +95,8 @@ public:
   }
   int64_t get_process_query_time() const { return process_query_time_; }
   void set_process_query_time(int64_t process_query_time) { process_query_time_ = process_query_time; }
+  int64_t get_query_timeout_ts() const { return query_timeout_ts_; }
+  void set_query_timeout_ts(int64_t time) { query_timeout_ts_ = time; }
 private:
   int process_channels(ObIDltChannelLoopPred *pred, int64_t &nth_channel);
   int process_channel(int64_t &nth_channel);
@@ -146,6 +148,8 @@ private:
   int64_t loop_times_;
   int64_t begin_wait_time_; // use rdtsc to record begin dtl wait time
   int64_t process_query_time_;
+  int64_t last_dump_channel_time_; // Used to track long-term active channels
+  int64_t query_timeout_ts_;
 };
 
 OB_INLINE void ObDtlChannelLoop::add_last_data_list(ObDtlChannel *ch)

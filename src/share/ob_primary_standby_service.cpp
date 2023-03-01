@@ -19,7 +19,6 @@
 #include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
 #include "rootserver/ob_tenant_role_transition_service.h" // ObTenantRoleTransitionService
 #include "rootserver/ob_primary_ls_service.h"//ObTenantLSInfo
-#include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
 #include "share/ls/ob_ls_recovery_stat_operator.h"// ObLSRecoveryStatOperator
 #include "share/ls/ob_ls_life_manager.h" //ObLSLifeAgentManager
 #include "share/ls/ob_ls_operator.h" //ObLSAttr
@@ -90,6 +89,7 @@ int ObPrimaryStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
   ObSchemaGetterGuard schema_guard;
   const char *alter_cluster_event = arg.get_alter_type_str();
   const ObSimpleTenantSchema *tenant_schema = nullptr;
+  uint64_t compat_version = 0;
   CLUSTER_EVENT_ADD_CONTROL_START(ret, alter_cluster_event, "stmt_str", arg.get_stmt_str());
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
@@ -98,6 +98,12 @@ int ObPrimaryStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
     LOG_WARN("invalid arg", K(arg), KR(ret));
   } else if (OB_FAIL(get_target_tenant_id(arg.get_tenant_name(), arg.get_exec_tenant_id(), switch_tenant_id))) {
     LOG_WARN("failed to get_target_tenant_id", KR(ret), K(switch_tenant_id), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(switch_tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(switch_tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Tenant COMPATIBLE is below 4.1.0.0, switch tenant is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.1.0.0, switch tenant is");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("failed to get schema guard", KR(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_info(switch_tenant_id, tenant_schema))) {
@@ -235,6 +241,7 @@ int ObPrimaryStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg
   int64_t begin_time = ObTimeUtility::current_time();
   uint64_t tenant_id = OB_INVALID_ID;
   const char *alter_cluster_event = "recover_tenant";
+  uint64_t compat_version = 0;
   CLUSTER_EVENT_ADD_CONTROL_START(ret, alter_cluster_event, "stmt_str", arg.get_stmt_str());
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
@@ -243,7 +250,14 @@ int ObPrimaryStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg
     LOG_WARN("invalid arg", K(arg), KR(ret));
   } else if (OB_FAIL(get_target_tenant_id(arg.get_tenant_name(), arg.get_exec_tenant_id(), tenant_id))) {
     LOG_WARN("failed to get_target_tenant_id", KR(ret), K(tenant_id), K(arg));
-  } else if (OB_FAIL(do_recover_tenant(arg, tenant_id))) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Tenant COMPATIBLE is below 4.1.0.0, recover tenant is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.1.0.0, recover tenant is");
+  } else if (OB_FAIL(do_recover_tenant(tenant_id, share::NORMAL_SWITCHOVER_STATUS, arg.get_type(),
+                                       arg.get_recovery_until_scn()))) {
     LOG_WARN("failed to do_recover_tenant", KR(ret), K(tenant_id), K(arg));
   }
 
@@ -255,7 +269,11 @@ int ObPrimaryStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg
   return ret;
 }
 
-int ObPrimaryStandbyService::do_recover_tenant(const obrpc::ObRecoverTenantArg &arg, const uint64_t tenant_id)
+int ObPrimaryStandbyService::do_recover_tenant(
+    const uint64_t tenant_id,
+    const share::ObTenantSwitchoverStatus &working_sw_status,
+    const obrpc::ObRecoverTenantArg::RecoverType &recover_type,
+    const share::SCN &recovery_until_scn)
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
@@ -267,9 +285,10 @@ int ObPrimaryStandbyService::do_recover_tenant(const obrpc::ObRecoverTenantArg &
   ObLSRecoveryStat sys_ls_recovery;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
-  } else if (!arg.is_valid()) {
+  } else if (!obrpc::ObRecoverTenantArg::is_valid(recover_type, recovery_until_scn)
+             || !working_sw_status.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(arg), KR(ret));
+    LOG_WARN("invalid arg", K(recover_type), K(recovery_until_scn), KR(ret));
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(schema_service_) || OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(schema_service_), KP(sql_proxy_));
@@ -282,7 +301,7 @@ int ObPrimaryStandbyService::do_recover_tenant(const obrpc::ObRecoverTenantArg &
     LOG_WARN("failed to get tenant info", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(tenant_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant_schema is null", KR(ret), K(tenant_id), K(arg));
+    LOG_WARN("tenant_schema is null", KR(ret), K(tenant_id), K(recover_type), K(recovery_until_scn));
   } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true, tenant_info))) {
@@ -291,37 +310,34 @@ int ObPrimaryStandbyService::do_recover_tenant(const obrpc::ObRecoverTenantArg &
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("tenant role is not STANDBY", K(tenant_info));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant role is not STANDBY, recover is");
-  } else if (!tenant_info.is_normal_status()) {
+  } else if (tenant_info.get_switchover_status() != working_sw_status) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("tenant switchover_status is not NORMAL", K(tenant_info));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant switchover_status is not NORMAL, recover is");
+    LOG_WARN("unexpected tenant switchover status", KR(ret), K(working_sw_status), K(tenant_info));
   } else if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, share::SYS_LS,
                      true /*for_update*/, sys_ls_recovery, trans))) {
     LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id));
-  } else if (obrpc::ObRecoverTenantArg::RecoverType::UNTIL == arg.get_type()
-              && (arg.get_recovery_until_scn() < tenant_info.get_sync_scn()
-                  || arg.get_recovery_until_scn() < sys_ls_recovery.get_sync_scn())) {
+  } else if (obrpc::ObRecoverTenantArg::RecoverType::UNTIL == recover_type
+              && (recovery_until_scn < tenant_info.get_sync_scn()
+                  || recovery_until_scn < sys_ls_recovery.get_sync_scn())) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("recover before tenant sync_scn or SYS LS sync_scn is not allow", KR(ret), K(tenant_info),
-             K(tenant_id), K(arg), K(sys_ls_recovery));
+             K(tenant_id), K(recover_type), K(recovery_until_scn), K(sys_ls_recovery));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover before tenant sync_scn or SYS LS sync_scn is");
   } else if (tenant_schema->is_normal()) {
-    ObLogRestoreSourceMgr restore_source_mgr;
-    const SCN &recovery_until_scn = obrpc::ObRecoverTenantArg::RecoverType::UNTIL == arg.get_type() ?
-          arg.get_recovery_until_scn() : SCN::max(tenant_info.get_sync_scn(), sys_ls_recovery.get_sync_scn());
-    if (tenant_info.get_recovery_until_scn() == recovery_until_scn) {
-      LOG_WARN("recovery_until_scn is same with original", KR(ret), K(tenant_info), K(tenant_id), K(arg));
-    } else if (OB_FAIL(restore_source_mgr.init(tenant_id, &trans))) {
-      LOG_WARN("failed to init restore_source_mgr", KR(ret), K(tenant_id), K(arg));
-    } else if (OB_FAIL(restore_source_mgr.update_recovery_until_scn(recovery_until_scn))) {
-      LOG_WARN("failed to update_recovery_until_scn", KR(ret), K(tenant_id), K(arg));
+    const SCN &recovery_until_scn_to_set = obrpc::ObRecoverTenantArg::RecoverType::UNTIL == recover_type ?
+                                        recovery_until_scn : SCN::max(tenant_info.get_sync_scn(), sys_ls_recovery.get_sync_scn());
+    if (tenant_info.get_recovery_until_scn() == recovery_until_scn_to_set) {
+      LOG_WARN("recovery_until_scn is same with original", KR(ret), K(tenant_info), K(tenant_id),
+               K(recover_type), K(recovery_until_scn));
     } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
-                  tenant_id, trans, tenant_info.get_switchover_epoch(), recovery_until_scn))) {
-      LOG_WARN("failed to update_tenant_recovery_until_scn", KR(ret), K(tenant_id), K(arg));
+                  tenant_id, trans, tenant_info.get_switchover_epoch(), recovery_until_scn_to_set))) {
+      LOG_WARN("failed to update_tenant_recovery_until_scn", KR(ret), K(tenant_id), K(recover_type),
+               K(recovery_until_scn), K(recovery_until_scn_to_set));
     }
   } else {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("tenant status is not normal, recover is not allowed", KR(ret), K(tenant_id), K(arg), KPC(tenant_schema));
+    LOG_WARN("tenant status is not normal, recover is not allowed", KR(ret), K(tenant_id),
+             K(recover_type), K(recovery_until_scn), KPC(tenant_schema));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant status is not normal, recover is");
   }
 

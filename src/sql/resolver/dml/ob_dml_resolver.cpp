@@ -616,7 +616,7 @@ int ObDMLResolver::print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str)
   } else {
     if (OB_FAIL(res_str.append("."))) {
       LOG_WARN("dot symbol write fail", K(ret));
-    } else if (tmp_path->children_[0]->is_input_quoted == 1 && OB_FAIL(res_str.append("\""))) {
+    } else if (tmp_path->children_[0]->is_input_quoted_ == 1 && OB_FAIL(res_str.append("\""))) {
       LOG_WARN("add \" fail in side", K(ret));
     } else if (OB_NOT_NULL(tmp_path->children_[0]->raw_text_)
                 && OB_FAIL(res_str.append(tmp_path->children_[0]->raw_text_, tmp_path->children_[0]->text_len_))) {
@@ -625,7 +625,7 @@ int ObDMLResolver::print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str)
       if (OB_FAIL(res_str.append(tmp_path->children_[0]->str_value_, tmp_path->children_[0]->str_len_))) {
         LOG_WARN("str_value write fail");
       }
-    } else if (tmp_path->children_[0]->is_input_quoted == 1 && OB_FAIL(res_str.append("\""))) {
+    } else if (tmp_path->children_[0]->is_input_quoted_ == 1 && OB_FAIL(res_str.append("\""))) {
       LOG_WARN("add \" fail in side", K(ret));
     }
     if (tmp_path->type_ == T_FUN_SYS) {
@@ -7654,15 +7654,58 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is NULL", K(ret));
+  } else if (parse_tree.type_  == T_OBJ_ACCESS_REF) {
+    ObJsonBuffer path_buffer(allocator);
+    if (OB_FAIL(path_buffer.append("$."))) {
+      LOG_WARN("failed to append path start", K(ret));
+    } else if (parse_tree.num_child_ != 2
+               || OB_ISNULL(parse_tree.children_)
+               || OB_ISNULL(parse_tree.children_[0])
+               || OB_ISNULL(parse_tree.children_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to make path, param not expected", K(ret), K(parse_tree.num_child_),
+              KP(parse_tree.children_));
+    } else if (OB_FAIL(path_buffer.append(parse_tree.children_[0]->str_value_,
+                                          parse_tree.children_[0]->str_len_))) {
+      LOG_WARN("failed to append raw text", K(ret));
+    } else {
+      ParseNode *tmp_path = parse_tree.children_[1];
+      while (OB_SUCC(ret) && OB_NOT_NULL(tmp_path)) {
+        if (OB_ISNULL(tmp_path->children_[0])) {
+          tmp_path = NULL;
+          // do nothing
+        } else {
+          if (OB_FAIL(print_json_path(tmp_path, path_buffer))) {
+            LOG_WARN("failed to print path", K(ret));
+          }
+        }
+      }
+
+      char* path_buf = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(path_buf = static_cast<char*>(allocator->alloc(path_buffer.length() + 1)))) {
+        LOG_WARN("failed to allocate path buffer", K(ret), K(path_buffer.length()));
+      } else {
+        MEMCPY(path_buf, path_buffer.ptr(), path_buffer.length());
+        path_buf[path_buffer.length()] = 0;
+        path_str.assign_ptr(path_buf, strlen(path_buf));
+      }
+    }
   } else {
-    char* str_buf = static_cast<char*>(allocator->alloc(parse_tree.str_len_ + 3));
+    char* str_buf = static_cast<char*>(allocator->alloc(parse_tree.text_len_ + 3));
     if (OB_ISNULL(str_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(parse_tree.str_len_));
     } else {
-      MEMCPY(str_buf + 2, parse_tree.raw_text_, parse_tree.text_len_);
       MEMCPY(str_buf, "$.", 2);
-      str_buf[parse_tree.str_len_ + 2] = '\0';
+      str_buf[parse_tree.text_len_ + 2] = '\0';
+      if (parse_tree.text_len_ > 0
+          && (parse_tree.raw_text_[0] == '\'' && parse_tree.raw_text_[parse_tree.text_len_-1] == '\'')) {
+        MEMCPY(str_buf + 2, parse_tree.raw_text_ + 1, parse_tree.text_len_ - 1);
+        str_buf[parse_tree.text_len_] = '\0';
+      } else {
+        MEMCPY(str_buf + 2, parse_tree.raw_text_, parse_tree.text_len_);
+      }
       path_str.assign_ptr(str_buf, strlen(str_buf));
     }
   }
@@ -7687,13 +7730,21 @@ int ObDMLResolver::resolve_json_table_column_name_and_path(const ParseNode *name
   } else if (path_node->type_ != T_NULL
               && (path_node->str_len_ > 0 && OB_NOT_NULL(path_node->str_value_))) {
     col_def->col_base_info_.path_.assign_ptr(path_node->str_value_, path_node->str_len_);
+    if (*path_node->str_value_ != '$' && path_node->value_ != 1
+        && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_))) {
+      LOG_WARN("failed to make json path", K(ret));
+    }
   } else if (path_node->type_ == T_NULL
-      && OB_FAIL(json_table_make_json_path(*name_node, allocator, col_def->col_base_info_.path_))) {
-    LOG_WARN("failed to make json path", K(ret));
+             && OB_FAIL(json_table_make_json_path(*name_node, allocator, col_def->col_base_info_.path_))) {
+    LOG_WARN("failed to make json path by name", K(ret));
+  } else if (path_node->type_  == T_OBJ_ACCESS_REF
+             && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_))) {
+    LOG_WARN("failed to make json path by lists", K(ret));
   }
 
   if (OB_SUCC(ret)) {
     col_def->col_base_info_.col_name_.assign_ptr(name_node->str_value_, name_node->str_len_);
+    col_def->col_base_info_.is_name_quoted_ = name_node->is_input_quoted_;
   }
   return ret;
 }
@@ -7784,6 +7835,7 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
       if (ObNumberType == obj_type && parse_tree.int16_values_[2] == -1) {
         accuracy.set_precision(parse_tree.int16_values_[2]);
         accuracy.set_scale(parse_tree.int16_values_[3]);
+      } else if (ObIntType == obj_type) {
       } else {
         accuracy.set_precision(parse_tree.int16_values_[2]);
         accuracy.set_scale(parse_tree.int16_values_[3]);
@@ -13734,7 +13786,7 @@ int ObDMLResolver::resolve_with_clause(const ParseNode *node, bool same_level)
     // do nothing
   } else if (OB_UNLIKELY(node->type_ != T_WITH_CLAUSE_LIST)) {
     //should not be here
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_MISSING_KEYWORD;
     LOG_WARN("resolver with_clause_as met unexpected node type", K_(node->type));
   } else {
     int num_child = node->num_child_;

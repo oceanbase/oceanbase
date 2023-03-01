@@ -45,9 +45,6 @@ public:
   // return total size of header and body, including the length of padding log
   int64_t get_group_entry_size() const { return header_.get_serialize_size() +
     header_.get_data_len(); }
-  // used for fetch_log, ignore the data len of padding entry
-  int64_t get_group_size_without_padding_data() const { return header_.get_serialize_size() +
-    (header_.is_padding_log() ? 0 : header_.get_data_len()); }
   int get_log_min_scn(share::SCN &min_scn) const;
   const share::SCN get_scn() const { return header_.get_max_scn(); }
   LSN get_committed_end_lsn() const { return header_.get_committed_end_lsn(); }

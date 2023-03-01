@@ -644,7 +644,6 @@ int ObMicroBlockReader::get_rows(
         for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
           common::ObDatum &datum = datums.at(i)[idx];
           int32_t col_idx = cols_projector.at(i);
-          bool need_copy = false;
           if (col_idx >= read_info_->get_request_count()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected col idx", K(ret), K(i), K(col_idx), K(read_info_->get_request_count()));
@@ -656,14 +655,17 @@ int ObMicroBlockReader::get_rows(
               LOG_WARN("Fail to transfer datum", K(ret), K(i), K(idx), K(row_idx), K(default_row));
             }
             LOG_TRACE("Transfer nop value", K(ret), K(idx), K(row_idx), K(col_idx), K(default_row));
-          } else if (row_buf.storage_datums_[col_idx].need_copy_for_encoding_column_with_flat_format(map_types.at(i))) {
-            exprs[i]->reset_ptr_in_datum(eval_ctx, idx);
-            need_copy = true;
-          }
-          if (OB_SUCC(ret) && OB_FAIL(datum.from_storage_datum(row_buf.storage_datums_[col_idx], map_types.at(i), need_copy))) {
-            LOG_WARN("Failed to from storage datum", K(ret), K(idx), K(row_idx), K(col_idx), K(need_copy),
-                      K(row_buf.storage_datums_[col_idx]), KPC_(header));
-          }
+          } else {
+            bool need_copy = false;
+            if (row_buf.storage_datums_[col_idx].need_copy_for_encoding_column_with_flat_format(map_types.at(i))) {
+              exprs[i]->reset_ptr_in_datum(eval_ctx, idx);
+              need_copy = true;
+            }
+            if (OB_FAIL(datum.from_storage_datum(row_buf.storage_datums_[col_idx], map_types.at(i), need_copy))) {
+              LOG_WARN("Failed to from storage datum", K(ret), K(idx), K(row_idx), K(col_idx), K(need_copy),
+                        K(row_buf.storage_datums_[col_idx]), KPC_(header));
+            }
+         }
         }
       }
     }

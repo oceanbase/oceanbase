@@ -399,7 +399,6 @@ template <>
           ret = OB_SIZE_OVERFLOW;\
         } else {\
           buffer[pos++] = (IS_DOUBLE ? 'D' : 'F');\
-          buffer[pos] = '\0';\
         }\
       }\
     }\

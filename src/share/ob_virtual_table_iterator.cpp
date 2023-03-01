@@ -489,6 +489,8 @@ int ObVirtualTableIterator::get_next_row()
                  OB_FAIL(ob_adjust_lob_datum(row->cells_[i], expr->obj_meta_,
                                              expr->obj_datum_map_, *allocator_, datum))) {
         LOG_WARN("adjust lob datum failed", K(ret), K(i), K(row->cells_[i].get_meta()), K(expr->obj_meta_));
+      } else {
+        SANITY_CHECK_RANGE(datum.ptr_, datum.len_);
       }
     }
   }

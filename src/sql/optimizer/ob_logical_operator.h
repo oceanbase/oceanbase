@@ -1360,7 +1360,7 @@ public:
   virtual int has_block_parent_for_shj(bool &has_shj);
 
   virtual int allocate_startup_expr_post();
-  int allocate_startup_expr_post(int64_t child_idx);
+  virtual int allocate_startup_expr_post(int64_t child_idx);
   /**
    *  Start plan tree traverse
    *

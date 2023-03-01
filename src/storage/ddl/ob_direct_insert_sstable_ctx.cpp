@@ -40,7 +40,7 @@ using namespace oceanbase::sql;
 ObSSTableInsertTabletParam::ObSSTableInsertTabletParam()
   : context_id_(0), ls_id_(), tablet_id_(), table_id_(0), write_major_(false),
     task_cnt_(0), schema_version_(0), snapshot_version_(0), execution_id_(1), ddl_task_id_(0),
-    cluster_version_(0)
+    data_format_version_(0)
 {
 
 }
@@ -60,7 +60,7 @@ bool ObSSTableInsertTabletParam::is_valid() const
               && schema_version_ > 0
               && execution_id_ >= 0
               && ddl_task_id_ > 0
-              && cluster_version_ > 0;
+              && data_format_version_ > 0;
   return bret;
 }
 
@@ -494,7 +494,7 @@ int ObSSTableInsertTabletContext::update(const int64_t snapshot_version)
     } else if (data_sstable_redo_writer_.get_start_scn().is_valid_and_not_min()) {
       // ddl start log is already written, do nothing
     } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key,
-      build_param_.execution_id_, build_param_.cluster_version_, ddl_kv_mgr_handle_))) {
+      build_param_.execution_id_, build_param_.data_format_version_, ddl_kv_mgr_handle_))) {
       LOG_WARN("fail write start log", K(ret), K(table_key), K(build_param_));
     }
   }
@@ -698,7 +698,7 @@ int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSch
                                     build_param_.tablet_id_, // TODO(shuangcan): confirm this
                                     build_param_.write_major_ ? storage::MAJOR_MERGE : storage::MINOR_MERGE,
                                     1L /*snapshot_version*/,
-                                    build_param_.cluster_version_))) {
+                                    build_param_.data_format_version_))) {
     LOG_WARN("fail to init data desc", K(ret));
   } else {
     data_desc.row_column_count_ = data_desc.rowkey_column_count_ + 1;
@@ -876,7 +876,7 @@ int ObSSTableInsertTabletContext::get_table_key(ObITable::TableKey &table_key)
 
 ObSSTableInsertTableParam::ObSSTableInsertTableParam()
   : exec_ctx_(nullptr), context_id_(0), dest_table_id_(OB_INVALID_ID), write_major_(false), schema_version_(0),
-    snapshot_version_(0), task_cnt_(0), execution_id_(1), ddl_task_id_(1), cluster_version_(0), ls_tablet_ids_()
+    snapshot_version_(0), task_cnt_(0), execution_id_(1), ddl_task_id_(1), data_format_version_(0), ls_tablet_ids_()
 {
 }
 
@@ -894,7 +894,7 @@ int ObSSTableInsertTableParam::assign(const ObSSTableInsertTableParam &other)
     task_cnt_ = other.task_cnt_;
     execution_id_ = other.execution_id_;
     ddl_task_id_ = other.ddl_task_id_;
-    cluster_version_ = other.cluster_version_;
+    data_format_version_ = other.data_format_version_;
     exec_ctx_ = other.exec_ctx_;
   }
   return ret;
@@ -974,7 +974,7 @@ int ObSSTableInsertTableContext::create_all_tablet_contexts(
         param.task_cnt_ = param_.task_cnt_;
         param.execution_id_ = param_.execution_id_;
         param.ddl_task_id_ = param_.ddl_task_id_;
-        param.cluster_version_ = param_.cluster_version_;
+        param.data_format_version_ = param_.data_format_version_;
         if (OB_FAIL(tablet_ctx->init(param))) {
           LOG_WARN("init tablet insert sstable context", K(ret));
         } else if (OB_FAIL(tablet_ctx_map_.set_refactored(tablet_id, tablet_ctx))) {

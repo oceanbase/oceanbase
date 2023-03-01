@@ -112,9 +112,6 @@ private:
     int deal_with_init_sqc_error(ObExecContext &exec_ctx,
                                  const ObPxSqcMeta &sqc,
                                  int rc) const;
-    int fast_dispatch_sqc(ObExecContext &exec_ctx,
-                          ObDfo &dfo,
-                          ObArray<ObPxSqcMeta *> &sqcs) const;
     int schedule_pair(ObExecContext &exec_ctx,
                       ObDfo &child,
                       ObDfo &parent) const;

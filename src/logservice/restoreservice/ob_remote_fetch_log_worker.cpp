@@ -235,6 +235,10 @@ void ObRemoteFetchWorker::do_thread_task_()
       LOG_WARN("try_consume_data_ failed", K(ret));
     }
   }
+
+  if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+    LOG_INFO("ObRemoteFetchWorker is running", "thread_index", get_thread_idx());
+  }
 }
 
 int ObRemoteFetchWorker::handle_single_task_()

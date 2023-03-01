@@ -535,7 +535,7 @@ int ObIORequest::alloc_aligned_io_buf()
 int ObIORequest::prepare()
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard tg("prepare");
+  ObTimeGuard tg("prepare", 100000); //100ms
   if (OB_ISNULL(control_block_)
       && (OB_ISNULL(io_info_.fd_.device_handle_) || OB_ISNULL(control_block_ = io_info_.fd_.device_handle_->alloc_iocb()))) {
     ret = OB_ERR_UNEXPECTED;

@@ -240,8 +240,6 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate semi info", K(ret));
   } else if (OB_FALSE_IT(semi_info = new(semi_info)SemiInfo())) {
-  } else if (OB_FAIL(semi_info->semi_conditions_.assign(joined_table->get_join_conditions()))) {
-    LOG_WARN("failed to assign join conditions", K(ret));
   } else if (lib::is_oracle_mode() && OB_FAIL(clear_for_update(right_table))) {
     // avoid for update op in the right side of the anti/semi.
     LOG_WARN("failed to clear for update", K(ret));
@@ -266,7 +264,9 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *
     semi_info->right_table_id_ = right_table->table_id_;
     semi_info->semi_id_ = stmt->get_query_ctx()->available_tb_id_--;
     int64_t idx = stmt->get_from_item_idx(joined_table->table_id_);
-    if (OB_UNLIKELY(idx < 0 || idx >= stmt->get_from_item_size())) {
+    if (OB_FAIL(semi_info->semi_conditions_.assign(joined_table->get_join_conditions()))) {
+      LOG_WARN("failed to assign join conditions", K(ret));
+    } else if (OB_UNLIKELY(idx < 0 || idx >= stmt->get_from_item_size())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid index", K(ret), K(idx));
     } else {

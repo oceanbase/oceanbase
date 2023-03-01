@@ -70,7 +70,7 @@ public:
                                     const bool is_copy_foreign_keys,
                                     const bool is_ignore_errors);
   int update_task_process_schedulable(const int64_t task_id);
-  int abort_task(const int64_t task_id, common::ObMySQLProxy &mysql_proxy);
+  int abort_task(const int64_t task_id);
   int64_t get_task_cnt() const { return task_list_.get_size(); }
   void destroy();
 private:

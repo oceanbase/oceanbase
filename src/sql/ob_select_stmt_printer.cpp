@@ -343,7 +343,7 @@ int ObSelectStmtPrinter::print_recursive_union_stmt()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
     } else  {
-      DATA_PRINTF("WITH RECURSIVE ");
+      DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE ");
       DATA_PRINTF("%.*s", LEN_AND_PTR(table->table_name_));
       if (OB_FAIL(print_cte_define_title(select_stmt))) {
         LOG_WARN("failed to printf cte title", K(ret));

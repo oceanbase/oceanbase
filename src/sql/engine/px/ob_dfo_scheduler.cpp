@@ -483,18 +483,7 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
       LOG_WARN("no memory", K(ret));
     }
   }
-  bool ignore_vtable_error = dfo.is_ignore_vtable_error();
-  if (OB_SUCC(ret)) {
-    ObDfo *child_dfo = nullptr;
-    for (int i = 0; i < dfo.get_child_count() && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(dfo.get_child_dfo(i, child_dfo))) {
-        LOG_WARN("fail to get child dfo", K(ret));
-      } else if (!child_dfo->is_ignore_vtable_error()) {
-        ignore_vtable_error = false;
-        break;
-      }
-    }
-  }
+  bool ignore_vtable_error = coord_info_.should_ignore_vtable_error();
   int64_t cluster_id = GCONF.cluster_id;
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
     ObPxSqcMeta &sqc = *sqcs.at(idx);
@@ -532,7 +521,7 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
         if (dfo.has_child_dfo()) {
           sqc.set_recieve_use_interm_result(true);
         }
-        if (ignore_vtable_error && dfo.get_child_count() > 0) {
+        if (ignore_vtable_error) {
           sqc.set_ignore_vtable_error(true);
         }
         if (coord_info_.enable_px_batch_rescan()) {
@@ -712,30 +701,22 @@ int ObParallelDfoScheduler::do_schedule_dfo(ObExecContext &exec_ctx, ObDfo &dfo)
   }
 
   if (OB_SUCC(ret)) {
-    //if (dfo.is_prealloc_transmit_channel() || dfo.is_prealloc_receive_channel()) {
-      // 下面的逻辑处理简单 DFO 调用的情况
-      //  - 目的： 大部分分布式查询的并发度为1，并且只有一个 DFO
-      //           这种情况下无需为 task 建立 worker 线程，
-      //           直接在 SQC 的工作线程中完成所有执行即可
-      //ret = fast_dispatch_sqc(exec_ctx, dfo, sqcs);
-    //} else {
-      // 下面的逻辑处理握手阶段超时的情况
-      //  - 目的： 为了防止死锁
-      //  - 方式： 一旦超时，则终止掉全部 sqc，等待一段事件后，整个 dfo 重试
-      //  - 问题： init sqc 是异步的，其中部分 sqc 已经汇报了获取 task 的信息
-      //           突然被终止，QC 方面的状态需要重新维护。但是存在下面的问题：
-      //           场景举例：
-      //            1. sqc1 成功，sqc2 超时
-      //            2. dfo abort, clean sqc state
-      //            3. sqc1 汇报已经分配好 task (old news)
-      //            4. sqc1, sqc2 收到中断信息
-      //            5. sqc1 重新调度
-      //            6. sqc2 汇报已经分配好 task (latest news)
-      //            7. qc 认为 dfo 都已全部调度成功 (实际上没有)
-      //            8. sqc1 汇报分配好的 task (too late msg)
-      //
-      ret = dispatch_sqc(exec_ctx, dfo, sqcs);
-    //}
+    // 下面的逻辑处理握手阶段超时的情况
+    //  - 目的： 为了防止死锁
+    //  - 方式： 一旦超时，则终止掉全部 sqc，等待一段事件后，整个 dfo 重试
+    //  - 问题： init sqc 是异步的，其中部分 sqc 已经汇报了获取 task 的信息
+    //           突然被终止，QC 方面的状态需要重新维护。但是存在下面的问题：
+    //           场景举例：
+    //            1. sqc1 成功，sqc2 超时
+    //            2. dfo abort, clean sqc state
+    //            3. sqc1 汇报已经分配好 task (old news)
+    //            4. sqc1, sqc2 收到中断信息
+    //            5. sqc1 重新调度
+    //            6. sqc2 汇报已经分配好 task (latest news)
+    //            7. qc 认为 dfo 都已全部调度成功 (实际上没有)
+    //            8. sqc1 汇报分配好的 task (too late msg)
+    //
+    ret = dispatch_sqc(exec_ctx, dfo, sqcs);
   }
   return ret;
 }
@@ -1210,74 +1191,6 @@ int ObParallelDfoScheduler::deal_with_init_sqc_error(ObExecContext &exec_ctx,
   }
   return ret;
 }
-
-// 将lightweight SQC 分发到各个 server，无需在远端申请 px 线程，直接
-// 由工作线程执行
-int ObParallelDfoScheduler::fast_dispatch_sqc(ObExecContext &exec_ctx,
-                                                      ObDfo &dfo,
-                                                      ObArray<ObPxSqcMeta *> &sqcs) const
-{
-  int ret = OB_SUCCESS;
-  int64_t timeout_us =  0;
-  const ObPhysicalPlan *phy_plan = NULL;
-  ObPhysicalPlanCtx *phy_plan_ctx = NULL;
-  ObSQLSessionInfo *session = NULL;
-
-  if (OB_UNLIKELY(NULL == (phy_plan = dfo.get_phy_plan()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("NULL plan ptr unexpected", K(ret));
-  } else if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(exec_ctx))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy plan ctx NULL", K(ret));
-  } else if (OB_ISNULL(session = exec_ctx.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is NULL", K(ret));
-  }
-
-
-  // 分发 sqc 可能需要重试，主要针对两种情况：
-  //  1. 分发 sqc 的 rpc 超时
-  //  2. 分发 sqc 的 rpc 成功，但 sqc 上无法分配任何 worker 线程
-  // 发生上述情况后，整个 dfo 需要重置状态，稍等片刻然后重试
-  int64_t cluster_id = GCONF.cluster_id;
-  ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-    ObPxSqcMeta &sqc = *sqcs.at(idx);
-    const ObAddr &addr = sqc.get_exec_addr();
-    auto proxy = coord_info_.rpc_proxy_.to(addr);
-    if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
-                      share::ObCascadMember(addr, cluster_id), true /* add_server */,
-                      session->get_process_query_time()))) {
-      if (!sqc.is_ignore_vtable_error()) {
-        ret = OB_RPC_CONNECT_ERROR;
-        LOG_WARN("peer no in communication, maybe crashed", K(ret), K(sqc), K(cluster_id),
-                K(session->get_process_query_time()));
-      } else {
-        LOG_WARN("ignore the black server list with virtual table", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else {
-      SMART_VAR(ObPxRpcInitSqcArgs, args) {
-        ObPxRpcInitSqcResponse resp;
-        timeout_us = phy_plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time();
-        args.set_serialize_param(exec_ctx, const_cast<ObOpSpec &>(*dfo.get_root_op_spec()), *phy_plan);
-        if (timeout_us <= 0) {
-          ret = OB_TIMEOUT;
-        } else if (OB_FAIL(args.sqc_.assign(sqc))) {
-          LOG_WARN("fail assign sqc", K(ret));
-        } else if (OB_FAIL(proxy
-                          .by(THIS_WORKER.get_rpc_tenant()?: session->get_effective_tenant_id())
-                          .timeout(timeout_us)
-                          .init_sqc(args, resp))) {
-          LOG_WARN("fail dispatch dfo rpc", K(sqc), K(ret));
-        }
-        LOG_TRACE("Sent lw dfo to addr", K(dfo), K(addr), K(args), K(resp));
-      }
-    }
-  }
-  return ret;
-}
-
 
 /* 当发送 sqc 超时时，可能是遇到了死锁。
  * 应对策略是：终止 dfo 下所有 sqc，清空 qc-sqc 通道，

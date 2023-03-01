@@ -833,7 +833,11 @@ public:
         is_private_routine_(false),
         accessors_(allocator),
         priv_user_(),
-        loc_(0) {}
+        loc_(0),
+        is_no_sql_(false),
+        is_reads_sql_data_(false),
+        is_modifies_sql_data_(false),
+        is_contains_sql_(true){}
   virtual ~ObPLRoutineInfo();
 
   int make_routine_param(common::ObIAllocator &allocator,
@@ -921,6 +925,15 @@ public:
   virtual void set_deterministic() { is_deterministic_ = true; }
   virtual bool is_deterministic() const { return is_deterministic_; }
 
+  virtual void set_no_sql() { is_no_sql_ = true; is_reads_sql_data_ = false; is_modifies_sql_data_ = false; is_contains_sql_ = false; }
+  virtual bool is_no_sql() const { return is_no_sql_; }
+  virtual void set_reads_sql_data() { is_no_sql_ = false; is_reads_sql_data_ = true; is_modifies_sql_data_ = false; is_contains_sql_ = false; }
+  virtual bool is_reads_sql_data() const { return is_reads_sql_data_; }
+  virtual void set_modifies_sql_data() { is_no_sql_ = false; is_reads_sql_data_ = false; is_modifies_sql_data_ = true; is_contains_sql_ = false; }
+  virtual bool is_modifies_sql_data() const { return is_modifies_sql_data_; }
+  virtual void set_contains_sql() { is_no_sql_ = false; is_reads_sql_data_ = false; is_modifies_sql_data_ = false; is_contains_sql_ = true; }
+  virtual bool is_contains_sql() const { return is_contains_sql_; }
+
   virtual void set_parallel_enable() { is_parallel_enable_ = true; }
   virtual bool is_parallel_enable() const { return is_parallel_enable_; }
 
@@ -995,6 +1008,10 @@ private:
   ObPLSEArray<AccessorItem> accessors_;
   common::ObString priv_user_;
   uint64_t loc_;
+  bool is_no_sql_;
+  bool is_reads_sql_data_;
+  bool is_modifies_sql_data_;
+  bool is_contains_sql_;
 };
 
 class ObPLFunctionAST;

@@ -41,7 +41,7 @@ int ObDDLServerClient::create_hidden_table(const obrpc::ObCreateHiddenTableArg &
     LOG_WARN("failed to create hidden table", KR(ret), K(arg));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  } else if (OB_FAIL(wait_table_lock(arg.tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
+  } else if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
     LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     int tmp_ret = OB_SUCCESS;
     obrpc::ObAbortRedefTableArg abort_redef_table_arg;
@@ -71,7 +71,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
     LOG_WARN("failed to start redef table", KR(ret), K(arg));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  } else if (OB_FAIL(wait_table_lock(arg.orig_tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
+  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
     LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     int tmp_ret = OB_SUCCESS;
     obrpc::ObAbortRedefTableArg abort_redef_table_arg;
@@ -86,10 +86,11 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
   }
   return ret;
 }
-
 int ObDDLServerClient::copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg)
 {
   int ret = OB_SUCCESS;
+  const int64_t retry_interval = 100 * 1000L;
+  ObAddr rs_leader_addr;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -97,8 +98,26 @@ int ObDDLServerClient::copy_table_dependents(const obrpc::ObCopyTableDependentsA
   } else if (OB_ISNULL(common_rpc_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy is null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->copy_table_dependents(arg))) {
-    LOG_WARN("failed to copy table dependents", KR(ret), K(arg));
+  } else {
+    while (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
+        LOG_WARN("fail to rootservice address", K(tmp_ret));
+      } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).copy_table_dependents(arg))) {
+        LOG_WARN("copy table dependents failed", K(ret), K(arg));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          LOG_WARN("ddl task not exist", K(ret), K(arg));
+          break;
+        } else {
+          LOG_INFO("ddl task exist, try again", K(arg));
+          ret = OB_SUCCESS;
+          ob_usleep(retry_interval);
+        }
+      } else {
+        LOG_INFO("copy table dependents success", K(arg));
+        break;
+      }
+    }
   }
   return ret;
 }
@@ -121,9 +140,11 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
       if (OB_TMP_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
         LOG_WARN("fail to get rootservice address", K(tmp_ret));
       } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).abort_redef_table(arg))) {
+        LOG_WARN("abort redef table failed", K(ret), K(arg));
         if (OB_ENTRY_NOT_EXIST == ret) {
           break;
         } else {
+          LOG_INFO("ddl task exist, try again", K(arg));
           ret = OB_SUCCESS;
           ob_usleep(retry_interval);
         }
@@ -152,6 +173,8 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  const int64_t retry_interval = 100 * 1000L;
+  ObAddr rs_leader_addr;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
   if (OB_UNLIKELY(!finish_redef_arg.is_valid() || !build_single_arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -159,15 +182,34 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
   } else if (OB_ISNULL(common_rpc_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy is null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->finish_redef_table(finish_redef_arg))) {
-    LOG_WARN("failed to finish redef table", K(ret), K(finish_redef_arg));
-  } else if (OB_FAIL(build_ddl_single_replica_response(build_single_arg))) {
-    LOG_WARN("build ddl single replica response", K(ret), K(build_single_arg));
-  } else if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(finish_redef_arg.tenant_id_, finish_redef_arg.task_id_, session, common_rpc_proxy))) {
-    LOG_WARN("failed to wait ddl finish", K(ret), K(finish_redef_arg.tenant_id_), K(finish_redef_arg.task_id_));
-  }
-  if (OB_TMP_FAIL(heart_beat_clear(finish_redef_arg.task_id_))) {
-    LOG_WARN("heart beat clear failed", K(tmp_ret), K(finish_redef_arg.task_id_));
+  } else {
+    while (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
+        LOG_WARN("fail to rootservice address", K(tmp_ret));
+      } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).finish_redef_table(finish_redef_arg))) {
+        LOG_WARN("finish redef table failed", K(ret), K(finish_redef_arg));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          break;
+        } else {
+          LOG_INFO("ddl task exist, try again", K(finish_redef_arg));
+          ret = OB_SUCCESS;
+          ob_usleep(retry_interval);
+        }
+      } else {
+        LOG_INFO("finish redef table success", K(finish_redef_arg));
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(build_ddl_single_replica_response(build_single_arg))) {
+        LOG_WARN("build ddl single replica response", K(ret), K(build_single_arg));
+    } else if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(finish_redef_arg.tenant_id_, finish_redef_arg.task_id_, session, common_rpc_proxy))) {
+      LOG_WARN("failed to wait ddl finish", K(ret), K(finish_redef_arg.tenant_id_), K(finish_redef_arg.task_id_));
+    }
+    if (OB_TMP_FAIL(heart_beat_clear(finish_redef_arg.task_id_))) {
+      LOG_WARN("heart beat clear failed", K(tmp_ret), K(finish_redef_arg.task_id_));
+    }
   }
   return ret;
 }
@@ -188,7 +230,7 @@ int ObDDLServerClient::build_ddl_single_replica_response(const obrpc::ObDDLBuild
   return ret;
 }
 
-int ObDDLServerClient::wait_table_lock(const uint64_t tenant_id, const int64_t task_id, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session)
+int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const int64_t task_id, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   const int64_t retry_interval = 100 * 1000;

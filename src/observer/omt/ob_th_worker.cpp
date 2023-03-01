@@ -42,17 +42,72 @@ namespace memtable
 {
 extern TLOCAL(bool, TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR);
 }
+
+namespace omt
+{
+int create_worker(ObThWorker* &worker, ObTenant *tenant, int32_t group_id,
+                  int32_t level, ObResourceGroup *group)
+{
+  int ret = OB_SUCCESS;
+  if (tenant->total_worker_cnt() >= tenant->max_worker_cnt()) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_ERROR("create worker fail", K(ret), K(tenant->id()), K(group_id), K(level),
+                                    K(tenant->total_worker_cnt()), K(tenant->max_worker_cnt()));
+  } else if (OB_ISNULL(worker = OB_NEW(ObThWorker,
+                                       ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(),
+                                       "OMT_Worker",
+                                       ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("create worker fail", K(ret), K(tenant->id()), K(group_id), K(level));
+  } else if (OB_FAIL(worker->init())) {
+    LOG_ERROR("init worker fail", K(ret), K(tenant->id()), K(group_id), K(level));
+    ob_delete(worker);
+    worker = nullptr;
+  } else {
+    worker->reset();
+    worker->set_tenant(tenant);
+    worker->set_group_id(group_id);
+    worker->set_worker_level(level);
+    worker->set_group(group);
+    if (OB_FAIL(worker->start())) {
+      ob_delete(worker);
+      worker = nullptr;
+      LOG_ERROR("worker start failed", K(ret), K(tenant->id()), K(group_id), K(level));
+    } else {
+      ++tenant->total_worker_cnt_;
+    }
+  }
+  return ret;
 }
+
+int destroy_worker(ObThWorker *worker)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(worker)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(worker), K(ret));
+  } else {
+    auto* tenant = worker->get_tenant();
+    worker->stop();
+    worker->wait();
+    worker->destroy();
+    ob_delete(worker);
+    --tenant->total_worker_cnt_;
+  }
+  return ret;
+}
+}// end of namespace omt
+}// end of namespace oceanbase
 
 ObThWorker::ObThWorker()
     : procor_(ObServer::get_instance().get_net_frame().get_xlator(), ObServer::get_instance().get_self()),
       is_inited_(false), tenant_(nullptr),
       group_(nullptr), run_cond_(),
       pause_flag_(false), large_query_(false),
+      priority_limit_(RQ_LOW), is_lq_yield_(false),
       query_start_time_(0), last_check_time_(0),
       can_retry_(true), need_retry_(false),
-      active_(false), waiting_active_(false),
-      active_inactive_ts_(0L), lq_token_(false), has_add_to_cgroup_(false)
+      has_add_to_cgroup_(false), last_wakeup_ts_(0)
 {
 }
 
@@ -109,77 +164,8 @@ void ObThWorker::resume()
   run_cond_.signal();
 }
 
-void ObThWorker::activate()
-{
-  ObThreadCondGuard guard(run_cond_);
-  active_inactive_ts_ = ObTimeUtility::current_time();
-  active_ = true;
-  run_cond_.signal();
-}
 
 RLOCAL(uint64_t, serving_tenant_id);
-void ObThWorker::wait_active()
-{
-  bool has_reset_pm = false;
-  auto *pm = common::ObPageManager::thread_local_instance();
-  ObThreadCondGuard guard(run_cond_);
-  while (OB_UNLIKELY(!active_)) {
-    if (pm != nullptr && !has_reset_pm) {
-      pm->reset();
-      has_reset_pm = true;
-    }
-    waiting_active_ = true;
-    share::ObTenantEnv::set_tenant(nullptr);
-    lib::set_thread_name("OMT_FREE_", NULL == tenant_ ? 0 : tenant_->id());
-    serving_tenant_id = 0;
-    IGNORE_RETURN run_cond_.wait();
-    waiting_active_ = false;
-
-  }
-
-  // set ObTenant Context thread_local
-  if (OB_NOT_NULL(tenant_)) {
-    if (static_cast<share::ObTenantBase*>(tenant_) != MTL_CTX() || tenant_->id() != MTL_ID()) {
-      LOG_INFO("ObThWorker set tenant ctx", K(tenant_->id()), K(MTL_ID()), KP(tenant_), KP(MTL_CTX()));
-      share::ObTenantEnv::set_tenant(tenant_);
-    }
-    if (tenant_->id() != MTL_ID()) {
-      abort();
-    }
-  }
-}
-
-inline void ObThWorker::wait_runnable()
-{
-  int64_t wait_us = std::max(0L, get_timeout_remain());
-  if (OB_UNLIKELY(!tenant_->has_stopped()) &&
-      wait_us > 0 &&
-      pause_flag_) {
-    ObThreadCondGuard guard(run_cond_);
-    while (!tenant_->has_stopped() &&
-           wait_us > 0 &&
-           pause_flag_) {
-      WAIT_BEGIN(OMT_WAIT, wait_us, 0, 0, 0);
-      NG_TRACE(wait_start);
-      IGNORE_RETURN run_cond_.wait_us(wait_us);
-      NG_TRACE(wait_end);
-      WAIT_END(OMT_WAIT);
-      wait_us = std::max(0L, get_timeout_remain());
-    }
-  }
-  // LQ Worker being woken up maybe has 2 reasons generally.
-  //
-  // 1. Scheduler thinks it should run, e.g. LQ token is enough or
-  //    tenant is deleting.
-  // 2. The task has reached its timeout and this worker should run
-  //    the cleanup process ASAP.
-  //
-  // In the second condition, current worker may be still in the
-  // waiting queue. So that we need try to remove it from the queue by
-  // invoking this function.
-  tenant_->try_unlink_lq_waiting_worker_with_lock(*this);
-  pause_flag_ = false;
-}
 
 // Check only before user request starts
 ObThWorker::Status ObThWorker::check_qtime_throttle()
@@ -250,17 +236,12 @@ ObThWorker::Status ObThWorker::check_wait()
   } else if (OB_UNLIKELY(!tenant_->user_sched_enabled())) {
   } else if (OB_UNLIKELY(true == get_disable_wait_flag())) {
   } else if (this->get_curr_request_level() >= MULTI_LEVEL_THRESHOLD) {
-  } else if (this->get_group() != nullptr) {
+  } else if (this->is_group_worker() && this->get_group_id() != share::OBCG_LQ) {
   } else if (curr_time > last_check_time_ + WORKER_CHECK_PERIOD) {
     st = check_throttle();
     if (st != WS_OUT_OF_THROTTLE) {
       if (OB_UNLIKELY(curr_time > get_query_start_time() + threshold)) {
-        large_query_ = true;
-        tenant_->lq_check_status(*this);
-        wait_runnable();
-      } else {
-        // no need to reset large query flag
-        //large_query_ = false;
+        tenant_->lq_yield(*this);
       }
     }
     last_check_time_ = curr_time;
@@ -325,8 +306,7 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
   if (REACH_TIME_INTERVAL(10*1000*1000)) {
     auto *pm = common::ObPageManager::thread_local_instance();
     const int64_t pm_hold = (pm != nullptr) ? pm->get_hold() : 0;
-    _OB_LOG(INFO, "worker= %ld thd_flag=%d total=%ld used=%ld pm_hold=%ld",
-            lib::Worker::get_tidx(),
+    _OB_LOG(INFO, "thd_flag=%d total=%ld used=%ld pm_hold=%ld",
             has_req_flag(),
             get_allocator().total(),
             get_allocator().used(),
@@ -343,7 +323,7 @@ void ObThWorker::set_th_worker_thread_name(uint64_t tenant_id)
   char buf[32];
   if (serving_tenant_id != tenant_->id()) {
     serving_tenant_id = tenant_->id();
-    snprintf(buf, 32, "TNT_L%d_G%d", get_worker_level(), get_group_id());
+    snprintf(buf, 32, "L%d_G%d", get_worker_level(), get_group_id());
     lib::set_thread_name(buf);
   }
 }
@@ -367,19 +347,17 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
       this->set_worker_level(0);
     }
     while (!has_set_stop()) {
-      wait_active();
       worker_level = this->get_worker_level(); // Update backtrace printing parameters
       if (nullptr != this->tenant_) {
         tenant_id = this->tenant_->id(); // Update backtrace printing parameters
       }
-      if (OB_UNLIKELY(has_set_stop())) {
-        // empty
-      } else if (OB_ISNULL(tenant_)) {
+      if (OB_ISNULL(tenant_)) {
         LOG_ERROR("invalid status, unexpected", K(tenant_));
       } else {
         if (nullptr != GCTX.cgroup_ctrl_ && nullptr != tenant_ && OB_LIKELY(GCTX.cgroup_ctrl_->is_valid()) && !has_add_to_cgroup_) {
-          GCTX.cgroup_ctrl_->add_thread_to_cgroup(get_tid(), tenant_->id(), get_group_id());
-          has_add_to_cgroup_ = true;
+          if (OB_SUCC(GCTX.cgroup_ctrl_->add_thread_to_cgroup(gettid(), tenant_->id(), get_group_id()))) {
+            has_add_to_cgroup_ = true;
+          }
         }
         if (OB_LIKELY(pm != nullptr)) {
           if (pm->get_used() != 0) {
@@ -440,6 +418,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
                   query_start_time_ = wait_end_time;
                   query_enqueue_time_ = req->get_enqueue_timestamp();
                   last_check_time_ = wait_end_time;
+                  set_last_wakeup_ts(query_start_time_);
                   set_rpc_stat_srv(&(tenant_->rpc_stat_info_->rpc_stat_srv_));
                   req_start_time = ObTimeUtility::current_time();
                   process_request(*req);
@@ -458,10 +437,10 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
                 ret = OB_SUCCESS;
               }
               tenant_->add_idle_time(wait_end_time - wait_start_time);
-              if (this->get_worker_level() == 0 && this->get_group() == nullptr) {
+              if (this->get_worker_level() == 0 && !is_group_worker()) {
                 tenant_->check_worker_count(*this);
-                tenant_->check_paused_worker(*this);
-              } else if (this->get_group() != nullptr) {
+                tenant_->lq_end(*this);
+              } else if (this->is_group_worker()) {
                 group_->check_worker_count(*this);
               }
             }

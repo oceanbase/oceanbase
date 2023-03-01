@@ -103,6 +103,7 @@ void ObCdcService::run1()
     while(! is_stoped()) {
       // archive is always off for sys tenant, no need to query archive dest
       int64_t current_ts = ObTimeUtility::current_time();
+      IGNORE_RETURN lib::Thread::update_loop_ts(current_ts);
       if (OB_SYS_TENANT_ID != tenant_id) {
         if (current_ts - last_query_ts >= QUERY_INTERVAL) {
           // the change of archive dest info is not supported

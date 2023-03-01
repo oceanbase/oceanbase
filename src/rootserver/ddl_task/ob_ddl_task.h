@@ -171,10 +171,16 @@ public:
       int64_t &task_status,
       int64_t &execution_id);
 
-  static int get_all_record(
+  static int get_ddl_task_record(
+      const int64_t task_id,
+      common::ObMySQLProxy &proxy,
+      common::ObIAllocator &allocator,
+      ObDDLTaskRecord &record);
+  static int get_all_ddl_task_record(
       common::ObMySQLProxy &proxy,
       common::ObIAllocator &allocator,
       common::ObIArray<ObDDLTaskRecord> &records);
+
   static int check_task_id_exist(
       common::ObMySQLProxy &proxy,
       const int64_t task_id,
@@ -185,7 +191,7 @@ public:
      common::ObIAllocator &allocator,
      const uint64_t table_id,
      bool &is_building);
-  
+
   static int check_has_long_running_ddl(
      common::ObMySQLProxy *proxy,
      const uint64_t tenant_id,
@@ -219,11 +225,16 @@ private:
       ObDDLTaskRecord &task_record);
 
   static int64_t get_record_id(share::ObDDLType ddl_type, int64_t origin_id);
-
   static int kill_inner_sql(
       common::ObMySQLProxy &proxy,
       const uint64_t tenant_id,
       const uint64_t session_id);
+
+  static int get_task_record(
+      const ObSqlString &sql_string,
+      common::ObMySQLProxy &proxy,
+      common::ObIAllocator &allocator,
+      common::ObIArray<ObDDLTaskRecord> &records);
 };
 
 class ObDDLWaitTransEndCtx
@@ -379,7 +390,7 @@ public:
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
       longops_stat_(nullptr), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
-      execution_id_(-1), sql_exec_addr_(), start_time_(0), cluster_version_(0)
+      execution_id_(-1), sql_exec_addr_(), start_time_(0), data_format_version_(0)
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -410,7 +421,7 @@ public:
                                  obrpc::ObDDLArg &dest_arg);
   void set_longops_stat(share::ObDDLLongopsStat *longops_stat) { longops_stat_ = longops_stat; }
   share::ObDDLLongopsStat *get_longops_stat() const { return longops_stat_; }
-  int64_t get_cluster_version() const { return cluster_version_; }
+  int64_t get_data_format_version() const { return data_format_version_; }
   static int fetch_new_task_id(ObMySQLProxy &sql_proxy, int64_t &new_task_id);
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const = 0;
   virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) = 0;
@@ -458,7 +469,7 @@ public:
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
       K_(sys_task_id), K_(err_code_occurence_cnt), K_(stat_info),
-      K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(cluster_version));
+      K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(data_format_version));
 protected:
   int gather_redefinition_stats(const uint64_t tenant_id,
                                 const int64_t task_id,
@@ -522,7 +533,7 @@ protected:
   int64_t execution_id_; // guarded by lock_
   common::ObAddr sql_exec_addr_;
   int64_t start_time_;
-  int64_t cluster_version_;
+  int64_t data_format_version_;
 };
 
 enum ColChecksumStat

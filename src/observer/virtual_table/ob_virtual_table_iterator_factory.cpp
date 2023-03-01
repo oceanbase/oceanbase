@@ -52,6 +52,7 @@
 #include "observer/virtual_table/ob_all_virtual_session_stat.h"
 #include "observer/virtual_table/ob_all_disk_stat.h"
 #include "observer/virtual_table/ob_mem_leak_checker_info.h"
+#include "observer/virtual_table/ob_all_virtual_malloc_sample_info.h"
 #include "observer/virtual_table/ob_all_latch.h"
 #include "observer/virtual_table/ob_all_data_type_class_table.h"
 #include "observer/virtual_table/ob_all_data_type_table.h"
@@ -195,7 +196,6 @@
 #include "observer/virtual_table/ob_virtual_show_trace.h"
 #include "observer/virtual_table/ob_all_virtual_sql_plan.h"
 #include "observer/virtual_table/ob_all_virtual_plan_table.h"
-#include "observer/virtual_table/ob_all_virtual_plan_real_info.h"
 
 namespace oceanbase
 {
@@ -1293,6 +1293,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_MALLOC_SAMPLE_INFO_TID: {
+            ObMallocSampleInfo *malloc_sample_info = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObMallocSampleInfo, malloc_sample_info))) {
+              malloc_sample_info->set_allocator(&allocator);
+              vt_iter = static_cast<ObVirtualTableIterator *>(malloc_sample_info);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_MEM_LEAK_CHECKER_INFO_TID: {
             ObMemLeakCheckerInfo *leak_checker = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObMemLeakCheckerInfo, leak_checker))) {
@@ -2291,33 +2299,24 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_ALL_VIRTUAL_SQL_PLAN_TID: {
-            ObAllVirtualSqlPlan *sql_plan_table = NULL;
-            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSqlPlan, sql_plan_table))) {
-              sql_plan_table->set_allocator(&allocator);
-              sql_plan_table->set_addr(addr_);
-              vt_iter = static_cast<ObVirtualTableIterator *>(sql_plan_table);
-            }
-            break;
-          }
-          case OB_ALL_VIRTUAL_PLAN_TABLE_TID: {
-            ObAllVirtualPlanTable *plan_table = NULL;
-            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualPlanTable, plan_table))) {
-              plan_table->set_allocator(&allocator);
-              plan_table->set_plan_table_mgr(session->get_plan_table_manager());;
-              vt_iter = static_cast<ObVirtualTableIterator *>(plan_table);
-            }
-            break;
-          }
-          case OB_ALL_VIRTUAL_PLAN_REAL_INFO_TID: {
-            ObAllVirtualPlanRealInfo *plan_real_info = NULL;
-            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualPlanRealInfo, plan_real_info))) {
-              plan_real_info->set_allocator(&allocator);
-              plan_real_info->set_addr(addr_);
-              vt_iter = static_cast<ObVirtualTableIterator *>(plan_real_info);
-            }
-            break;
-          }
+          // case OB_ALL_VIRTUAL_SQL_PLAN_TID: {
+          //   ObAllVirtualSqlPlan *sql_plan_table = NULL;
+          //   if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSqlPlan, sql_plan_table))) {
+          //     sql_plan_table->set_allocator(&allocator);
+          //     sql_plan_table->set_addr(addr_);
+          //     vt_iter = static_cast<ObVirtualTableIterator *>(sql_plan_table);
+          //   }
+          //   break;
+          // }
+          // case OB_ALL_VIRTUAL_PLAN_TABLE_TID: {
+          //   ObAllVirtualPlanTable *plan_table = NULL;
+          //   if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualPlanTable, plan_table))) {
+          //     plan_table->set_allocator(&allocator);
+          //     plan_table->set_plan_table_mgr(session->get_plan_table_manager());;
+          //     vt_iter = static_cast<ObVirtualTableIterator *>(plan_table);
+          //   }
+          //   break;
+          // }
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER

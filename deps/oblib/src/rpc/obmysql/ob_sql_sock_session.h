@@ -39,7 +39,7 @@ private:
 class ObSqlSockSession
 {
 public:
-  ObSqlSockSession(ObISMConnectionCallback& conn_cb, ObSqlNio& nio);
+  ObSqlSockSession(ObISMConnectionCallback& conn_cb, ObSqlNio* nio);
   ~ObSqlSockSession();
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
   int init();
@@ -61,7 +61,7 @@ public:
   void set_sql_session_info(void* sess);
   int set_ssl_enabled();
   SSL* get_ssl_st();
-  ObSqlNio& nio_;
+  ObSqlNio* nio_;
   ObISMConnectionCallback& sm_conn_cb_;
   rpc::ObRequest sql_req_;
   ObSqlSessionMemPool pool_;

@@ -306,8 +306,8 @@ int ObLobMetaWriteIter::open(ObLobAccessParam &param,
 int ObLobMetaWriteIter::open(ObLobAccessParam &param, ObILobApator* adatper)
 {
   int ret = OB_SUCCESS;
-  
-  if (OB_FAIL(scan_iter_.open(param, adatper))) {
+  bool is_empty_lob = (param.byte_size_ == 0);
+  if (!is_empty_lob && OB_FAIL(scan_iter_.open(param, adatper))) {
     LOG_WARN("failed open scan meta open iter.", K(ret));
   } else {
     coll_type_ = param.coll_type_;
@@ -315,20 +315,22 @@ int ObLobMetaWriteIter::open(ObLobAccessParam &param, ObILobApator* adatper)
     piece_id_ = ObLobMetaUtil::LOB_META_INLINE_PIECE_ID;
     padding_size_ = 0;
     inner_buffer_.assign_ptr(nullptr, 0);
-    ObLobMetaScanResult scan_res;
     
-    // locate first piece 
-    ret = scan_iter_.get_next_row(scan_res);
-    if (OB_FAIL(ret)) {
-      if (ret == OB_ITER_END) {
-        // empty table
-        ret = OB_SUCCESS;
+    // locate first piece
+    if (!is_empty_lob) {
+      ObLobMetaScanResult scan_res;
+      ret = scan_iter_.get_next_row(scan_res);
+      if (OB_FAIL(ret)) {
+        if (ret == OB_ITER_END) {
+          // empty table
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get next row.", K(ret));
+        }
       } else {
-        LOG_WARN("failed to get next row.", K(ret));
+        last_info_ = scan_res.info_;
+        seq_id_.set_seq_id(scan_res.info_.seq_id_);
       }
-    } else {
-      last_info_ = scan_res.info_;
-      seq_id_.set_seq_id(scan_res.info_.seq_id_);
     }
   }
   return ret;

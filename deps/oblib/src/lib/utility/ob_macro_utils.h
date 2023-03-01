@@ -25,21 +25,8 @@
                    _90, _91, _92, _93, _94, _95, _96, _97, _98, _99, \
                    _100, ...) _100
 
-#define _SELECT100_(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9,          \
-                   _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, \
-                   _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, \
-                   _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, \
-                   _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, \
-                   _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, \
-                   _60, _61, _62, _63, _64, _65, _66, _67, _68, _69, \
-                   _70, _71, _72, _73, _74, _75, _76, _77, _78, _79, \
-                   _80, _81, _82, _83, _84, _85, _86, _87, _88, _89, \
-                   _90, _91, _92, _93, _94, _95, _96, _97, _98, _99, \
-                   _100, ...) _100
-
 // These two macros do same work that select the 100th argument from
 // argument list.
-#define _SELECT100(...) _SELECT100_(__VA_ARGS__)
 #define SELECT100(...) SELECT100_(__VA_ARGS__)
 
 // Expand to the number of arguments
@@ -76,129 +63,117 @@
 #define _CONCAT_(x, y) x ## y
 #define _CONCAT(x, y) _CONCAT_(x, y)
 
-// make that many duplicates of X, X should be surrounded by parentheses.
+#define APPLY_VARGS(f, x) f(x)
+#define APPLY0(f, ...) __VA_ARGS__
+#define APPLY1(f, ...) APPLY_VARGS(f, APPLY0(f, ##__VA_ARGS__))
+#define APPLY2(f, ...) APPLY_VARGS(f, APPLY1(f, ##__VA_ARGS__))
+#define APPLY3(f, ...) APPLY_VARGS(f, APPLY2(f, ##__VA_ARGS__))
+#define APPLY4(f, ...) APPLY_VARGS(f, APPLY3(f, ##__VA_ARGS__))
+#define APPLY5(f, ...) APPLY_VARGS(f, APPLY4(f, ##__VA_ARGS__))
+#define APPLY6(f, ...) APPLY_VARGS(f, APPLY5(f, ##__VA_ARGS__))
+#define APPLY7(f, ...) APPLY_VARGS(f, APPLY6(f, ##__VA_ARGS__))
+#define APPLY8(f, ...) APPLY_VARGS(f, APPLY7(f, ##__VA_ARGS__))
+#define APPLY9(f, ...) APPLY_VARGS(f, APPLY8(f, ##__VA_ARGS__))
+#define APPLY10(f, ...) APPLY_VARGS(f, APPLY9(f, ##__VA_ARGS__))
+#define APPLY11(f, ...) APPLY_VARGS(f, APPLY10(f, ##__VA_ARGS__))
+#define APPLY12(f, ...) APPLY_VARGS(f, APPLY11(f, ##__VA_ARGS__))
+#define APPLY13(f, ...) APPLY_VARGS(f, APPLY12(f, ##__VA_ARGS__))
+#define APPLY14(f, ...) APPLY_VARGS(f, APPLY13(f, ##__VA_ARGS__))
+#define APPLY15(f, ...) APPLY_VARGS(f, APPLY14(f, ##__VA_ARGS__))
+#define APPLY16(f, ...) APPLY_VARGS(f, APPLY15(f, ##__VA_ARGS__))
+#define APPLY17(f, ...) APPLY_VARGS(f, APPLY16(f, ##__VA_ARGS__))
+#define APPLY18(f, ...) APPLY_VARGS(f, APPLY17(f, ##__VA_ARGS__))
+#define APPLY19(f, ...) APPLY_VARGS(f, APPLY18(f, ##__VA_ARGS__))
+#define APPLY20(f, ...) APPLY_VARGS(f, APPLY19(f, ##__VA_ARGS__))
+#define APPLY21(f, ...) APPLY_VARGS(f, APPLY20(f, ##__VA_ARGS__))
+#define APPLY22(f, ...) APPLY_VARGS(f, APPLY21(f, ##__VA_ARGS__))
+#define APPLY23(f, ...) APPLY_VARGS(f, APPLY22(f, ##__VA_ARGS__))
+#define APPLY24(f, ...) APPLY_VARGS(f, APPLY23(f, ##__VA_ARGS__))
+#define APPLY25(f, ...) APPLY_VARGS(f, APPLY24(f, ##__VA_ARGS__))
+#define APPLY26(f, ...) APPLY_VARGS(f, APPLY25(f, ##__VA_ARGS__))
+#define APPLY27(f, ...) APPLY_VARGS(f, APPLY26(f, ##__VA_ARGS__))
+#define APPLY28(f, ...) APPLY_VARGS(f, APPLY27(f, ##__VA_ARGS__))
+#define APPLY29(f, ...) APPLY_VARGS(f, APPLY28(f, ##__VA_ARGS__))
+#define APPLY30(f, ...) APPLY_VARGS(f, APPLY29(f, ##__VA_ARGS__))
+#define APPLY31(f, ...) APPLY_VARGS(f, APPLY30(f, ##__VA_ARGS__))
+#define APPLY32(f, ...) APPLY_VARGS(f, APPLY31(f, ##__VA_ARGS__))
+#define APPLY33(f, ...) APPLY_VARGS(f, APPLY32(f, ##__VA_ARGS__))
+#define APPLY34(f, ...) APPLY_VARGS(f, APPLY33(f, ##__VA_ARGS__))
+#define APPLY35(f, ...) APPLY_VARGS(f, APPLY34(f, ##__VA_ARGS__))
+#define APPLY36(f, ...) APPLY_VARGS(f, APPLY35(f, ##__VA_ARGS__))
+#define APPLY37(f, ...) APPLY_VARGS(f, APPLY36(f, ##__VA_ARGS__))
+#define APPLY38(f, ...) APPLY_VARGS(f, APPLY37(f, ##__VA_ARGS__))
+#define APPLY39(f, ...) APPLY_VARGS(f, APPLY38(f, ##__VA_ARGS__))
+#define APPLY40(f, ...) APPLY_VARGS(f, APPLY39(f, ##__VA_ARGS__))
+#define APPLY41(f, ...) APPLY_VARGS(f, APPLY40(f, ##__VA_ARGS__))
+#define APPLY42(f, ...) APPLY_VARGS(f, APPLY41(f, ##__VA_ARGS__))
+#define APPLY43(f, ...) APPLY_VARGS(f, APPLY42(f, ##__VA_ARGS__))
+#define APPLY44(f, ...) APPLY_VARGS(f, APPLY43(f, ##__VA_ARGS__))
+#define APPLY45(f, ...) APPLY_VARGS(f, APPLY44(f, ##__VA_ARGS__))
+#define APPLY46(f, ...) APPLY_VARGS(f, APPLY45(f, ##__VA_ARGS__))
+#define APPLY47(f, ...) APPLY_VARGS(f, APPLY46(f, ##__VA_ARGS__))
+#define APPLY48(f, ...) APPLY_VARGS(f, APPLY47(f, ##__VA_ARGS__))
+#define APPLY49(f, ...) APPLY_VARGS(f, APPLY48(f, ##__VA_ARGS__))
+#define APPLY50(f, ...) APPLY_VARGS(f, APPLY49(f, ##__VA_ARGS__))
+#define APPLY51(f, ...) APPLY_VARGS(f, APPLY50(f, ##__VA_ARGS__))
+#define APPLY52(f, ...) APPLY_VARGS(f, APPLY51(f, ##__VA_ARGS__))
+#define APPLY53(f, ...) APPLY_VARGS(f, APPLY52(f, ##__VA_ARGS__))
+#define APPLY54(f, ...) APPLY_VARGS(f, APPLY53(f, ##__VA_ARGS__))
+#define APPLY55(f, ...) APPLY_VARGS(f, APPLY54(f, ##__VA_ARGS__))
+#define APPLY56(f, ...) APPLY_VARGS(f, APPLY55(f, ##__VA_ARGS__))
+#define APPLY57(f, ...) APPLY_VARGS(f, APPLY56(f, ##__VA_ARGS__))
+#define APPLY58(f, ...) APPLY_VARGS(f, APPLY57(f, ##__VA_ARGS__))
+#define APPLY59(f, ...) APPLY_VARGS(f, APPLY58(f, ##__VA_ARGS__))
+#define APPLY60(f, ...) APPLY_VARGS(f, APPLY59(f, ##__VA_ARGS__))
+#define APPLY61(f, ...) APPLY_VARGS(f, APPLY60(f, ##__VA_ARGS__))
+#define APPLY62(f, ...) APPLY_VARGS(f, APPLY61(f, ##__VA_ARGS__))
+#define APPLY63(f, ...) APPLY_VARGS(f, APPLY62(f, ##__VA_ARGS__))
+#define APPLY64(f, ...) APPLY_VARGS(f, APPLY63(f, ##__VA_ARGS__))
+#define APPLY65(f, ...) APPLY_VARGS(f, APPLY64(f, ##__VA_ARGS__))
+#define APPLY66(f, ...) APPLY_VARGS(f, APPLY65(f, ##__VA_ARGS__))
+#define APPLY67(f, ...) APPLY_VARGS(f, APPLY66(f, ##__VA_ARGS__))
+#define APPLY68(f, ...) APPLY_VARGS(f, APPLY67(f, ##__VA_ARGS__))
+#define APPLY69(f, ...) APPLY_VARGS(f, APPLY68(f, ##__VA_ARGS__))
+#define APPLY70(f, ...) APPLY_VARGS(f, APPLY69(f, ##__VA_ARGS__))
+#define APPLY71(f, ...) APPLY_VARGS(f, APPLY70(f, ##__VA_ARGS__))
+#define APPLY72(f, ...) APPLY_VARGS(f, APPLY71(f, ##__VA_ARGS__))
+#define APPLY73(f, ...) APPLY_VARGS(f, APPLY72(f, ##__VA_ARGS__))
+#define APPLY74(f, ...) APPLY_VARGS(f, APPLY73(f, ##__VA_ARGS__))
+#define APPLY75(f, ...) APPLY_VARGS(f, APPLY74(f, ##__VA_ARGS__))
+#define APPLY76(f, ...) APPLY_VARGS(f, APPLY75(f, ##__VA_ARGS__))
+#define APPLY77(f, ...) APPLY_VARGS(f, APPLY76(f, ##__VA_ARGS__))
+#define APPLY78(f, ...) APPLY_VARGS(f, APPLY77(f, ##__VA_ARGS__))
+#define APPLY79(f, ...) APPLY_VARGS(f, APPLY78(f, ##__VA_ARGS__))
+#define APPLY80(f, ...) APPLY_VARGS(f, APPLY79(f, ##__VA_ARGS__))
+#define APPLY81(f, ...) APPLY_VARGS(f, APPLY80(f, ##__VA_ARGS__))
+#define APPLY82(f, ...) APPLY_VARGS(f, APPLY81(f, ##__VA_ARGS__))
+#define APPLY83(f, ...) APPLY_VARGS(f, APPLY82(f, ##__VA_ARGS__))
+#define APPLY84(f, ...) APPLY_VARGS(f, APPLY83(f, ##__VA_ARGS__))
+#define APPLY85(f, ...) APPLY_VARGS(f, APPLY84(f, ##__VA_ARGS__))
+#define APPLY86(f, ...) APPLY_VARGS(f, APPLY85(f, ##__VA_ARGS__))
+#define APPLY87(f, ...) APPLY_VARGS(f, APPLY86(f, ##__VA_ARGS__))
+#define APPLY88(f, ...) APPLY_VARGS(f, APPLY87(f, ##__VA_ARGS__))
+#define APPLY89(f, ...) APPLY_VARGS(f, APPLY88(f, ##__VA_ARGS__))
+#define APPLY90(f, ...) APPLY_VARGS(f, APPLY89(f, ##__VA_ARGS__))
+#define APPLY91(f, ...) APPLY_VARGS(f, APPLY90(f, ##__VA_ARGS__))
+#define APPLY92(f, ...) APPLY_VARGS(f, APPLY91(f, ##__VA_ARGS__))
+#define APPLY93(f, ...) APPLY_VARGS(f, APPLY92(f, ##__VA_ARGS__))
+#define APPLY94(f, ...) APPLY_VARGS(f, APPLY93(f, ##__VA_ARGS__))
+#define APPLY95(f, ...) APPLY_VARGS(f, APPLY94(f, ##__VA_ARGS__))
+#define APPLY96(f, ...) APPLY_VARGS(f, APPLY95(f, ##__VA_ARGS__))
+#define APPLY97(f, ...) APPLY_VARGS(f, APPLY96(f, ##__VA_ARGS__))
+#define APPLY98(f, ...) APPLY_VARGS(f, APPLY97(f, ##__VA_ARGS__))
+#define APPLY99(f, ...) APPLY_VARGS(f, APPLY98(f, ##__VA_ARGS__))
+#define APPLY100(f, ...) APPLY_VARGS(f, APPLY99(f, ##__VA_ARGS__))
+#define APPLY(n, f, ...) APPLY ## n (f, ##__VA_ARGS__)
+
+// select nth argument
 //
-// DUP1((=)) => =
-// DUP2((,)) => ,,
-// DUP5((a++;)) => a++;a++;a++;a++;a++;
-//
-#define DUP1(X) SELF X
-#define DUP2(X) SELF X DUP1(X)
-#define DUP3(X) SELF X DUP2(X)
-#define DUP4(X) SELF X DUP3(X)
-#define DUP5(X) SELF X DUP4(X)
-#define DUP6(X) SELF X DUP5(X)
-#define DUP7(X) SELF X DUP6(X)
-#define DUP8(X) SELF X DUP7(X)
-#define DUP9(X) SELF X DUP8(X)
-#define DUP10(X) SELF X DUP9(X)
-#define DUP11(X) SELF X DUP10(X)
-#define DUP12(X) SELF X DUP11(X)
-#define DUP13(X) SELF X DUP12(X)
-#define DUP14(X) SELF X DUP13(X)
-#define DUP15(X) SELF X DUP14(X)
-#define DUP16(X) SELF X DUP15(X)
-#define DUP17(X) SELF X DUP16(X)
-#define DUP18(X) SELF X DUP17(X)
-#define DUP19(X) SELF X DUP18(X)
-#define DUP20(X) SELF X DUP19(X)
-#define DUP21(X) SELF X DUP20(X)
-#define DUP22(X) SELF X DUP21(X)
-#define DUP23(X) SELF X DUP22(X)
-#define DUP24(X) SELF X DUP23(X)
-#define DUP25(X) SELF X DUP24(X)
-#define DUP26(X) SELF X DUP25(X)
-#define DUP27(X) SELF X DUP26(X)
-#define DUP28(X) SELF X DUP27(X)
-#define DUP29(X) SELF X DUP28(X)
-#define DUP30(X) SELF X DUP29(X)
-#define DUP31(X) SELF X DUP30(X)
-#define DUP32(X) SELF X DUP31(X)
-#define DUP33(X) SELF X DUP32(X)
-#define DUP34(X) SELF X DUP33(X)
-#define DUP35(X) SELF X DUP34(X)
-#define DUP36(X) SELF X DUP35(X)
-#define DUP37(X) SELF X DUP36(X)
-#define DUP38(X) SELF X DUP37(X)
-#define DUP39(X) SELF X DUP38(X)
-#define DUP40(X) SELF X DUP39(X)
-#define DUP41(X) SELF X DUP40(X)
-#define DUP42(X) SELF X DUP41(X)
-#define DUP43(X) SELF X DUP42(X)
-#define DUP44(X) SELF X DUP43(X)
-#define DUP45(X) SELF X DUP44(X)
-#define DUP46(X) SELF X DUP45(X)
-#define DUP47(X) SELF X DUP46(X)
-#define DUP48(X) SELF X DUP47(X)
-#define DUP49(X) SELF X DUP48(X)
-#define DUP50(X) SELF X DUP49(X)
-#define DUP51(X) SELF X DUP50(X)
-#define DUP52(X) SELF X DUP51(X)
-#define DUP53(X) SELF X DUP52(X)
-#define DUP54(X) SELF X DUP53(X)
-#define DUP55(X) SELF X DUP54(X)
-#define DUP56(X) SELF X DUP55(X)
-#define DUP57(X) SELF X DUP56(X)
-#define DUP58(X) SELF X DUP57(X)
-#define DUP59(X) SELF X DUP58(X)
-#define DUP60(X) SELF X DUP59(X)
-#define DUP61(X) SELF X DUP60(X)
-#define DUP62(X) SELF X DUP61(X)
-#define DUP63(X) SELF X DUP62(X)
-#define DUP64(X) SELF X DUP63(X)
-#define DUP65(X) SELF X DUP64(X)
-#define DUP66(X) SELF X DUP65(X)
-#define DUP67(X) SELF X DUP66(X)
-#define DUP68(X) SELF X DUP67(X)
-#define DUP69(X) SELF X DUP68(X)
-#define DUP70(X) SELF X DUP69(X)
-#define DUP71(X) SELF X DUP70(X)
-#define DUP72(X) SELF X DUP71(X)
-#define DUP73(X) SELF X DUP72(X)
-#define DUP74(X) SELF X DUP73(X)
-#define DUP75(X) SELF X DUP74(X)
-#define DUP76(X) SELF X DUP75(X)
-#define DUP77(X) SELF X DUP76(X)
-#define DUP78(X) SELF X DUP77(X)
-#define DUP79(X) SELF X DUP78(X)
-#define DUP80(X) SELF X DUP79(X)
-#define DUP81(X) SELF X DUP80(X)
-#define DUP82(X) SELF X DUP81(X)
-#define DUP83(X) SELF X DUP82(X)
-#define DUP84(X) SELF X DUP83(X)
-#define DUP85(X) SELF X DUP84(X)
-#define DUP86(X) SELF X DUP85(X)
-#define DUP87(X) SELF X DUP86(X)
-#define DUP88(X) SELF X DUP87(X)
-#define DUP89(X) SELF X DUP88(X)
-#define DUP90(X) SELF X DUP89(X)
-#define DUP91(X) SELF X DUP90(X)
-#define DUP92(X) SELF X DUP91(X)
-#define DUP93(X) SELF X DUP92(X)
-#define DUP94(X) SELF X DUP93(X)
-#define DUP95(X) SELF X DUP94(X)
-#define DUP96(X) SELF X DUP95(X)
-#define DUP97(X) SELF X DUP96(X)
-#define DUP98(X) SELF X DUP97(X)
-#define DUP99(X) SELF X DUP98(X)
-
-#define DUP_(n, X) DUP ## n (X)
-#define DUP(n, X) DUP_(n, X)
-
-
-// expand to the number of 100 minus n
-#define COMP100(n)                                      \
-  _SELECT100(DUP(n, (,)),                               \
-             1, 2, 3, 4, 5, 6, 7, 8, 9,                 \
-             10, 11, 12, 13, 14, 15, 16, 17, 18, 19,    \
-             20, 21, 22, 23, 24, 25, 26, 27, 28, 29,    \
-             30, 31, 32, 33, 34, 35, 36, 37, 38, 39,    \
-             40, 41, 42, 43, 44, 45, 46, 47, 48, 49,    \
-             50, 51, 52, 53, 54, 55, 56, 57, 58, 59,    \
-             60, 61, 62, 63, 64, 65, 66, 67, 68, 69,    \
-             70, 71, 72, 73, 74, 75, 76, 77, 78, 79,    \
-             80, 81, 82, 83, 84, 85, 86, 87, 88, 89,    \
-             90, 91, 92, 93, 94, 95, 96, 97, 98, 99)
+// SELECT(2, arg1, arg2, arg3) => arg2
+#define EXPAND(...) __VA_ARGS__
+#define FIRST(x,...) x
+#define REMOVE_FIRST(x,...) __VA_ARGS__
+#define SELECT(n, ...) APPLY_VARGS(FIRST, APPLY(n, REMOVE_FIRST, ,##__VA_ARGS__))
 
 #define LST_DO_0(...)
 #define LST_DO_1(M, s, P, ...) P(M, 1, ##__VA_ARGS__)
@@ -307,11 +282,6 @@
 #define LST_DO(M, s, ...) LST_DO_(ARGS_NUM(__VA_ARGS__), M, s, PROC_ONE, ##__VA_ARGS__)
 #define LST_DO2(M, s, ...) LST_DO_(ARGS_NUM(__VA_ARGS__), M, s, PROC_ONE2, ##__VA_ARGS__)
 
-// select nth argument
-//
-// SELECT(2, arg1, arg2, arg3) => arg2
-#define SELECT(n, ...) SELECT100(DUP(COMP100(n), (,)), __VA_ARGS__)
-
 #define PROC_ONE(M, ...) M(SELECT(__VA_ARGS__))
 #define PROC_ONE2(M, IDX, ...) M(SELECT(IDX, __VA_ARGS__), IDX)
 
@@ -351,20 +321,10 @@
 //   IF_PARENT(XXX, MACRO_PAREN, MACRO_NO_PAREN) ==> MACRO_NO_PAREN(XXX)
 //   IF_PARENT((XXX), MACRO_PAREN, MACRO_NO_PAREN) ==> MACRO_PAREN(XXX)
 //
-#define OBMPAR IGNORE(
-#define PAR(x) _SELF(
-#define OBM_SELF(x) x
-
-#define PAREN(x, M) CONCAT(OBM, PAR x) M x)
-
-#define OBMNPNPAR SELF(IGNORE(
-#define OBMNP_SELF(x) SELF
-#define NPAR(x) _IGNORE(
-#define OBMNP_IGNORE(...) IGNORE(
-
-#define NO_PAREN(x, M) CONCAT(OBMNP, NPAR x)) M (x))
-
-#define IF_PAREN(x, MP, MNP) PAREN(x, MP) NO_PAREN(x, MNP)
+#define COMMA_(...) ,
+#define APPLY_(f, ...) f(__VA_ARGS__)
+#define IF_IS_PAREN(x, yes_branch, no_branch) APPLY_(SELECT3, COMMA_ x, yes_branch, no_branch)
+#define IF_PAREN(x, yes_branch, no_branch) EXPAND(IF_IS_PAREN(x, yes_branch, no_branch) IF_IS_PAREN(x, x, (x)))
 
 #ifndef MIN
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
@@ -381,17 +341,6 @@
 #define CAT(a, ...) PRIMITIVE_CAT(a, __VA_ARGS__)
 #define PRIMITIVE_CAT(a, ...) a ## __VA_ARGS__
 
-#define EMPTY()
-#define INNER_DEFER(id) id EMPTY()
-#define OBSTRUCT(...) __VA_ARGS__ INNER_DEFER(EMPTY)()
-#define EXPAND(...) __VA_ARGS__
-
-#define EVAL(...)  EVAL1(EVAL1(EVAL1(__VA_ARGS__)))
-#define EVAL1(...) EVAL2(EVAL2(EVAL2(__VA_ARGS__)))
-#define EVAL2(...) EVAL3(EVAL3(EVAL3(__VA_ARGS__)))
-#define EVAL3(...) EVAL4(EVAL4(EVAL4(__VA_ARGS__)))
-#define EVAL4(...) EVAL5(EVAL5(EVAL5(__VA_ARGS__)))
-#define EVAL5(...) __VA_ARGS__
 
 ////////////////////////////////////////////////////////////////
 /**

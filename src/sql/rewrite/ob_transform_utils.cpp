@@ -6208,6 +6208,15 @@ int ObTransformUtils::create_set_stmt(ObTransformerCtx *ctx,
   } else {
     if (ObSelectStmt::UNION != set_type || is_distinct) {
       temp_stmt->assign_set_distinct();
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
+        if (OB_ISNULL(child_stmts.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null stmt", K(ret));
+        } else if (child_stmts.at(i)->get_select_items().empty() &&
+                   OB_FAIL(create_dummy_select_item(*child_stmts.at(i), ctx))) {
+          LOG_WARN("failed to create dummy select", K(ret));
+        }
+      }
     } else {
       temp_stmt->assign_set_all();
     }
@@ -6215,7 +6224,8 @@ int ObTransformUtils::create_set_stmt(ObTransformerCtx *ctx,
     temp_stmt->assign_set_op(set_type);
     temp_stmt->set_calc_found_rows(child_stmt->is_calc_found_rows());
     // adjust statement id after set query_ctx and set_type
-    if (OB_FAIL(temp_stmt->adjust_statement_id(ctx->allocator_,
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(temp_stmt->adjust_statement_id(ctx->allocator_,
                                                ctx->src_qb_name_,
                                                ctx->src_hash_val_))) {
       LOG_WARN("failed to adjust statement id", K(ret), K(child_stmt));
@@ -8400,6 +8410,39 @@ int ObTransformUtils::convert_column_expr_to_select_expr(const common::ObIArray<
     } else if (FALSE_IT(column_expr = static_cast<ObColumnRefRawExpr*>(outer_expr))) {
       /*do nothing*/
     } else if (FALSE_IT(pos = column_expr->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
+      /*do nothing*/
+    } else if (OB_UNLIKELY(pos < 0 || pos >= inner_stmt.get_select_item_size())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid array pos", K(pos), K(inner_stmt.get_select_item_size()), K(ret));
+    } else if (OB_ISNULL(inner_expr = inner_stmt.get_select_item(pos).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(select_exprs.push_back(inner_expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObTransformUtils::convert_set_op_expr_to_select_expr(const common::ObIArray<ObRawExpr*> &set_op_exprs,
+                                                         const ObSelectStmt &inner_stmt,
+                                                         common::ObIArray<ObRawExpr*> &select_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *outer_expr = NULL;
+  ObRawExpr *inner_expr = NULL;
+  ObSetOpRawExpr *set_op_expr = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < set_op_exprs.count(); i++) {
+    int64_t pos = OB_INVALID_ID;
+    if (OB_ISNULL(outer_expr = set_op_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_UNLIKELY(!outer_expr->is_set_op_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected expr type", K(ret));
+    } else if (FALSE_IT(set_op_expr = static_cast<ObSetOpRawExpr*>(outer_expr))) {
+      /*do nothing*/
+    } else if (FALSE_IT(pos = set_op_expr->get_idx())) {
       /*do nothing*/
     } else if (OB_UNLIKELY(pos < 0 || pos >= inner_stmt.get_select_item_size())) {
       ret = OB_ERR_UNEXPECTED;
@@ -12008,35 +12051,6 @@ int ObTransformUtils::rebuild_win_compare_range_expr(ObRawExprFactory* expr_fact
   return ret;
 }
 
-int ObTransformUtils::check_stmt_from_one_dblink(ObDMLStmt *stmt, bool &from_one_dblink)
-{
-  int ret = OB_SUCCESS;
-  from_one_dblink = true;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  }
-  int64_t dblink_id = OB_INVALID_ID;
-  for (int64_t i = 0; from_one_dblink && i < stmt->get_table_size(); i++) {
-    TableItem *table = NULL;
-    if (OB_ISNULL(table = stmt->get_table_item(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_INVALID_ID != table->dblink_id_ || table->is_reverse_link_) {
-      if (dblink_id == OB_INVALID_ID){
-        dblink_id = table->is_reverse_link_ ? 0 : table->dblink_id_;
-      } else {
-        from_one_dblink = (dblink_id == (table->is_reverse_link_ ? 0 : table->dblink_id_));
-      }
-    } else {
-      from_one_dblink = false;
-    }
-  }
-  from_one_dblink &= (OB_INVALID_ID != dblink_id);
-  return ret;
-}
-
-
 int ObTransformUtils::check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
                                                       bool &is_valid)
 {
@@ -12162,6 +12176,72 @@ int ObTransformUtils::is_scalar_expr(ObRawExpr* expr, bool &is_scalar)
   } else if (expr->is_query_ref_expr()) {
     ObQueryRefRawExpr *query_ref = static_cast<ObQueryRefRawExpr*>(expr);
     is_scalar = (!query_ref->is_set()) && (query_ref->get_output_column() == 1);
+  }
+  return ret;
+}
+
+int ObTransformUtils::pack_stmt(ObTransformerCtx *ctx,
+                                ObSelectStmt *parent_stmt,
+                                ObSelectStmt **child_stmt_ptr)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *dummy_stmt = NULL;
+  ObSelectStmt *child_stmt = NULL;
+  TableItem *new_table_item = NULL;
+  ObSEArray<ObRawExpr *, 8> column_exprs;
+  if (OB_ISNULL(ctx) || OB_ISNULL(ctx->stmt_factory_) ||
+      OB_ISNULL(ctx->allocator_) || OB_ISNULL(parent_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ctx), K(parent_stmt), K(ret));
+  } else if (OB_FAIL(ctx->stmt_factory_->create_stmt<ObSelectStmt>(child_stmt))) {
+    LOG_WARN("failed to create stmt", K(ret));
+  } else if (OB_ISNULL(child_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(ctx->stmt_factory_->create_stmt<ObSelectStmt>(dummy_stmt))) {
+    LOG_WARN("failed to create stmt", K(ret));
+  } else if (OB_ISNULL(dummy_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(child_stmt->assign(*parent_stmt))) {
+    LOG_WARN("failed to assign stmt", K(ret));
+  } else if (OB_FAIL(parent_stmt->assign(*dummy_stmt))) {
+    LOG_WARN("failed to assign stmt", K(ret));
+  } else if (OB_FAIL(parent_stmt->ObStmt::assign(*child_stmt))) {
+    LOG_WARN("failed to assign stmt", K(ret));
+  } else if (OB_FAIL(parent_stmt->get_stmt_hint().assign(child_stmt->get_stmt_hint()))) {
+    LOG_WARN("failed to assign stmt hint", K(ret));
+  } else if (OB_FAIL(child_stmt->adjust_statement_id(ctx->allocator_,
+                                                     ctx->src_qb_name_,
+                                                     ctx->src_hash_val_))) {
+    LOG_WARN("failed to adjust statement id", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx,
+                                                          parent_stmt,
+                                                          child_stmt,
+                                                          new_table_item))) {
+    LOG_WARN("failed to add new table item", K(ret));
+  } else if (OB_ISNULL(new_table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(parent_stmt->add_from_item(new_table_item->table_id_, false))) {
+    LOG_WARN("failed to add from item", K(ret));
+  } else if (OB_FAIL(parent_stmt->rebuild_tables_hash())) {
+    LOG_WARN("failed to rebuild table hash", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx,
+                                                               *new_table_item,
+                                                               parent_stmt,
+                                                               column_exprs))) {
+    LOG_WARN("failed to create column items", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx->allocator_,
+                                                          column_exprs,
+                                                          parent_stmt))) {
+    LOG_WARN("failed to create select item", K(ret));
+  } else {
+    parent_stmt->set_select_into(child_stmt->get_select_into());
+    child_stmt->set_select_into(NULL);
+    if (NULL != child_stmt_ptr) {
+      *child_stmt_ptr = child_stmt;
+    }
   }
   return ret;
 }

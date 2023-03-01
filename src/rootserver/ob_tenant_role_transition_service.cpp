@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX STANDBY
 #include "ob_tenant_role_transition_service.h"
 #include "logservice/palf/log_define.h"
 #include "share/scn.h"
@@ -25,6 +25,7 @@
 #include "share/location_cache/ob_location_service.h"//get ls leader
 #include "share/ob_schema_status_proxy.h"//set_schema_status
 #include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
+#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
 
 namespace oceanbase
 {
@@ -194,6 +195,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_(share::ObAllTenantInfo 
 {
   int ret = OB_SUCCESS;
 
+  DEBUG_SYNC(BEFORE_PREPARE_FLASHBACK);
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else if (OB_UNLIKELY(!(tenant_info.is_prepare_flashback_for_failover_to_primary_status()
@@ -235,6 +238,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
   ObLogRestoreSourceItem item;
 
   DEBUG_SYNC(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY);
+
+  LOG_INFO("start to do_prepare_flashback_for_switch_to_primary_", KR(ret), K_(tenant_id));
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
@@ -306,6 +311,14 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_failover_to_primary_
     LOG_WARN("tenant switchover status not valid", KR(ret), K(tenant_info), K_(switchover_epoch));
   } else if (OB_FAIL(update_tenant_stat_info_())) {
     LOG_WARN("failed to update tenant stat info", KR(ret), K(tenant_info), K_(switchover_epoch));
+  } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.do_recover_tenant(tenant_id_,
+                     share::PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_SWITCHOVER_STATUS,
+                     obrpc::ObRecoverTenantArg::RecoverType::CANCEL,
+                     SCN::min_scn()))) {
+    LOG_WARN("failed to do_recover_tenant", KR(ret), K_(tenant_id));
+    // reset error code and USER_ERROR to avoid print recover error log
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "can not do recover cancel for tenant, failed to failover to primary");
   } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_switchover_status(
                      tenant_id_, sql_proxy_, tenant_info.get_switchover_epoch(),
                      tenant_info.get_switchover_status(), share::FLASHBACK_SWITCHOVER_STATUS))) {
@@ -824,7 +837,7 @@ int ObTenantRoleTransitionService::switchover_update_tenant_status(
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_status(tenant_id,
-                                                                  &trans,
+                                                                  trans,
                                                                   new_role,
                                                                   old_status,
                                                                   new_status,
@@ -936,6 +949,8 @@ int ObTenantRoleTransitionService::check_sync_to_latest_(const uint64_t tenant_i
   bool sys_ls_sync_to_latest = false;
   share::ObLSStatusInfo ls_status;
 
+  LOG_INFO("start to check_sync_to_latest", KR(ret), K(tenant_id), K(tenant_info));
+
   if (!is_user_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
@@ -1006,6 +1021,8 @@ int ObTenantRoleTransitionService::get_checkpoints_by_rpc_(const uint64_t tenant
 {
   int ret = OB_SUCCESS;
   checkpoints.reset();
+
+  LOG_INFO("start to get_checkpoints_by_rpc_", KR(ret), K(tenant_id), K(check_sync_to_latest), K(status_info_array));
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), KP(sql_proxy_));
   } else if (!is_user_tenant(tenant_id) || 0 >= status_info_array.count()) {

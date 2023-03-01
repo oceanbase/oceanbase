@@ -45,6 +45,7 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
     const ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_data_format_version = 0;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableRedefinitionTask has already been inited", K(ret));
@@ -56,6 +57,8 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
     LOG_WARN("deep copy alter table arg failed", K(ret));
   } else if (OB_FAIL(set_ddl_stmt_str(alter_table_arg_.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_format_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
     task_type_ = ddl_type;
     object_id_ = data_table_id;
@@ -67,7 +70,7 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
     task_version_ = OB_TABLE_REDEFINITION_TASK_VERSION;
     task_id_ = task_id;
     parallelism_ = parallelism;
-    cluster_version_ = GET_MIN_CLUSTER_VERSION();
+    data_format_version_ = tenant_data_format_version;
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
     start_time_ = ObTimeUtility::current_time();
     if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
@@ -800,7 +803,8 @@ int ObTableRedefinitionTask::repending(const share::ObDDLTaskStatus next_task_st
 
 bool ObTableRedefinitionTask::check_task_status_before_pending(const share::ObDDLTaskStatus task_status)
 {
-  return task_status == ObDDLTaskStatus::PREPARE || task_status == ObDDLTaskStatus::WAIT_TRANS_END || task_status == ObDDLTaskStatus::LOCK_TABLE;
+  return task_status == ObDDLTaskStatus::PREPARE || task_status == ObDDLTaskStatus::WAIT_TRANS_END
+         || task_status == ObDDLTaskStatus::LOCK_TABLE || task_status == ObDDLTaskStatus::CHECK_TABLE_EMPTY;
 }
 
 int ObTableRedefinitionTask::process()
@@ -825,18 +829,18 @@ int ObTableRedefinitionTask::process()
         }
         break;
       case ObDDLTaskStatus::LOCK_TABLE:
-        if (OB_FAIL(lock_table(ObDDLTaskStatus::REPENDING))) {
+        if (OB_FAIL(lock_table(ObDDLTaskStatus::CHECK_TABLE_EMPTY))) {
           LOG_WARN("fail to lock table", K(ret));
         }
         break;
-      case ObDDLTaskStatus::REPENDING:
-        if (OB_FAIL(repending(ObDDLTaskStatus::CHECK_TABLE_EMPTY))) {
-          LOG_WARN("fail to repending", K(ret));
+      case ObDDLTaskStatus::CHECK_TABLE_EMPTY:
+        if (OB_FAIL(check_table_empty(ObDDLTaskStatus::REPENDING))) {
+          LOG_WARN("fail to check table empty", K(ret));
         }
         break;
-      case ObDDLTaskStatus::CHECK_TABLE_EMPTY:
-        if (OB_FAIL(check_table_empty(ObDDLTaskStatus::REDEFINITION))) {
-          LOG_WARN("fail to check table empty", K(ret));
+      case ObDDLTaskStatus::REPENDING:
+        if (OB_FAIL(repending(ObDDLTaskStatus::REDEFINITION))) {
+          LOG_WARN("fail to repending", K(ret));
         }
         break;
       case ObDDLTaskStatus::REDEFINITION:
@@ -907,7 +911,7 @@ int64_t ObTableRedefinitionTask::get_serialize_param_size() const
   int8_t ignore_errors = static_cast<int8_t>(is_ignore_errors_);
   int8_t do_finish = static_cast<int8_t>(is_do_finish_);
   return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_)
-         + serialization::encoded_length_i64(parallelism_) + serialization::encoded_length_i64(cluster_version_)
+         + serialization::encoded_length_i64(parallelism_) + serialization::encoded_length_i64(data_format_version_)
          + serialization::encoded_length_i8(copy_indexes) + serialization::encoded_length_i8(copy_triggers)
          + serialization::encoded_length_i8(copy_constraints) + serialization::encoded_length_i8(copy_foreign_keys)
          + serialization::encoded_length_i8(ignore_errors) + serialization::encoded_length_i8(do_finish);
@@ -931,7 +935,7 @@ int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_
     LOG_WARN("serialize table arg failed", K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, parallelism_))) {
     LOG_WARN("fail to serialize parallelism_", K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, cluster_version_))) {
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, data_format_version_))) {
     LOG_WARN("fail to serialize parallelism_", K(ret));
   } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, copy_indexes))) {
     LOG_WARN("fail to serialize is_copy_indexes", K(ret));
@@ -970,8 +974,8 @@ int ObTableRedefinitionTask::deserlize_params_from_message(const char *buf, cons
     LOG_WARN("deep copy table arg failed", K(ret));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &parallelism_))) {
     LOG_WARN("fail to deserialize parallelism", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &cluster_version_))) {
-    LOG_WARN("fail to deserialize cluster_version", K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &data_format_version_))) {
+    LOG_WARN("fail to deserialize data format version", K(ret));
   } else if (pos < data_len) {
     if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &copy_indexes))) {
       LOG_WARN("fail to deserialize is_copy_indexes_", K(ret));

@@ -33,6 +33,9 @@ public:
   int init(int64_t capacity) {
     return queue_.init(capacity);
   }
+  int64_t size() const {
+    return queue_.size();
+  }
 private:
   common::LightyQueue queue_;
 };

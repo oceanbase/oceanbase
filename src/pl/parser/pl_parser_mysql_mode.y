@@ -1255,10 +1255,26 @@ sp_chistic:
     $$->str_len_ = $2->str_len_;
   }
   | LANGUAGE SQL { /* Just parse it, we only have one language for now. */ $$ = NULL; }
-  | NO SQL {}
-  | CONTAINS SQL {}
-  | READS SQL DATA {}
-  | MODIFIES SQL DATA {}
+  | NO SQL
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_DATA_ACCESS);
+    $$->value_ = SP_NO_SQL;
+  }
+  | CONTAINS SQL
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_DATA_ACCESS);
+    $$->value_ = SP_CONTAINS_SQL;
+  }
+  | READS SQL DATA
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_DATA_ACCESS);
+    $$->value_ = SP_READS_SQL_DATA;
+  }
+  | MODIFIES SQL DATA
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_DATA_ACCESS);
+    $$->value_ = SP_MODIFIES_SQL_DATA;
+  }
   | SQL SECURITY DEFINER
   {
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_SP_INVOKE);

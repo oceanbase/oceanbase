@@ -16,6 +16,7 @@
 #include <new>
 #include <stdlib.h>
 
+#include "lib/alloc/memory_sanity.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/utility/utility.h"
@@ -427,6 +428,7 @@ ObResourceMgr::ObResourceMgr()
   : inited_(false), cache_washer_(NULL), locks_(), tenant_resource_mgrs_()
 {
   for (int64_t i = 0; i < MAX_TENANT_COUNT; ++i) {
+    locks_[i].enable_record_stat(false);
     locks_[i].set_latch_id(common::ObLatchIds::TENANT_RES_MGR_LIST_LOCK);
   }
 }
@@ -461,6 +463,7 @@ ObResourceMgr &ObResourceMgr::get_instance()
   static ObResourceMgr resource_mgr;
   if (!resource_mgr.inited_) {
     // use first lock to avoid concurrent init of resource mgr
+    ObDisableDiagnoseGuard disable_diagnose_guard;
     SpinWLockGuard guard(resource_mgr.locks_[0]);
     if (!resource_mgr.inited_) {
       int ret = OB_SUCCESS;
@@ -481,6 +484,7 @@ int ObResourceMgr::set_cache_washer(ObICacheWasher &cache_washer)
   } else {
     cache_washer_ = &cache_washer;
     for (int64_t pos = 0; pos < MAX_TENANT_COUNT; ++pos) {
+      ObDisableDiagnoseGuard disable_diagnose_guard;
       SpinWLockGuard guard(locks_[pos]);
       ObTenantResourceMgr *tenant_resource_mgr = tenant_resource_mgrs_[pos];
       while (NULL != tenant_resource_mgr) {
@@ -505,6 +509,7 @@ int ObResourceMgr::get_tenant_resource_mgr(const uint64_t tenant_id,
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else {
     const int64_t pos = tenant_id % MAX_TENANT_COUNT;
+    ObDisableDiagnoseGuard disable_diagnose_guard;
     ObTenantResourceMgr *tenant_resource_mgr = NULL;
     {
       SpinRLockGuard guard(locks_[pos]);
@@ -555,6 +560,7 @@ void ObResourceMgr::dec_ref(ObTenantResourceMgr *tenant_resource_mgr)
     int64_t ref_cnt = 0;
     if (0 == (ref_cnt = ATOMIC_SAF(&tenant_resource_mgr->ref_cnt_, 1))) {
       const int64_t pos = tenant_resource_mgr->tenant_id_ % MAX_TENANT_COUNT;
+      ObDisableDiagnoseGuard disable_diagnose_guard;
       SpinWLockGuard guard(locks_[pos]);
       if (0 == ATOMIC_LOAD(&tenant_resource_mgr->ref_cnt_)) {
         int ret = OB_SUCCESS;

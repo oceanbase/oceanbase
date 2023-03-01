@@ -2618,7 +2618,7 @@ int ObSQLUtils::revise_hash_part_object(common::ObObj &obj,
  *  4. other
  */
 int ObSQLUtils::choose_best_replica_for_estimation(
-                          const ObCandiTabletLocIArray &part_loc_info_array,
+                          const ObCandiTabletLoc &phy_part_loc_info,
                           const ObAddr &local_addr,
                           const common::ObIArray<ObAddr> &addrs_list,
                           const bool no_use_remote,
@@ -2626,42 +2626,37 @@ int ObSQLUtils::choose_best_replica_for_estimation(
 {
   int ret = OB_SUCCESS;
   best_partition.reset();
-  if (OB_UNLIKELY(1 != part_loc_info_array.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition array count should be 1", K(ret), K(part_loc_info_array.count()));
-  } else {
-    const ObIArray<ObRoutePolicy::CandidateReplica> &replica_loc_array =
-                part_loc_info_array.at(0).get_partition_location().get_replica_locations();
-    bool found = false;
-    // 2. check whether best partition can find in local
-    for (int64_t i = -1; !found && i < addrs_list.count(); ++i) {
-      const ObAddr &addr = (i == -1? local_addr : addrs_list.at(i));
-      for (int64_t j = 0; !found && j < replica_loc_array.count(); ++j) {
-        if (addr == replica_loc_array.at(j).get_server() &&
-            0 != replica_loc_array.at(j).get_property().get_memstore_percent()) {
-          found = true;
-          best_partition.set(addr,
-                             part_loc_info_array.at(0).get_partition_location().get_tablet_id(),
-                             part_loc_info_array.at(0).get_partition_location().get_ls_id());
-        }
+  const ObIArray<ObRoutePolicy::CandidateReplica> &replica_loc_array =
+              phy_part_loc_info.get_partition_location().get_replica_locations();
+  bool found = false;
+  // 2. check whether best partition can find in local
+  for (int64_t i = -1; !found && i < addrs_list.count(); ++i) {
+    const ObAddr &addr = (i == -1? local_addr : addrs_list.at(i));
+    for (int64_t j = 0; !found && j < replica_loc_array.count(); ++j) {
+      if (addr == replica_loc_array.at(j).get_server() &&
+          0 != replica_loc_array.at(j).get_property().get_memstore_percent()) {
+        found = true;
+        best_partition.set(addr,
+                            phy_part_loc_info.get_partition_location().get_tablet_id(),
+                            phy_part_loc_info.get_partition_location().get_ls_id());
       }
     }
-    if (!found && !no_use_remote) {
-      // best partition not find in local
-      ObAddr remote_addr;
-      if (OB_FAIL(choose_best_partition_replica_addr(local_addr,
-                                                     part_loc_info_array.at(0),
-                                                     false,
-                                                     remote_addr))) {
-        LOG_WARN("failed to get best partition replica addr", K(ret));
-        // choose partition replica failed doesn't affect execution, we will decide whether use
-        // storage estimation interface by (!use_local && remote_addr.is_valid()).
-        ret = OB_SUCCESS;
-      }
-      best_partition.set(remote_addr,
-                         part_loc_info_array.at(0).get_partition_location().get_tablet_id(),
-                         part_loc_info_array.at(0).get_partition_location().get_ls_id());
+  }
+  if (!found && !no_use_remote) {
+    // best partition not find in local
+    ObAddr remote_addr;
+    if (OB_FAIL(choose_best_partition_replica_addr(local_addr,
+                                                   phy_part_loc_info,
+                                                   false,
+                                                   remote_addr))) {
+      LOG_WARN("failed to get best partition replica addr", K(ret));
+      // choose partition replica failed doesn't affect execution, we will decide whether use
+      // storage estimation interface by (!use_local && remote_addr.is_valid()).
+      ret = OB_SUCCESS;
     }
+    best_partition.set(remote_addr,
+                       phy_part_loc_info.get_partition_location().get_tablet_id(),
+                       phy_part_loc_info.get_partition_location().get_ls_id());
   }
   return ret;
 }

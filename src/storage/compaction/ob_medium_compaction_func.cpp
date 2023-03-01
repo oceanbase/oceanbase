@@ -279,6 +279,9 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
   if (0 == table_store.get_major_sstables().count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("major sstable should not be empty", K(ret), K(tablet_));
+  } else if (0 == ls_.get_min_reserved_snapshot()) {
+    ret = OB_NO_NEED_MERGE;
+    // not sync reserved snapshot yet, should not schedule now
   } else if (FALSE_IT(max_merged_snapshot = table_store.get_major_sstables().get_boundary_table(true/*last*/)->get_snapshot_version())) {
   } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(
       tablet_.get_tablet_meta().tablet_id_, max_merged_snapshot, min_reserved_snapshot))) {

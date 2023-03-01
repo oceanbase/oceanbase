@@ -495,7 +495,7 @@ int ObExecContext::check_status()
   if (OB_ISNULL(phy_plan_ctx_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical plan ctx is null");
-  } else if (phy_plan_ctx_->is_timeout()) {
+  } else if (phy_plan_ctx_->is_exec_timeout()) {
     ret = OB_TIMEOUT;
     LOG_WARN("query is timeout", K(ret));
   } else if (OB_ISNULL(my_session_)) {

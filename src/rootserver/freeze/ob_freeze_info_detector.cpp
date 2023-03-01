@@ -128,8 +128,8 @@ void ObFreezeInfoDetector::run3()
 
         bool need_broadcast = false;
         ret = OB_SUCCESS; // ignore ret
-        if (OB_FAIL(check_need_broadcast(need_broadcast))) {
-          LOG_WARN("fail to check need broadcast", KR(ret), K_(tenant_id));
+        if (OB_FAIL(check_need_broadcast(need_broadcast, proposal_id))) {
+          LOG_WARN("fail to check need broadcast", KR(ret), K_(tenant_id), K(proposal_id));
         }
 
         if (need_broadcast) {
@@ -166,13 +166,13 @@ void ObFreezeInfoDetector::run3()
   LOG_INFO("stop freeze_info_detector", K_(tenant_id));
 }
 
-int ObFreezeInfoDetector::check_need_broadcast(bool &need_broadcast)
+int ObFreezeInfoDetector::check_need_broadcast(bool &need_broadcast, const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(try_adjust_global_merge_info())) {
+  } else if (OB_FAIL(try_adjust_global_merge_info(expected_epoch))) {
     LOG_WARN("fail to try adjust global merge info", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(freeze_info_mgr_->check_need_broadcast(need_broadcast))) {
     LOG_WARN("fail to check need broadcast", KR(ret), K_(tenant_id));
@@ -348,7 +348,7 @@ int ObFreezeInfoDetector::try_reload_freeze_info(const int64_t expected_epoch)
   return ret;
 }
 
-int ObFreezeInfoDetector::try_adjust_global_merge_info()
+int ObFreezeInfoDetector::try_adjust_global_merge_info(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   bool is_initial = false;
@@ -368,7 +368,7 @@ int ObFreezeInfoDetector::try_adjust_global_merge_info()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to try adjust global merge info, freeze info manager is null", KR(ret),
                K_(tenant_id), K_(is_primary_service));
-    } else if (OB_FAIL(freeze_info_mgr_->adjust_global_merge_info())) {
+    } else if (OB_FAIL(freeze_info_mgr_->adjust_global_merge_info(expected_epoch))) {
       LOG_WARN("fail to adjust global merge info", KR(ret), K_(tenant_id), K_(is_primary_service));
     } else {
       is_global_merge_info_adjusted_ = true;

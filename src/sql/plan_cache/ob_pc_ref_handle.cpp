@@ -37,7 +37,7 @@ const char* ObCacheRefHandleMgr::handle_name(const CacheRefHandleID handle_id)
     "cli_query_handle",
     "outline_exec_handle",
     "plan_explain_handle",
-    "asyn_baseline_handle",
+    "check_evolution_plan_handle",
     "load_baseline_handle",
     "ps_exec_handle",
     "gv_sql_handle",

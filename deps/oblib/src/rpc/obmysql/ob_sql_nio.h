@@ -17,6 +17,8 @@
 #include "lib/thread/threads.h"
 #include "lib/ssl/ob_ssl_config.h"
 
+#define MAX_THREAD_CNT 64
+
 namespace oceanbase
 {
 namespace obmysql
@@ -26,9 +28,12 @@ class ObISqlSockHandler;
 class ObSqlNio: public lib::Threads
 {
 public:
-  ObSqlNio(): impl_(NULL) {}
+  ObSqlNio()
+      : impl_(NULL), port_(0), handler_(NULL), dispatch_idx_(0),
+        tenant_id_(common::OB_INVALID_ID) {}
   virtual ~ObSqlNio() {}
-  int start(int port, ObISqlSockHandler* handler, int n_thread);
+  int start(int port, ObISqlSockHandler *handler, int n_thread,
+            const uint64_t tenant_id);
   bool has_error(void* sess);
   void destroy_sock(void* sess);
   void revert_sock(void* sess);
@@ -46,13 +51,23 @@ public:
   void shutdown(void* sess);
   int set_ssl_enabled(void* sess);
   SSL* get_ssl_st(void* sess);
+  int get_thread_count() { return lib::Threads::get_thread_count(); }
+  int set_thread_count(const int n_thread);
+  int regist_sess(void *sess);
+  uint64_t get_dispatch_idx() {
+    return ATOMIC_FAA(&dispatch_idx_, 1) % get_thread_count();
+  }
   void update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt);
 private:
   void run(int64_t idx);
 private:
   ObSqlNioImpl* impl_;
+  int port_;
+  ObISqlSockHandler* handler_;
+  uint64_t dispatch_idx_;
+  uint64_t tenant_id_;
 };
-
+extern int sql_nio_add_cgroup(const uint64_t tenant_id);
 }; // end namespace obmysql
 }; // end namespace oceanbase
 

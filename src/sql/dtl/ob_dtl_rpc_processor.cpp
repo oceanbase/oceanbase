@@ -173,7 +173,7 @@ int ObDtlSendMessageP::process_px_bloom_filter_data(ObDtlLinkedBuffer *&buffer)
         LOG_WARN("fail to decode bloom filter data", K(ret));
       } else {
         ObPXBloomFilterHashWrapper bf_key(bf_data.tenant_id_, bf_data.filter_id_, 
-            bf_data.server_id_, bf_data.execution_id_, 0/*task_id*/);  
+            bf_data.server_id_, bf_data.px_sequence_id_, 0/*task_id*/);
         if (OB_FAIL(ObPxBloomFilterManager::instance().get_px_bf_for_merge_filter(
             bf_key, filter))) {
           LOG_WARN("fail to get px bloom filter", K(ret));

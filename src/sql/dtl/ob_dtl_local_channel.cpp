@@ -148,8 +148,9 @@ int ObDtlLocalChannel::send_shared_message(ObDtlLinkedBuffer *&buf)
       metric_.mark_first_out();
     }
     if (is_eof) {
-      metric_.mark_last_out();
+      metric_.mark_eof();
     }
+    metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
   }
   //统一返回消息
   msg_response_.on_finish(is_block, ret);

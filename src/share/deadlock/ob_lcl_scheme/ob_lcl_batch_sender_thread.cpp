@@ -219,6 +219,7 @@ void ObLCLBatchSenderThread::run1()
   ObLCLBatchSenderThread::RemoveIfOp op(mock_lcl_message_list);
   lib::set_thread_name("LCLSender");
   while(ATOMIC_LOAD(&is_running_)) {
+    IGNORE_RETURN lib::Thread::update_loop_ts();
     int64_t _lcl_op_interval = ObServerConfig::get_instance()._lcl_op_interval;
     if (_lcl_op_interval == 0) {// 0 means deadlock is disabled
       if (lcl_msg_map_.count() != 0) {

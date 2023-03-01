@@ -114,6 +114,19 @@ public:
     }
     return (ts_timeout_us_ > 0 && now > ts_timeout_us_);
   }
+  inline bool is_exec_timeout(int64_t *remain_us = NULL) const
+  {
+    int64_t now = common::ObClockGenerator::getClock();
+    int64_t ts_timeout_us = spm_ts_timeout_us_ > 0 ? spm_ts_timeout_us_ : ts_timeout_us_;
+    if (remain_us != NULL) {
+      if (OB_LIKELY(ts_timeout_us > 0)) {
+        *remain_us = ts_timeout_us - now;
+      } else {
+        *remain_us = INT64_MAX; // no timeout
+      }
+    }
+    return (ts_timeout_us > 0 && now > ts_timeout_us);
+  }
   // snapshot timestamp used for transaction set consistency check
   inline int64_t get_tsc_timestamp() const
   {
@@ -427,6 +440,7 @@ public:
   }
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   common::ObCurTraceId::TraceId &get_last_trace_id() { return last_trace_id_; }
+  void set_spm_timeout_timestamp(const int64_t timeout) { spm_ts_timeout_us_ = timeout; }
 
 private:
   void reset_datum_frame(char *frame, int64_t expr_cnt);
@@ -560,6 +574,8 @@ private:
   //used for monitor operator information
   int64_t plan_start_time_;
   bool is_ps_rewrite_sql_;
+  // timeout use by spm, don't need to serialize
+  int64_t spm_ts_timeout_us_;
 };
 
 }

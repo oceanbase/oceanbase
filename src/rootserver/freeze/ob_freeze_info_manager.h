@@ -105,7 +105,7 @@ public:
   int get_global_last_merged_scn(share::SCN &global_last_merged_scn) const;
   int get_global_broadcast_scn(share::SCN &global_broadcast_scn) const;
   int get_local_latest_frozen_scn(share::SCN &frozen_scn);
-  int adjust_global_merge_info();
+  int adjust_global_merge_info(const int64_t expected_epoch);
 
   void reset_freeze_info();
 

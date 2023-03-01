@@ -93,6 +93,13 @@ int ObInitSqcP::process()
   } else {
     /*do nothing*/
   }
+
+#ifdef ERRSIM
+  if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_INIT_PROCESS_FAILED) OB_SUCCESS)) {
+    LOG_WARN("match sqc execute errism", K(ret));
+  }
+#endif
+
   if (OB_FAIL(ret) && OB_NOT_NULL(sqc_handler)) {
     if (unregister_interrupt_) {
       ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
@@ -265,7 +272,8 @@ void ObFastInitSqcReportQCMessageCall::operator()(hash::HashMapPair<ObInterrupti
 {
   UNUSED(entry);
   if (OB_NOT_NULL(sqc_)) {
-    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS && err_ != OB_TIMEOUT) {
+    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS
+        && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(err_)) {
       // 当该SQC是虚拟表查询时, 调度RPC失败时需要忽略错误结果.
       // 并mock一个sqc finsh msg发送给正在轮询消息的PX算子
       // 此操作已确认是线程安全的.

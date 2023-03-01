@@ -337,29 +337,33 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
   auto session_id = session->get_sessid();
   LOG_INFO("begin to kill tx", K(cause), K(session_id), KPC(session));
   int ret = OB_SUCCESS;
-  if (session->is_in_transaction() && !session->is_txn_free_route_temp()) {
+  if (session->is_in_transaction()) {
     transaction::ObTxDesc *tx_desc = session->get_tx_desc();
     auto tx_tenant_id = tx_desc->get_tenant_id();
     const ObTransID tx_id = tx_desc->get_tx_id();
+    auto tx_free_route_tmp = session->is_txn_free_route_temp();
     MTL_SWITCH(tx_tenant_id) {
-      if (tx_desc->is_xa_trans()) {
+      if (tx_free_route_tmp) {
+        // if XA-txn is on this server, we have acquired its ref, release ref
+        // and disassocate with session
+        if (tx_desc->is_xa_trans() && tx_desc->get_addr() == GCONF.self_addr_) {
+          auto txs = MTL(transaction::ObTransService*);
+          CK (OB_NOT_NULL(txs));
+          OZ (txs->release_tx_ref(*tx_desc));
+          OX (session->get_tx_desc() = NULL);
+        }
+      } else  if (tx_desc->is_xa_trans()) {
         const transaction::ObXATransID xid = session->get_xid();
         const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+        auto xas = MTL(transaction::ObXAService *);
+        CK (OB_NOT_NULL(xas));
         if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
-          if (OB_FAIL(MTL(transaction::ObXAService *)->handle_terminate_for_xa_branch(
-                  session->get_xid(), tx_desc, session->get_xa_end_timeout_seconds()))) {
-            LOG_WARN("rollback xa trans fail", K(ret), K(xid), K(global_tx_type), K(session_id),
-                K(tx_id));
-          } else {
-            // currently, tx_desc is NULL
-          }
+          OZ (xas->handle_terminate_for_xa_branch(session->get_xid(), tx_desc, session->get_xa_end_timeout_seconds()),
+              xid, global_tx_type, session_id, tx_id);
+          // currently, tx_desc is NULL
         } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
-          if (OB_FAIL(MTL(transaction::ObXAService *)->rollback_for_dblink_trans(tx_desc))) {
-            LOG_WARN("fail to rollback for dblink trans", K(ret), K(xid), K(global_tx_type),
-                K(tx_id));
-          } else {
-            // currently, tx_desc is NULL
-          }
+          OZ (xas->rollback_for_dblink_trans(tx_desc), ret, xid, global_tx_type, tx_id);
+          // currently, tx_desc is NULL
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected global trans type", K(ret), K(xid), K(global_tx_type), K(tx_id));
@@ -367,12 +371,11 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
         session->get_tx_desc() = NULL;
       } else {
         transaction::ObTransService *txs = NULL;
-        CK(OB_NOT_NULL(txs = MTL_WITH_CHECK_TENANT(transaction::ObTransService*,
-                                                   tx_tenant_id)));
+        CK(OB_NOT_NULL(txs = MTL_WITH_CHECK_TENANT(transaction::ObTransService*, tx_tenant_id)));
         OZ(txs->abort_tx(*tx_desc, cause), *session, tx_desc->get_tx_id());
       }
       // NOTE that the tx_desc is set to NULL in xa case, DO NOT print anything in tx_desc
-      LOG_INFO("kill tx done", K(ret), K(cause), K(session_id), K(tx_id));
+      LOG_INFO("kill tx done", K(ret), K(cause), K(session_id), K(tx_id), K(tx_free_route_tmp));
     }
   }
   return ret;
@@ -834,8 +837,10 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   OZ (get_tx_service(session, txs), *session);
   // plain select stmt don't require txn descriptor
   if (OB_SUCC(ret) && !is_plain_select) {
-    ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback);
     CK (OB_NOT_NULL(tx_desc));
+    ObTransID tx_id_before_rollback;
+    OX (tx_id_before_rollback = tx_desc->get_tx_id());
+    OX (ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback));
     auto &tx_result = session->get_trans_result();
     if (OB_FAIL(ret)) {
     } else if (tx_result.is_incomplete()) {
@@ -850,6 +855,15 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
       auto &touched_ls = tx_result.get_touched_ls();
       OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls),
           savepoint, stmt_expire_ts, touched_ls);
+    }
+    // this may happend cause tx may implicit aborted
+    // (for example: first write sql of implicit started trans meet lock conflict)
+    // and if associated detector is created, must clean it also
+    if (OB_NOT_NULL(tx_desc) && tx_desc->get_tx_id() != tx_id_before_rollback) {
+      ObTransDeadlockDetectorAdapter::
+      unregister_from_deadlock_detector(tx_id_before_rollback,
+                                        ObTransDeadlockDetectorAdapter::
+                                        UnregisterPath::TX_ROLLBACK_IN_END_STMT);
     }
   }
   // call end stmt hook

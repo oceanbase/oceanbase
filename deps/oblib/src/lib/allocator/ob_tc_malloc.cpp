@@ -18,11 +18,13 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/list/ob_free_list.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "lib/utility/utility.h"
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/worker.h"
+#include "lib/alloc/malloc_hook.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -131,7 +133,12 @@ const ObCtxInfo &get_global_ctx_info()
 
 void  __attribute__((constructor(MALLOC_INIT_PRIORITY))) init_global_memory_pool()
 {
+  auto& t = EventTable::instance();
+  auto& c = get_mem_leak_checker();
+  auto& a = AChunkMgr::instance();
+  in_hook()= true;
   global_default_allocator = ObMallocAllocator::get_instance();
+  in_hook()= false;
   #ifndef OB_USE_ASAN
   abort_unless(OB_SUCCESS == install_ob_signal_handler());
   #endif
@@ -150,7 +157,6 @@ int64_t get_virtual_memory_used(int64_t *resident_size)
   }
   return page_cnt * ps;
 }
-
 
 } // end namespace common
 } // end namespace oceanbase

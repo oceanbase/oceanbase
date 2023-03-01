@@ -21,7 +21,7 @@ namespace oceanbase
 namespace sql
 {
 
-
+class ObPxCoordInfo;
 class ObDfoMgr
 {
 public:
@@ -36,7 +36,8 @@ public:
                    const ObOpSpec &root_op_spec,
                    int64_t expected_worker_count,
                    int64_t admited_worker_count,
-                   const ObDfoInterruptIdGen &dfo_int_gen);
+                   const ObDfoInterruptIdGen &dfo_int_gen,
+                   ObPxCoordInfo &px_coord_info);
   ObDfo *get_root_dfo() { return root_dfo_; }
   
   virtual int get_ready_dfo(ObDfo *&dfo) const; // 仅用于单层dfo调度
@@ -60,7 +61,8 @@ private:
                common::ObIAllocator &allocator,
                const ObOpSpec *phy_op,
                ObDfo *&parent_dfo,
-               const ObDfoInterruptIdGen &dfo_id_gen) const;
+               const ObDfoInterruptIdGen &dfo_id_gen,
+               ObPxCoordInfo &px_coord_info) const;
   int create_dfo(common::ObIAllocator &allocator,
                  const ObOpSpec *dfo_root_op,
                  ObDfo *&dfo) const;

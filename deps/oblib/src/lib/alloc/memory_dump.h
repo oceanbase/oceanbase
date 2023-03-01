@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_DUMP_MEMORY_H_
 #define OCEANBASE_DUMP_MEMORY_H_
 
+#include "lib/alloc/ob_malloc_sample_struct.h"
 #include "lib/queue/ob_lighty_queue.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/rc/context.h"
@@ -26,6 +27,7 @@ namespace oceanbase
 namespace observer
 {
 class ObAllVirtualMemoryInfo;
+class ObMallocSampleInfo;
 }
 namespace lib
 {
@@ -142,6 +144,7 @@ struct TenantCtxRange
 struct Stat {
   LabelItem up2date_items_[MAX_LABEL_ITEM_CNT];
   TenantCtxRange tcrs_[MAX_TENANT_CNT * ObCtxIds::MAX_CTX_ID];
+  lib::ObMallocSampleMap  malloc_sample_map_;
   int tcr_cnt_ = 0;
 };
 
@@ -182,6 +185,7 @@ public:
     lib::ObMutexGuard guard(task_mutex_);
     avaliable_task_set_ |= (1 << pos);
   }
+  int load_malloc_sample_map(lib::ObMallocSampleMap& malloc_sample_map);
 private:
   void run1() override;
   void handle(void *task);

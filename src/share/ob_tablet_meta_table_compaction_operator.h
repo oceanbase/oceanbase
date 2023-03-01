@@ -28,6 +28,7 @@ class ObMySQLTransaction;
 namespace share
 {
 class ObTabletReplicaFilter;
+class SCN;
 
 // part compaction related member from __all_tablet_meta_table
 struct ObTabletCompactionScnInfo
@@ -116,6 +117,9 @@ public:
       const share::ObLSID &ls_id,
       const int64_t major_frozen_scn,
       const common::ObIArray<ObTabletID> &input_tablet_id_array);
+  static int get_min_compaction_scn(
+      const uint64_t tenant_id,
+      SCN &min_compaction_scn);
 private:
   // is_update_finish_scn = TRUE: update finish_scn
   // is_update_finish_scn = FALSE: delete rows

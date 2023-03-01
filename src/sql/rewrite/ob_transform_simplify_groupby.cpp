@@ -1425,18 +1425,12 @@ int ObTransformSimplifyGroupby::transform_const_aggr(ObDMLStmt *stmt, bool &tran
   trans_happened = false;
   ObSelectStmt *select_stmt = NULL;
   ObSelectStmt *view_stmt = NULL;
-  bool from_one_dblink = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is NULL", K(ret), K(stmt));
   } else if (!stmt->is_select_stmt() ||
              FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt))) {
     //do nothing
-  } else if (OB_FAIL(ObTransformUtils::check_stmt_from_one_dblink(stmt, from_one_dblink))) {
-    LOG_WARN("failed to check if all tables from one dblink", K(ret));
-  } else if (from_one_dblink) {
-    // do not transform,
-    // for compatibility with Oracle before 12c
   } else if (OB_FAIL(is_valid_const_aggregate(select_stmt, is_valid))) {
     LOG_WARN("failed to check is valid const aggregate", K(ret));
   } else if (!is_valid) {

@@ -1433,6 +1433,8 @@ public:
                                                    ObOptimizerContext &opt_ctx,
                                                    ObRawExpr *&calc_part_id_expr);
 
+  static int check_contain_my_exec_param(ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain);
+
 private:
   //disallow construct
   ObOptimizerUtil();

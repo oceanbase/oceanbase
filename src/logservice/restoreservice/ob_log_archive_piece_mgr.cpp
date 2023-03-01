@@ -1454,6 +1454,7 @@ int ObLogArchivePieceContext::get_ls_meta_data_(
     CLOG_LOG(WARN, "locate round failed", K(ret));
   } else if (FALSE_IT(piece_id = cal_piece_id_(timestamp))) {
   } else {
+    piece_id = min(round_context_.max_piece_id_, piece_id);
     ret = get_ls_meta_in_piece_(meta_type, timestamp, fuzzy_match, piece_id, buf, buf_size, real_size);
   }
   return ret;

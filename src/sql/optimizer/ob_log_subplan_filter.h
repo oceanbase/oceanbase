@@ -109,6 +109,8 @@ public:
 
   int allocate_startup_expr_post() override;
 
+  int allocate_startup_expr_post(int64_t child_idx) override;
+
   int allocate_subquery_id();
 
   int replace_nested_subquery_exprs(

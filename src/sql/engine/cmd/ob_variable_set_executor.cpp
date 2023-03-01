@@ -915,7 +915,7 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
     LOG_WARN("session is NULL", K(ret));
   } else {
     auto tx_desc = my_session->get_tx_desc();
-    bool in_trans = OB_NOT_NULL(tx_desc) && tx_desc->in_tx_or_has_state();
+    bool in_trans = OB_NOT_NULL(tx_desc) && tx_desc->in_tx_or_has_extra_state();
     if (OB_FAIL(my_session->get_autocommit(orig_ac))) {
       LOG_WARN("fail to get autocommit", K(ret));
     } else if (OB_FAIL(val.get_int(autocommit))) {

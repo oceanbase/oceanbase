@@ -30,7 +30,7 @@ public:
     is_local_(false), is_data_(false), is_transmit_(false), channel_id_(0), op_id_(-1), peer_id_(0), tenant_id_(0), alloc_buffer_cnt_(0),
     free_buffer_cnt_(0), send_buffer_cnt_(0), recv_buffer_cnt_(0), processed_buffer_cnt_(0), send_buffer_size_(0),
     hash_val_(0), buffer_pool_id_(0), pins_(0), first_in_ts_(0), first_out_ts_(0), last_in_ts_(0), last_out_ts_(0),
-    state_(0), thread_id_(0), owner_mod_(0), peer_()
+    state_(0), thread_id_(0), owner_mod_(0), peer_(), eof_(false)
   {}
 
   void get_info(sql::dtl::ObDtlChannel* ch);
@@ -61,6 +61,7 @@ public:
   int64_t thread_id_;
   int64_t owner_mod_;
   ObAddr peer_;
+  bool eof_;
 };
 
 class ObVirtualDtlChannelOp
@@ -148,6 +149,7 @@ private:
     OWNER_MOD,
     PEER_IP,              // OB_APP_MIN_COLUMN_ID + 25
     PEER_PORT,            // OB_APP_MIN_COLUMN_ID + 26
+    DTL_EOF,
   };
   int get_row(ObVirtualChannelInfo &chan_info, common::ObNewRow *&row);
 

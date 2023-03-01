@@ -2895,20 +2895,6 @@
     "background_cn": "",
     "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/zst4cy"
   },
-  "ob_sql_plan_memory_percentage": {
-    "id": 10135,
-    "name": "ob_sql_plan_memory_percentage",
-    "value": "5",
-    "data_type": "int",
-    "info": "The limited percentage of tenant memory for sql plan",
-    "flags": "GLOBAL | NEED_SERIALIZE",
-    "min_val": "0",
-    "max_val": "80",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
   "log_row_value_options": {
     "id": 10136,
     "name": "log_row_value_options",

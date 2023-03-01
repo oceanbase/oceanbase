@@ -385,7 +385,6 @@ public:
     px_bf_id_(OB_INVALID_ID),
     use_filter_ch_map_(),
     total_task_cnt_(0),
-    ignore_vtable_error_(false),
     pkey_table_loc_id_(0),
     tsc_op_cnt_(0)
   {
@@ -551,8 +550,6 @@ public:
     return (dfo_id >= 0 && dfo_id <= MAX_DFO_ID) ||
            (dfo_id == MAX_DFO_ID);
   }
-  void set_ignore_vtable_error(bool flag) { ignore_vtable_error_ = flag; }
-  bool is_ignore_vtable_error() { return ignore_vtable_error_; }
   void set_pkey_table_loc_id(int64_t id) { pkey_table_loc_id_ = id; }
   int64_t get_pkey_table_loc_id() { return pkey_table_loc_id_; };
   void inc_tsc_op_cnt() { tsc_op_cnt_++; }
@@ -647,7 +644,6 @@ private:
   int64_t px_bf_id_;                    //记录px_bloom_filter_id
   ObPxBloomFilterChInfo use_filter_ch_map_;   // use and create channel info is same
   int64_t total_task_cnt_;      // the task total count of dfo start worker
-  bool ignore_vtable_error_;
   int64_t pkey_table_loc_id_; // record pkey table loc id for child dfo
   int64_t tsc_op_cnt_;
 };

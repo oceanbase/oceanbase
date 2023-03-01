@@ -12,7 +12,6 @@
 
 #ifndef OCEANBASE_OBRPC_OB_POC_RPC_SERVER_H_
 #define OCEANBASE_OBRPC_OB_POC_RPC_SERVER_H_
-#include "rpc/obrpc/ob_poc_nio.h"
 #include "rpc/obrpc/ob_rpc_mem_pool.h"
 #include "rpc/ob_request.h"
 #include "rpc/frame/ob_req_deliver.h"
@@ -26,56 +25,39 @@ namespace obrpc
 class ObPocServerHandleContext
 {
 public:
-  ObPocServerHandleContext(ObINio& nio, ObRpcMemPool& pool, uint64_t resp_id):
-      nio_(nio), pool_(pool), resp_id_(resp_id)
+  ObPocServerHandleContext( ObRpcMemPool& pool, uint64_t resp_id):
+      pool_(pool), resp_id_(resp_id)
   {}
   ~ObPocServerHandleContext() {
     destroy();
   }
-  static rpc::ObRequest* create(ObINio& nio, int64_t resp_id, char* buf, int64_t sz);
+  static int create(int64_t resp_id, const char* buf, int64_t sz, rpc::ObRequest*& req);
   void destroy() { pool_.destroy(); }
   void resp(ObRpcPacket* pkt);
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
 private:
-  ObINio& nio_;
   ObRpcMemPool& pool_;
-  int64_t resp_id_;
+  uint64_t resp_id_;
 };
 
-class ObPocServerReqHandler: public IReqHandler
-{
-public:
-  ObPocServerReqHandler(): deliver_(NULL), nio_(NULL) {}
-  ~ObPocServerReqHandler() {}
-  void init(rpc::frame::ObReqDeliver* deliver, ObINio* nio) {
-    deliver_ = deliver;
-    nio_ = nio;
-  }
-  int handle_req(int64_t resp_id, char* buf, int64_t sz) {
-    rpc::ObRequest* req = ObPocServerHandleContext::create(*nio_, resp_id, buf, sz);
-    return deliver_->deliver(*req);
-  }
-private:
-  rpc::frame::ObReqDeliver* deliver_;
-  ObINio* nio_;
-};
 
 class ObPocRpcServer
 {
 
 public:
-  ObPocRpcServer() {}
+  ObPocRpcServer() : has_start_(false){}
   ~ObPocRpcServer() {}
-  int start(int port, rpc::frame::ObReqDeliver* deliver);
+  int start(int port, int net_thread_count, rpc::frame::ObReqDeliver* deliver);
   void stop() {}
-  ObPocNio& get_nio() { return nio_; }
+  bool has_start() {return has_start_;}
+  int update_tcp_keepalive_params(int64_t user_timeout);
+  bool client_use_pkt_nio();
 private:
-  ObPocNio nio_;
-  ObListener listener_;
-  ObPocServerReqHandler server_req_handler_;
+  bool has_start_;
 };
 
 extern ObPocRpcServer global_poc_server;
+extern ObListener* global_ob_listener;
 
 }; // end namespace obrpc
 }; // end namespace oceanbase

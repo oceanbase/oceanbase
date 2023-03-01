@@ -97,6 +97,7 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
   return ::malloc(size);
 #else
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   int ret = OB_E(EventTable::EN_4) OB_SUCCESS;
   void *ptr = NULL;
   ObTenantCtxAllocatorGuard allocator = NULL;
@@ -129,13 +130,6 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
     ptr = allocator->alloc(size, inner_attr);
   }
 
-  if (OB_NOT_NULL(ptr)) {
-    AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE
-                 || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
-    get_mem_leak_checker().on_alloc(*obj, inner_attr);
-  }
-
   return ptr;
 #endif
 }
@@ -148,6 +142,7 @@ void *ObMallocAllocator::realloc(
   return ::realloc(const_cast<void *>(ptr), size);
 #else
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   // Won't create tenant allocator!!
   void *nptr = NULL;
   int ret = OB_E(EventTable::EN_4) OB_SUCCESS;
@@ -172,11 +167,6 @@ void *ObMallocAllocator::realloc(
     // do nothing
   } else if (OB_ISNULL(nptr = allocator->realloc(ptr, size, inner_attr))) {
     // do nothing
-  } else {
-    AObject *obj = reinterpret_cast<AObject*>((char*)nptr - AOBJECT_HEADER_SIZE);
-    abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE
-                 || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
-    get_mem_leak_checker().on_alloc(*obj, inner_attr);
   }
   return nptr;;
 #endif
@@ -189,24 +179,7 @@ void ObMallocAllocator::free(void *ptr)
 #else
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   // directly free object instead of using tenant allocator.
-  if (NULL != ptr) {
-    AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    abort_unless(NULL != obj);
-    abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE
-                 || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
-    abort_unless(obj->in_use_);
-    SANITY_POISON(obj->data_, obj->alloc_bytes_);
-
-    get_mem_leak_checker().on_free(*obj);
-    ABlock *block = obj->block();
-    abort_unless(block);
-    abort_unless(block->is_valid());
-    abort_unless(block->in_use_);
-    abort_unless(block->obj_set_ != NULL);
-
-    ObjectSet *set = block->obj_set_;
-    set->free_object(obj);
-  }
+  ObTenantCtxAllocator::common_free(ptr);
 #endif // PERF_MODE
 }
 
@@ -223,6 +196,7 @@ ObTenantCtxAllocatorGuard ObMallocAllocator::get_tenant_ctx_allocator_without_tl
     }
   }
   const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   BucketRLockGuard guard(const_cast<BucketLock&>(locks_[slot]),
                          GETTID() % BucketLock::BUCKET_COUNT);
   if (OB_LIKELY(tenant_id < PRESERVED_TENANT_COUNT)) {
@@ -342,6 +316,7 @@ int ObMallocAllocator::add_tenant_allocator(ObTenantCtxAllocator *allocator)
   uint64_t tenant_id = allocator->get_tenant_id();
   const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
   // critical area is extremely small, just wait without trylock
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   BucketWLockGuard guard(locks_[slot]);
   ObTenantCtxAllocator **cur = &allocators_[slot];
   while ((NULL != *cur) && (*cur)->get_tenant_id() < tenant_id) {
@@ -361,6 +336,7 @@ ObTenantCtxAllocator *ObMallocAllocator::take_off_tenant_allocator(uint64_t tena
 {
   ObTenantCtxAllocator *ta = NULL;
   const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   BucketWLockGuard guard(locks_[slot]);
   ObTenantCtxAllocator **cur = &allocators_[slot];
   while (*cur && (*cur)->get_tenant_id() < tenant_id) {
@@ -566,6 +542,7 @@ int ObMallocAllocator::set_tenant_ctx_idle(const uint64_t tenant_id,
 int ObMallocAllocator::get_chunks(AChunk **chunks, int cap, int &cnt)
 {
   int ret = OB_SUCCESS;
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   for (int64_t slot = 0; OB_SUCC(ret) && slot < PRESERVED_TENANT_COUNT; ++slot) {
     ObTenantCtxAllocatorGuard tas[16]; // TODO: should be dynamic array, but enough so far
     int tas_cnt = 0;
@@ -624,6 +601,7 @@ ObTenantCtxAllocatorGuard ObMallocAllocator::get_tenant_ctx_allocator_unrecycled
   uint64_t tenant_id, uint64_t ctx_id) const
 {
   ObTenantCtxAllocatorGuard ta;
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   ObLatchRGuard guard(const_cast<ObLatch&>(unrecycled_lock_), ObLatchIds::OB_ALLOCATOR_LOCK);
   ObTenantCtxAllocator * const *cur = &unrecycled_allocators_;
   while (*cur) {
@@ -643,6 +621,7 @@ void ObMallocAllocator::add_tenant_allocator_unrecycled(ObTenantCtxAllocator *al
     modify_tenant_memory_access_permission(allocator, false);
   }
 #endif
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   ObLatchWGuard guard(unrecycled_lock_, ObLatchIds::OB_ALLOCATOR_LOCK);
   allocator->get_next() = unrecycled_allocators_;
   unrecycled_allocators_ = allocator;
@@ -652,6 +631,7 @@ ObTenantCtxAllocator *ObMallocAllocator::take_off_tenant_allocator_unrecycled(ui
 {
   ObTenantCtxAllocator *ta = NULL;
   {
+    ObDisableDiagnoseGuard disable_diagnose_guard;
     ObLatchWGuard guard(unrecycled_lock_, ObLatchIds::OB_ALLOCATOR_LOCK);
     ObTenantCtxAllocator **cur = &unrecycled_allocators_;
     while (*cur) {
@@ -760,6 +740,7 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
 void ObMallocAllocator::get_unrecycled_tenant_ids(uint64_t *ids, int cap, int &cnt) const
 {
   cnt = 0;
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   ObLatchRGuard guard(const_cast<ObLatch&>(unrecycled_lock_), ObLatchIds::OB_ALLOCATOR_LOCK);
   ObTenantCtxAllocator * const *cur = &unrecycled_allocators_;
   while (*cur && cnt < cap) {

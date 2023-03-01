@@ -1001,7 +1001,10 @@ int ObDDLUtil::get_ddl_rpc_timeout(const int64_t tenant_id, const int64_t table_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(get_tablet_count(tenant_id, table_id, tablet_count))) {
-    LOG_WARN("get tablet count failed", K(ret));
+    ret = OB_SUCCESS; // force succ
+    tablet_count = 0;
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_ddl_rpc_timeout(tablet_count, ddl_rpc_timeout_us))) {
     LOG_WARN("get ddl rpc timeout failed", K(ret));
   }
@@ -1035,10 +1038,10 @@ int64_t ObDDLUtil::get_default_ddl_tx_timeout()
 }
 
 
-int ObDDLUtil::get_ddl_cluster_version(
+int ObDDLUtil::get_data_format_version(
     const uint64_t tenant_id,
     const uint64_t task_id,
-    int64_t &ddl_cluster_version)
+    int64_t &data_format_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0
@@ -1070,7 +1073,7 @@ int ObDDLUtil::get_ddl_cluster_version(
             if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
-              ddl_cluster_version = task.get_cluster_version();
+              data_format_version = task.get_data_format_version();
             }
           }
         } else {
@@ -1078,7 +1081,7 @@ int ObDDLUtil::get_ddl_cluster_version(
             if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
-              ddl_cluster_version = task.get_cluster_version();
+              data_format_version = task.get_data_format_version();
             }
           }
         }
@@ -1540,10 +1543,10 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
   const uint64_t ddl_task_id,
   const int64_t execution_id,
   ObIArray<ObTabletID> &tablet_ids,
-  bool &tablet_checksum_status)
+  bool &is_checksums_all_report)
 {
   int ret = OB_SUCCESS;
-  tablet_checksum_status = false;
+  is_checksums_all_report = false;
   common::hash::ObHashMap<uint64_t, bool> tablet_checksum_status_map;
   int64_t tablet_count = tablet_ids.count();
 
@@ -1565,6 +1568,7 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
     LOG_WARN("fail to get tablet checksum status",
       K(ret), K(tenant_id), K(execution_id), K(index_table_id), K(ddl_task_id));
   } else {
+    int64_t report_checksum_cnt = 0;
     int64_t tablet_idx = 0;
     for (tablet_idx = 0; OB_SUCC(ret) && tablet_idx < tablet_count; ++tablet_idx) {
       const ObTabletID &tablet_id = tablet_ids.at(tablet_idx);
@@ -1572,16 +1576,23 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
       bool status = false;
       if (OB_FAIL(tablet_checksum_status_map.get_refactored(tablet_id_id, status))) {
         LOG_WARN("fail to get tablet checksum record from map", K(ret), K(tablet_id_id));
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          break;
+        }
       } else if (!status) {
         break;
+      } else {
+        report_checksum_cnt++;
       }
     }
     if (OB_SUCC(ret)) {
-      if (tablet_idx == tablet_count) {
-        tablet_checksum_status = true;
+      if (report_checksum_cnt == tablet_count) {
+        is_checksums_all_report = true;
       } else {
         ret = OB_EAGAIN;
-        LOG_INFO("not all tablet has update checksum, will re-check", K(ret), K(tablet_idx), K(tablet_count));
+        LOG_INFO("not all tablet has update checksum, will re-check",
+          K(ret), K(tablet_idx), K(tablet_count), K(is_checksums_all_report));
       }
     }
   }
@@ -1607,7 +1618,7 @@ int ObCheckTabletDataComplementOp::check_all_tablet_sstable_status(
 {
   int ret = OB_SUCCESS;
   ObArray<ObTabletID> dest_tablet_ids;
-  bool tablet_checksum_status = false;
+  bool is_checksums_all_report = false;
   is_all_sstable_build_finished = false;
 
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == index_table_id || OB_INVALID_TIMESTAMP == snapshot_version ||
@@ -1620,11 +1631,36 @@ int ObCheckTabletDataComplementOp::check_all_tablet_sstable_status(
     LOG_WARN("fail to check tablet merge status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(snapshot_version));
   } else {
     if (is_all_sstable_build_finished) {
-      if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, index_table_id, ddl_task_id, execution_id, dest_tablet_ids, tablet_checksum_status))) {
+      if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, index_table_id, ddl_task_id, execution_id, dest_tablet_ids, is_checksums_all_report))) {
         LOG_WARN("fail to check tablet checksum update status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
       }
-      is_all_sstable_build_finished &= tablet_checksum_status;
+      is_all_sstable_build_finished &= is_checksums_all_report;
     }
+  }
+  return ret;
+}
+
+int ObCheckTabletDataComplementOp::check_finish_report_checksum(
+  const uint64_t tenant_id,
+  const uint64_t index_table_id,
+  const int64_t execution_id,
+  const uint64_t ddl_task_id)
+{
+  int ret = OB_SUCCESS;
+  bool is_checksums_all_report = false;
+  ObArray<ObTabletID> dest_tablet_ids;
+
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == index_table_id ||
+      ddl_task_id == OB_INVALID_ID || execution_id < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to check report checksum finished", K(ret), K(tenant_id), K(index_table_id), K(execution_id), K(ddl_task_id));
+  } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, index_table_id, dest_tablet_ids))) {
+    LOG_WARN("fail to get tablets", K(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, index_table_id, ddl_task_id, execution_id, dest_tablet_ids, is_checksums_all_report))) {
+    LOG_WARN("fail to check tablet checksum update status, maybe EAGAIN", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
+  } else if (!is_checksums_all_report) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablets checksum not all report!", K(is_checksums_all_report), K(ret));
   }
   return ret;
 }

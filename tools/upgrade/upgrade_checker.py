@@ -92,6 +92,7 @@ sys.argv[0] + """ [OPTIONS]""" +\
 '-h, --host=name     Connect to host.\n' +\
 '-P, --port=name     Port number to use for connection.\n' +\
 '-u, --user=name     User for login.\n' +\
+'-t, --timeout=name  Cmd/Query/Inspection execute timeout(s).\n' +\
 '-p, --password=name Password to use when connecting to server. If password is\n' +\
 '                    not given it\'s empty string "".\n' +\
 '-m, --module=name   Modules to run. Modules should be a string combined by some of\n' +\
@@ -154,6 +155,7 @@ Option('V', 'version', False, True),\
 Option('h', 'host', True, False),\
 Option('P', 'port', True, False),\
 Option('u', 'user', True, False),\
+Option('t', 'timeout', True, False, 0),\
 Option('p', 'password', True, False, ''),\
 # 要跑哪个模块，默认全跑
 Option('m', 'module', True, False, 'all'),\
@@ -250,6 +252,12 @@ def get_opt_password():
   global g_opts
   for opt in g_opts:
     if 'password' == opt.get_long_name():
+      return opt.get_value()
+
+def get_opt_timeout():
+  global g_opts
+  for opt in g_opts:
+    if 'timeout' == opt.get_long_name():
       return opt.get_value()
 
 def get_opt_module():
@@ -407,7 +415,6 @@ def check_restore_job_exist(query_cur):
       fail_list.append("""still has restore job, upgrade is not allowed temporarily""")
   logging.info('check restore job success')
 
-
 def check_is_primary_zone_distributed(primary_zone_str):
   semicolon_pos = len(primary_zone_str)
   for i in range(len(primary_zone_str)):
@@ -451,8 +458,13 @@ def check_fail_list():
      error_msg ="upgrade checker failed with " + str(len(fail_list)) + " reasons: " + ", ".join(['['+x+"] " for x in fail_list])
      raise MyError(error_msg)
 
+def set_query_timeout(query_cur, timeout):
+  if timeout != 0:
+    sql = """set @@session.ob_query_timeout = {0}""".format(timeout * 1000 * 1000)
+    query_cur.exec_sql(sql)
+
 # 开始升级前的检查
-def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
+def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
   try:
     conn = mysql.connector.connect(user = my_user,
                                    password = my_passwd,
@@ -464,6 +476,7 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
     cur = conn.cursor(buffered=True)
     try:
       query_cur = Cursor(cur)
+      set_query_timeout(query_cur, timeout)
       check_observer_version(query_cur, upgrade_params)
       check_data_version(query_cur)
       check_paxos_replica(query_cur)
@@ -506,9 +519,10 @@ if __name__ == '__main__':
       port = int(get_opt_port())
       user = get_opt_user()
       password = get_opt_password()
-      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\"',\
+      timeout = int(get_opt_timeout())
+      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
           host, port, user, password, log_filename)
-      do_check(host, port, user, password, upgrade_params)
+      do_check(host, port, user, password, timeout, upgrade_params)
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')
       raise e

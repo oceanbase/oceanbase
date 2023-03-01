@@ -109,7 +109,8 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       field_array_(nullptr),
       is_ps_protocol_(false),
       plan_start_time_(0),
-      is_ps_rewrite_sql_(false)
+      is_ps_rewrite_sql_(false),
+      spm_ts_timeout_us_(0)
 {
 }
 

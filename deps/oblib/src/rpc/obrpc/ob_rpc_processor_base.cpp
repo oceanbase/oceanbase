@@ -318,7 +318,7 @@ int ObRpcProcessorBase::do_response(const Response &rsp)
         if (rsp.bad_routing_) {
           packet->set_bad_routing();
         }
-        packet->set_unis_version(unis_version_);
+        packet->set_unis_version(0);
         packet->calc_checksum();
         opacket_size = packet->get_clen() + packet->get_header_size() + common::OB_NET_HEADER_LENGTH;
         EVENT_INC(RPC_PACKET_OUT);

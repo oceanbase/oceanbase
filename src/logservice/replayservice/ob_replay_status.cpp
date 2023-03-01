@@ -1300,7 +1300,7 @@ bool ObReplayStatus::is_fatal_error(const int ret) const
           && OB_NOT_RUNNING != ret
           // for temporary positioning issue
           && OB_IO_ERROR != ret
-          && OB_DISK_CORRUPTED != ret);
+          && OB_DISK_HUNG != ret);
 }
 
 int ObReplayStatus::submit_task_to_replay_service_(ObReplayServiceTask &task)

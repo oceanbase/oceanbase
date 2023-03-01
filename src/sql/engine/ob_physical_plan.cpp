@@ -31,6 +31,7 @@
 #include "sql/engine/ob_operator_factory.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/ob_truncated_string.h"
+#include "sql/spm/ob_spm_evolution_plan.h"
 
 namespace oceanbase
 {
@@ -540,9 +541,10 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     ATOMIC_STORE(&(stat_.last_active_time_), current_time);
     if (ATOMIC_LOAD(&stat_.is_evolution_)) { //for spm
       ATOMIC_INC(&(stat_.evolution_stat_.executions_));
-      ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
-                 record.get_elapsed_time() - record.exec_record_.wait_time_end_
-                 - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+      // ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
+      //            record.get_elapsed_time() - record.exec_record_.wait_time_end_
+      //            - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+      ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
       ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
     }
     if (stat_.is_bind_sensitive_ && execute_count > 0) {

@@ -296,6 +296,8 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
     const binlogBuf *filter_rv = filter_rv_impl->filterValues((unsigned int &) filter_rv_count);
     common::ObString trace_id;
     common::ObString unique_id;
+    const char *trace_info_ptr = br->obTraceInfo();
+    common::ObString trace_info(trace_info_ptr);
 
     if (filter_rv != NULL && filter_rv_count > 2) {
       unique_id.assign_ptr(filter_rv[1].buf, filter_rv[1].buf_used_size);
@@ -397,9 +399,14 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
       ROW_PRINTF(ptr, size, pos, ri, "uk_info:%s", uk_info);
       ROW_PRINTF(ptr, size, pos, ri, "uks:%s", uks);
 
-      // If trace_id is not empty, then print
+      // If trace_id is not empty, then print (trace_id is deprecated in 4.x)
       if (trace_id.length() > 0) {
         ROW_PRINTF(ptr, size, pos, ri, "trace_id:[%.*s](%d)", trace_id.length(), trace_id.ptr(), trace_id.length());
+      }
+
+      // if trace_info is not empty and enable_print_detail, then print
+      if (enable_print_detail && 0 < trace_info.length()) {
+        ROW_PRINTF(ptr, size, pos, ri, "trace_info:[%.*s](%d)", trace_info.length(), trace_info.ptr(), trace_info.length());
       }
 
       for (int64_t index = 0; OB_SUCC(ret) && index < column_count; index++) {

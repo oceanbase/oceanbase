@@ -17,7 +17,6 @@
 #include <functional>
 #include "lib/container/ob_vector.h"
 #include "lib/lock/ob_bucket_lock.h"    // ObBucketLock
-#include "ob_worker_pool.h"
 #include "ob_tenant_node_balancer.h"
 
 namespace oceanbase
@@ -162,7 +161,6 @@ public:
   inline bool has_synced() const;
 
   void set_workers_per_cpu(int64_t v);
-  void set_group_sug_token();
   int write_create_tenant_abort_slog(uint64_t tenant_id);
   int write_delete_tenant_commit_slog(uint64_t tenant_id);
   int clear_persistent_data(const uint64_t tenant_id);

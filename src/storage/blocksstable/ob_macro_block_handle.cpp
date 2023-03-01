@@ -170,6 +170,10 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
     if (OB_FAIL(ObIOManager::get_instance().aio_write(io_info, io_handle_))) {
       LOG_WARN("Fail to aio_write", K(ret), K(write_info));
     } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(macro_id_))) {
+        LOG_WARN("fail to update write time for macro block", K(tmp_ret), K(macro_id_));
+      }
       FLOG_INFO("Async write macro block", K(macro_id_));
     }
   }

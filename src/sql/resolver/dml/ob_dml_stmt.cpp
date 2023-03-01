@@ -4525,7 +4525,8 @@ ObJtColBaseInfo::ObJtColBaseInfo()
     res_type_(-1),
     data_type_(),
     parent_id_(-1),
-    id_(-1) {}
+    id_(-1),
+    value_(0) {}
 
 ObJtColBaseInfo::ObJtColBaseInfo(const ObJtColBaseInfo& info)
   : col_type_(info.col_type_),
@@ -4545,7 +4546,8 @@ ObJtColBaseInfo::ObJtColBaseInfo(const ObJtColBaseInfo& info)
     res_type_(info.res_type_),
     data_type_(info.data_type_),
     parent_id_(info.parent_id_),
-    id_(info.id_) {}
+    id_(info.id_),
+    value_(info.value_) {}
 
 int ObJtColBaseInfo::deep_copy(const ObJtColBaseInfo& src, ObIAllocator* allocator)
 {
@@ -4581,6 +4583,7 @@ int ObJtColBaseInfo::deep_copy(const ObJtColBaseInfo& src, ObIAllocator* allocat
     data_type_ = src.data_type_;
     parent_id_ = src.parent_id_;
     id_ = src.id_;
+    value_ = src.value_;
   }
   return ret;
 }
@@ -4607,6 +4610,7 @@ int ObJtColBaseInfo::assign(const ObJtColBaseInfo& src)
   data_type_ = src.data_type_;
   parent_id_ = src.parent_id_;
   id_ = src.id_;
+  value_ = src.value_;
 
   return ret;
 }

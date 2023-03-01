@@ -328,8 +328,9 @@ int ObDtlBasicChannel::send(const ObDtlMsg &msg, int64_t timeout_ts,
   if (is_data_msg_) {
     metric_.mark_first_in();
     if (channel_is_eof_) {
-      metric_.mark_last_in();
+      metric_.mark_eof();
     }
+    metric_.set_last_in_ts(::oceanbase::common::ObTimeUtility::current_time());
   }
   if (OB_FAIL(write_msg(msg, timeout_ts, eval_ctx, is_eof))) {
     if (OB_ITER_END != ret) {
@@ -427,8 +428,9 @@ int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_b
     if (is_data_msg) {
       metric_.mark_first_in();
       if (is_eof) {
-        metric_.mark_last_in();
+        metric_.mark_eof();
       }
+      metric_.set_last_in_ts(::oceanbase::common::ObTimeUtility::current_time());
     }
     if (is_first_buffer_cached) {
       set_first_buffer();
@@ -598,11 +600,14 @@ int ObDtlBasicChannel::process1(
           bool transferred = false;
           ret = proc->process(*buffer, transferred);
           LOG_DEBUG("process buffer", K(ret), KP(buffer), K(transferred));
+          if (buffer->is_data_msg()) {
+            metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
+          }
           if (OB_ITER_END == ret || transferred) {
             inc_processed_buffer_cnt();
             if (buffer->is_eof()) {
               if (buffer->is_data_msg()) {
-                metric_.mark_last_out();
+                metric_.mark_eof();
               }
               if (!is_eof()) {
                 if (NULL != channel_loop_) {

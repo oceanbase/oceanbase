@@ -751,7 +751,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
       if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*tablet_handle.get_obj(),
                                                           log.get_table_key(),
                                                           start_scn,
-                                                          log.get_cluster_version(),
+                                                          log.get_data_format_version(),
                                                           log.get_execution_id(),
                                                           SCN::min_scn()/*checkpoint_scn*/))) {
         LOG_WARN("start ddl log failed", K(ret), K(start_scn), K(log));
@@ -1041,7 +1041,7 @@ int ObDDLSSTableRedoWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_i
 
 int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
                                            const int64_t execution_id,
-                                           const int64_t ddl_cluster_version,
+                                           const int64_t data_format_version,
                                            ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
@@ -1054,11 +1054,11 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || ddl_cluster_version <= 0)) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key), K(execution_id), K(ddl_cluster_version));
-  } else if (OB_FAIL(log.init(table_key, ddl_cluster_version, execution_id))) {
-    LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), K(execution_id), K(ddl_cluster_version));
+    LOG_WARN("invalid arguments", K(ret), K(table_key), K(execution_id), K(data_format_version));
+  } else if (OB_FAIL(log.init(table_key, data_format_version, execution_id))) {
+    LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), K(execution_id), K(data_format_version));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {

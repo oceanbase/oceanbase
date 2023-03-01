@@ -734,9 +734,7 @@ int ObParser::reconstruct_insert_sql(const common::ObString &stmt,
     allocator_ = &allocator;
     if (OB_FAIL(parse(stmt, parse_result, parse_mode, false, true))) {
       // if parser SQL failed，then we won't rewrite it and keep it as it is
-      LOG_WARN("failed to parser insert sql", K(ret),
-          K(parse_result.ins_multi_value_res_->on_duplicate_pos_),
-          K(parse_result.ins_multi_value_res_->values_count_));
+      LOG_WARN("failed to parser insert sql", K(ret), K(stmt));
     } else if (parse_result.ins_multi_value_res_->values_count_ == 1) {
       // only one set of values，not need rewrite
     } else if (OB_ISNULL(bak_allocator)) {

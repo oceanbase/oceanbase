@@ -1229,6 +1229,10 @@ public:
                                                 const ObSelectStmt &inner_stmt,
                                                 common::ObIArray<ObRawExpr*> &select_exprs);
 
+  static int convert_set_op_expr_to_select_expr(const common::ObIArray<ObRawExpr*> &set_op_exprs,
+                                                const ObSelectStmt &inner_stmt,
+                                                common::ObIArray<ObRawExpr*> &select_exprs);
+
   /**
    * @brief convert_select_expr_to_column_expr
    * 将视图的select expr转换为outer stmt对应的column expr
@@ -1625,8 +1629,6 @@ public:
                                             ObWinFunRawExpr &win_expr,
                                             ObRawExpr* order_expr);
 
-  static int check_stmt_from_one_dblink(ObDMLStmt *stmt, bool &from_one_dblink);
-
   static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
                                              bool &is_valid);
 
@@ -1665,6 +1667,12 @@ public:
                                 ObIArray<ObRawExpr *> *rollup_exprs = NULL,
                                 ObIArray<ObRawExpr *> *having_exprs = NULL,
                                 ObIArray<OrderItem> *order_items = NULL);
+
+  /* Push all content of the parent stmt into an inline view,
+     and keep the ptr of the parent stmt  */
+  static int pack_stmt(ObTransformerCtx *ctx,
+                       ObSelectStmt *parent_stmt,
+                       ObSelectStmt **child_stmt_ptr = NULL);
 
   static int generate_select_list(ObTransformerCtx *ctx,
                                   ObDMLStmt *stmt,

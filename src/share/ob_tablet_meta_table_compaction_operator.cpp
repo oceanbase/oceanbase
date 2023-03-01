@@ -17,6 +17,7 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "share/tablet/ob_tablet_filter.h"
 #include "share/ob_service_epoch_proxy.h"
+#include "share/scn.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase
@@ -209,8 +210,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_unequal_report_scn_tablet(
     } else if (OB_FAIL(append_tablet_id_array(tenant_id, input_tablet_id_array, start_idx, end_idx, sql))) {
       LOG_WARN("fail to append tablet id array", KR(ret), K(tenant_id),
         K(input_tablet_id_array.count()), K(start_idx), K(end_idx));
-    } else if (OB_FAIL(sql.append_fmt(") AND compaction_scn = '%lu' AND report_scn < '%lu'",
-        major_frozen_scn, major_frozen_scn))) {
+    } else if (OB_FAIL(sql.append_fmt(") AND report_scn < '%lu'", major_frozen_scn))) {
       LOG_WARN("failed to assign sql", K(ret), K(tenant_id), K(start_idx));
     } else {
       SMART_VAR(ObISQLClient::ReadResult, result) {
@@ -240,6 +240,56 @@ int ObTabletMetaTableCompactionOperator::batch_update_unequal_report_scn_tablet(
       start_idx = end_idx;
       end_idx = min(start_idx + MAX_BATCH_COUNT, input_tablet_id_array.count());
     }
+  }
+  return ret;
+}
+
+int ObTabletMetaTableCompactionOperator::get_min_compaction_scn(
+    const uint64_t tenant_id,
+    SCN &min_compaction_scn)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_time_us = ObTimeUtil::current_time();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    int64_t estimated_timeout_us = 0;
+    ObTimeoutCtx timeout_ctx;
+    // set trx_timeout and query_timeout based on tablet_replica_cnt
+    if (OB_FAIL(ObTabletMetaTableCompactionOperator::get_estimated_timeout_us(tenant_id,
+                                                     estimated_timeout_us))) {
+      LOG_WARN("fail to get estimated_timeout_us", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(estimated_timeout_us))) {
+      LOG_WARN("fail to set trx timeout", KR(ret), K(estimated_timeout_us));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(estimated_timeout_us))) {
+      LOG_WARN("fail to set abs timeout", KR(ret), K(estimated_timeout_us));
+    } else {
+      ObSqlString sql;
+      SMART_VAR(ObISQLClient::ReadResult, res) {
+        ObMySQLResult *result = nullptr;
+        if (OB_FAIL(sql.assign_fmt("SELECT MIN(compaction_scn) as value FROM %s WHERE tenant_id ="
+                                   " '%ld' ", OB_ALL_TABLET_META_TABLE_TNAME, tenant_id))) {
+          LOG_WARN("failed to append fmt", K(ret), K(tenant_id));
+        } else if (OB_FAIL(GCTX.sql_proxy_->read(res, meta_tenant_id, sql.ptr()))) {
+          LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
+        } else if (OB_FAIL(result->next())) {
+          LOG_WARN("get next result failed", KR(ret), K(tenant_id), K(sql));
+        } else {
+          uint64_t min_compaction_scn_val = UINT64_MAX;
+          EXTRACT_UINT_FIELD_MYSQL(*result, "value", min_compaction_scn_val, uint64_t);
+          if (FAILEDx(min_compaction_scn.convert_for_inner_table_field(min_compaction_scn_val))) {
+            LOG_WARN("fail to convert uint64_t to SCN", KR(ret), K(min_compaction_scn_val));
+          }
+        }
+      }
+    }
+    LOG_INFO("finish to get min_compaction_scn", KR(ret), K(tenant_id), K(min_compaction_scn),
+             "cost_time_us", ObTimeUtil::current_time() - start_time_us, K(estimated_timeout_us));
   }
   return ret;
 }
@@ -303,21 +353,23 @@ int ObTabletMetaTableCompactionOperator::inner_batch_update_unequal_report_scn_t
   int64_t affected_rows = 0;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
   ObSqlString sql;
-  if (OB_FAIL(sql.append_fmt("UPDATE %s SET report_scn='%lu' WHERE tenant_id='%lu' AND ls_id='%ld' AND tablet_id IN (",
-      OB_ALL_TABLET_META_TABLE_TNAME,
-      major_frozen_scn,
-      tenant_id,
-      ls_id.id()))) {
+  if (OB_FAIL(sql.append_fmt(
+          "UPDATE %s t1 SET report_scn=if(compaction_scn>'%lu' ,'%lu', compaction_scn) WHERE "
+          "tenant_id='%lu' AND ls_id='%ld' AND tablet_id IN (",
+          OB_ALL_TABLET_META_TABLE_TNAME, major_frozen_scn, major_frozen_scn,
+          tenant_id, ls_id.id()))) {
     LOG_WARN("failed to append fmt", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(append_tablet_id_array(tenant_id, unequal_tablet_id_array, 0, unequal_tablet_id_array.count(), sql))) {
+  } else if (OB_FAIL(append_tablet_id_array(tenant_id, unequal_tablet_id_array,
+                                            0, unequal_tablet_id_array.count(),
+                                            sql))) {
     LOG_WARN("fail to append tablet id array", KR(ret), K(tenant_id), K(unequal_tablet_id_array));
-  } else if (OB_FAIL(sql.append_fmt(") AND compaction_scn >= '%lu' AND report_scn <'%lu'",
-      major_frozen_scn, major_frozen_scn))) {
+  } else if (OB_FAIL(sql.append_fmt(") AND report_scn <'%lu'", major_frozen_scn))) {
     LOG_WARN("failed to assign sql", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(GCTX.sql_proxy_->write(meta_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(GCTX.sql_proxy_->write(meta_tenant_id, sql.ptr(),
+                                            affected_rows))) {
     LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
   } else if (affected_rows > 0) {
-    LOG_INFO("success to update unequal report_scn", K(ret), K(tenant_id), K(ls_id), K(unequal_tablet_id_array.count()));
+    LOG_INFO("success to update unequal report_scn", K(ret), K(sql), K(tenant_id), K(ls_id), K(unequal_tablet_id_array.count()));
   }
   return ret;
 }
@@ -360,7 +412,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else if (compat_version < DATA_VERSION_4_1_0_0) {
-    // do nothing
+    // do nothing until schema upgrade
   } else {
     ObMySQLTransaction trans;
     int64_t affected_rows = 0;
@@ -409,7 +461,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_status(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else if (compat_version < DATA_VERSION_4_1_0_0) {
-    // do nothing
+    // do nothing until schema upgrade
   } else {
     ObMySQLTransaction trans;
     int64_t affected_rows = 0;

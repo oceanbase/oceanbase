@@ -54,22 +54,6 @@ public:
   memtable::ObIMemtableCtx *p_mt_ctx_;
 };
 
-class LocalTaskFactory
-{
-public:
-  static LocalTask *alloc(int64_t msg_type)
-  { return op_reclaim_alloc_args(LocalTask, msg_type); }
-  static void release(const LocalTask *task)
-  {
-    if (NULL == task) {
-      TRANS_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "task is null", KP(task));
-    } else {
-      op_reclaim_free(const_cast<LocalTask *>(task));
-      task = NULL;
-    }
-  }
-};
-
 class CtxLock
 {
 public:

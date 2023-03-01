@@ -1005,7 +1005,10 @@ int ObXAService::xa_start(const ObXATransID &xid,
     ret = OB_TRANS_XA_INVAL;
     TRANS_LOG(WARN, "invalid flags for xa start", K(ret), K(xid), K(flags));
   }
-
+  // set xa_start_addr for txn-free-route
+  if (OB_SUCC(ret) && OB_NOT_NULL(tx_desc)) {
+    tx_desc->set_xa_start_addr(GCONF.self_addr_);
+  }
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start failed", K(ret), K(xid), K(flags), K(timeout_seconds));
   } else {

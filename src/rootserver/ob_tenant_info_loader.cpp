@@ -55,7 +55,7 @@ int ObTenantInfoLoader::init()
     } else if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql proxy is null", KR(ret));
-    } else if (OB_FAIL(create(thread_cnt, "TenantInfoLoader"))) {
+    } else if (OB_FAIL(create(thread_cnt, "TenantInf"))) {
       LOG_WARN("failed to create tenant info loader thread", KR(ret), K(thread_cnt));
     }
   }

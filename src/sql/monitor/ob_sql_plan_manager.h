@@ -7,7 +7,7 @@
 #define SRC_OBSERVER_SQL_PLAN_MGR_H_
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "observer/mysql/ob_ra_queue.h"
-#include "ob_plan_real_info_manager.h"
+#include "ob_plan_info_manager.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/task/ob_timer.h"
 namespace oceanbase
@@ -42,8 +42,8 @@ public:
   //进行一次release_old操作删除的记录数
   static const int32_t BATCH_RELEASE_COUNT = 5000;
   //初始化queue大小为100w
-  static const int64_t MAX_QUEUE_SIZE = 1000000; //100w
-  static const int64_t MINI_MODE_MAX_QUEUE_SIZE = 100000; // 10w
+  static const int64_t MAX_QUEUE_SIZE = 1; //100w
+  static const int64_t MINI_MODE_MAX_QUEUE_SIZE = 1; // 10w
   //当sql_plan超过90w行记录时触发淘汰
   static constexpr const double HIGH_LEVEL_EVICT_SIZE_PERCENT = 0.9;
   //按行淘汰的低水位线

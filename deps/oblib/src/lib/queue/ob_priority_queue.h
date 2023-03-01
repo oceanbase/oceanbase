@@ -101,11 +101,11 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPriorityQueue);
 };
 
-template <int HIGH_HIGH_PRIOS, int HIGH_PRIOS=0, int LOW_PRIOS=0>
+template <int HIGH_PRIOS, int NORMAL_PRIOS=0, int LOW_PRIOS=0>
 class ObPriorityQueue2
 {
 public:
-  enum { PRIO_CNT = HIGH_HIGH_PRIOS + HIGH_PRIOS + LOW_PRIOS };
+  enum { PRIO_CNT = HIGH_PRIOS + NORMAL_PRIOS + LOW_PRIOS };
 
   ObPriorityQueue2() : queue_(), size_(0), limit_(INT64_MAX) {}
   ~ObPriorityQueue2() {}
@@ -137,9 +137,9 @@ public:
     } else if (OB_FAIL(queue_[priority].push(data))) {
       // do nothing
     } else {
-      if (priority < HIGH_HIGH_PRIOS) {
+      if (priority < HIGH_PRIOS) {
         cond_.signal(1, 0);
-      } else if (priority < HIGH_PRIOS + HIGH_HIGH_PRIOS) {
+      } else if (priority < NORMAL_PRIOS + HIGH_PRIOS) {
         cond_.signal(1, 1);
       } else {
         cond_.signal(1, 2);
@@ -157,14 +157,14 @@ public:
     return do_pop(data, PRIO_CNT, timeout_us);
   }
 
-  int pop_high(ObLink*& data, int64_t timeout_us)
+  int pop_normal(ObLink*& data, int64_t timeout_us)
   {
-    return do_pop(data, HIGH_HIGH_PRIOS + HIGH_PRIOS, timeout_us);
+    return do_pop(data, HIGH_PRIOS + NORMAL_PRIOS, timeout_us);
   }
 
-  int pop_high_high(ObLink*& data, int64_t timeout_us)
+  int pop_high(ObLink*& data, int64_t timeout_us)
   {
-    return do_pop(data, HIGH_HIGH_PRIOS, timeout_us);
+    return do_pop(data, HIGH_PRIOS, timeout_us);
   }
 
 private:
@@ -175,9 +175,9 @@ private:
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(ERROR, "timeout is invalid", K(ret), K(timeout_us));
     } else {
-      if (plimit <= HIGH_HIGH_PRIOS) {
+      if (plimit <= HIGH_PRIOS) {
         cond_.prepare(0);
-      } else if (plimit <= HIGH_PRIOS + HIGH_HIGH_PRIOS) {
+      } else if (plimit <= NORMAL_PRIOS + HIGH_PRIOS) {
         cond_.prepare(1);
       } else {
         cond_.prepare(2);

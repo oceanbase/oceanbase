@@ -62,7 +62,6 @@ ob_set_subtarget(oblib_rpc obrpc
   obrpc/ob_net_keepalive.cpp
   obrpc/ob_listener.cpp
   obrpc/ob_net_client.cpp
-  obrpc/ob_poc_nio.cpp
   obrpc/ob_poc_rpc_proxy.cpp
   obrpc/ob_poc_rpc_request_operator.cpp
   obrpc/ob_poc_rpc_server.cpp

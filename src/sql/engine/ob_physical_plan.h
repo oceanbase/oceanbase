@@ -51,6 +51,7 @@ class ObTablePartitionInfo;
 class ObPhyOperatorMonnitorInfo;
 struct ObAuditRecordData;
 class ObOpSpec;
+class ObEvolutionPlan;
 
 //class ObPhysicalPlan: public common::ObDLinkBase<ObPhysicalPlan>
 typedef common::ObFixedArray<common::ObFixedArray<int64_t, common::ObIAllocator>, common::ObIAllocator> PhyRowParamMap;
@@ -355,6 +356,9 @@ public:
   {
     return ob_write_string(allocator_, rule_name, stat_.rule_name_);
   }
+  inline int64_t get_plan_error_cnt() { return stat_.evolution_stat_.error_cnt_; }
+  inline void update_plan_error_cnt() { ATOMIC_INC(&(stat_.evolution_stat_.error_cnt_)); }
+
 public:
   int inc_concurrent_num();
   void dec_concurrent_num();

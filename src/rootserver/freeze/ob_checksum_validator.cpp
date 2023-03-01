@@ -567,7 +567,11 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
             if (OB_CHECKSUM_ERROR == ret) {
               check_ret = ret;
             }
-            ret = OB_SUCCESS;  // ignore ret, and continue check next table_schema
+            if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret) {
+              // do not ignore ret, therefore not continue to check next table_schema
+            } else {
+              ret = OB_SUCCESS; // ignore ret, and continue to check next table_schema
+            }
           }
         }  // end for loop
 
@@ -906,18 +910,21 @@ int ObCrossClusterTabletChecksumValidator::write_tablet_checksum_at_table_level(
                       && (OB_INVALID_ID != special_table_id_))) {
       const int64_t IMMEDIATE_RETRY_CNT = 5;
       int64_t fail_count = 0;
-      int64_t sleep_time_s = 1L;  // 1s
+      int64_t sleep_time_us = 200 * 1000; // 200 ms
       while (!stop
              && (fail_count < IMMEDIATE_RETRY_CNT)
              && OB_FAIL(try_update_tablet_checksum_items(stop, pairs, frozen_scn, expected_epoch))) {
         if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret) {
           LOG_WARN("freeze_service_epoch mismatch, no need to write tablet checksum items", KR(ret), K_(tenant_id));
           break;
+        } else if (OB_ITEM_NOT_MATCH == ret) {
+          LOG_INFO("tablet replica checksum item is empty, no need to write tablet checksum items", KR(ret), K_(tenant_id));
+          break;
         } else {
           ++fail_count;
-          LOG_WARN("fail to write tablet checksum items", KR(ret), K_(tenant_id), K(fail_count), K(sleep_time_s));
-          sleep(sleep_time_s);
-          sleep_time_s *= 2;
+          LOG_WARN("fail to write tablet checksum items", KR(ret), K_(tenant_id), K(fail_count), K(sleep_time_us));
+          USLEEP(sleep_time_us);
+          sleep_time_us *= 2;
         }
       }
     }

@@ -18,6 +18,7 @@
 #include "easy_define.h"
 #include "io/easy_io_struct.h"
 #include "lib/allocator/ob_allocator.h"
+#include "lib/lock/ob_spin_lock.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_utility.h"

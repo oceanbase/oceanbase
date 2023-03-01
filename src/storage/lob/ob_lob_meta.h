@@ -68,6 +68,7 @@ public:
   bool is_range_begin(const ObLobMetaInfo& info);
   bool is_range_end(const ObLobMetaInfo& info);
   bool is_range_over(const ObLobMetaInfo& info);
+  TO_STRING_KV(K_(cur_pos), K_(cur_info));
 private:
   bool is_in_range(const ObLobMetaInfo& info);
 private:
@@ -108,6 +109,8 @@ public:
            ObString &seq_id_end);
   int get_next_row(ObLobMetaWriteResult &row);
   int close();
+  TO_STRING_KV(K_(seq_id), K_(offset), K_(lob_id), K_(piece_id), K_(coll_type), K_(piece_block_size),
+               K_(scan_iter), K_(padding_size), K_(seq_id_end), K_(last_info));
 private:
   int try_fill_data(
       ObLobMetaWriteResult& row,

@@ -42,7 +42,6 @@ public:
   static int estimate_full_table_rowcount(ObOptimizerContext &ctx,
                                           const ObTablePartitionInfo &table_part_info,
                                           ObTableMetaInfo &meta);
-
 private:
 
   static int64_t get_get_range_count(const ObIArray<ObNewRange> &ranges);
@@ -54,7 +53,7 @@ private:
                                            RowCountEstMethod &method,
                                            bool &is_vt);
   
-  static int choose_leader_replica(const ObTablePartitionInfo &table_part_info,
+  static int choose_leader_replica(const ObCandiTabletLoc &part_loc_info,
                                    const bool can_use_remote,
                                    const ObAddr &local_addr,
                                    EstimatedPartition &best_partition);
@@ -144,6 +143,15 @@ private:
                                            const ObTabletID &tablet_id,
                                            const uint64_t index_id,
                                            ObIArray<common::ObNewRange> &new_ranges);
+
+  static int storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
+                                                  const ObCandiTabletLoc &part_loc_info,
+                                                  ObTableMetaInfo &meta);
+
+  static int estimate_full_table_rowcount_by_meta_table(ObOptimizerContext &ctx,
+                                                        const ObIArray<ObTabletID> &all_tablet_ids,
+                                                        const ObIArray<ObLSID> &all_ls_ids,
+                                                        ObTableMetaInfo &meta);
 
 };
 

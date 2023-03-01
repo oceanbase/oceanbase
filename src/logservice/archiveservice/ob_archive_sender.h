@@ -92,6 +92,10 @@ private:
   void run1();
   void do_thread_task_();
 
+  int try_consume_send_task_();
+
+  int do_consume_send_task_();
+
   // 消费task status, 为日志流级别send_task队列, 目前为单线程消费单个日志流
   int get_send_task_(ObArchiveSendTask *&task, bool &exist);
 
@@ -175,7 +179,7 @@ private:
   bool is_retry_ret_code_(const int ret_code) const;
   bool is_ignore_ret_code_(const int ret_code) const;
 
-  void statistic(const ObArchiveSendTask &task, const int64_t cost_ts);
+  void statistic(const int64_t log_size, const int64_t buf_size, const int64_t cost_ts);
 
   int try_free_send_task_();
   int do_free_send_task_();

@@ -434,7 +434,7 @@ public:
                                      const share::schema::ObPartitionFuncType part_type);
 
   static int choose_best_replica_for_estimation(
-                              const ObCandiTabletLocIArray &part_loc_info_array,
+                              const ObCandiTabletLoc &phy_part_loc_info,
                               const ObAddr &local_addr,
                               const common::ObIArray<ObAddr> &addrs_list,
                               const bool no_use_remote,

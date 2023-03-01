@@ -1609,7 +1609,9 @@ ObDataIndexBlockBuilder::ObDataIndexBlockBuilder()
     meta_row_(),
     data_blocks_cnt_(0),
     meta_block_offset_(0),
-    meta_block_size_(0)
+    meta_block_size_(0),
+    estimate_leaf_block_size_(0),
+    estimate_meta_block_size_(0)
 {
 }
 
@@ -1635,6 +1637,8 @@ void ObDataIndexBlockBuilder::reset()
   data_blocks_cnt_ = 0;
   meta_block_offset_ = 0;
   meta_block_size_ = 0;
+  estimate_leaf_block_size_ = 0;
+  estimate_meta_block_size_ = 0;
   sstable_allocator_ = nullptr;
   ObBaseIndexBlockBuilder::reset();
 }
@@ -1786,6 +1790,10 @@ int ObDataIndexBlockBuilder::append_row(const ObMicroBlockDesc &micro_block_desc
         STORAGE_LOG(DEBUG, "succeed to prevent append_row", K(ret), K(macro_block.get_remain_size()),
             K(cur_data_block_size), K(estimate_meta_block_size), K(remain_size));
       }
+    } else {
+      // only update these two variables when succeeded to append data micro block
+      estimate_leaf_block_size_ = remain_size;
+      estimate_meta_block_size_ = estimate_meta_block_size;
     }
   }
   return ret;
@@ -1926,6 +1934,16 @@ int ObDataIndexBlockBuilder::append_index_micro_block(ObMacroBlock &macro_block,
     STORAGE_LOG(WARN, "fail to build meta block", K(ret));
   } else {
     root_micro_block_desc_->last_macro_size_ = data_offset + leaf_block_size + meta_block_size_;
+  }
+
+  if (OB_FAIL(ret) && OB_BUF_NOT_ENOUGH == ret) {
+    STORAGE_LOG(WARN, "error!!!fail to write leaf/meta block into data macro block",
+        K(ret), K_(estimate_leaf_block_size), K_(estimate_meta_block_size),
+        K(leaf_block_desc), K_(macro_row_desc));
+    STORAGE_LOG(INFO, "print error leaf block");
+    micro_writer_->dump_diagnose_info();
+    STORAGE_LOG(INFO, "print error meta block");
+    meta_block_writer_->dump_diagnose_info();
   }
   clean_status();
   return ret;
@@ -2189,9 +2207,10 @@ int ObMetaIndexBlockBuilder::build_single_macro_row_desc(const IndexMicroBlockDe
 {
   int ret = OB_SUCCESS;
   ObDataStoreDesc data_desc;
-  if (OB_UNLIKELY(1 != roots.count() || 1 != roots[0]->macro_metas_->count())) {
+  if (OB_UNLIKELY(1 != roots.count() || 1 != roots[0]->macro_metas_->count())
+               || 0 >= roots[0]->meta_block_size_ || 0 >= roots[0]->meta_block_offset_) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "number of macro meta should be 1", K(ret), K(roots));
+    STORAGE_LOG(WARN, "unexpected roots", K(ret), K(roots));
   } else if (OB_FAIL(data_desc.assign(*index_store_desc_))) {
     STORAGE_LOG(WARN, "fail to assign data desc", K(ret), KPC(index_store_desc_));
   } else {
@@ -2316,6 +2335,25 @@ int ObIndexBlockRebuilder::get_macro_meta(
     ObDataMacroBlockMeta *&macro_meta)
 {
   int ret = OB_SUCCESS;
+  int64_t meta_block_offset = 0;
+  int64_t meta_block_size = 0;
+  if (OB_FAIL(inner_get_macro_meta(buf, size, macro_id, allocator,
+      macro_meta, meta_block_offset, meta_block_size))) {
+    STORAGE_LOG(WARN, "fail to get macro meta", K(ret));
+  }
+  return ret;
+}
+
+int ObIndexBlockRebuilder::inner_get_macro_meta(
+    const char *buf,
+    const int64_t size,
+    const MacroBlockId &macro_id,
+    common::ObIAllocator &allocator,
+    ObDataMacroBlockMeta *&macro_meta,
+    int64_t &meta_block_offset,
+    int64_t &meta_block_size)
+{
+  int ret = OB_SUCCESS;
   ObSSTableMacroBlockHeader macro_header;
   ObMacroBlockReader reader;
   // FIXME: macro_reader, micro_reader, read_info, datum_row could be used as member variables
@@ -2368,6 +2406,10 @@ int ObIndexBlockRebuilder::get_macro_meta(
       macro_meta = tmp_meta_ptr;
     }
   }
+  if (OB_SUCC(ret)) {
+    meta_block_offset = macro_header.fixed_header_.meta_block_offset_;
+    meta_block_size = macro_header.fixed_header_.meta_block_size_;
+  }
   return ret;
 }
 
@@ -2379,10 +2421,13 @@ int ObIndexBlockRebuilder::append_macro_row(
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   ObDataMacroBlockMeta *macro_meta = nullptr;
+  int64_t meta_block_offset = 0;
+  int64_t meta_block_size = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "rebuilder not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_macro_meta(buf, size, macro_id, allocator, macro_meta))) {
+  } else if (OB_FAIL(inner_get_macro_meta(buf, size, macro_id, allocator, macro_meta,
+      root_micro_block_desc_->meta_block_offset_, root_micro_block_desc_->meta_block_size_))) {
     STORAGE_LOG(WARN, "fail to get macro meta", K(ret),K(macro_id));
   } else if (OB_ISNULL(macro_meta)) {
     ret = OB_ERR_UNEXPECTED;

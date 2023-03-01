@@ -313,7 +313,7 @@ int ObLogCommitter::push(PartTransTask *task,
     if (OB_FAIL(handle_not_served_trans_(*task))) {
       LOG_ERROR("handle_not_served_trans_ fail", KR(ret), KPC(task));
     }
-  } else if (task->is_ls_table_trans()) {
+  } else if (task->is_ls_op_trans()) {
     if (OB_FAIL(push_ls_table_task_(*task))) {
       LOG_ERROR("push_ls_table_task_ fail", KR(ret), KPC(task));
     }

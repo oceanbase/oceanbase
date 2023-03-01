@@ -68,8 +68,8 @@ public:
   virtual ~ObOptStatMonitorCheckTask() {}
   int init(int tg_id);
   virtual void runTimerTask() override;
-private:
   const static int64_t CHECK_INTERVAL = 900L * 1000L * 1000L; // 15min
+private:
   bool is_inited_;
 };
 
@@ -149,7 +149,8 @@ public:
 public:
   static int flush_database_monitoring_info(sql::ObExecContext &ctx,
                                             const bool is_flush_col_usage = true,
-                                            const bool is_flush_dml_stat = true);
+                                            const bool is_flush_dml_stat = true,
+                                            const bool ignore_failed = true);
   int update_opt_stat_monitoring_info(const bool with_check);
   int update_opt_stat_monitoring_info(const obrpc::ObFlushOptStatArg &arg);
   int update_local_cache(uint64_t tenant_id, common::ObIArray<ColumnUsageArg> &args);

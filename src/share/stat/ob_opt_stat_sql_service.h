@@ -149,6 +149,12 @@ public:
                                common::ObIAllocator &allocator,
                                common::ObString &dest_str);
 
+  int fetch_table_rowcnt(const uint64_t tenant_id,
+                         const uint64_t table_id,
+                         const ObIArray<ObTabletID> &all_tablet_ids,
+                         const ObIArray<share::ObLSID> &all_ls_ids,
+                         ObIArray<ObOptTableStat> &tstats);
+
 private:
   int get_table_stat_sql(const uint64_t tenant_id,
                          const ObOptTableStat &stat,
@@ -238,6 +244,11 @@ private:
                                   const uint64_t tenant_id,
                                   const uint64_t table_id,
                                   ObObjMeta &endpoint_meta);
+
+  int gen_tablet_list_str(const ObIArray<ObTabletID> &all_tablet_ids,
+                          const ObIArray<share::ObLSID> &all_ls_ids,
+                          ObSqlString &tablet_list_str,
+                          ObSqlString &tablet_ls_list_str);
 
   static const char *bitmap_compress_lib_name;
 

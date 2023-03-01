@@ -293,6 +293,12 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   } else if (OB_FAIL(ls_->get_restore_status(restore_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
   } else if (restore_status.is_restore_none()) {
+    lib::ObMutexGuard guard(mtx_);
+    if (OB_NOT_NULL(state_handler_)) {
+      state_handler_->~ObILSRestoreState();
+      allocator_.free(state_handler_);
+      state_handler_ = nullptr;
+    }
   } else if (restore_status.is_restore_failed()) {
     if (REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000)) {
       LOG_WARN("ls restore failed, tenant restore can't continue", K(result_mgr_));

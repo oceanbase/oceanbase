@@ -112,11 +112,20 @@ struct PalfDiagnoseInfo {
 };
 
 struct FetchLogStat {
+  FetchLogStat() { reset(); }
+  ~FetchLogStat() { reset(); }
   int64_t total_size_;
   int64_t group_log_cnt_;
   int64_t read_cost_;  // time cost of reading and deserializing log
   int64_t get_cost_;   // time cost of checking integrity
   int64_t send_cost_;  // time cost of sending logs by rpc
+  void reset() {
+    total_size_ = 0;
+    group_log_cnt_ = 0;
+    read_cost_ = 0;
+    get_cost_ = 0;
+    send_cost_ = 0;
+  }
   TO_STRING_KV(K_(total_size),
                K_(group_log_cnt),
                K_(read_cost),
@@ -1057,6 +1066,8 @@ private:
   bool diskspace_enough_;
   ObMiniStat::ObStatItem append_cost_stat_;
   ObMiniStat::ObStatItem flush_cb_cost_stat_;
+  int64_t last_accum_statistic_time_;
+  int64_t accum_write_log_size_;  // the accum size of written logs
   // a spin lock for read/write replica_meta mutex
   SpinLock replica_meta_lock_;
   SpinLock rebuilding_lock_;

@@ -38,11 +38,11 @@
 // ::rollback to savepoint::
 //   1. advance In-Transaction-Clock to establish operation relation of Rollback-After-Write
 // -------------------------------------------------------------------------------------------
-#define TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE \
+#define TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(end_txn)                \
   do {                                                                  \
     bool inv = false;                                                   \
     if (tx.is_xa_trans()) {                                             \
-      inv = tx.xa_start_addr_ != self_;                                 \
+      inv = end_txn ? tx.addr_ != self_ : tx.xa_start_addr_ != self_;   \
     } else {                                                            \
       inv = tx.addr_ != self_;                                          \
     }                                                                   \
@@ -270,7 +270,7 @@ int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param)
 
 int ObTransService::rollback_tx(ObTxDesc &tx)
 {
-  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE
+  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(true)
   int ret = OB_SUCCESS;
   TX_STAT_ROLLBACK_INC
   ObSpinLockGuard guard(tx.lock_);
@@ -405,7 +405,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
                                      ObITxCallback &cb,
                                      const ObString *trace_info)
 {
-  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE
+  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(true)
   int ret = OB_SUCCESS;
   tx.lock_.lock();
   if (tx.commit_ts_ <= 0) {
@@ -1024,7 +1024,10 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
       break;
     case ObTxDesc::State::IMPLICIT_ACTIVE:
       tx.release_implicit_savepoint(savepoint);
-      if (!tx.has_implicit_savepoint() && tx.active_scn_ >= savepoint) {
+      if (!tx.flags_.REPLICA_             // on tx start node
+          && !tx.has_implicit_savepoint() // to first savepoint
+          && tx.active_scn_ >= savepoint  // rollback all dirty state
+          && !tx.has_extra_state_()) {    // hasn't explicit savepoint or serializable snapshot
         reset_tx = true;
       } else {
         normal_rollback = true;
@@ -1091,6 +1094,7 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                       OB_Y(ret), OB_Y(savepoint), OB_Y(expire_ts),
                       OB_ID(time_used), elapsed_us,
                       OB_ID(arg), (void*)extra_touched_ls,
+                      OB_ID(tag1), reset_tx,
                       OB_ID(opid), tx.op_sn_,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
@@ -1679,7 +1683,12 @@ int ObTransService::start_epoch_(ObTxDesc &tx)
     TRANS_LOG(INFO, "tx start new epoch", K(ret), K(tx));
   }
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, start_epoch, OB_Y(ret), OB_ID(opid), tx.op_sn_);
+  int tlog_truncate_cnt = 0;
+  if (OB_SUCC(ret) && tlog.count() > 50) {
+    tlog_truncate_cnt = tlog.count() - 10;
+    tlog.set_count(10);
+  }
+  REC_TRANS_TRACE_EXT(&tlog, start_epoch, OB_Y(ret), OB_ID(opid), tx.op_sn_, OB_ID(tag1), tlog_truncate_cnt);
   return ret;
 }
 
@@ -1774,7 +1783,9 @@ int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, co
           TRANS_LOG(WARN, "need rollback", K(ret), K(global_tx_type), K(xid));
         }
       }
-    } else {
+    } else if (tx.is_xa_tightly_couple()) {
+      // loosely couple mode txn-route use session_id to detect xa-start node's alive
+      // so, can not overwrite session_id
       tx.set_sessid(session_id);
     }
     if (OB_FAIL(ret) && registed) {

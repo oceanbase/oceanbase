@@ -5527,7 +5527,7 @@ int ObRecoverTenantArg::init(
     const SCN &recovery_until_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == exec_tenant_id || !is_valid_(type, recovery_until_scn))) {
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == exec_tenant_id || !is_valid(type, recovery_until_scn))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(exec_tenant_id), K(type), K(recovery_until_scn));
   } else {
@@ -6360,7 +6360,7 @@ OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressResponse, err_, progress_);
 
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_,
   source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, execution_id_,
-  parallelism_, tablet_task_id_, cluster_version_);
+  parallelism_, tablet_task_id_, data_format_version_);
 
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
@@ -6378,7 +6378,7 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   parallelism_ = other.parallelism_;
   execution_id_ = other.execution_id_;
   tablet_task_id_ = other.tablet_task_id_;
-  cluster_version_ = other.cluster_version_;
+  data_format_version_ = other.data_format_version_;
   return ret;
 }
 

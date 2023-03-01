@@ -194,7 +194,7 @@ int ObMaintainObjDepInfoTask::assign_view_schema(const ObTableSchema &view_schem
 int ObMaintainDepInfoTaskQueue::init(const int64_t thread_cnt, const int64_t queue_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObAsyncTaskQueue::init(thread_cnt, queue_size))) {
+  if (OB_FAIL(ObAsyncTaskQueue::init(thread_cnt, queue_size, "MaintainDepInfoTaskQueue"))) {
     LOG_WARN("failed to init base queue", K(ret));
   } else if (OB_FAIL(view_info_set_.create(INIT_BKT_SIZE))) {
     LOG_WARN("failed to init view set", K(ret));
@@ -212,6 +212,7 @@ void ObMaintainDepInfoTaskQueue::run2()
   } else {
     ObAddr zero_addr;
     while (!stop_) {
+      IGNORE_RETURN lib::Thread::update_loop_ts();
       if (REACH_TIME_INTERVAL(6 * 1000 * 1000)) {
         if (0 == queue_.size() && 0 != view_info_set_.size()) {
           LOG_WARN("queue size not match", K(queue_.size()), K(view_info_set_.size()));

@@ -386,13 +386,14 @@ loop:
   return 0;
 }
 void ob_hash_sort_8bit_bin(const ObCharsetInfo *cs __attribute__((unused)),
-              const uchar *key, size_t len, ulong *nr1, ulong *nr2, const bool calc_end_space __attribute__((unused)),
-          hash_algo hash_algo)
+              const uchar *key, size_t len, ulong *nr1, ulong *nr2, const bool calc_end_space, hash_algo hash_algo)
 {
   const uchar *pos = key;
   key += len;
   //trailing space to make 'A ' == 'A'
-  key = skip_trailing_space(key, len, 0);
+  if (!calc_end_space) {
+    key = skip_trailing_space(pos, len, 0);
+  }
   if (NULL == hash_algo)
   {
     for (; pos < (uchar*) key ; pos++)

@@ -65,7 +65,10 @@ void ObInterruptChecker::clear_status()
   interrupted_ = false;
   array_pos_ = 0;
   ref_count_ = 0;
-  MEMSET(interrupt_code_array_, 0, T_ARRAY_SIZE);
+  for (int idx = 0; idx < T_ARRAY_SIZE; ++idx)
+  {
+    interrupt_code_array_[idx].reset();
+  }
 }
 
 void ObInterruptChecker::clear_interrupt_status()

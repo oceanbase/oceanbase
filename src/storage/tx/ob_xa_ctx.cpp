@@ -1820,6 +1820,8 @@ int ObXACtx::create_xa_savepoint_if_need_(const ObXATransID &xid, const uint32_t
         if (info.is_first_stmt_) {
           if (OB_FAIL(MTL(transaction::ObTransService *)->create_explicit_savepoint(*tx_desc_, PL_XA_IMPLICIT_SAVEPOINT, session_id))) {
             TRANS_LOG(WARN, "create xa savepoint fail", K(ret), K(xid), K(session_id), K(*this));
+          } else {
+            TRANS_LOG(INFO, "create pl xa savepoint success", K(ret), K(xid), K(session_id), K(*this));
           }
           info.is_first_stmt_ = false;
         }
@@ -2459,7 +2461,9 @@ int ObXACtx::try_heartbeat()
   int tmp_ret = OB_SUCCESS;
   ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
   const int64_t now = ObTimeUtility::current_time();
-  if (original_sche_addr_ != GCTX.self_addr()) {
+  if (is_exiting_ || is_terminated_) {
+    // do nothing
+  } else if (original_sche_addr_ != GCTX.self_addr()) {
     // temproray scheduler, do nothing
   } else if (OB_ISNULL(xa_branch_info_)
       && (ObXATransState::IDLE < xa_trans_state_ || ObXATransState::UNKNOWN == xa_trans_state_)) {

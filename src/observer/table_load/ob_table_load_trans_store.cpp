@@ -373,12 +373,12 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
       LOG_WARN("fail to cast obj and check", KR(ret), K(i), K(row.cells_[i]));
     } else if (OB_FAIL(datum_row.storage_datums_[i].from_obj_enhance(out_obj))) {
       LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
-    } else if (column_schema->is_autoincrement() &&
+    } else if (column_schema->is_autoincrement() && !column_schema->is_tbl_part_key_column() &&
                OB_FAIL(handle_autoinc_column(column_schema, datum_row.storage_datums_[i],
                                              column_schema->get_meta_type().get_type_class(),
                                              session_id))) {
       LOG_WARN("fail to handle autoinc column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
-    } else if (column_schema->is_identity_column() &&
+    } else if (column_schema->is_identity_column() && !column_schema->is_tbl_part_key_column() &&
                OB_FAIL(handle_identity_column(column_schema, datum_row.storage_datums_[i], cast_allocator))) {
       LOG_WARN("fail to handle identity column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
     }

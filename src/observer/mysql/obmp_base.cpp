@@ -345,9 +345,8 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
     session.set_rpc_tenant_id(THIS_WORKER.get_rpc_tenant());
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
 
-    if (0 == multi_stmt_item.get_seq_num() && !session.is_in_transaction()) {
+    if (0 == multi_stmt_item.get_seq_num()) {
       // 第一条sql
-      // 并且还没开启事务时，这条sql才能二次路由
       ctx.can_reroute_sql_ = (pkt.can_reroute_pkt() && get_conn()->is_support_proxy_reroute());
     }
     ctx.is_protocol_weak_read_ = pkt.is_weak_read();

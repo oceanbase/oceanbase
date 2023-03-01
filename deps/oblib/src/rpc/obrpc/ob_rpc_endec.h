@@ -28,13 +28,30 @@ int init_packet(ObRpcProxy& proxy, ObRpcPacket& pkt, ObRpcPacketCode pcode, cons
                 const bool unneed_response);
 
 template <typename T>
-    int rpc_encode_req(ObRpcProxy& proxy, ObRpcMemPool& pool, ObRpcPacketCode pcode, const T& args, const ObRpcOpts& opts, char*& req, int64_t& req_sz)
+    int rpc_encode_req(
+      ObRpcProxy& proxy,
+      ObRpcMemPool& pool,
+      ObRpcPacketCode pcode,
+      const T& args,
+      const ObRpcOpts& opts,
+      char*& req,
+      int64_t& req_sz,
+      bool unneed_resp,
+      bool is_next = false,
+      bool is_last = false,
+      int64_t session_id = 0
+    )
 {
   int ret = common::OB_SUCCESS;
   ObRpcPacket pkt;
   const int64_t header_sz = pkt.get_header_size();
   const int64_t payload_sz = calc_extra_payload_size() + common::serialization::encoded_length(args);
-  char* header_buf = (char*)pool.alloc(header_sz + payload_sz);
+#ifdef PERF_MODE
+  const int64_t reserve_bytes_for_pnio = 200;
+#else
+  const int64_t reserve_bytes_for_pnio = 0;
+#endif
+  char* header_buf = (char*)pool.alloc(reserve_bytes_for_pnio + header_sz + payload_sz) + reserve_bytes_for_pnio;
   char* payload_buf = header_buf + header_sz;
   int64_t pos = 0;
   UNIS_VERSION_GUARD(opts.unis_version_);
@@ -53,9 +70,20 @@ template <typename T>
   } else {
     int64_t header_pos = 0;
     pkt.set_content(payload_buf, payload_sz);
-    if (OB_FAIL(init_packet(proxy, pkt, pcode, opts, false))) {
+    if (OB_FAIL(init_packet(proxy, pkt, pcode, opts, unneed_resp))) {
       RPC_OBRPC_LOG(WARN, "init packet fail", K(ret));
-    } else if (OB_FAIL(pkt.encode_header(header_buf, header_sz, header_pos))) {
+    } else {
+      if (is_next) {
+          pkt.set_stream_next();
+      }
+      if (is_last) {
+          pkt.set_stream_last();
+      }
+      if (session_id) {
+        pkt.set_session_id(session_id);
+      }
+    }
+    if (OB_FAIL(pkt.encode_header(header_buf, header_sz, header_pos))) {
       RPC_OBRPC_LOG(WARN, "encode header fail", K(ret));
     } else {
       req = header_buf;
@@ -66,23 +94,23 @@ template <typename T>
 }
 
 template <typename T>
-    int rpc_decode_resp(char* resp_buf, int64_t resp_sz, T& result)
+int rpc_decode_resp(const char* resp_buf, int64_t resp_sz, T& result, ObRpcPacket &pkt, ObRpcResultCode &rcode)
 {
   int ret = common::OB_SUCCESS;
-  ObRpcPacket pkt;
   int64_t pos = 0;
   if (OB_FAIL(pkt.decode(resp_buf, resp_sz))) {
     RPC_OBRPC_LOG(WARN, "decode packet fail", K(ret));
   } else {
-    ObRpcResultCode rcode;
     UNIS_VERSION_GUARD(pkt.get_unis_version());
-    if (OB_FAIL(rcode.deserialize(resp_buf, resp_sz, pos))) {
+    const char* payload = pkt.get_cdata();
+    int64_t limit = pkt.get_clen();
+    if (OB_FAIL(rcode.deserialize(payload, limit, pos))) {
+      rcode.rcode_ = common::OB_DESERIALIZE_ERROR;
       RPC_OBRPC_LOG(WARN, "deserialize result code fail", K(ret));
     } else {
       if (rcode.rcode_ != common::OB_SUCCESS) {
         ret = rcode.rcode_;
-        RPC_OBRPC_LOG(WARN, "execute rpc fail", K(ret));
-      } else if (OB_FAIL(common::serialization::decode(resp_buf, resp_sz, pos, result))) {
+      } else if (OB_FAIL(common::serialization::decode(payload, limit, pos, result))) {
         RPC_OBRPC_LOG(WARN, "deserialize result fail", K(ret));
       } else {
         ret = rcode.rcode_;
@@ -92,7 +120,7 @@ template <typename T>
   return ret;
 }
 
-int rpc_decode_ob_packet(ObRpcMemPool& pool, char* buf, int64_t sz, ObRpcPacket*& ret_pkt);
+int rpc_decode_ob_packet(ObRpcMemPool& pool, const char* buf, int64_t sz, ObRpcPacket*& ret_pkt);
 int rpc_encode_ob_packet(ObRpcMemPool& pool, ObRpcPacket* pkt, char*& buf, int64_t& sz);
 
 }; // end namespace obrpc

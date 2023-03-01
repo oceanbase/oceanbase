@@ -703,7 +703,7 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
 
     // Continuously iterate through the fetch log results while the current fetch log stream is continuously active, and then process
     while (! stop_flag
-        && OB_SUCCESS == ret
+        && OB_SUCC(ret)
         && is_stream_valid
         && OB_SUCC(fetch_log_arpc_.next_result(result, rpc_is_flying))) {
       need_hibernate = false;
@@ -732,7 +732,7 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
         fetch_log_arpc_.revert_result(result);
         result = NULL;
       }
-    }
+    } // while
 
     if (stop_flag) {
       ret = OB_IN_STOP_STATE;
@@ -750,6 +750,11 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
         // The RPC is not running, it is still the current thread that is responsible for that fetch log stream
         stream_been_taken_over_by_rpc = false;
       }
+    }
+
+    // Fetching missing log RPC failed, need retry
+    if (OB_NEED_RETRY == ret) {
+      ret = OB_SUCCESS;
     }
 
     // Final unified processing results
@@ -794,9 +799,9 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
     TransStatInfo &tsi)
 {
   int ret = OB_SUCCESS;
-
   palf::MemPalfBufferIterator entry_iter;
   TransStatInfo local_tsi;
+
   if (group_entry.get_header().is_padding_log()) {
     LOG_DEBUG("GroupLogEntry is_padding_log", K(group_entry), K(group_start_lsn));
   } else if (OB_FAIL(ls_fetch_ctx_->get_log_entry_iterator(group_entry, group_start_lsn, entry_iter))) {
@@ -872,11 +877,13 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
         LOG_DEBUG("get_log_entry succ", K(log_entry), K(entry_lsn));
       }
     } // while
+    // End of iteration
     if (OB_ITER_END == ret) {
       // current group entry iter end, go on with next group_entry(if exist)
       ret = OB_SUCCESS;
     }
   }
+
   return ret;
 }
 
@@ -1386,7 +1393,9 @@ int FetchStream::read_log_(
         decode_log_entry_time += (get_timestamp() - begin_time);
         if (OB_FAIL(read_group_entry_(group_entry, group_start_lsn,
             stop_flag, kick_out_info, tsi))) {
-          LOG_ERROR("read group entry failed", KR(ret));
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("read group entry failed", KR(ret));
+          }
         }
 
         // update log process
@@ -1652,8 +1661,8 @@ int FetchStream::handle_log_miss_(
                 }
               }
             }
-            // TODO if OB_NEED_RETRY or other err_code, should add to kick_out_info
           }
+
           if (OB_NEED_RETRY == ret) {
             fail_reason = KickOutReason::MISSING_LOG_FETCH_FAIL;
           }

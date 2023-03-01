@@ -179,6 +179,7 @@ private:
   bool need_receive_channel_map_via_dtl(int64_t child_dfo_id);
   int get_whole_msg_provider(uint64_t op_id, dtl::ObDtlMsgType msg_type, ObPxDatahubDataProvider *&provider);
   int64_t get_process_query_time();
+  int64_t get_query_timeout_ts();
   /* variables */
   public:
   ObSqcCtx &sqc_ctx_;

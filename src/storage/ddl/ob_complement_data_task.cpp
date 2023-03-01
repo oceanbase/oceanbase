@@ -114,10 +114,10 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
     task_id_ = arg.task_id_;
     execution_id_ = arg.execution_id_;
     tablet_task_id_ = arg.tablet_task_id_;
-    cluster_version_ = arg.cluster_version_;
+    data_format_version_ = arg.data_format_version_;
     FLOG_INFO("succeed to init ObComplementDataParam", K(ret), K(is_inited_), K(tenant_id_), K(ls_id_),
       K(source_tablet_id_), K(dest_tablet_id_), K(schema_version_), K(task_id_), K(arg), K(concurrent_cnt_),
-      K(cluster_version_));
+      K(data_format_version_));
   }
   return ret;
 }
@@ -281,7 +281,7 @@ int ObComplementDataContext::write_start_log(const ObComplementDataParam &param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table key", K(ret), K(hidden_table_key));
   } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(hidden_table_key,
-    param.execution_id_, param.cluster_version_, ddl_kv_mgr_handle_))) {
+    param.execution_id_, param.data_format_version_, ddl_kv_mgr_handle_))) {
     LOG_WARN("fail write start log", K(ret), K(hidden_table_key), K(param));
   } else {
     LOG_INFO("complement task start ddl redo success", K(hidden_table_key));
@@ -406,7 +406,7 @@ int ObComplementDataDag::prepare_context()
                                     param_.dest_tablet_id_,
                                     MAJOR_MERGE,
                                     param_.snapshot_version_,
-                                    param_.cluster_version_))) {
+                                    param_.data_format_version_))) {
     LOG_WARN("fail to init data desc", K(ret));
   } else {
     data_desc.row_column_count_ = data_desc.rowkey_column_count_ + 1;
@@ -1005,7 +1005,7 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
                                         param_->dest_tablet_id_,
                                         MAJOR_MERGE,
                                         param_->snapshot_version_,
-                                        param_->cluster_version_))) {
+                                        param_->data_format_version_))) {
         LOG_WARN("fail to init data store desc", K(ret), K(*param_), K(param_->dest_tablet_id_));
       } else if (FALSE_IT(data_desc.sstable_index_builder_ = context_->index_builder_)) {
       } else if (FALSE_IT(data_desc.is_ddl_ = true)) {

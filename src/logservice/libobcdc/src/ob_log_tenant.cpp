@@ -377,7 +377,7 @@ int ObLogTenant::update_sys_ls_info(const PartTransTask &task)
   }
   // Only heartbeat and DDL transaction tasks are allowed
   else if (OB_UNLIKELY(! task.is_ddl_trans()
-        && ! task.is_ls_table_trans()
+        && ! task.is_ls_op_trans()
         && ! task.is_sys_ls_heartbeat())) {
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("task is not DDL trans task, or LS Table, or HEARTBEAT, not supported", KR(ret), K(task));

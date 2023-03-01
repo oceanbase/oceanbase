@@ -16,6 +16,9 @@
 #include "lib/ob_define.h"
 #include "lib/net/ob_addr.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
+extern "C" {
+#include "rpc/pnio/interface/group.h"
+};
 
 using namespace oceanbase::common;
 
@@ -50,6 +53,7 @@ int ObNetClient::init_(const ObNetOptions opts)
   } else if (OB_FAIL(net_.start())) {
     LOG_ERROR("Start client network fail", K(ret));
   } else {
+    pn_provision(-1, 1, 1);
     inited_ = true;
   }
 

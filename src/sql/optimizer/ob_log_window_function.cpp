@@ -15,6 +15,7 @@
 #include "ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "common/ob_smart_call.h"
+#include "sql/optimizer/ob_log_exchange.h"
 
 #define PRINT_BOUND(bound_name, bound)                 \
   if (OB_SUCC(ret)) {                                 \
@@ -77,9 +78,14 @@ using namespace oceanbase::sql::log_op_def;
 int ObLogWindowFunction::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  FOREACH_CNT_X(it, rd_sort_keys_, OB_SUCC(ret)) {
-    if (OB_FAIL(all_exprs.push_back(it->expr_))) {
-      LOG_WARN("array push back failed", K(ret));
+  if (OB_UNLIKELY(sort_keys_.count() < rd_sort_keys_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(sort_keys_.count()), K(rd_sort_keys_cnt_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rd_sort_keys_cnt_; i++) {
+      if (OB_FAIL(all_exprs.push_back(sort_keys_.at(i).expr_))) {
+        LOG_WARN("array push back failed", K(ret));
+      }
     }
   }
   if (OB_FAIL(ret)) {
@@ -336,11 +342,18 @@ int ObLogWindowFunction::get_win_partition_intersect_exprs(ObIArray<ObWinFunRawE
 int ObLogWindowFunction::compute_op_ordering()
 {
   int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
   if (OB_FAIL(ObLogicalOperator::compute_op_ordering())) {
     LOG_WARN("failed to compute op ordering", K(ret));
+  } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first child is null", K(ret), K(child));
   } else if (!single_part_parallel_) {
-    is_local_order_ = (range_dist_parallel_ || is_fully_paratition_wise())
-                       && !get_op_ordering().empty();
+    is_local_order_ = (range_dist_parallel_ || is_fully_paratition_wise()
+                       || (get_sort_keys().empty()
+                           && LOG_EXCHANGE == child->get_type()
+                           && child->get_is_local_order())
+                      ) && !get_op_ordering().empty();
   }
   return ret;
 }
@@ -430,7 +443,7 @@ int ObLogWindowFunction::inner_replace_op_exprs(
     const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
 {
   int ret = OB_SUCCESS;
-  FOREACH_X(key, rd_sort_keys_, OB_SUCC(ret)) {
+  FOREACH_X(key, sort_keys_, OB_SUCC(ret)) {
     if (OB_FAIL(replace_expr_action(to_replace_exprs, key->expr_))) {
       LOG_WARN("replace expr failed", K(ret));
     }
@@ -450,6 +463,23 @@ int ObLogWindowFunction::inner_replace_op_exprs(
       LOG_WARN("new win expr is null", K(ret));
     } else {
       win_exprs_.at(i) = new_expr;
+    }
+  }
+  return ret;
+}
+
+int ObLogWindowFunction::get_rd_sort_keys(common::ObIArray<OrderItem> &rd_sort_keys)
+{
+  int ret = OB_SUCCESS;
+  rd_sort_keys.reuse();
+  if (OB_UNLIKELY(sort_keys_.count() < rd_sort_keys_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(sort_keys_.count()), K(rd_sort_keys_cnt_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rd_sort_keys_cnt_; i++) {
+      if (OB_FAIL(rd_sort_keys.push_back(sort_keys_.at(i)))) {
+        LOG_WARN("array push back failed", K(ret));
+      }
     }
   }
   return ret;

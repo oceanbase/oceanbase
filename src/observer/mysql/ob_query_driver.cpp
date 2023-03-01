@@ -124,6 +124,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
   bool is_cac_found_rows =  result.is_calc_found_rows();
   int64_t limit_count = OB_INVALID_COUNT == fetch_limit ? INT64_MAX : fetch_limit;
   int64_t row_num = 0;
+  ObSqlCtx *sql_ctx = result.get_exec_context().get_sql_ctx();
   if (!has_top_limit && OB_INVALID_COUNT == fetch_limit) {
     limit_count = INT64_MAX;
     if (OB_FAIL(session_.get_sql_select_limit(limit_count))) {

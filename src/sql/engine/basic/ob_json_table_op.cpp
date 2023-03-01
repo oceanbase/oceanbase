@@ -1397,8 +1397,8 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
         break;
       }
       case JSN_QUERY_EMPTY: {
-        iter_ = curr_ = nullptr;
-        is_null_result_ = true;
+        iter_ = curr_ = ObJsonTableOp::get_js_array();
+        is_null_result_ = false;
         break;
       }
       case JSN_QUERY_EMPTY_ARRAY: {

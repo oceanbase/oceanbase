@@ -377,6 +377,7 @@ void ObjectSet::free_object(AObject *obj)
   }
 #endif
   const int64_t ctx_id = blk_mgr_->ctx_id_;
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   if (ctx_id == common::ObCtxIds::LIBEASY) {
     if (locker_->trylock()) {
       do_free_object(obj);
@@ -417,6 +418,7 @@ void ObjectSet::do_free_object(AObject *obj)
   used_bytes_ -= hold;
 
   obj->in_use_ = false;
+  obj->on_malloc_sample_ = false;
   if (!obj->is_large_) {
     free_normal_object(obj);
   } else {

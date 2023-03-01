@@ -198,6 +198,7 @@ int ObExprSecToTime::calc_sectotime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
         ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
         if (CM_IS_WARN_ON_FAIL(cast_mode)) {
           ret = OB_SUCCESS;
+          expr_datum.set_null();
         } else {
           LOG_WARN("time value is out of range", K(ret), K(int_usec));
         }
@@ -369,6 +370,7 @@ int ObExprSubAddtime::calc_result2(common::ObObj &result,
           if (OB_FAIL(ObTimeConverter::time_overflow_trunc(int_usec))) {
             if (CM_IS_WARN_ON_FAIL(cast_ctx.cast_mode_)) {
               ret = OB_SUCCESS;
+              result.set_time(int_usec);
             } else {
               LOG_WARN("time value is out of range", K(ret), K(int_usec));
             }
@@ -609,10 +611,13 @@ int ObExprSubAddtime::subaddtime_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObD
         }
       }
     }
-    uint64_t cast_mode = 0;
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
-    if (CM_IS_WARN_ON_FAIL(cast_mode) && OB_ALLOCATE_MEMORY_FAILED != ret) {
-      ret = OB_SUCCESS;
+    if (OB_FAIL(ret) && OB_ALLOCATE_MEMORY_FAILED != ret) {
+      uint64_t cast_mode = 0;
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+      if (CM_IS_WARN_ON_FAIL(cast_mode) ) {
+        ret = OB_SUCCESS;
+        expr_datum.set_null();
+      }
     }
   }
   return ret;

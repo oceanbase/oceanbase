@@ -301,7 +301,7 @@ int ObDependencyInfo::insert_schema_object_dependency(common::ObISQLClient &tran
     if (!only_history) {
       ObDMLExecHelper exec(trans, exec_tenant_id);
       if (is_replace) {
-        if (OB_FAIL(exec.exec_update(OB_ALL_TENANT_DEPENDENCY_TNAME, dml, affected_rows))) {
+        if (OB_FAIL(exec.exec_insert_update(OB_ALL_TENANT_DEPENDENCY_TNAME, dml, affected_rows))) {
           LOG_WARN("execute update failed", K(ret));
         }
       } else {
@@ -309,7 +309,7 @@ int ObDependencyInfo::insert_schema_object_dependency(common::ObISQLClient &tran
           LOG_WARN("execute insert failed", K(ret));
         }
       }
-      if (OB_SUCC(ret) && !is_single_row(affected_rows)) {
+      if (OB_SUCC(ret) && !is_single_row(affected_rows) && !is_double_row(affected_rows)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
       }

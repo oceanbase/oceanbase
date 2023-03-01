@@ -268,7 +268,7 @@ int ObPxSubCoord::pre_setup_op_input(ObExecContext &ctx,
       ObPxBloomFilter *filter_use = NULL;
       ObPXBloomFilterHashWrapper bf_key;
       bf_key.init(ctx.get_my_session()->get_effective_tenant_id(), filter_op.get_filter_id(),
-                  filter_op.get_server_id(), ctx.get_my_session()->get_current_execution_id());
+                  filter_op.get_server_id(), sqc_arg_.sqc_.get_px_sequence_id());
       if (OB_FAIL(ObPxBloomFilterManager::init_px_bloom_filter(filter_op.get_filter_length(),
                                                                ctx.get_allocator(),
                                                                filter_use))) {
@@ -872,7 +872,7 @@ int ObPxSubCoord::start_ddl()
       param.exec_ctx_ = exec_ctx;
       param.execution_id_ = phy_plan->get_ddl_execution_id();
       param.ddl_task_id_ = phy_plan->get_ddl_task_id();
-      if (OB_FAIL(ObDDLUtil::get_ddl_cluster_version(tenant_id, param.ddl_task_id_, param.cluster_version_))) {
+      if (OB_FAIL(ObDDLUtil::get_data_format_version(tenant_id, param.ddl_task_id_, param.data_format_version_))) {
         LOG_WARN("get ddl cluster version failed", K(ret));
       } else if (OB_FAIL(ObSSTableInsertManager::get_instance().create_table_context(param, ddl_ctrl_.context_id_))) {
         LOG_WARN("create table context failed", K(ret));

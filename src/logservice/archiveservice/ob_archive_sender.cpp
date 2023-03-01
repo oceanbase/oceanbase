@@ -185,7 +185,7 @@ int ObArchiveSender::push_task_status(ObArchiveTaskStatus *task_status)
   } else if (OB_FAIL(task_queue_.push(task_status))) {
     ARCHIVE_LOG(WARN, "push fail", K(ret), KPC(task_status));
   } else {
-    ARCHIVE_LOG(INFO, "push succ", KPC(task_status));
+    ARCHIVE_LOG(INFO, "push succ", KP(task_status));
   }
   return ret;
 }
@@ -250,37 +250,7 @@ void ObArchiveSender::do_thread_task_()
 {
   // try consume task
   {
-    int ret = OB_SUCCESS;
-    ObArchiveSendTask *task = NULL;
-    bool task_exist = false;
-    TaskConsumeStatus consume_status = TaskConsumeStatus::INVALID;
-    // As task issued flag is marked, no matter task is handled succ or fail
-    // the flag should be dealed.
-    if (OB_FAIL(get_send_task_(task, task_exist))) {
-      ARCHIVE_LOG(WARN, "get send task failed", K(ret));
-    } else if (! task_exist) {
-    } else if (FALSE_IT(handle(*task, consume_status))) {
-    } else {
-      ARCHIVE_LOG(TRACE, "after handle task", KPC(task), K(consume_status));
-      switch (consume_status) {
-        case TaskConsumeStatus::DONE:
-          break;
-        case TaskConsumeStatus::STALE_TASK:
-          task->mark_stale();
-          break;
-        case TaskConsumeStatus::NEED_RETRY:
-          if (! task->retire_task_with_retry()) {
-            ret = OB_ERR_UNEXPECTED;
-            ARCHIVE_LOG(ERROR, "retire task with retry failed", K(ret), KPC(task));
-          }
-          break;
-        default:
-          ret = OB_ERR_UNEXPECTED;
-          ARCHIVE_LOG(ERROR, "handle send_task status unexpected", K(consume_status), KPC(task));
-          task->mark_stale();
-          break;
-      }
-    }
+    (void)try_consume_send_task_();
   }
 
   // try free send task
@@ -290,6 +260,55 @@ void ObArchiveSender::do_thread_task_()
       ARCHIVE_LOG(WARN, "try free send task failed", K(ret));
     }
   }
+
+  if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+    ARCHIVE_LOG(INFO, "ObArchiveSender is running", "thread_index", get_thread_idx());
+  }
+}
+
+int ObArchiveSender::try_consume_send_task_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t counts = std::max(1L, task_queue_.size());
+  for (int64_t i = 0; OB_SUCC(ret) && i < counts; i++) {
+    ret = do_consume_send_task_();
+  }
+  return ret;
+}
+
+int ObArchiveSender::do_consume_send_task_()
+{
+  int ret = OB_SUCCESS;
+  ObArchiveSendTask *task = NULL;
+  bool task_exist = false;
+  TaskConsumeStatus consume_status = TaskConsumeStatus::INVALID;
+  // As task issued flag is marked, no matter task is handled succ or fail
+  // the flag should be dealed.
+  if (OB_FAIL(get_send_task_(task, task_exist))) {
+    ARCHIVE_LOG(WARN, "get send task failed", K(ret));
+  } else if (! task_exist) {
+  } else if (FALSE_IT(handle(*task, consume_status))) {
+  } else {
+    switch (consume_status) {
+      case TaskConsumeStatus::DONE:
+        break;
+      case TaskConsumeStatus::STALE_TASK:
+        task->mark_stale();
+        break;
+      case TaskConsumeStatus::NEED_RETRY:
+        if (! task->retire_task_with_retry()) {
+          ret = OB_ERR_UNEXPECTED;
+          ARCHIVE_LOG(ERROR, "retire task with retry failed", K(ret), KPC(task));
+        }
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        ARCHIVE_LOG(ERROR, "handle send_task status unexpected", K(consume_status), KPC(task));
+        task->mark_stale();
+        break;
+    }
+  }
+  return ret;
 }
 
 // only get task pointer, while task is still in task_status
@@ -340,7 +359,7 @@ int ObArchiveSender::get_send_task_(ObArchiveSendTask *&task, bool &exist)
 int ObArchiveSender::try_free_send_task_()
 {
   int ret = OB_SUCCESS;
-  const int64_t counts = std::max(1L, task_queue_.size()) + get_thread_count();
+  const int64_t counts = std::max(1L, task_queue_.size());
   if (0 != get_thread_idx()) {
     // only 0 thread affirm and free send task
   } else {
@@ -466,6 +485,11 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
 
   handle_archive_ret_code_(id, station.get_round(), ret);
 
+  // if encounter fail, sleep 100ms
+  if (OB_FAIL(ret)) {
+    ob_usleep(100 * 1000L);
+  }
+
   DEBUG_SYNC(ARCHIVE_SENDER_HANDLE_TASK_DONE);
 }
 
@@ -521,7 +545,7 @@ int ObArchiveSender::do_compensate_piece_(const ObLSID &id,
 {
   int ret = OB_SUCCESS;
   share::ObBackupPath prefix;
-  if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_dir_path(backup_dest, station.get_round().dest_id_,
+  if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_log_dir_path(backup_dest, station.get_round().dest_id_,
       station.get_round().round_, next_piece_id, id, prefix))) {
     ARCHIVE_LOG(WARN, "get piece ls dir path failed", K(ret), K(id), K(next_piece_id), K(station));
   } else {
@@ -546,7 +570,9 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
   int64_t file_offset = 0;
   share::ObBackupPath path;
   ObBackupPathString uri;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
+  const int64_t log_size = static_cast<int64_t>((task.get_end_lsn() - task.get_start_lsn()));
+  const int64_t buf_size = task.get_buf_size();
   const ObArchivePiece &pre_piece = arg.tuple_.get_piece();
   const ObArchivePiece &piece = task.get_piece();
   const ArchiveWorkStation &station = task.get_station();
@@ -601,7 +627,7 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
 
   // 8. 统计
   if (OB_SUCC(ret)) {
-    statistic(task, common::ObTimeUtility::current_time() - start_ts);
+    statistic(log_size, buf_size, common::ObTimeUtility::current_time() - start_ts);
   }
   return ret;
 }
@@ -639,7 +665,7 @@ int ObArchiveSender::build_archive_prefix_if_needed_(const ObLSID &id,
   share::ObBackupPath prefix;
   if (pre_piece.is_valid() && pre_piece == cur_piece && piece_dir_exist) {
     // just skip
-  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_dir_path(backup_dest, station.get_round().dest_id_,
+  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_log_dir_path(backup_dest, station.get_round().dest_id_,
       station.get_round().round_, cur_piece.get_piece_id(), id, prefix))) {
     ARCHIVE_LOG(WARN, "get piece ls dir path failed", K(ret), K(id),
         K(cur_piece), K(station), K(backup_dest));
@@ -821,15 +847,15 @@ int ObArchiveSender::free_residual_task_()
   return ret;
 }
 
-void ObArchiveSender::statistic(const ObArchiveSendTask &task, const int64_t cost_ts)
+void ObArchiveSender::statistic(const int64_t log_size, const int64_t buf_size, const int64_t cost_ts)
 {
   static __thread int64_t SEND_LOG_LSN_SIZE;
   static __thread int64_t SEND_BUF_SIZE;
   static __thread int64_t SEND_TASK_COUNT;
   static __thread int64_t SEND_COST_TS;
 
-  SEND_LOG_LSN_SIZE += static_cast<int64_t>((task.get_end_lsn() - task.get_start_lsn()));
-  SEND_BUF_SIZE += task.get_buf_size();
+  SEND_LOG_LSN_SIZE += log_size;
+  SEND_BUF_SIZE += buf_size;
   SEND_TASK_COUNT++;
   SEND_COST_TS += cost_ts;
 

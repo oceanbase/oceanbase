@@ -657,15 +657,16 @@ int ObRestoreService::tenant_restore_finish(const ObPhysicalRestoreJob &job_info
 {
   int ret = OB_SUCCESS;
   ObHisRestoreJobPersistInfo history_info;
+  bool restore_tenant_exist = true;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
-  } else if (OB_FAIL(reset_restore_concurrency_(job_info.get_tenant_id(), job_info))) {
-    LOG_WARN("failed to reset restore concurrency", K(ret), K(job_info));
-  } else if (OB_FAIL(try_get_tenant_restore_history_(job_info, history_info))) {
+  } else if (OB_FAIL(try_get_tenant_restore_history_(job_info, history_info, restore_tenant_exist))) {
     LOG_WARN("failed to get user tenant restory info", KR(ret), K(job_info));
+  } else if (restore_tenant_exist && OB_FAIL(reset_restore_concurrency_(job_info.get_tenant_id(), job_info))) {
+    LOG_WARN("failed to reset restore concurrency", K(ret), K(job_info));
   } else if (share::PHYSICAL_RESTORE_SUCCESS == job_info.get_status()) {
     //restore success
   }
@@ -695,11 +696,12 @@ int ObRestoreService::check_stop() const
 
 int ObRestoreService::try_get_tenant_restore_history_(
     const ObPhysicalRestoreJob &job_info,
-    ObHisRestoreJobPersistInfo &history_info)
+    ObHisRestoreJobPersistInfo &history_info,
+    bool &restore_tenant_exist)
 {
   int ret = OB_SUCCESS;
+  restore_tenant_exist = true;
   ObSchemaGetterGuard schema_guard;
-  bool restore_tenant_exist = true;
   bool tenant_dropped = false;
   ObHisRestoreJobPersistInfo user_history_info; 
   const uint64_t restore_tenant_id = job_info.get_tenant_id();
@@ -1249,7 +1251,7 @@ int ObRestoreService::check_all_ls_restore_finish_(
     SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
       ObSqlString sql;
       common::sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql.assign_fmt("select a.ls_id, b.restore_status, b.replica_status from %s as a "
+      if (OB_FAIL(sql.assign_fmt("select a.ls_id, b.restore_status from %s as a "
               "left join %s as b on a.ls_id = b.ls_id",
               OB_ALL_LS_STATUS_TNAME, OB_ALL_LS_META_TABLE_TNAME))) {
         LOG_WARN("failed to assign sql", K(ret));
@@ -1262,8 +1264,6 @@ int ObRestoreService::check_all_ls_restore_finish_(
         int64_t ls_id = 0;
         share::ObLSRestoreStatus ls_restore_status;
         int32_t restore_status = -1;
-        ObString replica_status_str;
-        ObReplicaStatus replica_status;
         //TODO no ls in ls_meta
         //if one of ls restore failed, make tenant restore failed
         //https://work.aone.alibaba-inc.com/issue/44518531
@@ -1271,13 +1271,8 @@ int ObRestoreService::check_all_ls_restore_finish_(
             && !is_tenant_restore_failed(tenant_restore_status)) {
           EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "restore_status", restore_status, int32_t);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "replica_status", replica_status_str);
 
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(share::get_replica_status(replica_status_str, replica_status))) {
-            LOG_WARN("fail to get replica status from string", KR(ret), K(replica_status_str));
-          } else if (REPLICA_STATUS_NORMAL != replica_status) {
-            tenant_restore_status = TenantRestoreStatus::IN_PROGRESS;
           } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
             LOG_WARN("failed to set status", KR(ret), K(restore_status));
           } else if (ls_restore_status.is_restore_failed()) {

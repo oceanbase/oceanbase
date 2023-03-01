@@ -66,6 +66,7 @@ public:
   int regist(uint64_t magic, int count, int *pipefd_array);
   uint8_t compatible_balance_assign(io_threads_pipefd_pool_t *& pipefd_pool);
   void set_port(int port) {port_ = port;}
+  int do_one_event(int accept_fd);
   void destroy();
 
 private:

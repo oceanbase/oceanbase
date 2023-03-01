@@ -2367,7 +2367,7 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   }
 
   int tmp_ret = ret;
-  if (!is_begin_commit_stmt && GCONF.enable_perf_event
+  if (!is_begin_commit_stmt
       && OB_FAIL(handle_large_query(tmp_ret,
                                     result,
                                     ectx.get_need_disconnect_for_update(),
@@ -3892,7 +3892,7 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
 
     bool read_only = false;
     //租户级别的read only检查
-    if (session->is_inner() || (pc_ctx.is_begin_commit_stmt() && !GCONF.enable_perf_event)) {
+    if (session->is_inner() || pc_ctx.is_begin_commit_stmt()) {
       // FIXME:
       // schema拆分后，为了避免建租户时获取不到租户read only属性导致建租户失败，对于inner sql
       // 暂时跳过read only检查。实际上，对于tenant space系统表，不应该检查read only属性。
