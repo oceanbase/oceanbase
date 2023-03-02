@@ -5098,7 +5098,8 @@ int ObDMLResolver::deduce_generated_exprs(ObIArray<ObRawExpr*> &exprs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 8> generate_exprs;
-  for (int64_t i = 0; OB_SUCC(ret) && !params_.is_from_create_view_ && i < exprs.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && !params_.is_from_create_view_
+                                   && !params_.is_prepare_stage_ && i < exprs.count(); ++i) {
     ObRawExpr *expr = exprs.at(i);
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
