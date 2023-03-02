@@ -97,12 +97,6 @@ public:
   void set_source(logservice::ObRemoteLogParent *source);
   logservice::ObRemoteLogParent *get_source() { return source_; }
 
-  logservice::ObRemoteLogGroupEntryIterator &get_remote_iter() {
-    return iter_;
-  }
-  void set_iter_next_lsn(const palf::LSN &lsn) { iter_next_lsn_ = lsn; }
-  const palf::LSN &get_iter_next_lsn() const { return iter_next_lsn_; }
-
   void set_fetch_mode(FetchMode mode, const char *reason) {
     FetchMode from = fetch_mode_, to = mode;
     fetch_mode_ = mode;
@@ -117,18 +111,17 @@ public:
   int64_t get_progress() const { return client_progress_; }
 
   TO_STRING_KV(K_(source),
-               K_(iter),
-               K_(iter_next_lsn),
                K_(fetch_mode),
                K_(last_touch_ts),
                K_(client_progress))
+
+friend class ObCdcGetSourceFunctor;
+friend class ObCdcUpdateSourceFunctor;
+
 private:
   bool is_inited_;
+  ObSpinLock source_lock_;
   logservice::ObRemoteLogParent *source_;
-  ObCdcGetSourceFunctor get_source_func_;
-  ObCdcUpdateSourceFunctor update_source_func_;
-  logservice::ObRemoteLogGroupEntryIterator iter_;
-  palf::LSN iter_next_lsn_;
   FetchMode fetch_mode_;
   int64_t last_touch_ts_;
   int64_t client_progress_;

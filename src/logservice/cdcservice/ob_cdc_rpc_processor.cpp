@@ -33,7 +33,7 @@ int __get_cdc_service(uint64_t tenant_id, cdc::ObCdcService *&cdc_service)
     ret = OB_ERR_UNEXPECTED;
     EXTLOG_LOG(WARN, "cdc_service is NULL", KR(ret), K(tenant_id));
 	} else {
-    EXTLOG_LOG(INFO, "__get_cdc_service", K(cdc_service), KP(log_service), K(tenant_id), K(MTL_ID()));
+    // get CdcService succ
   }
 
 	return ret;
