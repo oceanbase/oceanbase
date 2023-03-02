@@ -338,7 +338,8 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
       } else if (OB_FAIL(mgr.update_column_stat(ctx.get_virtual_table_ctx().schema_guard_,
                                                 param.table_param_.tenant_id_,
                                                 column_stats,
-                                                true))) {
+                                                true,
+                                                CREATE_OBJ_PRINT_PARAM(ctx.get_my_session())))) {
         LOG_WARN("failed to update column stats", K(ret));
       } else {
         LOG_TRACE("end set column stats", K(param), K(*col_stat));

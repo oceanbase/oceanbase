@@ -421,7 +421,8 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
                                             const ObIArray<ObOptColumnStat*> &column_stats,
                                             const int64_t current_time,
                                             bool only_update_col_stat /*default false*/,
-                                            bool is_history_stat/*default false*/)
+                                            bool is_history_stat/*default false*/,
+                                            const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
@@ -444,7 +445,8 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
                                                column_stats,
                                                current_time,
                                                is_history_stat,
-                                               column_stats_sql))) {
+                                               column_stats_sql,
+                                               print_params))) {
     LOG_WARN("failed to construct column stat sql", K(ret));
   // construct histogram delete column
   } else if (!only_update_col_stat && !is_history_stat &&
@@ -459,7 +461,8 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
                                                     current_time,
                                                     is_history_stat,
                                                     insert_histogram,
-                                                    need_histogram))) {
+                                                    need_histogram,
+                                                    print_params))) {
     LOG_WARN("failed to construct histogram insert sql", K(ret));
   } else if (OB_FAIL(trans.start(mysql_proxy_, exec_tenant_id))) {
     LOG_WARN("fail to start transaction", K(ret));
@@ -491,7 +494,8 @@ int ObOptStatSqlService::construct_column_stat_sql(share::schema::ObSchemaGetter
                                                    const ObIArray<ObOptColumnStat*> &column_stats,
                                                    const int64_t current_time,
                                                    bool is_history_stat,
-                                                   ObSqlString &column_stats_sql)
+                                                   ObSqlString &column_stats_sql,
+                                                   const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   ObSqlString tmp;
@@ -515,7 +519,7 @@ int ObOptStatSqlService::construct_column_stat_sql(share::schema::ObSchemaGetter
         LOG_WARN("failed to append fmt sql", K(ret));
       } else if (OB_FAIL(get_column_stat_history_sql(tenant_id, allocator,
                                                      *column_stats.at(i), current_time,
-                                                     min_meta, max_meta, tmp))) {
+                                                     min_meta, max_meta, tmp, print_params))) {
         LOG_WARN("failed to get column stat history sql", K(ret));
       } else if (OB_FAIL(column_stats_sql.append_fmt("(%s)%s", tmp.ptr(),
                                                     (i == column_stats.count() - 1 ? ";" : ",")))) {
@@ -525,7 +529,7 @@ int ObOptStatSqlService::construct_column_stat_sql(share::schema::ObSchemaGetter
       LOG_WARN("failed to append sql", K(ret));
     } else if (OB_FAIL(get_column_stat_sql(tenant_id, allocator,
                                            *column_stats.at(i), current_time,
-                                           min_meta, max_meta, tmp))) {
+                                           min_meta, max_meta, tmp, print_params))) {
       LOG_WARN("failed to get column stat", K(ret));
     } else if (OB_FAIL(column_stats_sql.append_fmt("(%s)%s", tmp.ptr(),
                                                     (i == column_stats.count() - 1 ? ";" : ",")))) {
@@ -576,7 +580,8 @@ int ObOptStatSqlService::construct_histogram_insert_sql(share::schema::ObSchemaG
                                                         const int64_t current_time,
                                                         bool is_history_stat,
                                                         ObSqlString &insert_histogram_sql,
-                                                        bool &need_histogram)
+                                                        bool &need_histogram,
+                                                        const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   ObSqlString tmp;
@@ -606,7 +611,8 @@ int ObOptStatSqlService::construct_histogram_insert_sql(share::schema::ObSchemaG
                                                             hist.get(j),
                                                             current_time,
                                                             endpoint_meta,
-                                                            tmp))) {
+                                                            tmp,
+                                                            print_params))) {
             LOG_WARN("failed to get histogram stat history sql", K(ret));
           } else if (OB_FAIL(insert_histogram_sql.append_fmt("%s (%s)", (!need_histogram ? "" : ","), tmp.ptr()))) {
             LOG_WARN("failed to append sql", K(ret));
@@ -616,7 +622,7 @@ int ObOptStatSqlService::construct_histogram_insert_sql(share::schema::ObSchemaG
         } else if (!need_histogram && OB_FAIL(insert_histogram_sql.append(INSERT_HISTOGRAM_STAT_SQL))) {
           LOG_WARN("failed to append sql", K(ret));
         } else if (OB_FAIL(get_histogram_stat_sql(tenant_id, *column_stats.at(i),
-                                                  allocator, hist.get(j), endpoint_meta, tmp))) {
+                                                  allocator, hist.get(j), endpoint_meta, tmp, print_params))) {
           LOG_WARN("failed to get histogram sql", K(ret));
         } else if (OB_FAIL(insert_histogram_sql.append_fmt("%s (%s)", (!need_histogram ? "" : ","), tmp.ptr()))) {
           LOG_WARN("failed to append sql", K(ret));
@@ -865,7 +871,8 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
                                              const int64_t current_time,
                                              ObObjMeta min_meta,
                                              ObObjMeta max_meta,
-                                             ObSqlString &sql_string)
+                                             ObSqlString &sql_string,
+                                             const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   share::ObDMLSqlSplicer dml_splicer;
@@ -878,8 +885,8 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
   char *llc_hex_buf = NULL;
   int64_t llc_comp_size = 0;
   int64_t llc_hex_size = 0;
-  if (OB_FAIL(get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str)) ||
-      OB_FAIL(get_valid_obj_str(stat.get_max_value(), max_meta, allocator, max_str))) {
+  if (OB_FAIL(get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str, print_params)) ||
+      OB_FAIL(get_valid_obj_str(stat.get_max_value(), max_meta, allocator, max_str, print_params))) {
     LOG_WARN("failed to get valid obj str", K(ret));
   } else if (OB_FAIL(get_obj_binary_hex_str(stat.get_min_value(), allocator, b_min_str)) ||
              OB_FAIL(get_obj_binary_hex_str(stat.get_max_value(), allocator, b_max_str))) {
@@ -939,7 +946,8 @@ int ObOptStatSqlService::get_column_stat_history_sql(const uint64_t tenant_id,
                                                      const int64_t saving_time,
                                                      ObObjMeta min_meta,
                                                      ObObjMeta max_meta,
-                                                     ObSqlString &sql_string)
+                                                     ObSqlString &sql_string,
+                                                     const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   share::ObDMLSqlSplicer dml_splicer;
@@ -952,8 +960,8 @@ int ObOptStatSqlService::get_column_stat_history_sql(const uint64_t tenant_id,
   char *llc_hex_buf = NULL;
   int64_t llc_comp_size = 0;
   int64_t llc_hex_size = 0;
-  if (OB_FAIL(ObOptStatSqlService::get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str)) ||
-      OB_FAIL(ObOptStatSqlService::get_valid_obj_str(stat.get_max_value(), max_meta, allocator, max_str)) ||
+  if (OB_FAIL(ObOptStatSqlService::get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str, print_params)) ||
+      OB_FAIL(ObOptStatSqlService::get_valid_obj_str(stat.get_max_value(), max_meta, allocator, max_str, print_params)) ||
       OB_FAIL(ObOptStatSqlService::get_obj_binary_hex_str(stat.get_min_value(), allocator, b_min_str)) ||
       OB_FAIL(ObOptStatSqlService::get_obj_binary_hex_str(stat.get_max_value(), allocator, b_max_str))) {
     LOG_WARN("failed to convert obj to str", K(ret));
@@ -1011,7 +1019,8 @@ int ObOptStatSqlService::get_histogram_stat_sql(const uint64_t tenant_id,
                                                 ObIAllocator &allocator,
                                                 ObHistBucket &bucket,
                                                 ObObjMeta endpoint_meta,
-                                                ObSqlString &sql_string)
+                                                ObSqlString &sql_string,
+                                                const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   ObString endpoint_value;
@@ -1023,7 +1032,8 @@ int ObOptStatSqlService::get_histogram_stat_sql(const uint64_t tenant_id,
   if (OB_FAIL(get_valid_obj_str(bucket.endpoint_value_,
                                 endpoint_meta,
                                 allocator,
-                                endpoint_value))) {
+                                endpoint_value,
+                                print_params))) {
     LOG_WARN("failed to get valid obj str", K(ret));
   } else if (OB_FAIL(get_obj_binary_hex_str(bucket.endpoint_value_, allocator, b_endpoint_value))) {
     LOG_WARN("failed to convert obj to binary string", K(ret));
@@ -1050,7 +1060,8 @@ int ObOptStatSqlService::get_histogram_stat_history_sql(const uint64_t tenant_id
                                                         const ObHistBucket &bucket,
                                                         const int64_t saving_time,
                                                         ObObjMeta endpoint_meta,
-                                                        ObSqlString &sql_string)
+                                                        ObSqlString &sql_string,
+                                                        const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   ObString endpoint_value;
@@ -1062,7 +1073,8 @@ int ObOptStatSqlService::get_histogram_stat_history_sql(const uint64_t tenant_id
   if (OB_FAIL(ObOptStatSqlService::get_valid_obj_str(bucket.endpoint_value_,
                                                      endpoint_meta,
                                                      allocator,
-                                                     endpoint_value))) {
+                                                     endpoint_value,
+                                                     print_params))) {
     LOG_WARN("failed to convert obj to string", K(ret));
   } else if (OB_FAIL(ObOptStatSqlService::get_obj_binary_hex_str(bucket.endpoint_value_,
                                                                  allocator, b_endpoint_value))) {
@@ -1115,7 +1127,8 @@ int ObOptStatSqlService::hex_str_to_obj(const char *buf,
 
 int ObOptStatSqlService::get_obj_str(const ObObj &obj,
                                      ObIAllocator &allocator,
-                                     ObString &out_str)
+                                     ObString &out_str,
+                                     const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
@@ -1125,11 +1138,11 @@ int ObOptStatSqlService::get_obj_str(const ObObj &obj,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else if (obj.is_string_type()) {
-    if (OB_FAIL(obj.print_varchar_literal(buf, buf_len, pos))) {
+    if (OB_FAIL(obj.print_varchar_literal(buf, buf_len, pos, print_params))) {
       LOG_WARN("failed to print sql literal", K(ret));
     } else { /*do nothing*/ }
   } else if (obj.is_valid_type()) {
-    if (OB_FAIL(obj.print_sql_literal(buf, buf_len, pos))) {
+    if (OB_FAIL(obj.print_sql_literal(buf, buf_len, pos, print_params))) {
       LOG_WARN("failed to print_sql_literal", K(ret));
     } else { /*do nothing*/ }
   } else {
@@ -1619,47 +1632,46 @@ int ObOptStatSqlService::generate_in_list(const ObIArray<uint64_t> &list, ObSqlS
 int ObOptStatSqlService::get_valid_obj_str(const ObObj &src_obj,
                                            common::ObObjMeta dst_column_meta,
                                            ObIAllocator &allocator,
-                                           ObString &dest_str)
+                                           ObString &dest_str,
+                                           const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   if (src_obj.is_string_type()) {
-    ObString str;
-    int64_t well_formed_len = 0;
-    ObObj new_obj;
-    ObArenaAllocator calc_buf(ObModIds::OB_SQL_PARSER);
-    ObCastCtx cast_ctx(&calc_buf, NULL, CM_NONE, dst_column_meta.get_collation_type());
-    if (src_obj.get_meta().get_charset_type() != dst_column_meta.get_charset_type()) {
-      if (OB_FAIL(ObObjCaster::to_type(dst_column_meta.get_type(), cast_ctx, src_obj, new_obj))) {
-        LOG_WARN("failed to cast number to double type", K(ret));
-      } else {/*do nothing*/}
-    } else {
-      new_obj = src_obj;
-    }
-    if (OB_FAIL(ret)) {//do nothing
-    } else if (OB_FAIL(new_obj.get_string(str))) {
-      LOG_WARN("failed to get string", K(ret), K(str));
-    } else if (OB_FAIL(ObCharset::well_formed_len(dst_column_meta.get_collation_type(), str.ptr(),
-                                                  str.length(), well_formed_len))) {
+    ObObj dst_obj;
+    char *buf = NULL;
+    int32_t buf_len = src_obj.get_string_len() * ObCharset::CharConvertFactorNum;
+    uint32_t result_len = 0;
+    if (0 == buf_len) {
+      //do noting
+    } else if (OB_UNLIKELY(NULL == (buf = static_cast<char *>(
+              allocator.alloc(buf_len))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("alloc memory failed", K(ret), K(buf_len));
+    } else if (OB_FAIL(ObCharset::charset_convert(src_obj.get_collation_type(), src_obj.get_string_ptr(),
+      src_obj.get_string_len(), dst_column_meta.get_collation_type(), buf, buf_len, result_len))) {
       //for column which have invalid char ==> save obj binary to use, and obj value to
       //  save "-4258: Incorrect string value" to show this obj have invalid.
       if (OB_ERR_INCORRECT_STRING_VALUE == ret) {
-        LOG_WARN("invalid string for charset", K(ret), K(dst_column_meta), K(str), K(well_formed_len),
-                                               KPHEX(str.ptr(), str.length()));
+        LOG_WARN("invalid string for charset", K(ret), K(dst_column_meta), K(dst_obj));
         ret = OB_SUCCESS;
         const char *incorrect_string = "-4258: Incorrect string value, can't show.";
         ObObj incorrect_str_obj;
-        incorrect_str_obj.set_string(new_obj.get_type(), incorrect_string, static_cast<int32_t>(strlen(incorrect_string)));
-        if (OB_FAIL(get_obj_str(incorrect_str_obj, allocator, dest_str))) {
+        incorrect_str_obj.set_string(dst_column_meta.get_type(), incorrect_string, static_cast<int32_t>(strlen(incorrect_string)));
+        if (OB_FAIL(get_obj_str(incorrect_str_obj, allocator, dest_str, print_params))) {
           LOG_WARN("failed to get obj str", K(ret));
-        } else {/*do nothing*/}
+        } else {}
       } else {
         LOG_WARN("failed to judge the string formed", K(ret));
       }
-    } else if (OB_FAIL(get_obj_str(new_obj, allocator, dest_str))) {
-      LOG_WARN("failed to get obj str", K(ret));
-    } else {/*do nothing*/}
+    } else {
+      dst_obj.set_string(src_obj.get_type(), buf, static_cast<int32_t>(result_len));
+      dst_obj.set_collation_type(dst_column_meta.get_collation_type());
+      if (OB_FAIL(get_obj_str(dst_obj, allocator, dest_str, print_params))) {
+        LOG_WARN("fail to get obj str", K(ret));
+      }
+    }
     LOG_TRACE("succeed to get valid obj str", K(src_obj), K(dst_column_meta), K(dest_str));
-  } else if (OB_FAIL(get_obj_str(src_obj, allocator, dest_str))) {
+  } else if (OB_FAIL(get_obj_str(src_obj, allocator, dest_str, print_params))) {
     LOG_WARN("failed to get obj str", K(ret));
   } else {/*do nothing*/}
   return ret;

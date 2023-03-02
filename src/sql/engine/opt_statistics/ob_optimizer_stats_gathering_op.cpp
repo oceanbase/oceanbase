@@ -100,7 +100,6 @@ void ObOptimizerStatsGatheringOp::reset() {
 }
 
 void ObOptimizerStatsGatheringOp::reuse_stats() {
-  // call each column stat's reset to free memory allocated by inner_max_alloc and inner_min_alloc
   FOREACH(it, column_stats_map_) {
     if (OB_NOT_NULL(it->second)) {
       it->second->reset();
@@ -489,9 +488,18 @@ void ObOptimizerStatsGatheringOp::set_col_stats_avg_len(StatItems &all_stats, in
 int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats, ObObj &obj)
 {
   int ret = OB_SUCCESS;
+  const ObObj *tmp_obj;
+  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&obj, arena_, tmp_obj))) {
+    LOG_WARN("fail to truncate string", K(ret));
+  } else {
+    obj = *tmp_obj;
+  }
+
   all_stats.global_col_stat_->set_stat_level(StatLevel::TABLE_LEVEL);
-  if (OB_FAIL(all_stats.global_col_stat_->merge_obj(obj))) {
-    LOG_WARN("fail to set global column stat", K(ret), K(obj));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(all_stats.global_col_stat_->merge_obj(obj))) {
+      LOG_WARN("fail to set global column stat", K(ret), K(obj));
+    }
   }
   if (OB_SUCC(ret) && MY_SPEC.is_part_table()) {
     all_stats.part_col_stat_->set_stat_level(StatLevel::PARTITION_LEVEL);
@@ -583,10 +591,8 @@ int ObOptimizerStatsGatheringOp::merge_col_stat(ObOptColumnStat *src_col_stat)
       } else {
       }
     }
-  } else {
-    if (OB_FAIL(col_stat->merge_column_stat(*src_col_stat))) {
-      LOG_WARN("fail to merge two table stats", K(ret), K(col_stat), K(src_col_stat));
-    }
+  } else if (OB_FAIL(col_stat->merge_column_stat(*src_col_stat))) {
+    LOG_WARN("fail to merge two table stats", K(ret), K(col_stat), K(src_col_stat));
   }
   return ret;
 }

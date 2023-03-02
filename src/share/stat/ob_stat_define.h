@@ -53,7 +53,7 @@ enum StatOptionFlags
 };
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
-const static int64_t OPT_STATS_MAX_VALUE_CAHR_LEN = 128;
+const static int64_t OPT_STATS_MAX_VALUE_CHAR_LEN = 128;
 const int64_t MAGIC_SAMPLE_SIZE = 5500;
 const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
 const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;

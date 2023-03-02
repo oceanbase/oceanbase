@@ -8611,3 +8611,44 @@ int ObOptimizerUtil::replace_gen_column(ObLogPlan *log_plan, ObRawExpr *part_exp
   }
   return ret;
 }
+
+int ObOptimizerUtil::truncate_string_for_opt_stats(const ObObj *old_obj,
+                                                   ObIAllocator &alloc,
+                                                   const ObObj *&new_obj)
+{
+  int ret = OB_SUCCESS;
+  bool is_truncated = false;
+  if (old_obj->is_string_type()) {
+    ObString str;
+    if (OB_FAIL(old_obj->get_string(str))) {
+      LOG_WARN("failed to get string", K(ret), K(str));
+    } else {
+      int64_t mb_len = ObCharset::strlen_char(old_obj->get_collation_type(), str.ptr(), str.length());
+      if (mb_len <= OPT_STATS_MAX_VALUE_CHAR_LEN) {
+      } else {
+        //need truncate string, because the opt stats is gathered after truncate string, such as: max_value、min_value、histogram.
+        ObObj *tmp_obj = NULL;
+        if (OB_ISNULL(tmp_obj = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc buf", K(ret));
+        } else {
+          int64_t valid_len = ObCharset::charpos(old_obj->get_collation_type(), str.ptr(),
+                                                 str.length(), OPT_STATS_MAX_VALUE_CHAR_LEN);
+          if (OB_UNLIKELY(valid_len <= 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error", K(ret), K(valid_len), K(str), K(OPT_STATS_MAX_VALUE_CHAR_LEN));
+          } else {
+            tmp_obj->set_varchar(str.ptr(), valid_len);
+            tmp_obj->set_meta_type(old_obj->get_meta());
+            new_obj = tmp_obj;
+            is_truncated = true;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_truncated) {
+    new_obj = old_obj;
+  }
+  return ret;
+}

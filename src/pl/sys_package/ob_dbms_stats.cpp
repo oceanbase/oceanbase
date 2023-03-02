@@ -3326,7 +3326,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
         col_param.is_valid_hist_type_ =
           ObColumnStatParam::is_valid_histogram_type(col->get_meta_type().get_type());
         col_param.need_truncate_str_ = ob_is_string_type(col->get_meta_type().get_type()) &&
-                                              col->get_data_length() > OPT_STATS_MAX_VALUE_CAHR_LEN;
+                                              col->get_data_length() > OPT_STATS_MAX_VALUE_CHAR_LEN;
       }
       if (col->is_rowkey_column() && !table_schema.is_heap_table()) {
         col_param.set_is_index_column();

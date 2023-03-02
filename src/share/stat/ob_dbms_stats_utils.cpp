@@ -121,7 +121,8 @@ int ObDbmsStatsUtils::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                   const int64_t current_time,
                                   const bool is_index_stat,
                                   const bool is_history_stat,
-                                  const bool is_online_stat)
+                                  const bool is_online_stat,
+                                  const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObOptStatManager::get_instance().batch_write(schema_guard,
@@ -130,7 +131,8 @@ int ObDbmsStatsUtils::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                                            column_stats,
                                                            current_time,
                                                            is_index_stat,
-                                                           is_history_stat))) {
+                                                           is_history_stat,
+                                                           print_params))) {
     LOG_WARN("failed to batch write stats", K(ret));
   //histroy stat is from cache no need free.
   } else if (!is_history_stat && !is_online_stat) {
@@ -296,7 +298,8 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                        column_stats,
                                        is_index_stat,
                                        is_history_stat,
-                                       is_online_stat))) {
+                                       is_online_stat,
+                                       CREATE_OBJ_PRINT_PARAM(ctx.get_my_session())))) {
     LOG_WARN("failed to split batch write", K(ret));
   } else {/*do nothing*/}
   return ret;
@@ -308,7 +311,8 @@ int ObDbmsStatsUtils::split_batch_write(share::schema::ObSchemaGetterGuard *sche
                                         ObIArray<ObOptColumnStat*> &column_stats,
                                         const bool is_index_stat/*default false*/,
                                         const bool is_history_stat/*default false*/,
-                                        const bool is_online_stat /*default false*/)
+                                        const bool is_online_stat /*default false*/,
+                                        const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   int64_t idx_tab_stat = 0;
@@ -361,7 +365,8 @@ int ObDbmsStatsUtils::split_batch_write(share::schema::ObSchemaGetterGuard *sche
                                                 current_time,
                                                 is_index_stat,
                                                 is_history_stat,
-                                                is_online_stat))) {
+                                                is_online_stat,
+                                                print_params))) {
         LOG_WARN("failed to batch write stats", K(ret), K(idx_tab_stat), K(idx_col_stat));
       } else {/*do nothing*/}
     }

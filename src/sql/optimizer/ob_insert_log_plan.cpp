@@ -166,7 +166,8 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
     LOG_WARN("get unexpected null pointer", K(ret), K(insert_stmt->get_insert_table_info()));
   } else if (OB_UNLIKELY(ins_table->is_system_table_ || ins_table->is_index_table_)
              || insert_stmt->is_insert_up()
-             || !get_optimizer_context().get_session_info()->is_user_session()) {
+             || insert_stmt->value_from_select()
+             || (!get_optimizer_context().get_session_info()->is_user_session())) {
     need_gathering = false;
   }
 
@@ -184,7 +185,7 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
                && online_sys_var
                && ((get_optimizer_context().get_query_ctx()->get_global_hint().should_generate_osg_operator())
                || (get_optimizer_context().use_pdml()));
-    LOG_TRACE("online insert stat", K(online_sys_var), K(need_osg));
+    LOG_TRACE("online insert stat", K(online_sys_var), K(need_osg), K(need_gathering));
   }
   return ret;
 }

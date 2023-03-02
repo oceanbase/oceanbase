@@ -101,7 +101,8 @@ public:
                          const common::ObIArray<ObOptColumnStat*> &column_stats,
                          const int64_t current_time,
                          bool only_update_col_stat = false,
-                         bool is_history_stat = false);
+                         bool is_history_stat = false,
+                         const ObObjPrintParams &print_params = ObObjPrintParams());
 
   int delete_table_stat(const uint64_t exec_tenant_id,
                         const uint64_t table_id,
@@ -133,7 +134,8 @@ public:
 
   static int get_obj_str(const common::ObObj &obj,
                          common::ObIAllocator &allocator,
-                         common::ObString &out_str);
+                         common::ObString &out_str,
+                         const ObObjPrintParams &print_params);
 
   static int get_obj_binary_hex_str(const common::ObObj &obj,
                                     common::ObIAllocator &allocator,
@@ -147,7 +149,8 @@ public:
   static int get_valid_obj_str(const common::ObObj &src_obj,
                                common::ObObjMeta dst_column_meta,
                                common::ObIAllocator &allocator,
-                               common::ObString &dest_str);
+                               common::ObString &dest_str,
+                               const ObObjPrintParams &print_params);
 
   int fetch_table_rowcnt(const uint64_t tenant_id,
                          const uint64_t table_id,
@@ -171,27 +174,31 @@ private:
                                 const int64_t current_time,
                                 ObObjMeta min_meta,
                                 ObObjMeta max_meta,
-                                ObSqlString &sql_string);
+                                ObSqlString &sql_string,
+                                const ObObjPrintParams &print_params);
   int get_column_stat_history_sql(const uint64_t tenant_id,
                                   ObIAllocator &allocator,
                                   const ObOptColumnStat &stat,
                                   const int64_t saving_time,
                                   ObObjMeta min_meta,
                                   ObObjMeta max_meta,
-                                  ObSqlString &sql_string);
+                                  ObSqlString &sql_string,
+                                  const ObObjPrintParams &print_params);
   int get_histogram_stat_sql(const uint64_t tenant_id,
                              const ObOptColumnStat &stat,
                              common::ObIAllocator &allocator,
                              ObHistBucket &bucket,
                              ObObjMeta endpoint_meta,
-                             ObSqlString &sql_string);
+                             ObSqlString &sql_string,
+                             const ObObjPrintParams &print_params);
   int get_histogram_stat_history_sql(const uint64_t tenant_id,
                                      const ObOptColumnStat &stat,
                                      ObIAllocator &allocator,
                                      const ObHistBucket &bucket,
                                      const int64_t saving_time,
                                      ObObjMeta endpoint_meta,
-                                     ObSqlString &sql_string);
+                                     ObSqlString &sql_string,
+                                     const ObObjPrintParams &print_params);
 
   int generate_in_list(const ObIArray<uint64_t> &list,
                        ObSqlString &sql_string);
@@ -202,7 +209,8 @@ private:
                                 const ObIArray<ObOptColumnStat*> &column_stats,
                                 const int64_t current_time,
                                 bool is_history_stat,
-                                ObSqlString &column_stats_sql);
+                                ObSqlString &column_stats_sql,
+                                const ObObjPrintParams &print_params);
 
   int construct_delete_column_histogram_sql(const uint64_t tenant_id,
                                             const ObIArray<ObOptColumnStat*> &column_stats,
@@ -215,7 +223,8 @@ private:
                                      const int64_t current_time,
                                      bool is_history_stat,
                                      ObSqlString &insert_histogram_sql,
-                                     bool &need_histogram);
+                                     bool &need_histogram,
+                                     const ObObjPrintParams &print_params);
 
   int generate_specified_keys_list_str(const uint64_t tenant_id,
                                        ObIArray<ObOptKeyColumnStat> &key_col_stats,

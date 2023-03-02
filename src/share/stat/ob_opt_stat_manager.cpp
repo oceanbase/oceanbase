@@ -222,7 +222,8 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
 int ObOptStatManager::update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                          const uint64_t tenant_id,
                                          const ObIArray<ObOptColumnStat *> &column_stats,
-                                         bool only_update_col_stat /*default false*/)
+                                         bool only_update_col_stat /*default false*/,
+                                         const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   int64_t current_time = ObTimeUtility::current_time();
@@ -233,7 +234,9 @@ int ObOptStatManager::update_column_stat(share::schema::ObSchemaGetterGuard *sch
                                                                         tenant_id,
                                                                         column_stats,
                                                                         current_time,
-                                                                        only_update_col_stat))) {
+                                                                        only_update_col_stat,
+                                                                        false,
+                                                                        print_params))) {
     LOG_WARN("failed to update column stat.", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -354,7 +357,8 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                   ObIArray<ObOptColumnStat *> &column_stats,
                                   const int64_t current_time,
                                   const bool is_index_stat,
-                                  const bool is_history_stat)
+                                  const bool is_history_stat,
+                                  const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -374,7 +378,8 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                                                         column_stats,
                                                                         current_time,
                                                                         false,
-                                                                        is_history_stat))) {
+                                                                        is_history_stat,
+                                                                        print_params))) {
     LOG_WARN("failed to update coumn stats", K(ret));
   }
   return ret;

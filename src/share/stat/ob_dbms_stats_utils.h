@@ -51,7 +51,8 @@ public:
                                ObIArray<ObOptColumnStat*> &column_stats,
                                const bool is_index_stat = false,
                                const bool is_history_stat = false,
-                               const bool is_online_stat = false);
+                               const bool is_online_stat = false,
+                               const ObObjPrintParams &print_params = ObObjPrintParams());
 
   static int batch_write_history_stats(sql::ObExecContext &ctx,
                                        ObIArray<ObOptTableStatHandle> &history_tab_handles,
@@ -107,7 +108,8 @@ private:
                          const int64_t current_time,
                          const bool is_index_stat,
                          const bool is_history_stat,
-                         const bool is_online_stat = false);
+                         const bool is_online_stat = false,
+                         const ObObjPrintParams &print_params = ObObjPrintParams());
 
 };
 

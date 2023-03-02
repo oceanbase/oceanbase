@@ -133,7 +133,8 @@ public:
   virtual int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                  const uint64_t tenant_id,
                                  const common::ObIArray<ObOptColumnStat *> &column_stats,
-                                 bool only_update_col_stat = false);
+                                 bool only_update_col_stat = false,
+                                 const ObObjPrintParams &print_params = ObObjPrintParams());
 
   int delete_table_stat(const uint64_t tenant_id,
                         const uint64_t ref_id,
@@ -168,7 +169,8 @@ public:
                   ObIArray<ObOptColumnStat *> &column_stats,
                   const int64_t current_time,
                   const bool is_index_stat,
-                  const bool is_history_stat);
+                  const bool is_history_stat,
+                  const ObObjPrintParams &print_params);
 
   /**  @brief  外部获取行统计信息的接口 */
   virtual int get_table_stat(const uint64_t tenant_id,
