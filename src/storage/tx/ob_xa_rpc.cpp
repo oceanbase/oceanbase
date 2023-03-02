@@ -362,7 +362,11 @@ int ObXACommitP::process()
     TRANS_LOG(WARN, "xa ctx is null", K(ret), K(arg_));
   } else {
     if (OB_FAIL(xa_ctx->one_phase_end_trans(xid, false/*is_rollback*/, timeout_us, request_id))) {
-      TRANS_LOG(WARN, "one phase end trans failed", K(ret), K(xid));
+      if (OB_TRANS_COMMITED != ret) {
+         TRANS_LOG(WARN, "one phase xa commit failed", K(ret), K(xid));
+      } else {
+        ret = OB_SUCCESS;
+      }
     } else if (OB_FAIL(xa_ctx->wait_one_phase_end_trans(false/*is_rollback*/, timeout_us))) {
       TRANS_LOG(WARN, "fail to wait one phase xa end trans", K(ret), K(xid));
     }

@@ -1630,10 +1630,17 @@ int ObXAService::xa_rollback_for_pending_trans_(const ObXATransID &xid,
       TRANS_LOG(WARN, "xa ctx init failed", K(ret), K(xid), K(tx_id));
     } else {
       if (OB_FAIL(xa_ctx->two_phase_end_trans(xid, coord, true/*is_rollback*/, timeout_us, request_id))) {
-        TRANS_LOG(WARN, "xa rollback failed", K(ret), K(xid), K(tx_id));
+        if (OB_TRANS_ROLLBACKED != ret) {
+          TRANS_LOG(WARN, "xa rollback failed", K(ret), K(xid), K(tx_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
       } else if (OB_FAIL(xa_ctx->wait_two_phase_end_trans(xid, true/*is_rollback*/, timeout_us))) {
         TRANS_LOG(WARN, "wait xa rollback failed", K(ret), K(xid), K(tx_id));
       } else {
+        // do nothing
+      }
+      if (OB_SUCC(ret)) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = delete_xa_pending_record(tenant_id, tx_id))) {
           TRANS_LOG(WARN, "fail to delete xa record from pending trans", K(ret), K(xid), K(tx_id));
@@ -1732,7 +1739,12 @@ int ObXAService::two_phase_xa_rollback_(const ObXATransID &xid,
       TRANS_LOG(WARN, "xa ctx init failed", K(ret), K(xid), K(tx_id));
     } else {
       if (OB_FAIL(xa_ctx->two_phase_end_trans(xid, coord, true/*is_rollback*/, timeout_us, request_id))) {
-        TRANS_LOG(WARN, "two phase xa rollback failed", K(ret), K(xid), K(tx_id));
+        if (OB_TRANS_ROLLBACKED != ret) {
+          TRANS_LOG(WARN, "two phase xa rollback failed", K(ret), K(xid), K(tx_id));
+        } else {
+          ret = OB_SUCCESS;
+          TRANS_LOG(INFO, "two phase xa rollback success", K(ret), K(xid), K(tx_id));
+        }
       } else if (OB_FAIL(xa_ctx->wait_two_phase_end_trans(xid, true/*is_rollback*/, timeout_us))) {
         TRANS_LOG(WARN, "wait two phase xa rollback failed", K(ret), K(xid), K(tx_id));
       } else {
@@ -1797,7 +1809,11 @@ int ObXAService::one_phase_xa_rollback_(const ObXATransID &xid,
   } else {
     // if there exists xa ctx, one phase xa rollback is required
     if (OB_FAIL(xa_ctx->one_phase_end_trans(xid, true/*is_rollback*/, timeout_us, request_id))) {
-      TRANS_LOG(WARN, "one phase xa rollback failed", K(ret), K(tx_id));
+      if (OB_TRANS_ROLLBACKED != ret) {
+        TRANS_LOG(WARN, "one phase xa rollback failed", K(ret), K(tx_id));
+      } else {
+        ret = OB_SUCCESS;
+      }
     } else if (OB_FAIL(xa_ctx->wait_one_phase_end_trans(true/*is_rollback*/, timeout_us))) {
       TRANS_LOG(WARN, "fail to wait one phase xa end trans", K(ret), K(xid), K(tx_id));
     }
@@ -1839,16 +1855,8 @@ int ObXAService::xa_rollback_remote_(const ObXATransID &xid,
 
   if (OB_SUCC(ret)) {
     switch (result) {
-      case OB_TRANS_XA_PROTO:
-      case OB_TRANS_COMMITED: {
-        ret = OB_TRANS_XA_PROTO;
-        TRANS_LOG(WARN, "xa rollback failed", KR(ret), K(result), K(sche_addr));
-        break;
-      }
-      case OB_SUCCESS:
-      case OB_TRANS_ROLLBACKED: {
-        ret = OB_SUCCESS;
-        TRANS_LOG(WARN, "xa rollback success", KR(ret), K(result), K(sche_addr));
+      case OB_SUCCESS: {
+        // do nothing
         break;
       }
       case OB_TIMEOUT:
