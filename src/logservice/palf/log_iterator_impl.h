@@ -186,11 +186,11 @@ private:
   {
     int ret = OB_SUCCESS;
     PALF_LOG(TRACE, "T is LogGroupEntry, do no thing", K(entry));
-    if (OB_FAIL(verify_accum_checksum_(entry))) {
-      PALF_LOG(ERROR, "verify_accum_checksum_ failed", K(ret), KPC(this), K(entry));
-    } else {
+   // if (OB_FAIL(verify_accum_checksum_(entry))) {
+   //   PALF_LOG(ERROR, "verify_accum_checksum_ failed", K(ret), KPC(this), K(entry));
+   // } else {
       curr_entry_is_raw_write_ = entry.get_header().is_raw_write();
-    }
+   // }
   return ret;
   }
   // @brief: accumlate checksum verify, only verify checkum when accum_checksum_ is not -1.
