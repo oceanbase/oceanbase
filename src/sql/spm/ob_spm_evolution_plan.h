@@ -68,7 +68,6 @@ public:
       evolution_count_ts_(DEFAULT_EVOLUTION_COUNT_THRESHOLD),
       evolution_timeout_ts_(DEFAULT_EVOLUTION_TIMEOUT_THRESHOLD),
       evolving_plan_(NULL),
-      evolving_plan_stat_(NULL),
       history_exec_time_(0),
       is_inited_(false),
       current_stage_cnt_(0),
@@ -166,8 +165,6 @@ protected:
   ObPhysicalPlan *evolving_plan_;
   common::ObSEArray<ObPhysicalPlan *, 4> baseline_plans_; 
   common::ObSEArray<ObPhysicalPlan *, 4> garbage_list_;
-  ObEvolutionStat *evolving_plan_stat_;
-  ObSEArray<ObEvolutionStat*, 4> baseline_plans_stat_;
   int64_t history_exec_time_;
   bool is_inited_;
   bool is_evo_best_plan_;
