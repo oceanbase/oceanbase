@@ -7967,6 +7967,39 @@ int ObTransformUtils::convert_column_expr_to_select_expr(const common::ObIArray<
   return ret;
 }
 
+int ObTransformUtils::convert_set_op_expr_to_select_expr(const common::ObIArray<ObRawExpr*> &set_op_exprs,
+                                                         const ObSelectStmt &inner_stmt,
+                                                         common::ObIArray<ObRawExpr*> &select_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *outer_expr = NULL;
+  ObRawExpr *inner_expr = NULL;
+  ObSetOpRawExpr *set_op_expr = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < set_op_exprs.count(); i++) {
+    int64_t pos = OB_INVALID_ID;
+    if (OB_ISNULL(outer_expr = set_op_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_UNLIKELY(!outer_expr->is_set_op_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected expr type", K(ret));
+    } else if (FALSE_IT(set_op_expr = static_cast<ObSetOpRawExpr*>(outer_expr))) {
+      /*do nothing*/
+    } else if (FALSE_IT(pos = set_op_expr->get_idx())) {
+      /*do nothing*/
+    } else if (OB_UNLIKELY(pos < 0 || pos >= inner_stmt.get_select_item_size())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid array pos", K(pos), K(inner_stmt.get_select_item_size()), K(ret));
+    } else if (OB_ISNULL(inner_expr = inner_stmt.get_select_item(pos).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(select_exprs.push_back(inner_expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
 int ObTransformUtils::convert_select_expr_to_column_expr(const common::ObIArray<ObRawExpr*> &select_exprs,
                                                         const ObSelectStmt &inner_stmt,
                                                         ObDMLStmt &outer_stmt,
