@@ -1461,8 +1461,10 @@ int ObTenant::lq_yield(ObThWorker &w)
 {
   int ret = OB_SUCCESS;
   ATOMIC_INC(&tt_large_quries_);
-  if (!cgroup_ctrl_.is_valid() && w.get_group_id() == share::OBCG_LQ) {
-    lq_wait(w);
+  if (!cgroup_ctrl_.is_valid()) {
+    if (w.get_group_id() == share::OBCG_LQ) {
+      lq_wait(w);
+    }
   } else if (w.is_lq_yield()) {
     // avoid duplicate change group
   } else if (OB_FAIL(cgroup_ctrl_.add_thread_to_cgroup(w.get_tid(), id_, OBCG_LQ))) {
