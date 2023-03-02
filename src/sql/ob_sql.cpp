@@ -143,19 +143,20 @@ void ObSql::stat()
 {
   sql::print_sql_stat();
 }
+#define STMT_SUPPORT_BY_TXN_FREE_ROUTE(stmt_type, allow_ps)             \
+  (ObStmt::is_dml_stmt(stmt_type)                                       \
+   || (stmt_type == stmt::StmtType::T_VARIABLE_SET)                     \
+   || (stmt_type == stmt::StmtType::T_USE_DATABASE)                     \
+   || (allow_ps && stmt_type == stmt::StmtType::T_PREPARE)              \
+   || (allow_ps && stmt_type == stmt::StmtType::T_EXECUTE)              \
+   || (allow_ps && stmt_type == stmt::StmtType::T_DEALLOCATE))
 
 #define CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, allow_ps)        \
  if (OB_SUCC(ret)) {                                                    \
    auto stmt_type = result.get_stmt_type();                             \
    auto &session = result.get_session();                                \
    if (!session.is_inner() && session.is_txn_free_route_temp()) {       \
-     if (ObStmt::is_dml_stmt(stmt_type)                                 \
-         || (stmt_type == stmt::StmtType::T_VARIABLE_SET)               \
-         || stmt_type == stmt::StmtType::T_USE_DATABASE                 \
-         || (allow_ps && stmt_type == stmt::StmtType::T_PREPARE)        \
-         || (allow_ps && stmt_type == stmt::StmtType::T_EXECUTE)        \
-         || (allow_ps && stmt_type == stmt::StmtType::T_DEALLOCATE)) {  \
-     } else {                                                           \
+     if (!STMT_SUPPORT_BY_TXN_FREE_ROUTE(stmt_type, allow_ps)) {        \
        ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;                         \
        LOG_WARN("only DML stmt or SET command is supported to be executed on txn temporary node", \
                 KR(ret), K(stmt_type), K(session.get_txn_free_route_ctx()), K(session)); \
@@ -4919,17 +4920,28 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
         should_reroute = false;
       }
     }
-    // the SQL use tmp table can not run on TXN_FREE_ROUTE temp node
-    if (should_reroute && NULL != plan && !session.get_is_deserialized() && !session.is_inner() && session.is_in_transaction()) {
-      bool has_session_tmp_table = plan->is_contain_oracle_session_level_temporary_table() || plan->contains_temp_table();
-      bool has_txn_tmp_table = plan->is_contain_oracle_trx_level_temporary_table();
-      if ((has_session_tmp_table || has_txn_tmp_table)
-          // 1. TXN_FREE_ROUTE DISABLED, all query in one node -- orignal node
-          // 2. TXN_FREE_ROUTE ENABLED, must on orignal node
-          && !session.is_txn_free_route_temp()) {
+
+    // CHECK for `TXN_FREE_ROUTE`
+    if (should_reroute && !session.is_inner() && session.is_in_transaction()) {
+      auto stmt_type = plan->get_stmt_type();
+      bool fixed_route = true;
+      if (pc_ctx.sql_ctx_.multi_stmt_item_.is_part_of_multi_stmt()) {
+        // current is multi-stmt
+      } else if (!STMT_SUPPORT_BY_TXN_FREE_ROUTE(stmt_type, false)) {
+        // stmt is not DML
+      } else if (plan->is_contain_oracle_session_level_temporary_table()
+                 || plan->contains_temp_table()
+                 || plan->is_contain_oracle_trx_level_temporary_table()) {
+        // access temp table
+      } else {
+        fixed_route = false;
+      }
+      if (fixed_route) {
+        // multi-stmt or stmt disallow on other node, can not be rerouted
         should_reroute = false;
       }
     }
+
     if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null schema guard", K(ret));
