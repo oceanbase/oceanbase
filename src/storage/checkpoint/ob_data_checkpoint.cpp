@@ -782,7 +782,7 @@ int ObDataCheckpoint::freeze_base_on_needs_(share::SCN recycle_scn)
         } else {
           int need_flush_num = need_flush_tablets.count();
           logstream_freeze =
-            need_flush_num * 100 / wait_flush_num <= TABLET_FREEZE_PERCENT;
+            need_flush_num * 100 / wait_flush_num > TABLET_FREEZE_PERCENT;
         }
       }
 
