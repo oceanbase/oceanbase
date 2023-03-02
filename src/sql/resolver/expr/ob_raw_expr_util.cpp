@@ -3803,7 +3803,8 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
                                             ObRawExpr *src_expr,
                                             ObSysFunRawExpr *&out_expr,
                                             ObSQLSessionInfo *session_info,
-                                            bool is_type_to_str)
+                                            bool is_type_to_str,
+                                            ObObjType dst_type)
 {
   int ret = OB_SUCCESS;
   ObExprOperator *op = NULL;
@@ -3839,6 +3840,9 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
       LOG_ERROR("allocate expr operator failed", K(ret));
     } else {
       out_expr->set_func_name(ObString::make_string(func_name));
+      if (is_lob_storage(dst_type)) {
+        out_expr->set_extra(1);
+      }
     }
 
     ObConstRawExpr *col_accuracy_expr = NULL;

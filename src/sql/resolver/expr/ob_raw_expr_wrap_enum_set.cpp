@@ -433,10 +433,12 @@ int ObRawExprWrapEnumSet::check_and_wrap_left(ObRawExpr &expr, int64_t idx,
     bool need_numberic = false;
     bool need_varchar = false;
     const bool is_same_type_need = false;
+    ObObjType dest_type = ObMaxType;
     for (int64_t i = 0; OB_SUCC(ret) && i < target_num && !(need_numberic && need_varchar); ++i) {
       bool need_wrap = false;
+      dest_type = cmp_types.at(row_dimension * i + idx).get_type();
       if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(expr_type,
-                                                      cmp_types.at(row_dimension * i + idx).get_type(),
+                                                      dest_type,
                                                       is_same_type_need, need_wrap))) {
         LOG_WARN("failed to check whether need wrap", K(i), K(expr), K(ret));
       } else if (need_wrap) {
@@ -449,7 +451,7 @@ int ObRawExprWrapEnumSet::check_and_wrap_left(ObRawExpr &expr, int64_t idx,
     if (OB_SUCC(ret) && need_varchar) {
       const bool is_type_to_str = !need_numberic;
       if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, &expr,
-                                                          wrapped_expr, my_session_, is_type_to_str))) {
+                                                          wrapped_expr, my_session_, is_type_to_str, dest_type))) {
         LOG_WARN("failed to create_type_to_string_expr",K(expr), K(ret));
       }
     }
@@ -633,7 +635,7 @@ int ObRawExprWrapEnumSet::wrap_type_to_str_if_necessary(ObRawExpr *expr,
                                                          is_same_need, need_wrap))) {
     LOG_WARN("failed to check_need_wrap_to_string", K(ret));
   } else if (need_wrap && OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, expr,
-      wrapped_expr, my_session_, is_type_to_str))) {
+      wrapped_expr, my_session_, is_type_to_str, dest_type))) {
     LOG_WARN("failed to create_type_to_string_expr", KPC(expr), K(is_type_to_str), K(ret));
   } else {
     LOG_DEBUG("finish wrap_type_to_str_if_necessary", K(ret), K(need_wrap), K(dest_type), KPC(expr),
@@ -663,8 +665,9 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr &expr)
         bool need_numberic = false;
         bool need_varchar = false;
         ObObjType arg_type = arg_param_expr->get_data_type();
+        ObObjType calc_type = ObMaxType;
         for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_when_expr_size(); ++i) {
-          ObObjType calc_type = expr.get_input_types().at(i + 1).get_calc_type();
+          calc_type = expr.get_input_types().at(i + 1).get_calc_type();
           wrapped_expr = NULL;
           ObRawExpr *when_expr = expr.get_when_param_expr(i);
           bool need_wrap = false;
@@ -685,7 +688,7 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr &expr)
           const bool is_type_to_str = !need_numberic;
           wrapped_expr = NULL;
           if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, arg_param_expr,
-                                                              wrapped_expr, my_session_, is_type_to_str))) {
+                                                              wrapped_expr, my_session_, is_type_to_str, calc_type))) {
             LOG_WARN("failed to create_type_to_string_expr", K(ret));
           } else if (OB_ISNULL(wrapped_expr)) {
             ret = OB_ERR_UNEXPECTED;
@@ -870,7 +873,8 @@ int ObRawExprWrapEnumSet::wrap_nullif_expr(ObSysFunRawExpr &expr)
                                                             left_param,
                                                             wrapped_expr,
                                                             my_session_,
-                                                            is_type_to_str))) {
+                                                            is_type_to_str,
+                                                            calc_type))) {
           LOG_WARN("failed to create_type_to_string_expr", K(ret));
         } else if ((NULL != wrapped_expr) && OB_FAIL(expr.replace_param_expr(0, wrapped_expr))) {
           LOG_WARN("failed to replace left param expr", K(ret));

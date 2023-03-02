@@ -16,6 +16,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/container/ob_array_serialization.h"
 #include "sql/code_generator/ob_static_engine_expr_cg.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -57,7 +58,11 @@ int ObExprTypeToStr::calc_result_type2(ObExprResType &type,
   UNUSED(type_ctx);
   UNUSED(type2);
   int ret = OB_SUCCESS;
-  type.set_type(ObVarcharType);
+  if (get_raw_expr()->get_extra() == 1) {
+    type.set_type(ObLongTextType);
+  } else {
+    type.set_type(ObVarcharType);
+  }
   type.set_collation_type(type1.get_collation_type());
   type.set_collation_level(CS_LEVEL_IMPLICIT);
   type.set_length(type1.get_length());
@@ -281,9 +286,9 @@ int ObExprSetToStr::calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     if (OB_SUCC(ret)) {
       int64_t pos = 0;
       char *buf = NULL;
-      if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, need_size))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc memory failed", K(ret), K(buf), K(need_size));
+      ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+      if (OB_FAIL(text_result.init(need_size))) {
+        LOG_WARN("init lob result failed", K(ret), K(need_size));
       } else {
         uint64_t index = 1ULL;
         for (int64_t i = 0;
@@ -291,20 +296,19 @@ int ObExprSetToStr::calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
              ++i, index = index << 1) {
           if (set_val & (index)) {
             const ObString &element_val = str_values.at(i);
-            MEMCPY(buf + pos, element_val.ptr(), element_val.length());
-            pos += element_val.length();
-            if ((i + 1) < element_num && (i + 1) < EFFECTIVE_COUNT &&
+            if (OB_FAIL(text_result.append(element_val))) {
+              LOG_WARN("fail to append str to lob result", K(ret), K(element_val));
+            } else if ((i + 1) < element_num && (i + 1) < EFFECTIVE_COUNT &&
                 ((index << 1) <= set_val)) {
               // skip setting last seperator
-              MEMCPY(buf + pos, sep.ptr(), sep.length());
-              pos += sep.length();
+              if (OB_FAIL(text_result.append(sep))) {
+                LOG_WARN("fail to append str to lob result", K(ret), K(sep));
+              }
             }
           }
         }
-        if (0 == pos) {
-          res_datum.set_enumset_inner(buf, static_cast<ObString::obstr_size_t>(pos));
-        } else {
-          res_datum.set_enumset_inner(buf, static_cast<ObString::obstr_size_t>(pos));
+        if (OB_SUCC(ret)) {
+          text_result.set_result();
         }
       }
     }
@@ -357,25 +361,27 @@ int ObExprEnumToStr::calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
     uint64_t enum_val = enum_datum->get_enum();
     int64_t element_num = str_values.count();
     uint64_t element_idx = enum_val - 1;
+    ObString element_str;
     if (OB_UNLIKELY(element_num < 1)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid element num", K(element_num), K(element_num));
     } else if (0 == enum_val) {
-      ObString empty_string;
-      res_datum.set_enumset_inner(empty_string.make_empty_string());
+      // ObString empty_string;
+      // res_datum.set_enumset_inner(empty_string.make_empty_string());
     } else if (OB_UNLIKELY(element_idx > element_num - 1)) {
       ret = OB_ERR_DATA_TRUNCATED;
       LOG_WARN("enum value out of range", K(element_idx), K(element_num), K(ret));
     } else {
-      const ObString &element_str = str_values.at(element_idx);
-      if (element_str.empty()) {
-        res_datum.set_enumset_inner(element_str);
-      } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, element_str.length()))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc memory failed", K(ret), K(buf), K(element_str.length()));
+      element_str = str_values.at(element_idx);
+    }
+    if (OB_SUCC(ret)) {
+      ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+      if (OB_FAIL(text_result.init(element_str.length()))) {
+        LOG_WARN("init lob result failed");
+      } else if (OB_FAIL(text_result.append(element_str.ptr(), element_str.length()))) {
+        LOG_WARN("failed to append realdata", K(ret), K(text_result));
       } else {
-        MEMCPY(buf, element_str.ptr(), element_str.length());
-        res_datum.set_enumset_inner(buf, static_cast<ObString::obstr_size_t>(element_str.length()));
+        text_result.set_result();
       }
     }
   }

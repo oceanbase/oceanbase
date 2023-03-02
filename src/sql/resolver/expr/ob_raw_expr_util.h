@@ -474,7 +474,8 @@ public:
                                      ObRawExpr *src_expr,
                                      ObSysFunRawExpr *&out_expr,
                                      ObSQLSessionInfo *session_info,
-                                     bool is_type_to_str);
+                                     bool is_type_to_str,
+                                     ObObjType dst_type = ObMaxType);
 
   static int get_exec_param_expr(ObRawExprFactory &expr_factory,
                                  ObQueryRefRawExpr *query_ref,
