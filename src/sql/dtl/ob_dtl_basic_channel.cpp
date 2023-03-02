@@ -392,7 +392,8 @@ int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
   return ret;
 }
 
-int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_buffer_cached)
+int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_buffer_cached,
+                              bool inc_recv_buf_cnt)
 {
   int ret = OB_SUCCESS;
   ObDtlMsgHeader header;
@@ -405,7 +406,9 @@ int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_b
     LOG_WARN("failed to deserialize msg header", K(ret));
   } else if (header.is_drain()) {
     alloc_buffer_count();
-    inc_recv_buffer_cnt();
+    if (inc_recv_buf_cnt) {
+      inc_recv_buffer_cnt();
+    }
     dfc_->set_drain(this);
     LOG_TRACE("transmit receive drain cmd", KP(linked_buffer), K(this), KP(id_), KP(peer_id_),
         K(recv_list_.is_empty()));
@@ -424,7 +427,9 @@ int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_b
     linked_buffer = nullptr;
     // 将attach收到的是自己申请的，因为释放权交给了当前channel，所以认为这次申请也是自己，与free保持一致，方便统计
     alloc_buffer_count();
-    inc_recv_buffer_cnt();
+    if (inc_recv_buf_cnt) {
+      inc_recv_buffer_cnt();
+    }
     if (is_data_msg) {
       metric_.mark_first_in();
       if (is_eof) {

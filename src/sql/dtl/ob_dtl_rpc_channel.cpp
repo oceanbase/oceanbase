@@ -176,7 +176,7 @@ ObDtlRpcChannel::ObDtlRpcChannel(
     const uint64_t tenant_id,
     const uint64_t id,
     const ObAddr &peer)
-    : ObDtlBasicChannel(tenant_id, id, peer), recv_mock_eof_cnt_(0)
+    : ObDtlBasicChannel(tenant_id, id, peer)
 {}
 
 ObDtlRpcChannel::ObDtlRpcChannel(
@@ -184,7 +184,7 @@ ObDtlRpcChannel::ObDtlRpcChannel(
     const uint64_t id,
     const ObAddr &peer,
     const int64_t hash_val)
-    : ObDtlBasicChannel(tenant_id, id, peer, hash_val), recv_mock_eof_cnt_(0)
+    : ObDtlBasicChannel(tenant_id, id, peer, hash_val)
 {}
 
 ObDtlRpcChannel::~ObDtlRpcChannel()
@@ -233,11 +233,10 @@ int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
       LOG_TRACE("DTL feedup a new msg to msg loop", K(buffer->size()), KP(id_), K(peer_));
       ObDtlLinkedBuffer::assign(*buffer, linked_buffer);
       if (1 == linked_buffer->seq_no() && linked_buffer->is_data_msg()
-          && 0 != get_recv_buffer_cnt() &&
-          !(1 == get_recv_buffer_cnt() && 1 == recv_mock_eof_cnt_)) {
+          && 0 != get_recv_buffer_cnt()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("first buffer is not first", K(ret), K(get_id()), K(get_peer_id()),
-                K(get_recv_buffer_cnt()), K(recv_mock_eof_cnt_));
+                K(get_recv_buffer_cnt()), K(linked_buffer->seq_no()));
         free_buf(linked_buffer);
         linked_buffer = nullptr;
       } else if (OB_FAIL(block_on_increase_size(linked_buffer->size()))) {
@@ -250,9 +249,6 @@ int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
         linked_buffer = nullptr;
       } else if (FALSE_IT(inc_recv_buffer_cnt())) {
       } else {
-        if (1 == buffer->seq_no() && buffer->is_eof() && 0 == buffer->pos()) {
-          recv_mock_eof_cnt_++;
-        }
         if (buffer->is_data_msg()) {
           metric_.mark_first_in();
           if (buffer->is_eof()) {
