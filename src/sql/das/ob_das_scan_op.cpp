@@ -1024,6 +1024,8 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
                 "index_group_cnt", get_index_group_cnt(),
                 "lookup_group_cnt", get_lookup_group_cnt(),
                 "scan_range", scan_param_.key_ranges_,
+                "index_table_id", index_ctdef_->ref_table_id_ ,
+                "data_table_tablet_id", tablet_id_ ,
                 KPC_(lookup_ctdef), KPC_(lookup_rtdef));
     }
   }
