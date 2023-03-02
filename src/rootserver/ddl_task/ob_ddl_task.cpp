@@ -1593,8 +1593,6 @@ int check_trans_end(const ObArray<SendItem> &send_array,
     LOG_WARN("copy send array failed", K(ret), K(send_array.count()));
   } else if (OB_FAIL(result_map.create(send_array.count(), "check_trans_map"))) {
     LOG_WARN("create return code map failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(arg.tablets_.count(), rpc_timeout))) {
-    LOG_WARN("get_ddl_rpc_timeout_failed", K(ret));
   } else {
     // group by leader addr and send batch rpc
     std::sort(tmp_send_array.begin(), tmp_send_array.end());
@@ -1603,8 +1601,10 @@ int check_trans_end(const ObArray<SendItem> &send_array,
       const SendItem &send_item = tmp_send_array.at(i);
       if (send_item.leader_addr_ != last_addr) {
         if (arg.tablets_.count() > 0) {
-          if (OB_FAIL(proxy.call(last_addr, rpc_timeout, arg.tenant_id_, arg))) {
-            LOG_WARN("send rpc failed", K(ret), K(arg), K(last_addr), K(arg.tenant_id_));
+          if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(arg.tablets_.count(), rpc_timeout))) {
+            LOG_WARN("get_ddl_rpc_timeout_failed", K(ret));
+          } else if (OB_FAIL(proxy.call(last_addr, rpc_timeout, arg.tenant_id_, arg))) {
+            LOG_WARN("send rpc failed", K(ret), K(arg), K(last_addr), K(arg.tenant_id_), K(rpc_timeout));
           }
         }
         if (OB_SUCC(ret)) {
@@ -1622,7 +1622,9 @@ int check_trans_end(const ObArray<SendItem> &send_array,
       }
     }
     if (OB_SUCC(ret) && arg.tablets_.count() > 0) {
-      if (OB_FAIL(proxy.call(last_addr, rpc_timeout, arg.tenant_id_, arg))) {
+      if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(arg.tablets_.count(), rpc_timeout))) {
+        LOG_WARN("get_ddl_rpc_timeout_failed", K(ret));
+      } else if (OB_FAIL(proxy.call(last_addr, rpc_timeout, arg.tenant_id_, arg))) {
         LOG_WARN("send rpc failed", K(ret), K(arg), K(last_addr), K(arg.tenant_id_));
       }
     }
