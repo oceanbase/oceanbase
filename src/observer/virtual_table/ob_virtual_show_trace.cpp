@@ -112,7 +112,7 @@ int ObVirtualShowTrace::retrive_all_span_info()
       LOG_TRACE("send inner sql to retrive records", KP(session_), K(session_->get_proxy_sessid()),
                                                      K(session_->get_sessid()), K(table_name),
                                                      K(tenant_id_), K(trace_id_), K(trace_id),
-                                                     K(effective_tenant_id_));
+                                                     K(effective_tenant_id_), K(ObString(sql_len, sql)));
       if (sql_len >= OB_MAX_SQL_LENGTH || sql_len <= 0) {
         ret = OB_SIZE_OVERFLOW;
         SERVER_LOG(WARN, "failed to format sql. size not enough");
@@ -284,8 +284,9 @@ int ObVirtualShowTrace::generate_span_info_tree()
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (!found_root) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not found root span reset show trace", K(session_->get_last_flt_span_id()), K(session_->get_last_flt_trace_id()));
       show_trace_arr_.reset();
-      LOG_INFO("not found root span reset show trace");
     } else {
       // recursively generate span tree
       for (int64_t i = 0; OB_SUCC(ret) && i < root_arr.count(); ++i) {

@@ -133,7 +133,6 @@ namespace sql
       session.set_auto_flush_trace(false);
       session.set_trace_enable(false);
     }
-    OZ(ObFLTUtils::init_flt_show_trace_env(session));
     return ret;
   }
 
@@ -412,7 +411,13 @@ namespace sql
         sid.deserialize(span_id.ptr(), span_id.length(), pos);
         OBTRACE->init(tid, sid);
         FLT_SET_TRACE_LEVEL(sess.get_control_info().level_);
+        if (sess.is_use_trace_log()) {
+          sess.set_auto_flush_trace(true);
+        }
         FLT_SET_AUTO_FLUSH(sess.is_auto_flush_trace());
+        char last_trace_id[OB_MAX_UUID_STR_LENGTH + 1];
+        pos = 0;
+        sid.tostring(last_trace_id, OB_MAX_UUID_STR_LENGTH + 1, pos);
       }
     // update trace_id by server self
     } else {
@@ -429,6 +434,9 @@ namespace sql
         }
       }
       FLT_SET_TRACE_LEVEL(sess.get_control_info().level_);
+      if (sess.is_use_trace_log()) {
+        sess.set_auto_flush_trace(true);
+      }
       FLT_SET_AUTO_FLUSH(sess.is_auto_flush_trace());
     }
 
@@ -567,14 +575,22 @@ namespace sql
       // record span
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if (OB_FAIL(flt_span_manager->record_span(data))) {
-        if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
-          LOG_TRACE("cannot allocate mem for record", K(ret));
-          ret = OB_SUCCESS;
-        } else {
-          if (REACH_TIME_INTERVAL(100 * 1000)) { // in case logging is too frequent
-            LOG_WARN("failed to record request info in request manager", K(ret));
+      } else {
+        while (true) {
+          if (OB_FAIL(flt_span_manager->record_span(data))) {
+            if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
+              LOG_TRACE("cannot allocate mem for record", K(ret));
+              ret = OB_SUCCESS;
+            } else {
+              if (REACH_TIME_INTERVAL(100 * 1000)) { // in case logging is too frequent
+                LOG_WARN("failed to record request info in request manager", K(ret));
+              }
+            }
           }
+          // If the slot is full, a certain amount of
+          // internal space will be released,
+          // and it needs to be added again
+          if (ret != OB_ENTRY_NOT_EXIST) break;
         }
       }
     }
