@@ -9415,13 +9415,11 @@ int ObLogPlan::get_subplan_filter_normal_equal_keys(const ObLogicalOperator *chi
                                                     ObIArray<bool> &null_safe_info)
 {
   int ret = OB_SUCCESS;
-  const ObSelectStmt *stmt = NULL;
   if (OB_ISNULL(child) || OB_ISNULL(child->get_stmt()) ||
       OB_UNLIKELY(!child->get_stmt()->is_select_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
   } else {
-    stmt = static_cast<const ObSelectStmt *>(child->get_stmt());
     //首先在filter里寻找
     for (int64_t i = 0; OB_SUCC(ret) && i < child->get_filter_exprs().count(); ++i) {
       ObRawExpr *expr = child->get_filter_exprs().at(i);
@@ -9463,11 +9461,11 @@ int ObLogPlan::get_subplan_filter_normal_equal_keys(const ObLogicalOperator *chi
             }
           }
         } else { //单expr
-          if (1 != stmt->get_select_item_size()) {
+          if (1 != right_stmt->get_select_item_size()) {
             LOG_WARN("select item size should be 1",
-                     K(ret), K(stmt->get_select_item_size()));
+                     K(ret), K(right_stmt->get_select_item_size()));
           } else if (OB_FAIL(left_keys.push_back(left_hand))
-                     || OB_FAIL(right_keys.push_back(stmt->get_select_item(0).expr_))
+                     || OB_FAIL(right_keys.push_back(right_stmt->get_select_item(0).expr_))
                      || OB_FAIL(null_safe_info.push_back(is_null_safe))) {
             LOG_WARN("push back error", K(ret));
           } else { /* Do nothing */ }
