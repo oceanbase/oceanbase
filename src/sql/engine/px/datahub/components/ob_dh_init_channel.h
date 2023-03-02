@@ -71,6 +71,8 @@ public:
                     tenant_id_(tenant_id)/*, whole_msg_()*/ {}
   ~ObInitChannelPieceMsgCtx() = default;
   INHERIT_TO_STRING_KV("meta", ObPieceMsgCtx, K_(received));
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual void reset_resource() override;
   static int alloc_piece_msg_ctx(const ObInitChannelPieceMsg &pkt,
                                  ObPxCoordInfo &coord_info,
                                  ObExecContext &ctx,

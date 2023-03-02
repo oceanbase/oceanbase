@@ -122,7 +122,8 @@ public:
       exec_ctx_(exec_ctx), eval_ctx_(exec_ctx)
   {
   }
-
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual void reset_resource() override;
   static int alloc_piece_msg_ctx(const ObRDWFPieceMsg &pkt,
                                  ObPxCoordInfo &coord_info,
                                  ObExecContext &ctx,

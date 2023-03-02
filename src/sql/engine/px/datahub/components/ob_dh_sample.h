@@ -111,6 +111,8 @@ public:
       const SortDef &sort_def);
   virtual ~ObDynamicSamplePieceMsgCtx() = default;
   int init(const ObIArray<uint64_t> &tablet_ids);
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual void reset_resource() override;
   virtual void destroy();
   int process_piece(const ObDynamicSamplePieceMsg &piece);
   int split_range(
