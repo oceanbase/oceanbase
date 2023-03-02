@@ -20001,7 +20001,20 @@ def_table_schema(
     AND db.database_id = t.database_id
     AND T.TENANT_ID = 0
   JOIN
-    oceanbase.__all_column c
+    (SELECT CAST(0 AS SIGNED) AS TENANT_ID,
+            TABLE_ID,
+            COLUMN_ID,
+            COLUMN_NAME,
+            IS_HIDDEN
+    FROM oceanbase.__all_virtual_core_column_table
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+   UNION ALL
+    SELECT TENANT_ID,
+           TABLE_ID,
+           COLUMN_ID,
+           COLUMN_NAME,
+           IS_HIDDEN
+      FROM oceanbase.__all_column) c
     ON c.tenant_id = t.tenant_id
     AND c.table_id = t.table_id
   left join
@@ -41706,9 +41719,22 @@ FROM
     AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
   JOIN
-    SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT c
-    ON c.tenant_id = t.tenant_id
-    AND c.table_id = t.table_id
+    (SELECT TENANT_ID,
+            TABLE_ID,
+            COLUMN_ID,
+            COLUMN_NAME,
+            IS_HIDDEN
+     FROM SYS.ALL_VIRTUAL_CORE_COLUMN_TABLE
+     UNION ALL
+     SELECT TENANT_ID,
+            TABLE_ID,
+            COLUMN_ID,
+            COLUMN_NAME,
+            IS_HIDDEN
+     FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT
+     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()) c
+  ON c.tenant_id = t.tenant_id
+  AND c.table_id = t.table_id
   LEFT JOIN
     SYS.ALL_VIRTUAL_COLUMN_STAT_REAL_AGENT stat
     ON c.table_id = stat.table_id
@@ -41771,9 +41797,22 @@ FROM
     AND t.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
   JOIN
-    SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT c
-    ON c.tenant_id = t.tenant_id
-    AND c.table_id = t.table_id
+    (SELECT TENANT_ID,
+            TABLE_ID,
+            COLUMN_ID,
+            COLUMN_NAME,
+            IS_HIDDEN
+     FROM SYS.ALL_VIRTUAL_CORE_COLUMN_TABLE
+     UNION ALL
+     SELECT TENANT_ID,
+            TABLE_ID,
+            COLUMN_ID,
+            COLUMN_NAME,
+            IS_HIDDEN
+     FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT
+     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()) c
+  ON c.tenant_id = t.tenant_id
+  AND c.table_id = t.table_id
   LEFT JOIN
     SYS.ALL_VIRTUAL_COLUMN_STAT_REAL_AGENT stat
     ON c.table_id = stat.table_id
@@ -41837,8 +41876,8 @@ FROM
     AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
   JOIN
     SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT c
-    ON c.tenant_id = t.tenant_id
-    AND c.table_id = t.table_id
+  ON c.tenant_id = t.tenant_id
+  AND c.table_id = t.table_id
   LEFT JOIN
     SYS.ALL_VIRTUAL_COLUMN_STAT_REAL_AGENT stat
     ON c.table_id = stat.table_id
