@@ -833,7 +833,8 @@ int ObAllTenantInfoProxy::update_tenant_sys_recovery_scn_in_trans(
              "update %s set sys_recovery_scn = %lu ",
              OB_ALL_TENANT_INFO_TNAME, sys_recovery_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sys_recovery_scn), K(sql));
-  } else if (update_sync_scn && OB_FAIL(sql.append_fmt(", sync_scn = %lu ",
+  } else if (update_sync_scn && OB_FAIL(sql.append_fmt(", sync_scn = %lu, replayable_scn = %lu ",
+                     sys_recovery_scn.get_val_for_inner_table_field(),
                      sys_recovery_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to append sql", KR(ret), K(sys_recovery_scn), K(sql));
   } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {

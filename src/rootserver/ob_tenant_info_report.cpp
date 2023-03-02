@@ -64,7 +64,7 @@ void ObTenantInfoReportor::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    int64_t idle_time_us = 100 * 1000L;
+    int64_t idle_time_us = 500 * 1000L;
     while (!has_set_stop()) {
       ObCurTraceId::init(GCONF.self_addr_);
       if (is_sys_tenant(tenant_id_)) {

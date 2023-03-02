@@ -56,7 +56,7 @@ int ObLSRecoveryReportor::init()
     } else if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql proxy is null", KR(ret));
-    } else if (OB_FAIL(create(thread_cnt, "TeRec"))) {
+    } else if (OB_FAIL(create(thread_cnt, "LSRecRep"))) {
       LOG_WARN("failed to create tenant recovery stat thread",
           KR(ret), K(thread_cnt));
     }
@@ -122,7 +122,8 @@ void ObLSRecoveryReportor::run2()
     LOG_WARN("not init", KR(ret));
   } else {
     ObThreadCondGuard guard(get_cond());
-    const int64_t idle_time = ObTenantRoleTransitionConstants::TENANT_INFO_REFRESH_TIME_US;
+    //const int64_t idle_time = ObTenantRoleTransitionConstants::TENANT_INFO_REFRESH_TIME_US;
+    const int64_t idle_time = 500 * 1000;
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     while (!stop_) {
       if (OB_ISNULL(GCTX.schema_service_)) {
