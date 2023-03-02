@@ -6515,7 +6515,7 @@ int ObQueryRange::and_first_in_key(ObSearchState &search_state,
     for (int64_t or_depth = 0; OB_SUCC(ret) && or_depth < param_val_cnt; ++or_depth) {
       int copy_depth = search_state.depth_;
       bool copy_produce_range = search_state.produce_range_;
-      bool copy_max_exist_index = search_state.max_exist_index_;
+      int64_t copy_max_exist_index = search_state.max_exist_index_;
       for (int64_t i = 0; OB_SUCC(ret) && i < cur->in_keypart_->in_params_.count(); ++i) {
         const InParamMeta *param_meta = cur->in_keypart_->in_params_.at(i);
         const ObObj &val = param_meta->vals_.at(or_depth);
