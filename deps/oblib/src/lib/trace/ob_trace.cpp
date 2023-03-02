@@ -325,7 +325,9 @@ ObTrace* ObTrace::get_instance()
     thread_local char default_tls_buffer[MIN_BUFFER_SIZE];
     struct Guard {
       Guard(char* buffer, int64_t size) {
-        IGNORE_RETURN new(buffer) ObTrace(size);
+        if (OB_NOT_NULL(buffer)) {
+          IGNORE_RETURN new(buffer) ObTrace(size);
+        }
       }
     };
     thread_local Guard guard1(default_tsi_buffer, DEFAULT_BUFFER_SIZE);
