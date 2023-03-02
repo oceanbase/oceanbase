@@ -2542,6 +2542,7 @@ int ObRootService::alter_resource_tenant(const obrpc::ObAlterResourceTenantArg &
     const common::ObIArray<uint64_t> &delete_unit_group_id_array = arg.unit_group_id_array_;
     share::schema::ObSchemaGetterGuard schema_guard;
     uint64_t target_tenant_id = OB_INVALID_ID;
+    int tmp_ret = OB_SUCCESS;
 
     if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
       LOG_WARN("fail to get tenant schema guard", KR(ret), "tenant_id", OB_SYS_TENANT_ID);
@@ -2554,9 +2555,13 @@ int ObRootService::alter_resource_tenant(const obrpc::ObAlterResourceTenantArg &
             target_tenant_id, new_unit_num, delete_unit_group_id_array))) {
       LOG_WARN("fail to alter resource tenant", KR(ret), K(target_tenant_id),
                K(new_unit_num), K(delete_unit_group_id_array));
+      if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {
+        LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+      }
     }
     LOG_INFO("finish alter_resource_tenant", KR(ret), K(arg));
   }
+
   ROOTSERVICE_EVENT_ADD("root_service", "alter_resource_tenant", K(ret), K(arg));
   return ret;
 }
@@ -2678,12 +2683,16 @@ int ObRootService::create_tenant(const ObCreateTenantArg &arg, UInt64 &tenant_id
 {
   LOG_INFO("receive create tenant arg", K(arg), "timeout_ts", THIS_WORKER.get_timeout_ts());
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(ddl_service_.create_tenant(arg, tenant_id))) {
     LOG_WARN("fail to create tenant", KR(ret), K(arg));
-  }
+    if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {
+      LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+    }
+  } else {}
   LOG_INFO("finish create tenant", KR(ret), K(tenant_id), K(arg), "timeout_ts", THIS_WORKER.get_timeout_ts());
   return ret;
 }
