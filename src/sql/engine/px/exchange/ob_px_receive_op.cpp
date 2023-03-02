@@ -481,6 +481,7 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
   int64_t idx = 0;
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
   batch_info_guard.set_batch_size(max_cnt);
+  const ObIArray<ObExpr *> *all_exprs = nullptr;
   for (; idx < max_cnt && OB_SUCC(ret); idx++) {
     batch_info_guard.set_batch_idx(idx);
     if (OB_FAIL(inner_get_next_row())) {
@@ -492,7 +493,7 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
       break;
     } else {
       // deep copy
-      const ObIArray<ObExpr *> *all_exprs = (static_cast<const ObPxReceiveSpec &>(get_spec())).get_all_exprs();
+      all_exprs = (static_cast<const ObPxReceiveSpec &>(get_spec())).get_all_exprs();
       if (NULL != all_exprs) {
         for (int64_t i = 0; OB_SUCC(ret) && i < all_exprs->count(); i++) {
           ObExpr *e = all_exprs->at(i);
@@ -525,6 +526,12 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
   if (OB_SUCC(ret)) {
     brs_.size_ = idx;
     brs_.end_ = idx < max_cnt;
+    // set project flag to prevent duplcated expression calculation
+    if (NULL != all_exprs) {
+      FOREACH_CNT(e, spec_.calc_exprs_) {
+        (*e)->get_eval_info(eval_ctx_).projected_ = 1;
+      }
+    }
   }
   return ret;
 }
