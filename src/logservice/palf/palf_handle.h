@@ -150,6 +150,9 @@ public:
   int get_begin_lsn(LSN &lsn) const;
   int get_begin_scn(share::SCN &scn) const;
 
+  // return the max recyclable point of Palf
+  int get_base_lsn(LSN &lsn) const;
+
   // PalfBaseInfo include the 'base_lsn' and the 'prev_log_info' of sliding window.
   // @param[in] const LSN&, base_lsn of ls.
   // @param[out] PalfBaseInfo&, palf_base_info

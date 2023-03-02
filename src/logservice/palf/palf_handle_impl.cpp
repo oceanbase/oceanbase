@@ -305,6 +305,18 @@ int PalfHandleImpl::get_begin_scn(SCN &scn)
   return ret;
 }
 
+int PalfHandleImpl::get_base_lsn(LSN &lsn) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl not init", K(ret), KPC(this));
+  } else {
+    lsn = get_base_lsn_used_for_block_gc();
+  }
+  return ret;
+}
+
 int PalfHandleImpl::get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info)
 {
   int ret = OB_SUCCESS;

@@ -23,6 +23,7 @@
 #include "ob_remote_error_reporter.h"     // ObRemoteErrorReporter
 #include "ob_log_restore_allocator.h"     // ObLogRestoreAllocator
 #include "ob_log_restore_scheduler.h"     // ObLogRestoreScheduler
+#include "ob_log_restore_controller.h"    // ObLogRestoreController
 
 namespace oceanbase
 {
@@ -66,6 +67,7 @@ public:
 private:
   void run1();
   void do_thread_task_();
+  void update_restore_quota_();
   void update_upstream_();
   void schedule_fetch_log_();
   void schedule_resource_();
@@ -75,6 +77,7 @@ private:
   bool inited_;
   ObLSService *ls_svr_;
   ObLogResSvrRpc proxy_;
+  ObLogRestoreController restore_controller_;
   ObRemoteLocationAdaptor location_adaptor_;
   ObRemoteFetchLogImpl fetch_log_impl_;
   ObRemoteFetchWorker fetch_log_worker_;

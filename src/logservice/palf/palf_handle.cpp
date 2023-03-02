@@ -216,6 +216,12 @@ int PalfHandle::get_begin_scn(SCN &scn) const
   return palf_handle_impl_->get_begin_scn(scn);
 }
 
+int PalfHandle::get_base_lsn(LSN &lsn) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_base_lsn(lsn);
+}
+
 int PalfHandle::get_base_info(const LSN &lsn,
                               PalfBaseInfo &palf_base_info)
 {
