@@ -1445,10 +1445,10 @@ void ObTenant::lq_wait(ObThWorker &w)
 {
   int64_t last_query_us = ObTimeUtility::current_time() - w.get_last_wakeup_ts();
   int64_t lq_group_worker_cnt = w.get_group()->get_token_cnt();
-  int64_t unit_min_cpu = unit_min_cpu_;
+  int64_t default_group_worker_cnt = token_cnt_;
   double large_query_percentage = GCONF.large_query_worker_percentage / 100.0;
   int64_t wait_us = static_cast<int64_t>(last_query_us * lq_group_worker_cnt /
-                                        (unit_min_cpu * large_query_percentage) -
+                                        (default_group_worker_cnt * large_query_percentage) -
                                          last_query_us);
   wait_us = std::min(wait_us, min(100 * 1000, w.get_timeout_remain()));
   if (wait_us > 10 * 1000) {
