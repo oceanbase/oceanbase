@@ -256,7 +256,6 @@ int ObObjectDevice::release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType
   int ret = OB_SUCCESS;
   int ret_tmp = OB_SUCCESS;
   /*release the ctx*/
-  common::ObSpinLockGuard guard(lock_);
   if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "ctx is null, invald para!");
@@ -304,7 +303,6 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
   int ret = OB_SUCCESS;
   void* ctx = NULL;
   ObStorageAccessType access_type = OB_STORAGE_ACCESS_MAX_TYPE;
-  common::ObSpinLockGuard guard(lock_);
   //validate fd
   if (fd_mng_.validate_fd(fd, false)) {
     ret = OB_INIT_TWICE;
