@@ -298,15 +298,26 @@ int ObPartitionMergeProgress::update_merge_info(ObSSTableMergeInfo &merge_info)
 
 void ObPartitionMergeProgress::update_estimated_finish_time_()
 {
+  int tmp_ret = OB_SUCCESS;
   int64_t current_time = ObTimeUtility::fast_current_time();
+  int64_t start_time = current_time;
   if (0 == pre_scanned_row_cnt_) { // first time to init merge_progress
     int64_t spend_time = estimate_occupy_size_ / common::OB_DEFAULT_MACRO_BLOCK_SIZE * ObCompactionProgress::MERGE_SPEED
         + ObCompactionProgress::EXTRA_TIME;
-    estimated_finish_time_ = spend_time + current_time + UPDATE_INTERVAL;
+    estimated_finish_time_ = spend_time + start_time + UPDATE_INTERVAL;
   } else {
+    start_time = merge_dag_->get_start_time();
     int64_t delta_row_cnt = estimate_row_cnt_ - pre_scanned_row_cnt_;
-    int64_t rest_time = MAX(1, delta_row_cnt) * (current_time - merge_dag_->get_start_time()) / pre_scanned_row_cnt_;
+    int64_t rest_time = MAX(1, delta_row_cnt) * (current_time - start_time) / pre_scanned_row_cnt_;
     estimated_finish_time_ = MAX(estimated_finish_time_, current_time + rest_time + UPDATE_INTERVAL);
+  }
+  if (estimated_finish_time_ - start_time >= MAX_ESTIMATE_SPEND_TIME) {
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_ESTIMATE_WARN_INTERVAL)) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN_RET(tmp_ret, "estimated finish time is too large", K(tmp_ret), K_(estimate_occupy_size),
+        K(start_time), K(current_time), K_(pre_scanned_row_cnt), K_(estimate_row_cnt), K_(estimated_finish_time));
+    }
+    estimated_finish_time_ = start_time + MAX_ESTIMATE_SPEND_TIME;
   }
 }
 

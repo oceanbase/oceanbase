@@ -402,6 +402,22 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
         }
       }
       (void)diagnose_medium_scn_table(compaction_scn);
+      // check tenant suspect info
+      if (diagnose_major_flag) {
+        ObScheduleSuspectInfo ret_info;
+        if (OB_SUCC(get_suspect_info(MEDIUM_MERGE, share::ObLSID(INT64_MAX), ObTabletID(INT64_MAX), ret_info))
+              && can_add_diagnose_info()) {
+          SET_DIAGNOSE_INFO(
+              info_array_[idx_++],
+              MEDIUM_MERGE,
+              ret_info.tenant_id_,
+              share::ObLSID(INT64_MAX),
+              ObTabletID(INT64_MAX),
+              ObCompactionDiagnoseInfo::DIA_STATUS_FAILED,
+              ret_info.add_time_,
+              "schedule_suspect_info", ret_info.suspect_info_);
+        }
+      }
 
       while (OB_SUCC(ret)) { // loop all log_stream
         bool need_merge = false;
@@ -546,7 +562,14 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_mini_merge(
 int ObCompactionDiagnoseMgr::diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
-  if (tablet.get_table_store().get_minor_sstables().count() >= DIAGNOSE_TABLE_CNT_IN_STORAGE) {
+  int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      minor_compact_trigger = tenant_config->minor_compact_trigger;
+    }
+  }
+  if (tablet.get_table_store().get_minor_sstables().count() >= minor_compact_trigger) {
     ObTabletMergeExecuteDag dag;
     if (OB_FAIL(diagnose_tablet_merge(
             dag,
@@ -690,6 +713,8 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_merge(
         LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id), K(progress));
       }
     }
+  } else if (OB_FAIL(diagnose_no_dag(dag, merge_type, ls_id, tablet_id, compaction_scn))) {
+    LOG_WARN("failed to dagnose no dag", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
 }

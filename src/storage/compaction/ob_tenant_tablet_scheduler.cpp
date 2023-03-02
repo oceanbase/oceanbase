@@ -1042,6 +1042,9 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
     // do nothing, should not loop tablets
     if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("compat_version is smaller than DATA_VERSION_4_1_0_0, cannot schedule medium", K(compat_version));
+      ADD_SUSPECT_INFO(MEDIUM_MERGE, share::ObLSID(INT64_MAX), ObTabletID(INT64_MAX),
+        "invalid data version to schedule all tablets medium",
+        K(compat_version), "DATA_VERSION_4_1_0_0", DATA_VERSION_4_1_0_0);
     }
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get ls iterator", K(ret));
@@ -1132,7 +1135,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
     if (OB_SUCC(ret) && tenant_merge_finish && merge_version > merged_version_) {
       merged_version_ = merge_version;
       LOG_INFO("all tablet major merge finish", K(merged_version_), K(merge_version));
-
+      DEL_SUSPECT_INFO(MEDIUM_MERGE, share::ObLSID(INT64_MAX), ObTabletID(INT64_MAX));
       if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress(
           merge_version,
           share::ObIDag::DAG_STATUS_FINISH))) {
