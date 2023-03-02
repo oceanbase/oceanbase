@@ -416,6 +416,7 @@ int ObFreezeInfoManager::generate_frozen_scn(
 
   SCN tmp_frozen_scn;
   SCN local_max_frozen_scn;
+  uint64_t cur_min_data_version = 0;
 
   ObSimpleFrozenStatus max_frozen_status;
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
@@ -436,6 +437,14 @@ int ObFreezeInfoManager::generate_frozen_scn(
       LOG_WARN("max frozen_scn in cache is larger than max frozen_scn in table", KR(ret),
                K(local_max_frozen_scn), K(max_frozen_status));
     }
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, cur_min_data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
+  } else if (cur_min_data_version < max_frozen_status.data_version_) {
+    // do not allow data_version of freeze_info rollback
+    ret = OB_MAJOR_FREEZE_NOT_ALLOW;
+    LOG_WARN("major freeze is not allowed now, please check and upgrade observer", KR(ret),
+             K_(tenant_id), K(cur_min_data_version), "last_min_data_version",
+             max_frozen_status.data_version_);
   } else if (OB_FAIL(get_gts(tmp_frozen_scn))) {
     LOG_WARN("fail to get gts", KR(ret));
   } else if ((tmp_frozen_scn <= snapshot_gc_scn)
