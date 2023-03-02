@@ -1414,7 +1414,6 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
-  ObTimeGuard time_guard(__func__, 5 * 1000 * 1000); // 5s
 
   // TODO(bowen.gbw): optimize this logic, refactor ObTabletStatusChecker
   if (OB_FAIL(get_tablet(key, tablet_handle, timeout_us))) {
@@ -1423,14 +1422,12 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
     } else {
       LOG_WARN("failed to get tablet", K(ret), K(key), K(timeout_us));
     }
-  } else if (FALSE_IT(time_guard.click("DirectGet"))) {
   } else if (tablet_handle.get_obj()->is_ls_inner_tablet()) {
     // no need to check ls inner tablet, do nothing
   } else if (ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US == timeout_us) {
     // no checking
   } else if (OB_FAIL(tablet_handle.get_obj()->get_tablet_status(tablet_status))) {
     LOG_WARN("failed to get tablet status", K(ret));
-  } else if (FALSE_IT(time_guard.click("GetTxData"))) {
   } else if (ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US == timeout_us) {
     if (ObTabletStatus::NORMAL != tablet_status) {
       ret = OB_TABLET_NOT_EXIST;
@@ -1445,7 +1442,6 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
       if (OB_FAIL(checker.check(timeout_us))) {
         LOG_WARN("failed to check tablet status", K(ret), K(timeout_us), K(tablet_handle));
       }
-      time_guard.click("CheckStatus");
     }
   }
 

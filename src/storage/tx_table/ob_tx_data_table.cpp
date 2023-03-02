@@ -367,7 +367,6 @@ void ObTxDataTable::free_undo_status_list_(ObUndoStatusNode *node_ptr)
 int ObTxDataTable::insert(ObTxData *&tx_data)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard tg("tx_data_table::insert", 100 * 1000);
   ObTxDataMemtableWriteGuard write_guard;
   ObTransID tx_id = tx_data->tx_id_;
 
@@ -381,20 +380,13 @@ int ObTxDataTable::insert(ObTxData *&tx_data)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "trying to insert an invalid tx data into tx data table", KR(ret),
                 KP(tx_data), KPC(tx_data));
-  } else if (FALSE_IT(tg.click())) {
-    // do nothing
   } else if (OB_FAIL(get_memtable_mgr_()->get_all_memtables_for_write(write_guard))) {
     STORAGE_LOG(WARN, "get all memtables for write fail.", KR(ret), KPC(get_memtable_mgr_()));
-  } else if (FALSE_IT(tg.click())) {
-    // do nothing
   } else if (OB_FAIL(insert_(tx_data, write_guard))) {
     STORAGE_LOG(WARN, "insert tx data failed.", KR(ret), KPC(tx_data), KP(this), K(tablet_id_));
   } else {
     // successfully insert
     // TODO : @gengli do not dec ref and set nullptr after insert
-  }
-  if (tg.get_diff() > 100000) {
-    STORAGE_LOG(INFO, "ObTxDataTable insert cost too much time", K(tx_id), K(tg));
   }
 
   return ret;
@@ -406,7 +398,6 @@ int ObTxDataTable::insert(ObTxData *&tx_data)
 int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write_guard)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard tg("tx_data_table::insert_", 100 * 1000);
   bool inserted = false;
   ObTxDataMemtable *tx_data_memtable = nullptr;
   ObTableHandleV2 (&memtable_handles)[MAX_TX_DATA_MEMTABLE_CNT] = write_guard.handles_;
@@ -421,11 +412,8 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "tx data memtable is nullptr.", KR(ret), KP(this), K(tablet_id_),
                   K(memtable_handles[i]));
-    } else if (FALSE_IT(tg.click())) {
-      // do nothing
     } else if (tx_data_memtable->get_start_scn() < tx_data->end_scn_
                && tx_data_memtable->get_end_scn() >= tx_data->end_scn_) {
-      tg.click();
       if (OB_FAIL(tx_data_memtable->insert(tx_data))) {
         STORAGE_LOG(WARN,
                     "insert tx data into tx data memtable failed",
@@ -441,7 +429,6 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
       STORAGE_LOG(DEBUG, "skip this tx data memtable", KPC(tx_data), KPC(tx_data_memtable));
     }
   }
-  tg.click();
 
   // If this tx data can not be inserted into all memtables, check if it should be filtered.
   // We use the start log ts of the first memtable as the filtering time stamp
@@ -451,16 +438,11 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
       // Filter this tx data. The part trans ctx need to handle this error code because the memory
       // of tx data need to be freed.
       STORAGE_LOG(DEBUG, "This tx data is filtered.", K(clog_checkpoint_scn), KPC(tx_data));
-      tg.click();
-
     } else {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "cannot find the correct tx data memtable to insert", KR(ret),
                   KPC(tx_data), K(clog_checkpoint_scn), K(memtable_handles));
     }
-  }
-  if (tg.get_diff() > 100000) {
-    STORAGE_LOG(INFO, "ObTxDataTable insert_ cost too much time", K(tg));
   }
 
   return ret;

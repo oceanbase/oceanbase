@@ -1751,7 +1751,6 @@ int ObPartTransCtx::on_dist_end_(const bool commit)
 
 int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
 {
-  common::ObTimeGuard tg("part_ctx::on_success", 100 * 1000);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const int64_t cur_ts = ObTimeUtility::current_time();
@@ -1759,7 +1758,6 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
   ObTransStatistic::get_instance().add_clog_sync_count(tenant_id_, 1);
   {
     CtxLockGuard guard(lock_);
-    tg.click();
     const SCN log_ts = log_cb->get_log_ts();
     const ObTxLogType last_log_type = log_cb->get_last_log_type();
     if (is_exiting_) {
@@ -1776,7 +1774,6 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
       // save the first error code
       int save_ret = OB_SUCCESS;
       ObTxLogCb *cur_cb = busy_cbs_.get_first();
-      tg.click();
       for (int64_t i = 0; i < busy_cbs_.get_size(); i++) {
         if (cur_cb->is_callbacked()) {
           // do nothing
@@ -1801,7 +1798,6 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
           cur_cb = cur_cb->get_next();
         }
       }
-      tg.click();
       if (cur_cb != log_cb) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "unexpected log callback", K(ret), K(*this), K(*cur_cb), K(*log_cb));
@@ -1812,25 +1808,18 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     }
     // ignore ret
     return_log_cb_(log_cb);
-    tg.click();
     if (need_record_log_()) {
       // ignore error
       if (OB_SUCCESS != (tmp_ret = submit_record_log_())) {
         TRANS_LOG(WARN, "failed to submit record log", K(tmp_ret), K(*this));
       }
     }
-    tg.click();
     if (!ObTxLogTypeChecker::is_state_log(last_log_type)) {
       try_submit_next_log_();
     }
-    tg.click();
     // REC_TRANS_TRACE_EXT(tlog_, on_succ_cb, OB_ID(ret), ret,
     //                                        OB_ID(t), log_ts,
     //                                        OB_ID(ctx_ref), get_ref());
-    if (tg.get_diff() > 100000) {
-      FORCE_PRINT_TRACE(tlog_, "[tx cb debug] ");
-      TRANS_LOG(INFO, "on success cost too much time", K_(trans_id), K(last_log_type), K(log_ts), K(tg));
-    }
   }
   if (OB_SUCCESS != (tmp_ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this))) {
     TRANS_LOG(ERROR, "release ctx ref failed", KR(tmp_ret));
@@ -1840,7 +1829,6 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
 
 int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
 {
-  common::ObTimeGuard tg("part_ctx::on_success_ops", 100 * 1000);
   int ret = OB_SUCCESS;
   const SCN log_ts = log_cb->get_log_ts();
   const palf::LSN log_lsn = log_cb->get_lsn();
@@ -1850,7 +1838,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
   if (OB_FAIL(common_on_success_(log_cb))) {
     TRANS_LOG(WARN, "common_on_success_ failed", K(ret));
   }
-  tg.click();
   for (int64_t i = 0; OB_SUCC(ret) && i < cb_arg_array.count(); i++) {
     const ObTxLogType log_type = cb_arg_array.at(i).get_log_type();
     if (ObTxLogType::TX_REDO_LOG == log_type) {
@@ -1889,9 +1876,7 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
         }
         TRANS_LOG(INFO, "apply commit info log", KR(ret), K(*this), K(two_phase_log_type));
       }
-      tg.click();
     } else if (ObTxLogType::TX_ROLLBACK_TO_LOG == log_type) {
-      tg.click();
       ObTxData *tx_data = log_cb->get_tx_data();
       if (OB_ISNULL(tx_data)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1907,7 +1892,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
           log_cb->set_tx_data(nullptr);
         }
       }
-      tg.click();
     } else if (ObTxLogTypeChecker::is_state_log(log_type)) {
       sub_state_.clear_state_log_submitting();
       if (ObTxLogType::TX_PREPARE_LOG == log_type) {
@@ -1933,9 +1917,7 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
         } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::apply_log(two_phase_log_type))) {
           TRANS_LOG(ERROR, "dist tx apply log failed", KR(ret), K(*this));
         }
-        tg.click();
       } else if (ObTxLogType::TX_COMMIT_LOG == log_type) {
-        tg.click();
         if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
             && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, log_ts, log_lsn, false))) {
           TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(log_cb), KPC(this));
@@ -1944,20 +1926,17 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
           if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
             TRANS_LOG(WARN, "set end log ts failed", K(ret));
           } else {
-            tg.click();
             if (OB_FAIL(on_local_commit_tx_())) {
               TRANS_LOG(WARN, "on local commit failed", KR(ret), K(*this));
             }
           }
         } else {
-          tg.click();
           const NotifyType type = NotifyType::ON_COMMIT;
           if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
             TRANS_LOG(WARN, "set end log ts failed", K(ret));
           } else if (OB_FAIL(notify_data_source_(type, log_ts, false, exec_info_.multi_data_source_))) {
             TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
           }
-          tg.click();
           ObTwoPhaseCommitLogType two_phase_log_type;
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(switch_log_type_(log_type, two_phase_log_type))) {
@@ -1965,7 +1944,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
           } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::apply_log(two_phase_log_type))) {
             TRANS_LOG(ERROR, "dist tx apply log failed", KR(ret), K(*this), K(two_phase_log_type));
           }
-          tg.click();
         }
       } else if (ObTxLogType::TX_ABORT_LOG == log_type) {
         if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
@@ -1978,7 +1956,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
           } else if (OB_FAIL(on_local_abort_tx_())) {
             TRANS_LOG(WARN, "on local abort failed", KR(ret), K(*this));
           }
-          tg.click();
         } else {
           const NotifyType type = NotifyType::ON_ABORT;
           tmp_array.reset();
@@ -1989,7 +1966,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
           } else if (OB_FAIL(notify_data_source_(type, log_ts, false, tmp_array))) {
             TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
           }
-          tg.click();
           ObTwoPhaseCommitLogType two_phase_log_type;
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(switch_log_type_(log_type, two_phase_log_type))) {
@@ -1997,7 +1973,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
           } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::apply_log(two_phase_log_type))) {
             TRANS_LOG(ERROR, "dist tx apply log failed", KR(ret), K(*this), K(two_phase_log_type));
           }
-          tg.click();
         }
       } else if (ObTxLogType::TX_CLEAR_LOG == log_type) {
         ObTwoPhaseCommitLogType two_phase_log_type;
@@ -2017,10 +1992,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
                                OB_ID(t), log_ts,
                                OB_ID(offset), log_lsn,
                                OB_ID(ctx_ref), get_ref());
-  }
-  if (tg.get_diff() > 100000) {
-    FORCE_PRINT_TRACE(tlog_, "[tx common cb debug] ");
-    TRANS_LOG(INFO, "on succcess ops cost too much time", K(tg), K(*this));
   }
   return ret;
 }
@@ -2234,7 +2205,6 @@ int ObPartTransCtx::wait_gts_elapse_commit_version_(bool &need_wait)
 {
   int ret = OB_SUCCESS;
   need_wait = false;
-  common::ObTimeGuard tg("part_ctx::wait_gts", 100 * 1000);
 
   ObITsMgr *ts_mgr = trans_service_->get_ts_mgr();
 
@@ -2244,17 +2214,12 @@ int ObPartTransCtx::wait_gts_elapse_commit_version_(bool &need_wait)
                                       need_wait))) {
     TRANS_LOG(WARN, "wait gts elapse failed", KR(ret), K(*this));
   } else if (need_wait) {
-    tg.click();
     sub_state_.set_gts_waiting();
     if (OB_FAIL(acquire_ctx_ref_())) {
       TRANS_LOG(WARN, "get trans ctx error", KR(ret), K(*this));
     }
-    tg.click();
     TRANS_LOG(INFO, "need wait gts elapse", KR(ret), K(*this));
     REC_TRANS_TRACE_EXT2(tlog_, wait_gts_elapse, OB_ID(ctx_ref), get_ref());
-  }
-  if (tg.get_diff() > 100000) {
-    TRANS_LOG(INFO, "wait gts debug cost too much time", K(tg), K(*this));
   }
 
   return ret;
@@ -6499,7 +6464,6 @@ int ObPartTransCtx::on_local_commit_tx_()
 {
   int ret = OB_SUCCESS;
   bool need_wait = false;
-  common::ObTimeGuard tg("part_ctx::on_local_commit", 100 * 1000);
 
   if (sub_state_.is_gts_waiting()) {
     ret = OB_ERR_UNEXPECTED;
@@ -6509,7 +6473,6 @@ int ObPartTransCtx::on_local_commit_tx_()
     TRANS_LOG(WARN, "invalid commit version", K(ret), KPC(this));
   } else if (OB_FAIL(wait_gts_elapse_commit_version_(need_wait))) {
     TRANS_LOG(WARN, "wait gts elapse commit version failed", KR(ret), KPC(this));
-  } else if (FALSE_IT(tg.click())) {
   } else if (OB_FAIL(tx_end_(true /*commit*/))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
   } else if (FALSE_IT(elr_handler_.reset_elr_state())) {
@@ -6524,17 +6487,12 @@ int ObPartTransCtx::on_local_commit_tx_()
 
   } else if (need_wait) {
     REC_TRANS_TRACE_EXT2(tlog_, wait_gts_elapse, OB_ID(ctx_ref), get_ref());
-  } else if (FALSE_IT(tg.click())) {
   }
 
   if (OB_FAIL(ret) || need_wait) {
     // do nothing
   } else if (OB_FAIL(after_local_commit_succ_())) {
     TRANS_LOG(WARN, "terminate trx after local commit failed", KR(ret), KPC(this));
-  }
-
-  if (tg.get_diff() > 100000) {
-    TRANS_LOG(INFO, "on local commit cost too much time", K(ret), K(need_wait), K(tg), K(*this));
   }
 
   return ret;

@@ -152,7 +152,9 @@ public:
     explicit WRLockGuard(const common::SpinRWLock &rwlock);
     ~WRLockGuard() {}
   private:
+#ifdef ENABLE_DEBUG_LOG
     common::ObSimpleTimeGuard time_guard_; // print log and lbt, if the lock is held too much time.
+#endif
     common::SpinWLockGuard lock_guard_;
   };
   class RDLockGuard
@@ -161,7 +163,9 @@ public:
     explicit RDLockGuard(const common::SpinRWLock &rwlock);
     ~RDLockGuard() {}
   private:
+#ifdef ENABLE_DEBUG_LOG
     common::ObSimpleTimeGuard time_guard_; // print log and lbt, if the lock is held too much time.
+#endif
     common::SpinRLockGuard lock_guard_;
   };
 
