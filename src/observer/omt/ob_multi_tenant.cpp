@@ -1534,6 +1534,16 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &try_clock_succ)
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(OB_TMP_FILE_STORE.free_tenant_file_store(tenant_id))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        STORAGE_LOG(WARN, "fail to free tmp tenant file store", K(ret), K(tenant_id));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
     if (OB_ISNULL(malloc_allocator)) {
       ret = OB_INVALID_ARGUMENT;
@@ -1680,15 +1690,6 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
         LOG_WARN("fail to write delete tenant commit slog", K(ret), K(tenant_id));
       }
     } while (OB_FAIL(ret));
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(OB_TMP_FILE_STORE.free_tenant_file_store(tenant_id))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        STORAGE_LOG(WARN, "fail to free tmp tenant file store", K(ret), K(tenant_id));
-      }
-    }
     if (OB_SUCC(ret)) {
       lib::ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
     }
