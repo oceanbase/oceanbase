@@ -2061,7 +2061,10 @@ void LogSlidingWindow::try_fetch_log_streamingly_(const LSN &log_end_lsn)
     int64_t last_submit_log_pid = INVALID_PROPOSAL_ID;
     (void) get_last_submit_log_info_(last_submit_lsn, last_submit_end_lsn, last_submit_log_id, last_submit_log_pid);
     const int64_t fetch_start_log_id = last_submit_log_id + 1;
-    const int64_t fetch_log_size = group_buffer_.get_available_buffer_size();
+    // fetch_log_size need sub MAX_LOG_BUFFER_SIZE to ensure the incoming last fetched log's end_lsn
+    // is not smaller than last_fetch_end_lsn, then it can successfully trigger next streaming fetch.
+    // And all the incoming fetched logs can be filled into group_buffer.
+    const int64_t fetch_log_size = group_buffer_.get_available_buffer_size() - MAX_LOG_BUFFER_SIZE;
     const LSN fetch_begin_lsn = last_submit_end_lsn;
     const LSN prev_lsn = last_submit_lsn;
     ObAddr dest;
