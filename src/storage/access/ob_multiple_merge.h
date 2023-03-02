@@ -28,6 +28,7 @@
 #include "ob_table_access_context.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/lob/ob_lob_data_reader.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {
@@ -171,14 +172,7 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
 OB_INLINE int ObMultipleMerge::update_and_report_tablet_stat()
 {
   int ret = OB_SUCCESS;
-  bool enable_adaptive_compaction = true;
-  {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
-    }
-  }
-  if (enable_adaptive_compaction) {
+  if (MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
     EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
     access_ctx_->table_store_stat_.access_row_cnt_ += row_stat_.filt_del_count_;
     if (NULL != access_ctx_->table_scan_stat_) {

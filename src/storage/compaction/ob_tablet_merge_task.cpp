@@ -240,6 +240,21 @@ int ObBasicTabletMergeDag::get_tablet_and_compat_mode()
     compat_mode_ = tmp_tablet_handle.get_obj()->get_tablet_meta().compat_mode_;
   }
 
+  if (OB_SUCC(ret) && is_mini_merge(merge_type_)) {
+    int64_t inc_sstable_cnt = tmp_tablet_handle.get_obj()->get_table_store().get_minor_sstables().count() + 1/*major table*/;
+    bool is_exist = false;
+    if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(this, is_exist))) {
+      LOG_WARN("failed to check dag exist", K(ret), K_(param));
+    } else if (is_exist) {
+      ++inc_sstable_cnt;
+    }
+    if (OB_SUCC(ret) && inc_sstable_cnt >= MAX_SSTABLE_CNT_IN_STORAGE) {
+      ret = OB_EAGAIN;
+      LOG_WARN("Too many sstables in tablet, cannot schdule mini compaction, retry later",
+          K(ret), K(inc_sstable_cnt), K(tmp_tablet_handle.get_obj()));
+    }
+  }
+
   int tmp_ret = OB_SUCCESS;
   if (OB_SUCC(ret)
       && typeid(*this) != typeid(ObTxTableMergeDag)
@@ -1285,13 +1300,7 @@ int ObTabletMergeFinishTask::try_schedule_compaction_after_mini(
   int tmp_ret = OB_SUCCESS;
   const ObTabletID &tablet_id = ctx.param_.tablet_id_;
   ObLSID ls_id = ctx.param_.ls_id_;
-  bool enable_adaptive_compaction = true;
-  {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
-    }
-  }
+  bool enable_adaptive_compaction = MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction();
   // report tablet stat
   if (0 == ctx.get_merge_info().get_sstable_merge_info().macro_block_count_) {
     // empty mini compaction, no need to reprot stat

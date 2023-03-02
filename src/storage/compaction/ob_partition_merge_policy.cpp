@@ -1326,14 +1326,20 @@ int ObAdaptiveMergePolicy::find_meta_major_tables(
     if (OB_FAIL(ret)) {
     } else if (tx_determ_table_cnt < 2) {
       ret = OB_NO_NEED_MERGE;
-      LOG_INFO("no enough table for meta merge", K(ret), K(result), K(table_store));
+      if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000/*60s*/)) {
+        LOG_INFO("no enough table for meta merge", K(ret), K(result), K(table_store));
+      }
     } else if (inc_row_cnt < TRANS_STATE_DETERM_ROW_CNT_THRESHOLD
       || inc_row_cnt < INC_ROW_COUNT_PERCENTAGE_THRESHOLD * base_row_cnt) {
       ret = OB_NO_NEED_MERGE;
-      LOG_INFO("found sstable could merge is not enough", K(ret), K(inc_row_cnt), K(base_row_cnt));
+      if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000/*60s*/)) {
+        LOG_INFO("found sstable could merge is not enough", K(ret), K(inc_row_cnt), K(base_row_cnt));
+      }
     } else if (result.version_range_.snapshot_version_ < tablet.get_multi_version_start()) {
       ret = OB_NO_NEED_MERGE;
-      LOG_INFO("chosen snapshot is abandoned", K(ret), K(result), K(tablet.get_multi_version_start()));
+      if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000/*60s*/)) {
+        LOG_INFO("chosen snapshot is abandoned", K(ret), K(result), K(tablet.get_multi_version_start()));
+      }
     }
 
 #ifdef ERRSIM

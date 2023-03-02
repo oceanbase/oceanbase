@@ -103,6 +103,7 @@ public:
   void wait();
   bool is_stop() const { return is_stop_; }
   int reload_tenant_config();
+  bool enable_adaptive_compaction() const { return enable_adaptive_compaction_; }
 
   // major merge status control
   void stop_major_merge();
@@ -241,6 +242,7 @@ private:
   MediumLoopTask medium_loop_task_;
   SSTableGCTask sstable_gc_task_;
   ObFastFreezeChecker fast_freeze_checker_;
+  bool enable_adaptive_compaction_;
 };
 
 } // namespace storage
