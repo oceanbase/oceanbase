@@ -18,6 +18,10 @@
 
 namespace oceanbase
 {
+namespace sql
+{
+  class ObLoadDataStat;
+}
 namespace rootserver
 {
 class ObRootService;
@@ -87,6 +91,7 @@ private:
   int replica_end_check(const int ret_code);
   int check_modify_autoinc(bool &modify_autoinc);
   int check_use_heap_table_ddl_plan(bool &use_heap_table_ddl_plan);
+  int get_direct_load_job_stat(common::ObArenaAllocator &allocator, sql::ObLoadDataStat &job_stat);
 private:
   static const int64_t OB_TABLE_REDEFINITION_TASK_VERSION = 1L;
   bool has_rebuild_index_;
