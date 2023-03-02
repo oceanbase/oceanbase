@@ -722,7 +722,7 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
   OZ (acquire_tx_if_need_(txs, *session));
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
-  OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, !session->get_xid().empty() ? session->get_sessid() : 0), sp_name);
+  OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session)), sp_name);
   if (start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {
@@ -731,6 +731,11 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
     }
   }
   return ret;
+}
+
+uint32_t ObSqlTransControl::get_real_session_id(ObSQLSessionInfo &session)
+{
+  return session.get_xid().empty() ? 0 : (session.get_proxy_sessid() != 0 ? session.get_proxy_sessid() : session.get_sessid());
 }
 
 int ObSqlTransControl::start_hook_if_need_(ObSQLSessionInfo &session,
@@ -762,7 +767,7 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
   OX (stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session));
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
-  OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, !session->get_xid().empty() ? session->get_sessid() : 0), sp_name);
+  OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, get_real_session_id(*session)), sp_name);
   if (start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {
@@ -786,7 +791,7 @@ int ObSqlTransControl::release_savepoint(ObExecContext &exec_ctx,
   OZ (acquire_tx_if_need_(txs, *session));
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
-  OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name, !session->get_xid().empty() ? session->get_sessid() : 0), *session, sp_name);
+  OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session)), *session, sp_name);
   if (start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {
