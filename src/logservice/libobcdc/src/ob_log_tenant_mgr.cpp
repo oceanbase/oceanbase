@@ -12,6 +12,7 @@
  * Tenant Manager for OBCDC(ObLogTenantMgr)
  */
 
+
 #define USING_LOG_PREFIX OBLOG
 
 #include <algorithm>                  // std::min
@@ -24,6 +25,7 @@
 #include "ob_log_config.h"            // TCONF
 #include "ob_log_store_service.h"
 #include "ob_cdc_tenant_sql_server_provider.h"
+#include "lib/utility/ob_macro_utils.h"
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [TenantMgr] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_LOG(level, "[STAT] [TenantMgr] " fmt, ##args)
@@ -1312,17 +1314,39 @@ int ObLogTenantMgr::get_tenant_ids_(
     }
   } else if (is_data_dict_refresh_mode(refresh_mode_)) {
     IObLogSysTableHelper *systable_helper = TCTX.systable_helper_;
+    ObSEArray<IObLogSysTableHelper::TenantInfo, 16> tenant_info_list;
     bool done = false;
+    tenant_id_list.reset();
 
     if (OB_ISNULL(systable_helper)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("systable_helper is NULL", KR(ret));
     } else {
       while (! done && OB_SUCCESS == ret) {
-        if (OB_FAIL(systable_helper->query_tenant_id_list(tenant_id_list))) {
+        if (OB_FAIL(systable_helper->query_tenant_info_list(tenant_info_list))) {
           LOG_WARN("systable_helper query_tenant_ls_info fail", KR(ret), K(tenant_id_list));
         } else {
-          done = true;
+          const int64_t tenant_info_list_cnt = tenant_info_list.count();
+          ARRAY_FOREACH_N(tenant_info_list, idx, tenant_info_list_cnt) {
+            const IObLogSysTableHelper::TenantInfo &tenant_info = tenant_info_list.at(idx);
+            bool chosen = true;
+            if (OB_FAIL(filter_tenant(tenant_info.tenant_name.ptr(), chosen))) {
+              LOG_ERROR("filter_tenant failed", K(tenant_info), K(chosen), K(start_tstamp_ns),
+                  K(sys_schema_version));
+            } else if (! chosen && OB_SYS_TENANT_ID != tenant_info.tenant_id) {
+              // tenant have been filtered
+              LOG_INFO("tenant has been filtered in advance", K(chosen), K(tenant_info), K(tenant_id_list));
+            } else if (OB_FAIL(tenant_id_list.push_back(tenant_info.tenant_id))) {
+              LOG_ERROR("push back tenant_id_list failed", K(tenant_info), K(tenant_id_list),
+                  K(tenant_info_list), K(chosen));
+            } else {
+              LOG_INFO("tenant hasn't been filtered in advance", K(chosen), K(tenant_info), K(tenant_id_list));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            done = true;
+          }
         }
 
         if (OB_NEED_RETRY == ret) {
