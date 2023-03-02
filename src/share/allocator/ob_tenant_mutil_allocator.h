@@ -76,24 +76,8 @@ protected:
   int64_t flying_meta_task_;
 };
 
-// Interface for ReplayEngine module
-class ObIReplayTaskAllocator
-{
-public:
-  ObIReplayTaskAllocator() {}
-  virtual ~ObIReplayTaskAllocator() {}
-
-public:
-  virtual void *alloc_replay_task_buf(const bool is_inner_table, const int64_t size) = 0;
-  virtual void free_replay_task(const bool is_inner_table, void *ptr) = 0;
-  virtual bool can_alloc_replay_task(const bool is_inner_table, int64_t size) const = 0;
-  virtual void inc_pending_replay_mutator_size(int64_t size) = 0;
-  virtual void dec_pending_replay_mutator_size(int64_t size) = 0;
-  virtual int64_t get_pending_replay_mutator_size() const = 0;
-};
-
 class ObTenantMutilAllocator
-    : public ObILogAllocator, public ObIReplayTaskAllocator, public common::ObLink
+    : public ObILogAllocator, public common::ObLink
 {
 public:
   // The memory percent of clog
@@ -128,12 +112,6 @@ public:
   void *ge_alloc(const int64_t size);
   void ge_free(void *ptr);
   const ObBlockAllocMgr &get_clog_blk_alloc_mgr() const;
-  void *alloc_replay_task_buf(const bool is_inner_table, const int64_t size);
-  void free_replay_task(const bool is_inner_table, void *ptr);
-  bool can_alloc_replay_task(const bool is_inner_table, int64_t size) const;
-  void inc_pending_replay_mutator_size(int64_t size);
-  void dec_pending_replay_mutator_size(int64_t size);
-  int64_t get_pending_replay_mutator_size() const;
   // V4.0
   palf::LogIOFlushLogTask *alloc_log_io_flush_log_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_flush_log_task(palf::LogIOFlushLogTask *ptr);
@@ -163,13 +141,10 @@ private:
   const int PALF_FETCH_LOG_TASK_SIZE;
   const int LOG_IO_FLASHBACK_TASK_SIZE;
   ObBlockAllocMgr clog_blk_alloc_;
-  ObBlockAllocMgr inner_table_replay_blk_alloc_;
-  ObBlockAllocMgr user_table_replay_blk_alloc_;
   ObBlockAllocMgr common_blk_alloc_;
   ObBlockAllocMgr unlimited_blk_alloc_;
+  ObBlockAllocMgr replay_log_task_blk_alloc_;
   ObVSliceAlloc clog_ge_alloc_;
-  ObVSliceAlloc inner_table_replay_task_alloc_;
-  ObVSliceAlloc user_table_replay_task_alloc_;
   ObSliceAlloc log_io_flush_log_task_alloc_;
   ObSliceAlloc log_io_truncate_log_task_alloc_;
   ObSliceAlloc log_io_flush_meta_task_alloc_;
