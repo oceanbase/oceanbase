@@ -10867,6 +10867,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       // submit async build index task
       if (OB_FAIL(ret)) {
       } else if (is_double_table_long_running_ddl(ddl_type)) {
+        bool has_conflict_ddl = false;
         ObCreateDDLTaskParam param(tenant_id,
                                    ddl_type,
                                    orig_table_schema,
@@ -10882,6 +10883,11 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           (void)snprintf(err_msg, sizeof(err_msg), "%s on temporary table is", ddl_type_str(ddl_type));
           LOG_WARN("double table long running ddl on temporary table is disallowed", K(ret), K(ddl_type));
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+        } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_conflict_ddl(sql_proxy_, tenant_id, orig_table_schema->get_table_id(), 0, ddl_type, has_conflict_ddl))) {
+          LOG_WARN("failed to check ddl conflict", K(ret));
+        } else if (has_conflict_ddl) {
+          ret = OB_SCHEMA_EAGAIN;
+          LOG_WARN("failed to alter table that has conflict ddl", K(ret), K(orig_table_schema->get_table_id()));
         } else if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
           LOG_WARN("submit ddl task failed", K(ret));
         } else {
@@ -19697,6 +19703,7 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
         ret = OB_SUCC(ret) ? commit_ret : ret;
       }
     }
+    DEBUG_SYNC(AFTER_UPDATE_INDEX_STATUS);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(publish_schema(tenant_id))) {
         LOG_WARN("publish schema failed", KR(ret));

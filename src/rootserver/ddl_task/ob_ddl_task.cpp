@@ -2613,6 +2613,21 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
               }
               break;
             }
+            case ObDDLType::DDL_DOUBLE_TABLE_OFFLINE:
+            case ObDDLType::DDL_MODIFY_COLUMN:
+            case ObDDLType::DDL_ADD_PRIMARY_KEY:
+            case ObDDLType::DDL_DROP_PRIMARY_KEY:
+            case ObDDLType::DDL_ALTER_PRIMARY_KEY:
+            case ObDDLType::DDL_ALTER_PARTITION_BY:
+            case ObDDLType::DDL_DROP_COLUMN:
+            case ObDDLType::DDL_CONVERT_TO_CHARACTER:
+            case ObDDLType::DDL_ADD_COLUMN_OFFLINE:
+            case ObDDLType::DDL_COLUMN_REDEFINITION:
+            case ObDDLType::DDL_TABLE_REDEFINITION:
+            case ObDDLType::DDL_DIRECT_LOAD: {
+              has_conflict_ddl = true;
+              break;
+            }
             default: {
               // do nothing
             }
