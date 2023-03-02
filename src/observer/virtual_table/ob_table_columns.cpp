@@ -962,6 +962,8 @@ int ObTableColumns::resolve_view_definition(
           bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
           if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
             LOG_WARN("failed to resolve view", K(ret));
+          } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret && lib::is_mysql_mode())) {
+            // do nothing
           } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(table_schema, select_stmt, reset_column_infos, *allocator, *session))) {
             LOG_WARN("failed to add recompile view task", K(tmp_ret));
             if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
