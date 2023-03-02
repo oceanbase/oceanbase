@@ -3150,9 +3150,18 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
     LogTaskGuard guard(this);
     int64_t group_log_data_checksum = 0;
     int64_t pos = 0;
+    LSN last_slide_end_lsn;
+    get_last_slide_end_lsn_(last_slide_end_lsn);
 
     if (OB_FAIL(group_entry_header.deserialize(buf, buf_len, pos))) {
       PALF_LOG(WARN, "group_entry_header deserialize failed", K(ret), K_(palf_id), K_(self));
+    } else if (lsn < last_slide_end_lsn && group_entry_header.get_log_id() < get_start_id()) {
+      // raw_write may submit an old group_log which is smaller than start log of sw,
+      // just return success for this case.
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        PALF_LOG(INFO, "this group_log has slid out, no need submit", K(ret), K_(palf_id), K_(self),
+            K(lsn), K(last_slide_end_lsn), K(group_entry_header));
+      }
     } else if (!leader_can_submit_group_log_(lsn, buf_len)) {
       LSN curr_max_lsn;
       (void) lsn_allocator_.get_curr_end_lsn(curr_max_lsn);
