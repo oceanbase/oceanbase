@@ -21,8 +21,8 @@ namespace oceanbase
 namespace common
 {
 
-ObBasicStatsEstimator::ObBasicStatsEstimator(ObExecContext &ctx)
-  : ObStatsEstimator(ctx)
+ObBasicStatsEstimator::ObBasicStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator)
+  : ObStatsEstimator(ctx, allocator)
 {}
 
 template<class T>
@@ -32,7 +32,7 @@ int ObBasicStatsEstimator::add_stat_item(const T &item)
   ObStatItem *cpy = NULL;
   if (!item.is_needed()) {
     // do nothing
-  } else if (OB_ISNULL(cpy = copy_stat_item(ctx_.get_allocator(), item))) {
+  } else if (OB_ISNULL(cpy = copy_stat_item(allocator_, item))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to copy stat item", K(ret));
   } else if (OB_FAIL(stat_items_.push_back(cpy))) {
@@ -61,9 +61,9 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
   //            1. RowCount should be added at the first
   //            2. NumDistinct should be estimated before TopKHist
   //            3. AvgRowLen should be added at the last
-  if (OB_UNLIKELY(dst_opt_stats.empty())) {
+  if (OB_UNLIKELY(dst_opt_stats.empty()) || OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected empty", K(ret), K(dst_opt_stats.empty()));
+    LOG_WARN("get unexpected empty", K(ret), K(dst_opt_stats.empty()), K(param.allocator_));
   } else if (OB_FAIL(ObDbmsStatsUtils::init_col_stats(allocator,
                                                       column_params.count(),
                                                       src_col_stats))) {
@@ -78,7 +78,7 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
                                                                param.duration_time_,
                                                                duration_time))) {
     LOG_WARN("failed to get valid duration time", K(ret));
-  } else if (OB_FAIL(fill_query_timeout_info(ctx_.get_allocator(), duration_time))) {
+  } else if (OB_FAIL(fill_query_timeout_info(*param.allocator_, duration_time))) {
     LOG_WARN("failed to fill query timeout info", K(ret));
   } else if (OB_FAIL(fill_sample_info(allocator, param.sample_info_))) {
     LOG_WARN("failed to fill sample info", K(ret));
@@ -805,13 +805,16 @@ int ObBasicStatsEstimator::refine_basic_stats(const ObTableStatParam &param,
                                               ObIArray<ObOptStat> &dst_opt_stats)
 {
   int ret = OB_SUCCESS;
-  if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
+  if (OB_ISNULL(param.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < dst_opt_stats.count(); ++i) {
       bool need_re_estimate = false;
       ObExtraParam new_extra;
       ObTableStatParam new_param;
       ObSEArray<ObOptStat, 1> tmp_opt_stats;
-      ObBasicStatsEstimator basic_re_est(ctx_);
+      ObBasicStatsEstimator basic_re_est(ctx_, *param.allocator_);
       if (OB_FAIL(check_stat_need_re_estimate(param, extra, dst_opt_stats.at(i),
                                               need_re_estimate, new_param, new_extra))) {
         LOG_WARN("failed to check stat need re-estimate", K(ret));

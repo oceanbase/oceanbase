@@ -567,9 +567,9 @@ int ObDbmsStatsExportImport::do_import_stats(ObExecContext &ctx,
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
       ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy);
-      if (OB_UNLIKELY(raw_sql.empty())) {
+      if (OB_UNLIKELY(raw_sql.empty()) || OB_ISNULL(param.allocator_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected empty", K(ret), K(raw_sql));
+        LOG_WARN("get unexpected empty", K(ret), K(raw_sql), K(param));
       } else if (OB_FAIL(sql_client_retry_weak.read(proxy_result,
                                                     param.tenant_id_, raw_sql.ptr()))) {
         LOG_WARN("failed to execute sql", K(ret), K(raw_sql));
@@ -585,7 +585,7 @@ int ObDbmsStatsExportImport::do_import_stats(ObExecContext &ctx,
             ObObj val;
             if (OB_FAIL(client_result->get_obj(i, tmp))) {
               LOG_WARN("failed to get object", K(ret));
-            } else if (OB_FAIL(ob_write_obj(ctx.get_allocator(), tmp, val))) {
+            } else if (OB_FAIL(ob_write_obj(*param.allocator_, tmp, val))) {
               LOG_WARN("failed to write object", K(ret));
             } else if (OB_FAIL(result_objs.push_back(val))) {
               LOG_WARN("failed to add result", K(ret));
@@ -679,9 +679,10 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   is_index_stat = false;
-  if (OB_UNLIKELY(result_objs.count() != StatTableColumnName::MAX_COL)) {
+  if (OB_UNLIKELY(result_objs.count() != StatTableColumnName::MAX_COL) ||
+      OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(result_objs.count()));
+    LOG_WARN("get unexpected error", K(ret), K(result_objs.count()), K(param));
   } else {
     ObOptTableStat *tbl_stat = NULL;
     ObOptColumnStat *col_stat = NULL;
@@ -994,7 +995,7 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("get unexpected error", K(result_objs), K(ret), KPC(col_stat));
               } else if (col_stat->get_histogram().get_buckets().empty()) {
-                if (OB_FAIL(col_stat->get_histogram().prepare_allocate_buckets(ctx.get_allocator(),
+                if (OB_FAIL(col_stat->get_histogram().prepare_allocate_buckets(*param.allocator_,
                                                                                int_val))) {
                   LOG_WARN("failed to prepare allocate buckets", K(ret));
                 } else {/*do nothing*/}
@@ -1036,12 +1037,12 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
                 LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid or inconsistent input values");
               }
             } else if (lib::is_oracle_mode() &&
-                       OB_FAIL(convert_bin_hex_raw_to_obj(ctx.get_allocator(),
+                       OB_FAIL(convert_bin_hex_raw_to_obj(*param.allocator_,
                                                           result_objs.at(i),
                                                           min_obj))) {
               LOG_WARN("failed to convert bin hex raw to obj", K(ret));
             } else if (lib::is_mysql_mode() &&
-                       OB_FAIL(convert_bin_hex_text_to_obj(ctx.get_allocator(),
+                       OB_FAIL(convert_bin_hex_text_to_obj(*param.allocator_,
                                                            result_objs.at(i),
                                                            min_obj))) {
               LOG_WARN("failed to convert bin hex text to obj", K(ret));
@@ -1059,12 +1060,12 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
                 LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid or inconsistent input values");
               }
             } else if (lib::is_oracle_mode() &&
-                       OB_FAIL(convert_bin_hex_raw_to_obj(ctx.get_allocator(),
+                       OB_FAIL(convert_bin_hex_raw_to_obj(*param.allocator_,
                                                           result_objs.at(i),
                                                           max_obj))) {
               LOG_WARN("failed to convert bin hex raw to obj", K(ret));
             } else if (lib::is_mysql_mode() &&
-                       OB_FAIL(convert_bin_hex_text_to_obj(ctx.get_allocator(),
+                       OB_FAIL(convert_bin_hex_text_to_obj(*param.allocator_,
                                                            result_objs.at(i),
                                                            max_obj))) {
               LOG_WARN("failed to convert bin hex text to obj", K(ret));
@@ -1081,12 +1082,12 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
                 LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid or inconsistent input values");
               }
             } else if (lib::is_oracle_mode() &&
-                       OB_FAIL(convert_bin_hex_raw_to_obj(ctx.get_allocator(),
+                       OB_FAIL(convert_bin_hex_raw_to_obj(*param.allocator_,
                                                           result_objs.at(i),
                                                           hist_bucket.endpoint_value_))) {
               LOG_WARN("failed to convert bin hex raw to obj", K(ret));
             } else if (lib::is_mysql_mode() &&
-                       OB_FAIL(convert_bin_hex_text_to_obj(ctx.get_allocator(),
+                       OB_FAIL(convert_bin_hex_text_to_obj(*param.allocator_,
                                                            result_objs.at(i),
                                                            hist_bucket.endpoint_value_))) {
               LOG_WARN("failed to convert bin hex text to obj", K(ret));
@@ -1143,7 +1144,7 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
               LOG_WARN("failed to get varchar", K(ret));
             } else if (stat_type == COLUMN_STAT && llc_bitmap_size > 0) {
               char *bitmap_buf = NULL;
-              if (OB_ISNULL(bitmap_buf = static_cast<char*>(ctx.get_allocator().alloc(
+              if (OB_ISNULL(bitmap_buf = static_cast<char*>(param.allocator_->alloc(
                                                                               hex_str.length())))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
                 LOG_ERROR("allocate memory for llc_bitmap failed.", K(hex_str.length()), K(ret));
@@ -1153,7 +1154,7 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
                 char *decomp_buf = NULL ;
                 int64_t decomp_size = ObColumnStat::NUM_LLC_BUCKET;
                 const int64_t bitmap_size = hex_str.length() / 2;
-                if (OB_FAIL(ObOptStatSqlService::get_decompressed_llc_bitmap(ctx.get_allocator(),
+                if (OB_FAIL(ObOptStatSqlService::get_decompressed_llc_bitmap(*param.allocator_,
                                                                              bitmap_buf,
                                                                              bitmap_size,
                                                                              decomp_buf,
@@ -1200,10 +1201,13 @@ int ObDbmsStatsExportImport::init_opt_stat(ObExecContext &ctx,
   uint64_t column_id = 0;
   uint64_t stattype = StatTypeLocked::NULL_TYPE;
   common::ObCollationType cs_type = CS_TYPE_INVALID;
-  if (OB_FAIL(get_part_info(param, part_str, subpart_str, part_id, type, stattype))) {
+  if (OB_ISNULL(param.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(param));
+  } else if (OB_FAIL(get_part_info(param, part_str, subpart_str, part_id, type, stattype))) {
     LOG_WARN("failed to get part info", K(ret));
   } else if (TABLE_STAT == stat_type || stat_type == INDEX_STAT) {
-    if (OB_ISNULL(ptr = ctx.get_allocator().alloc(sizeof(ObOptTableStat)))) {
+    if (OB_ISNULL(ptr = param.allocator_->alloc(sizeof(ObOptTableStat)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("memory is not enough", K(ret), K(ptr));
     } else {
@@ -1222,11 +1226,11 @@ int ObDbmsStatsExportImport::init_opt_stat(ObExecContext &ctx,
       LOG_WARN("failed to get opt col stat", K(ret));
     } else if (col_stat != NULL) {//find already exists opt column stat
       /*do nothing*/
-    } else if (OB_ISNULL(ptr = ctx.get_allocator().alloc(sizeof(ObOptColumnStat)))) {
+    } else if (OB_ISNULL(ptr = param.allocator_->alloc(sizeof(ObOptColumnStat)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("memory is not enough", K(ret), K(ptr));
     } else {
-      col_stat = new (ptr) ObOptColumnStat(ctx.get_allocator());
+      col_stat = new (ptr) ObOptColumnStat(*param.allocator_);
       col_stat->set_table_id(param.table_id_);
       col_stat->set_partition_id(part_id);
       col_stat->set_stat_level(type);

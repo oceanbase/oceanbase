@@ -237,6 +237,7 @@ public:
                                 common::ObObj &result);
 
   static int parse_method_opt(sql::ObExecContext &ctx,
+                              ObIAllocator *allocator,
                               ObIArray<ObColumnStatParam> &column_params,
                               const ObString &method_opt);
 
@@ -497,6 +498,7 @@ private:
                                            ObIArray<uint64_t> &table_ids);
 
   static int get_new_stat_pref(ObExecContext &ctx,
+                               common::ObIAllocator &allocator,
                                ObString &opt_name,
                                ObString &opt_value,
                                bool is_global_prefs,
@@ -545,6 +547,7 @@ private:
                                    ObIArray<ObAuxTableMetaInfo> &index_infos);
 
   static int get_index_schema(sql::ObExecContext &ctx,
+                              common::ObIAllocator &allocator,
                               const int64_t data_table_id,
                               const bool is_sensitive_compare,
                               ObString &index_name,

@@ -42,6 +42,7 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
 {
   int ret = OB_SUCCESS;
   ObTableStatParam param;
+  param.allocator_ = &ctx.get_allocator();
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   ObSQLSessionInfo *session = ctx.get_my_session();
   bool in_restore = false;

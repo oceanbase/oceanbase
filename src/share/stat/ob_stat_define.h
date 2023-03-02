@@ -301,7 +301,8 @@ struct ObTableStatParam {
     global_data_part_id_(INVALID_GLOBAL_PART_ID),
     data_table_id_(INVALID_GLOBAL_PART_ID),
     need_estimate_block_(true),
-    is_temp_table_(false)
+    is_temp_table_(false),
+    allocator_(NULL)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -374,6 +375,7 @@ struct ObTableStatParam {
   int64_t data_table_id_; // the data table id for index schema
   bool need_estimate_block_;//need estimate macro/micro block count
   bool is_temp_table_;
+  common::ObIAllocator *allocator_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),

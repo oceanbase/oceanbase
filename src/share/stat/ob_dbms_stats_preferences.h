@@ -260,6 +260,7 @@ public:
 
 private:
   static int do_get_prefs(ObExecContext &ctx,
+                          ObIAllocator *allocator,
                           const ObSqlString &raw_sql,
                           bool &get_result,
                           ObObj &result);

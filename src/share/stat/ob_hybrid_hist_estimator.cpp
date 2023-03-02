@@ -21,8 +21,8 @@ namespace oceanbase
 namespace common
 {
 
-ObHybridHistEstimator::ObHybridHistEstimator(ObExecContext &ctx)
-  : ObStatsEstimator(ctx)
+ObHybridHistEstimator::ObHybridHistEstimator(ObExecContext &ctx, ObIAllocator &allocator)
+  : ObStatsEstimator(ctx, allocator)
 {}
 
 template<class T>
@@ -32,7 +32,7 @@ int ObHybridHistEstimator::add_stat_item(const T &item, ObIArray<ObStatItem *> &
   ObStatItem *cpy = NULL;
   if (!item.is_needed()) {
     // do nothing
-  } else if (OB_ISNULL(cpy = copy_stat_item(ctx_.get_allocator(), item))) {
+  } else if (OB_ISNULL(cpy = copy_stat_item(allocator_, item))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to copy stat item", K(ret));
   } else if (OB_FAIL(stat_items.push_back(cpy))) {
@@ -435,7 +435,7 @@ int ObHybridHistEstimator::try_build_hybrid_hist(const ObColumnStatParam &param,
         LOG_WARN("failed to do build hybrid hist", K(ret));
       } else {
         col_stat.get_histogram().get_buckets().reset();
-        if (OB_FAIL(col_stat.get_histogram().prepare_allocate_buckets(ctx_.get_allocator(),
+        if (OB_FAIL(col_stat.get_histogram().prepare_allocate_buckets(allocator_,
                                                                       hybrid_hist.get_buckets().count()))) {
           LOG_WARN("failed to prepare allocate buckets", K(ret));
         } else if (OB_FAIL(col_stat.get_histogram().assign_buckets(hybrid_hist.get_buckets()))) {

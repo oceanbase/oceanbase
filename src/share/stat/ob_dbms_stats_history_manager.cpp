@@ -319,9 +319,9 @@ int ObDbmsStatsHistoryManager::fetch_table_stat_histrory(ObExecContext &ctx,
   uint64_t tenant_id = param.tenant_id_;
   uint64_t exec_tenant_id = share::schema::ObSchemaUtils::get_exec_tenant_id(tenant_id);
   ObSqlString partition_list;
-  if (OB_ISNULL(mysql_proxy = ctx.get_sql_proxy())) {
+  if (OB_ISNULL(mysql_proxy = ctx.get_sql_proxy()) || OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(mysql_proxy));
+    LOG_WARN("get unexpected error", K(ret), K(mysql_proxy), K(param));
   } else if (OB_FAIL(gen_partition_list(param, partition_list))) {
     LOG_WARN("failed to gen partition list", K(ret));
   } else if (OB_FAIL(raw_sql.append_fmt(FETCH_TAB_STATS_HISTROY,
@@ -344,7 +344,7 @@ int ObDbmsStatsHistoryManager::fetch_table_stat_histrory(ObExecContext &ctx,
       } else {
         while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
           ObOptTableStat *stat = NULL;
-          if (OB_FAIL(fill_table_stat_history(ctx.get_allocator(), *client_result, stat))) {
+          if (OB_FAIL(fill_table_stat_history(*param.allocator_, *client_result, stat))) {
             LOG_WARN("failed to fill table stat", K(ret));
           } else if (OB_ISNULL(stat)) {
             ret = OB_ERR_UNEXPECTED;
@@ -422,9 +422,9 @@ int ObDbmsStatsHistoryManager::fetch_column_stat_history(ObExecContext &ctx,
   uint64_t tenant_id = param.tenant_id_;
   uint64_t exec_tenant_id = share::schema::ObSchemaUtils::get_exec_tenant_id(tenant_id);
   ObSqlString partition_list;
-  if (OB_ISNULL(mysql_proxy = ctx.get_sql_proxy())) {
+  if (OB_ISNULL(mysql_proxy = ctx.get_sql_proxy()) || OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(mysql_proxy));
+    LOG_WARN("get unexpected error", K(ret), K(mysql_proxy), K(param));
   } else if (OB_FAIL(gen_partition_list(param, partition_list))) {
     LOG_WARN("failed to gen partition list", K(ret));
   } else if (OB_FAIL(raw_sql.append_fmt(FETCH_COL_STATS_HISTROY,
@@ -447,7 +447,7 @@ int ObDbmsStatsHistoryManager::fetch_column_stat_history(ObExecContext &ctx,
       } else {
         while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
           ObOptColumnStat *col_stat = NULL;
-          if (OB_FAIL(fill_column_stat_history(ctx.get_allocator(), *client_result, col_stat))) {
+          if (OB_FAIL(fill_column_stat_history(*param.allocator_, *client_result, col_stat))) {
             LOG_WARN("failed to fill table stat", K(ret));
           } else if (OB_ISNULL(col_stat)) {
             ret = OB_ERR_UNEXPECTED;
@@ -460,7 +460,8 @@ int ObDbmsStatsHistoryManager::fetch_column_stat_history(ObExecContext &ctx,
               LOG_WARN("failed to set col stat cs type", K(ret));
             } else if (!col_stat->get_histogram().is_valid()) {
               // do nothing
-            } else if (OB_FAIL(fetch_histogram_stat_histroy(ctx, specify_time, *col_stat))) {
+            } else if (OB_FAIL(fetch_histogram_stat_histroy(ctx, *param.allocator_,
+                                                            specify_time, *col_stat))) {
               LOG_WARN("fetch histogram statistics failed", K(ret));
             } else {/*do nothing*/}
           }
@@ -587,6 +588,7 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
 }
 
 int ObDbmsStatsHistoryManager::fetch_histogram_stat_histroy(ObExecContext &ctx,
+                                                            ObIAllocator &allocator,
                                                             const int64_t specify_time,
                                                             ObOptColumnStat &col_stat)
 {
@@ -621,7 +623,7 @@ int ObDbmsStatsHistoryManager::fetch_histogram_stat_histroy(ObExecContext &ctx,
           LOG_WARN("failed to execute sql", K(ret));
         } else {
           while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
-            if (OB_FAIL(fill_bucket_stat_histroy(ctx.get_allocator(), *client_result, col_stat))) {
+            if (OB_FAIL(fill_bucket_stat_histroy(allocator, *client_result, col_stat))) {
               LOG_WARN("fill bucket stat failed", K(ret));
             } else {/*do nothing*/}
           }

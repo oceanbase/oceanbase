@@ -658,6 +658,7 @@ int ObOptimizerStatsGatheringOp::generate_stat_param(ObTableStatParam &param)
     param.table_id_ = MY_SPEC.table_id_;
     param.need_global_ = true;
     param.part_level_ = MY_SPEC.part_level_;
+    param.allocator_ = &ctx_.get_allocator();
     if (!MY_SPEC.is_part_table()) {
       param.global_part_id_ = MY_SPEC.table_id_;
       param.global_tablet_id_ = MY_SPEC.table_id_;

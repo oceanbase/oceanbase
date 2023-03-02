@@ -21,8 +21,9 @@ namespace oceanbase
 namespace common
 {
 
-ObStatsEstimator::ObStatsEstimator(ObExecContext &ctx) :
+ObStatsEstimator::ObStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator) :
   ctx_(ctx),
+  allocator_(allocator),
   db_name_(),
   from_table_(),
   partition_hint_(),
@@ -368,14 +369,14 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
             ObObj val;
             if (OB_FAIL(client_result->get_obj(i, tmp))) {
               LOG_WARN("failed to get object", K(ret));
-            } else if (OB_FAIL(ob_write_obj(ctx_.get_allocator(), tmp, val))) {
+            } else if (OB_FAIL(ob_write_obj(allocator_, tmp, val))) {
               LOG_WARN("failed to write object", K(ret));
             } else if (OB_FAIL(add_result(val))) {
               LOG_WARN("failed to add result", K(ret));
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(decode(ctx_.get_allocator()))) {
+            if (OB_FAIL(decode(allocator_))) {
               LOG_WARN("failed to decode results", K(ret));
             } else if (copy_type == COPY_ALL_STAT &&
                        OB_FAIL(copy_opt_stat(src_opt_stat, dst_opt_stats))) {
