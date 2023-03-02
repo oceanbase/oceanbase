@@ -573,6 +573,7 @@ public:
       can_rollup_pushdown_(false),
       force_use_hash_(false),
       force_use_merge_(false),
+      is_scalar_group_by_(false),
       distinct_exprs_(),
       aggr_code_expr_(NULL),
       non_distinct_aggr_items_(),
@@ -591,6 +592,7 @@ public:
     bool can_rollup_pushdown_;
     bool force_use_hash_; // has use_hash_aggregation/use_hash_distinct hint
     bool force_use_merge_; // has no_use_hash_aggregation/no_use_hash_distinct hint
+    bool is_scalar_group_by_;
     ObSEArray<ObRawExpr*, 8> distinct_exprs_;
 
     // context for three stage group by push down
@@ -614,6 +616,7 @@ public:
                  K_(can_rollup_pushdown),
                  K_(force_use_hash),
                  K_(force_use_merge),
+                 K_(is_scalar_group_by),
                  K_(distinct_exprs));
   };
 
