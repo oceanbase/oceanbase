@@ -763,7 +763,7 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
     LOG_WARN("unexpect exprs", K(ret), K(left_unique_exprs), K(right_flag_exprs));
   } else {
     int64_t idx = OB_INVALID_INDEX;
-    if (ObOptimizerUtil::find_equal_expr(select_exprs, right_flag_exprs.at(0), idx)) {
+    if (ObOptimizerUtil::find_item(select_exprs, right_flag_exprs.at(0), &idx)) {
       ret = right_flag_pos.add_member(idx);
     } else if (OB_FAIL(right_flag_pos.add_member(stmt->get_select_item_size()))) {
       LOG_WARN("failed to push back expr", K(ret));
@@ -772,7 +772,7 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
       LOG_WARN("failed to create select item", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < left_unique_exprs.count(); ++i) {
-      if (ObOptimizerUtil::find_equal_expr(select_exprs, left_unique_exprs.at(i), idx)) {
+      if (ObOptimizerUtil::find_item(select_exprs, left_unique_exprs.at(i), &idx)) {
         ret = left_unique_pos.add_member(idx);
       } else if (OB_FAIL(left_unique_pos.add_member(stmt->get_select_item_size()))) {
         LOG_WARN("failed to push back expr", K(ret));

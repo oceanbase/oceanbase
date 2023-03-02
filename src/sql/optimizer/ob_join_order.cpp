@@ -405,12 +405,6 @@ int ObJoinOrder::compute_sharding_info_for_base_path(const bool use_das,
                                   table_partition_info.get_ref_table_id(),
                                   table_partition_info.get_phy_tbl_location_info_for_update()))) {
       LOG_WARN("failed to set partition key", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(sharding_info->get_partition_keys()))) {
-      LOG_WARN("failed to get shared expr for partition keys", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(sharding_info->get_sub_partition_keys()))) {
-      LOG_WARN("failed to get shared expr for subpartition keys", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(sharding_info->get_partition_func()))) {
-      LOG_WARN("failed to get partition func", K(ret));
     } else {
       sharding_info->set_can_reselect_replica(can_reselect_replica);
       LOG_TRACE("succeed to compute base table sharding info", K(*sharding_info));
@@ -3217,8 +3211,6 @@ int ObJoinOrder::compute_const_exprs_for_subquery(uint64_t table_id,
                                         root->get_output_const_exprs(),
                                         output_const_exprs_))) {
       LOG_WARN("failed to convert subplan scan expr", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(output_const_exprs_))) {
-      LOG_WARN("failed to get shared expr", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::get_subplan_const_column(*parent_stmt,
                                                                  table_id,
                                                                  *child_stmt,
@@ -3368,8 +3360,6 @@ int ObJoinOrder::compute_equal_set_for_subquery(uint64_t table_id, ObLogicalOper
                 root->get_output_equal_sets(),
                 input_equal_sets))) {
       LOG_WARN("failed to generate subplan scan expr", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(input_equal_sets))) {
-      LOG_WARN("failed to get shared expr for input equal sets", K(ret));
     } else if (OB_FAIL(preds.assign(restrict_info_set_))) {
       LOG_WARN("failed to assign exprs", K(ret));
       // todo link.zt, the generated predicates is only used for deducing equal sets
@@ -3488,8 +3478,6 @@ int ObJoinOrder::convert_subplan_scan_order_item(ObLogPlan &plan,
       } else {
         break;
       }
-    } else if (OB_FAIL(plan.get_shared_expr(temp_expr))) {
-      LOG_WARN("failed to get shared expr", K(ret));
     } else if (OB_FAIL(output_order.push_back(OrderItem(temp_expr,
                                                         input_order.at(i).order_type_)))) {
       LOG_WARN("failed to push back order item", K(ret));
@@ -3577,8 +3565,6 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                                 input_sharding->get_partition_keys(),
                                                                 part_exprs))) {
     LOG_WARN("failed to convert subplan scan expr", K(ret));
-  } else if (OB_FAIL(plan.get_shared_expr(part_exprs))) {
-    LOG_WARN("failed to get shared exprs", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
                                                                 subplan_root.get_output_equal_sets(),
                                                                 table_id,
@@ -3588,8 +3574,6 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                                 input_sharding->get_sub_partition_keys(),
                                                                 subpart_exprs))) {
     LOG_WARN("failed to convert subplan scan expr", K(ret));
-  } else if (OB_FAIL(plan.get_shared_expr(subpart_exprs))) {
-    LOG_WARN("failed to get shared exprs", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
                                                                 subplan_root.get_output_equal_sets(),
                                                                 table_id,
@@ -3599,8 +3583,6 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                                 input_sharding->get_partition_func(),
                                                                 part_func))) {
     LOG_WARN("failed to convert subplan scan expr", K(ret));
-  } else if (OB_FAIL(plan.get_shared_expr(part_func))) {
-    LOG_WARN("failed to get shared exprs", K(ret));
   } else {
     bool is_converted = input_sharding->get_partition_keys().count() == part_exprs.count() &&
         input_sharding->get_sub_partition_keys().count() == subpart_exprs.count() &&
@@ -11605,8 +11587,6 @@ int ObJoinOrder::compute_fd_item_set_for_subquery(const uint64_t table_id,
                        subplan_root->get_fd_item_set(),
                        fd_item_set_))) {
     LOG_WARN("failed to convert subplan scan fd item sets", K(ret));
-  } else if (OB_FAIL(get_plan()->get_shared_expr(fd_item_set_))) {
-    LOG_WARN("failed to get shared expr for fd item set", K(ret));
   } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set())) {
     LOG_WARN("failed to deduce fd item set", K(ret));
   } else {

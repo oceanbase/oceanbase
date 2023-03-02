@@ -4519,7 +4519,8 @@ bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
   bool bool_ret = true;
   if (this == &expr) {
     // do nothing
-  } else if (NULL != check_context && check_context->need_check_deterministic_ && !is_deterministic()) {
+  } else if (!is_deterministic() && (NULL == check_context ||
+                                     (NULL != check_context && check_context->need_check_deterministic_))) {
     bool_ret = false;
   } else if (!ObSysFunRawExpr::inner_same_as(expr, check_context)) {
     bool_ret = false;

@@ -864,8 +864,8 @@ int ObTransformAggrSubquery::transform_child_stmt(ObDMLStmt *stmt,
       ObRawExpr *group_expr = cond_expr->get_param_expr(inner_param_id);
       if (group_expr->has_flag(IS_CONST)) {
         // do nothing for const expr
-      } else if (ObOptimizerUtil::find_equal_expr(subquery.get_group_exprs(),
-                                                  group_expr)) {
+      } else if (ObOptimizerUtil::find_item(subquery.get_group_exprs(),
+                                            group_expr)) {
         // do nothing
       } else if (OB_FAIL(subquery.add_group_expr(group_expr))) {
         LOG_WARN("failed to add group expr", K(ret));

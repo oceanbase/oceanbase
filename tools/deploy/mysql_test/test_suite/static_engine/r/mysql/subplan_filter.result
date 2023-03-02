@@ -2203,8 +2203,8 @@ rowset=256
 cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil),
 rowset=256
       dop=1
-  2 - output([t1.c1], [cast(t1.c1, DECIMAL(11, 0))], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))],
-[t1.c1 = ANY(subquery(7))], [subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
+[subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
       exec_params_([t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
@@ -2296,8 +2296,8 @@ DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > 
   1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
 DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [cast(t1.c1, DECIMAL(11, 0))], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))],
-[t1.c1 = ANY(subquery(7))], [subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
+[subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
       exec_params_([t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
@@ -2389,8 +2389,8 @@ DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > 
   1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
 DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [cast(t1.c1, DECIMAL(11, 0))], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))],
-[t1.c1 = ANY(subquery(7))], [subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
+[subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
       exec_params_([t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule

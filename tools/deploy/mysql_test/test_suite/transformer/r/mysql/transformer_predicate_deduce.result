@@ -3959,8 +3959,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t3.c1], [t3.c2]), filter(nil), rowset=256
       equal_conds([cast(t1.c1, DOUBLE(-1, -1)) = cast(t3.c2, DOUBLE(-1, -1))]), other_conds(nil)
-  1 - output([t3.c2], [t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([cast(t3.c2, DOUBLE(-1, -1)) IN (cast(10, DOUBLE(-1, -1)), cast(20, DOUBLE(-1, -1)),
-cast(40, DOUBLE(-1, -1)))]), rowset=256
+  1 - output([t3.c2], [t3.c1]), filter([cast(t3.c2, DOUBLE(-1, -1)) IN (cast(10, DOUBLE(-1, -1)), cast(20, DOUBLE(-1, -1)), cast(40, DOUBLE(-1, -1)))]),
+rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -4141,7 +4141,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t3.c1], [t3.c2]), filter(nil), rowset=256
       equal_conds([cast(t1.c1, DOUBLE(-1, -1)) = cast(t3.c2, DOUBLE(-1, -1))]), other_conds(nil)
-  1 - output([t3.c2], [t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([cast(t3.c2, DOUBLE(-1, -1)) != cast(20, DOUBLE(-1, -1))]), rowset=256
+  1 - output([t3.c2], [t3.c1]), filter([cast(t3.c2, DOUBLE(-1, -1)) != cast(20, DOUBLE(-1, -1))]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -4205,8 +4205,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t2.c1]), filter(nil), rowset=256
       equal_conds([cast(t3.c2, DOUBLE(-1, -1)) = t2.c2]), other_conds(nil)
-  1 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0,
--1)), DOUBLE(-1, -1)))]), rowset=256
+  1 - output([t3.c2], [t3.c1]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, -1)), DOUBLE(-1, -1)))]),
+rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true

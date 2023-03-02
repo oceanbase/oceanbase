@@ -131,7 +131,6 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     update_table_metas_(),
     selectivity_ctx_(ctx, this, stmt),
     alloc_sfu_list_(),
-    expr_resv_ctx_(NULL),
     onetime_copier_(NULL)
 {
 }
@@ -153,10 +152,6 @@ ObLogPlan::~ObLogPlan()
 
 void ObLogPlan::destory()
 {
-  if (NULL != expr_resv_ctx_) {
-    expr_resv_ctx_->~ObSharedExprResolver();
-    expr_resv_ctx_ = NULL;
-  }
   if (NULL != onetime_copier_) {
     onetime_copier_->~ObRawExprCopier();
     onetime_copier_ = NULL;
@@ -11134,8 +11129,6 @@ int ObLogPlan::init_plan_info()
   } else if (OB_FAIL(log_plan_hint_.init_log_plan_hint(*schema_guard, *get_stmt(),
                                                        query_ctx->get_query_hint()))) {
     LOG_WARN("failed to init log plan hint", K(ret));
-  } else if (OB_FAIL(init_shared_expr_set())) {
-    LOG_WARN("failed to init shared expr set", K(ret));
   } else if (OB_FAIL(init_onetime_subquery_info())) {
     LOG_WARN("failed to extract onetime_exprs", K(ret));
   }
@@ -12949,55 +12942,6 @@ int ObLogPlan::gen_calc_part_id_expr(uint64_t table_id,
   return ret;
 }
 
-int ObLogPlan::init_shared_expr_set()
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObRawExpr *> all_exprs;
-  ObStmtExprGetter visitor;
-  visitor.set_relation_scope();
-  visitor.remove_scope(SCOPE_INSERT_VECTOR);
-  visitor.remove_scope(SCOPE_JOINED_TABLE);
-  void *ptr = NULL;
-  if (OB_ISNULL(get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret));
-  } else if (get_stmt()->is_hierarchical_query()) {
-    // do nothing
-  } else if (OB_FAIL(get_stmt()->get_relation_exprs(all_exprs, visitor))) {
-    LOG_WARN("failed to iterate stmt expr", K(ret));
-  } else if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(ObSharedExprResolver)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("memory allocate failed", K(ret));
-  } else {
-    expr_resv_ctx_ = new(ptr) ObSharedExprResolver(get_optimizer_context().get_query_ctx());
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_exprs.count(); ++i) {
-      ObRawExpr *new_expr = NULL;
-      bool is_new = false;
-      if (OB_FAIL(expr_resv_ctx_->get_shared_instance(all_exprs.at(i),
-                                                      new_expr,
-                                                      is_new))) {
-        LOG_WARN("failed to get shared expr instance", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::get_shared_expr(ObRawExpr *&expr)
-{
-  int ret = OB_SUCCESS;
-  ObRawExpr *shared_expr = NULL;
-  bool is_new = false;
-  if (NULL == expr_resv_ctx_) {
-    // do nothing
-  } else if (OB_FAIL(expr_resv_ctx_->get_shared_instance(expr, shared_expr, is_new))) {
-    LOG_WARN("failed to get shared expr instance", K(ret));
-  } else {
-    expr = shared_expr;
-  }
-  return ret;
-}
-
 // this function is used to allocate the material operator to the for-update operator
 int ObLogPlan::candi_allocate_for_update_material()
 {
@@ -13057,17 +13001,6 @@ int ObLogPlan::perform_simplify_win_expr(ObLogicalOperator *op)
       } else if (OB_FAIL(win_expr->formalize(get_optimizer_context().get_session_info()))) {
         LOG_WARN("formalize win func expr failed", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::get_shared_expr(ObIArray<ObRawExpr *> &exprs)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    if (OB_FAIL(get_shared_expr(exprs.at(i)))) {
-      LOG_WARN("failed to get shared expr", K(ret));
     }
   }
   return ret;
@@ -13161,33 +13094,6 @@ int ObLogPlan::simplify_win_order_items(ObLogicalOperator* child_op,
         OB_FAIL(ObTransformUtils::rebuild_win_compare_range_expr(&get_optimizer_context().get_expr_factory(),
                                                                  win_expr, first_order_expr))) {
       LOG_WARN("failed to rebuild win compare range expr", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::get_shared_expr(EqualSets &equal_sets)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < equal_sets.count(); ++i) {
-    if (OB_ISNULL(equal_sets.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("equal sets is null", K(ret));
-    } else if (OB_FAIL(get_shared_expr(*equal_sets.at(i)))) {
-      LOG_WARN("failed to get shared expr", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::get_shared_expr(ObFdItemSet &fd_set)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < fd_set.count(); ++i) {
-    if (NULL != fd_set.at(i) && NULL != fd_set.at(i)->get_parent_exprs()) {
-      if (OB_FAIL(get_shared_expr(*fd_set.at(i)->get_parent_exprs()))) {
-        LOG_WARN("failed to get shared expr", K(ret));
-      }
     }
   }
   return ret;

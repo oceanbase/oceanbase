@@ -1673,7 +1673,7 @@ int ObSelectResolver::resolve_order_item(const ParseNode &sort_node, OrderItem &
     ObSEArray<ObRawExpr*, 4> select_exprs;
     if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
       LOG_WARN("failed to get select exprs", K(ret));
-    } else if (ObOptimizerUtil::find_equal_expr(select_exprs, order_item.expr_)) {
+    } else if (ObOptimizerUtil::find_item(select_exprs, order_item.expr_)) {
       /*do nothing*/
     } else {
       ret = OB_ERR_ORDER_BY_ITEM_NOT_IN_SELECT_LIST;

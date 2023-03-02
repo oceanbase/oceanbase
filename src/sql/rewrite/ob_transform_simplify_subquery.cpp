@@ -1422,7 +1422,7 @@ int ObTransformSimplifySubquery::groupby_can_be_eliminated_in_any_all(const ObSe
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("select list expr is NULL", K(ret));
       } else if ((s_expr)->has_flag(CNT_COLUMN)) {
-        if (!ObOptimizerUtil::find_equal_expr(stmt->get_group_exprs(), s_expr)) {
+        if (!ObOptimizerUtil::find_item(stmt->get_group_exprs(), s_expr)) {
           all_in_group_exprs = false;
         } else { /* do nothing */ }
       } else { /* do nothing */ }

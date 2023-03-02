@@ -140,6 +140,9 @@ public:
                                  const ObRawExpr *to,
                                  const EqualSets &equal_sets);
 
+  static bool is_expr_equivalent(const ObRawExpr *from,
+                                 const ObRawExpr *to);
+
   static int is_const_expr(const ObRawExpr* expr,
                            const EqualSets &equal_sets,
                            const common::ObIArray<ObRawExpr *> &const_exprs,
@@ -263,15 +266,13 @@ public:
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr)
   {
-    return find_item(exprs, expr);
+    int64_t idx = -1;
+    return find_equal_expr(exprs, expr, idx);
   }
 
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr,
-                              int64_t &idx)
-  {
-    return find_item(exprs, expr ,&idx);
-  }
+                              int64_t &idx);
 
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr,

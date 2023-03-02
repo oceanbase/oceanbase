@@ -519,6 +519,8 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
     // do nothing
   } else if (from == to) {
     found = true;
+  } else if (!from->is_generalized_column() && from->same_as(*to)) {
+    found = true;
   } else if (equal_sets.empty()) {
     // do nothing
   } else if (ObRawExprUtils::expr_is_order_consistent(from, to, is_consistent)
@@ -534,6 +536,20 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
         found = true;
       }
     }
+  }
+  return found;
+}
+
+bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
+                                         const ObRawExpr *to)
+{
+  bool found = false;
+  if (OB_ISNULL(from) || OB_ISNULL(to)) {
+    // do nothing
+  } else if (from == to) {
+    found = true;
+  } else if (!from->is_generalized_column() && from->same_as(*to)) {
+    found = true;
   }
   return found;
 }
@@ -1117,6 +1133,21 @@ bool ObOptimizerUtil::find_equal_expr(const ObIArray<ObRawExpr*> &exprs,
      }
    }
    return found;
+}
+
+bool ObOptimizerUtil::find_equal_expr(const ObIArray<ObRawExpr *> &exprs,
+                                      const ObRawExpr *expr,
+                                      int64_t &idx)
+{
+  bool found = false;
+  int64_t N = exprs.count();
+  for (int64_t i = 0; !found && i < N; ++i) {
+    if (is_expr_equivalent(exprs.at(i), expr)) {
+      found = true;
+      idx = i;
+    }
+  }
+  return found;
 }
 
 int ObOptimizerUtil::find_stmt_expr_direction(const ObDMLStmt &stmt,
@@ -4867,6 +4898,15 @@ int ObOptimizerUtil::convert_subplan_scan_expr(ObRawExprCopier &copier,
     LOG_WARN("failed to check subplan scan expr validity", K(ret));
   } else if (!is_valid) {
     /*do nothing*/
+  } else if (OB_FAIL(get_parent_stmt_expr(equal_sets,
+                                          table_id,
+                                          parent_stmt,
+                                          child_stmt,
+                                          input_expr,
+                                          output_expr))) {
+    LOG_WARN("failed to get parent stmt expr", K(ret));
+  } else if (NULL != output_expr) {
+    // do nothing
   } else if (OB_FAIL(copier.copy_on_replace(input_expr,
                                             output_expr,
                                             &replacer))) {
