@@ -269,7 +269,8 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
     for (int i = 0; i < batch_count && OB_SUCC(ret); ++i) {
       if (need_fill_batch_info) {
         if (OB_FAIL(ctx.fill_px_batch_info(arg_.get_sqc_handler()->
-          get_sqc_init_arg().sqc_.get_rescan_batch_params(), i))) {
+          get_sqc_init_arg().sqc_.get_rescan_batch_params(), i,
+          arg_.des_phy_plan_->get_expr_frame_info().rt_exprs_))) {
           LOG_WARN("fail to fill batch info", K(ret));
         } else if (OB_FAIL(arg_.get_sqc_handler()->get_sub_coord().
           get_sqc_ctx().gi_pump_.regenerate_gi_task())) {

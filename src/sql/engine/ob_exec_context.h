@@ -429,7 +429,10 @@ public:
   const ObIArray<ObPxTabletRange> &get_partition_ranges() const { return part_ranges_; }
   int set_partition_ranges(const ObIArray<ObPxTabletRange> &part_ranges);
   int add_partition_range(ObPxTabletRange &part_range);
-  int fill_px_batch_info(ObBatchRescanParams &params, int64_t batch_id);
+  int fill_px_batch_info(
+      ObBatchRescanParams &params,
+      int64_t batch_id,
+      sql::ObExpr::ObExprIArray &array);
   int64_t get_px_batch_id() { return px_batch_id_; }
 
   ObDmlEventType get_dml_event() const { return dml_event_; }
