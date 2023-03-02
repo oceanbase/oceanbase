@@ -900,7 +900,7 @@ struct ObArchiveLSMetaType final
   // so pay attention to give the type an appropriate name while the length of its name
   // 'SMALLER' than then MAX_TYPE_LEN
   static const int64_t MAX_TYPE_LEN = 100;
-  enum class Type : int64_t
+  enum Type : int64_t
   {
     INVALID_TYPE = 0,
     // add task type here
@@ -918,6 +918,7 @@ struct ObArchiveLSMetaType final
   bool operator==(const ObArchiveLSMetaType &other) const { return 0 == compare(other); }
   bool operator!=(const ObArchiveLSMetaType &other) const { return !operator==(other); }
   const char *get_type_str() const;
+  int get_next_type();
 
   TO_STRING_KV("type", get_type_str());
 };

@@ -1134,11 +1134,36 @@ int ObArchiveLSMetaType::compare(const ObArchiveLSMetaType &other) const
 
 const char *ObArchiveLSMetaType::get_type_str() const
 {
-  #define CHECK_TYPE_STR(x) case(Type::x): return #x
-  switch (type_) {
-    CHECK_TYPE_STR(SCHEMA_META);
-    default:
-      return "Invalid";
+  const char *type_str = nullptr;
+  const char *meta_type_strs[] = {
+    "invalid",
+    "schema_meta",
   };
-  #undef CHECK_TYPE_STR
+  STATIC_ASSERT(Type::MAX_TYPE == ARRAYSIZEOF(meta_type_strs), "type count mismatch");
+  if (type_ < Type::INVALID_TYPE || type_ >= Type::MAX_TYPE) {
+    type_str = "unknow";
+  } else {
+    type_str = meta_type_strs[type_];
+  }
+  return type_str;
+}
+
+int ObArchiveLSMetaType::get_next_type()
+{
+  int ret = OB_SUCCESS;
+  switch (type_) {
+    case Type::INVALID_TYPE: {
+      type_ = Type::SCHEMA_META;
+      break;
+    };
+    case Type::SCHEMA_META: {
+      ret = OB_ITER_END;
+      break;
+    };
+    case Type::MAX_TYPE: {
+      ret = OB_ITER_END;
+      break;
+    };
+  }
+  return ret;
 }

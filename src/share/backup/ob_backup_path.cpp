@@ -542,7 +542,7 @@ int ObBackupPathUtil::get_backup_set_placeholder_end_failed_path(
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/
+// file:///obbackup/backup_set_1_full/
 int ObBackupPathUtil::get_backup_set_dir_path(const share::ObBackupDest &backup_set_dest, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -553,7 +553,7 @@ int ObBackupPathUtil::get_backup_set_dir_path(const share::ObBackupDest &backup_
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/
+// file:///obbackup/backup_set_1_full/
 int ObBackupPathUtil::get_backup_set_dir_path(const share::ObBackupDest &backup_tenant_dest, 
     const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
 {
@@ -613,7 +613,7 @@ int ObBackupPathUtil::get_backup_set_inner_placeholder(
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/
+// file:///obbackup/backup_set_1_full/log_stream_1/
 int ObBackupPathUtil::get_ls_backup_dir_path(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id, 
     ObBackupPath &path)
 {
@@ -638,7 +638,7 @@ int ObBackupPathUtil::get_ls_backup_dir_path(const share::ObBackupDest &backup_s
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/meta_info_turn_1/tablet_info.obbak
+// file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1/tablet_info.obbak
 int ObBackupPathUtil::get_ls_data_tablet_info_path(const share::ObBackupDest &backup_set_dest,
     const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, ObBackupPath &path)
 {
@@ -653,7 +653,7 @@ int ObBackupPathUtil::get_ls_data_tablet_info_path(const share::ObBackupDest &ba
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/major_data_turn_1_retry_0/
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/
 int ObBackupPathUtil::get_ls_backup_data_dir_path(const share::ObBackupDest &backup_set_dest,
     const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type,
     const int64_t turn_id, const int64_t retry_id, ObBackupPath &path)
@@ -668,7 +668,7 @@ int ObBackupPathUtil::get_ls_backup_data_dir_path(const share::ObBackupDest &bac
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/major_data_turn_1_retry_0/
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/
 int ObBackupPathUtil::get_ls_backup_data_dir_path(const share::ObBackupDest &backup_tenant_dest,
     const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
     const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path)
@@ -684,7 +684,7 @@ int ObBackupPathUtil::get_ls_backup_data_dir_path(const share::ObBackupDest &bac
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/major_data_turn_1_retry_0/macro_block_data.1.obbak
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/macro_block_data.1.obbak
 int ObBackupPathUtil::get_macro_block_backup_path(const share::ObBackupDest &backup_set_dest,
     const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type,
     const int64_t turn_id, const int64_t retry_id, const int64_t file_id, ObBackupPath &path)
@@ -717,7 +717,7 @@ int ObBackupPathUtil::get_macro_block_backup_path(const share::ObBackupDest &bac
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/major_data_turn_1_retry_0/macro_range_index.obbak
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/macro_range_index.obbak
 int ObBackupPathUtil::get_ls_macro_range_index_backup_path(const share::ObBackupDest &backup_set_dest, 
     const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type, const int64_t turn_id, 
     const int64_t retry_id, ObBackupPath &path)
@@ -750,7 +750,7 @@ int ObBackupPathUtil::get_ls_macro_range_index_backup_path(const share::ObBackup
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/major_data_turn_1_retry_0/meta_index.obbak
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/meta_index.obbak
 int ObBackupPathUtil::get_ls_meta_index_backup_path(const share::ObBackupDest &backup_set_dest, 
     const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type,
     const int64_t turn_id, const int64_t retry_id, const bool is_sec_meta, ObBackupPath &path)
@@ -784,7 +784,7 @@ int ObBackupPathUtil::get_ls_meta_index_backup_path(const share::ObBackupDest &b
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/infos/
+// file:///obbackup/backup_set_1_full/infos/
 int ObBackupPathUtil::get_ls_info_dir_path(const share::ObBackupDest &backup_set_dest, ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
@@ -892,7 +892,7 @@ int ObBackupPathUtil::get_ls_meta_infos_path(const share::ObBackupDest &backup_s
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/tenant_backup_set_infos.obbak
+// file:///obbackup/backup_set_1_full/tenant_backup_set_infos.obbak
 int ObBackupPathUtil::get_tenant_backup_set_infos_path(const share::ObBackupDest &backup_set_dest, 
     ObBackupPath &backup_path)
 {
@@ -918,7 +918,7 @@ int ObBackupPathUtil::get_tenant_backup_set_infos_path(const share::ObBackupDest
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/single_backup_set_info.obbak
+// file:///obbackup/backup_set_1_full/single_backup_set_info.obbak
 int ObBackupPathUtil::get_backup_set_info_path(const share::ObBackupDest &backup_set_dest,
     ObBackupPath &backup_path)
 {
@@ -944,7 +944,7 @@ int ObBackupPathUtil::get_backup_set_info_path(const share::ObBackupDest &backup
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/infos/diagnose_info.obbak
+// file:///obbackup/backup_set_1_full/infos/diagnose_info.obbak
 int ObBackupPathUtil::get_diagnose_info_path(const share::ObBackupDest &backup_set_dest,
     ObBackupPath &backup_path)
 {
@@ -970,7 +970,7 @@ int ObBackupPathUtil::get_diagnose_info_path(const share::ObBackupDest &backup_t
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/infos/locality_info.obbak
+// file:///obbackup/backup_set_1_full/infos/locality_info.obbak
 int ObBackupPathUtil::get_locality_info_path(const share::ObBackupDest &backup_set_dest,
     ObBackupPath &backup_path)
 {
@@ -996,7 +996,7 @@ int ObBackupPathUtil::get_locality_info_path(const share::ObBackupDest &backup_t
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/meta_info_turn_1_retry_0/ls_meta_info.obbak
+// file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1_retry_0/ls_meta_info.obbak
 int ObBackupPathUtil::get_ls_meta_info_backup_path(const share::ObBackupDest &backup_tenant_dest,
     const ObBackupSetDesc &desc, const share::ObLSID &ls_id, const int64_t turn_id, 
     const int64_t retry_id, ObBackupPath &backup_path)
@@ -1014,7 +1014,7 @@ int ObBackupPathUtil::get_ls_meta_info_backup_path(const share::ObBackupDest &ba
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/logstream_1/xxx_xxx_turn_1_retry_0/macro_range_index.obbak
+// file:///obbackup/backup_set_1_full/logstream_1/xxx_xxx_turn_1_retry_0/macro_range_index.obbak
 int ObBackupPathUtil::get_tenant_macro_range_index_backup_path(const share::ObBackupDest &backup_set_dest,
     const ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id, ObBackupPath &path)
 {
@@ -1044,7 +1044,7 @@ int ObBackupPathUtil::get_tenant_macro_range_index_backup_path(const share::ObBa
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/logstream_1/xxx_xxx_turn_1_retry_0/meta_index.obbak
+// file:///obbackup/backup_set_1_full/logstream_1/xxx_xxx_turn_1_retry_0/meta_index.obbak
 int ObBackupPathUtil::get_tenant_meta_index_backup_path(const share::ObBackupDest &backup_set_dest,
     const ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
     const bool is_sec_meta, ObBackupPath &path)
@@ -1075,7 +1075,7 @@ int ObBackupPathUtil::get_tenant_meta_index_backup_path(const share::ObBackupDes
   return ret;
 }
 
-// file://obbackup/backup_set_1_full_20211231/infos/data_info_turn_1/tablet_log_stream_info.obbak
+// file://obbackup/backup_set_1_full/infos/data_info_turn_1/tablet_log_stream_info.obbak
 int ObBackupPathUtil::get_backup_data_tablet_ls_info_path(const share::ObBackupDest &backup_set_dest,
     const uint64_t turn_id, ObBackupPath &path)
 {
@@ -1103,7 +1103,7 @@ int ObBackupPathUtil::get_deleted_tablet_info_path(const share::ObBackupDest &ba
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/complement_log/
+// file:///obbackup/backup_set_1_full/log_stream_1/complement_log/
 int ObBackupPathUtil::get_ls_complement_log_dir_path(const share::ObBackupDest &backup_set_dest, 
     const share::ObLSID &ls_id, ObBackupPath &backup_path)
 {
@@ -1130,7 +1130,7 @@ int ObBackupPathUtil::get_ls_complement_log_dir_path(const share::ObBackupDest &
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/complement_log/1
+// file:///obbackup/backup_set_1_full/log_stream_1/complement_log/1
 int ObBackupPathUtil::get_ls_complement_log_backup_path(const share::ObBackupDest &backup_set_dest,
     const share::ObLSID &ls_id, const int64_t file_id, ObBackupPath &path)
 {

@@ -920,7 +920,7 @@ int ObArchiveStore::write_piece_inner_placeholder(const int64_t dest_id, const i
   return ret;
 }
 
-// oss://archive/d[dest_id]r[round_id]p[piece_id]/[ls_id]/ls_file_info.obarc
+// oss://archive/d[dest_id]r[round_id]p[piece_id]/[ls_id]/file_info.obarc
 int ObArchiveStore::is_single_ls_info_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
     const ObLSID &ls_id, bool &is_exist) const
 {
@@ -932,7 +932,7 @@ int ObArchiveStore::is_single_ls_info_file_exist(const int64_t dest_id, const in
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_single_ls_info_file_path(dest, dest_id, round_id, piece_id, ls_id,full_path))) {
+  } else if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, dest_id, round_id, piece_id, ls_id,full_path))) {
     LOG_WARN("failed to get single ls info file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else if (OB_FAIL(util.is_exist(full_path.get_ptr(), storage_info, is_exist))) {
     LOG_WARN("failed to check single ls info file exist.", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(ls_id), K(full_path), K(storage_info));
@@ -949,7 +949,7 @@ int ObArchiveStore::read_single_ls_info(const int64_t dest_id, const int64_t rou
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_single_ls_info_file_path(dest, dest_id, round_id, piece_id, ls_id, full_path))) {
+  } else if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, dest_id, round_id, piece_id, ls_id, full_path))) {
     LOG_WARN("failed to get single ls info file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else if (OB_FAIL(read_single_file(full_path.get_ptr(), desc))) {
     LOG_WARN("failed to read single file", K(ret), K(full_path));
@@ -965,7 +965,7 @@ int ObArchiveStore::write_single_ls_info(const int64_t dest_id, const int64_t ro
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_single_ls_info_file_path(dest, dest_id, round_id, piece_id, ls_id, full_path))) {
+  } else if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, dest_id, round_id, piece_id, ls_id, full_path))) {
     LOG_WARN("failed to get single ls info file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else if (OB_FAIL(write_single_file(full_path.get_ptr(), desc))) {
     LOG_WARN("failed to write single file", K(ret), K(full_path));
@@ -973,7 +973,7 @@ int ObArchiveStore::write_single_ls_info(const int64_t dest_id, const int64_t ro
   return ret;
 }
 
-// oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_file_info.obarc
+// oss://archive/d[dest_id]r[round_id]p[piece_id]/file_info.obarc
 int ObArchiveStore::is_piece_info_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const
 {
   int ret = OB_SUCCESS;

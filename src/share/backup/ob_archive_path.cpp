@@ -75,7 +75,7 @@ int ObArchivePathUtil::get_rounds_dir_path(const ObBackupDest &dest, ObBackupPat
   return ret;
 }
 
-// oss://archive/rounds/round_d[dest_id]r[round_id]_start
+// oss://archive/rounds/round_d[dest_id]r[round_id]_start.obarc
 int ObArchivePathUtil::get_round_start_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, ObBackupPath &path)
 {
@@ -91,7 +91,7 @@ int ObArchivePathUtil::get_round_start_file_path(const ObBackupDest &dest, const
   return ret;
 }
 
-// oss://archive/rounds/round_d[dest_id]r[round_id]_end
+// oss://archive/rounds/round_d[dest_id]r[round_id]_end.obarc
 int ObArchivePathUtil::get_round_end_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, ObBackupPath &path)
 {
@@ -120,7 +120,7 @@ int ObArchivePathUtil::get_pieces_dir_path(const ObBackupDest &dest, ObBackupPat
   return ret;
 }
 
-// // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000
+// // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000.obarc
 int ObArchivePathUtil::get_piece_start_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
     ObBackupPath &path)
@@ -141,7 +141,7 @@ int ObArchivePathUtil::get_piece_start_file_path(const ObBackupDest &dest, const
   return ret;
 }
 
-// oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000
+// oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000.obarc
 int ObArchivePathUtil::get_piece_end_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const SCN &end_scn,
     ObBackupPath &path)
@@ -179,7 +179,7 @@ int ObArchivePathUtil::get_piece_dir_path(const ObBackupDest &dest, const int64_
   return ret;
 }
 
-// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/single_piece_info
+// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/single_piece_info.obarc
 int ObArchivePathUtil::get_single_piece_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, ObBackupPath &path)
 {
@@ -207,7 +207,7 @@ int ObArchivePathUtil::get_piece_checkpoint_dir_path(const ObBackupDest &dest, c
   return ret;
 }
 
-// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info.[file_id]
+// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info.[file_id].obarc
 int ObArchivePathUtil::get_piece_checkpoint_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const int64_t file_id, ObBackupPath &path)
 {
@@ -223,7 +223,7 @@ int ObArchivePathUtil::get_piece_checkpoint_file_path(const ObBackupDest &dest, 
   return ret;
 }
 
-// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000
+// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000.obarc
 int ObArchivePathUtil::get_piece_inner_placeholder_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const SCN &start_scn, const SCN &end_scn, ObBackupPath &path)
 {
@@ -277,33 +277,33 @@ int ObArchivePathUtil::get_piece_ls_log_dir_path(const ObBackupDest &dest, const
   return ret;
 }
 
-// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/ls_file_info
-int ObArchivePathUtil::get_single_ls_info_file_path(const ObBackupDest &dest, const int64_t dest_id, 
+// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/file_info.obarc
+int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const int64_t dest_id,
     const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_piece_ls_dir_path_(dest, dest_id, round_id, piece_id, ls_id, path))) {
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id), K(ls_id));
-  } else if (OB_FAIL(path.join("ls_file_info", ObBackupFileSuffix::ARCHIVE))) {
+  } else if (OB_FAIL(path.join("file_info", ObBackupFileSuffix::ARCHIVE))) {
     LOG_WARN("failed to join ls file info ", K(ret), K(path));
   }
   return ret;
 }
 
-// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/piece_file_info
+// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/file_info.obarc
 int ObArchivePathUtil::get_piece_info_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_piece_dir_path(dest, dest_id, round_id, piece_id, path))) {
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id));
-  } else if (OB_FAIL(path.join("piece_file_info", ObBackupFileSuffix::ARCHIVE))) {
+  } else if (OB_FAIL(path.join("file_info", ObBackupFileSuffix::ARCHIVE))) {
     LOG_WARN("failed to join piece info file", K(ret), K(path));
   }
   return ret;
 }
 
-// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/tenant_archive_piece_infos
+// oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/tenant_archive_piece_infos.obarc
 int ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, ObBackupPath &path)
 {
@@ -336,10 +336,9 @@ int ObArchivePathUtil::get_ls_meta_record_prefix(const ObBackupDest &dest, const
     const ObArchiveLSMetaType &meta_type, ObBackupPath &prefix)
 {
   int ret = OB_SUCCESS;
-  ObFixedLengthString<ObArchiveLSMetaType::MAX_TYPE_LEN> s(meta_type.get_type_str());
   if (OB_FAIL(get_piece_ls_dir_path_(dest, dest_id, round_id, piece_id, ls_id, prefix))) {
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id), K(ls_id));
-  } else if (OB_FAIL(prefix.join(::obsys::ObStringUtil::str_to_lower(s.ptr()), ObBackupFileSuffix::NONE))) {
+  } else if (OB_FAIL(prefix.join(meta_type.get_type_str(), ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join meta_type", K(ret), K(prefix));
   }
   return ret;
