@@ -70,8 +70,8 @@ private:
   int get_all_tenant_();
   // get all ls list
   int get_all_tenant_ls_(const uint64_t tenant_id);
-  // get ls end scn and store them into ls_end_map_
-  int get_ls_end_scn_(const uint64_t tenant_id); // k means ls_id, v means end_scn
+  // get ls max scn and store them into ls_end_map_
+  int get_ls_max_scn_(const uint64_t tenant_id); // k means ls_id, v means max_scn
   // get ls checkpoint scn and store them into ls_checkpoint_map_
   int get_ls_checkpoint_scn_(const uint64_t tenant_id, const int64_t dest_id);
   int get_full_row_(const share::schema::ObTableSchema *table,
