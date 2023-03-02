@@ -1963,6 +1963,7 @@ int ObDDLWaitColumnChecksumCtx::init(
         || OB_INVALID_ID == tenant_id
         || OB_INVALID_ID == source_table_id
         || OB_INVALID_ID == target_table_id
+        || source_table_id == target_table_id
         || schema_version <= 0
         || snapshot_version <= 0
         || execution_id < 0
@@ -1972,11 +1973,15 @@ int ObDDLWaitColumnChecksumCtx::init(
         K(schema_version), K(snapshot_version), K(execution_id));
   } else {
     ObArray<ObTabletID> tablet_ids;
+    hash::ObHashSet<ObTabletID> tablet_set;
     PartitionColChecksumStat tmp_stat;
     const int64_t NEED_CALC_CHECKSUM_COUNT =  2;  // source table and target table
     tmp_stat.col_checksum_stat_ = CCS_INVALID;
     tmp_stat.execution_id_ = execution_id;
     tmp_stat.snapshot_ = -1;
+    if (OB_FAIL(tablet_set.create(1023))) {
+      LOG_WARN("create tablet set failed", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < NEED_CALC_CHECKSUM_COUNT; ++i) {
       const uint64_t cur_table_id =  0 == i ? source_table_id : target_table_id;
       tablet_ids.reset();
@@ -1992,7 +1997,9 @@ int ObDDLWaitColumnChecksumCtx::init(
         for (int64_t j = 0; OB_SUCC(ret) && j < tablet_ids.count(); ++j) {
           tmp_stat.tablet_id_ = tablet_ids.at(j);
           tmp_stat.table_id_ = cur_table_id;
-          if (OB_FAIL(stat_array_.push_back(tmp_stat))) {
+          if (OB_FAIL(tablet_set.set_refactored(tmp_stat.tablet_id_, 0/*not cover exists object*/))) {
+            LOG_WARN("put into set failed", K(ret), K(tmp_stat));
+          } else if (OB_FAIL(stat_array_.push_back(tmp_stat))) {
             LOG_WARN("push batck column checksum status array failed", K(ret), K(tmp_stat));
           }
         }
@@ -2032,6 +2039,8 @@ void ObDDLWaitColumnChecksumCtx::reset()
 int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
 {
   is_column_checksum_ready = false;
+  int64_t success_count = 0;
+  int64_t send_succ_count = 0;
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2041,7 +2050,6 @@ int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
   } else {
     SpinRLockGuard guard(lock_);
     const int64_t check_count = stat_array_.count();
-    int64_t success_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < check_count; ++i) {
       const PartitionColChecksumStat &item = stat_array_.at(i);
       if (!item.is_valid()) {
@@ -2062,7 +2070,6 @@ int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
     }
   }
   if (OB_SUCC(ret) && !is_calc_done_) {
-    int64_t send_succ_count = 0;
     if (0 != last_drive_ts_  && last_drive_ts_ + timeout_us_ < ObTimeUtility::current_time()) {
       // wait too long, refresh to retry send rpc
       if (OB_FAIL(refresh_zombie_task())) {
@@ -2077,6 +2084,9 @@ int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
     }
   }
   is_column_checksum_ready = is_calc_done_;
+  if (REACH_TIME_INTERVAL(1000L * 1000L)) {
+    LOG_INFO("try wait checksum", K(ret), K(stat_array_.count()), K(success_count), K(send_succ_count));
+  }
   return ret;
 }
 
@@ -2110,6 +2120,18 @@ int ObDDLWaitColumnChecksumCtx::update_status(const common::ObTabletID &tablet_i
     if (!found) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("column_checksum_stat not found", K(ret), K(tablet_id));
+    } else {
+      int64_t last_found_pos = -1;
+      for (int64_t i = 0; i < stat_array_.count(); ++i) {
+        PartitionColChecksumStat &item = stat_array_.at(i);
+        if (tablet_id == item.tablet_id_) {
+          if (last_found_pos < 0) {
+            last_found_pos = i;
+          } else {
+            LOG_WARN("duplicated tablet id for validating checksum", K(tablet_id), K(last_found_pos), K(i));
+          }
+        }
+      }
     }
   }
   return ret;

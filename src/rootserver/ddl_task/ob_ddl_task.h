@@ -260,7 +260,7 @@ public:
   int try_wait(bool &is_trans_end, int64_t &snapshot_version, const bool need_wait_trans_end = true);
   transaction::ObTransID get_pending_tx_id() const { return pending_tx_id_; }
   TO_STRING_KV(K(is_inited_), K_(tenant_id), K(table_id_), K(is_trans_end_), K(wait_type_),
-      K(wait_version_), K_(pending_tx_id), K(tablet_ids_), K(snapshot_array_));
+      K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(snapshot_array_.count()));
 
 private:
   static bool is_wait_trans_type_valid(const WaitTransType wait_trans_type);

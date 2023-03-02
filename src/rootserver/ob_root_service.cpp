@@ -3957,7 +3957,7 @@ int ObRootService::finish_redef_table(const obrpc::ObFinishRedefTableArg &arg)
 
 int ObRootService::copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg)
 {
-  LOG_DEBUG("receive copy table dependents arg", K(arg));
+  LOG_INFO("receive copy table dependents arg", K(arg));
   int ret = OB_SUCCESS;
   const int64_t task_id = arg.task_id_;
   const uint64_t tenant_id = arg.tenant_id_;

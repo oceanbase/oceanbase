@@ -61,6 +61,10 @@ public:
   virtual void flt_set_task_span_tag() const override;
   virtual void flt_set_status_span_tag() const override;
   static bool check_task_status_before_pending(const share::ObDDLTaskStatus task_status);
+  INHERIT_TO_STRING_KV("ObDDLRedefinitionTask", ObDDLRedefinitionTask,
+      K(has_rebuild_index_), K(has_rebuild_constraint_), K(has_rebuild_foreign_key_),
+      K(is_copy_indexes_), K(is_copy_triggers_), K(is_copy_constraints_),
+      K(is_copy_foreign_keys_), K(is_ignore_errors_), K(is_do_finish_));
 protected:
   int table_redefinition(const share::ObDDLTaskStatus next_task_status);
   int copy_table_dependent_objects(const share::ObDDLTaskStatus next_task_status);

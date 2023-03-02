@@ -51,6 +51,8 @@ public:
   virtual bool support_longops_monitoring() const { return true; }
   virtual void flt_set_task_span_tag() const override;
   virtual void flt_set_status_span_tag() const override;
+  INHERIT_TO_STRING_KV("ObDDLRedefinitionTask", ObDDLRedefinitionTask,
+      K(has_rebuild_index_), K(has_rebuild_constraint_), K(has_rebuild_foreign_key_), K(is_sstable_complete_task_submitted_));
 private:
   int wait_data_complement(const share::ObDDLTaskStatus next_task_status);
   int send_build_single_replica_request();

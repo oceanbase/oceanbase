@@ -954,6 +954,8 @@ int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_
   } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, do_finish))) {
     LOG_WARN("fail to serialize is_do_finish");
   }
+  FLOG_INFO("serialize message for table redefinition", K(ret),
+      K(copy_indexes), K(copy_triggers), K(copy_constraints), K(copy_foreign_keys), K(ignore_errors), K(do_finish), K(*this));
   return ret;
 }
 
@@ -1002,6 +1004,8 @@ int ObTableRedefinitionTask::deserlize_params_from_message(const char *buf, cons
       is_do_finish_ = static_cast<bool>(do_finish);
     }
   }
+  FLOG_INFO("deserialize message for table redefinition", K(ret),
+      K(copy_indexes), K(copy_triggers), K(copy_constraints), K(copy_foreign_keys), K(ignore_errors), K(do_finish), K(*this));
   return ret;
 }
 

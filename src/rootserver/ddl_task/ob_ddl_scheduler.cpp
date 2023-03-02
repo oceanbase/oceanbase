@@ -2001,7 +2001,6 @@ int ObDDLScheduler::on_column_checksum_calc_reply(
     const int ret_code)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("receive column checksum response", K(tablet_id), K(task_key), K(ret_code));
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -2020,6 +2019,7 @@ int ObDDLScheduler::on_column_checksum_calc_reply(
       }))) {
     LOG_WARN("failed to modify task", K(ret));
   }
+  LOG_INFO("receive column checksum response", K(ret), K(tablet_id), K(task_key), K(ret_code));
   return ret;
 }
 
