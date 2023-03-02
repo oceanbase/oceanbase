@@ -1329,7 +1329,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = major_tables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),
@@ -1344,7 +1344,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = minor_tables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),
@@ -1360,7 +1360,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = ddl_sstables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),
@@ -1375,7 +1375,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = ddl_mem_sstables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),
@@ -1390,7 +1390,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = extend_tables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),

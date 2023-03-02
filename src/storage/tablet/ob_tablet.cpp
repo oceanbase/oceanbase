@@ -759,7 +759,7 @@ int ObTablet::load_deserialize(
       tablet_meta_.max_sync_storage_schema_version_ = storage_schema_.schema_version_;
     }
     is_inited_ = true;
-    LOG_INFO("succeeded to deserialize tablet", K(ret), K(*this));
+    FLOG_INFO("succeeded to deserialize tablet", K(ret), K(*this));
   } else if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
