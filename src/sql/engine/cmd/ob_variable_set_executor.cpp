@@ -935,7 +935,6 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
         // 其它只影响AC标志位，但无需做commit操作
       }
     }
-    LOG_INFO("set var: autocommit", K(ret), K(orig_ac), "to", autocommit, K(my_session->get_sessid()));
   }
   return ret;
 }

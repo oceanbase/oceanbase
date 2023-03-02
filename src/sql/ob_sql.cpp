@@ -4174,7 +4174,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       if (OB_SUCC(ret)) {
         DAS_CTX(pc_ctx.exec_ctx_).unmark_need_check_server();
         bool need_reroute = false;
-        if (OB_FAIL(check_need_reroute(pc_ctx, phy_plan, need_reroute))) {
+        if (OB_FAIL(check_need_reroute(pc_ctx, session, phy_plan, need_reroute))) {
           LOG_WARN("fail to check need reroute", K(ret));
         } else if (need_reroute) {
           ret = OB_ERR_PROXY_REROUTE;
@@ -4276,7 +4276,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       if (has_session_tmp_table || has_txn_tmp_table) {
         if (!session.is_inner() && session.is_txn_free_route_temp()) {
           ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
-          LOG_WARN("access temp table is supported to be executed on txn temporary node", KR(ret));
+          LOG_WARN("access temp table is supported to be executed on txn temporary node", KR(ret), K(session.get_txn_free_route_ctx()));
         } else if (has_session_tmp_table) {
           bool is_already_set = false;
           if (OB_FAIL(session.get_session_temp_table_used(is_already_set))) {
@@ -4897,7 +4897,7 @@ int ObSql::handle_text_execute(const ObStmt *basic_stmt,
   return ret;
 }
 
-int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan *plan, bool &need_reroute)
+int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session, ObPhysicalPlan *plan, bool &need_reroute)
 {
   int ret = OB_SUCCESS;
   need_reroute = false;
@@ -4916,6 +4916,17 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan *plan, bool
       const ObSchemaObjVersion &schema_obj = dep_tables.at(i);
       if (TABLE_SCHEMA == schema_obj.get_schema_type()
           && is_virtual_table(schema_obj.object_id_)) {
+        should_reroute = false;
+      }
+    }
+    // the SQL use tmp table can not run on TXN_FREE_ROUTE temp node
+    if (should_reroute && NULL != plan && !session.get_is_deserialized() && !session.is_inner() && session.is_in_transaction()) {
+      bool has_session_tmp_table = plan->is_contain_oracle_session_level_temporary_table() || plan->contains_temp_table();
+      bool has_txn_tmp_table = plan->is_contain_oracle_trx_level_temporary_table();
+      if ((has_session_tmp_table || has_txn_tmp_table)
+          // 1. TXN_FREE_ROUTE DISABLED, all query in one node -- orignal node
+          // 2. TXN_FREE_ROUTE ENABLED, must on orignal node
+          && !session.is_txn_free_route_temp()) {
         should_reroute = false;
       }
     }
