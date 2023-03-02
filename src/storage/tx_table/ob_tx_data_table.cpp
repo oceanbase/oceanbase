@@ -310,6 +310,8 @@ int ObTxDataTable::deep_copy_undo_status_list_(const ObUndoStatusList &in_list,
       STORAGE_LOG(WARN, "alloc undo status node failed.", KR(ret));
     } else {
       *new_node = *cur_in_node;
+      // reset next pointer to avoid invalid free
+      new_node->next_ = nullptr;
       if (nullptr == pre_node) {
         out_list.head_ = new_node;
       } else {
