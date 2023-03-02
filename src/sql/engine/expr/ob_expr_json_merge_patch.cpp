@@ -254,6 +254,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
     LOG_USER_ERROR(OB_ERR_JSON_PATCH_INVALID);
   } else if (j_patch_node->json_type() != ObJsonNodeType::J_OBJECT) {
     j_base = j_patch_node;
+  } else if (OB_FAIL(ret)) {
   } else {
     ObJsonObject *j_obj = NULL;
     if (j_base->json_type() == ObJsonNodeType::J_OBJECT) {
