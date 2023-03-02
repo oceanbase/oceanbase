@@ -637,6 +637,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       // MySQL兼容: 对于对象不存在的错误，resolve阶段不报错,这里替换为一个single语句，在执行阶段报错
       // 由于对象的创建可能在sp的创建之后，因此这里不将加了single语句的function放入cache
       if ((OB_ERR_FUNCTION_UNKNOWN == ret
+           || OB_ERR_SP_WRONG_ARG_NUM == ret
            || OB_ERR_SP_DOES_NOT_EXIST == ret
            || OB_ERR_GET_STACKED_DIAGNOSTICS == ret
            || OB_ERR_RESIGNAL_WITHOUT_ACTIVE_HANDLER == ret)
