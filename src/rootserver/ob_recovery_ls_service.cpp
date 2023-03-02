@@ -104,7 +104,7 @@ void ObRecoveryLSService::do_work()
           idle_time_us = 10 * 1000 * 1000;//10s
         }
       }
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {  // every 10 second
+      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {  // every 10 second
         (void)try_tenant_upgrade_end_();
       }
       LOG_INFO("[RECOVERY_LS_SERVICE] finish one round", KR(ret),

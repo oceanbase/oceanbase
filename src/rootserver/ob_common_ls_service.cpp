@@ -92,7 +92,7 @@ void ObCommonLSService::do_work()
         }
       }
 
-      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+      if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000)) {
         ret = OB_SUCCESS;//ignore error
         if (OB_FAIL(try_update_sys_ls_primary_zone_())) {
           LOG_WARN("failed to update sys ls primary zone", KR(ret));
