@@ -91,9 +91,9 @@ public:
       const uint64_t size = *(uint64_t *)((char *)ptr - 8);
       ObLuaHandler::get_instance().memory_update(- 8 - size);
 #if defined(OB_USE_ASAN) || defined(ENABLE_SANITY)
-      ::free(ptr);
+      ::free((void *)((char *)ptr - 8));
 #else
-      ::munmap((void *)((char *)ptr - 8), size);
+      ::munmap((void *)((char *)ptr - 8), size + 8);
 #endif
     }
   }
