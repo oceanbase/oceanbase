@@ -298,6 +298,7 @@ WAIT_EVENT_DEF(CLOG_CKPT_RWLOCK_WAIT, 15253, "rwlock: clog checkpoint rwlock wai
 WAIT_EVENT_DEF(TENANT_IO_CONFIG_WAIT, 15254, "rwlock: tenant io config wait", "address", "number", "tries", CONCURRENCY, "rwlock: tenant io config wait", true)
 WAIT_EVENT_DEF(SQL_WF_PARTICIPATOR_LOCK_WAIT, 15255, "latch: window function participator cond lock wait", "address", "", "", CONCURRENCY, "window function participator cond lock wait", true)
 WAIT_EVENT_DEF(SQL_WF_PARTICIPATOR_COND_WAIT, 15256, "mutex: window function participator cond wait", "address", "", "", CONCURRENCY, "window function participator cond wait", true)
+WAIT_EVENT_DEF(MAJOR_FREEZE_DIAGNOSE_LOCK_WAIT, 15257, "latch: major_freeze diagnose lock wait", "address", "number", "tries", CONCURRENCY, "latch: major_freeze diagnose lock wait", true)
 
 //transaction
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,"wait end trans", false)

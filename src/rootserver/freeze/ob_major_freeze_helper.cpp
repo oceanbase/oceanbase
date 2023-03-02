@@ -202,7 +202,14 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
     obrpc::ObMajorFreezeResponse resp;
     uint64_t tenant_id = freeze_info.tenant_id_;
 
-    if (OB_ISNULL(GCTX.location_service_)) {
+    uint64_t min_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (min_data_version < DATA_VERSION_4_1_0_0) {
+      ret = OB_MAJOR_FREEZE_NOT_ALLOW;
+      LOG_WARN("major freeze is not allowed now, please upgrade observer first", KR(ret),
+               K(tenant_id), K(min_data_version));
+    } else if (OB_ISNULL(GCTX.location_service_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid GCTX", KR(ret));
     } else if (OB_FAIL(proxy.init(&transport))) {

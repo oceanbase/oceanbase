@@ -154,6 +154,7 @@ public:
                                                const int64_t expected_epoch);
 
   void set_major_merge_start_time(const int64_t major_merge_start_us);
+  int get_uncompacted_tablets(common::ObArray<share::ObTabletReplica> &uncompacted_tablets) const;
 
 public:
   ObMergeTimeStatistics merge_time_statistics_;
@@ -184,6 +185,7 @@ private:
                                    const share::ObLSReplica::MemberList &member_list,
                                    bool &is_in_member_list) const;
   int mark_uncompacted_tables_as_verified(const common::ObIArray<share::ObTableCompactionInfo> &uncompacted_tables);
+  void reset_uncompacted_tablets();
 
 private:
   bool is_inited_;
@@ -203,6 +205,8 @@ private:
   ObTabletChecksumValidator tablet_validator_;
   ObIndexChecksumValidator index_validator_;
   ObCrossClusterTabletChecksumValidator cross_cluster_validator_;
+  common::ObArray<share::ObTabletReplica> uncompacted_tablets_; // record for diagnose
+  common::SpinRWLock diagnose_rw_lock_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeProgressChecker);
 };

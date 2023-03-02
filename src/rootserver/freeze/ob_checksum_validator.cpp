@@ -1144,6 +1144,10 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
                 }
               } else { // !simple_schema->can_read_index()
                 // 2. for index table can not read, directly mark it as VERIFIED
+                // do not check compaction_scn and validate checksum of can not read index's tablets.
+                // although update_all_tablets_report_scn will update its report_scn. the storage
+                // layer may schedule major compaction and increase compaction_scn of this index's
+                // tablets later.
                 if (OB_FAIL(handle_table_can_not_verify(table_id, table_compaction_map))) {
                   LOG_WARN("fail to handle table can not verify", KR(ret));
                 }

@@ -82,6 +82,7 @@ public:
   ObMajorMergeIdling &get_major_scheduler_idling() { return idling_; }
 
   int try_update_epoch_and_reload();
+  int get_uncompacted_tablets(common::ObArray<share::ObTabletReplica> &uncompacted_tablets) const;
 
 protected:
   virtual int try_idle(const int64_t ori_idle_time_us,
@@ -112,6 +113,7 @@ private:
   int do_update_and_reload(const int64_t epoch);
   bool is_primary_service() const { return is_primary_service_; }
 
+  // including tablets about can_not_read index and permanent offline server
   int update_all_tablets_report_scn(const uint64_t global_broadcast_scn_val);
 
   void check_merge_interval_time(const bool is_merging);
