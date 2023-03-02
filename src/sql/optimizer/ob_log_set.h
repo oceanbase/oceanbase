@@ -60,7 +60,7 @@ public:
   //hash set 全部都是从left 建立hash表，0号孩子是block input
   virtual bool is_block_input(const int64_t child_idx) const override 
   {
-    return HASH_SET == set_algo_ && 0 == child_idx;
+    return HASH_SET == set_algo_ && 0 == child_idx && ObSelectStmt::UNION != get_set_op();
   }
   inline void assign_set_op(const ObSelectStmt::SetOperator set_op) { set_op_ = set_op; }
   inline ObSelectStmt::SetOperator get_set_op() const { return set_op_; }
