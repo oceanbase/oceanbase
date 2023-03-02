@@ -155,7 +155,6 @@ int ObMPBase::after_process(int error_code)
       PRINT_TRACE(THE_TRACE);
     }
   }
-  ObActiveSessionGuard::get_stat().exec_phase_ = 0;
   return ret;
 }
 
