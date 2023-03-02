@@ -336,7 +336,7 @@ int ObResourceGroup::acquire_more_worker(int64_t num, int64_t &succ_num)
   while (OB_SUCC(ret) && need_num > succ_num) {
     ObThWorker *w = nullptr;
     if (OB_FAIL(create_worker(w, tenant_, group_id_, INT32_MAX, this))) {
-      LOG_ERROR("create worker failed", K(ret));
+      LOG_WARN("create worker failed", K(ret));
     } else if (!workers_.add_last(&w->worker_node_)) {
       OB_ASSERT(false);
       ret = OB_ERR_UNEXPECTED;
@@ -1381,7 +1381,7 @@ int ObTenant::acquire_level_worker(int64_t num, int64_t &succ_num, int32_t level
     while (OB_SUCC(ret) && need_num > succ_num) {
       ObThWorker *w = nullptr;
       if (OB_FAIL(create_worker(w, this, 0, level))) {
-        LOG_ERROR("create worker failed", K(ret));
+        LOG_WARN("create worker failed", K(ret));
       } else if (!nesting_workers_.add_last(&w->worker_node_)) {
         OB_ASSERT(false);
         ret = OB_ERR_UNEXPECTED;
@@ -1413,7 +1413,7 @@ int ObTenant::acquire_more_worker(int64_t num, int64_t &succ_num)
   while (OB_SUCC(ret) && num > succ_num) {
     ObThWorker *w = nullptr;
     if (OB_FAIL(create_worker(w, this, 0, 0))) {
-      LOG_ERROR("create worker failed", K(ret));
+      LOG_WARN("create worker failed", K(ret));
     } else if (!workers_.add_last(&w->worker_node_)) {
       OB_ASSERT(false);
       ret = OB_ERR_UNEXPECTED;
