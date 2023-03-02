@@ -152,11 +152,13 @@ public:
   bool is_update_unique_key_;
   bool is_update_part_key_;
   DistinctType distinct_algo_;
-  ObRawExpr *lookup_part_id_expr_;
+  ObRawExpr *lookup_part_id_expr_; // for replace and insert_up conflict scene
   ObRawExpr *old_part_id_expr_;
   ObRawExpr *new_part_id_expr_;
   ObRawExpr *old_rowid_expr_;
   ObRawExpr *new_rowid_expr_;
+  // for generated column, the diff between column_exprs_ and column_old_values_exprs_
+  // is virtual generated column is replaced.
   common::ObSEArray<ObRawExpr*, 64, common::ModulePageAllocator, true> column_old_values_exprs_;
   // local index id related to current dml
   TableIDArray related_index_ids_;
@@ -311,6 +313,7 @@ protected:
   int generate_update_new_rowid_expr(IndexDMLInfo &table_dml_info);
   int generate_insert_new_rowid_expr(IndexDMLInfo &table_dml_info);
   int generate_old_calc_partid_expr(IndexDMLInfo &index_info);
+  int generate_lookup_part_id_expr(IndexDMLInfo &index_info);
   int generate_insert_new_calc_partid_expr(IndexDMLInfo &index_dml_info);
   int generate_update_new_calc_partid_expr(IndexDMLInfo &index_dml_info);
 
