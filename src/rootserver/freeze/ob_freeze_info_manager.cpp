@@ -424,8 +424,18 @@ int ObFreezeInfoManager::generate_frozen_scn(
   } else if (OB_FAIL(freeze_info.get_latest_frozen_scn(local_max_frozen_scn))) {
     LOG_WARN("fail to get latest frozen_scn", KR(ret), K(freeze_info));
   } else if (max_frozen_status.frozen_scn_ != local_max_frozen_scn) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("max frozen_scn not same in cache and table", KR(ret), K(max_frozen_status), K(local_max_frozen_scn));
+    // after new leader updates epoch and reloads freeze_info, old leader generates one new
+    // frozen_scn and can add it into __all_freeze_info (cuz not checking epoch)
+    // https://work.aone.alibaba-inc.com/issue/48130096
+    if (local_max_frozen_scn < max_frozen_status.frozen_scn_) {
+      ret = OB_EAGAIN;
+      LOG_WARN("max frozen_scn in cache is smaller than max frozen_scn in table, will try again",
+               KR(ret), K(local_max_frozen_scn), K(max_frozen_status));
+    } else { // local_max_frozen_scn > max_frozen_status.frozen_scn_
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("max frozen_scn in cache is larger than max frozen_scn in table", KR(ret),
+               K(local_max_frozen_scn), K(max_frozen_status));
+    }
   } else if (OB_FAIL(get_gts(tmp_frozen_scn))) {
     LOG_WARN("fail to get gts", KR(ret));
   } else if ((tmp_frozen_scn <= snapshot_gc_scn)
