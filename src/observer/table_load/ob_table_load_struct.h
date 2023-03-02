@@ -152,22 +152,27 @@ public:
 struct ObTableLoadDDLParam
 {
 public:
-  ObTableLoadDDLParam() : dest_table_id_(common::OB_INVALID_ID), task_id_(0), schema_version_(0) {}
+  ObTableLoadDDLParam()
+    : dest_table_id_(common::OB_INVALID_ID), task_id_(0), schema_version_(0), data_version_(0) {}
   void reset()
   {
     dest_table_id_ = common::OB_INVALID_ID;
     task_id_ = 0;
     schema_version_ = 0;
+    data_version_ = 0;
   }
   bool is_valid() const
   {
-    return common::OB_INVALID_ID != dest_table_id_ && 0 != task_id_ && 0 != schema_version_;
+    return common::OB_INVALID_ID != dest_table_id_ && 0 != task_id_ && 0 != schema_version_ &&
+           0 != data_version_;
   }
-  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version));
+  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(data_version));
+
 public:
   uint64_t dest_table_id_;
   int64_t task_id_;
   int64_t schema_version_;
+  int64_t data_version_;
 };
 
 class ObTableLoadMutexGuard

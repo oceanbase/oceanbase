@@ -228,6 +228,7 @@ int ObTableLoadCoordinator::pre_begin_peers()
     request.dest_table_id_ = ctx_->ddl_param_.dest_table_id_;
     request.task_id_ = ctx_->ddl_param_.task_id_;
     request.schema_version_ = ctx_->ddl_param_.schema_version_;
+    request.data_version_ = ctx_->ddl_param_.data_version_;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_leader_info_array.count(); ++i) {
       const ObTableLoadPartitionLocation::LeaderInfo &leader_info = all_leader_info_array.at(i);
       const ObTableLoadPartitionLocation::LeaderInfo &target_leader_info = target_all_leader_info_array.at(i);

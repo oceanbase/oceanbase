@@ -41,6 +41,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadPreBeginPeerRequest,
                     dest_table_id_,
                     task_id_,
                     schema_version_,
+                    data_version_,
                     partition_id_array_,
                     target_partition_id_array_);
 

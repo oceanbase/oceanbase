@@ -75,6 +75,7 @@ int ObTableLoadStoreCtx::init(
     insert_table_param.snapshot_version_ = ObTimeUtil::current_time_ns();
     insert_table_param.ddl_task_id_ = ctx_->ddl_param_.task_id_;
     insert_table_param.execution_id_ = 1; //仓氐说暂时设置为1，不然后面检测过不了
+    insert_table_param.data_version_ = ctx_->ddl_param_.data_version_;
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_id_array.count(); ++i) {
       const ObLSID &ls_id = partition_id_array[i].ls_id_;
       const ObTableLoadPartitionId &part_tablet_id = partition_id_array[i].part_tablet_id_;
