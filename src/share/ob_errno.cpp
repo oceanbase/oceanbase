@@ -24321,6 +24321,18 @@ static const _error _error_OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = {
       .oracle_str_error      = "ORA-08006: specified row no longer exists",
       .oracle_str_user_error = "ORA-08006: specified row no longer exists"
 };
+static const _error _error_OB_ERR_VARIABLE_NOT_IN_SELECT_LIST = {
+      .error_name            = "OB_ERR_VARIABLE_NOT_IN_SELECT_LIST",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "variable not in select list",
+      .str_user_error        = "variable not in select list",
+      .oracle_errno          = 1007,
+      .oracle_str_error      = "ORA-01007: variable not in select list",
+      .oracle_str_user_error = "ORA-01007: variable not in select list"
+};
 
 struct ObStrErrorInit
 {
@@ -26353,6 +26365,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_FLASHBACK_QUERY_WITH_UPDATE] = &_error_OB_ERR_FLASHBACK_QUERY_WITH_UPDATE;
     _errors[-OB_ERR_UPDATE_ON_EXPR] = &_error_OB_ERR_UPDATE_ON_EXPR;
     _errors[-OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS] = &_error_OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS;
+    _errors[-OB_ERR_VARIABLE_NOT_IN_SELECT_LIST] = &_error_OB_ERR_VARIABLE_NOT_IN_SELECT_LIST;
 
   }
 };
