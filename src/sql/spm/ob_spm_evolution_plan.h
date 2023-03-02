@@ -72,7 +72,6 @@ public:
       history_exec_time_(0),
       is_inited_(false),
       current_stage_cnt_(0),
-      evolution_finish_count_(0),
       lazy_finished_(false),
       lazy_better_(false)
   {
@@ -152,6 +151,7 @@ private:
                                             ObPlanCacheCtx &ctx,
                                             ObPhysicalPlan *&plan);
   int64_t get_baseline_plan_error_cnt();
+  int64_t get_plan_finish_cnt();
 
 protected:
   ObSqlPlanSet *plan_set_;
@@ -173,7 +173,6 @@ protected:
   bool is_evo_best_plan_;
   int64_t best_plan_cnt_;
   int64_t current_stage_cnt_;
-  int64_t evolution_finish_count_;
   bool lazy_finished_;
   bool lazy_better_;
 };
