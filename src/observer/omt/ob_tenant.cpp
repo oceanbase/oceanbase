@@ -328,7 +328,6 @@ void ObResourceGroup::update_queue_size()
 int ObResourceGroup::acquire_more_worker(int64_t num, int64_t &succ_num)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObTenantSwitchGuard guard(tenant_);
 
   const auto need_num = num;
@@ -647,10 +646,15 @@ int ObTenant::init(const ObTenantMeta &meta)
         // do nothing
       } else if (OB_FAIL(OB_PX_TARGET_MGR.add_tenant(id_))) {
         LOG_WARN("add tenant into px target mgr failed", K(ret), K(id_));
+      } else if (OB_FAIL(G_RES_MGR.get_col_mapping_rule_mgr().add_tenant(id_))) {
+        LOG_WARN("add tenant into res col maping rule mgr failed", K(ret), K(id_));
       }
     } else {
       disable_user_sched(); // disable_user_sched for virtual tenant
     }
+  }
+
+  if (OB_SUCC(ret)) {
     int64_t succ_cnt = 0L;
     if (OB_FAIL(acquire_more_worker(2, succ_cnt))) {
       LOG_WARN("create worker in init failed", K(ret), K(succ_cnt));
@@ -665,13 +669,6 @@ int ObTenant::init(const ObTenantMeta &meta)
         succ_cnt = 0L;
       }
       timeup();
-    }
-  }
-  if (OB_SUCC(ret) && !is_virtual_tenant_id(id_)) {
-    if (OB_FAIL(OB_PX_TARGET_MGR.add_tenant(id_))) {
-      LOG_WARN("add tenant into px target mgr failed", K(ret), K(id_));
-    } else if (OB_FAIL(G_RES_MGR.get_col_mapping_rule_mgr().add_tenant(id_))) {
-      LOG_WARN("add tenant into res col maping rule mgr failed", K(ret), K(id_));
     }
   }
 
