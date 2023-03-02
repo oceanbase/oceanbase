@@ -846,7 +846,6 @@ protected:
   virtual int64_t parse(const char *str, bool &valid) const override;
 
 private:
-  uint64_t value_;
   DISALLOW_COPY_AND_ASSIGN(ObConfigVersionItem);
 };
 

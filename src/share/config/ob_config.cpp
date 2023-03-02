@@ -996,15 +996,16 @@ ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
 
 bool ObConfigVersionItem::set(const char *str)
 {
-  int64_t old_value = value_;
+  int64_t old_value = get_value();
   bool value_update = value_updated();
   bool valid = ObConfigIntegralItem::set(str);
-  if (valid && value_update && old_value > value_) {
-    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "Attention!!! data version is retrogressive", K(old_value), K_(value));
+  int64_t new_value = get_value();
+  if (valid && value_update && old_value > new_value) {
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "Attention!!! data version is retrogressive", K(old_value), K(new_value));
   }
-  if (old_value != value_) {
+  if (value_update && old_value != new_value) {
     ObTaskController::get().allow_next_syslog();
-    OB_LOG(INFO, "Config data version changed", K(old_value), K_(value), K(value_update), K(valid));
+    OB_LOG(INFO, "Config data version changed", K(old_value), K(new_value), K(value_update), K(valid));
   }
   return valid;
 }

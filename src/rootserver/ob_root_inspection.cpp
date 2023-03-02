@@ -937,9 +937,8 @@ int ObRootInspection::check_sys_stat_(const uint64_t tenant_id)
     LOG_WARN("schema_service is null", KR(ret));
   } else if (OB_FAIL(check_cancel())) {
     LOG_WARN("check_cancel failed", KR(ret));
-  } else if (!schema_service_->is_tenant_full_schema(tenant_id)) {
-    ret = OB_EAGAIN;
-    LOG_WARN("schema is not ready, try again", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_status_(tenant_id))) {
+    LOG_WARN("fail to check tenant status", KR(ret), K(tenant_id));
   } else if (OB_FAIL(sys_stat.set_initial_values(tenant_id))) {
     LOG_WARN("set initial values failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(extra_cond.assign_fmt("tenant_id = %lu",
@@ -999,9 +998,8 @@ int ObRootInspection::check_sys_param_(const uint64_t tenant_id)
     LOG_WARN("schema_service is null", KR(ret));
   } else if (OB_FAIL(check_cancel())) {
     LOG_WARN("check_cancel failed", KR(ret));
-  } else if (!schema_service_->is_tenant_full_schema(tenant_id)) {
-    ret = OB_EAGAIN;
-    LOG_WARN("schema is not ready, try again", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_status_(tenant_id))) {
+    LOG_WARN("fail to check tenant status", KR(ret), K(tenant_id));
   } else if (OB_FAIL(extra_cond.assign_fmt("tenant_id = %lu",
              ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))) {
     LOG_WARN("extra_cond assign_fmt failed", KR(ret), K(tenant_id));
@@ -1271,15 +1269,6 @@ int ObRootInspection::check_sys_table_schemas_(
              || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else if (OB_ISNULL(schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", KR(ret));
-  } else if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(
-                     tenant_id, schema_version))) {
-    LOG_WARN("fail to get tenant refreshed schema_version", KR(ret), K(tenant_id));
-  } else if (!ObSchemaService::is_formal_version(schema_version)) {
-    ret = OB_EAGAIN;
-    LOG_WARN("schema is not ready, try again", KR(ret), K(tenant_id), K(schema_version));
   } else {
     const schema_create_func *creator_ptr_array[] = {
       share::all_core_table_schema_creator,
@@ -1302,6 +1291,8 @@ int ObRootInspection::check_sys_table_schemas_(
         table_schema.reset();
         if (OB_FAIL(check_cancel())) {
           LOG_WARN("check_cancel failed", KR(ret));
+        } else if (OB_FAIL(check_tenant_status_(tenant_id))) {
+          LOG_WARN("fail to check tenant status", KR(ret), K(tenant_id));
         } else if (OB_FAIL((*creator_ptr)(table_schema))) {
           LOG_WARN("create table schema failed", KR(ret));
         } else if (!is_sys_tenant(tenant_id)
@@ -1326,6 +1317,10 @@ int ObRootInspection::check_sys_table_schemas_(
             LOG_WARN("check sys view failed", KR(tmp_ret), K(tenant_id),
                      "table_id", table_schema.get_table_id(), "table_name", table_schema.get_table_name());
             back_ret = OB_SUCCESS == back_ret ? tmp_ret : back_ret;
+            // sql may has occur other error except OB_SCHEMA_ERROR, we should not continue is such situation.
+            if (OB_SCHEMA_ERROR != tmp_ret) {
+              ret = OB_SUCC(ret) ? back_ret : tmp_ret;
+            }
           }
         }
       } // end for
@@ -1585,7 +1580,12 @@ int ObRootInspection::check_sys_view_(
         }
       }
       if (OB_FAIL(ret)) {
-        LOG_ERROR("check sys view: expand failed", KR(ret), K(tenant_id), K(table_name));
+        if (OB_ERR_VIEW_INVALID == ret) {
+          ret = OB_SCHEMA_ERROR;
+          LOG_ERROR("check sys view: expand failed", KR(ret), K(tenant_id), K(table_name));
+        } else {
+          LOG_WARN("check sys view: expand failed", KR(ret), K(tenant_id), K(table_name));
+        }
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get sql result", KR(ret), K(tenant_id));
@@ -1865,6 +1865,8 @@ int ObRootInspection::check_data_version_()
     FOREACH_X(tenant_id, tenant_ids, OB_SUCC(ret)) {
       if (OB_FAIL(check_cancel())) {
         LOG_WARN("check_cancel failed", KR(ret));
+      } else if (OB_FAIL(check_tenant_status_(*tenant_id))) {
+        LOG_WARN("fail to check tenant status", KR(ret), K(*tenant_id));
       } else if (OB_TMP_FAIL(check_data_version_(*tenant_id))) {
         LOG_WARN("fail to check data version by tenant", KR(tmp_ret), K(*tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
@@ -1913,6 +1915,36 @@ int ObRootInspection::check_cancel()
   int ret = OB_SUCCESS;
   if (stopped_) {
     ret = OB_CANCELED;
+  }
+  return ret;
+}
+
+int ObRootInspection::check_tenant_status_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard guard;
+  const ObSimpleTenantSchema *tenant = NULL;
+  int64_t schema_version = OB_INVALID_VERSION;
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret));
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant))) {
+    LOG_WARN("fail to get tenant schema", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant)) {
+    // tenant may has been dropped;
+    ret = OB_EAGAIN;
+    LOG_WARN("tenant may be dropped, don't continue", KR(ret), K(tenant_id));
+  } else if (!tenant->is_normal()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tenant status is not noraml, should check next round", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(tenant_id, schema_version))) {
+    LOG_WARN("fail to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (!ObSchemaService::is_formal_version(schema_version)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("schema version is not formal, observer may be restarting or inner table schema changed, "
+             "should check next round", KR(ret), K(tenant_id), K(schema_version));
   }
   return ret;
 }
