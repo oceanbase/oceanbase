@@ -5,8 +5,11 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_service.h"
+#include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_schema.h"
+#include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
+#include "observer/table_load/ob_table_load_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/schema/ob_table_schema.h"
 
@@ -189,6 +192,9 @@ int ObTableLoadService::add_ctx(ObTableLoadTableCtx *table_ctx)
   if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
+  } else if (service->is_stop_) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("service is stop", KR(ret));
   } else {
     ObTableLoadUniqueKey key(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
     ret = service->get_manager().add_table_ctx(key, table_ctx);
@@ -249,7 +255,7 @@ void ObTableLoadService::put_ctx(ObTableLoadTableCtx *table_ctx)
 }
 
 ObTableLoadService::ObTableLoadService()
-  : gc_task_(*this), release_task_(*this), is_inited_(false)
+  : gc_task_(*this), release_task_(*this), is_stop_(false), is_inited_(false)
 {
 }
 
@@ -293,6 +299,7 @@ int ObTableLoadService::start()
 int ObTableLoadService::stop()
 {
   int ret = OB_SUCCESS;
+  is_stop_ = true;
   gc_timer_.stop();
   return ret;
 }
@@ -300,12 +307,67 @@ int ObTableLoadService::stop()
 void ObTableLoadService::wait()
 {
   gc_timer_.wait();
+  abort_all_ctx();
+  release_all_ctx();
 }
 
 void ObTableLoadService::destroy()
 {
   is_inited_ = false;
   gc_timer_.destroy();
+}
+
+void ObTableLoadService::abort_all_ctx()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObTableLoadTableCtx *> table_ctx_array;
+  if (OB_FAIL(manager_.remove_all_table_ctx(table_ctx_array))) {
+    LOG_WARN("fail to remove all table ctx list", KR(ret));
+  } else {
+    SMART_VAR(sql::ObSQLSessionInfo, session_info)
+    {
+      if (OB_FAIL(ObTableLoadUtils::init_session_info(OB_SERVER_USER_ID, session_info))) {
+        LOG_WARN("fail to init session info", KR(ret));
+      } else {
+        for (int i = 0; i < table_ctx_array.count(); ++i) {
+          ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
+          // abort coordinator
+          if (nullptr != table_ctx->coordinator_ctx_) {
+            ObTableLoadCoordinator::abort_ctx(table_ctx, session_info);
+          }
+          // abort store
+          else if (nullptr != table_ctx->store_ctx_) {
+            ObTableLoadStore::abort_ctx(table_ctx);
+          }
+          manager_.put_table_ctx(table_ctx);
+        }
+      }
+    }
+  }
+}
+
+void ObTableLoadService::release_all_ctx()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  while (OB_SUCC(ret)) {
+    ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    if (OB_FAIL(manager_.get_releasable_table_ctx_list(table_ctx_array))) {
+      LOG_WARN("fail to get releasable table ctx list", KR(ret));
+    }
+    for (int64_t i = 0; i < table_ctx_array.count(); ++i) {
+      ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
+      const uint64_t table_id = table_ctx->param_.table_id_;
+      const uint64_t hidden_table_id = table_ctx->ddl_param_.dest_table_id_;
+      LOG_INFO("free table ctx", K(tenant_id), K(table_id), K(hidden_table_id), KP(table_ctx));
+      ObTableLoadService::free_ctx(table_ctx);
+    }
+    if (manager_.is_dirty_list_empty()) {
+      break;
+    } else {
+      ob_usleep(10 * 1000 * 1000);
+    }
+  }
 }
 
 } // namespace observer

@@ -37,6 +37,9 @@ public:
   void destroy();
   ObTableLoadManager &get_manager() { return manager_; }
 private:
+  void abort_all_ctx();
+  void release_all_ctx();
+private:
   static const int64_t GC_INTERVAL = 30LL * 1000 * 1000; // 30s
   static const int64_t RELEASE_INTERVAL = 1LL * 1000 * 1000; // 1s
   class ObGCTask : public common::ObTimerTask
@@ -70,6 +73,7 @@ private:
   common::ObTimer gc_timer_;
   ObGCTask gc_task_;
   ObReleaseTask release_task_;
+  volatile bool is_stop_;
   bool is_inited_;
 };
 

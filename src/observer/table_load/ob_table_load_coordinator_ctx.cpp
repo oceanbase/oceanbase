@@ -172,34 +172,24 @@ int ObTableLoadCoordinatorCtx::generate_credential(uint64_t user_id)
   return ret;
 }
 
-int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)
+int ObTableLoadCoordinatorCtx::advance_status_unlock(ObTableLoadStatusType status)
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinatorCtx not init", KR(ret));
-  } else if (OB_UNLIKELY(ObTableLoadStatusType::ERROR == status ||
-                         ObTableLoadStatusType::ABORT == status)) {
+  if (OB_UNLIKELY(ObTableLoadStatusType::NONE == status || ObTableLoadStatusType::ERROR == status ||
+                  ObTableLoadStatusType::ABORT == status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(status));
-  } else {
-    obsys::ObWLockGuard guard(rwlock_);
-    if (OB_UNLIKELY(ObTableLoadStatusType::ERROR == status_)) {
-      ret = error_code_;
-      LOG_WARN("coordinator has error", KR(ret));
-    } else if (OB_UNLIKELY(ObTableLoadStatusType::ABORT == status_)) {
-      ret = OB_TRANS_KILLED;
-      LOG_WARN("coordinator is abort", KR(ret));
-    }
-    // 正常运行阶段, 状态是一步步推进的
-    else if (OB_UNLIKELY(static_cast<int64_t>(status) != static_cast<int64_t>(status_) + 1)) {
-      ret = OB_STATE_NOT_MATCH;
-      LOG_WARN("unexpected status", KR(ret), K(status), K(status_));
-    } else {
-      status_ = status;
-      table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
-      LOG_INFO("LOAD DATA COORDINATOR advance status", K(status));
-    }
+  }
+  // normally, the state is advanced step by step
+  else if (OB_UNLIKELY(static_cast<int64_t>(status) != static_cast<int64_t>(status_) + 1)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("unexpected status", KR(ret), K(status), K(status_));
+  }
+  // advance status
+  else {
+    status_ = status;
+    table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+    LOG_INFO("LOAD DATA COORDINATOR advance status", K(status));
   }
   return ret;
 }
@@ -207,17 +197,16 @@ int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)
 int ObTableLoadCoordinatorCtx::set_status_error(int error_code)
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinatorCtx not init", KR(ret));
-  } else if (OB_UNLIKELY(OB_SUCCESS == error_code)) {
+  if (OB_UNLIKELY(OB_SUCCESS == error_code)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(error_code));
   } else {
-    obsys::ObWLockGuard guard(rwlock_);
-    if (OB_UNLIKELY(status_ == ObTableLoadStatusType::ABORT)) {
-      ret = OB_TRANS_KILLED;
-    } else if (status_ != ObTableLoadStatusType::ERROR) {
+    obsys::ObWLockGuard guard(status_lock_);
+    if (status_ == ObTableLoadStatusType::ERROR) {
+      // ignore
+    } else if (static_cast<int64_t>(status_) > static_cast<int64_t>(ObTableLoadStatusType::ERROR)) {
+      ret = OB_STATE_NOT_MATCH;
+    } else {
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
       table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
@@ -230,16 +219,13 @@ int ObTableLoadCoordinatorCtx::set_status_error(int error_code)
 int ObTableLoadCoordinatorCtx::set_status_abort()
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinatorCtx not init", KR(ret));
+  obsys::ObWLockGuard guard(status_lock_);
+  if (ObTableLoadStatusType::ABORT == status_) {
+    LOG_INFO("LOAD DATA COORDINATOR already abort");
   } else {
-    obsys::ObWLockGuard guard(rwlock_);
-    if (OB_UNLIKELY(status_ != ObTableLoadStatusType::ABORT)) {
-      status_ = ObTableLoadStatusType::ABORT;
-      table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
-      LOG_INFO("LOAD DATA COORDINATOR status abort");
-    }
+    status_ = ObTableLoadStatusType::ABORT;
+    table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+    LOG_INFO("LOAD DATA COORDINATOR status abort");
   }
   return ret;
 }
@@ -255,19 +241,6 @@ int ObTableLoadCoordinatorCtx::check_status_unlock(ObTableLoadStatusType status)
     } else {
       ret = OB_STATE_NOT_MATCH;
     }
-  }
-  return ret;
-}
-
-int ObTableLoadCoordinatorCtx::check_status(ObTableLoadStatusType status) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinatorCtx not init", KR(ret));
-  } else {
-    obsys::ObRLockGuard guard(rwlock_);
-    ret = check_status_unlock(status);
   }
   return ret;
 }
@@ -336,10 +309,11 @@ int ObTableLoadCoordinatorCtx::start_trans(const ObTableLoadSegmentID &segment_i
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinatorCtx not init", KR(ret));
   } else {
-    obsys::ObWLockGuard guard(rwlock_);
+    obsys::ObRLockGuard status_guard(status_lock_);
     if (OB_FAIL(check_status_unlock(ObTableLoadStatusType::LOADING))) {
       LOG_WARN("fail to check status", KR(ret), K_(status));
     } else {
+      obsys::ObWLockGuard guard(rwlock_);
       SegmentCtx *segment_ctx = nullptr;
       if (OB_FAIL(segment_ctx_map_.get(segment_id, segment_ctx))) {
         if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
@@ -352,7 +326,7 @@ int ObTableLoadCoordinatorCtx::start_trans(const ObTableLoadSegmentID &segment_i
       }
       if (OB_SUCC(ret)) {
         if (OB_UNLIKELY(nullptr != segment_ctx->current_trans_ ||
-            nullptr != segment_ctx->committed_trans_ctx_)) {
+                        nullptr != segment_ctx->committed_trans_ctx_)) {
           ret = OB_ENTRY_EXIST;
           LOG_WARN("trans already exist", KR(ret));
         } else {
@@ -404,6 +378,9 @@ int ObTableLoadCoordinatorCtx::commit_trans(ObTableLoadCoordinatorTrans *trans)
       segment_ctx->committed_trans_ctx_ = trans->get_trans_ctx();
       trans->set_dirty();
     }
+    if (OB_NOT_NULL(segment_ctx)) {
+      segment_ctx_map_.revert(segment_ctx);
+    }
   }
   return ret;
 }
@@ -436,6 +413,9 @@ int ObTableLoadCoordinatorCtx::abort_trans(ObTableLoadCoordinatorTrans *trans)
     } else {
       segment_ctx->current_trans_ = nullptr;
       trans->set_dirty();
+    }
+    if (OB_NOT_NULL(segment_ctx)) {
+      segment_ctx_map_.revert(segment_ctx);
     }
   }
   return ret;

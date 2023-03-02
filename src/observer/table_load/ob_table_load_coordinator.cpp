@@ -298,11 +298,14 @@ int ObTableLoadCoordinator::begin()
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator begin");
-    if (OB_FAIL(pre_begin_peers())) {
+    obsys::ObWLockGuard guard(coordinator_ctx_->get_status_lock());
+    if (OB_FAIL(coordinator_ctx_->check_status_unlock(ObTableLoadStatusType::INITED))) {
+      LOG_WARN("fail to check status", KR(ret));
+    } else if (OB_FAIL(pre_begin_peers())) {
       LOG_WARN("fail to pre begin peers", KR(ret));
     } else if (OB_FAIL(confirm_begin_peers())) {
       LOG_WARN("fail to confirm begin peers", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->set_status_loading())) {
+    } else if (OB_FAIL(coordinator_ctx_->set_status_loading_unlock())) {
       LOG_WARN("fail to set coordinator status loading", KR(ret));
     }
   }
@@ -393,8 +396,9 @@ int ObTableLoadCoordinator::finish()
     LOG_INFO("coordinator finish");
     bool active_trans_exist = false;
     bool committed_trans_eixst = false;
+    obsys::ObWLockGuard guard(coordinator_ctx_->get_status_lock());
     // 1. 冻结状态, 防止后续继续创建trans
-    if (OB_FAIL(coordinator_ctx_->set_status_frozen())) {
+    if (OB_FAIL(coordinator_ctx_->set_status_frozen_unlock())) {
       LOG_WARN("fail to set coordinator status frozen", KR(ret));
     }
     // 2. 检查当前是否还有trans没有结束
@@ -420,7 +424,7 @@ int ObTableLoadCoordinator::finish()
         LOG_WARN("fail to start merge peers", KR(ret));
       }
       // 5. 设置当前状态为合并中
-      else if (OB_FAIL(coordinator_ctx_->set_status_merging())) {
+      else if (OB_FAIL(coordinator_ctx_->set_status_merging_unlock())) {
         LOG_WARN("fail to set coordinator status merging", KR(ret));
       }
       // 6. 添加定时任务检查合并结果
@@ -650,8 +654,9 @@ int ObTableLoadCoordinator::commit(ObExecContext *exec_ctx, ObSQLSessionInfo &se
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator commit");
+    obsys::ObWLockGuard guard(coordinator_ctx_->get_status_lock());
     ObTableLoadSqlStatistics sql_statistics;
-    if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
+    if (OB_FAIL(coordinator_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check coordinator status", KR(ret));
     } else if (OB_FAIL(commit_peers(sql_statistics))) {
       LOG_WARN("fail to commit peers", KR(ret));
@@ -660,7 +665,7 @@ int ObTableLoadCoordinator::commit(ObExecContext *exec_ctx, ObSQLSessionInfo &se
       LOG_WARN("fail to drive sql stat", KR(ret));
     } else if (OB_FAIL(commit_redef_table(session_info))) {
       LOG_WARN("fail to commit redef table", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->set_status_commit())) {
+    } else if (OB_FAIL(coordinator_ctx_->set_status_commit_unlock())) {
       LOG_WARN("fail to set coordinator status commit", KR(ret));
     } else {
       result_info = coordinator_ctx_->result_info_;
@@ -679,8 +684,9 @@ int ObTableLoadCoordinator::px_commit_data(ObExecContext *exec_ctx)
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator px_commit_data");
+    obsys::ObRLockGuard guard(coordinator_ctx_->get_status_lock());
     ObTableLoadSqlStatistics sql_statistics;
-    if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
+    if (OB_FAIL(coordinator_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check coordinator status", KR(ret));
     } else if (OB_FAIL(commit_peers(sql_statistics))) {
       LOG_WARN("fail to commit peers", KR(ret));
@@ -701,9 +707,12 @@ int ObTableLoadCoordinator::px_commit_ddl(ObSQLSessionInfo &session_info)
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator px_commit_ddl");
-    if (OB_FAIL(commit_redef_table(session_info))) {
+    obsys::ObWLockGuard guard(coordinator_ctx_->get_status_lock());
+    if (OB_FAIL(coordinator_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
+      LOG_WARN("fail to check coordinator status", KR(ret));
+    } else if (OB_FAIL(commit_redef_table(session_info))) {
       LOG_WARN("fail to commit redef table", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->set_status_commit())) {
+    } else if (OB_FAIL(coordinator_ctx_->set_status_commit_unlock())) {
       LOG_WARN("fail to set coordinator status commit", KR(ret));
     }
   }

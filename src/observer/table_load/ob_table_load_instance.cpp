@@ -36,10 +36,12 @@ ObTableLoadInstance::~ObTableLoadInstance() { destroy(); }
 
 void ObTableLoadInstance::destroy()
 {
+  int ret = OB_SUCCESS;
   trans_ctx_.reset();
   if (nullptr != table_ctx_) {
-    ObTableLoadService::remove_ctx(table_ctx_);
-    if (!is_committed_) {
+    if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx_))) {
+      LOG_WARN("table ctx may remove by service", KR(ret), KP(table_ctx_));
+    } else if (!is_committed_) {
       ObTableLoadCoordinator::abort_ctx(table_ctx_, *session_info_);
     }
     ObTableLoadService::put_ctx(table_ctx_);
