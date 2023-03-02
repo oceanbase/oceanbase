@@ -1221,6 +1221,7 @@ int ObDDLRedefinitionTask::finish()
   alter_table_arg_.ddl_task_type_ = share::CLEANUP_GARBAGE_TASK;
   alter_table_arg_.table_id_ = object_id_;
   alter_table_arg_.hidden_table_id_ = target_object_id_;
+  alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
   ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;

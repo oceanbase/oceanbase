@@ -465,6 +465,7 @@ int ObModifyAutoincTask::set_schema_available()
   } else {
     ObSArray<uint64_t> unused_ids;
     alter_table_arg_.ddl_task_type_ = share::UPDATE_AUTOINC_SCHEMA;
+    alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
       LOG_WARN("get rpc timeout failed", K(ret));
     } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).

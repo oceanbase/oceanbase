@@ -1048,6 +1048,7 @@ int ObConstraintTask::set_foreign_key_constraint_validated()
       fk_arg.need_validate_data_ = false;
       alter_table_arg.exec_tenant_id_ = tenant_id_;
       alter_table_arg.based_schema_object_infos_.reset();
+      alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
       if (is_table_hidden_) {
         ObSArray<uint64_t> unused_ids;
         alter_table_arg.ddl_task_type_ = share::MODIFY_FOREIGN_KEY_STATE_TASK;
@@ -1121,6 +1122,7 @@ int ObConstraintTask::set_check_constraint_validated()
       } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
         LOG_WARN("get ddl rpc timeout failed", K(ret));
       } else if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
+        alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
         if (is_table_hidden_) {
           if (!is_oracle_mode) {
             // only mysql mode support modify not null column during offline ddl, support oracle later.
@@ -1399,6 +1401,7 @@ int ObConstraintTask::rollback_failed_foregin_key()
         ObSArray<uint64_t> unused_ids;
         alter_table_arg.ddl_task_type_ = share::MODIFY_FOREIGN_KEY_STATE_TASK;
         alter_table_arg.hidden_table_id_ = object_id_;
+        alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
         if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
             execute_ddl_task(alter_table_arg, unused_ids))) {
           LOG_WARN("alter table failed", K(ret));
@@ -1485,6 +1488,7 @@ int ObConstraintTask::rollback_failed_add_not_null_columns()
       alter_table_arg.ddl_task_type_ = share::DELETE_COLUMN_FROM_SCHEMA;
       alter_table_arg.index_arg_list_.reset();
       alter_table_arg.foreign_key_arg_list_.reset();
+      alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
       AlterColumnSchema *col_schema = NULL;
       for (int64_t i = 0; i < alter_table_arg.alter_table_schema_.get_column_count() && OB_SUCC(ret); i++) {
         if (OB_ISNULL(col_schema = static_cast<AlterColumnSchema *>(

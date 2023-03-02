@@ -271,6 +271,7 @@ int ObColumnRedefinitionTask::copy_table_indexes()
       alter_table_arg_.ddl_task_type_ = share::REBUILD_INDEX_TASK;
       alter_table_arg_.table_id_ = object_id_;
       alter_table_arg_.hidden_table_id_ = target_object_id_;
+      alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
       if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
         LOG_WARN("get schema guard failed", K(ret));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, table_schema))) {
@@ -410,6 +411,7 @@ int ObColumnRedefinitionTask::copy_table_constraints()
         alter_table_arg_.ddl_task_type_ = share::REBUILD_CONSTRAINT_TASK;
         alter_table_arg_.table_id_ = object_id_;
         alter_table_arg_.hidden_table_id_ = target_object_id_;
+        alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
         if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, rpc_timeout))) {
           LOG_WARN("get ddl rpc timeout failed", K(ret));
         } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
@@ -457,6 +459,7 @@ int ObColumnRedefinitionTask::copy_table_foreign_keys()
         alter_table_arg_.ddl_task_type_ = share::REBUILD_FOREIGN_KEY_TASK;
         alter_table_arg_.table_id_ = object_id_;
         alter_table_arg_.hidden_table_id_ = target_object_id_;
+        alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
         if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, rpc_timeout))) {
           LOG_WARN("get ddl rpc timeout failed", K(ret));
         } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
@@ -602,6 +605,7 @@ int ObColumnRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status
   alter_table_arg_.hidden_table_id_ = target_object_id_;
   // offline ddl is allowed on table with trigger(enable/disable).
   alter_table_arg_.need_rebuild_trigger_ = true;
+  alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
   ObRootService *root_service = GCTX.root_service_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
