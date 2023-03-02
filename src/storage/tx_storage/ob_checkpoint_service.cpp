@@ -25,7 +25,11 @@
 #include "logservice/palf/palf_env.h"
 #include "logservice/palf/lsn.h"
 #include "logservice/archiveservice/ob_archive_service.h"
+#include "logservice/ob_log_handler.h"              //ObLogHandler
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "rootserver/ob_tenant_info_loader.h"//get_tenant_info
+#include "share/ob_cluster_version.h"//get_tenant_data_version
+#include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
 
 namespace oceanbase
 {
@@ -177,13 +181,29 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
               K(archive_lsn), K(checkpoint_lsn), KPC(ls));
           checkpoint_lsn = archive_lsn;
         }
-        if (OB_FAIL(ls->get_log_handler()->advance_base_lsn(checkpoint_lsn))) {
-          ARCHIVE_LOG(WARN, "advance base lsn failed", K(ret), K(checkpoint_lsn));
-        } else {
-          FLOG_INFO("[CHECKPOINT] advance palf base lsn successfully",
-              K(checkpoint_lsn), K(ls->get_ls_id()));
-        }
       }
+      if (OB_SUCC(ret) && ls->get_ls_id().is_sys_ls()) {
+        //The check_point point of the sys ls refers to the sys_recovery_scn of __all_tenant_info
+        const uint64_t tenant_id = ls->get_tenant_id();
+        palf::LSN sys_recovery_lsn;
+        if (!is_user_tenant(tenant_id)) {
+          //nothing todo
+        } else if (OB_FAIL(get_sys_ls_recovery_lsn_(ls->get_log_handler(), sys_recovery_lsn))) {
+          LOG_WARN("failed to get sys ls recovery lsn", KR(ret));
+        } else if (sys_recovery_lsn < checkpoint_lsn) {
+          LOG_TRACE(
+              "sys ls recovery lsn is small than checkpoint_lsn, set base_lsn with sys recovery lsn",
+              K(sys_recovery_lsn), K(checkpoint_lsn));
+          checkpoint_lsn = sys_recovery_lsn;
+        }  // end for user tenant
+      }
+      if (FAILEDx(ls->get_log_handler()->advance_base_lsn(checkpoint_lsn))) {
+        ARCHIVE_LOG(WARN, "advance base lsn failed", K(ret), K(checkpoint_lsn));
+      } else {
+        FLOG_INFO("[CHECKPOINT] advance palf base lsn successfully",
+            K(checkpoint_lsn), K(ls->get_ls_id()));
+      }
+
     }
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
@@ -194,6 +214,32 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
       }
     }
   }
+}
+
+int ObCheckPointService::ObCheckpointTask::get_sys_ls_recovery_lsn_(
+  logservice::ObLogHandler *log_handler, palf::LSN &recovery_lsn)
+{
+  int ret = OB_SUCCESS;
+  share::ObAllTenantInfo tenant_info;
+  SCN recovery_scn;
+  recovery_lsn.reset();
+  if (OB_FAIL(MTL(rootserver::ObTenantInfoLoader *)->get_tenant_info(tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret));
+  } else if (tenant_info.get_sys_recovery_scn().is_min()) {
+    // min is during upgrade, use sync scn instead
+    recovery_scn = tenant_info.get_sync_scn();
+  } else {
+    recovery_scn = tenant_info.get_sys_recovery_scn();
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(log_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log handle is null", KR(ret), K(tenant_info));
+  } else if (OB_FAIL(log_handler->locate_by_scn_coarsely(recovery_scn,
+                                                         recovery_lsn))) {
+    LOG_WARN("failed to locate scn", KR(ret), K(tenant_info));
+  }
+  return ret;
 }
 
 bool ObCheckPointService::get_disk_usage_threshold_(int64_t &threshold)

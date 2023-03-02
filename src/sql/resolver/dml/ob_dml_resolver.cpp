@@ -2166,9 +2166,12 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
       LOG_WARN("push back failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr))) {
       LOG_WARN("replace column ref expr failed", K(ret));
-    } else if (expr->is_sys_func_expr() && OB_FAIL(check_col_param_on_expr(expr))) {
-      LOG_WARN("illegal param on func_expr", K(ret));
     } else { /*do nothing*/ }
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(expr) && expr->is_sys_func_expr()
+      && OB_FAIL(check_col_param_on_expr(expr))) {
+    LOG_WARN("illegal param on func_expr", K(ret));
   }
   return ret;
 }
@@ -4169,9 +4172,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
   }
   if (OB_SUCC(ret)) {
     item->synonym_name_ = synonym_name;
-    if (is_db_explicit) {
-      item->synonym_db_name_ = synonym_db_name;
-    }
+    item->synonym_db_name_ = synonym_db_name;
     item->database_name_ = db_name;
     bool select_index_enabled = false;
     uint64_t database_id = OB_INVALID_ID;
@@ -7318,6 +7319,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
   ObString out_db_name;
   ObString out_table_name;
   synonym_db_name.reset();
+  bool is_public_synonym = false;
   if (OB_FAIL(resolve_table_relation_node_v2(node, table_name, db_name, is_db_explicit))) {
     LOG_WARN("failed to resolve table relation node!", K(ret));
   } else if (FALSE_IT(orig_name.assign_ptr(table_name.ptr(), table_name.length()))) {
@@ -7335,7 +7337,8 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
                                                         table_name,
                                                         db_name,
                                                         synonym_checker,
-                                                        is_db_explicit))) {
+                                                        is_db_explicit,
+                                                        is_public_synonym))) {
     if (OB_TABLE_NOT_EXIST == ret) {
       if (synonym_checker.has_synonym()) {
         ret = OB_ERR_SYNONYM_TRANSLATION_INVALID;
@@ -7352,6 +7355,9 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     synonym_db_name.reset();
   } else {
     synonym_name = orig_name;
+    if (is_public_synonym) {
+      synonym_db_name.reset();
+    }
     ObStmt *stmt = get_basic_stmt();
     // 一般的对synonym操作的dml语句stmt不会是NULL，但是类似于desc synonym_name的语句，运行到这里
     // stmt还未生成，因为还未生成从虚拟表select的语句，所以stmt为NULL
@@ -7447,7 +7453,8 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
                                                       ObString &table_name,
                                                       ObString &db_name,
                                                       ObSynonymChecker &synonym_checker,
-                                                      bool is_db_explicit)
+                                                      bool is_db_explicit,
+                                                      bool &is_synonym_public)
 {
   int ret = OB_SUCCESS;
   bool exist_with_synonym = false;
@@ -7470,7 +7477,7 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
       ret = OB_SUCCESS;
       if (OB_FAIL(schema_checker_->get_synonym_schema(tenant_id, database_id, table_name,
                                                       object_db_id, synonym_id, object_table_name,
-                                                      exist_with_synonym, !is_db_explicit))) {
+                                                      exist_with_synonym, !is_db_explicit, &is_synonym_public))) {
         LOG_WARN("get synonym schema failed", K(tenant_id), K(database_id), K(table_name), K(ret));
       } else if (exist_with_synonym) {
         synonym_checker.set_synonym(true);
@@ -7485,12 +7492,14 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
           db_name = database_schema->get_database_name_str();
           table_name = object_table_name;
           database_id = object_db_id;
+          bool dummy = false;
           if (OB_FAIL(SMART_CALL(resolve_table_relation_recursively(tenant_id,
                                                                     database_id,
                                                                     table_name,
                                                                     db_name,
                                                                     synonym_checker,
-                                                                    is_db_explicit)))) {
+                                                                    is_db_explicit,
+                                                                    dummy)))) {
             LOG_WARN("fail to resolve table relation", K(tenant_id), K(database_id), K(table_name), K(ret));
           }
         }

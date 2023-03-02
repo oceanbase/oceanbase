@@ -199,7 +199,8 @@ public:
   static int stmt_setup_savepoint_(ObSQLSessionInfo *session,
                                    ObDASCtx &das_ctx,
                                    ObPhysicalPlanCtx *plan_ctx,
-                                   transaction::ObTransService* txs);
+                                   transaction::ObTransService* txs,
+                                   const int64_t nested_level);
   static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback);
   static int kill_query_session(ObSQLSessionInfo &session, const ObSQLSessionState &status);
   static int kill_tx(ObSQLSessionInfo *session, int cause);

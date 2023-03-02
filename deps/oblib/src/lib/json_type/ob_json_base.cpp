@@ -4333,6 +4333,7 @@ int ObIJsonBase::compare_double(const ObIJsonBase &other, int &res) const
     switch (j_type_b) {
       case ObJsonNodeType::J_OFLOAT: {
         double double_b = other.get_float();
+        double_a = (float) double_a;
         res = ObJsonBaseUtil::compare_numbers(double_a, double_b);
         break;
       }
@@ -4500,7 +4501,11 @@ int ObIJsonBase::path_compare_string(const ObString &str_l, const ObString &str_
   int i = 0;
   while (i < l_len && OB_SUCC(ret) && res == 0) {
     if (i < r_len) {
-      if (str_l[i] < str_r[i]) {
+      if (str_l[i] < 0 && str_r[i] > 0) {
+        res = 1;
+      } else if (str_r[i] < 0 && str_l[i] > 0) {
+        res = -1;
+      } else if (str_l[i] < str_r[i]) {
         res = -1;
       } else if (str_l[i] > str_r[i]) {
         res = 1;
@@ -4540,7 +4545,7 @@ static constexpr int type_comparison[JSON_TYPE_NUM][JSON_TYPE_NUM] = {
   /* 1  DECIMAL */      {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 2  INT */          {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 3  UINT */         {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 4  DOUBLE */       {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
+  /* 4  DOUBLE */       {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 5  STRING */       {1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2},
   /* 6  OBJECT */       {1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 7  ARRAY */        {1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
@@ -4552,7 +4557,7 @@ static constexpr int type_comparison[JSON_TYPE_NUM][JSON_TYPE_NUM] = {
   /* 13  OPAQUE */      {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 14  empty */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /*  ORACLE MODE */
-  /* 15  OFLOAT */      {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
+  /* 15  OFLOAT */      {2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 16  ODOUBLE */     {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 17  ODECIMAL */    {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 18  OINT */        {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
@@ -4580,7 +4585,9 @@ int ObIJsonBase::compare(const ObIJsonBase &other, int &res, bool is_path) const
   if (j_type_a == ObJsonNodeType::J_ERROR || j_type_b == ObJsonNodeType::J_ERROR) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("error json type", K(j_type_a), K(j_type_b));
-  } else if (is_path && (j_type_a == ObJsonNodeType::J_OBJECT || j_type_b == ObJsonNodeType::J_OBJECT)) {
+  } else if (is_path
+            && (j_type_a == ObJsonNodeType::J_OBJECT || j_type_b == ObJsonNodeType::J_OBJECT
+            || ((j_type_a == ObJsonNodeType::J_NULL || j_type_a == ObJsonNodeType::J_NULL) && j_type_a != j_type_b))) {
     res = -3;
   } else {
     // Compare the matrix to get which json type has a higher priority, and return the result if the priority is different.

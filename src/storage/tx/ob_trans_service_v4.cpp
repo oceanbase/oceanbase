@@ -39,7 +39,6 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/ls/ob_ls.h"
 #include "ob_xa_service.h"
-#include "rootserver/ob_tenant_recovery_reportor.h"
 
 /*  interface(s)  */
 namespace oceanbase {

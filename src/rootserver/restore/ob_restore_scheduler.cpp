@@ -15,7 +15,8 @@
 #include "ob_restore_scheduler.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/ob_unit_manager.h"//convert_pool_name_lis
-#include "rootserver/ob_tenant_role_transition_service.h"//failover_to_primary
+#include "rootserver/ob_ls_service_helper.h"//create_new_ls_in_trans
+#include "rootserver/ob_common_ls_service.h"//do_create_user_ls
 #include "share/ob_schema_status_proxy.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/schema/ob_schema_mgr.h"
@@ -976,19 +977,16 @@ int ObRestoreService::restore_init_ls(const share::ObPhysicalRestoreJob &job_inf
     } else if (OB_FAIL(store.read_ls_attr_info(backup_ls_attr))) {
       LOG_WARN("failed to read ls info", KR(ret));
     } else {
-      const SCN &sync_scn = backup_ls_attr.backup_scn_;
-      const SCN readable_scn = SCN::base_scn();
-      ObLSRecoveryStatOperator ls_recovery;
-      ObLSRecoveryStat ls_recovery_stat;
-      LOG_INFO("start to create ls and set sync scn", K(sync_scn), K(backup_ls_attr));
-      if (OB_FAIL(ls_recovery_stat.init_only_recovery_stat(
-              tenant_id_, SYS_LS, sync_scn, readable_scn))) {
-        LOG_WARN("failed to init ls recovery stat", KR(ret), K(backup_ls_attr.backup_scn_),
-                 K(sync_scn), K(readable_scn));
-      } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat(ls_recovery_stat,
-                                                             *sql_proxy_))) {
-        LOG_WARN("failed to update ls recovery stat", KR(ret),
-                 K(ls_recovery_stat));
+      const SCN &sys_recovery_scn = backup_ls_attr.backup_scn_;
+      ObAllTenantInfo tenant_info;
+      LOG_INFO("start to create ls and set sys_recovery_scn", K(sys_recovery_scn), K(backup_ls_attr));
+      if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, sql_proxy_, false, tenant_info))) {
+        LOG_WARN("failed to update tenant info", KR(ret), K(tenant_id_));
+      } else if (tenant_info.get_sys_recovery_scn() >= sys_recovery_scn) {
+        //no need update sys recovery scn
+      } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_sys_recovery_scn(tenant_id_, sys_recovery_scn,
+        false, sql_proxy_))) {
+        LOG_WARN("failed to update tenant sys recovery scn", KR(ret), K(tenant_id_), K(sys_recovery_scn), K(tenant_info));
       }
     }
     if (FAILEDx(create_all_ls_(*tenant_schema, backup_ls_attr.ls_attr_array_))) {
@@ -1056,7 +1054,7 @@ int ObRestoreService::create_all_ls_(
           LOG_INFO("[RESTORE] ls already exist", K(ls_info), K(tenant_id_));
         } else if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id_), K(ls_info));
-        } else if (OB_FAIL(tenant_stat.create_new_ls_for_recovery(
+        } else if (OB_FAIL(tenant_stat.create_new_ls_in_trans(
                    ls_info.get_ls_id(), ls_info.get_ls_group_id(), ls_info.get_create_scn(),
                    trans))) {
           LOG_WARN("failed to add new ls status info", KR(ret), K(ls_info));
@@ -1096,12 +1094,10 @@ int ObRestoreService::wait_all_ls_created_(const share::schema::ObTenantSchema &
     ObLSRecoveryStat recovery_stat;
     ObLSRecoveryStatOperator ls_recovery_operator;
     
-    ObTenantLSInfo tenant_stat(sql_proxy_, &tenant_schema, tenant_id_,
-                               srv_rpc_proxy_, GCTX.lst_operator_);
     if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id, ls_array,
                                                      *sql_proxy_))) {
       LOG_WARN("failed to get all ls status", KR(ret), K(tenant_id));
-    }
+  }
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_array.count(); ++i) {
       const ObLSStatusInfo &info = ls_array.at(i);
       if (info.ls_is_creating()) {
@@ -1113,10 +1109,11 @@ int ObRestoreService::wait_all_ls_created_(const share::schema::ObTenantSchema &
                 job_info, info.ls_id_, palf_base_info))) {
           LOG_WARN("failed to get restore ls palf info", KR(ret), K(info),
                    K(job_info));
-        } else if (OB_FAIL(tenant_stat.create_ls_with_palf(info, recovery_stat.get_create_scn(),
-                                                           true,/*create with palf*/
-                                                           palf_base_info))) {
-          LOG_WARN("failed to create ls with palf", KR(ret), K(info),
+        } else if (OB_FAIL(ObCommonLSService::do_create_user_ls(
+                       tenant_schema, info, recovery_stat.get_create_scn(),
+                       true, /*create with palf*/
+                       palf_base_info))) {
+          LOG_WARN("failed to create ls with palf", KR(ret), K(info), K(tenant_schema),
                    K(palf_base_info));
         }
       }

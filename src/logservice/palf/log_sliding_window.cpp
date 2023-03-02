@@ -41,6 +41,12 @@ bool UpdateMatchLsnFunc::operator()(const common::ObAddr &server, LsnTsInfo &val
   if (!value.is_valid()) {
     bool_ret = false;
   } else if (value.lsn_ <= new_end_lsn_) {
+    old_end_lsn_ = value.lsn_;
+    old_advance_time_us_ = value.last_advance_time_us_;
+    if (value.lsn_ < new_end_lsn_) {
+      // Update last_advance_time_us_ when lsn really changes.
+      value.last_advance_time_us_ = new_ack_time_us_;
+    }
     value.lsn_ = new_end_lsn_;
     value.last_ack_time_us_ = new_ack_time_us_;
     bool_ret = true;
@@ -452,7 +458,7 @@ int LogSlidingWindow::submit_log(const char *buf,
       } else if (is_need_handle && FALSE_IT(is_need_handle_next |= is_need_handle)) {
       } else {
         PALF_LOG(INFO, "generate_new_group_log_ for padding log success", K_(palf_id), K_(self), K(log_id),
-            K(tmp_lsn), K(scn), K(is_need_handle), K(is_need_handle_next));
+            K(padding_size), K(tmp_lsn), K(scn), K(is_need_handle), K(is_need_handle_next));
         // after gen padding_entry, update lsn to next block
         tmp_lsn.val_ += padding_size;
         log_id++;  // inc log_id for following new log
@@ -3762,7 +3768,11 @@ int LogSlidingWindow::try_update_match_lsn_map_(const common::ObAddr &server, co
       PALF_LOG(WARN, "match_lsn_map_.operate() failed", K(ret), K_(palf_id), K_(self),
           K(server), K(end_lsn), "curr val", tmp_val);
     } else {
-      // do nothing
+      // Update successfully, check if it advances delay too long.
+      if (update_func.is_advance_delay_too_long()) {
+        PALF_LOG(WARN, "[MATCH LSN ADVANCE DELAY]match_lsn advance delay too much time",
+            K(ret), K_(palf_id), K_(self), K(server), K(update_func));
+      }
     }
   }
   PALF_LOG(TRACE, "try_update_match_lsn_map_ finished", K(ret), K_(palf_id), K_(self), K(server), K(end_lsn));

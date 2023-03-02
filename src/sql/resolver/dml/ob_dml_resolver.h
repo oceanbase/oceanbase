@@ -783,7 +783,8 @@ private:
                                          common::ObString &table_name,
                                          common::ObString &db_name,
                                          ObSynonymChecker &synonym_checker,
-                                         bool is_db_explicit);
+                                         bool is_db_explicit,
+                                         bool &is_synonym_public);
   int add_synonym_version(const common::ObIArray<uint64_t> &synonym_ids);
 
   int find_const_params_for_gen_column(const ObRawExpr &expr);

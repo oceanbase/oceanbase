@@ -240,7 +240,6 @@ private:
   int handle_table_verification_finished(const uint64_t table_id,
                                          const share::SCN &frozen_scn,
                                          hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
-  bool is_index_table(const share::schema::ObSimpleTableSchemaV2 &simple_schema);
   // handle data tables with index, mark data tables whose all index tables finished verification as INDEX_CKM_VERIFIED
   int handle_data_table_with_index(const volatile bool &stop,
                                    const share::SCN &frozen_scn,
@@ -259,6 +258,13 @@ private:
                          share::schema::ObSchemaGetterGuard &schema_guard,
                          hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
                          const int64_t expected_epoch);
+  // This function is specially designed to make it easier for troubleshooting. Moreover, this
+  // function will not modify table_compaction_map, which ensures major compaction will not be
+  // affected by this function.
+  int try_print_first_unverified_info(const share::schema::ObSimpleTableSchemaV2 *simple_schema,
+                                      const share::schema::ObTableSchema *table_schema,
+                                      const hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                      bool &already_print);
 };
 
 } // end namespace rootserver

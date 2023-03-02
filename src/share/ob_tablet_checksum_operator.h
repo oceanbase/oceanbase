@@ -99,11 +99,13 @@ public:
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
       common::ObIArray<ObTabletChecksumItem> &items);
-  // delete all records whose 'snapshot_version' <= min_snapshot_version
+  // delete limited records whose 'snapshot_version' <= min_snapshot_version
+  // , while the record of whose (tablet_id, ls_id) is (1, 1) can't be deleted.
   static int delete_tablet_checksum_items(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
-      const SCN &gc_compaction_scn);
+      const SCN &gc_compaction_scn,
+      const int64_t limit_cnt);
   static int delete_tablet_checksum_items(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,

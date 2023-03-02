@@ -78,6 +78,7 @@ public:
  }
  virtual void run2() override;
  int get_tenant_info(share::ObAllTenantInfo &tenant_info);
+ int get_tenant_readable_scn(share::SCN &readable_scn);
  /**
   * @description:
   *    get valid sts, only return sts refreshed after specified_time

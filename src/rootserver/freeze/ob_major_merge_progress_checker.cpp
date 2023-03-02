@@ -120,7 +120,7 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_unverified)
     if (OB_SUCC(ret)) {
       if (uncompacted_tables.count() > 0) {
         // Note: uncompacted tables are caused by truncate table. mark these uncomapted tables as
-        // verified. Ptherwise, major compaction cannot finish forever due to uncompacted tables.
+        // verified. Otherwise, major compaction cannot finish forever due to uncompacted tables.
         // Moreover, if uncompacted tables are index tables, data_tables can not start to verify
         // checksum with these uncompacted index_tables.
         // https://work.aone.alibaba-inc.com/issue/47565111
@@ -128,9 +128,12 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_unverified)
           LOG_WARN("fail to mark uncompacted tables as verified", KR(ret), K(uncompacted_tables));
         }
       }
-      exist_unverified = unverified_tables.count() > 0;
+      const int64_t unverified_cnt = unverified_tables.count();
+      exist_unverified = unverified_cnt > 0;
       if (exist_unverified) {
-        FLOG_INFO("exists unverified tables", "unverified cnt", unverified_tables.count(), K(unverified_tables));
+        const int64_t print_count = (unverified_cnt > 10) ? 10 : unverified_cnt;
+        FLOG_INFO("exists unverified tables", K(unverified_cnt), K(print_count), "unverified_tables",
+          ObArrayWrap<ObTableCompactionInfo>(unverified_tables.get_data(), print_count));
       } else if (ele_count != table_count_) {
         ret = OB_INNER_STAT_ERROR;
         LOG_WARN("table_compaction_map element count should not be less than table count", KR(ret), K(ele_count),

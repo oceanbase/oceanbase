@@ -37,7 +37,9 @@ int64_t MAX_STATE_SIZE = 4 * 1024; // 4KB
 
 bool ObTxnFreeRouteCtx::is_temp(const ObTxDesc &tx) const
 {
-  return !TX_START_OR_RESUME_LOCAL(&tx);
+  //return !TX_START_OR_RESUME_LOCAL(&tx);
+  UNUSED(tx);
+  return txn_addr_.is_valid() && txn_addr_ != GCONF.self_addr_;
 }
 void ObTxnFreeRouteCtx::init_before_update_state(bool proxy_support)
 {

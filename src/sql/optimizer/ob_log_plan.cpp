@@ -4418,8 +4418,8 @@ int ObLogPlan::allocate_join_path(JoinPath *join_path,
     if (OB_ISNULL(left_path) || OB_ISNULL(right_path)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(left_path), K(right_path));
-    } else if (OB_FAIL(create_plan_tree_from_path(left_path, left_child)) ||
-               OB_FAIL(create_plan_tree_from_path(right_path, right_child))) {
+    } else if (OB_FAIL(SMART_CALL(create_plan_tree_from_path(left_path, left_child))) ||
+               OB_FAIL(SMART_CALL(create_plan_tree_from_path(right_path, right_child)))) {
       LOG_WARN("failed to create plan tree from path", K(ret));
     } else if (OB_ISNULL(left_child) || OB_ISNULL(right_child)) {
       ret = OB_ERR_UNEXPECTED;
@@ -5083,6 +5083,32 @@ int ObLogPlan::compute_repartition_distribution_info(const EqualSets &equal_sets
   return ret;
 }
 
+int ObLogPlan::find_table_scan_with_sharding_info(const ObLogicalOperator &op,
+                                                  const ObShardingInfo *sharding,
+                                                  const ObLogTableScan *&tsc)
+{
+  int ret = OB_SUCCESS;
+  tsc = NULL;
+  if (op.get_strong_sharding() != sharding) {
+    // return null tsc.
+  } else if (LOG_TABLE_SCAN == op.get_type()) {
+    tsc = static_cast<const ObLogTableScan*>(&op);
+  } else {
+    const bool is_subplan_scan = LOG_SUBPLAN_SCAN == op.get_type();
+    for (int64_t i = 0; i < op.get_num_of_child() && NULL == tsc && OB_SUCC(ret); i++) {
+      if (OB_ISNULL(op.get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL((SMART_CALL(find_table_scan_with_sharding_info(*op.get_child(i),
+                  is_subplan_scan ? op.get_child(i)->get_strong_sharding() : sharding,
+                  tsc))))) {
+        LOG_WARN("find table scan failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::get_repartition_table_info(const ObLogicalOperator &op,
                                           ObString &table_name,
                                           uint64_t &ref_table_id,
@@ -5091,37 +5117,9 @@ int ObLogPlan::get_repartition_table_info(const ObLogicalOperator &op,
   int ret = OB_SUCCESS;
   const ObLogicalOperator *cur_op = &op;
   const ObLogTableScan *table_scan = NULL;
-  while (NULL != cur_op) {
-    if (LOG_TABLE_SCAN == cur_op->get_type()) {
-      table_scan = static_cast<const ObLogTableScan*>(cur_op);
-      cur_op = NULL;
-    } else if (LOG_SUBPLAN_SCAN == cur_op->get_type()) {
-      cur_op = cur_op->get_child(0);
-    } else if (OB_NOT_NULL(cur_op->get_strong_sharding())) {
-      const ObLogicalOperator *child = NULL;
-      for (int64_t i = 0; i < cur_op->get_num_of_child() && NULL == child; i++) {
-        if (LOG_EXCHANGE == cur_op->get_child(i)->get_type()) {
-          /**
-          *                 JOIN(1)
-          *                   |
-          *             --------------
-          *             |            |
-          *           EXCHANGE    TABLE SCAN
-          *             |
-          *            ...
-          *   sharding of exchange, table scan and join are same.
-          *   We should choose the second branch.
-          */
-        } else if (cur_op->get_child(i)->get_strong_sharding() == cur_op->get_strong_sharding()) {
-          child = cur_op->get_child(i);
-        }
-      }
-      cur_op = child;
-    } else {
-      cur_op = NULL;
-    }
-  }
-  if (OB_ISNULL(table_scan)) {
+  if (OB_FAIL(find_table_scan_with_sharding_info(op, op.get_strong_sharding(), table_scan))) {
+    LOG_WARN("find table scan failed", K(ret));
+  } else if (OB_ISNULL(table_scan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
@@ -6648,20 +6646,21 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
   ObLogicalOperator *best_plan = NULL;
-  const ObSelectStmt* stmt = NULL;
+  const ObDMLStmt* stmt = NULL;
   ObSEArray<ObRawExpr*, 4> group_rollup_exprs;
   bool push_group = false;
+  groupby_helper.is_scalar_group_by_ = true;
   groupby_helper.force_use_hash_ = get_log_plan_hint().use_hash_aggregate();
   groupby_helper.force_use_merge_ = get_log_plan_hint().use_merge_aggregate();
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan) ||
-             OB_ISNULL(get_stmt()) ||
-             OB_UNLIKELY(!get_stmt()->is_select_stmt()) ||
-             OB_ISNULL(stmt = static_cast<const ObSelectStmt*>(get_stmt()))) {
+             OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FALSE_IT(groupby_helper.is_scalar_group_by_ = stmt->is_scala_group_by())) {
+  } else if (stmt->is_select_stmt() &&
+             OB_FALSE_IT(groupby_helper.is_scalar_group_by_ =
+                         static_cast<const ObSelectStmt*>(stmt)->is_scala_group_by())) {
   } else if (OB_FAIL(append(group_rollup_exprs, group_exprs)) ||
              OB_FAIL(append(group_rollup_exprs, rollup_exprs))) {
     LOG_WARN("failed to append group rollup exprs", K(ret));

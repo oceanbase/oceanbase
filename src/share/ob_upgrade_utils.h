@@ -22,9 +22,13 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObTimeoutCtx;
+}
 namespace share
 {
-
+class SCN;
 static const int64_t UPGRADE_JOB_TYPE_COUNT = 1;
 static const rootserver::ObRsJobType upgrade_job_type_array[UPGRADE_JOB_TYPE_COUNT] = {
   rootserver::JOB_TYPE_INVALID,
@@ -186,6 +190,8 @@ private:
   int post_upgrade_for_srs();
   int init_rewrite_rule_version(const uint64_t tenant_id);
   static int recompile_all_views_and_synonyms(const uint64_t tenant_id);
+  int init_tenant_sys_recovery_scn(const uint64_t tenant_id);
+  int get_sys_ls_max_sync_scn_(const uint64_t tenant_id, share::SCN &sys_scn);
 };
 /* =========== special upgrade processor end   ============= */
 

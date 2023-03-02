@@ -159,21 +159,6 @@ private:
       const uint64_t tenant_id,
       ObAllTenantInfo &new_tenant_info);
 
-  /**
-   * @description:
-   *    when switch to standby, prepare ls_status in all_ls and all_ls_status to proper status
-   * @param[in] tenant_id the tenant id to check
-   * @param[in] status only prepare in specified switchover status
-   * @param[in] switchover_epoch only prepare in specified switchover epoch
-   * @param[out] new_tenant_info return the updated tenant_info
-   * @return return code
-   */
-  int switch_to_standby_prepare_ls_status_(
-      const uint64_t tenant_id,
-      const ObTenantSwitchoverStatus &status,
-      const int64_t switchover_epoch,
-      ObAllTenantInfo &new_tenant_info);
-
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;
   const static int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;

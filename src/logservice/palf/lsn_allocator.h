@@ -79,7 +79,6 @@ private:
   static const int64_t LOG_TS_DELTA_UPPER_BOUND = (1ul << LOG_TS_DELTA_BIT_CNT) - 1000;
   static const uint64_t LOG_CUT_TRIGGER = 1 << 21;          // 聚合日志跨2M边界时切分
   static const uint64_t LOG_CUT_TRIGGER_MASK = (1 << 21) - 1;
-  static const int64_t CLOG_FILE_TAIL_PADDING_TRIGGER = 4096;     // 文件尾剩余空间补padding阈值
   static const uint64_t MAX_SUPPORTED_BLOCK_ID = 0xfffffffff - 1000;  // block_id告警阈值
   static const uint64_t MAX_SUPPORTED_BLOCK_OFFSET = 0xfffffff;        // block_offset的最大支持256MB
 private:

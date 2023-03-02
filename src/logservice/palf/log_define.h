@@ -60,7 +60,13 @@ const int64_t PALF_PHY_BLOCK_SIZE = 1 << 26;                                    
 const int64_t PALF_BLOCK_SIZE = PALF_PHY_BLOCK_SIZE - MAX_INFO_BLOCK_SIZE;          // log block size is 64M-MAX_INFO_BLOCK_SIZE by default.
 const int64_t PALF_META_BLOCK_SIZE = PALF_PHY_BLOCK_SIZE - MAX_INFO_BLOCK_SIZE;     // meta block size is 64M-MAX_INFO_BLOCK_SIZE by default.
 
-constexpr offset_t MAX_LOG_BUFFER_SIZE = MAX_LOG_BODY_SIZE + MAX_LOG_HEADER_SIZE;
+constexpr int64_t CLOG_FILE_TAIL_PADDING_TRIGGER = 4096;     // 文件尾剩余空间补padding阈值
+// The valid group_entry (not padding entry) size range is:
+//    (0, (MAX_LOG_BODY_SIZE + MAX_LOG_HEADER_SIZE) ).
+// The padding group_entry size range is:
+//    [4KB, (max_valid_group_entry_size + CLOG_FILE_TAIL_PADDING_TRIGGER) ).
+// So the MAX_LOG_BUFFER_SIZE is defined as below:
+constexpr offset_t MAX_LOG_BUFFER_SIZE = MAX_LOG_BODY_SIZE + MAX_LOG_HEADER_SIZE + CLOG_FILE_TAIL_PADDING_TRIGGER;
 
 constexpr offset_t LOG_DIO_ALIGN_SIZE = 4 * 1024;
 constexpr offset_t LOG_DIO_ALIGNED_BUF_SIZE_REDO = MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE;
@@ -78,6 +84,8 @@ const int64_t MAX_ALLOWED_SKEW_FOR_REF_US = 3600L * 1000 * 1000;          // 1h
 // follower's group buffer size is 8MB larger than leader's.
 const int64_t FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE = LEADER_DEFAULT_GROUP_BUFFER_SIZE + 8 * 1024 * 1024L;
 const int64_t PALF_STAT_PRINT_INTERVAL_US = 1 * 1000 * 1000L;
+// The advance delay threshold for match lsn is 1s.
+const int64_t MATCH_LSN_ADVANCE_DELAY_THRESHOLD_US = 1 * 1000 * 1000L;
 const int64_t PALF_RECONFIRM_FETCH_MAX_LSN_INTERVAL = 1 * 1000 * 1000;
 const int64_t PALF_FETCH_LOG_INTERVAL_US = 2 * 1000 * 1000L;                 // 2s
 const int64_t PALF_FETCH_LOG_RENEW_LEADER_INTERVAL_US = 5 * 1000 * 1000;            // 5s

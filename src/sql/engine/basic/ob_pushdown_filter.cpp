@@ -827,8 +827,8 @@ int ObPushdownFilterExecutor::init_filter_param(
           } else if (!def_cell.is_nop_value()) {
             if (OB_FAIL(default_datum.from_obj(def_cell))) {
               LOG_WARN("convert obj to datum failed", K(ret), K(col_params_.count()), K(def_cell));
-            } else {
-              // def value must have no lob header
+            } else if (col_params.at(idx)->get_meta_type().is_lob_storage() && !def_cell.is_null()) {
+              // lob def value must have no lob header when not null
               // When do lob pushdown, should add lob header for default value
               ObString data = default_datum.get_string();
               ObString out;

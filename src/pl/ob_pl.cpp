@@ -2169,12 +2169,17 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
   CK (OB_NOT_NULL(get_allocator()));
   CK (var_idx >= 0 && var_idx < params->count());
 
-  if (OB_SUCC(ret) && params->at(var_idx).is_pl_extend() && params->at(var_idx).get_ext() != 0) {
+  if (OB_SUCC(ret)
+      && params->at(var_idx).is_pl_extend()
+      && params->at(var_idx).get_ext() != 0
+      && params->at(var_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
     OZ (ObUserDefinedType::destruct_obj(params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
   }
 
   if (OB_FAIL(ret)) {
-  } else if (value.is_pl_extend() && value.get_ext() != 0) {
+  } else if (value.is_pl_extend()
+              && value.get_ext() != 0
+              && value.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
     OZ (ObUserDefinedType::deep_copy_obj(*get_allocator(), value, copy_value));
   } else {
     OZ (deep_copy_obj(*get_allocator(), value, copy_value));
@@ -2192,6 +2197,8 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
     int64_t udt_id = params->at(var_idx).get_udt_id();
     params->at(var_idx) = copy_value;
     params->at(var_idx).set_udt_id(udt_id);
+  } else {
+    params->at(var_idx) = copy_value;
   }
   OX (params->at(var_idx).set_param_meta());
   return ret;
@@ -2248,6 +2255,23 @@ int ObPLExecCtx::get_user_type(uint64_t type_id,
     if (OB_SUCC(ret) && type_id == func_->get_type_table().at(i)->get_user_type_id()) {
       user_type = func_->get_type_table().at(i);
     }
+  }
+  if (OB_SUCC(ret)
+      && OB_ISNULL(user_type)
+      && OB_NOT_NULL(allocator_)
+      && OB_NOT_NULL(exec_ctx_)
+      && OB_NOT_NULL(exec_ctx_->get_my_session())
+      && OB_NOT_NULL(exec_ctx_->get_sql_ctx())
+      && OB_NOT_NULL(exec_ctx_->get_sql_ctx()->schema_guard_)
+      && OB_NOT_NULL(exec_ctx_->get_sql_proxy())
+      && OB_NOT_NULL(guard_)) {
+    pl::ObPLResolveCtx resolve_ctx(*allocator_,
+                                    *(exec_ctx_->get_my_session()),
+                                    *(exec_ctx_->get_sql_ctx()->schema_guard_),
+                                    *(guard_),
+                                    *(exec_ctx_->get_sql_proxy()),
+                                    false);
+    OZ (resolve_ctx.get_user_type(type_id, user_type));
   }
   return ret;
 }

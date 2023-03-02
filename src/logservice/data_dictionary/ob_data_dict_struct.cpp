@@ -389,7 +389,7 @@ int ObDictTenantMeta::incremental_data_update(const share::ObLSAttr &ls_attr)
   if (OB_UNLIKELY(! ls_attr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     DDLOG(WARN, "ls attr is invalid", KR(ret), K(ls_attr));
-  } else if (share::is_ls_create_end_op(ls_attr.get_ls_operatin_type())) {
+  } else if (share::is_ls_create_end_op(ls_attr.get_ls_operation_type())) {
     if (OB_FAIL(ls_arr_.push_back(ls_attr.get_ls_id()))) {
       DDLOG(WARN, "ls_arr_ push_back failed", KR(ret), K(ls_attr), K(ls_arr_));
     }

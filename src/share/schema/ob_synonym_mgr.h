@@ -196,7 +196,8 @@ public:
                  uint64_t &synonym_id,
                  common::ObString &obj_table_name,
                  bool &do_exist,
-                 bool search_public_schema = true) const;
+                 bool search_public_schema = true,
+                 bool *is_public = NULL) const;
   int get_synonym_schemas_in_tenant(const uint64_t tenant_id,
       common::ObIArray<const ObSimpleSynonymSchema *> &synonym_schemas) const;
   int get_synonym_schemas_in_database(const uint64_t tenant_id,

@@ -71,9 +71,16 @@ void LogGroupEntry::reset()
 
 bool LogGroupEntry::check_integrity() const
 {
-  int64_t data_len = header_.get_data_len();
-  return header_.check_integrity(buf_, data_len);
+  int64_t unused_data_checksum = -1;
+  return check_integrity(unused_data_checksum);
 }
+
+bool LogGroupEntry::check_integrity(int64_t &data_checksum) const
+{
+  int64_t data_len = header_.get_data_len();
+  return header_.check_integrity(buf_, data_len, data_checksum);
+}
+
 
 int LogGroupEntry::truncate(const SCN &upper_limit_scn, const int64_t pre_accum_checksum)
 {

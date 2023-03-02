@@ -66,10 +66,14 @@ ob_set_subtarget(ob_rootserver common
   ob_vtable_location_getter.cpp
   ob_zone_manager.cpp
   ob_zone_unit_provider.cpp
-  ob_tenant_recovery_reportor.cpp
+  ob_tenant_thread_helper.cpp
+  ob_ls_recovery_reportor.cpp
   ob_tenant_info_loader.cpp
+  ob_tenant_info_report.cpp
   ob_primary_ls_service.cpp
   ob_recovery_ls_service.cpp
+  ob_common_ls_service.cpp
+  ob_ls_service_helper.cpp
   ob_tenant_role_transition_service.cpp
   ob_server_balancer.cpp
   ob_system_admin_util.cpp
