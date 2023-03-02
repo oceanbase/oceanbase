@@ -489,19 +489,26 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
   } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR__SET_REVERSE_DBLINK_INFOS, value))) {
     LOG_WARN("failed to get SYS_VAR_SET_REVERSE_DBLINK_INFOS", K(value), K(ret));
   } else if (NULL == reverse_dblink_ || 0 != last_reverse_info_values_.compare(value)) {
-    if (!value.empty()){
+    if (!value.empty()){ // get a new valid REVERSE_DBLINK_INFOS, need create or update ObReverseLink
       void *ptr = NULL;
+      void *last_new_value_ptr = NULL;
+      int64_t last_new_value_length = value.length();
       if (OB_ISNULL(ptr = arena_alloc_.alloc(sizeof(ObReverseLink)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc memory", K(ret));
+        LOG_WARN("failed to alloc memory", K(ret), K(sizeof(ObReverseLink)));
+      } else if (OB_ISNULL(last_new_value_ptr = arena_alloc_.alloc(last_new_value_length))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(ret), K(last_new_value_length));
       } else {
+        MEMCPY(last_new_value_ptr, value.ptr(), last_new_value_length);
+        last_reverse_info_values_.assign((char *)last_new_value_ptr, last_new_value_length);
         reverse_dblink_ = new(ptr) ObReverseLink(arena_alloc_);
         char *new_buff = NULL;
         int64_t new_size = 0;
         int64_t pos = 0;
-        LOG_DEBUG("get SYS_VAR_SET_REVERSE_DBLINK_INFOS", K(value));
-        if (OB_FAIL(ObHexUtilsBase::unhex(value, arena_alloc_, new_buff, new_size))) {
-          LOG_WARN("failed to unhex", K(value), K(new_size), K(ret));
+        LOG_DEBUG("get SYS_VAR_SET_REVERSE_DBLINK_INFOS", K(last_reverse_info_values_));
+        if (OB_FAIL(ObHexUtilsBase::unhex(last_reverse_info_values_, arena_alloc_, new_buff, new_size))) {
+          LOG_WARN("failed to unhex", K(last_reverse_info_values_), K(new_size), K(ret));
         } else if (OB_FAIL(reverse_dblink_->deserialize(new_buff, new_size, pos))) {
           LOG_WARN("failed to deserialize reverse_dblink_", K(new_size), K(ret));
         } else {
@@ -509,11 +516,16 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
           LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
         }
       }
+    } else if (OB_ISNULL(reverse_dblink_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL ptr", K(ret));
+    } else {
+      reverse_dblink = reverse_dblink_;
+      LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
     }
   } else {
     reverse_dblink = reverse_dblink_;
     LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
   }
-  last_reverse_info_values_.assign(value.ptr(), value.length());
   return ret;
 }
