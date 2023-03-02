@@ -699,7 +699,10 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
       } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_QUERY)) {
         // to print returning type
         OZ (print_json_return_type(col_info.res_type_, col_info.data_type_));
-        DATA_PRINTF(" format json");
+        ObObjType cast_type = col_info.data_type_.get_obj_type();
+        if (cast_type != ObJsonType){
+          DATA_PRINTF(" format json");
+        }
         if (OB_FAIL(ret)) {
         } else if (col_info.allow_scalar_ == 0) {
           DATA_PRINTF(" allow scalars");

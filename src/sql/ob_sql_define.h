@@ -114,7 +114,8 @@ enum JtColType {
   COL_TYPE_EXISTS, // 2
   COL_TYPE_QUERY, // 3
   COL_TYPE_VALUE, // 4
-  NESTED_COL_TYPE = 5,
+  NESTED_COL_TYPE, // 5
+  COL_TYPE_QUERY_JSON_COL = 6,
 };
 
 enum ObNameTypeClass
