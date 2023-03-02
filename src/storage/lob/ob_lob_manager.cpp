@@ -2202,6 +2202,10 @@ int ObLobManager::write_outrow_inner(ObLobAccessParam& param, ObLobQueryIter *it
     uint64_t padding_size = 0;
     uint64_t pos = 0;
     if (old_data.length() == 0) {
+      if (param.scan_backward_) {
+        LOG_INFO("param scan_backward is true. Make it be false.", K(param));
+        param.scan_backward_ = false;
+      }
       if (OB_FAIL(prepare_write_buffers(param, remain_buf, tmp_buf))) {
         LOG_WARN("fail to prepare buffers", K(ret));
       } else if (OB_FAIL(lob_ctx_.lob_meta_mngr_->scan(param, meta_iter))) {
