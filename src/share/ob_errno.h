@@ -3378,6 +3378,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
 #define OB_PACKET_CLUSTER_ID_NOT_MATCH__USER_ERROR_MSG "Packet cluster_id not match"
+#define OB_TENANT_ID_NOT_MATCH__USER_ERROR_MSG "Tenant id not match"
 #define OB_URI_ERROR__USER_ERROR_MSG "URI error"
 #define OB_FINAL_MD5_ERROR__USER_ERROR_MSG "OSS file MD5 error"
 #define OB_OSS_ERROR__USER_ERROR_MSG "OSS error"
@@ -5405,6 +5406,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8003, Packet checksum error"
 #define OB_PACKET_CLUSTER_ID_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8004, Packet cluster_id not match"
+#define OB_TENANT_ID_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8005, Tenant id not match"
 #define OB_URI_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9001, URI error"
 #define OB_FINAL_MD5_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9002, OSS file MD5 error"
 #define OB_OSS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9003, OSS error"
@@ -5749,7 +5751,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2023];
+extern int g_all_ob_errnos[2024];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

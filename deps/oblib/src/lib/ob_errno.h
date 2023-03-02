@@ -351,6 +351,7 @@ constexpr int OB_ERR_INVALID_OPTION_KEY = -7286;
 constexpr int OB_ERR_INVALID_OPTION_VALUE = -7287;
 constexpr int OB_ERR_INVALID_GEOMETRY_TYPE = -7288;
 constexpr int OB_PACKET_CLUSTER_ID_NOT_MATCH = -8004;
+constexpr int OB_TENANT_ID_NOT_MATCH = -8005;
 constexpr int OB_URI_ERROR = -9001;
 constexpr int OB_FINAL_MD5_ERROR = -9002;
 constexpr int OB_OSS_ERROR = -9003;

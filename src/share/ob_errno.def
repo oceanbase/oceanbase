@@ -1853,6 +1853,7 @@ DEFINE_ERROR(OB_SERVER_IS_INIT, -8001, -1, "08004", "Server is initializing");
 DEFINE_ERROR(OB_SERVER_IS_STOPPING, -8002, -1, "08004", "Server is stopping");
 DEFINE_ERROR(OB_PACKET_CHECKSUM_ERROR, -8003, -1, "08004", "Packet checksum error");
 DEFINE_ERROR_DEP(OB_PACKET_CLUSTER_ID_NOT_MATCH, -8004, -1, "08004", "Packet cluster_id not match");
+DEFINE_ERROR_DEP(OB_TENANT_ID_NOT_MATCH, -8005, -1, "08005", "Tenant id not match");
 
 ////////////////////////////////////////////////////////////////
 // backup and restore error codes 9000 - 9099

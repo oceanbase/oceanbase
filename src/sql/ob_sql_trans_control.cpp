@@ -75,7 +75,7 @@ static int get_tx_service(ObBasicSessionInfo *session,
   if (session->get_tx_desc() != NULL) {
     auto tx_tenant_id = session->get_tx_desc()->get_tenant_id();
     if (effective_tenant_id != tx_tenant_id) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_TENANT_ID_NOT_MATCH;
       LOG_ERROR("effective_tenant_id not equals to tx_tenant_id", K(ret), K(effective_tenant_id), K(tx_tenant_id), KPC(session));
     }
   }
