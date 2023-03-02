@@ -169,14 +169,12 @@ int64_t ObITable::to_string(char *buf, const int64_t buf_len) const
 ObTableHandleV2::ObTableHandleV2()
   : table_(nullptr), t3m_(nullptr), allocator_(nullptr), table_type_(ObITable::TableType::MAX_TABLE_TYPE)
 {
-  INIT_OBJ_LEAK_DEBUG_NODE(node_, this, share::LEAK_CHECK_OBJ_TABLE_HANDLE, MTL_ID());
 }
 
 ObTableHandleV2::ObTableHandleV2(ObITable *table, ObTenantMetaMemMgr *t3m, ObITable::TableType type)
   : table_(nullptr), t3m_(nullptr), allocator_(nullptr), table_type_(type)
 {
   abort_unless(OB_SUCCESS == set_table(table, t3m, table_type_));
-  INIT_OBJ_LEAK_DEBUG_NODE(node_, this, share::LEAK_CHECK_OBJ_TABLE_HANDLE, MTL_ID());
 }
 
 ObTableHandleV2::~ObTableHandleV2()
@@ -422,7 +420,6 @@ int ObTableHandleV2::get_lock_memtable(const ObLockMemtable *&memtable) const
 ObTableHandleV2::ObTableHandleV2(const ObTableHandleV2 &other)
   : table_(nullptr), t3m_(nullptr)
 {
-  INIT_OBJ_LEAK_DEBUG_NODE(node_, this, share::LEAK_CHECK_OBJ_TABLE_HANDLE, MTL_ID());
   *this = other;
 }
 

@@ -337,7 +337,6 @@ public:
   ObLDHandle &operator=(ObLDHandle &&other)
   {
     node_ = other.node_;
-    other.node_;
     return *this;
   }
   ObLDHandleNode *node_;
