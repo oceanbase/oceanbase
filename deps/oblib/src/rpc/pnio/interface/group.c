@@ -239,9 +239,6 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
     }
   }
   pn_grp->count = count;
-  while(pn_grp->count > thread_count) {
-    pn_destroy(pn_grp->pn_array[--pn_grp->count]);
-  }
   return pn_grp->count;
   el();
   return -1;
