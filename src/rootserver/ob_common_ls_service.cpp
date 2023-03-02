@@ -35,11 +35,6 @@ using namespace palf;
 namespace rootserver
 {
 //////////////ObCommonLSService
-int ObCommonLSService::mtl_init(ObCommonLSService *&ka)
-{
-  return ka->init();
-}
-
 int ObCommonLSService::init()
 {
   int ret = OB_SUCCESS;

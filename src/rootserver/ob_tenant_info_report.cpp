@@ -27,10 +27,6 @@ using namespace palf;
 namespace rootserver
 {
 //////////////ObTenantInfoReportor
-int ObTenantInfoReportor::mtl_init(ObTenantInfoReportor *&ka)
-{
-  return ka->init();
-}
 
 int ObTenantInfoReportor::init()
 {

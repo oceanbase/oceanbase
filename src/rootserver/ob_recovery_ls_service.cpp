@@ -41,10 +41,6 @@ using namespace palf;
 namespace rootserver
 {
 
-int ObRecoveryLSService::mtl_init(ObRecoveryLSService*&ka)
-{
-  return ka->init();
-}
 int ObRecoveryLSService::init()
 {
   int ret = OB_SUCCESS;

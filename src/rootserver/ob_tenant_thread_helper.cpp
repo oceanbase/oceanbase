@@ -80,18 +80,40 @@ int ObTenantThreadHelper::start()
 
 void ObTenantThreadHelper::stop()
 {
-  LOG_INFO("[TENANT THREAD] thread stop start", K(tg_id_), K(thread_name_));
+  LOG_INFO("[TENANT THREAD] thread logical stop start", K(tg_id_), K(thread_name_));
   if (-1 != tg_id_) {
     TG_REENTRANT_LOGICAL_STOP(tg_id_);
   }
-  LOG_INFO("[TENANT THREAD] thread stop finish", K(tg_id_), K(thread_name_));
+  LOG_INFO("[TENANT THREAD] thread logical stop finish", K(tg_id_), K(thread_name_));
 }
 
 void ObTenantThreadHelper::wait()
 {
-  LOG_INFO("[TENANT THREAD] thread wait start", K(tg_id_), K(thread_name_));
+  LOG_INFO("[TENANT THREAD] thread logical wait start", K(tg_id_), K(thread_name_));
   if (-1 != tg_id_) {
     TG_REENTRANT_LOGICAL_WAIT(tg_id_);
+  }
+  LOG_INFO("[TENANT THREAD] thread logical wait finish", K(tg_id_), K(thread_name_));
+}
+void ObTenantThreadHelper::mtl_thread_stop()
+{
+  LOG_INFO("[TENANT THREAD] thread stop start", K(tg_id_), K(thread_name_));
+  if (-1 != tg_id_) {
+    TG_STOP(tg_id_);
+  }
+  LOG_INFO("[TENANT THREAD] thread stop finish", K(tg_id_), K(thread_name_));
+}
+
+void ObTenantThreadHelper::mtl_thread_wait()
+{
+  LOG_INFO("[TENANT THREAD] thread wait start", K(tg_id_), K(thread_name_));
+  if (-1 != tg_id_) {
+    {
+      ObThreadCondGuard guard(thread_cond_);
+      thread_cond_.broadcast();
+    }
+    TG_WAIT(tg_id_);
+    is_first_time_to_start_ = true;
   }
   LOG_INFO("[TENANT THREAD] thread wait finish", K(tg_id_), K(thread_name_));
 }
@@ -100,12 +122,8 @@ void ObTenantThreadHelper::destroy()
 {
   LOG_INFO("[TENANT THREAD] thread destory start", K(tg_id_), K(thread_name_));
   if (-1 != tg_id_) {
-    TG_STOP(tg_id_);
-    {
-      ObThreadCondGuard guard(thread_cond_);
-      thread_cond_.broadcast();
-    }
-    TG_WAIT(tg_id_);
+    mtl_thread_stop();
+    mtl_thread_wait();
     TG_DESTROY(tg_id_);
     tg_id_ = -1;
   }

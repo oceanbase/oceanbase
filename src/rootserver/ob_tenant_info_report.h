@@ -54,10 +54,10 @@ class ObTenantInfoReportor : public ObTenantThreadHelper,
 public:
   ObTenantInfoReportor():inited_(false), tenant_id_(OB_INVALID_TENANT_ID) {}
   virtual ~ObTenantInfoReportor() {}
-  static int mtl_init(ObTenantInfoReportor *&ka);
   int init();
   void destroy();
   virtual void do_work() override;
+  DEFINE_MTL_FUNC(ObTenantInfoReportor)
 
 public:
   virtual share::SCN get_rec_scn() override { return share::SCN::max_scn();}

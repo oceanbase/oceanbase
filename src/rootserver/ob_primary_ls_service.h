@@ -71,10 +71,10 @@ class ObPrimaryLSService : public ObTenantThreadHelper,
 public:
   ObPrimaryLSService():inited_(false), tenant_id_(OB_INVALID_TENANT_ID) {}
   virtual ~ObPrimaryLSService() {}
-  static int mtl_init(ObPrimaryLSService *&ka);
   int init();
   void destroy();
   virtual void do_work() override;
+  DEFINE_MTL_FUNC(ObPrimaryLSService)
 
 public:
   virtual share::SCN get_rec_scn() override { return share::SCN::max_scn();}

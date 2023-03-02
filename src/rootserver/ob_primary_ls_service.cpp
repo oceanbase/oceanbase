@@ -33,11 +33,6 @@ namespace rootserver
 {
 
 //////////////ObPrimaryLSService
-int ObPrimaryLSService::mtl_init(ObPrimaryLSService *&ka)
-{
-  return ka->init();
-}
-
 int ObPrimaryLSService::init()
 {
   int ret = OB_SUCCESS;
