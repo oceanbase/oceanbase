@@ -150,7 +150,7 @@ int ObTransService::release_tx(ObTxDesc &tx)
 #endif
       tx_desc_mgr_.revert(tx);
     } else {
-      ret = finalize_tx_(tx);
+      finalize_tx_(tx);
       tx_desc_mgr_.revert(tx);
     }
   }
