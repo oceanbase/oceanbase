@@ -99,8 +99,7 @@ int ObLogRestoreController::update_quota()
     } else if (OB_FAIL(palf_handle.get_end_lsn(end_lsn))) {
       CLOG_LOG(WARN, "get palf end_lsn failed", K(palf_id));
     } else if (OB_UNLIKELY(base_lsn > end_lsn)) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "unexpected base_lsn or end_lsn", K(palf_id), K(base_lsn), K(end_lsn));
+      CLOG_LOG(TRACE, "base_lsn smaller than end_lsn, maybe rebuild happened", K(palf_id), K(base_lsn), K(end_lsn));
     } else {
       used_size += static_cast<int64_t>(end_lsn - base_lsn);
     }
