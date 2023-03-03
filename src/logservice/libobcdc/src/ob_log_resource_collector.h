@@ -77,7 +77,7 @@ public:
   virtual int start() = 0;
   virtual void stop() = 0;
   virtual void mark_stop_flag() = 0;
-  virtual int64_t get_part_trans_task_count() const = 0;
+  virtual void get_task_count(int64_t &part_trans_task_count, int64_t &br_count) const = 0;
   virtual void print_stat_info() const = 0;
 };
 
@@ -120,7 +120,7 @@ public:
   void stop();
   void mark_stop_flag();
   int handle(void *data, const int64_t thread_index, volatile bool &stop_flag);
-  int64_t get_part_trans_task_count() const;
+  void get_task_count(int64_t &part_trans_task_count, int64_t &br_count) const;
   void print_stat_info() const;
 
 private:

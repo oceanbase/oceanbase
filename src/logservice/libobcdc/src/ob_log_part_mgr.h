@@ -485,6 +485,7 @@ private:
 
   // Default whitelist match insensitive
   bool              enable_oracle_mode_match_case_sensitive_;
+  bool              enable_check_schema_version_;
 
   // Conditional
   common::ObThreadCond   schema_cond_;

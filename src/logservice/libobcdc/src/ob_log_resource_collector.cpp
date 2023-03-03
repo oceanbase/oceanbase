@@ -785,9 +785,10 @@ int ObLogResourceCollector::revert_single_binlog_record_(ObLogBR *br)
   return ret;
 }
 
-int64_t ObLogResourceCollector::get_part_trans_task_count() const
+void ObLogResourceCollector::get_task_count(int64_t &part_trans_task_count, int64_t &br_count) const
 {
-  return ATOMIC_LOAD(&total_part_trans_task_count_);
+  part_trans_task_count = ATOMIC_LOAD(&total_part_trans_task_count_);
+  br_count = ATOMIC_LOAD(&br_count_);
 }
 
 int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t thread_idx, PartTransTask &task)
