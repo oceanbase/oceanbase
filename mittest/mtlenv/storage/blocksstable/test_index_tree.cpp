@@ -498,6 +498,7 @@ void TestIndexTree::prepare_index_desc(ObDataStoreDesc &index_desc)
 {
   int ret = OB_SUCCESS;
   ret = index_desc.init(index_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE);
+  index_desc.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 

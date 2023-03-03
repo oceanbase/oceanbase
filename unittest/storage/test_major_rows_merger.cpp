@@ -156,6 +156,7 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
 
   ASSERT_EQ(OB_SUCCESS, merge_context.init_merge_info());
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder(index_desc_));
+  index_desc_.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
 }
 
 

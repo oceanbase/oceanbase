@@ -737,7 +737,9 @@ int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSch
       } else if (OB_ISNULL(index_builder_ = new (builder_buf) ObSSTableIndexBuilder())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to new ObSSTableIndexBuilder", K(ret));
-      } else if (OB_FAIL(index_builder_->init(data_desc))) {
+      } else if (OB_FAIL(index_builder_->init(data_desc,
+                                              nullptr, // macro block flush callback
+                                              ObSSTableIndexBuilder::DISABLE))) {
         LOG_WARN("failed to init index builder", K(ret), K(data_desc));
       }
       if (OB_FAIL(ret)) {

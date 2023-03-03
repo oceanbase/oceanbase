@@ -452,7 +452,7 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
   data_desc_.row_store_type_ = row_store_type_;
   ASSERT_TRUE(data_desc_.is_valid());
 
-  ASSERT_EQ(OB_SUCCESS, index_desc_.init(index_schema_, ls_id, tablet_id, merge_type_, snapshot_version, 1000000));
+  ASSERT_EQ(OB_SUCCESS, index_desc_.init(index_schema_, ls_id, tablet_id, merge_type_, snapshot_version, DATA_VERSION_4_1_0_0));
   ASSERT_TRUE(index_desc_.is_valid());
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(index_desc_));
 
