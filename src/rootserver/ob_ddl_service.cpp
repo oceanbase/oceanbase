@@ -13354,6 +13354,8 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(hidden_table_schema));
     } else {
       hidden_table_schema.set_database_id(orig_table_schema.get_database_id());
+      // offline ddl change table_id, so we need to reset truncate_version
+      hidden_table_schema.set_truncate_version(OB_INVALID_VERSION);
       hidden_table_schema.set_table_id(new_table_id);
       hidden_table_schema.set_table_name(new_table_name);
       hidden_table_schema.set_association_table_id(orig_table_schema.get_table_id());
@@ -16225,6 +16227,7 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
       boundary_schema_version = gen_schema_version_array.at(gen_array_count - 1);
       latest_table_schema_version = gen_schema_version_array.at(gen_array_count - 2);
     }
+    /*
     // in mysql mode
     // 1.reinit auto_increment table value
     // 2.clear auto_increment cache
@@ -16234,7 +16237,8 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
       LOG_WARN("fail to get alive server list", KR(ret));
     } else if (OB_FAIL(ddl_operator.reinit_autoinc_row(*orig_table_schemas.at(0), trans, &alive_server_list))) {
       LOG_WARN("fail to reinit autoinc row", KR(ret), K(table_name));
-    } else if (OB_FAIL(drop_and_create_tablet(first_schema_version, orig_table_schemas, new_table_schemas, trans))) {
+    */
+    if (FAILEDx(drop_and_create_tablet(first_schema_version, orig_table_schemas, new_table_schemas, trans))) {
       LOG_WARN("fail to drop or create tablet", KR(ret), K(table_name), K(first_schema_version));
     } else {
       ObTableSchema *new_table_schema = NULL;
@@ -16292,7 +16296,6 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
 
   } // else
 
-
   int64_t before_wait_task = ObTimeUtility::current_time();
   // Serial Submit
   if (FAILEDx(schema_service_->get_ddl_trans_controller().wait_task_ready(task_id, THIS_WORKER.get_timeout_remain()))) {
@@ -16311,14 +16314,6 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     schema_service_->get_ddl_trans_controller().remove_task(task_id);
   }
   int64_t trans_end = ObTimeUtility::current_time();
-  // For table has auto_increment
-  // Sequence will not start from 1 when table not refresh newest schema
-  //To protect sequence value, we should synchronous refresh schema when we finish truncate table
-  //if (OB_SUCC(ret)) {
-  //  if (OB_FAIL(publish_schema(tenant_id))) {
-  //    LOG_WARN("publish_schema failed", KR(ret), K(table_name), K(tenant_id));
-  //  }
-  //}
   LOG_INFO("truncate cost after truncate_in_trans finish", KR(ret), K(task_id),
            "trans_cost", trans_end - start_time,
            "fetch_schema_cost", before_wait_task - before_fetch_schema,
@@ -16507,6 +16502,9 @@ int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_
     if (check_foreign_key && OB_FAIL(check_is_foreign_key_parent_table(table_schema, trans))){
       LOG_WARN("failed to check table is foreign key's parent table", KR(ret), K(table_name), K(table_id));
     }
+  } else if (0 != table_schema.get_autoinc_column_id()) {
+    ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+    LOG_WARN("table with autoinc column should not get in new_truncate_table", KR(ret));
   } else if (table_schema.is_sys_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("truncate table is not supported on system table", KR(ret), K(table_id), K(table_name));
