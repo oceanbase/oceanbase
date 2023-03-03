@@ -11408,6 +11408,7 @@ def_table_schema(
 
 # 12370: __all_virtual_wait_for_partition_split_tablet
 # 12371: __all_virtual_external_table_file
+# 12372: __all_virtual_io_tracer
 
 #
 # 余留位置
