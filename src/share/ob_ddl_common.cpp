@@ -1070,7 +1070,7 @@ int ObDDLUtil::get_data_format_version(
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "message_unhex", task_message);
         if (ObDDLType::DDL_CREATE_INDEX == ddl_type) {
           SMART_VAR(rootserver::ObIndexBuildTask, task) {
-            if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
+            if (OB_FAIL(task.deserlize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
               data_format_version = task.get_data_format_version();
@@ -1078,7 +1078,7 @@ int ObDDLUtil::get_data_format_version(
           }
         } else {
           SMART_VAR(rootserver::ObTableRedefinitionTask, task) {
-            if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
+            if (OB_FAIL(task.deserlize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
               data_format_version = task.get_data_format_version();
@@ -1090,6 +1090,75 @@ int ObDDLUtil::get_data_format_version(
   }
   return ret;
 }
+
+static inline void try_replace_user_tenant_id(const uint64_t user_tenant_id, uint64_t &check_tenant_id)
+{
+  check_tenant_id = !is_user_tenant(check_tenant_id) ? check_tenant_id : user_tenant_id;
+}
+
+int ObDDLUtil::replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObAlterTableArg &alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id)) {
+    LOG_TRACE("not user tenant, no need to replace", K(tenant_id));
+  } else {
+    try_replace_user_tenant_id(tenant_id, alter_table_arg.exec_tenant_id_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_arg.index_arg_list_.count(); ++i) {
+      obrpc::ObIndexArg *index_arg = alter_table_arg.index_arg_list_.at(i);
+      try_replace_user_tenant_id(tenant_id, index_arg->exec_tenant_id_);
+      try_replace_user_tenant_id(tenant_id, index_arg->tenant_id_);
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_arg.foreign_key_arg_list_.count(); ++i) {
+      obrpc::ObCreateForeignKeyArg &fk_arg = alter_table_arg.foreign_key_arg_list_.at(i);
+      try_replace_user_tenant_id(tenant_id, fk_arg.exec_tenant_id_);
+      try_replace_user_tenant_id(tenant_id, fk_arg.tenant_id_);
+    }
+    if (is_user_tenant(alter_table_arg.alter_table_schema_.get_tenant_id())) {
+      alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id);
+    }
+    try_replace_user_tenant_id(tenant_id, alter_table_arg.sequence_ddl_arg_.exec_tenant_id_);
+    if (is_user_tenant(alter_table_arg.sequence_ddl_arg_.seq_schema_.get_tenant_id())) {
+      alter_table_arg.sequence_ddl_arg_.seq_schema_.set_tenant_id(tenant_id);
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObCreateIndexArg &create_index_arg)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id)) {
+    LOG_TRACE("not user tenant, no need to replace", K(tenant_id));
+  } else {
+    try_replace_user_tenant_id(tenant_id, create_index_arg.exec_tenant_id_);
+    try_replace_user_tenant_id(tenant_id, create_index_arg.tenant_id_);
+    if (is_user_tenant(create_index_arg.index_schema_.get_tenant_id())) {
+      create_index_arg.index_schema_.set_tenant_id(tenant_id);
+    }
+  }
+  return ret;
+}
+
+#define REPLACE_DDL_ARG_FUNC(ArgType) \
+int ObDDLUtil::replace_user_tenant_id(const uint64_t tenant_id, ArgType &ddl_arg) \
+{ \
+  int ret = OB_SUCCESS; \
+  if (!is_user_tenant(tenant_id)) { \
+    LOG_TRACE("not user tenant, no need to replace", K(tenant_id)); \
+  } else { \
+    try_replace_user_tenant_id(tenant_id, ddl_arg.exec_tenant_id_); \
+    try_replace_user_tenant_id(tenant_id, ddl_arg.tenant_id_); \
+  } \
+  return ret; \
+}
+
+REPLACE_DDL_ARG_FUNC(obrpc::ObDropDatabaseArg)
+REPLACE_DDL_ARG_FUNC(obrpc::ObDropTableArg)
+REPLACE_DDL_ARG_FUNC(obrpc::ObDropIndexArg)
+REPLACE_DDL_ARG_FUNC(obrpc::ObTruncateTableArg)
+
+#undef REPLACE_DDL_ARG_FUNC
+
 
 /******************           ObCheckTabletDataComplementOp         *************/
 

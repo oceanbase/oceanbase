@@ -270,6 +270,53 @@ int ObAllTenantInfoProxy::is_standby_tenant(
   return ret;
 }
 
+int ObAllTenantInfoProxy::get_primary_tenant_ids(
+    ObISQLClient *proxy,
+    ObIArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  tenant_ids.reset();
+  ObSqlString sql;
+  ObTenantRole primary_role(ObTenantRole::PRIMARY_TENANT);
+  if (OB_ISNULL(proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("proxy is null", KR(ret), KP(proxy));
+  } else if (OB_FAIL(sql.append_fmt("select tenant_id from %s where tenant_role = '%s'",
+           OB_ALL_VIRTUAL_TENANT_INFO_TNAME, primary_role.to_str()))) {
+      LOG_WARN("gnenerate sql failed", K(ret));
+  } else {
+    HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("failed to read", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get sql result", KR(ret));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("get next sql result failed", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+              break;;
+            }
+          } else {
+            uint64_t tenant_id = OB_INVALID_TENANT_ID;
+            EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", tenant_id, uint64_t);
+            if (OB_FAIL(ret)) {
+              LOG_WARN("failed to get result", KR(ret));
+            } else if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
+              LOG_WARN("push back tenant id failed", K(ret), K(tenant_id), K(tenant_ids.count()));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
                                            ObISQLClient *proxy,
                                            const bool for_update,

@@ -156,6 +156,10 @@ public:
              ObISQLClient *proxy,
              const uint64_t tenant_id,
              bool &is_standby);
+
+  static int get_primary_tenant_ids(
+             ObISQLClient *proxy,
+             ObIArray<uint64_t> &tenant_ids);
   /**
    * @description: get target tenant's tenant_info from inner table 
    * @param[in] tenant_id

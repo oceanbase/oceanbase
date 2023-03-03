@@ -90,7 +90,7 @@ int ObDropIndexTask::init(
     ret_code_ = task_record.ret_code_;
     if (nullptr != task_record.message_.ptr()) {
       int64_t pos = 0;
-      if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
+      if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
         LOG_WARN("deserialize params from message failed", K(ret));
       }
     }
@@ -418,15 +418,17 @@ int ObDropIndexTask::serialize_params_to_message(char *buf, const int64_t buf_si
   return ret;
 }
 
-int ObDropIndexTask::deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos)
+int ObDropIndexTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   obrpc::ObDropIndexArg tmp_drop_index_arg;
-  if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), KP(buf), K(buf_size));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(buf_size));
   } else if (OB_FAIL(tmp_drop_index_arg.deserialize(buf, buf_size, pos))) {
     LOG_WARN("deserialize failed", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_drop_index_arg))) {
+    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_drop_index_arg));
   } else if (OB_FAIL(deep_copy_index_arg(allocator_, tmp_drop_index_arg, drop_index_arg_))) {
     LOG_WARN("deep copy drop index arg failed", K(ret));
   }

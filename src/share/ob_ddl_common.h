@@ -24,7 +24,12 @@ namespace oceanbase
 namespace obrpc
 {
 class ObSrvRpcProxy;
-class ObAlterTableArg;
+struct ObAlterTableArg;
+struct ObDropDatabaseArg;
+struct ObDropTableArg;
+struct ObDropIndexArg;
+struct ObTruncateTableArg;
+struct ObCreateIndexArg;
 }
 namespace sql
 {
@@ -327,6 +332,13 @@ public:
      const uint64_t tenant_id,
      const uint64_t task_id,
      int64_t &data_format_version);
+
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObAlterTableArg &alter_table_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropDatabaseArg &drop_db_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropTableArg &drop_table_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropIndexArg &drop_index_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObTruncateTableArg &trucnate_table_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObCreateIndexArg &create_index_arg);
 
 private:
   static int generate_column_name_str(

@@ -64,6 +64,7 @@ int ObDDLExecutorUtil::wait_ddl_finish(
   } else {
     int tmp_ret = OB_SUCCESS;
     bool is_tenant_dropped = false;
+    bool is_tenant_standby = false;
     while (OB_SUCC(ret)) {
       if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
           tenant_id, task_id, -1 /* target_object_id */, unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len)) {
@@ -78,6 +79,13 @@ int ObDDLExecutorUtil::wait_ddl_finish(
       } else if (is_tenant_dropped) {
         ret = OB_TENANT_HAS_BEEN_DROPPED;
         LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
+        break;
+      } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
+        LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
+      } else if (is_tenant_standby) {
+        ret = OB_STANDBY_READ_ONLY;
+        FORWARD_USER_ERROR(ret, "DDL not finish, need check");
+        LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
         break;
       } else if (OB_FAIL(handle_session_exception(session))) {
         LOG_WARN("session exeception happened", K(ret), K(is_support_cancel));
@@ -100,6 +108,7 @@ int ObDDLExecutorUtil::wait_build_index_finish(const uint64_t tenant_id, const i
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool is_tenant_dropped = false;
+  bool is_tenant_standby = false;
   ObAddr unused_addr;
   int64_t unused_user_msg_len = 0;
   THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
@@ -122,6 +131,12 @@ int ObDDLExecutorUtil::wait_build_index_finish(const uint64_t tenant_id, const i
   } else if (is_tenant_dropped) {
     ret = OB_TENANT_HAS_BEEN_DROPPED;
     LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
+  } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
+    LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
+  } else if (is_tenant_standby) {
+    ret = OB_STANDBY_READ_ONLY;
+    FORWARD_USER_ERROR(ret, "DDL not finish, need check");
+    LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
   }
   return ret;
 }
@@ -146,6 +161,7 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), KP(common_rpc_proxy));
   } else {
     bool is_tenant_dropped = false;
+    bool is_tenant_standby = false;
     int tmp_ret = OB_SUCCESS;
     while (OB_SUCC(ret)) {
       if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
@@ -188,6 +204,13 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
       } else if (is_tenant_dropped) {
         ret = OB_TENANT_HAS_BEEN_DROPPED;
         LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
+        break;
+      } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
+        LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
+      } else if (is_tenant_standby) {
+        ret = OB_STANDBY_READ_ONLY;
+        FORWARD_USER_ERROR(ret, "DDL not finish, need check");
+        LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
         break;
       } else if (OB_FAIL(handle_session_exception(session))) {
         LOG_WARN("session exeception happened", K(ret));

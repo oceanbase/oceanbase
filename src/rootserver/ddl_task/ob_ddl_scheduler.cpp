@@ -1524,6 +1524,18 @@ int ObDDLScheduler::insert_task_record(
   return ret;
 }
 
+static bool is_tenant_primary(const ObIArray<uint64_t> &primary_tenant_ids, const uint64_t tenant_id)
+{
+  bool is_primary = false;
+  for (int64_t i = 0; i < primary_tenant_ids.count(); ++i) {
+    if (primary_tenant_ids.at(i) == tenant_id) {
+      is_primary = true;
+      break;
+    }
+  }
+  return is_primary;
+}
+
 int ObDDLScheduler::recover_task()
 {
   int ret = OB_SUCCESS;
@@ -1533,12 +1545,15 @@ int ObDDLScheduler::recover_task()
   } else {
     ObSqlString sql_string;
     ObArray<ObDDLTaskRecord> task_records;
+    ObArray<uint64_t> primary_tenant_ids;
     ObArenaAllocator allocator(lib::ObLabel("DdlTasRecord"));
     share::schema::ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
     if (OB_FAIL(ObDDLTaskRecordOperator::get_all_ddl_task_record(root_service_->get_sql_proxy(), allocator, task_records))) {
       LOG_WARN("get task record failed", K(ret), K(sql_string));
+    } else if (OB_FAIL(ObAllTenantInfoProxy::get_primary_tenant_ids(&root_service_->get_sql_proxy(), primary_tenant_ids))) {
+      LOG_WARN("get primary tenant id failed", K(ret));
     }
-    LOG_INFO("start processing ddl recovery", K(task_records));
+    LOG_INFO("start processing ddl recovery", K(task_records), K(primary_tenant_ids));
     for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
       const ObDDLTaskRecord &cur_record = task_records.at(i);
       int64_t tenant_schema_version = 0;
@@ -1547,8 +1562,11 @@ int ObDDLScheduler::recover_task()
       ObMySQLTransaction trans;
       if (OB_FAIL(schema_service.get_tenant_schema_version(cur_record.tenant_id_, tenant_schema_version))) {
         LOG_WARN("failed to get tenant schema version", K(ret), K(cur_record));
+      } else if (!is_tenant_primary(primary_tenant_ids, cur_record.tenant_id_)) {
+        LOG_INFO("tenant not primary, skip schedule ddl task", K(cur_record));
       } else if (tenant_schema_version < cur_record.schema_version_) {
         // schema has not publish, by pass now
+        LOG_INFO("skip schedule ddl task, because tenant schema version too old", K(tenant_schema_version), K(cur_record));
       } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), cur_record.tenant_id_))) {
         LOG_WARN("start transaction failed", K(ret));
       } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans,
@@ -1616,21 +1634,14 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
     LOG_WARN("ddl task record is invalid", K(ret), K(record));
   } else {
     switch (record.ddl_type_) {
-      case ObDDLType::DDL_CREATE_INDEX: {
-        if (OB_FAIL(schedule_build_index_task(record))) {
-          LOG_WARN("schedule global index task failed", K(ret), K(record));
-        }
+      case ObDDLType::DDL_CREATE_INDEX:
+        ret = schedule_build_index_task(record);
         break;
-      }
       case ObDDLType::DDL_DROP_INDEX:
-        if (OB_FAIL(schedule_drop_index_task(record))) {
-          LOG_WARN("schedule drop index task failed", K(ret));
-        }
+        ret = schedule_drop_index_task(record);
         break;
       case DDL_DROP_PRIMARY_KEY:
-        if (OB_FAIL(schedule_drop_primary_key_task(record))) {
-          LOG_WARN("schedule drop primary key task failed", K(ret));
-        }
+        ret = schedule_drop_primary_key_task(record);
         break;
       case DDL_MODIFY_COLUMN:
       case DDL_ADD_PRIMARY_KEY:
@@ -1639,29 +1650,20 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_CONVERT_TO_CHARACTER:
       case DDL_TABLE_REDEFINITION:
       case DDL_DIRECT_LOAD:
-        if (OB_FAIL(schedule_table_redefinition_task(record))) {
-          LOG_WARN("schedule table redefinition task failed", K(ret));
-        }
+        ret = schedule_table_redefinition_task(record);
         break;
       case DDL_DROP_COLUMN:
       case DDL_ADD_COLUMN_OFFLINE:
       case DDL_COLUMN_REDEFINITION:
-        if(OB_FAIL(schedule_column_redefinition_task(record))) {
-          LOG_WARN("schedule column redefinition task failed", K(ret));
-        }
+        ret = schedule_column_redefinition_task(record);
         break;
-
       case DDL_CHECK_CONSTRAINT:
       case DDL_FOREIGN_KEY_CONSTRAINT:
       case DDL_ADD_NOT_NULL_COLUMN:
-        if (OB_FAIL(schedule_constraint_task(record))) {
-          LOG_WARN("schedule constraint task failed", K(ret));
-        }
+        ret = schedule_constraint_task(record);
         break;
       case DDL_MODIFY_AUTO_INCREMENT:
-        if (OB_FAIL(schedule_modify_autoinc_task(record))) {
-          LOG_WARN("schedule modify autoinc task failed", K(ret));
-        }
+        ret = schedule_modify_autoinc_task(record);
         break;
       case DDL_DROP_DATABASE:
       case DDL_DROP_TABLE:
@@ -1670,9 +1672,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_DROP_SUB_PARTITION:
       case DDL_TRUNCATE_PARTITION:
       case DDL_TRUNCATE_SUB_PARTITION:
-        if (OB_FAIL(schedule_ddl_retry_task(record))) {
-          LOG_WARN("schedule ddl retry task failed", K(ret));
-        }
+        ret = schedule_ddl_retry_task(record);
         break;
       default: {
         ret = OB_NOT_SUPPORTED;
@@ -1681,6 +1681,9 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       }
     }
     LOG_INFO("schedule ddl task", K(ret), K(record));
+    if (OB_ENTRY_EXIST == ret) {
+      ret = OB_SUCCESS;
+    }
   }
   return ret;
 }
@@ -1711,9 +1714,6 @@ int ObDDLScheduler::schedule_build_index_task(
     allocator_.free(build_index_task);
     build_index_task = nullptr;
   }
-  if (OB_ENTRY_EXIST == ret) {
-    ret = OB_SUCCESS;
-  }
   return ret;
 }
 
@@ -1739,9 +1739,6 @@ int ObDDLScheduler::schedule_drop_primary_key_task(const ObDDLTaskRecord &task_r
     drop_pk_task->~ObDropPrimaryKeyTask();
     allocator_.free(drop_pk_task);
     drop_pk_task = nullptr;
-  }
-  if (OB_ENTRY_EXIST == ret) {
-    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -1772,9 +1769,6 @@ int ObDDLScheduler::schedule_table_redefinition_task(const ObDDLTaskRecord &task
     allocator_.free(redefinition_task);
     redefinition_task = nullptr;
   }
-  if (OB_ENTRY_EXIST == ret) {
-    ret = OB_SUCCESS;
-  }
   return ret;
 }
 
@@ -1800,9 +1794,6 @@ int ObDDLScheduler::schedule_column_redefinition_task(const ObDDLTaskRecord &tas
     redefinition_task->~ObColumnRedefinitionTask();
     allocator_.free(redefinition_task);
     redefinition_task = nullptr;
-  }
-  if (OB_ENTRY_EXIST == ret) {
-    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -1830,9 +1821,6 @@ int ObDDLScheduler::schedule_ddl_retry_task(const ObDDLTaskRecord &task_record)
     allocator_.free(ddl_retry_task);
     ddl_retry_task = nullptr;
   }
-  if (OB_ENTRY_EXIST == ret) {
-    ret = OB_SUCCESS;
-  }
   return ret;
 }
 
@@ -1858,9 +1846,6 @@ int ObDDLScheduler::schedule_constraint_task(const ObDDLTaskRecord &task_record)
     constraint_task->~ObConstraintTask();
     allocator_.free(constraint_task);
     constraint_task = nullptr;
-  }
-  if (OB_ENTRY_EXIST == ret) {
-    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -1888,9 +1873,6 @@ int ObDDLScheduler::schedule_modify_autoinc_task(const ObDDLTaskRecord &task_rec
     allocator_.free(modify_autoinc_task);
     modify_autoinc_task = nullptr;
   }
-  if (OB_ENTRY_EXIST == ret) {
-    ret = OB_SUCCESS;
-  }
   return ret;
 }
 
@@ -1916,9 +1898,6 @@ int ObDDLScheduler::schedule_drop_index_task(const ObDDLTaskRecord &task_record)
     drop_index_task->~ObDropIndexTask();
     allocator_.free(drop_index_task);
     drop_index_task = nullptr;
-  }
-  if (OB_ENTRY_EXIST == ret) {
-    ret = OB_SUCCESS;
   }
   return ret;
 }

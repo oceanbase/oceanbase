@@ -424,7 +424,7 @@ public:
   int64_t get_data_format_version() const { return data_format_version_; }
   static int fetch_new_task_id(ObMySQLProxy &sql_proxy, int64_t &new_task_id);
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const = 0;
-  virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) = 0;
+  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) = 0;
   virtual int64_t get_serialize_param_size() const = 0;
   const ObString &get_ddl_stmt_str() const { return ddl_stmt_str_; }
   int set_ddl_stmt_str(const ObString &ddl_stmt_str);

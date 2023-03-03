@@ -57,7 +57,7 @@ public:
   inline void set_is_ignore_errors(const bool is_ignore_errors) {is_ignore_errors_ = is_ignore_errors;}
   inline void set_is_do_finish(const bool is_do_finish) {is_do_finish_ = is_do_finish;}
   virtual int serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const char *buf, const int64_t data_len, int64_t &pos) override;
+  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   int assign(const ObTableRedefinitionTask *table_redef_task);
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;

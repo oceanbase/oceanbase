@@ -820,6 +820,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool is_cancel = false;
+  bool is_standby_tenant = false;
   int real_ret_code = ret_code;
   bool is_tenant_dropped = false;
   ObDDLTaskStatus real_new_status = new_status;
@@ -847,6 +848,11 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   } else if (is_tenant_dropped) {
     need_retry_ = false;
     LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(&root_service->get_sql_proxy(), tenant_id_, is_standby_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+  } else if (is_standby_tenant) {
+    need_retry_ = false;
+    LOG_INFO("tenant is standby, exit anyway", K(ret), K(tenant_id_));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
