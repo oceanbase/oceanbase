@@ -2404,4 +2404,13 @@ inline bool is_x86() {
 #define DISABLE_WARNING_GCC_POP _Pragma("GCC diagnostic pop")
 #define DISABLE_WARNING_GCC_ATTRIBUTES DISABLE_WARNING_GCC("-Wattributes")
 
+extern "C" {
+extern int ob_pthread_cond_wait(pthread_cond_t *__restrict __cond,
+                                pthread_mutex_t *__restrict __mutex);
+extern int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
+                                     pthread_mutex_t *__restrict __mutex,
+                                     const struct timespec *__restrict __abstime);
+}
+
+
 #endif // OCEANBASE_COMMON_DEFINE_H_

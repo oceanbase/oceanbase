@@ -62,7 +62,7 @@ int ObCond::wait()
   if (need_wait) {
     pthread_mutex_lock(&mutex_);
     while (OB_SUCC(ret) && false == ATOMIC_CAS(&bcond_, true, false)) {
-      int tmp_ret = pthread_cond_wait(&cond_, &mutex_);
+      int tmp_ret = ob_pthread_cond_wait(&cond_, &mutex_);
       if (ETIMEDOUT == tmp_ret) {
         ret = OB_TIMEOUT;
         break;
@@ -95,7 +95,7 @@ int ObCond::timedwait(const int64_t time_us)
     ts.tv_nsec = (abs_time % 1000000) * 1000;
     pthread_mutex_lock(&mutex_);
     while (OB_SUCC(ret) && false == ATOMIC_CAS(&bcond_, true, false)) {
-      int tmp_ret = pthread_cond_timedwait(&cond_, &mutex_, &ts);
+      int tmp_ret = ob_pthread_cond_timedwait(&cond_, &mutex_, &ts);
       if (ETIMEDOUT == tmp_ret) {
         ret = OB_TIMEOUT;
         break;

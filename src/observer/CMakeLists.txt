@@ -112,7 +112,6 @@ ob_set_subtarget(ob_server omt
   omt/ob_th_worker.cpp
   omt/ob_worker_processor.cpp
   omt/ob_multi_tenant_operator.cpp
-  omt/ob_tenant_hook.cpp
   omt/ob_tenant_srs_mgr.cpp
   omt/ob_tenant_srs.cpp
 )

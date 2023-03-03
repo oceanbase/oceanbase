@@ -81,7 +81,7 @@ int ObThreadCond::wait_us(const uint64_t time_us)
   } else {
     ObWaitEventGuard guard(event_no_, time_us / 1000, reinterpret_cast<int64_t>(this));
     if (0 == time_us) {
-      if (OB_UNLIKELY(0 != (tmp_ret = pthread_cond_wait(&cond_, &mutex_)))) {
+      if (OB_UNLIKELY(0 != (tmp_ret = ob_pthread_cond_wait(&cond_, &mutex_)))) {
         ret = OB_ERR_SYS;
         COMMON_LOG(WARN, "Fail to cond wait, ", K(tmp_ret), K(ret));
       }
@@ -103,7 +103,7 @@ int ObThreadCond::wait_us(const uint64_t time_us)
         abstime.tv_sec = static_cast<decltype(abstime.tv_sec)>(std::min(static_cast<uint64_t>(std::numeric_limits<decltype(abstime.tv_sec)>::max()),
                                                                         static_cast<uint64_t>(us / 1000000)));
         abstime.tv_nsec = static_cast<decltype(abstime.tv_nsec)>(us % static_cast<uint64_t>(1000000)) * 1000;
-        if (OB_UNLIKELY(0 != (tmp_ret = pthread_cond_timedwait(&cond_, &mutex_, &abstime)))) {
+        if (OB_UNLIKELY(0 != (tmp_ret = ob_pthread_cond_timedwait(&cond_, &mutex_, &abstime)))) {
           if (ETIMEDOUT != tmp_ret) {
             ret = OB_ERR_SYS;
             COMMON_LOG(WARN, "Fail to timed cond wait, ", K(time_us), K(tmp_ret), K(ret));
