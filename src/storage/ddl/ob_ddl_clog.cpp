@@ -71,16 +71,24 @@ ObDDLStartClogCb::ObDDLStartClogCb()
 {
 }
 
-int ObDDLStartClogCb::init(const uint32_t lock_tid, ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+int ObDDLStartClogCb::init(const ObITable::TableKey &table_key,
+                           const int64_t data_format_version,
+                           const int64_t execution_id,
+                           const uint32_t lock_tid,
+                           ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version < 0
+          || 0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else {
+    table_key_ = table_key;
+    data_format_version_ = data_format_version;
+    execution_id_ = execution_id;
     lock_tid_ = lock_tid;
     ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
     is_inited_ = true;
@@ -91,12 +99,15 @@ int ObDDLStartClogCb::init(const uint32_t lock_tid, ObDDLKvMgrHandle &ddl_kv_mgr
 int ObDDLStartClogCb::on_success()
 {
   int ret = OB_SUCCESS;
+  const SCN &start_scn = __get_scn();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else {
-    ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  } else if (OB_FAIL(ddl_kv_mgr_handle_.get_obj()->ddl_start_nolock(table_key_, start_scn, data_format_version_,
+      execution_id_, SCN::min_scn()/*checkpoint_scn*/))) {
+    LOG_WARN("failed to start ddl in cb", K(ret), K(table_key_), K(start_scn), K(execution_id_));
   }
+  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);
   try_release();
