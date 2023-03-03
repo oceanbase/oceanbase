@@ -431,7 +431,7 @@ int ObOptEstCost::estimate_width_for_table(const OptTableMetas &table_metas,
         // do nothing
       } else {
         int64_t avg_len = 0;
-        if (OB_NOT_NULL(table_meta) &&
+        if (OB_NOT_NULL(table_meta) && table_meta->use_opt_stat() &&
             OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
                                                                 table_meta->get_ref_table_id(),
                                                                 table_meta->get_all_used_parts(),

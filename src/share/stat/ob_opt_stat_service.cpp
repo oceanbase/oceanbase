@@ -23,16 +23,6 @@ namespace oceanbase {
 namespace common {
 
 using namespace share::schema;
-namespace opt_stat_service {
-static bool is_non_stat_table(const int64_t table_id)
-{
-  const uint64_t id = table_id;
-  return (is_core_table(id)
-          || id == share::OB_ALL_TABLE_STAT_TID
-          || id == share::OB_ALL_COLUMN_STAT_TID
-          || id == share::OB_ALL_HISTOGRAM_STAT_TID);
-}
-}
 
 int ObOptStatService::get_table_stat(const uint64_t tenant_id,
                                      const ObOptTableStat::Key &key,
@@ -125,16 +115,6 @@ int ObOptStatService::get_column_stat(const uint64_t tenant_id,
       if (OB_ISNULL(keys.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(keys.at(i)));
-      } else if (common::opt_stat_service::is_non_stat_table(keys.at(i)->table_id_)) {
-        common::ObOptColumnStat tmp_col_stat;
-        tmp_col_stat.set_table_id(keys.at(i)->table_id_);
-        tmp_col_stat.set_partition_id(keys.at(i)->partition_id_);
-        tmp_col_stat.set_column_id(keys.at(i)->column_id_);
-        if (OB_FAIL(column_stat_cache_.put_and_fetch_row(*keys.at(i), tmp_col_stat, handle))) {
-          LOG_WARN("puts column stat into cache failed.", K(ret));
-        } else if (OB_FAIL(handles.push_back(handle))) {
-          LOG_WARN("failed to push back", K(ret));
-        } else {/*do nothing*/}
       } else if (OB_FAIL(column_stat_cache_.get_row(*keys.at(i), handle))) {
         // we need to fetch statistics from inner table if it is not yet available from cache
         if (OB_ENTRY_NOT_EXIST != ret) {
@@ -169,8 +149,6 @@ int ObOptStatService::load_table_stat_and_put_cache(const uint64_t tenant_id,
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("table statistics service is not initialized. ", K(ret), K(key));
-  } else if (common::opt_stat_service::is_non_stat_table(key.table_id_)) {
-    tstat.reset();
   } else if (OB_FAIL(sql_service_.fetch_table_stat(tenant_id, key, all_part_stats))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fetch table stat failed. ", K(ret), K(key));

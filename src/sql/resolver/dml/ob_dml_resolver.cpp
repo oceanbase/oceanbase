@@ -4212,7 +4212,8 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
       if (OB_FAIL(check_in_sysview(in_sysview))) {
         LOG_WARN("check in sys view failed", K(ret));
       } else {
-        if (!in_sysview) {
+        //allow the inner sql to access, like gather virtual table stats.
+        if (!in_sysview && !(session_info_->is_inner() && !session_info_->is_user_session())) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("restrict accessible virtual table can not access directly",
               K(ret), K(db_name), K(tbl_name));

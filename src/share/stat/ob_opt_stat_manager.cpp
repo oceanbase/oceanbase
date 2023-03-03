@@ -22,6 +22,7 @@
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_stat_item.h"
 #include "sql/plan_cache/ob_plan_cache.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -212,7 +213,7 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
+    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret), K(inited_));
   } else if (OB_FAIL(stat_service_.get_table_stat(tenant_id, key, tstat))) {
     LOG_WARN("get table stat failed", K(ret));
   }
@@ -471,7 +472,8 @@ int64_t ObOptStatManager::get_default_avg_row_size()
   return DEFAULT_ROW_SIZE;
 }
 
-int ObOptStatManager::check_has_opt_stat(const uint64_t tenant_id,
+int ObOptStatManager::check_has_opt_stat(share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const uint64_t tenant_id,
                                          const uint64_t table_ref_id,
                                          const ObIArray<int64_t> &part_ids,
                                          const int64_t part_cnt,
@@ -479,8 +481,16 @@ int ObOptStatManager::check_has_opt_stat(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   has_opt_stat = false;
-  if (is_sys_table(table_ref_id) || is_virtual_table(table_ref_id)) {
-    //do nothing, assume inner table has no user gathered statistics
+  bool is_valid = false;
+  if (OB_FAIL(check_stat_tables_ready(schema_guard, tenant_id, is_valid))) {
+    LOG_WARN("failed to check stat tables ready", K(ret));
+  } else if (!is_valid) {
+    //do nothing
+  } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(schema_guard, tenant_id,
+                                                           table_ref_id, is_valid))) {
+    LOG_WARN("failed to check is stat table", K(ret));
+  } else if (!is_valid) {
+    //do nothing
   } else if (!part_ids.empty()) {
     has_opt_stat = true;
     for (int64_t i = 0; OB_SUCC(ret) && has_opt_stat && i < part_ids.count(); ++i) {
@@ -498,7 +508,8 @@ int ObOptStatManager::check_has_opt_stat(const uint64_t tenant_id,
   return ret;
 }
 
-int ObOptStatManager::check_stat_version(const uint64_t tenant_id,
+int ObOptStatManager::check_stat_version(share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const uint64_t tenant_id,
                                          const uint64_t tab_ref_id,
                                          const int64_t part_id,
                                          int64_t &last_analyzed)
@@ -506,8 +517,16 @@ int ObOptStatManager::check_stat_version(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   last_analyzed = 0;
   ObOptTableStat tstat;
-  if (is_sys_table(tab_ref_id) || is_virtual_table(tab_ref_id)) {
-    // assume inner table has no user gathered statistics
+  bool is_valid = false;
+  if (OB_FAIL(check_stat_tables_ready(schema_guard, tenant_id, is_valid))) {
+    LOG_WARN("failed to check stat tables ready", K(ret));
+  } else if (!is_valid) {
+    //do nothing
+  } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(schema_guard, tenant_id,
+                                                           tab_ref_id, is_valid))) {
+    LOG_WARN("failed to check is stat table", K(ret));
+  } else if (!is_valid) {
+    //do nothing
   } else if (OB_FAIL(get_table_stat(tenant_id,
                                     ObOptTableStat::Key(tenant_id, tab_ref_id, part_id),
                                     tstat))) {
@@ -707,6 +726,40 @@ int ObOptStatManager::get_table_rowcnt(const uint64_t tenant_id,
                                        int64_t &table_rowcnt)
 {
   return stat_service_.get_table_rowcnt(tenant_id, table_id, all_tablet_ids, all_ls_ids, table_rowcnt);
+}
+
+//we need check the stat tables are valid, now we only check the stat table are exist. in some situation,
+//stat tables maybe not exist, such as the core table is created fist, and execute relation query, but
+//the stat tables are not created.
+int ObOptStatManager::check_stat_tables_ready(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const uint64_t tenant_id,
+                                              bool &are_stat_tables_ready)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  are_stat_tables_ready = false;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                   share::OB_ALL_TABLE_STAT_TID,
+                                                   table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_schema));
+  } else if (OB_ISNULL(table_schema)) {
+    //do nothing
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                   share::OB_ALL_COLUMN_STAT_TID,
+                                                   table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_schema));
+  } else if (OB_ISNULL(table_schema)) {
+    //do nothing
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                   share::OB_ALL_HISTOGRAM_STAT_TID,
+                                                   table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_schema));
+  } else if (OB_ISNULL(table_schema)) {
+    //do nothing
+  } else {
+    are_stat_tables_ready = true;
+  }
+  return ret;
 }
 
 }

@@ -1642,9 +1642,8 @@ int ObOptStatSqlService::get_valid_obj_str(const ObObj &src_obj,
     int32_t buf_len = src_obj.get_string_len() * ObCharset::CharConvertFactorNum;
     uint32_t result_len = 0;
     if (0 == buf_len) {
-      //do noting
-    } else if (OB_UNLIKELY(NULL == (buf = static_cast<char *>(
-              allocator.alloc(buf_len))))) {
+      dst_obj = src_obj;
+    } else if (OB_UNLIKELY(NULL == (buf = static_cast<char *>(allocator.alloc(buf_len))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc memory failed", K(ret), K(buf_len));
     } else if (OB_FAIL(ObCharset::charset_convert(src_obj.get_collation_type(), src_obj.get_string_ptr(),
@@ -1655,24 +1654,20 @@ int ObOptStatSqlService::get_valid_obj_str(const ObObj &src_obj,
         LOG_WARN("invalid string for charset", K(ret), K(dst_column_meta), K(dst_obj));
         ret = OB_SUCCESS;
         const char *incorrect_string = "-4258: Incorrect string value, can't show.";
-        ObObj incorrect_str_obj;
-        incorrect_str_obj.set_string(dst_column_meta.get_type(), incorrect_string, static_cast<int32_t>(strlen(incorrect_string)));
-        if (OB_FAIL(get_obj_str(incorrect_str_obj, allocator, dest_str, print_params))) {
-          LOG_WARN("failed to get obj str", K(ret));
-        } else {}
+        dst_obj.set_string(dst_column_meta.get_type(), incorrect_string, static_cast<int32_t>(strlen(incorrect_string)));
       } else {
         LOG_WARN("failed to judge the string formed", K(ret));
       }
     } else {
-      dst_obj.set_string(src_obj.get_type(), buf, static_cast<int32_t>(result_len));
+      dst_obj.set_string(dst_column_meta.get_type(), buf, static_cast<int32_t>(result_len));
       dst_obj.set_collation_type(dst_column_meta.get_collation_type());
-      if (OB_FAIL(get_obj_str(dst_obj, allocator, dest_str, print_params))) {
-        LOG_WARN("fail to get obj str", K(ret));
-      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(get_obj_str(dst_obj, allocator, dest_str, print_params))) {
+      LOG_WARN("fail to get obj str", K(ret));
     }
     LOG_TRACE("succeed to get valid obj str", K(src_obj), K(dst_column_meta), K(dest_str));
   } else if (OB_FAIL(get_obj_str(src_obj, allocator, dest_str, print_params))) {
-    LOG_WARN("failed to get obj str", K(ret));
+    LOG_WARN("failed to get obj str", K(ret), K(src_obj));
   } else {/*do nothing*/}
   return ret;
 }
