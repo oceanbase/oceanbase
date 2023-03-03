@@ -1685,43 +1685,48 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
 {
   int ret = OB_SUCCESS;
   need_exec_new_inner_sql = true; // default need execute new inner sql
-  bool is_old_task_session_exist = false;
-  bool is_all_sstable_build_finished = false;
-  bool need_wait = false;
+  bool is_old_task_session_exist = true;
+  bool is_dst_checksums_all_report = false;
 
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to check and wait complement task", K(ret), K(tenant_id), K(table_id));
   } else {
     LOG_INFO("start to check and wait complement task", K(tenant_id), K(table_id), K(inner_sql_exec_addr), K(trace_id));
-    do {
-      if (OB_FAIL(check_all_tablet_sstable_status(tenant_id, table_id, scn, execution_id, ddl_task_id, is_all_sstable_build_finished))) {
-        LOG_WARN("fail to check task tablet sstable status", K(ret), K(tenant_id), K(table_id), K(scn), K(execution_id), K(ddl_task_id));
-      } else if (is_all_sstable_build_finished) {
-        LOG_INFO("all tablet sstable has build finished");
+    while (OB_SUCC(ret) && is_old_task_session_exist) {
+      if (OB_FAIL(check_task_inner_sql_session_status(inner_sql_exec_addr, trace_id, tenant_id, execution_id, scn, is_old_task_session_exist))) {
+        LOG_WARN("fail check task inner sql session status", K(ret), K(trace_id), K(inner_sql_exec_addr));
+      } else if (!is_old_task_session_exist) {
+        LOG_WARN("old inner sql session is not exist.", K(ret));
       } else {
-        if (OB_FAIL(check_task_inner_sql_session_status(inner_sql_exec_addr, trace_id, tenant_id, execution_id, scn, is_old_task_session_exist))) {
-          LOG_WARN("fail check task inner sql session status", K(ret), K(trace_id), K(inner_sql_exec_addr));
-        } else if (!is_old_task_session_exist) {
-          LOG_WARN("old inner sql session is not exist.", K(ret));
-        } else {
-          usleep(10 * 1000); // sleep 10ms
-        }
+        usleep(10 * 1000); // sleep 10ms
       }
-      if (OB_EAGAIN == ret) { // retry
-        ret = OB_SUCCESS;
-      }
-      need_wait = !is_all_sstable_build_finished && is_old_task_session_exist;
-    } while (OB_SUCC(ret) && need_wait); // TODO: time out
-    ///// end
-    /* Only in table all sstables not finished case, we will do retry */
-    if (is_all_sstable_build_finished) {
+    }
+
+    // After old session exits, the rule of retry is specified as follows
+    //
+    // A. for dst table merge checksums of this execution,
+    // - if complete, goto B (need_exec_new_inner_sql = false)
+    // - else if all tablets has been merged, this means some checksum report failed, retry
+    // - else old session must fail/crash, retry
+    //
+    // B. do checksum validation against src table scan checksums of this execution,
+    // - if src checksums are complete, this is exactly a validation
+    // - else old session must fail/crash "unexpectedly" (because complete dst checksum in A
+    //   guarantees at least one preivous execution has successfully finished table scan),
+    //   the validation may returns error due to lack of src checksum records
+
+    ObArray<ObTabletID> dest_tablet_ids;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, table_id, ddl_task_id, execution_id, dest_tablet_ids, is_dst_checksums_all_report))) {
+      LOG_WARN("fail to check tablet checksum update status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
+    } else if (is_dst_checksums_all_report) {
       need_exec_new_inner_sql = false;
-      LOG_INFO("no need to execute inner sql to do complement.", K(need_exec_new_inner_sql));
+      LOG_INFO("no need execute because all tablet sstable has build finished", K(need_exec_new_inner_sql));
     }
   }
   LOG_INFO("end to check and wait complement task", K(ret),
-    K(table_id), K(is_old_task_session_exist), K(is_all_sstable_build_finished), K(need_exec_new_inner_sql));
+    K(table_id), K(is_old_task_session_exist), K(is_dst_checksums_all_report), K(need_exec_new_inner_sql));
 
   return ret;
 }
