@@ -3115,7 +3115,8 @@ int ObDataTabletsMigrationTask::build_tablet_group_info_()
             LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id));
           } else {
             total_size = tablet_simple_info.data_size_;
-            for (int64_t j = i + 1; OB_SUCC(ret) && j < tablet_id_array.count(); ++j) {
+            int64_t max_tablet_count = 0;
+            for (int64_t j = i + 1; OB_SUCC(ret) && j < tablet_id_array.count() && max_tablet_count < MAX_TABLET_COUNT; ++j) {
               const ObTabletID &tmp_tablet_id = tablet_id_array.at(j);
               ObCopyTabletSimpleInfo tmp_tablet_simple_info;
 
@@ -3134,6 +3135,7 @@ int ObDataTabletsMigrationTask::build_tablet_group_info_()
                   LOG_WARN("failed to set tablet into set", K(ret), K(tmp_tablet_id));
                 } else {
                   total_size += tmp_tablet_simple_info.data_size_;
+                  max_tablet_count++;
                 }
               }
             }
@@ -3142,7 +3144,7 @@ int ObDataTabletsMigrationTask::build_tablet_group_info_()
               if (OB_FAIL(ctx_->tablet_group_mgr_.build_tablet_group_ctx(tablet_group_id_array))) {
                 LOG_WARN("failed to build tablet group ctx", K(ret), K(tablet_group_id_array), KPC(ctx_));
               } else {
-                LOG_INFO("succeed build tablet group ctx", K(tablet_group_id_array));
+                LOG_INFO("succeed build tablet group ctx", K(tablet_group_id_array), "count", tablet_group_id_array.count());
               }
             }
           }

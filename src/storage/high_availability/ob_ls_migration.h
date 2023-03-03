@@ -422,6 +422,7 @@ private:
 
 private:
   static const int64_t MAX_TABLET_GROUP_SIZE = 2 * 1024L * 1024L * 1024L; //2G
+  static const int64_t MAX_TABLET_COUNT = 100;
   bool is_inited_;
   ObLSHandle ls_handle_;
   ObMigrationCtx *ctx_;
