@@ -177,6 +177,30 @@ int ObMySQLRawPacket::serialize(char *buf, const int64_t length, int64_t &pos) c
   return ret;
 }
 
+int Ob20ExtraInfo::assign(const Ob20ExtraInfo &other, char* buf, int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  uint64_t total_len = other.get_total_len();
+  if (total_len > buf_len) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(ERROR, "invalid alloc size", K(total_len), K(ret));
+  } else {
+    uint64_t len = 0;
+    MEMCPY(buf+len, other.trace_info_.ptr(), other.trace_info_.length());
+    trace_info_.assign_ptr(buf+len, other.trace_info_.length());
+    len += other.trace_info_.length();
+
+    MEMCPY(buf+len, other.sync_sess_info_.ptr(), other.sync_sess_info_.length());
+    sync_sess_info_.assign_ptr(buf+len, other.sync_sess_info_.length());
+    len += other.sync_sess_info_.length();
+
+    MEMCPY(buf+len, other.full_link_trace_.ptr(), other.full_link_trace_.length());
+    full_link_trace_.assign_ptr(buf+len, other.full_link_trace_.length());
+    len += other.full_link_trace_.length();
+  }
+  return ret;
+}
+
 char const *get_info_func_name(const ObInformationFunctions func)
 {
   const char *str = NULL;

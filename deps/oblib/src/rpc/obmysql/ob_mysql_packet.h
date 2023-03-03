@@ -360,6 +360,11 @@ public:
   bool exist_full_link_trace() const { return !full_link_trace_.empty(); }
   const ObString& get_sync_sess_info() const { return sync_sess_info_; }
   const ObString& get_full_link_trace() const { return full_link_trace_; }
+  bool exist_extra_info() {return !sync_sess_info_.empty() || !full_link_trace_.empty() || exist_trace_info_;}
+  bool exist_extra_info() const {return !sync_sess_info_.empty() || !full_link_trace_.empty() || exist_trace_info_;}
+  int assign(const Ob20ExtraInfo &other, char* buf, int64_t len);
+  int64_t get_total_len() {return trace_info_.length() + sync_sess_info_.length() + full_link_trace_.length();}
+  int64_t get_total_len() const {return trace_info_.length() + sync_sess_info_.length() + full_link_trace_.length();}
   TO_STRING_KV(K_(extra_len), K_(exist_trace_info), K_(trace_info),
                K_(sync_sess_info), K_(full_link_trace));
 };
@@ -511,9 +516,9 @@ public:
   inline void set_txn_free_route(const bool txn_free_route);
   inline bool txn_free_route() const;
 
-  inline void set_extra_info(const Ob20ExtraInfo &extra_info) { extra_info_ = extra_info; }
   inline const Ob20ExtraInfo &get_extra_info() const { return extra_info_; }
   bool exist_trace_info() const { return extra_info_.exist_trace_info_; }
+  bool exist_extra_info() const { return extra_info_.exist_extra_info(); }
   const common::ObString &get_trace_info() const { return extra_info_.trace_info_; }
   virtual int64_t get_serialize_size() const;
 
@@ -547,6 +552,7 @@ private:
   bool can_reroute_pkt_;
   bool is_weak_read_;
   bool txn_free_route_;
+public:
   Ob20ExtraInfo extra_info_;
 };
 
