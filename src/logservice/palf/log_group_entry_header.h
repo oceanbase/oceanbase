@@ -121,7 +121,7 @@ private:
   static constexpr int64_t PADDING_LOG_DATA_CHECKSUM = 0;  // padding log的data_checksum为0
 private:
   // Binary visualization, for LogGroupEntryHeader, its' magic number
-  // is 0x4752, means GH(group header)
+  // is 0x4752, means GR(group header)
   int16_t magic_;
   // Upgrade compatible
   int16_t version_;

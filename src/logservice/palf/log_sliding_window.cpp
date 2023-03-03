@@ -461,9 +461,10 @@ int LogSlidingWindow::wait_group_buffer_ready_(const LSN &lsn, const int64_t dat
   // NB: 尽管已经使用'committed_end_lsn_'限制了'leader_can_submit_new_log_', 但我们依旧需要判断'group_buffer_'是否已经可以复用:
   // 1. 并发提交日志会导致所有日志都能进入到提交流程;
   // 2. 不能够使用'committed_end_lsn_'判断'group_buffer_'是否可以被复用, 因为'committed_end_lsn_'可能大于'max_flushed_end_lsn'.
-  int tmp_ret = OB_SUCCESS;
   int64_t wait_times = 0;
-  while (OB_EAGAIN == (tmp_ret = group_buffer_.wait(lsn, data_len))) {
+  LSN curr_committed_end_lsn;
+  get_committed_end_lsn_(curr_committed_end_lsn);
+  while (false == group_buffer_.can_handle_new_log(lsn, data_len, curr_committed_end_lsn)) {
     // 要填充的终点超过了buffer可复用的范围
     // 需要重试直到可复用终点推大
     static const int64_t MAX_SLEEP_US = 100;
@@ -473,9 +474,9 @@ int LogSlidingWindow::wait_group_buffer_ready_(const LSN &lsn, const int64_t dat
       sleep_us = MAX_SLEEP_US;
     }
     ob_usleep(sleep_us);
-    PALF_LOG(WARN, "usleep wait", K(tmp_ret), K_(palf_id), K_(self), K(lsn), K(data_len));
+    PALF_LOG(WARN, "usleep wait", K_(palf_id), K_(self), K(lsn), K(data_len), K(curr_committed_end_lsn));
+    get_committed_end_lsn_(curr_committed_end_lsn);
   }
-  ret = tmp_ret;
   return ret;
 }
 
@@ -536,7 +537,7 @@ int LogSlidingWindow::append_to_group_log_(const LSN &lsn,
 int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
                                               const int64_t log_id,
                                               const int64_t log_ts,
-                                              const int64_t log_body_size,  // LOG_HEADER_SIZE + log_data_len
+                                              const int64_t log_body_size,  // log_entry_header_size + log_data_len
                                               const LogType &log_type,
                                               const char *log_data,
                                               const int64_t data_len,
@@ -589,12 +590,15 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
       if (OB_FAIL(wait_group_buffer_ready_(lsn, log_body_size + LogGroupEntryHeader::HEADER_SER_SIZE))) {
         PALF_LOG(ERROR, "group_buffer wait failed", K(ret), K_(palf_id), K_(self));
       } else if (is_padding_log) {
-        // padding log, no need fill buf, because its padding length is maybe larger than group_buffer size.
-        const int64_t log_entry_buf_len = log_body_size;
-        // inc ref
-        log_task->ref(log_entry_buf_len);
-        const bool set_submit_tag_res = log_task->set_submit_log_exist();
-        assert(true == set_submit_tag_res);
+        // padding log, fill log body with '\0'.
+        if (OB_FAIL(group_buffer_.fill_padding_body(lsn + LogGroupEntryHeader::HEADER_SER_SIZE, log_body_size))) {
+          PALF_LOG(WARN, "group_buffer fill_padding_body failed", K(ret), K_(palf_id), K_(self), K(log_body_size));
+        } else {
+          // inc ref
+          log_task->ref(log_body_size);
+          const bool set_submit_tag_res = log_task->set_submit_log_exist();
+          assert(true == set_submit_tag_res);
+        }
       } else {
         int64_t pos = 0;
         assert(LogEntryHeader::HEADER_SER_SIZE < TMP_HEADER_SER_BUF_LEN);
@@ -660,12 +664,14 @@ int LogSlidingWindow::handle_committed_log_()
             int64_t data_len = 0;
             LogTaskHeaderInfo log_task_header;
             log_task->lock();
-            log_task_header = log_task->get_header_info();
-            data_len = log_task->get_data_len();
-            log_end_lsn = log_task->get_begin_lsn() + LogGroupEntryHeader::HEADER_SER_SIZE + data_len;
+            // Notice: the following lines' order is vital, it should execute is_freezed() firstly.
+            // This order can ensure log_end_lsn is correct and decided.
             const bool is_freezed = log_task->is_freezed();
             const int64_t ref_cnt = log_task->get_ref_cnt();
+            log_task_header = log_task->get_header_info();
             log_begin_lsn = log_task->get_begin_lsn();
+            data_len = log_task->get_data_len();
+            log_end_lsn = log_task->get_begin_lsn() + LogGroupEntryHeader::HEADER_SER_SIZE + data_len;
             log_task->unlock();
 
             PALF_LOG(TRACE, "handle_committed_log", K_(palf_id), K_(self), K(log_end_lsn), K(committed_end_lsn),
@@ -771,9 +777,11 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
           int64_t group_log_size = 0;
 
           log_task->lock();
+          // Notice: the following lines' order is vital, it should execute try_pre_submit() firstly.
+          // This order can ensure log_end_lsn is correct and decided.
+          is_need_submit = log_task->try_pre_submit();
           begin_lsn = log_task->get_begin_lsn();
           log_end_lsn = begin_lsn + LogGroupEntryHeader::HEADER_SER_SIZE + log_task->get_data_len();
-          is_need_submit = log_task->try_pre_submit();
           log_proposal_id = log_task->get_proposal_id();
           log_cnt = log_task->get_log_cnt();
           log_task->unlock();
@@ -1824,53 +1832,59 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       const int64_t log_submit_ts = log_task->get_submit_ts();
       log_task->unlock();
 
-      int tmp_ret = OB_SUCCESS;
-      const int64_t fs_cb_begin_ts = ObTimeUtility::current_time();
-      if (OB_SUCCESS != (tmp_ret = palf_fs_cb_->update_end_lsn(palf_id_, log_end_lsn, log_proposal_id))) {
-        if (OB_EAGAIN == tmp_ret) {
-          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            PALF_LOG(WARN, "update_end_lsn eagain", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
-          }
-        } else {
-          PALF_LOG(WARN, "update_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
-        }
-      }
-      const int64_t fs_cb_cost = ObTimeUtility::current_time() - fs_cb_begin_ts;
-      fs_cb_cost_stat_.stat(fs_cb_cost);
-      if (fs_cb_cost > 1 * 1000) {
-        PALF_LOG(WARN, "fs_cb->update_end_lsn() cost too much time", K(tmp_ret), K_(palf_id), K_(self),
-            K(fs_cb_cost), K(log_id), K(log_begin_lsn), K(log_end_lsn), K(log_proposal_id));
-      }
-
-      const int64_t log_life_time = fs_cb_begin_ts - log_gen_ts;
-      log_life_time_stat_.stat(log_life_time);
-      log_submit_wait_stat_.stat(log_submit_ts - log_gen_ts);
-      log_submit_to_slide_cost_stat_.stat(fs_cb_begin_ts - log_submit_ts);
-
-      if (log_life_time > 100 * 1000) {
-        if (palf_reach_time_interval(10 * 1000, log_life_long_warn_time_)) {
-          PALF_LOG(WARN, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
-              K(fs_cb_begin_ts), K(log_life_time));
-        }
-      }
-
+      // Verifying accum_checksum firstly.
       if (OB_FAIL(checksum_.verify_accum_checksum(log_task_header.data_checksum_,
                                                   log_task_header.accum_checksum_))) {
-        PALF_LOG(ERROR, "verify_accum_checksum failed", K_(palf_id), K_(self), K(ret), K(log_id), KPC(log_task));
+        PALF_LOG(ERROR, "verify_accum_checksum failed", K(ret), KPC(this), K(log_id), KPC(log_task));
       } else {
-        // update last_slide_lsn_
-        (void) try_update_last_slide_log_info_(log_id, log_max_ts, log_begin_lsn, log_end_lsn, \
-            log_proposal_id, log_accum_checksum);
-      }
+        // Call fs_cb.
+        int tmp_ret = OB_SUCCESS;
+        const int64_t fs_cb_begin_ts = ObTimeUtility::current_time();
+        if (OB_SUCCESS != (tmp_ret = palf_fs_cb_->update_end_lsn(palf_id_, log_end_lsn, log_proposal_id))) {
+          if (OB_EAGAIN == tmp_ret) {
+            if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+              PALF_LOG(WARN, "update_end_lsn eagain", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
+            }
+          } else {
+            PALF_LOG(WARN, "update_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
+          }
+        }
+        const int64_t fs_cb_cost = ObTimeUtility::current_time() - fs_cb_begin_ts;
+        fs_cb_cost_stat_.stat(fs_cb_cost);
+        if (fs_cb_cost > 1 * 1000) {
+          PALF_LOG(WARN, "fs_cb->update_end_lsn() cost too much time", K(tmp_ret), K_(palf_id), K_(self),
+              K(fs_cb_cost), K(log_id), K(log_begin_lsn), K(log_end_lsn), K(log_proposal_id));
+        }
 
-      if (OB_SUCC(ret)
-          && (FOLLOWER == state_mgr_->get_role() || state_mgr_->is_leader_reconfirm())) {
-        // Check if need fetch log streamingly,
-        try_fetch_log_streamingly_(log_end_lsn);
+        const int64_t log_life_time = fs_cb_begin_ts - log_gen_ts;
+        log_life_time_stat_.stat(log_life_time);
+        log_submit_wait_stat_.stat(log_submit_ts - log_gen_ts);
+        log_submit_to_slide_cost_stat_.stat(fs_cb_begin_ts - log_submit_ts);
+
+        if (log_life_time > 100 * 1000) {
+          if (palf_reach_time_interval(10 * 1000, log_life_long_warn_time_)) {
+            PALF_LOG(WARN, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
+                K(fs_cb_begin_ts), K(log_life_time));
+          }
+        }
+
+        // update last_slide_lsn_
+        if (OB_SUCC(ret)) {
+          (void) try_update_last_slide_log_info_(log_id, log_max_ts, log_begin_lsn, log_end_lsn, \
+              log_proposal_id, log_accum_checksum);
+        }
+
+        MEM_BARRIER();  // ensure last_slide_log_info_ has been updated before fetch log streamingly
+
+        if (OB_SUCC(ret)
+            && (FOLLOWER == state_mgr_->get_role() || state_mgr_->is_leader_reconfirm())) {
+          // Check if need fetch log streamingly,
+          try_fetch_log_streamingly_(log_end_lsn);
+        }
       }
     }
     if (0 == log_id % 100) {
-      PALF_LOG(INFO, "sliding_cb finished", K_(palf_id), K_(self), K(ret), K(log_id));
+      PALF_LOG(INFO, "sliding_cb finished", K(ret), K_(palf_id), K_(self), K(ret), K(log_id));
     }
   }
   return ret;
@@ -2016,7 +2030,7 @@ int LogSlidingWindow::clean_cached_log(const int64_t begin_log_id,
 {
   // Caller holds palf_handle's wrlock.
   // This func is used to clean cached log_task that has not been processed.
-  // The arg begin_log_id is expected to be equal with (last_submit_log_id + 1).
+  // The arg begin_log_id is expected to be equal  to (last_submit_log_id + 1).
   // Before executing clean op, we need double check prev_log info.
   int ret = OB_SUCCESS;
   const int64_t last_submit_log_id = get_last_submit_log_id_();
@@ -2580,7 +2594,9 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
     if (OB_SUCC(ret)
         && log_id > (last_submit_log_id + 1)
         && log_proposal_id != last_submit_log_pid) {
-      // if its proposal_id does not equal to last_submit_log_pid, we cannot cache it.
+      // if its proposal_id does not equal to last_submit_log_pid,
+      // and it's not continuous with last_submit_log_id, we cannot receive it.
+      // Only logs whose proposal_id is equal to last_submit_log_pid can be cached into sw.
       ret = OB_EAGAIN;
       PALF_LOG(WARN, "new log's proposal_id does not equal to last submit log's, and log_id is not continuous with last "\
           "submit log, cannot receive(cache) it", K(ret), K_(palf_id), K_(self), K(log_id), K(log_proposal_id),
@@ -2592,7 +2608,7 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
         && need_check_clean_log
         && log_id == last_submit_log_id + 1
         && log_proposal_id != last_submit_log_pid) {
-      // prev log matches, new log's proposal_id does not equal with last submit log,
+      // prev log matches, new log's proposal_id does not equal to last submit log's,
       // and it is continuous with last submit log,
       // check if need clean cached log_tasks.
       if (INVALID_PROPOSAL_ID != last_submit_log_pid && log_proposal_id < last_submit_log_pid) {
@@ -2617,27 +2633,30 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
     if (OB_SUCC(ret)) {
       bool is_local_log_valid = false;
       if (!need_update_log_task_(group_entry_header, log_task, need_send_ack, is_local_log_valid, is_log_pid_match)) {
-        // local log_task is already valid
         PALF_LOG(INFO, "no need update log", K(log_id), K_(palf_id), K_(self), K(need_send_ack), K(is_log_pid_match),
             K(is_local_log_valid), K(is_prev_log_exist), K(is_prev_log_match), K(group_entry_header), KPC(log_task));
         if (false == is_local_log_valid) {
           // local log_task is invalid, and it does not need update, this means that it's maybe in PRE_FILL state.
         } else if (false == is_log_pid_match) {
           // local log_task's proposal_id does not match with new log.
-          // And (log_id <= last_submit_log_id) must be true, because:
-          // if log_id > last_submit_log_id, and there are too cases:
-          //    + its proposal_id != last_submit_log_pid, ret cannot be OB_SUCCESS, it cannot reach here.
-          //    + its proposal_id == last_submit_log_pid, the local log_task's propsal_id should be equal
-          //      with last_submit_log_pid too.
-          //      If not, local log_task's data is unexpected (it cannot be received).
-          // In summary, log_id <= last_submit_log_id, and it has passed prev log check.
+          //
+          // (log_id <= last_submit_log_id) must be true.
+          //
+          // Because if log_id > last_submit_log_id, there are only too cases:
+          // 1) new log_proposal_id != last_submit_log_pid, it cannot reach here, because it cannot be received.
+          //
+          // 2) new log_proposal_id == last_submit_log_pid, the local log_task's propsal_id should be equal
+          //      with last_submit_log_pid too. If not, local log shouldn't exist (it should already be
+          //      truncated by previous receive operation).
+          //
+          // In summary, (log_id <= last_submit_log_id) must be true.
           if (lsn <= last_submit_end_lsn) {
             // It means that this log is the first mismatch one with request server,
             // because it has passed prev log check.
-            // We need truncate log at this lsn.
+            // We need truncate log at this log's begin lsn.
             truncate_log_info.truncate_type_ = TRUNCATE_LOG;
             truncate_log_info.truncate_log_id_ = log_id;
-            // lsn is expected to be equal with log_task's end_lsn.
+            // lsn is expected to be equal to log_task's end_lsn.
             // So we can use lsn as the truncate_begin_lsn_.
             truncate_log_info.truncate_begin_lsn_ = lsn;
             log_task->lock();
@@ -2649,8 +2668,10 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
                 K(last_submit_log_id), KPC(log_task), K(is_prev_log_exist), K(is_prev_log_match),
                 K(truncate_log_info));
           } else {
-            // It means that the expected truncate pos should be some previous log.
-            // But it cannot pass prev log check, so this is unexpected!
+            // Unexpected case:
+            // (log_id <= last_submit_log_id) and (lsn > last_submit_end_lsn).
+            // If the expected truncating log is some previous one,
+            // this log cannot pass the prev log check.
             ret = OB_ERR_UNEXPECTED;
             PALF_LOG(ERROR, "lsn > last_submit_end_lsn and log_id <= last_submit_log_id, \
                 and local log_task's proposal_id != arg proposal_id, unexpected",
@@ -2802,12 +2823,29 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
     LogTaskGuard guard(this);
     int64_t group_log_data_checksum = 0;
     int64_t pos = 0;
+    LSN last_slide_end_lsn;
+    get_last_slide_end_lsn_(last_slide_end_lsn);
 
-    if (!leader_can_submit_group_log_(lsn, buf_len)) {
-      ret = OB_EAGAIN;
-      PALF_LOG(WARN, "leader cannot submit group log", K(ret), K_(palf_id), K_(self), K(lsn), K(buf_len));
-    } else if (OB_FAIL(group_entry_header.deserialize(buf, buf_len, pos))) {
+    if (OB_FAIL(group_entry_header.deserialize(buf, buf_len, pos))) {
       PALF_LOG(WARN, "group_entry_header deserialize failed", K(ret), K_(palf_id), K_(self));
+    } else if (lsn < last_slide_end_lsn && group_entry_header.get_log_id() < get_start_id()) {
+      // raw_write may submit an old group_log which is smaller than start log of sw,
+      // just return success for this case.
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        PALF_LOG(INFO, "this group_log has slid out, no need submit", K(ret), K_(palf_id), K_(self),
+            K(lsn), K(last_slide_end_lsn), K(group_entry_header));
+      }
+    } else if (!leader_can_submit_group_log_(lsn, buf_len)) {
+      LSN curr_max_lsn;
+      (void) lsn_allocator_.get_curr_end_lsn(curr_max_lsn);
+      if (lsn >= curr_max_lsn && group_entry_header.get_log_id() < get_start_id()) {
+        // This group log's lsn is larger than max_lsn, but its log_id is less than sw_start_id.
+        // This secenio is unexpected.
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        ret = OB_EAGAIN;
+      }
+      PALF_LOG(WARN, "leader cannot submit group log", K(ret), K_(palf_id), K_(self), K(lsn), K(buf_len));
     } else if (!group_entry_header.check_integrity(buf + LogGroupEntryHeader::HEADER_SER_SIZE,
           buf_len - LogGroupEntryHeader::HEADER_SER_SIZE, group_log_data_checksum)) {
       ret = OB_INVALID_DATA;
@@ -2841,8 +2879,17 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
       if (OB_SUCC(ret)) {
         int64_t min_log_ts_ns = OB_INVALID_TIMESTAMP;
         if (log_task->is_valid()) {
-          PALF_LOG(INFO, "log_task is already valid, no need receive log", K(log_id), K_(palf_id), K_(self),
-              K(group_entry_header), KPC(log_task));
+          if (group_entry_header.get_log_proposal_id() != log_task->get_proposal_id()
+              || lsn != log_task->get_begin_lsn()
+              || group_entry_header.get_max_timestamp() != log_task->get_max_log_ts()
+              || group_entry_header.get_accum_checksum() != log_task->get_accum_checksum()) {
+            ret = OB_ERR_UNEXPECTED;
+            PALF_LOG(ERROR, "local log_task is valid, but its content does not match "\
+                "with argument, unexpected", K(ret), K_(palf_id), K_(self), K(lsn), K(group_entry_header), KPC(log_task));
+          } else {
+            PALF_LOG(INFO, "log_task is already valid, no need receive log", K(ret), K(log_id), K_(palf_id), K_(self),
+                K(group_entry_header), KPC(log_task));
+          }
         } else if (OB_FAIL(get_min_log_ts_ns_from_buf_(group_entry_header, buf + LogGroupEntryHeader::HEADER_SER_SIZE,
                 buf_len - LogGroupEntryHeader::HEADER_SER_SIZE, min_log_ts_ns))) {
           PALF_LOG(WARN, "get_min_log_ts_ns_from_buf_ failed", K(ret), K_(palf_id), K_(self));

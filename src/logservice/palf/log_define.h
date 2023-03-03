@@ -88,6 +88,8 @@ const int64_t PALF_CHILD_RESEND_REGISTER_INTERVAL_NS = 4 * 1000 * 1000 * 1000L; 
 const int64_t PALF_CHECK_PARENT_CHILD_INTERVAL_US = 1 * 1000 * 1000;                // 1000ms
 const int64_t PALF_DUMP_DEBUG_INFO_INTERVAL_US = 10 * 1000 * 1000;                  // 10s
 constexpr int64_t INVALID_PROPOSAL_ID = INT64_MAX;
+constexpr int64_t PALF_INITIAL_PROPOSAL_ID = 0;
+constexpr char PADDING_LOG_CONTENT_CHAR = '\0';
 
 inline int64_t max_proposal_id(const int64_t a, const int64_t b)
 {

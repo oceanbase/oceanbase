@@ -2985,8 +2985,7 @@ int PalfHandleImpl::submit_fetch_log_resp_(const common::ObAddr &server,
   LogWriteBuf write_buf;
   // NB: 'curr_group_entry' generates by PalfGroupBufferIterator, the memory is safe before next();
   const char *buf = curr_group_entry.get_data_buf() - curr_group_entry.get_header().get_serialize_size();
-  // buf_len ignores padding entry's data_len
-  const int64_t buf_len = curr_group_entry.get_group_size_without_padding_data();
+  const int64_t buf_len = curr_group_entry.get_group_entry_size();
   int64_t pos = 0;
   const int64_t curr_log_proposal_id = curr_group_entry.get_header().get_log_proposal_id();
   if (OB_FAIL(write_buf.push_back(buf, buf_len))) {

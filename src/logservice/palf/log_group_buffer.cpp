@@ -189,31 +189,6 @@ int LogGroupBuffer::get_log_buf(const LSN &lsn, const int64_t total_len, LogWrit
   return ret;
 }
 
-int LogGroupBuffer::wait(const LSN &lsn, const int64_t data_len)
-{
-  int ret = OB_SUCCESS;
-  const LSN end_lsn = lsn + data_len;
-  LSN start_lsn, reuse_lsn;
-  get_buffer_start_lsn_(start_lsn);
-  get_reuse_lsn_(reuse_lsn);
-  const int64_t buf_size = get_available_buffer_size();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || data_len <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(data_len));
-  } else if (lsn < start_lsn) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(WARN, "lsn is less than start_lsn", K(ret), K(lsn), K(start_lsn));
-  } else if (end_lsn > reuse_lsn + buf_size) {
-    ret = OB_EAGAIN;
-    PALF_LOG(WARN, "need retry", K(ret), K(lsn), K(data_len), K(end_lsn), K(reuse_lsn), K(start_lsn));
-  } else {
-    // wait success
-  }
-  return ret;
-}
-
 int LogGroupBuffer::fill(const LSN &lsn,
                          const char *data,
                          const int64_t data_len)
@@ -258,12 +233,12 @@ int LogGroupBuffer::fill(const LSN &lsn,
   return ret;
 }
 
-int LogGroupBuffer::fill_padding(const LSN &lsn,
-                                 const int64_t padding_len)
+int LogGroupBuffer::fill_padding_body(const LSN &lsn,
+                                      const int64_t log_body_size)
 {
   int ret = OB_SUCCESS;
   int64_t start_pos = 0;
-  const LSN end_lsn = lsn + padding_len;
+  const LSN end_lsn = lsn + log_body_size;
   LSN start_lsn, reuse_lsn;
   get_buffer_start_lsn_(start_lsn);
   get_reuse_lsn_(reuse_lsn);
@@ -271,9 +246,9 @@ int LogGroupBuffer::fill_padding(const LSN &lsn,
   const int64_t available_buf_size = get_available_buffer_size();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || padding_len <= 0) {
+  } else if (!lsn.is_valid() || log_body_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(padding_len));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(log_body_size));
   } else if (lsn < start_lsn) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "lsn is less than start_lsn", K(ret), K(lsn), K_(start_lsn));
@@ -290,14 +265,14 @@ int LogGroupBuffer::fill_padding(const LSN &lsn,
     PALF_LOG(WARN, "get_buffer_pos_ failed", K(ret), K(lsn));
   } else {
     const int64_t group_buf_tail_len = reserved_buf_size - start_pos;
-    int64_t first_part_len = min(group_buf_tail_len, padding_len);
-    memset(data_buf_ + start_pos, 0, first_part_len);
-    if (padding_len > first_part_len) {
+    int64_t first_part_len = min(group_buf_tail_len, log_body_size);
+    memset(data_buf_ + start_pos, PADDING_LOG_CONTENT_CHAR, first_part_len);
+    if (log_body_size > first_part_len) {
       // seeking to buffer's beginning
-      memset(data_buf_, 0, padding_len - first_part_len);
+      memset(data_buf_, PADDING_LOG_CONTENT_CHAR, log_body_size - first_part_len);
     }
-    PALF_LOG(INFO, "fill padding success", K(ret), K(lsn), K(padding_len), K(start_pos), K(group_buf_tail_len),
-        K(first_part_len), "second_part_len", padding_len - first_part_len);
+    PALF_LOG(INFO, "fill padding body success", K(ret), K(lsn), K(log_body_size), K(start_pos), K(group_buf_tail_len),
+        K(first_part_len), "second_part_len", log_body_size - first_part_len);
   }
   return ret;
 }

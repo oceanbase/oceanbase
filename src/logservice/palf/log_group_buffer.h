@@ -46,9 +46,8 @@ public:
   int fill(const LSN &lsn,
            const char *data,
            const int64_t data_len);
-  int fill_padding(const LSN &lsn,
-                   const int64_t padding_len);
-  int wait(const LSN &lsn, const int64_t data_len);
+  int fill_padding_body(const LSN &lsn,
+                        const int64_t log_body_size);
   int get_log_buf(const LSN &lsn, const int64_t total_len, LogWriteBuf &log_buf);
   bool can_handle_new_log(const LSN &lsn,
                           const int64_t total_len) const;
