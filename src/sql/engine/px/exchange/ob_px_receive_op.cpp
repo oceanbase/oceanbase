@@ -528,7 +528,7 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
     brs_.end_ = idx < max_cnt;
     // set project flag to prevent duplcated expression calculation
     if (NULL != all_exprs) {
-      FOREACH_CNT(e, spec_.calc_exprs_) {
+      FOREACH_CNT(e, *(all_exprs)) {
         (*e)->get_eval_info(eval_ctx_).projected_ = 1;
       }
     }
