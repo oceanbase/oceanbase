@@ -338,7 +338,8 @@ private:
   int generate_group_entry_header_(const int64_t log_id,
                                    LogTask *log_task,
                                    LogGroupEntryHeader &header,
-                                   int64_t &group_log_checksum);
+                                   int64_t &group_log_checksum,
+                                   bool &is_accum_checksum_acquired);
   int gen_committed_end_lsn_(LSN &new_committed_end_lsn);
   int gen_committed_end_lsn_with_memberlist_(
     const ObMemberList &member_list,

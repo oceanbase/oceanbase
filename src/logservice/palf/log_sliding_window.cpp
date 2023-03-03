@@ -916,11 +916,9 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
                   K(prev_lsn), K(prev_log_pid), K(last_submit_log_id), K(last_submit_lsn), K(last_submit_log_pid),
                   K(tmp_log_id), KPC(log_task));
             } else if (OB_FAIL(generate_group_entry_header_(tmp_log_id, log_task, group_entry_header,
-                    group_log_data_checksum))) {
+                    group_log_data_checksum, is_accum_checksum_acquired))) {
               PALF_LOG(WARN, "generate_group_entry_header_ failed", K_(palf_id), K_(self));
             } else {
-              // set flag for rollback accum_checksum
-              is_accum_checksum_acquired = true;
               log_task->lock();
               if (!state_mgr_->is_follower_active()) {
                 // Updating data_checksum, accum_checksum, committed_end_lsn for log_task.
@@ -1048,7 +1046,8 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
 int LogSlidingWindow::generate_group_entry_header_(const int64_t log_id,
                                                    LogTask *log_task,
                                                    LogGroupEntryHeader &group_header,
-                                                   int64_t &group_log_data_checksum)
+                                                   int64_t &group_log_data_checksum,
+                                                   bool &is_accum_checksum_acquired)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_LOG_ID == log_id
@@ -1089,6 +1088,8 @@ int LogSlidingWindow::generate_group_entry_header_(const int64_t log_id,
     } else if (OB_FAIL(checksum_.acquire_accum_checksum(group_log_data_checksum, accum_checksum))) {
       PALF_LOG(WARN, "update_accumulated_checksum failed", K(ret), K_(palf_id), K_(self));
     } else {
+      // set flag for rollback accum_checksum
+      is_accum_checksum_acquired = true;
       (void) group_header.update_accumulated_checksum(accum_checksum);
       (void) group_header.update_header_checksum();
       PALF_LOG(TRACE, "generate_group_entry_header_ success", K(ret), K_(palf_id), K_(self), K(is_padding_log),
@@ -1214,6 +1215,9 @@ int LogSlidingWindow::period_freeze_last_log()
   } else if (OB_FAIL(try_freeze_last_log_task_(last_log_id, last_log_end_lsn, is_need_handle))) {
     PALF_LOG(WARN, "try_freeze_last_log_task_ failed", K(ret), K_(palf_id), K_(self), K(last_log_id), K(last_log_end_lsn));
   } else {
+  }
+  if (get_max_log_id() > get_last_submit_log_id_()) {
+    // try handle next submit log
     bool is_committed_lsn_updated = false;
     (void) handle_next_submit_log_(is_committed_lsn_updated);
   }
