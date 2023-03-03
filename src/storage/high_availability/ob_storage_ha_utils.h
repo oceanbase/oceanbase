@@ -28,6 +28,8 @@ class ObStorageHAUtils
 public:
   static int check_tablet_replica_validity(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObAddr &addr, const common::ObTabletID &tablet_id, common::ObISQLClient &sql_client);
+  static int get_server_version(uint64_t &server_version);
+  static int check_server_version(const uint64_t server_version);
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);

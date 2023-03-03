@@ -639,6 +639,7 @@ DEFINE_ERROR(OB_ERR_ROOTSERVICE_START, -4752, -1, "HY000", "rootservice start pr
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_STOP, -4753, -1, "HY000", "rootservice stop process has failure");
 DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not passed");
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice backgroud thread may be hung");
+DEFINE_ERROR(OB_MIGRATE_NOT_COMPATIBLE, -4756, -1, "HY000", "Migration src and dest version is not compatible.");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000

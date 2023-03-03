@@ -443,6 +443,7 @@ constexpr int OB_ERR_ROOTSERVICE_START = -4752;
 constexpr int OB_ERR_ROOTSERVICE_STOP = -4753;
 constexpr int OB_ERR_ROOT_INSPECTION = -4754;
 constexpr int OB_ERR_ROOTSERVICE_THREAD_HUNG = -4755;
+constexpr int OB_MIGRATE_NOT_COMPATIBLE = -4756;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -2238,6 +2239,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ROOTSERVICE_STOP__USER_ERROR_MSG "rootservice stop process has failure"
 #define OB_ERR_ROOT_INSPECTION__USER_ERROR_MSG "root inspection is not passed"
 #define OB_ERR_ROOTSERVICE_THREAD_HUNG__USER_ERROR_MSG "rootservice backgroud thread may be hung"
+#define OB_MIGRATE_NOT_COMPATIBLE__USER_ERROR_MSG "Migration src and dest version is not compatible."
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -4267,6 +4269,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ROOTSERVICE_STOP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4753, rootservice stop process has failure"
 #define OB_ERR_ROOT_INSPECTION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4754, root inspection is not passed"
 #define OB_ERR_ROOTSERVICE_THREAD_HUNG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4755, rootservice backgroud thread may be hung"
+#define OB_MIGRATE_NOT_COMPATIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4756, Migration src and dest version is not compatible."
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -5754,7 +5757,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__ORA_USER_ERROR_MSG "ORA-01007: variable not in select list"
 
-extern int g_all_ob_errnos[2024];
+extern int g_all_ob_errnos[2025];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

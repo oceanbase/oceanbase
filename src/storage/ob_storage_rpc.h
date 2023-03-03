@@ -125,13 +125,14 @@ public:
   void reset();
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id_list), K_(need_check_seq),
-      K_(ls_rebuild_seq), K_(is_only_copy_major));
+      K_(ls_rebuild_seq), K_(is_only_copy_major), K_(version));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObSArray<common::ObTabletID> tablet_id_list_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   bool is_only_copy_major_;
+  uint64_t version_;
 };
 
 struct ObCopyTabletInfo
@@ -143,12 +144,13 @@ public:
   void reset();
   int assign(const ObCopyTabletInfo &info);
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(status), K_(param), K_(data_size));
+  TO_STRING_KV(K_(tablet_id), K_(status), K_(param), K_(data_size), K_(version));
 
   common::ObTabletID tablet_id_;
   storage::ObCopyTabletStatus::STATUS status_;
   storage::ObMigrationTabletParam param_;
   int64_t data_size_; //need copy ssttablet size
+  uint64_t version_;
 };
 
 struct ObCopyTabletSSTableInfoArg final
@@ -179,7 +181,8 @@ public:
   int assign(const ObCopyTabletsSSTableInfoArg &arg);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(need_check_seq),
-      K_(ls_rebuild_seq), K_(is_only_copy_major), K_(tablet_sstable_info_arg_list));
+      K_(ls_rebuild_seq), K_(is_only_copy_major), K_(tablet_sstable_info_arg_list),
+      K_(version));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -187,6 +190,7 @@ public:
   int64_t ls_rebuild_seq_;
   bool is_only_copy_major_;
   common::ObSArray<ObCopyTabletSSTableInfoArg> tablet_sstable_info_arg_list_;
+  uint64_t version_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyTabletsSSTableInfoArg);
 };
 
@@ -218,6 +222,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(ls_id));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
+  uint64_t version_;
 };
 
 struct ObCopyLSInfo
@@ -229,10 +234,11 @@ public:
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(ls_meta_package), K_(tablet_id_array), K_(is_log_sync));
+  TO_STRING_KV(K_(ls_meta_package), K_(tablet_id_array), K_(is_log_sync), K_(version));
   storage::ObLSMetaPackage ls_meta_package_;
   common::ObSArray<common::ObTabletID> tablet_id_array_;
   bool is_log_sync_;
+  uint64_t version_;
 };
 
 struct ObFetchLSMetaInfoArg
@@ -244,9 +250,10 @@ public:
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(version));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
+  uint64_t version_;
 };
 
 struct ObFetchLSMetaInfoResp
@@ -258,8 +265,9 @@ public:
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(ls_meta_package));
+  TO_STRING_KV(K_(ls_meta_package), K_(version));
   storage::ObLSMetaPackage ls_meta_package_;
+  uint64_t version_;
 };
 
 struct ObFetchLSMemberListArg
@@ -332,12 +340,13 @@ public:
   ~ObCopyTabletSSTableHeader() {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(status), K_(sstable_count), K_(tablet_meta));
+  TO_STRING_KV(K_(tablet_id), K_(status), K_(sstable_count), K_(tablet_meta), K_(version));
 
   common::ObTabletID tablet_id_;
   storage::ObCopyTabletStatus::STATUS status_;
   int64_t sstable_count_;
   ObMigrationTabletParam tablet_meta_;
+  uint64_t version_;
 };
 
 // Leader notify follower to restore some tablets.

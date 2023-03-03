@@ -1141,6 +1141,8 @@ int ObStartMigrationTask::choose_src_()
       LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn));
     } else if (OB_FAIL(fetch_ls_info_(tenant_id, ls_id, src_info.src_addr_, ls_info))) {
       LOG_WARN("failed to fetch ls info", K(ret), K(tenant_id), K(ls_id), K(src_info));
+    } else if (OB_FAIL(ObStorageHAUtils::check_server_version(ls_info.version_))) {
+      LOG_WARN("failed to check server version", K(ret), K(ls_id), K(ls_info));
     } else {
       ctx_->minor_src_ = src_info;
       ctx_->major_src_ = src_info;
