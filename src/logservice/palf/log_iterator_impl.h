@@ -46,6 +46,42 @@ enum class LogEntryType
 };
 // =========== LogEntryType end =============
 
+enum class IterateEndReason {
+  DUE_TO_REPLAYBLE_POINT_SCN_LOG_GROUP_ENTRY = 0,
+  DUE_TO_REPLAYBLE_POINT_SCN_LOG_ENTRY = 1,
+  DUE_TO_FILE_END_LSN_NOT_READ_NEW_DATA = 2,
+  DUE_TO_FILE_END_LSN_READ_NEW_DATA = 3,
+  MAX_TYPE = 4
+};
+struct IterateEndInfo {
+  IterateEndInfo()
+  {
+    reset();
+  }
+  ~IterateEndInfo()
+  {
+    reset();
+  }
+  void reset()
+  {
+    reason_ = IterateEndReason::MAX_TYPE;
+    log_scn_.reset();
+  }
+  bool is_valid() const
+  {
+    return IterateEndReason::MAX_TYPE != reason_
+           && log_scn_.is_valid();
+  }
+  bool is_iterate_end_by_replayable_point_scn() const
+  {
+    return IterateEndReason::DUE_TO_REPLAYBLE_POINT_SCN_LOG_ENTRY == reason_
+           || IterateEndReason::DUE_TO_REPLAYBLE_POINT_SCN_LOG_GROUP_ENTRY == reason_;
+  }
+  IterateEndReason reason_;
+  SCN log_scn_;
+  TO_STRING_KV(K_(reason), K_(log_scn));
+};
+
 // LogIteratorImpl provide the ability to iterate all log entry.
 template <class ENTRY>
 class LogIteratorImpl
@@ -120,7 +156,8 @@ private:
   //   OB_ITER_END
   //   OB_ERR_OUT_LOWER_BOUND
   //   OB_NEED_RETRY: means the data has been truncate concurrently
-  int get_next_entry_();
+  int get_next_entry_(const SCN &replayable_point_scn,
+                      IterateEndInfo &info);
 
   // According to LogEntryType, deserialize different log entry
   // The log format
@@ -130,38 +167,79 @@ private:
   // @retval
   //   OB_SUCCESS.
   //   OB_BUF_NOT_ENOUGH.
-  //   OB_INVALID_DATA, means log entry is not integrity, need check this
-  //   log entry whether is the last one.
-  int parse_one_entry_();
+  //   OB_INVALID_DATA
+  //      -- means log entry is not integrity, need check this log entry whether is the last one.
+  //   OB_CHECKSUM_ERROR
+  //      -- means accumlate checksum is not matched.
+  //   OB_ITER_END
+  //      -- means log entry is iterated end by replayable_point_scn
+  int parse_one_entry_(const SCN &replayable_point_scn,
+                       IterateEndInfo &info);
 
-  template <
-    class ACTUAL_ENTRY>
-  int parse_one_specific_entry_(ACTUAL_ENTRY &actual_entry)
+  int parse_meta_entry_()
   {
     int ret = OB_SUCCESS;
-    const bool matched_type = std::is_same<ACTUAL_ENTRY, ENTRY>::value;
+    const bool matched_type = std::is_same<LogMetaEntry, ENTRY>::value;
     int64_t pos = curr_read_pos_;
     if (true == matched_type) {
       if (OB_FAIL(curr_entry_.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
-      // When curr_entry_ is LogGroupEntry, need check accumlate checksum
-      // and check whether it's raw write
-      } else if (OB_FAIL(handle_each_log_group_entry_(curr_entry_))) {
-        PALF_LOG(WARN, "handle_each_log_group_entry_ failed", KPC(this));
       }
-    } else if (OB_FAIL(actual_entry.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
-      PALF_LOG(TRACE, "deserialize entry failed", K(ret), KPC(this));
-    } else if (OB_FAIL(handle_each_log_group_entry_(actual_entry))) {
-      PALF_LOG(ERROR, "handle_each_log_group_entry_ failed", KPC(this), K(actual_entry));
     } else {
-      ret = OB_EAGAIN;
-      advance_read_lsn_(actual_entry.get_payload_offset());
-      PALF_LOG(TRACE, "advance_read_lsn_ payload offset", K(ret), KPC(this), K(actual_entry), "payload offset",
-          actual_entry.get_payload_offset());
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "parse LogMetaEntry failed, unexpected error", K(ret), KPC(this));
     }
     return ret;
   }
 
-  int parse_log_block_header_();
+  int parse_log_entry_(const SCN &replayable_point_scn,
+                       IterateEndInfo &info)
+  {
+    int ret = OB_SUCCESS;
+    const bool matched_type = std::is_same<LogEntry, ENTRY>::value;
+    int64_t pos = curr_read_pos_;
+    if (true == matched_type) {
+      if (OB_FAIL(curr_entry_.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
+      } else if (curr_entry_is_raw_write_ && curr_entry_.get_scn() > replayable_point_scn) {
+        ret = OB_ITER_END;
+        info.log_scn_ = curr_entry_.get_scn();
+        info.reason_ = IterateEndReason::DUE_TO_REPLAYBLE_POINT_SCN_LOG_ENTRY;
+        PALF_LOG(TRACE, "iterate end by replayable_point", KPC(this), K(replayable_point_scn), K(info));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "parse LogEntry failed, unexpected error", KPC(this), K(replayable_point_scn), K(info));
+    }
+    return ret;
+  }
+
+  // When entry in file is LogGroupEntry, handle it specifically.
+  // 1. for raw write LogGroupEntry, if it's controlled by replayable_point_scn, no need update
+  //    'curr_read_pos_', 'accum_checksum_', because this log may be flashbacked.
+  // 2. for append LogGroupEntry, handle it normally.
+  int parse_log_group_entry_(const SCN &replayable_point_scn,
+                             IterateEndInfo &info)
+  {
+    int ret = OB_SUCCESS;
+    const bool matched_type = std::is_same<LogGroupEntry, ENTRY>::value;
+    LogGroupEntry actual_entry;
+    int64_t pos = curr_read_pos_;
+    if (true == matched_type) {
+      if (OB_FAIL(curr_entry_.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
+      } else if (OB_FAIL(handle_each_log_group_entry_(curr_entry_, replayable_point_scn, info))) {
+        PALF_LOG(WARN, "handle_each_log_group_entry_ failed", KPC(this), K(info), K(replayable_point_scn));
+      }
+    } else if (OB_FAIL(actual_entry.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
+      PALF_LOG(TRACE, "deserialize entry failed", K(ret), KPC(this));
+    } else if (OB_FAIL(handle_each_log_group_entry_(actual_entry, replayable_point_scn, info))) {
+      PALF_LOG(WARN, "handle_each_log_group_entry_ failed", KPC(this), K(actual_entry), K(info), K(replayable_point_scn));
+    } else {
+      ret = OB_EAGAIN;
+      advance_read_lsn_(actual_entry.get_payload_offset());
+      PALF_LOG(TRACE, "advance_read_lsn_ payload offset", K(ret), KPC(this), K(actual_entry), "payload offset",
+          actual_entry.get_payload_offset(), K(info), K(replayable_point_scn));
+    }
+    return ret;
+  }
 
   int get_log_entry_type_(LogEntryType &log_entry_type);
 
@@ -175,29 +253,84 @@ private:
   void try_clean_up_cache_();
 
   template <class T>
-  int handle_each_log_group_entry_(const T&entry)
+  // when T is not LogGroupEntry, no need do anything
+  int handle_each_log_group_entry_(const T&entry,
+                                   const SCN &replayable_point_scn,
+                                   IterateEndInfo &info)
   {
     PALF_LOG(TRACE, "T is not LogGroupEntry, do no thing", K(entry));
     return OB_SUCCESS;
   }
 
   template <>
-  int handle_each_log_group_entry_(const LogGroupEntry&entry)
+  // When T is LogGroupEntry, need do:
+  // 1. check accumlate checksum:
+  //   - if accumlate checksum is not match, return OB_CHECKSUM_ERROR
+  //   - if data checksum is not match, return OB_INVALID_DATA
+  // 2. check this entry whether need control by 'replayable_point_scn':
+  //   - if control by 'replayable_point_scn', return OB_ITER_END, and don't modify
+  //     several fields in LogIteratorImpl('curr_read_pos_', 'curr_entry_is_raw_write_')
+  //   - if not control by 'replayable_point_scn', return OB_SUCCESS.
+  int handle_each_log_group_entry_(const LogGroupEntry&entry,
+                                   const SCN &replayable_point_scn,
+                                   IterateEndInfo &info)
   {
     int ret = OB_SUCCESS;
-    PALF_LOG(TRACE, "T is LogGroupEntry, do no thing", K(entry));
-   // if (OB_FAIL(verify_accum_checksum_(entry))) {
-   //   PALF_LOG(ERROR, "verify_accum_checksum_ failed", K(ret), KPC(this), K(entry));
-   // } else {
+    bool curr_entry_is_raw_write = entry.get_header().is_raw_write();
+    int64_t new_accumlate_checksum = -1;
+    PALF_LOG(TRACE, "T is LogGroupEntry", K(entry));
+    if (OB_FAIL(verify_accum_checksum_(entry, new_accumlate_checksum))) {
+      PALF_LOG(WARN, "verify_accum_checksum_ failed", K(ret), KPC(this), K(entry));
+    // NB: when current entry is raw write, and the log scn of current entry is greater than
+    //     replayable_point_scn, this log may be clean up, therefore we can not update several fields of
+    //     LogIteratorImpl, return OB_ITER_END directlly, otherwise, we may not parse new LogGroupEntryHeader
+    //     after flashback position, this will cause one log which is append, but control by replable_point_scn.
+    //
+    // NB: we need check the min scn of LogGroupEntry whether has been greater than
+    //     replayable_point_scn:
+    //     - if LogGroupEntry has two LogEntry, the scn of them are 10, 15 respectively,
+    //       replayable_point_scn is 12. in this case, we can read first LogEntry, and
+    //       we can update several fields like 'curr_entry_is_raw_write_', 'accum_checksum_'
+    //       and the others('curr_read_pos_'...). when the flashback scn is 12, the LogEntry
+    //       after 10 will be truncated, the new LogGroupEntry will be generated, meanwhile,
+    //       we will advanced 'curr_read_pos_' to the end of first LogEntry and read new LogGroupEntry
+    //       correctly.
+    //     - if LogGroupEntry has one LogEntry, the scn of it is 13, the several fields are
+    //       not been updated because of it's controlled by replayable_point_scn, when the flashback
+    //       scn is 12, we don't need rollback these fields.
+    //
+    // NB: for PalfGroupBufferIterator, we should use max scn to control replay and use min scn
+    //     as the log_scn_ of info. consider that, replayable_point_scn is 12, the min scn of group log
+    //     is 7 and max scn of group 15, we should not return this log. meanwhile, we should use
+    //     scn 7 to update next_min_scn.
+    } else if (true == curr_entry_is_raw_write) {
+      SCN min_scn;
+      bool is_group_iterator = std::is_same<ENTRY, LogGroupEntry>::value;
+      if (OB_FAIL(entry.get_log_min_scn(min_scn))) {
+        PALF_LOG(ERROR, "get_log_min_scn failed", K(ret), KPC(this), K(min_scn),
+            K(entry), K(replayable_point_scn));
+      } else if ((is_group_iterator && entry.get_scn() > replayable_point_scn)
+                 || (!is_group_iterator && min_scn > replayable_point_scn)) {
+        info.log_scn_ = min_scn;
+        info.reason_ = IterateEndReason::DUE_TO_REPLAYBLE_POINT_SCN_LOG_GROUP_ENTRY;
+        ret = OB_ITER_END;
+        PALF_LOG(TRACE, "iterate end by replayable_point", K(ret), KPC(this), K(min_scn),
+            K(entry), K(replayable_point_scn), K(info), K(is_group_iterator));
+      } else {
+      }
+    }
+    if (OB_SUCC(ret)) {
       curr_entry_is_raw_write_ = entry.get_header().is_raw_write();
-   // }
-  return ret;
+      accumlate_checksum_ = new_accumlate_checksum;
+    }
+    return ret;
   }
   // @brief: accumlate checksum verify, only verify checkum when accum_checksum_ is not -1.
   // ret val:
   //    OB_SUCCESS
   //    OB_CHECKSUM_ERROR
-  int verify_accum_checksum_(const LogGroupEntry &entry);
+  int verify_accum_checksum_(const LogGroupEntry &entry,
+                             int64_t &new_accumlate_checksum);
 
 private:
 static constexpr int MAX_READ_TIMES_IN_EACH_NEXT = 2;
@@ -278,9 +411,12 @@ int LogIteratorImpl<ENTRY>::init(const GetModeVersion &get_mode_version,
     curr_read_buf_end_pos_ = 0;
     next_round_pread_size_ = MAX_LOG_BUFFER_SIZE;
     log_storage_ = log_storage;
+    curr_entry_.reset();
+    curr_entry_is_raw_write_ = false;
     curr_entry_size_ = 0;
     init_mode_version_ = PALF_INITIAL_PROPOSAL_ID;
     get_mode_version_ = get_mode_version;
+    prev_entry_scn_.reset();
     accumlate_checksum_ = -1;
     is_inited_ = true;
     PALF_LOG(TRACE, "LogIteratorImpl init success", K(ret), KPC(this));
@@ -295,9 +431,11 @@ void LogIteratorImpl<ENTRY>::reuse()
   curr_read_buf_start_pos_ = 0;
   curr_read_buf_end_pos_ = 0;
   next_round_pread_size_ = MAX_LOG_BUFFER_SIZE;
+  curr_entry_.reset();
+  curr_entry_is_raw_write_ = false;
   curr_entry_size_ = 0;
-  prev_entry_scn_.reset();
   init_mode_version_ = PALF_INITIAL_PROPOSAL_ID;
+  prev_entry_scn_.reset();
   accumlate_checksum_ = -1;
 }
 
@@ -306,15 +444,19 @@ void LogIteratorImpl<ENTRY>::destroy()
 {
   if (IS_INIT) {
     is_inited_ = false;
+    accumlate_checksum_ = -1;
     prev_entry_scn_.reset();
+    init_mode_version_ = PALF_INITIAL_PROPOSAL_ID;
     curr_entry_size_ = 0;
+    curr_entry_is_raw_write_ = false;
+    curr_entry_.reset();
     log_storage_ = NULL;
     next_round_pread_size_ = 0;
+    buf_ = NULL;
     curr_read_buf_end_pos_ = 0;
     curr_read_buf_start_pos_ = 0;
     curr_read_pos_ = 0;
     init_mode_version_ = 0;
-    accumlate_checksum_ = -1;
   }
 }
 
@@ -337,14 +479,17 @@ LSN LogIteratorImpl<ENTRY>::get_curr_read_lsn() const
 // last entry.
 // NB: for restarting, the committed offset of sliding window is invalid.
 template <class ENTRY>
-int LogIteratorImpl<ENTRY>::get_next_entry_()
+int LogIteratorImpl<ENTRY>::get_next_entry_(const SCN &replayable_point_scn,
+                                            IterateEndInfo &info)
 {
   int ret = OB_SUCCESS;
   // NB: check need read next enty
   // Assume that read size must greater or equal than 1 in each round.
   if (true == log_storage_->check_iterate_end(curr_read_pos_ + 1)) {
     ret = OB_ITER_END;
-    PALF_LOG(TRACE, "get_next_entry_ iterate end, not read new data", K(ret), KPC(this));
+    info.reason_ = IterateEndReason::DUE_TO_FILE_END_LSN_NOT_READ_NEW_DATA;
+    info.log_scn_.reset();
+    PALF_LOG(TRACE, "get_next_entry_ iterate end, not read new data", K(ret), KPC(this), K(info));
   } else {
     // In truncate log case, the 'read_buf_' in LogIteratorStorage will not has
     // integrity data, to avoid read data in dead loop, return OB_NEED_RETRY.
@@ -362,14 +507,16 @@ int LogIteratorImpl<ENTRY>::get_next_entry_()
     int read_times = 0;
     do {
       int64_t header_size = 0;
-      if (OB_SUCC(parse_one_entry_())) {
+      if (OB_SUCC(parse_one_entry_(replayable_point_scn, info))) {
         curr_entry_size_ = curr_entry_.get_serialize_size();
       } else if (OB_BUF_NOT_ENOUGH == ret) {
         if (OB_FAIL(read_data_from_storage_()) && OB_ITER_END != ret
             && OB_ERR_OUT_OF_LOWER_BOUND != ret) {
           PALF_LOG(WARN, "read_data_from_storage_ failed", K(ret), KPC(this));
         } else if (OB_ITER_END == ret) {
-          PALF_LOG(WARN, "has iterate to end of block", K(ret), KPC(this));
+          info.reason_ = IterateEndReason::DUE_TO_FILE_END_LSN_NOT_READ_NEW_DATA;
+          info.log_scn_.reset();
+          PALF_LOG(WARN, "has iterate to end of block", K(ret), KPC(this), K(info));
         } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
           PALF_LOG(WARN, "the block may be unlinked", K(ret), KPC(this));
         } else {
@@ -386,11 +533,13 @@ int LogIteratorImpl<ENTRY>::get_next_entry_()
       }
     } while (OB_EAGAIN == ret);
 
-    // NB: check curr entry can be readable
+    // NB: check curr entry can be readable by file end lsn.
     if (OB_SUCC(ret)
         && true == log_storage_->check_iterate_end(curr_read_pos_ + curr_entry_size_)) {
       ret = OB_ITER_END;
-      PALF_LOG(TRACE, "get_next_entry_ iterate end, read new data", K(ret), KPC(this));
+      info.reason_ = IterateEndReason::DUE_TO_FILE_END_LSN_READ_NEW_DATA;
+      info.log_scn_ = curr_entry_.get_scn();
+      PALF_LOG(WARN, "get_next_entry_ iterate end, read new data", K(ret), KPC(this), K(info), K(replayable_point_scn));
     }
   }
   return ret;
@@ -414,25 +563,23 @@ int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn,
   advance_read_lsn_(curr_entry_size_);
   curr_entry_size_ = 0;
   iterate_end_by_replayable_point = false;
+  IterateEndInfo info;
 
-  // NB: when return OB_ITER_END, we need try to clean up cache, and we should not clean up cache only when
+  // NB: when return OB_ITER_END, we need try to clean up cache, and we should clean up cache only when
   // the log ts of curr entry is greater than 'replayable_point_scn', otherwise, we would return some logs
   // which has been flasback, consider following case:
-  // 1. T1, 'replayable_point_scn' is 10, the log ts of curr entry is 15, but there is no flashback option.
+  // 1. T1, 'replayable_point_scn' is 10, the log ts of curr entry is 15, but there is no flashback option.(no any bad effect)
   // 2. T2, 'replayable_point_scn' is 10, the logs on disk which the log ts after 10 has been flashbacked, and
-  //    return OB_ITER_END because of 'file end lsn'.
+  //    return OB_ITER_END because of 'file end lsn'.(no any bad effect)
   // 3. T3, 'replayable_point_scn' has been advanced to 16, and write several logs on disk, however, the cache
-  //    of iterator has not been clean up, the old logs will be returned.
-  //
-  // 1. T1, 'replayable_point_scn' is 10, the log ts of curr entry is 15, but there is no flashback option.
-  // 2. T2, 'replayable_point_scn' is 10, the logs on disk which the log ts after 10 has been flashbacked, and
-  //    has append new logs.
-  // 3. T3, 'replayable_point_scn' has been advanced to 16, however, the cache of iterator has not been clean up,
-  //    the old logs will be returned.
+  //    of iterator has not been clean up, the old logs will be returned.(bad effect)
   //
   // Therefore, we should try_clean_up_cache_ in the beginning of each round of next.
   (void) try_clean_up_cache_();
-  if (OB_FAIL(get_next_entry_())) {
+  if (!replayable_point_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argumetn", K(replayable_point_scn), KPC(this));
+  } else if (OB_FAIL(get_next_entry_(replayable_point_scn, info))) {
     // NB: if the data which has been corrupted, clean cache.
     // NB: if the accum_checksum_ is not match, return OB_CHECKSUM_ERROR.
     if (OB_INVALID_DATA == ret) {
@@ -444,68 +591,74 @@ int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn,
     if (OB_ITER_END != ret) {
       PALF_LOG(WARN, "get_next_entry_ failed", K(ret), KPC(this));
     }
-  } else {
-    // NB: when current entry is raw write, and the log scn of current entry is greater than replayable_point_scn
-    //     clean up cache when mode version has been changed.
-    if (true == curr_entry_is_raw_write_ && curr_entry_.get_scn() > replayable_point_scn) {
-      ret = OB_ITER_END;
-      iterate_end_by_replayable_point = true;
-    }
+    PALF_LOG(TRACE, "get_next_entry_ failed", K(ret), KPC(this), K(info), K(replayable_point_scn));
+    iterate_end_by_replayable_point = info.is_iterate_end_by_replayable_point_scn();
   }
   // If 'curr_entry_' can be iterate at this round, set 'prev_entry_scn_' to the log ts of 'curr_entry_'.
   if (OB_SUCC(ret)) {
     prev_entry_scn_ = curr_entry_.get_scn();
   }
 
+  // if 'curr_entry_' is not readable, we should set 'next_min_scn' to the scn of 'prev_entry_' + 1,
+  // and if 'curr_entry_' is not readable due to replayable_point_scn, we should set 'next_min_scn'
+  // to replayable_point_scn + 1
+  //
   // In case of 'next' return OB_ITER_END, we should set 'next_min_scn' which is the out parameter of 'next' to:
   //
-  // 1. if 'prev_entry_scn_' is OB_INVALID_TIMESTAMP and 'curr_entry_' is not valid, means that there is no log before
-  //    'file end lsn', we should set 'next_min_scn' to OB_INVALID_TIMESTAMP
+  // 1. if 'curr_entry_' iterate end by replayable point scn:
+  //    we should set next_min_scn to std::min(replayable_point_scn+1, the log scn of 'curr_entry_'),
+  //    however, replayable_point_scn may be smaller than 'prev_entry_scn_'(for example, the log
+  //    entry correspond to'prev_entry_scn_' was writen by APPEND, its' scn may be greater than
+  //    replayable_point_scn), we shoud set next_min_scn to std::max(
+  //    std::min(replayable_point_scn + 1, the log scn of 'curr_entry_'), 'prev_entry_scn_' + 1).
   //
-  // 2. if 'curr_entry_' is valid but not readable, means that there is no readable log before 'file end lsn' or replayable_point_scn,
-  //    we should set next_min_scn to std::min(replayable_point_scn, the log ts of 'curr_entry_'), however, replayable_point_scn may
-  //    be smaller than 'prev_entry_scn_'(for example, the log entry correspond to'prev_entry_scn_' was writen by APPEND, its' scn
-  //    may be greater than replayable_point_scn), we shoud set next_min_scn to std::max(std::min(replayable_point_scn + 1, the log ts
-  //    of 'curr_entry_'), 'prev_entry_scn_' + 1).
-  //
-  // 3. if 'curr_entry_' is not valid and 'prev_entry_scn_' is not OB_INVALID_TIMESTAMP, means there is no log after 'file end lsn'
-  //    or 'replayable_point_scn', we should set 'next_min_scn' to prev_entry_scn_ + 1;
-  //
+  // 2. oterwise, iterate end by file end lsn:
+  //    - case 1: if 'curr_entry_' has been parsed from LogIteratorStorage, however, it's not readable
+  //              due to file end lsn(consider that someone set the file end lsn to the middle of one
+  //              LogGroupEntry), we should set next_min_scn to the max of min(curr_entry_'s scn,
+  //              replayable_point_scn + 1) and prev_entry_scn_.
+  //    - case 2: if 'curr_entry_' has not been parsed from LogIteratorStorage, we just se next_min_scn
+  //              to prev_entry_scn_ + 1.
   if (OB_ITER_END == ret) {
-    if (0 == curr_entry_size_ && !prev_entry_scn_.is_valid()) {
+    if (!info.is_valid() && !prev_entry_scn_.is_valid()) {
       next_min_scn.reset();
-      PALF_LOG(WARN, "there is no readable log, set next_min_scn to OB_INVALID_TIMESTAMP", K(ret), KPC(this));
-    } else if (0 != curr_entry_size_) {
-      if (!curr_entry_.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        PALF_LOG(ERROR, "unexpected error, curr_entry_size_ is not zero but curr_entry_ is invalid", K(ret), KPC(this));
-      } else {
-        next_min_scn = MIN(
-            (replayable_point_scn.is_valid() ? SCN::plus(replayable_point_scn, 1) : SCN::min_scn()),
-            curr_entry_.get_scn());
-      }
+      PALF_LOG(WARN, "there is no readable log, set next_min_scn to OB_INVALID_TIMESTAMP",
+          K(ret), KPC(this), K(info), K(replayable_point_scn));
+    } else if (iterate_end_by_replayable_point || IterateEndReason::DUE_TO_FILE_END_LSN_READ_NEW_DATA == info.reason_) {
+      // when there is no log between [replayable_point_scn, 'curr_entry'), we can advance next_log_min_scn.
+      next_min_scn = MIN(
+          (replayable_point_scn.is_valid() ? SCN::plus(replayable_point_scn, 1) : SCN::max_scn()),
+          info.log_scn_);
+      PALF_LOG(TRACE, "update next_min_scn to min of replayable_point_scn and log_group_entry_min_scn_", KPC(this), K(info));
+
       next_min_scn = MAX(
           (prev_entry_scn_.is_valid() ? SCN::plus(prev_entry_scn_, 1) : SCN::min_scn()),
           next_min_scn);
-      // NB: we need update 'prev_entry_scn_' to the max of 'replayable_point_scn' and 'prev_entry_scn_'
-      // when iterate end by replayable point, otherwise, 'next_min_scn' may be smaller than previous
-      // result, consider following case:
-      // 1. T1, next return OB_ITER_END because of replayable point, the log ts of curr_entry_ is 10,
-      //    'prev_entry_scn_' is 5, 'replayable_point_scn' is 9, next_min_scn would be set to 10 because
-      //    of 'curr_entry_' is valid.
-      // 2. T2, several logs after 9(log_ts) has been truncate, next return OB_ITER_END because of
-      //    'file end lsn', 'curr_entry_' is invalid, 'replayable_point_scn' is 9, 'prev_entry_scn_'
-      //    is 5, 'next_min_scn' would be set to 5.
-      if (replayable_point_scn < curr_entry_.get_scn()) {
+      PALF_LOG(TRACE, "update next_min_scn to max of prev_entry_scn_ and next_min_scn",
+          KPC(this), K(info), K(replayable_point_scn));
+      // NB: To make 'next_min_scn' newly, advance 'prev_entry_scn_' when 'curr_entry_' need control by readable point scn.
+      //     consider follower case:
+      //     T1, iterate an entry successfully, and make prev_entry_scn to 5;
+      //     T2, iterate control by readable point scn, scn of 'curr_entry_' is 10, and readable point scn is 8.
+      //     T3, the logs after 8 have been flashabcked, and no log has been writen.
+      //     if we don't advance 'prev_entry_scn_' to 8, the continuous point of replay service can not update
+      //     to 8.
+      if (info.log_scn_ > replayable_point_scn) {
         prev_entry_scn_ = MAX(replayable_point_scn, prev_entry_scn_);
+        PALF_LOG(TRACE, "update prev_entry_scn_ to replayable_point_scn", KPC(this), K(info), K(replayable_point_scn));
       }
+      // NB: if has not read any log, we should set next_min_scn to invalid.
+    } else if (IterateEndReason::DUE_TO_FILE_END_LSN_NOT_READ_NEW_DATA == info.reason_) {
+        next_min_scn = prev_entry_scn_.is_valid() ? SCN::plus(prev_entry_scn_, 1) : SCN::min_scn();
+        PALF_LOG(TRACE, "update next_min_scn to prev_entry_scn_ + 1", KPC(this), K(info), K(replayable_point_scn));
     } else {
-      // prev_entry_scn_ must be invalid
-      next_min_scn = SCN::plus(prev_entry_scn_, 1);
+
     }
   }
   if (OB_FAIL(ret)) {
     curr_entry_size_ = 0;
+    // To debug easily, don't reset 'curr_entry_'
+    // curr_entry_.reset();
   }
   return ret;
 }
@@ -528,7 +681,8 @@ int LogIteratorImpl<ENTRY>::get_entry(ENTRY &entry, LSN &lsn, bool &is_raw_write
 }
 
 template<class ENTRY>
-int LogIteratorImpl<ENTRY>::verify_accum_checksum_(const LogGroupEntry &entry)
+int LogIteratorImpl<ENTRY>::verify_accum_checksum_(const LogGroupEntry &entry,
+                                                   int64_t &new_accumlate_checksum)
 {
   int ret = OB_SUCCESS;
   int64_t data_checksum = -1;
@@ -537,12 +691,13 @@ int LogIteratorImpl<ENTRY>::verify_accum_checksum_(const LogGroupEntry &entry)
     ret = OB_INVALID_DATA;
     PALF_LOG(WARN, "invalid data", K(ret), KPC(this), K(entry));
   } else if (-1 == accumlate_checksum_) {
-    accumlate_checksum_ = expected_verify_checksum;
-    PALF_LOG(INFO, "init accumlate_checksum to first LogGroupEntry", K(entry), KPC(this));
+    new_accumlate_checksum = expected_verify_checksum;
+    PALF_LOG(INFO, "init accumlate_checksum to first LogGroupEntry", K(entry), KPC(this),
+        K(new_accumlate_checksum));
   } else if (OB_FAIL(LogChecksum::verify_accum_checksum(
                 accumlate_checksum_, data_checksum,
-                expected_verify_checksum, accumlate_checksum_))) {
-    PALF_LOG(ERROR, "verify checksum failed", K(ret), KPC(this), K(entry));
+                expected_verify_checksum, new_accumlate_checksum))) {
+    PALF_LOG(ERROR, "verify accumlate checksum failed", K(ret), KPC(this), K(entry));
   } else {
     PALF_LOG(TRACE, "verify_accum_checksum_ success", K(ret), KPC(this), K(entry));
   }
@@ -555,7 +710,8 @@ int LogIteratorImpl<ENTRY>::verify_accum_checksum_(const LogGroupEntry &entry)
 // entry type is not 'wanted_log_entry_type', skip the header of this entry. NB: for
 // LOG_PADDING, the header size include data_len.
 template <class ENTRY>
-int LogIteratorImpl<ENTRY>::parse_one_entry_()
+int LogIteratorImpl<ENTRY>::parse_one_entry_(const SCN &replayable_point_scn,
+                                             IterateEndInfo &info)
 {
   int ret = OB_SUCCESS;
   const int MAGIC_NUMBER_SIZE = sizeof(int16_t);
@@ -567,26 +723,17 @@ int LogIteratorImpl<ENTRY>::parse_one_entry_()
       switch (actual_log_entry_type) {
         case LogEntryType::GROUP_ENTRY_HEADER:
           {
-              LogGroupEntry entry;
-              ret = parse_one_specific_entry_(entry);
+            ret = parse_log_group_entry_(replayable_point_scn, info);
             break;
           }
         case LogEntryType::LOG_ENTRY_HEADER:
           {
-            LogEntry entry;
-            ret = parse_one_specific_entry_(entry);
+            ret = parse_log_entry_(replayable_point_scn, info);
             break;
           }
         case LogEntryType::LOG_META_ENTRY_HEADER:
           {
-            LogMetaEntry entry;
-            ret = parse_one_specific_entry_(entry);
-            break;
-          }
-        case LogEntryType::LOG_INFO_BLOCK_HEADER:
-          {
-            ret = parse_log_block_header_();
-            if (OB_SUCC(ret)) ret = OB_EAGAIN;
+            ret = parse_meta_entry_();
             break;
           }
         default:
@@ -596,25 +743,6 @@ int LogIteratorImpl<ENTRY>::parse_one_entry_()
     }
   } while (OB_EAGAIN == ret);
 
-  return ret;
-}
-
-template <class ENTRY>
-int LogIteratorImpl<ENTRY>::parse_log_block_header_()
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = curr_read_pos_;
-  LogBlockHeader actual_entry;
-  if (OB_FAIL(actual_entry.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
-    PALF_LOG(TRACE, "deserialize entry failed", K(ret), KPC(this));
-  } else {
-    ret = OB_EAGAIN;
-    advance_read_lsn_(MAX_INFO_BLOCK_SIZE);
-    PALF_LOG(INFO, "parse_log_block_header_ success", K(ret), KPC(this));
-  }
-  if (OB_BUF_NOT_ENOUGH == ret) {
-    OB_ASSERT(true);
-  }
   return ret;
 }
 
@@ -757,12 +885,30 @@ void LogIteratorImpl<ENTRY>::try_clean_up_cache_()
     PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "current_mode_version is unexpected", K(current_mode_version), KPC(this));
   } else if (init_mode_version_ < current_mode_version) {
     PALF_LOG_RET(WARN, OB_SUCCESS, "mode version has been changed, need reset cache buf", KPC(this), K(current_mode_version));
-    init_mode_version_ = current_mode_version;
     LSN curr_read_lsn = log_storage_->get_lsn(curr_read_pos_);
+    // reuse LogIteratorStorage firstly, only the log before 'start_lsn_' + 'curr_read_pos_'
+    // has been consumed.
+    // NB: need ensure that we can not update 'curr_read_pos_' to 'curr_read_pos_' + sizeof(LogGroupEntryHeader)
+    //     when the LogGroupEntryHeader after 'curr_read_pos_' need be controlled by replable_point_scn.
     log_storage_->reuse(curr_read_lsn);
     curr_read_buf_start_pos_ = 0;
     curr_read_pos_ = 0;
     curr_read_buf_end_pos_ = 0;
+    curr_entry_.reset();
+
+    // NB: we can not reset curr_entry_is_raw_write_, otherwise, the log entry after replayable_point_scn may no be
+    //     controlled by replable_point_scn.
+    // curr_entry_is_raw_write_ = false;
+    curr_entry_size_ = 0;
+    init_mode_version_ = current_mode_version;
+
+    // we can not reset prev_entry_scn_, otherwise, after flashback, if there is no logs which can be readbale on disk,
+    // we can not return a valid next_min_scn.
+    // - prev_entry_.reset();
+
+    // we need reset accum_checksum_, otherwise, the accum_checksum_ is the log before flashback, and iterate new
+    // group log will fail.
+    accumlate_checksum_ = -1;
   }
 }
 } // end namespace palf
