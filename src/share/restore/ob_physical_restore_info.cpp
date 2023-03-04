@@ -242,8 +242,9 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(comment),
     K_(restore_start_ts),
     K_(restore_scn),
-    K_(post_cluster_version),
+    K_(post_data_version),
     K_(source_cluster_version),
+    K_(source_data_version),
     K_(restore_option),
     K_(backup_dest),
     K_(description),
@@ -278,8 +279,9 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
     status_ = other.status_;
     restore_start_ts_ = other.restore_start_ts_;
     restore_scn_ = other.restore_scn_;
-    post_cluster_version_ = other.post_cluster_version_;
+    post_data_version_ = other.post_data_version_;
     source_cluster_version_ = other.source_cluster_version_;
+    source_data_version_ = other.source_data_version_;
     compat_mode_ = other.compat_mode_;
     compatible_ = other.compatible_;
     kms_encrypt_ = other.kms_encrypt_;
@@ -332,8 +334,9 @@ void ObPhysicalRestoreJob::reset()
   comment_.reset();
   restore_start_ts_ = 0;
   restore_scn_ = SCN::min_scn();
-  post_cluster_version_ = 0;
+  post_data_version_ = 0;
   source_cluster_version_ = 0;
+  source_data_version_ = 0;
   restore_option_.reset();
   backup_dest_.reset();
   description_.reset();

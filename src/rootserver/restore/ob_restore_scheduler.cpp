@@ -343,8 +343,7 @@ int ObRestoreService::fill_create_tenant_arg(
      arg.if_not_exist_ = false;
      arg.is_restore_ = true;
      arg.recovery_until_scn_ = job.get_restore_scn();
-     //TODO(chongrong.th): should change to tenant's data version
-     arg.compatible_version_ = job.get_source_cluster_version();
+     arg.compatible_version_ = job.get_source_data_version();
      if (OB_FAIL(assign_pool_list(pool_list.ptr(), arg.pool_list_))) {
        LOG_WARN("fail to get pool list", K(ret), K(pool_list));
      }

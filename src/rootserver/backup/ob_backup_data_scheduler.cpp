@@ -610,10 +610,15 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
    LOG_WARN("log archive is not doing, can't start backup", K(ret));
   } else {
     ObMySQLTransaction trans;
-    if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(new_job_attr.tenant_id_)))) {
+    uint64_t cluster_version = 0;
+    if (OB_FAIL(ObShareUtil::fetch_current_cluster_version(*sql_proxy_, cluster_version))) {
+      LOG_WARN("failed to get cluster version", K(ret));
+    } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(new_job_attr.tenant_id_)))) {
       LOG_WARN("[DATA_BACKUP]failed to start trans", K(ret), K(job_attr));
     } else {
-      if (OB_FAIL(get_next_job_id(trans, new_job_attr.tenant_id_, new_job_attr.job_id_))) {
+      if (OB_FAIL(persist_backup_version_(trans, new_job_attr.tenant_id_, cluster_version))) {
+        LOG_WARN("failed to persist backup version", K(ret));
+      } else if (OB_FAIL(get_next_job_id(trans, new_job_attr.tenant_id_, new_job_attr.job_id_))) {
         LOG_WARN("[DATA_BACKUP]failed to get next job id", K(ret));
       } else if (OB_FAIL(get_next_backup_set_id(trans, new_job_attr.tenant_id_, new_job_attr.backup_set_id_))) {
         LOG_WARN("[DATA_BACKUP]failed to get next backup set id", K(ret));
@@ -647,29 +652,81 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
   return ret;
 }
 
-int ObBackupDataScheduler::get_scn(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, SCN &scn)
+int ObBackupDataScheduler::persist_backup_version_(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, const uint64_t &cluster_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (GCONF.enable_upgrade_mode) {
+    ret = OB_BACKUP_CAN_NOT_START;
+    LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, "cluster upgrading");
+    LOG_WARN("cluster upgrade, can't start backup", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(sql_proxy, exec_tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret), K(exec_tenant_id));
+  } else if (OB_FAIL(ObLSBackupInfoOperator::set_backup_version(sql_proxy, exec_tenant_id, data_version))) {
+    LOG_WARN("failed to set backup version", K(ret), K(exec_tenant_id), K(data_version));
+  } else if (OB_FAIL(ObLSBackupInfoOperator::set_cluster_version(sql_proxy, exec_tenant_id, cluster_version))) {
+    LOG_WARN("failed to set set cluster version", K(ret), K(exec_tenant_id));
+  }
+  return ret;
+}
+
+int ObBackupDataScheduler::get_backup_scn(
+    common::ObISQLClient &sql_proxy, const uint64_t tenant_id, const bool is_start, SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
-  const bool for_update = false;
-  if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &sql_proxy, for_update, tenant_info))) {
+  ObMySQLTransaction trans;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_FAIL(trans.start(&sql_proxy, exec_tenant_id))) {
+    LOG_WARN("failed to start trans", K(ret), K(exec_tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true/*for update*/, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
   } else {
-    // TODO when provide the scn_to_str, remove this .
-    // The conversion accuracy of SCN to time_stamp is inconsistent under MySQL mode and Oracle mode.
-    // The conversion accuracy in ORALCE mode is nanosecond, but it is microsecond in mysql
-    // for backup and restore, we keep the scn round up to microseconds that keep the conversion accuracy is consistent.
-    // meanwhile, in order to solve that boundary is not included in the restore, scn + 1;
-    // 1658475549197665190 --> 1658475549197666000
     SCN tmp_scn;
-    int64_t ts;
-    ts = tenant_info.get_standby_scn().convert_to_ts();
-    if (OB_FAIL(tmp_scn.convert_from_ts(ts))) {
-      LOG_WARN("fail to convert from ts", K(ret), K(ts));
-    } else if (tenant_info.get_standby_scn() != tmp_scn && OB_FAIL(tmp_scn.convert_from_ts(ts + 1))) {
-      LOG_WARN("fail to convert from ts", K(ret), K(ts));
+    if (tenant_info.is_primary()) {
+      // for parmary tenant, the backup start scn get from gts as the same as end scn.
+      if (OB_FAIL(ObBackupUtils::get_backup_scn(tenant_id, tmp_scn))) {
+        LOG_WARN("failed to get gts", K(ret), K(tenant_id));
+      }
+    } else if (tenant_info.is_standby()) {
+      // for standby tenant, the backup start scn must be the readable scn, so it get from sts.
+      // but end scn must be replayable scn, so it get from the tenant_info.
+      if (is_start) {
+        if (OB_FAIL(ObBackupUtils::get_backup_scn(tenant_id, tmp_scn))) {
+          LOG_WARN("failed to get gts", K(ret), K(tenant_id));
+        }
+      } else {
+        tmp_scn = tenant_info.get_replayable_scn();
+      }
     } else {
-      scn = tmp_scn;
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("tenant role not match", K(ret), K(tenant_info));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("failed to commit", K(ret));
+      } else {
+            // TODO when provide the scn_to_str, remove this .
+            // The conversion accuracy of SCN to time_stamp is inconsistent under MySQL mode and Oracle mode.
+            // The conversion accuracy in ORALCE mode is nanosecond, but it is microsecond in mysql
+            // for backup and restore, we keep the scn round up to microseconds that keep the conversion accuracy is consistent.
+            // meanwhile, in order to solve that boundary is not included in the restore, scn + 1;
+            // 1658475549197665190 --> 1658475549197666000
+        int64_t ts = 0;
+        ts = tmp_scn.convert_to_ts();
+        if (OB_FAIL(scn.convert_from_ts(ts))) {
+          LOG_WARN("fail to convert from ts", K(ret), K(ts));
+        } else if (tmp_scn != scn && OB_FAIL(scn.convert_from_ts(ts + 1))) {
+          LOG_WARN("fail to convert from ts", K(ret), K(ts));
+        }
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("failed to roll back", K(ret), K(tmp_ret));
+      }
     }
   }
   return ret;
@@ -1227,8 +1284,23 @@ int ObUserTenantBackupJobMgr::report_failed_to_initiator_()
 int ObUserTenantBackupJobMgr::check_can_backup_()
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  uint64_t cluster_version = 0;
+  uint64_t exec_tenant_id = gen_meta_tenant_id(job_attr_->tenant_id_);
   if (share::ObBackupStatus::CANCELING == job_attr_->status_.status_) {
     // backup job is canceling, no need to check log archive status
+  } else if (GCONF.enable_upgrade_mode) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("cluster is upgrade, backup can't continue", K(ret), KPC(job_attr_));
+  } else if (OB_FAIL(share::ObLSBackupInfoOperator::get_backup_version(*sql_proxy_, exec_tenant_id, data_version))) {
+    LOG_WARN("failed to get backup version", K(ret), K(exec_tenant_id));
+  } else if (OB_FAIL(share::ObLSBackupInfoOperator::get_cluster_version(*sql_proxy_, exec_tenant_id, cluster_version))) {
+    LOG_WARN("failed to get cluster version", K(ret), K(exec_tenant_id));
+  } else if (cluster_version != GET_MIN_CLUSTER_VERSION()) {
+    ret = OB_VERSION_NOT_MATCH;
+    LOG_WARN("cluster version not match, backup can't continue", K(ret), K(cluster_version));
+  } else if (OB_FAIL(ObBackupUtils::check_tenant_data_version_match(exec_tenant_id, data_version))) {
+    LOG_WARN("failed to check tenant data version", K(ret), K(exec_tenant_id), K(data_version));
   } else {
     ObTenantArchiveRoundAttr round_attr;
     if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {
@@ -1403,7 +1475,8 @@ int ObUserTenantBackupJobMgr::insert_backup_set_task_(common::ObISQLClient &sql_
     LOG_WARN("[DATA_BACKUP]failed to assign backup dest", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(get_next_task_id_(sql_proxy, backup_set_task.task_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to get next task id", K(ret));
-  } else if (OB_FAIL(ObBackupDataScheduler::get_scn(sql_proxy, job_attr_->tenant_id_, backup_set_task.start_scn_))) {
+  } else if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(
+    sql_proxy, job_attr_->tenant_id_, true/*start scn*/, backup_set_task.start_scn_))) {
     LOG_WARN("fail t get start scn", K(ret));
   } else {
     backup_set_task.tenant_id_ = job_attr_->tenant_id_;
@@ -1461,6 +1534,8 @@ int ObUserTenantBackupJobMgr::fill_backup_set_desc_(
     ObBackupSetFileDesc &backup_set_desc)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  uint64_t cluster_version = 0;
   if (!job_attr.is_valid() || prev_inc_backup_set_id < 0 || prev_full_backup_set_id < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(job_attr), K(prev_inc_backup_set_id), K(prev_full_backup_set_id));
@@ -1470,6 +1545,10 @@ int ObUserTenantBackupJobMgr::fill_backup_set_desc_(
     LOG_WARN("[DATA_BACKUP]failed to assign passwd", K(ret));
   } else if (OB_FAIL(backup_set_desc.backup_path_.assign(job_attr.backup_path_))) {
     LOG_WARN("[DATA_BACKUP]failed to assign backup dest", K(ret));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*sql_proxy_, job_attr.tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_cluster_version(*sql_proxy_, cluster_version))) {
+    LOG_WARN("failed to get cluster version", K(ret));
   } else {
     backup_set_desc.backup_set_id_ = job_attr.backup_set_id_;
     backup_set_desc.tenant_id_ = job_attr.tenant_id_;
@@ -1487,8 +1566,9 @@ int ObUserTenantBackupJobMgr::fill_backup_set_desc_(
     backup_set_desc.encryption_mode_ = job_attr.encryption_mode_;
     backup_set_desc.start_replay_scn_ = SCN::min_scn();
     backup_set_desc.min_restore_scn_ = SCN::min_scn();
-    backup_set_desc.backup_compatible_ = ObBackupSetFileDesc::Compatible::COMPATIBLE_VERSION_1;
-    backup_set_desc.tenant_compatible_ = GET_MIN_CLUSTER_VERSION();
+    backup_set_desc.backup_compatible_ = ObBackupSetFileDesc::Compatible::COMPATIBLE_VERSION_2;
+    backup_set_desc.tenant_compatible_ = data_version;
+    backup_set_desc.cluster_version_ = cluster_version;
     backup_set_desc.plus_archivelog_ = job_attr.plus_archivelog_;
   }
   return ret;

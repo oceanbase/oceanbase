@@ -11633,6 +11633,25 @@ int ObInnerTableSchema::all_virtual_backup_set_files_schema(ObTableSchema &table
       path_default,
       path_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj cluster_version_default;
+    cluster_version_default.set_varchar(ObString::make_string(""));
+    ADD_COLUMN_SCHEMA_T("cluster_version", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_INNER_TABLE_DEFAULT_VALUE_LENTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      cluster_version_default,
+      cluster_version_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
