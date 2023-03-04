@@ -476,75 +476,53 @@ int ObLogGroupBy::inner_replace_op_exprs(
 int ObLogGroupBy::print_outline_data(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
-  char *buf = plan_text.buf_;
-  int64_t &buf_len = plan_text.buf_len_;
-  int64_t &pos = plan_text.pos_;
   const ObDMLStmt *stmt = NULL;
   ObString qb_name;
-  const ObLogicalOperator *child = NULL;
-  const ObLogicalOperator *op = NULL;
-  const ObLogGroupBy *group_by_op = NULL;
   if (is_push_down()) {
     /* print outline in top group by */
-  } else if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())
-      || OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+  } else if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt), K(child));
-  } else if (OB_FAIL(child->get_pushdown_op(log_op_def::LOG_GROUP_BY, op))) {
-    LOG_WARN("failed to get push down group by", K(ret));
+    LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
   } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
     LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
-  } else if (NULL != op &&
-             OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
-                                ObQueryHint::get_outline_indent(plan_text.is_oneline_),
-                                ObHint::get_hint_name(T_GBY_PUSHDOWN),
-                                qb_name.length(), qb_name.ptr()))) {
-    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
-  } else if (OB_FALSE_IT(group_by_op = static_cast<const ObLogGroupBy*>(NULL == op ? this : op))) {
-  } else if (HASH_AGGREGATE == group_by_op->get_algo() &&
-             OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
-                                ObQueryHint::get_outline_indent(plan_text.is_oneline_),
-                                ObHint::get_hint_name(T_USE_HASH_AGGREGATE),
-                                qb_name.length(), qb_name.ptr()))) {
-    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
-  } else {/*do nothing*/}
+  } else {
+    if (OB_SUCC(ret) && has_push_down_) {
+      ObOptHint hint(T_GBY_PUSHDOWN);
+      hint.set_qb_name(qb_name);
+      if (OB_FAIL(hint.print_hint(plan_text))) {
+        LOG_WARN("failed to print hint", K(ret), K(hint));
+      }
+    }
+    if (OB_SUCC(ret) && (use_hash_aggr_ || use_part_sort_)) {
+      ObAggHint hint(use_hash_aggr_ ? T_USE_HASH_AGGREGATE : T_NO_USE_HASH_AGGREGATE);
+      hint.set_qb_name(qb_name);
+      hint.set_use_partition_sort(use_part_sort_);
+      if (OB_FAIL(hint.print_hint(plan_text))) {
+        LOG_WARN("failed to print hint", K(ret), K(hint));
+      }
+    }
+  }
   return ret;
 }
 
 int ObLogGroupBy::print_used_hint(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
-  const ObLogicalOperator *child = NULL;
-  const ObLogicalOperator *op = NULL;
+  const ObHint *hint = NULL;
   if (is_push_down()) {
     /* print outline in top group by */
   } else if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()));
-  } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(child));
-  } else if (OB_FAIL(child->get_pushdown_op(log_op_def::LOG_GROUP_BY, op))) {
-    LOG_WARN("failed to get push down group by", K(ret));
-  } else {
-    const ObHint *use_hash = get_plan()->get_log_plan_hint().get_normal_hint(T_USE_HASH_AGGREGATE);
-    const ObHint *pushdown = get_plan()->get_log_plan_hint().get_normal_hint(T_GBY_PUSHDOWN);
-    if (NULL != use_hash) {
-      // for pushdown group by, need get pushdown algo
-      const ObLogGroupBy *group_by_op = static_cast<const ObLogGroupBy*>(NULL == op ? this : op);
-      bool match_hint = (HASH_AGGREGATE == group_by_op->get_algo() && use_hash->is_enable_hint())
-                        || (MERGE_AGGREGATE == group_by_op->get_algo() && use_hash->is_disable_hint());
-      if (match_hint && OB_FAIL(use_hash->print_hint(plan_text))) {
-        LOG_WARN("failed to print used hint for group by", K(ret), K(*use_hash));
-      }
-    }
-    if (OB_SUCC(ret) && NULL != pushdown) {
-      bool match_hint = NULL == op ? pushdown->is_disable_hint()
-                                   : pushdown->is_enable_hint();
-      if (match_hint && OB_FAIL(pushdown->print_hint(plan_text))) {
-        LOG_WARN("failed to print used hint for group by", K(ret), K(*pushdown));
-      }
-    }
+  } else if (NULL != (hint = get_plan()->get_log_plan_hint().get_normal_hint(T_GBY_PUSHDOWN))
+             && hint->is_enable_hint() == has_push_down_
+             && OB_FAIL(hint->print_hint(plan_text))) {
+    LOG_WARN("failed to print used hint for group by", K(ret), K(*hint));
+  } else if (NULL != (hint = get_plan()->get_log_plan_hint().get_normal_hint(T_USE_HASH_AGGREGATE))
+             && hint->is_enable_hint() == use_hash_aggr_
+             && static_cast<const ObAggHint*>(hint)->force_partition_sort() == use_part_sort_
+             && OB_FAIL(hint->print_hint(plan_text))) {
+    LOG_WARN("failed to print used hint for group by", K(ret), K(*hint));
   }
   return ret;
 }

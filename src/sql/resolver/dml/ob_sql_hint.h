@@ -435,6 +435,10 @@ struct ObLogPlanHint
   bool has_disable_hint(ObItemType hint_type) const;
   bool use_join_filter(const ObRelIds &table_set) const;
   bool no_use_join_filter(const ObRelIds &table_set) const;
+  int get_aggregation_info(bool &force_use_hash,
+                           bool &force_use_merge,
+                           bool &force_part_sort,
+                           bool &force_normal_sort) const;
 
   bool use_late_material() const { return has_enable_hint(T_USE_LATE_MATERIALIZATION); }
   bool no_use_late_material() const { return has_disable_hint(T_USE_LATE_MATERIALIZATION); }

@@ -11982,8 +11982,6 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     }
     case T_USE_LATE_MATERIALIZATION:
     case T_NO_USE_LATE_MATERIALIZATION:
-    case T_USE_HASH_AGGREGATE:
-    case T_NO_USE_HASH_AGGREGATE:
     case T_GBY_PUSHDOWN:
     case T_NO_GBY_PUSHDOWN:
     case T_USE_HASH_DISTINCT:
@@ -11996,6 +11994,13 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_NO_USE_DISTRIBUTED_DML: {
       if (OB_FAIL(resolve_normal_optimize_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve normal optimize hint.", K(ret));
+      }
+      break;
+    }
+    case T_USE_HASH_AGGREGATE:
+    case T_NO_USE_HASH_AGGREGATE: {
+      if (OB_FAIL(resolve_aggregation_hint(hint_node, opt_hint))) {
+        LOG_WARN("failed to resolve aggregation hint.", K(ret));
       }
       break;
     }
@@ -12747,6 +12752,34 @@ int ObDMLResolver::resolve_normal_optimize_hint(const ParseNode &hint_node,
     LOG_WARN("failed to resolve qb name node.", K(ret));
   } else {
     hint->set_qb_name(qb_name);
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_aggregation_hint(const ParseNode &hint_node,
+                                            ObOptHint *&hint)
+{
+  int ret = OB_SUCCESS;
+  hint = NULL;
+  ObAggHint *agg_hint = NULL;
+  ObString qb_name;
+  if (OB_UNLIKELY(1 != hint_node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hint with qb name param has no one children.", K(ret));
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, agg_hint))) {
+    LOG_WARN("failed to create hint", K(ret));
+  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
+    LOG_WARN("failed to resolve qb name node.", K(ret));
+  } else {
+    hint = agg_hint;
+    agg_hint->set_qb_name(qb_name);
+    if (T_NO_USE_HASH_AGGREGATE == hint_node.type_) {
+      if (1 == hint_node.value_) {
+        agg_hint->set_use_partition_sort(true);
+      } else if (0 == hint_node.value_) {
+        agg_hint->set_use_partition_sort(false);
+      }
+    }
   }
   return ret;
 }

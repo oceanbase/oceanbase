@@ -487,6 +487,8 @@ public:
       can_rollup_pushdown_(false),
       force_use_hash_(false),
       force_use_merge_(false),
+      force_part_sort_(false),
+      force_normal_sort_(false),
       is_scalar_group_by_(false),
       distinct_exprs_(),
       aggr_code_expr_(NULL),
@@ -506,6 +508,8 @@ public:
     bool can_rollup_pushdown_;
     bool force_use_hash_; // has use_hash_aggregation/use_hash_distinct hint
     bool force_use_merge_; // has no_use_hash_aggregation/no_use_hash_distinct hint
+    bool force_part_sort_;  // force use partition sort for merge group by
+    bool force_normal_sort_;  // disable use partition sort for merge group by
     bool is_scalar_group_by_;
     ObSEArray<ObRawExpr*, 8> distinct_exprs_;
 
