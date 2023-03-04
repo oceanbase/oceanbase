@@ -8,6 +8,8 @@
 #include "observer/table_load/ob_table_load_coordinator_trans.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
+#include "share/ob_autoincrement_service.h"
+#include "share/sequence/ob_sequence_cache.h"
 
 namespace oceanbase
 {
@@ -19,6 +21,7 @@ using namespace lib;
 using namespace table;
 using namespace sql;
 using namespace obrpc;
+using namespace share;
 
 ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
   : ctx_(ctx),
@@ -99,6 +102,14 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t
                                                  ctx_->param_.session_count_, allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
+    }
+    // init session_ctx_array_
+    else if (OB_FAIL(init_session_ctx_array())) {
+      LOG_WARN("fail to init session ctx array", KR(ret));
+    }
+    // init sequence_cache_ and sequence_schema_
+    else if (ctx_->schema_.has_identity_column_ && OB_FAIL(init_sequence())) {
+      LOG_WARN("fail to init sequence", KR(ret));
     } else if (OB_FAIL(task_scheduler_->init())) {
       LOG_WARN("fail to init task scheduler", KR(ret));
     } else if (OB_FAIL(task_scheduler_->start())) {
@@ -141,6 +152,14 @@ void ObTableLoadCoordinatorCtx::destroy()
        ++iter) {
     ObTableLoadTransCtx *trans_ctx = iter->second;
     ctx_->free_trans_ctx(trans_ctx);
+  }
+  if (nullptr != session_ctx_array_) {
+    for (int64_t i = 0; i < ctx_->param_.session_count_; ++i) {
+      SessionContext *session_ctx = session_ctx_array_ + i;
+      session_ctx->~SessionContext();
+    }
+    allocator_.free(session_ctx_array_);
+    session_ctx_array_ = nullptr;
   }
   trans_ctx_map_.reuse();
   segment_ctx_map_.reset();
@@ -295,6 +314,138 @@ int ObTableLoadCoordinatorCtx::alloc_trans(const ObTableLoadSegmentID &segment_i
     if (nullptr != trans) {
       trans_allocator_.free(trans);
       trans = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::generate_autoinc_params(AutoincParam &autoinc_param)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_,
+                                                  ctx_->param_.table_id_,
+                                                  schema_guard, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(ctx_->param_.tenant_id_),
+                                         K(ctx_->param_.table_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", KR(ret), K(ctx_->param_.tenant_id_), K(ctx_->param_.table_id_));
+  } else {
+    //ddl对于auto increment是最后进行自增值同步，对于autoinc_param参数初始化得使用原表table id的table schema
+    ObColumnSchemaV2 *autoinc_column_schema = nullptr;
+    uint64_t column_id = 0;
+    for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+         OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+      ObColumnSchemaV2 *column_schema = *iter;
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid column schema", KR(ret), KP(column_schema));
+      } else {
+        column_id = column_schema->get_column_id();
+        if (column_schema->is_autoincrement() && column_id != OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+          autoinc_column_schema = column_schema;
+          break;
+        }
+      }
+    }//end for
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(autoinc_column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null autoinc column schema", KR(ret), KP(autoinc_column_schema));
+      } else {
+        autoinc_param.tenant_id_ = ctx_->param_.tenant_id_;
+        autoinc_param.autoinc_table_id_ = ctx_->param_.table_id_;
+        autoinc_param.autoinc_first_part_num_ = table_schema->get_first_part_num();
+        autoinc_param.autoinc_table_part_num_ = table_schema->get_all_part_num();
+        autoinc_param.autoinc_col_id_ = column_id;
+        autoinc_param.auto_increment_cache_size_ = MAX_INCREMENT_CACHE_SIZE;
+        autoinc_param.part_level_ = table_schema->get_part_level();
+        autoinc_param.autoinc_col_type_ = autoinc_column_schema->get_data_type();
+        autoinc_param.total_value_count_ = 1;
+        autoinc_param.autoinc_desired_count_ = 0;
+        autoinc_param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
+        autoinc_param.autoinc_increment_ = 1;
+        autoinc_param.autoinc_offset_ = 1;
+        autoinc_param.part_value_no_order_ = true;
+        if (autoinc_column_schema->is_tbl_part_key_column()) {
+          // don't keep intra-partition value asc order when partkey column is auto inc
+          autoinc_param.part_value_no_order_ = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::init_sequence()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ctx_->param_.tenant_id_;
+  const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
+  share::schema::ObSchemaGetterGuard table_schema_guard;
+  share::schema::ObSchemaGetterGuard sequence_schema_guard;
+  const ObSequenceSchema *sequence_schema = nullptr;
+  const ObTableSchema *target_table_schema = nullptr;
+  uint64_t sequence_id = OB_INVALID_ID;
+  if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, table_schema_guard,
+                                                  target_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else {
+    //ddl对于identity是建表的时候进行自增值同步，对于sequence参数初始化得用隐藏表table id的table schema
+    for (ObTableSchema::const_column_iterator iter = target_table_schema->column_begin();
+          OB_SUCC(ret) && iter != target_table_schema->column_end(); ++iter) {
+      ObColumnSchemaV2 *column_schema = *iter;
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid column schema", K(column_schema));
+      } else {
+        uint64_t column_id = column_schema->get_column_id();
+        if (column_schema->is_identity_column() && column_id != OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+          sequence_id = column_schema->get_sequence_id();
+          break;
+        }
+      }
+    }//end for
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+                     tenant_id,
+                     sequence_schema_guard))) {
+    LOG_WARN("get schema guard failed", KR(ret));
+  } else if (OB_FAIL(sequence_schema_guard.get_sequence_schema(
+                     tenant_id,
+                     sequence_id,
+                     sequence_schema))) {
+    LOG_WARN("fail get sequence schema", K(sequence_id), KR(ret));
+  } else if (OB_ISNULL(sequence_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null unexpected", KR(ret));
+  } else if (OB_FAIL(sequence_schema_.assign(*sequence_schema))) {
+    LOG_WARN("cache sequence_schema fail", K(tenant_id), K(sequence_id), KR(ret));
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::init_session_ctx_array()
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  AutoincParam autoinc_param;
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.session_count_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", KR(ret));
+  } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(generate_autoinc_params(autoinc_param))) {
+    LOG_WARN("fail to init auto increment param", KR(ret));
+  } else {
+    session_ctx_array_ = new (buf) SessionContext[ctx_->param_.session_count_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.session_count_; ++i) {
+      SessionContext *session_ctx = session_ctx_array_ + i;
+      session_ctx->autoinc_param_ = autoinc_param;
     }
   }
   return ret;

@@ -39,14 +39,12 @@ public:
 private:
   class SessionContext;
   int init_session_ctx_array();
-  int handle_partition_with_autoinc_identity(ObTableLoadStoreCtx *&store_ctx,
-                                             SessionContext &session_ctx,
+  int handle_partition_with_autoinc_identity(SessionContext &session_ctx,
                                              table::ObTableLoadObjRowArray &obj_rows,
                                              const uint64_t &sql_mode, int32_t session_id);
-  int handle_autoinc_column(ObTableLoadStoreCtx *&store_ctx, blocksstable::ObStorageDatum &datum,
-                            const ObObjTypeClass &tc, int32_t session_id, const uint64_t &sql_mode);
-  int handle_identity_column(ObTableLoadStoreCtx *&store_ctx,
-                             const share::schema::ObColumnSchemaV2 *column_schema,
+  int handle_autoinc_column(blocksstable::ObStorageDatum &datum, const ObObjTypeClass &tc,
+                            int32_t session_id, const uint64_t &sql_mode);
+  int handle_identity_column(const share::schema::ObColumnSchemaV2 *column_schema,
                              blocksstable::ObStorageDatum &datum,
                              common::ObArenaAllocator &cast_allocator);
   // 非分区表

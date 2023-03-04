@@ -11,11 +11,16 @@
 #include "observer/table_load/ob_table_load_partition_calc.h"
 #include "observer/table_load/ob_table_load_partition_location.h"
 #include "observer/table_load/ob_table_load_schema.h"
+#include "share/ob_autoincrement_param.h"
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
 {
+namespace share
+{
+class ObSequenceCache;
+} // namespace share
 namespace observer
 {
 class ObTableLoadTableCtx;
@@ -105,6 +110,9 @@ private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadSegmentID &segment_id,
                   ObTableLoadCoordinatorTrans *&trans);
+  int init_session_ctx_array();
+  int generate_autoinc_params(share::AutoincParam &autoinc_param);
+  int init_sequence();
 public:
   ObTableLoadTableCtx * const ctx_;
   common::ObArenaAllocator allocator_;
@@ -116,6 +124,14 @@ public:
   common::ObArray<int64_t> idx_array_;
   table::ObTableLoadResultInfo result_info_;
   common::ObString credential_;
+  share::schema::ObSequenceSchema sequence_schema_;
+  struct SessionContext
+  {
+    SessionContext() {}
+    ~SessionContext() {}
+    share::AutoincParam autoinc_param_;
+  };
+  SessionContext *session_ctx_array_;
 private:
   struct SegmentCtx : public common::LinkHashValue<table::ObTableLoadSegmentID>
   {

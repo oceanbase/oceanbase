@@ -61,7 +61,9 @@ int ObTableLoadPartitionCalc::init_session()
 }
 
 ObTableLoadPartitionCalc::ObTableLoadPartitionCalc()
-  : tenant_id_(OB_INVALID_ID),
+  : is_partition_with_autoinc_(false),
+    partition_with_autoinc_idx_(OB_INVALID_INDEX),
+    tenant_id_(OB_INVALID_ID),
     table_id_(OB_INVALID_ID),
     is_partitioned_(false),
     allocator_("TLD_PartCalc"),
@@ -166,6 +168,11 @@ int ObTableLoadPartitionCalc::init_rowkey_index(const ObTableSchema *table_schem
           rowkey_obj_index_[pos - 1].index_ = i - 1;
         } else {
           rowkey_obj_index_[pos - 1].index_ = i;
+          if (column_schema->is_tbl_part_key_column() &&
+              (column_schema->is_identity_column() || column_schema->is_autoincrement())) {
+            is_partition_with_autoinc_ = true;
+            partition_with_autoinc_idx_ = pos - 1;
+          }
         }
         rowkey_obj_index_[pos - 1].column_schema_ = column_schema;
       }
