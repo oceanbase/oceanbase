@@ -1079,14 +1079,11 @@ private:
   SpinLock flashback_lock_;
   int64_t last_dump_info_time_us_;
   bool is_flashback_done_;
-  // a spin lock which protects cached PalfStat for query optimization
-  SpinLock cached_palf_stat_lock_;
-  // cached palf stat for view query, do not use this value for inner usages.
-  PalfStat cached_palf_stat_for_query_;
   int64_t last_check_sync_time_us_;
   int64_t last_renew_loc_time_us_;
   int64_t last_print_in_sync_time_us_;
   int64_t chaning_config_warn_time_;
+  bool cached_is_in_sync_;
   bool has_higher_prio_config_change_;
   bool is_inited_;
 };
