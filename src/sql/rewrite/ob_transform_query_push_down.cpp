@@ -544,6 +544,17 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
   } else {
     can_be = true;
   }
+  if (OB_SUCC(ret) && select_stmt->has_rollup()) {
+    for (int64_t i = 0; OB_SUCC(ret) && can_be && i < select_exprs.count(); ++i) {
+      if (OB_ISNULL(select_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select expr is null", K(ret));
+      } else {
+        can_be = !select_exprs.at(i)->is_const_expr() &&
+                 !select_exprs.at(i)->has_flag(CNT_SUB_QUERY);
+      }
+    }
+  }
   return ret;
 }
 
