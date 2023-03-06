@@ -340,7 +340,7 @@ int ObIndexBuildTask::init(
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("fail to get table schema", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_format_version))) {
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*GCTX.sql_proxy_, tenant_id, tenant_data_format_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
     is_global_index_ = index_schema->is_global_index_table();

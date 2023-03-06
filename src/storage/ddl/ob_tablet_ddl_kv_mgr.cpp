@@ -779,8 +779,6 @@ int ObTabletDDLKvMgr::create_empty_ddl_sstable(ObTableHandleV2 &table_handle)
     ObArray<const ObDataMacroBlockMeta *> empty_meta_array;
     if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(ddl_param, empty_meta_array, nullptr/*first_ddl_sstable*/, table_handle))) {
       LOG_WARN("create empty ddl sstable failed", K(ret));
-    } else if (OB_FAIL(ObTabletDDLUtil::update_ddl_table_store(ddl_param, table_handle))) {
-      LOG_WARN("update ddl table store failed", K(ret), K(ddl_param), K(table_handle));
     }
   }
   return ret;
