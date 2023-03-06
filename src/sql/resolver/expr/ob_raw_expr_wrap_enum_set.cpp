@@ -176,7 +176,6 @@ int ObRawExprWrapEnumSet::analyze_all_expr(ObDMLStmt &stmt)
   } else if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
     LOG_WARN("get child stmt failed", K(ret));
   } else {/*do nothing*/}
-
   for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
     if (OB_FAIL(analyze_expr(relation_exprs.at(i)))) {
       LOG_WARN("failed to analyze expr", K(ret));
@@ -201,6 +200,9 @@ int ObRawExprWrapEnumSet::analyze_expr(ObRawExpr *expr)
   if (OB_ISNULL(expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr is NULL", K(ret));
+  // extract info before in case that IS/CNT_ENUM_OR_SET flag has not been set.
+  } else if (OB_FAIL(expr->extract_info())) {
+    LOG_WARN("extract info failed", K(ret));
   } else if (OB_FAIL(expr->postorder_accept(*this))) {
     LOG_WARN("failed to postorder_accept", K(ret));
   } else {/*do nothing*/}
