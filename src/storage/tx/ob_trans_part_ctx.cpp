@@ -1323,7 +1323,7 @@ int ObPartTransCtx::check_scheduler_status()
       last_ask_scheduler_status_ts_ = ObClockGenerator::getClock();
     }
 
-    if (is_committing_()) {
+    if (is_committing_() || ObClockGenerator::getClock() > trans_expired_time_) {
       (void)check_and_register_timeout_task_();
     }
   }
