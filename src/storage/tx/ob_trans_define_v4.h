@@ -594,7 +594,7 @@ public:
   bool is_xa_tightly_couple() const { return xa_tightly_couple_; }
   void set_xa_start_addr(common::ObAddr &addr) { xa_start_addr_ = addr; }
   common::ObAddr xa_start_addr() const { return xa_start_addr_; }
-  void reset_for_xa() { xid_.reset(); xa_ctx_ = NULL; }
+  void reset_for_xa() { xa_ctx_ = NULL; }
   int trans_deep_copy(const ObTxDesc &x);
   int64_t get_active_ts() const { return active_ts_; }
   int64_t get_expire_ts() const;
