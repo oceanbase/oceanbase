@@ -1235,7 +1235,10 @@ int ObIndexBuildTask::clean_on_failed()
       DEBUG_SYNC(CREATE_INDEX_FAILED);
       bool is_trans_end = false;
       int64_t tmp_snapshot_version = 0;
-      if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR != index_schema->get_index_status()) {
+      if (ObIndexStatus::INDEX_STATUS_AVAILABLE == index_schema->get_index_status()) {
+        LOG_INFO("index take effect but ddl task failed", K(ret), K(ret_code_), K(index_table_id_));
+        state_finished = true;
+      } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR != index_schema->get_index_status()) {
         state_finished = false;
       } else if (!wait_trans_ctx_.is_inited() && OB_FAIL(wait_trans_ctx_.init(
               tenant_id_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS, index_schema->get_schema_version()))) {
