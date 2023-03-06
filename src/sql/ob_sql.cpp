@@ -4944,6 +4944,15 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
     if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null schema guard", K(ret));
+    } else if (OB_ISNULL(pc_ctx.sql_ctx_.cur_stmt_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null stmt", K(ret));
+    } else if (OB_ISNULL(pc_ctx.sql_ctx_.cur_stmt_->get_query_ctx())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null query context", K(ret));
+    } else if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null session", K(ret));
     } else if (should_reroute) {
       if (DAS_CTX(pc_ctx.exec_ctx_).get_table_loc_list().empty()) {
         ret = OB_ERR_UNEXPECTED;
@@ -4961,7 +4970,7 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid null table schema", K(ret));
-        } else if (OB_ISNULL(pc_ctx.sql_ctx_.get_reroute_info())) {
+        } else if (OB_ISNULL(pc_ctx.sql_ctx_.get_or_create_reroute_info())) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("get reroute info failed", K(ret));
         } else if (OB_FAIL(loc_router.get_full_ls_replica_loc(table_schema->get_tenant_id(),
@@ -4969,12 +4978,31 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
                                                               ls_replica_loc))) {
           LOG_WARN("get full ls replica location failed", K(ret), KPC(first_tablet_loc));
         } else {
-          pc_ctx.sql_ctx_.get_reroute_info()->server_ = ls_replica_loc.get_server();
-          pc_ctx.sql_ctx_.get_reroute_info()->server_.set_port(static_cast<int32_t>(ls_replica_loc.get_sql_port()));
-          pc_ctx.sql_ctx_.get_reroute_info()->role_ = ls_replica_loc.get_role();
-          pc_ctx.sql_ctx_.get_reroute_info()->replica_type_ = ls_replica_loc.get_replica_type();
-          pc_ctx.sql_ctx_.get_reroute_info()->set_tbl_name(table_schema->get_table_name());
-          pc_ctx.sql_ctx_.get_reroute_info()->tbl_schema_version_ = table_schema->get_schema_version();
+          bool is_weak = false;
+          if (stmt::T_SELECT == pc_ctx.sql_ctx_.cur_stmt_->get_stmt_type()) {
+            if (pc_ctx.sql_ctx_.is_protocol_weak_read_) {
+              is_weak = true;
+            } else if (OB_UNLIKELY(INVALID_CONSISTENCY
+                   != pc_ctx.sql_ctx_.cur_stmt_->get_query_ctx()->
+                      get_global_hint().read_consistency_)) {
+              is_weak = (WEAK == pc_ctx.sql_ctx_.cur_stmt_->
+                          get_query_ctx()->get_global_hint().read_consistency_);
+            } else {
+              is_weak = (WEAK == pc_ctx.sql_ctx_.session_info_->get_consistency_level());
+            }
+          }
+          // if weak delay read, no need to return reroute_info.
+          if (pc_ctx.sql_ctx_.session_info_->
+              get_proxy_cap_flags().is_weak_stale_feedback() && is_weak) {
+            pc_ctx.sql_ctx_.reset_reroute_info();
+          } else {
+            pc_ctx.sql_ctx_.get_reroute_info()->server_ = ls_replica_loc.get_server();
+            pc_ctx.sql_ctx_.get_reroute_info()->server_.set_port(static_cast<int32_t>(ls_replica_loc.get_sql_port()));
+            pc_ctx.sql_ctx_.get_reroute_info()->role_ = ls_replica_loc.get_role();
+            pc_ctx.sql_ctx_.get_reroute_info()->replica_type_ = ls_replica_loc.get_replica_type();
+            pc_ctx.sql_ctx_.get_reroute_info()->set_tbl_name(table_schema->get_table_name());
+            pc_ctx.sql_ctx_.get_reroute_info()->tbl_schema_version_ = table_schema->get_schema_version();
+          }
           LOG_DEBUG("reroute sql", KPC(pc_ctx.sql_ctx_.get_reroute_info()));
           need_reroute = true;
         }

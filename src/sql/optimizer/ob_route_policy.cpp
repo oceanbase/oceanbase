@@ -60,16 +60,20 @@ int ObRoutePolicy::strong_sort_replicas(ObIArray<CandidateReplica>& candi_replic
   return ret;
 }
 
-int ObRoutePolicy::filter_replica(const ObLSID &ls_id,
+int ObRoutePolicy::filter_replica(const ObAddr &local_server,
+                                  const ObLSID &ls_id,
                                   ObIArray<CandidateReplica>& candi_replicas,
                                   ObRoutePolicyCtx &ctx)
 {
   int ret = OB_SUCCESS;
   ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
-  for (int64_t i = 0; OB_SUCC(ret) && i < candi_replicas.count(); ++i) {
+  bool need_break = false;
+  for (int64_t i = 0; !need_break && OB_SUCC(ret) && i < candi_replicas.count(); ++i) {
     CandidateReplica &cur_replica = candi_replicas.at(i);
     bool can_read = true;
-    if (OB_FAIL(ObSqlTransControl::check_ls_readable(ctx.tenant_id_,
+    bool is_local = cur_replica.get_server() == local_server;
+
+    if (is_local && OB_FAIL(ObSqlTransControl::check_ls_readable(ctx.tenant_id_,
                                                      ls_id,
                                                      cur_replica.get_server(),
                                                      ctx.max_read_stale_time_,
@@ -87,12 +91,22 @@ int ObRoutePolicy::filter_replica(const ObLSID &ls_id,
           || !can_read) {
         cur_replica.is_filter_ = true;
       }
+
+      // if is local replica and can read, filter all replicas and only select this replica.
+      if (is_local && !cur_replica.is_filter_) {
+        for (int64_t j = 0; j < candi_replicas.count(); ++j) {
+          candi_replicas.at(i).is_filter_ = true;
+        }
+        cur_replica.is_filter_ = false;
+        need_break = true;
+      }
     }
   }
   return ret;
 }
 
-int ObRoutePolicy::calculate_replica_priority(const ObLSID &ls_id,
+int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
+                                              const ObLSID &ls_id,
                                               ObIArray<CandidateReplica>& candi_replicas,
                                               ObRoutePolicyCtx &ctx)
 {
@@ -102,7 +116,7 @@ int ObRoutePolicy::calculate_replica_priority(const ObLSID &ls_id,
     LOG_WARN("not init", K(ret));
   } else if (candi_replicas.count() <= 1) {//do nothing
   } else if (WEAK == ctx.consistency_level_) {
-    if (OB_FAIL(filter_replica(ls_id, candi_replicas, ctx))) {
+    if (OB_FAIL(filter_replica(local_server, ls_id, candi_replicas, ctx))) {
       LOG_WARN("fail to filter replicas", K(candi_replicas), K(ctx), K(ret));
     } else if (OB_FAIL(weak_sort_replicas(candi_replicas, ctx))) {
       LOG_WARN("fail to sort replicas", K(candi_replicas), K(ctx), K(ret));

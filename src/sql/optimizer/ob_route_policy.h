@@ -170,7 +170,8 @@ public:
   {}
   ~ObRoutePolicy() {}
   int init();
-  int calculate_replica_priority(const share::ObLSID &ls_id,
+  int calculate_replica_priority(const ObAddr &local_server,
+                                 const share::ObLSID &ls_id,
                                  common::ObIArray<CandidateReplica>& candi_replicas,
                                  ObRoutePolicyCtx &ctx);
   int init_candidate_replicas(common::ObIArray<CandidateReplica> &candi_replicas);
@@ -212,7 +213,8 @@ protected:
   int get_merge_status(const share::ObServerLocality &candi_locality, CandidateReplica &candi_replica);
   int get_zone_status(const share::ObServerLocality &candi_locality, CandidateReplica &candi_replica);
 
-  int filter_replica(const share::ObLSID &ls_id,
+  int filter_replica(const ObAddr &local_server,
+                     const share::ObLSID &ls_id,
                      common::ObIArray<CandidateReplica>& candi_replicas,
                      ObRoutePolicyCtx &ctx);
   int weak_sort_replicas(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx &ctx);

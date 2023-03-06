@@ -2218,7 +2218,8 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
             ObIArray<ObRoutePolicy::CandidateReplica> &replica_array = phy_part_loc_info.get_partition_location().get_replica_locations();
             if (OB_FAIL(route_policy.init_candidate_replicas(replica_array))) {
               LOG_WARN("fail to init candidate replicas", K(replica_array), K(ret));
-            } else if (OB_FAIL(route_policy.calculate_replica_priority(phy_part_loc_info.get_ls_id(),
+            } else if (OB_FAIL(route_policy.calculate_replica_priority(local_server,
+                                                                       phy_part_loc_info.get_ls_id(),
                                                                        replica_array,
                                                                        route_policy_ctx))) {
               LOG_WARN("fail to calculate replica priority", K(replica_array), K(route_policy_ctx), K(ret));
