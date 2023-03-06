@@ -940,7 +940,7 @@ static size_t ob_strnxfrm_simple(const ObCharsetInfo* cs __attribute__((unused))
   return ob_strxfrm_pad_desc_and_reverse(cs, dst0, dst, dst0 + dstlen, nweights - srclen, flags, 0);
 }
 
-#define likeconv(s, A) (A)
+#define likeconv(s, A) ob_sort_order(cs,A)
 #define INC_PTR(cs, A, B) (A)++
 
 static int ob_wildcmp_8bit_impl(const ObCharsetInfo* cs, const char* str_ptr, const char* str_end_ptr,
@@ -1029,7 +1029,7 @@ int ob_wildcmp_8bit(const ObCharsetInfo* cs, const char* str, const char* str_en
 }
 
 
-uint32_t ob_instr_simple(const ObCharsetInfo* cs __attribute__((unused)), const char* b, size_t b_length,
+uint32_t ob_instr_simple(const ObCharsetInfo* cs , const char* b, size_t b_length,
     const char* s, size_t s_length, ob_match_t* match, uint nmatch)
 {
   register const unsigned char *str, *search, *end, *search_end;
@@ -1051,14 +1051,14 @@ uint32_t ob_instr_simple(const ObCharsetInfo* cs __attribute__((unused)), const 
 
   skip:
     while (str != end) {
-      if ((*str++) == (*search)) {
+      if (ob_sort_order(cs,*str++) == ob_sort_order(cs,*search)) {
         register const unsigned char *i, *j;
 
         i = str;
         j = search + 1;
 
         while (j != search_end)
-          if ((*i++) != (*j++))
+          if (ob_sort_order(cs,*i++) != ob_sort_order(cs,*j++))
             goto skip;
 
         if (nmatch > 0) {
