@@ -11937,6 +11937,18 @@ static const _error _error_OB_ERR_TABLE_NAME_NOT_IN_LIST = {
       .oracle_str_error      = "ORA-00964: table name not in FROM list",
       .oracle_str_user_error = "ORA-00964: table name not in FROM list"
 };
+static const _error _error_OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART = {
+      .error_name            = "OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "42000",
+      .str_error             = "DEFAULT partition must be last partition specified",
+      .str_user_error        = "DEFAULT partition must be last partition specified",
+      .oracle_errno          = 14318,
+      .oracle_str_error      = "ORA-14318: DEFAULT partition must be last partition specified",
+      .oracle_str_user_error = "ORA-14318: DEFAULT partition must be last partition specified"
+};
 static const _error _error_OB_ERR_SP_ALREADY_EXISTS = {
       .error_name            = "OB_ERR_SP_ALREADY_EXISTS",
       .error_cause           = "Internal Error",
@@ -25345,6 +25357,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL] = &_error_OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL;
     _errors[-OB_ERR_SCHEMA_HISTORY_EMPTY] = &_error_OB_ERR_SCHEMA_HISTORY_EMPTY;
     _errors[-OB_ERR_TABLE_NAME_NOT_IN_LIST] = &_error_OB_ERR_TABLE_NAME_NOT_IN_LIST;
+    _errors[-OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART] = &_error_OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART;
     _errors[-OB_ERR_SP_ALREADY_EXISTS] = &_error_OB_ERR_SP_ALREADY_EXISTS;
     _errors[-OB_ERR_SP_DOES_NOT_EXIST] = &_error_OB_ERR_SP_DOES_NOT_EXIST;
     _errors[-OB_ERR_SP_UNDECLARED_VAR] = &_error_OB_ERR_SP_UNDECLARED_VAR;
