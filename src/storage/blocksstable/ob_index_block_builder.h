@@ -427,6 +427,7 @@ class ObSSTableIndexBuilder final
 public:
   enum ObSpaceOptimizationMode
   {
+    // TODO zhouxinlan.zxl : delete the mode DISABLE
     ENABLE = 0,   // enable the optimization for small sstable with given occupy_size
     DISABLE = 1,  // disable the optimization
     AUTO = 2      // enable the optimization without giving occupy_size (users don't know/assign occupy_size)

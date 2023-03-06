@@ -53,7 +53,7 @@ enum StatOptionFlags
 };
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
-const static int64_t OPT_STATS_MAX_VALUE_CAHR_LEN = 128;
+const static int64_t OPT_STATS_MAX_VALUE_CHAR_LEN = 128;
 const int64_t MAGIC_SAMPLE_SIZE = 5500;
 const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
 const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;
@@ -301,7 +301,8 @@ struct ObTableStatParam {
     global_data_part_id_(INVALID_GLOBAL_PART_ID),
     data_table_id_(INVALID_GLOBAL_PART_ID),
     need_estimate_block_(true),
-    is_temp_table_(false)
+    is_temp_table_(false),
+    allocator_(NULL)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -374,6 +375,7 @@ struct ObTableStatParam {
   int64_t data_table_id_; // the data table id for index schema
   bool need_estimate_block_;//need estimate macro/micro block count
   bool is_temp_table_;
+  common::ObIAllocator *allocator_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),

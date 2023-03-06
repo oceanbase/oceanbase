@@ -16,6 +16,8 @@
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
 #include "share/scn.h"
+#include "share/ob_version.h"
+#include "share/ob_cluster_version.h"
 
 using namespace oceanbase::share;
 
@@ -45,6 +47,29 @@ int ObStorageHAUtils::check_tablet_replica_validity(const uint64_t tenant_id, co
     }
   } else if (OB_FAIL(check_tablet_replica_checksum_(tenant_id, tablet_id, ls_id, compaction_scn, sql_client))) {
     LOG_WARN("failed to check tablet replica checksum", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(compaction_scn));
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::get_server_version(uint64_t &server_version)
+{
+  int ret = OB_SUCCESS;
+  server_version = CLUSTER_CURRENT_VERSION;
+  return ret;
+}
+
+int ObStorageHAUtils::check_server_version(const uint64_t server_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t cur_server_version = 0;
+  if (OB_FAIL(get_server_version(cur_server_version))) {
+    LOG_WARN("failed to get server version", K(ret));
+  } else {
+    bool can_migrate = cur_server_version >= server_version;
+    if (!can_migrate) {
+      ret = OB_MIGRATE_NOT_COMPATIBLE;
+      LOG_WARN("migrate server not compatible", K(ret), K(server_version), K(cur_server_version));
+    }
   }
   return ret;
 }

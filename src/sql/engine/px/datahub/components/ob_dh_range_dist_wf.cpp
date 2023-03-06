@@ -234,6 +234,72 @@ int ObRDWFPieceMsgCtx::formalize_store_row()
   return ret;
 }
 
+int ObRDWFPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+{
+  int ret = OB_SUCCESS;
+  ObOperatorKit *op_kit = exec_ctx_.get_operator_kit(op_id_);
+  if (NULL == op_kit || NULL == op_kit->spec_ || PHY_WINDOW_FUNCTION != op_kit->spec_->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no window function operator", K(ret), KP(op_kit), K(op_id_));
+  } else {
+    auto wf = static_cast<const ObWindowFunctionSpec *>(op_kit->spec_);
+    if (OB_FAIL(wf->rd_generate_patch(*this))) {
+      LOG_WARN("calculate range distribution window function final res failed", K(ret));
+    } else if (formalize_store_row()) {
+      LOG_WARN("formalize store row failed", K(ret));
+    } else {
+      LOG_DEBUG("after formalize", K(infos_));
+    }
+  }
+  ObRDWFWholeMsg *responses = NULL;
+  if (OB_SUCC(ret)) {
+    responses = static_cast<ObRDWFWholeMsg *>(
+        arena_alloc_.alloc(sizeof(ObRDWFWholeMsg) * sqcs.count()));
+    OV(NULL != responses, OB_ALLOCATE_MEMORY_FAILED);
+    for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); i++) {
+      new (&responses[i])ObRDWFWholeMsg();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // order by sqc_id_, thread_id_
+    std::sort(infos_.begin(), infos_.end(), [](ObRDWFPartialInfo *l,
+                                               ObRDWFPartialInfo *r) {
+        return std::tie(l->sqc_id_, l->thread_id_) < std::tie(r->sqc_id_, r->thread_id_);
+    });
+    for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); i++) {
+      auto &sqc = *sqcs.at(i);
+      auto &msg = responses[i];
+      msg.op_id_ = op_id_;
+      auto it = std::lower_bound(infos_.begin(), infos_.end(), sqc.get_sqc_id(),
+                                 [&](ObRDWFPartialInfo *info, int64_t id)
+                                 { return info->sqc_id_ < id; });
+      if (it == infos_.end() || (*it)->sqc_id_ != sqc.get_sqc_id()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sqc not found", K(ret), K(sqc));
+      } else {
+        while (OB_SUCC(ret) && it != infos_.end() && (*it)->sqc_id_ == sqc.get_sqc_id()) {
+          OZ(msg.infos_.push_back(*it));
+          it++;
+        }
+      }
+      auto ch = sqc.get_qc_channel();
+      CK(NULL != ch);
+      OZ(ch->send(msg, timeout_ts_));
+      OZ(ch->flush(true /* wait */, false /* wait response */));
+    }
+    OZ(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs));
+  }
+  for (int64_t i = 0; NULL != responses && i < sqcs.count(); i++) {
+    responses[i].~ObRDWFWholeMsg();
+  }
+  return ret;
+}
+
+void ObRDWFPieceMsgCtx::reset_resource()
+{
+  received_ = 0;
+}
+
 int ObRDWFWholeMsg::assign(const ObRDWFWholeMsg &msg)
 {
   int ret = OB_SUCCESS;
@@ -263,64 +329,10 @@ int ObRDWFPieceMsgListener::on_message(ObRDWFPieceMsgCtx &ctx,
   }
 
   if (OB_SUCC(ret) && ctx.received_ == ctx.task_cnt_) {
-    ObOperatorKit *op_kit = ctx.exec_ctx_.get_operator_kit(ctx.op_id_);
-    if (NULL == op_kit || NULL == op_kit->spec_ || PHY_WINDOW_FUNCTION != op_kit->spec_->type_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("no window function operator", K(ret), KP(op_kit), K(ctx.op_id_));
-    } else {
-      auto wf = static_cast<const ObWindowFunctionSpec *>(op_kit->spec_);
-      if (OB_FAIL(wf->rd_generate_patch(ctx))) {
-        LOG_WARN("calculate range distribution window function final res failed", K(ret));
-      } else if (ctx.formalize_store_row()) {
-        LOG_WARN("formalize store row failed", K(ret));
-      } else {
-        LOG_DEBUG("after formalize", K(ctx.infos_));
-      }
+    if (OB_FAIL(ctx.send_whole_msg(sqcs))) {
+      LOG_WARN("fail to send whole msg", K(ret));
     }
-
-    ObRDWFWholeMsg *responses = NULL;
-    if (OB_SUCC(ret)) {
-      responses = static_cast<ObRDWFWholeMsg *>(
-          ctx.arena_alloc_.alloc(sizeof(ObRDWFWholeMsg) * sqcs.count()));
-      OV(NULL != responses, OB_ALLOCATE_MEMORY_FAILED);
-      for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); i++) {
-        new (&responses[i])ObRDWFWholeMsg();
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      // order by sqc_id_, thread_id_
-      std::sort(ctx.infos_.begin(), ctx.infos_.end(), [](ObRDWFPartialInfo *l,
-                                                         ObRDWFPartialInfo *r) {
-                return std::tie(l->sqc_id_, l->thread_id_) < std::tie(r->sqc_id_, r->thread_id_);
-                });
-      for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); i++) {
-        auto &sqc = *sqcs.at(i);
-        auto &msg = responses[i];
-        msg.op_id_ = ctx.op_id_;
-        auto it = std::lower_bound(ctx.infos_.begin(), ctx.infos_.end(), sqc.get_sqc_id(),
-                                   [&](ObRDWFPartialInfo *info, int64_t id)
-                                   { return info->sqc_id_ < id; });
-        if (it == ctx.infos_.end() || (*it)->sqc_id_ != sqc.get_sqc_id()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("sqc not found", K(ret), K(sqc));
-        } else {
-          while (OB_SUCC(ret) && it != ctx.infos_.end() && (*it)->sqc_id_ == sqc.get_sqc_id()) {
-            OZ(msg.infos_.push_back(*it));
-            it++;
-          }
-        }
-        auto ch = sqc.get_qc_channel();
-        CK(NULL != ch);
-        OZ(ch->send(msg, ctx.timeout_ts_));
-        OZ(ch->flush(true /* wait */, false /* wait response */));
-      }
-      OZ(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs));
-    }
-
-    for (int64_t i = 0; NULL != responses && i < sqcs.count(); i++) {
-      responses[i].~ObRDWFWholeMsg();
-    }
+    IGNORE_RETURN ctx.reset_resource();
   }
   return ret;
 }

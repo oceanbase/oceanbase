@@ -25,12 +25,15 @@ public:
   int add_table_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *table_ctx);
   int remove_table_ctx(const ObTableLoadUniqueKey &key);
   // table ctx holds a reference count
+  int remove_all_table_ctx(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
+  // table ctx holds a reference count
   int get_table_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *&table_ctx);
   // table ctx holds a reference count
   int get_table_ctx_by_table_id(uint64_t table_id, ObTableLoadTableCtx *&table_ctx);
   // all table ctx hold a reference count
   int get_inactive_table_ctx_list(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
   void put_table_ctx(ObTableLoadTableCtx *table_ctx);
+  bool is_dirty_list_empty() const;
   // table ctx no reference counting
   int get_releasable_table_ctx_list(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
 public:
@@ -55,7 +58,7 @@ private:
   mutable obsys::ObRWLock rwlock_;
   TableCtxMap table_ctx_map_;
   TableHandleMap table_handle_map_; // index of the latest task
-  lib::ObMutex mutex_;
+  mutable lib::ObMutex mutex_;
   common::ObDList<ObTableLoadTableCtx> dirty_list_;
   bool is_inited_;
 };

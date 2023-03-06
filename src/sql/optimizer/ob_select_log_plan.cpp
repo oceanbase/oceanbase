@@ -2142,21 +2142,48 @@ int ObSelectLogPlan::check_if_union_all_match_partition_wise(const ObIArray<ObLo
                                                              bool &is_partition_wise)
 {
   int ret = OB_SUCCESS;
+  EqualSets equal_sets;
+  EqualSets first_equal_sets;
   ObShardingInfo *first_sharding = NULL;
   ObShardingInfo *child_sharding = NULL;
+  const ObSelectStmt *child_stmt = NULL;
+  ObSEArray<ObRawExpr*, 4> first_select_exprs;
+  ObSEArray<ObRawExpr*, 4> child_select_exprs;
   is_partition_wise = true;
   for (int64_t i = 0; OB_SUCC(ret) && is_partition_wise && i < child_ops.count(); i++) {
+    equal_sets.reset();
+    child_select_exprs.reset();
     if (OB_ISNULL(child_ops.at(i)) ||
-        OB_ISNULL(child_sharding = child_ops.at(i)->get_sharding())) {
+        OB_ISNULL(child_sharding = child_ops.at(i)->get_sharding()) ||
+        OB_ISNULL(child_ops.at(i)->get_plan()) ||
+        OB_ISNULL(child_ops.at(i)->get_plan()->get_stmt()) ||
+        !child_ops.at(i)->get_plan()->get_stmt()->is_select_stmt() ||
+        OB_ISNULL(child_stmt = static_cast<const ObSelectStmt*>(child_ops.at(i)->get_plan()->get_stmt()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(child_ops.at(i)), K(child_sharding), K(ret));
     } else if (child_ops.at(i)->is_exchange_allocated()) {
       is_partition_wise = false;
     } else if (i == 0) {
       first_sharding = child_sharding;
-    } else if (OB_FAIL(ObShardingInfo::is_physically_equal_partitioned(*first_sharding,
-                                                                       *child_sharding,
-                                                                       is_partition_wise))) {
+      first_equal_sets = child_ops.at(i)->get_output_equal_sets();
+      if (OB_FAIL(child_stmt->get_select_exprs(first_select_exprs))) {
+        LOG_WARN("failed to get select exprs", K(ret));
+      }
+    } else if (OB_FAIL(child_stmt->get_select_exprs(child_select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (first_select_exprs.count() != child_select_exprs.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select exprs count doesn't match", K(first_select_exprs), K(child_select_exprs));
+    } else if (OB_FAIL(append(equal_sets, first_equal_sets))) {
+      LOG_WARN("failed to append equal sets", K(ret));
+    } else if (OB_FAIL(append(equal_sets, child_ops.at(i)->get_output_equal_sets()))) {
+      LOG_WARN("failed to append equal sets", K(ret));
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_partition_wise(equal_sets,
+                                                                     first_select_exprs,
+                                                                     child_select_exprs,
+                                                                     first_sharding,
+                                                                     child_sharding,
+                                                                     is_partition_wise))) {
       LOG_WARN("failed to check if union all match strict partition-wise", K(ret));
     } else {
       LOG_TRACE("succ to check union all matching pw", K(is_partition_wise));

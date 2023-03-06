@@ -18,6 +18,7 @@
 #include "share/scn.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -796,6 +797,8 @@ int ObCopyTabletInfoObReader::fetch_tablet_info(obrpc::ObCopyTabletInfo &tablet_
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to fetch and decode partition meta info", K(ret));
     }
+  } else if (OB_FAIL(ObStorageHAUtils::check_server_version(tablet_info.version_))) {
+    LOG_WARN("failed to check server version", K(ret));
   } else if (!tablet_info.is_valid()) {
     ret = OB_ERR_SYS;
     LOG_ERROR("invalid tablet info", K(ret), K(tablet_info));
@@ -892,6 +895,7 @@ int ObCopyTabletInfoRestoreReader::fetch_tablet_info(obrpc::ObCopyTabletInfo &ta
       tablet_info.data_size_ = 0;
       tablet_info.status_ = ObCopyTabletStatus::TABLET_EXIST;
       tablet_info.tablet_id_ = backup_tablet_meta.tablet_id_;
+      tablet_info.version_ = 0; // for restore this is invalid
       if (OB_FAIL(tablet_info.param_.ha_status_.set_restore_status(restore_status))) {
         LOG_WARN("failed to set restore status", K(ret), K(restore_status));
       } else if (OB_FAIL(tablet_info.param_.ha_status_.set_data_status(data_status))) {
@@ -992,6 +996,8 @@ int ObCopyTabletInfoObProducer::get_next_tablet_info(obrpc::ObCopyTabletInfo &ta
       LOG_WARN("failed to build migration tablet param", K(ret), K(tablet_id));
     } else if (OB_FAIL(tablet->get_ha_sstable_size(tablet_info.data_size_))) {
       LOG_WARN("failed to get sstable size", K(ret), K(tablet_id));
+    } else if (OB_FAIL(ObStorageHAUtils::get_server_version(tablet_info.version_))) {
+      LOG_WARN("failed to get server version", K(ret), K(tablet_info));
     } else {
       tablet_info.tablet_id_ = tablet_id;
       tablet_info.status_ = ObCopyTabletStatus::TABLET_EXIST;
@@ -1046,7 +1052,6 @@ int ObCopyTabletInfoObProducer::build_deleted_tablet_info_(
   }
   return ret;
 }
-
 
 ObCopySSTableInfoObReader::ObCopySSTableInfoObReader()
   : is_inited_(false),
@@ -1146,6 +1151,8 @@ int ObCopySSTableInfoObReader::get_next_tablet_sstable_header(
   } else if (!copy_header.is_valid()) {
     ret = OB_ERR_SYS;
     LOG_ERROR("copy header is invalid", K(ret), K(copy_header));
+  } else if (OB_FAIL(ObStorageHAUtils::check_server_version(copy_header.version_))) {
+    LOG_WARN("failed to check server version", K(ret));
   } else {
     is_sstable_iter_end_ = copy_header.sstable_count_ > 0 ? false : true;
     sstable_index_ = 0;
@@ -1382,6 +1389,7 @@ int ObCopySSTableInfoRestoreReader::get_next_tablet_sstable_header(
     copy_header.tablet_id_ = tablet_id;
     copy_header.status_ = ObCopyTabletStatus::TABLET_EXIST;
     copy_header.sstable_count_ = backup_sstable_meta_array_.count();
+    copy_header.version_ = 0; // restore version is not valid
     tablet_index_++;
   }
   return ret;
@@ -1843,6 +1851,8 @@ int ObCopySSTableInfoObProducer::get_copy_tablet_sstable_header(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("copy sstable info ob producer do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHAUtils::get_server_version(copy_header.version_))) {
+    LOG_WARN("failed to get server version", K(ret), K_(ls_id));
   } else {
     copy_header.tablet_id_ = tablet_sstable_info_.tablet_id_;
     copy_header.status_ = status_;

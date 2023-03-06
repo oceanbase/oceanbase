@@ -39,6 +39,7 @@
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
@@ -758,7 +759,7 @@ int ObTablet::load_deserialize(
       tablet_meta_.max_sync_storage_schema_version_ = storage_schema_.schema_version_;
     }
     is_inited_ = true;
-    LOG_INFO("succeeded to deserialize tablet", K(ret), K(*this));
+    FLOG_INFO("succeeded to deserialize tablet", K(ret), K(*this));
   } else if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
@@ -1484,15 +1485,8 @@ int ObTablet::do_rowkey_exists(
         // ROWKEY IN_ROW_CACHE / NOT EXIST
       } else if (FALSE_IT(store_ctx.tablet_stat_.exist_row_read_table_cnt_ = check_table_cnt)) {
       } else if (FALSE_IT(store_ctx.tablet_stat_.exist_row_total_table_cnt_ = table_iter.count())) {
-      } else {
-        bool enable_adaptive_compaction = true;
-        {
-          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-          if (tenant_config.is_valid()) {
-            enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
-          }
-        }
-        if (enable_adaptive_compaction && OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(store_ctx.tablet_stat_))) {
+      } else if (MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
+        if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(store_ctx.tablet_stat_))) {
           LOG_WARN("failed to report tablet stat", K(tmp_ret), K(stat));
         }
       }
@@ -1545,15 +1539,8 @@ int ObTablet::do_rowkeys_exist(ObTableStoreIterator &tables_iter, ObRowsInfo &ro
     int tmp_ret = OB_SUCCESS;
     if (0 == access_ctx.table_store_stat_.exist_row_.empty_read_cnt_) {
       // ROWKEY IN_ROW_CACHE / NOT EXIST
-    } else {
-      bool enable_adaptive_compaction = true;
-      {
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-        if (tenant_config.is_valid()) {
-          enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
-        }
-      }
-      if (enable_adaptive_compaction && OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(tablet_stat))) {
+    } else if (MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
+      if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(tablet_stat))) {
         LOG_WARN("failed to report tablet stat", K(tmp_ret), K(tablet_stat));
       }
     }

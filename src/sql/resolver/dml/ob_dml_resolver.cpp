@@ -4212,7 +4212,8 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
       if (OB_FAIL(check_in_sysview(in_sysview))) {
         LOG_WARN("check in sys view failed", K(ret));
       } else {
-        if (!in_sysview) {
+        //allow the inner sql to access, like gather virtual table stats.
+        if (!in_sysview && !(session_info_->is_inner() && !session_info_->is_user_session())) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("restrict accessible virtual table can not access directly",
               K(ret), K(db_name), K(tbl_name));
@@ -4542,6 +4543,8 @@ int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &vie
       bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
       if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
         LOG_WARN("failed to resolve view", K(ret));
+      } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret && lib::is_mysql_mode())) {
+        // do nothing
       } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(*view_schema, view_stmt,reset_column_infos, *allocator_, *session_info_))) {
         LOG_WARN("failed to add recompile view task", K(tmp_ret));
         if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
@@ -7796,9 +7799,13 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
   if (col_type == COL_TYPE_ORDINALITY) {
     data_type.set_int();
     data_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObInt32Type]);
+  } else if (col_type == COL_TYPE_QUERY && obj_type == ObJsonType) {
+    ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
+    LOG_WARN("failed to resolve column, not support return json in query column define", K(ret));
   } else if (col_type == COL_TYPE_EXISTS
              || col_type == COL_TYPE_VALUE
-             || col_type == COL_TYPE_QUERY) {
+             || col_type == COL_TYPE_QUERY
+             || col_type == COL_TYPE_QUERY_JSON_COL) {
     if (ObNumberType == obj_type
         && parse_tree.int16_values_[2] == -1 && parse_tree.int16_values_[3] == 0) {
       obj_type = ObIntType;
@@ -7957,7 +7964,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
     LOG_WARN("internal error find jt column failed", K(ret));
   } else if ((col_type == COL_TYPE_EXISTS && parse_tree.num_child_ != 4) ||
              (col_type == COL_TYPE_VALUE && parse_tree.num_child_ != 5) ||
-             (col_type == COL_TYPE_QUERY && parse_tree.num_child_ != 6) ||
+             ((col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) && parse_tree.num_child_ != 6) ||
              (col_type == COL_TYPE_ORDINALITY && parse_tree.num_child_ != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to resolve json table regular column", K(ret), K(parse_tree.num_child_), K(col_type));
@@ -8012,7 +8019,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
             }
           }
         }
-      } else if (col_type == COL_TYPE_QUERY) {
+      } else if (col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) {
         const ParseNode* scalar_node = parse_tree.children_[2];
         const ParseNode* wrapper_node = parse_tree.children_[3];
         const ParseNode* path_node = parse_tree.children_[4];
@@ -8320,7 +8327,8 @@ int ObDMLResolver::resolve_json_table_column_item(const ParseNode &parse_tree,
       if (col_type == COL_TYPE_VALUE ||
           col_type == COL_TYPE_QUERY ||
           col_type == COL_TYPE_EXISTS ||
-          col_type == COL_TYPE_ORDINALITY) {
+          col_type == COL_TYPE_ORDINALITY ||
+          col_type == COL_TYPE_QUERY_JSON_COL) {
         if (OB_FAIL(resolve_json_table_regular_column(*cur_node, table_item, cur_col_def, cur_node_id, id, cur_column_id))) {
           LOG_WARN("resolve column defination in json table failed.", K(ret), K(cur_node->value_));
         } else if (OB_ISNULL(cur_col_def)) {

@@ -130,6 +130,42 @@ int ObTableLoadManager::remove_table_ctx(const ObTableLoadUniqueKey &key)
   return ret;
 }
 
+int ObTableLoadManager::remove_all_table_ctx(ObIArray<ObTableLoadTableCtx *> &table_ctx_array)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));
+  } else {
+    table_ctx_array.reset();
+    obsys::ObWLockGuard guard(rwlock_);
+    for (TableCtxMap::const_iterator iter = table_ctx_map_.begin();
+         OB_SUCC(ret) && iter != table_ctx_map_.end(); ++iter) {
+      const ObTableLoadUniqueKey &key = iter->first;
+      ObTableLoadTableCtx *table_ctx = iter->second;
+      if (OB_FAIL(add_dirty_list(table_ctx))) {
+        LOG_WARN("fail to add dirty list", KR(ret), K(key), KP(table_ctx));
+      } else if (OB_FAIL(table_ctx_array.push_back(table_ctx))) {
+        LOG_WARN("fail to push back", KR(ret), K(key));
+      } else {
+        table_ctx->inc_ref_count();
+      }
+    }
+    if (OB_SUCC(ret)) {
+      table_ctx_map_.destroy();
+      table_handle_map_.destroy();
+    }
+    if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < table_ctx_array.count(); ++i) {
+        ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
+        put_table_ctx(table_ctx);
+      }
+      table_ctx_array.reset();
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadManager::get_table_ctx(const ObTableLoadUniqueKey &key,
                                       ObTableLoadTableCtx *&table_ctx)
 {
@@ -226,6 +262,12 @@ void ObTableLoadManager::put_table_ctx(ObTableLoadTableCtx *table_ctx)
   } else {
     OB_ASSERT(table_ctx->dec_ref_count() >= 0);
   }
+}
+
+bool ObTableLoadManager::is_dirty_list_empty() const
+{
+  ObMutexGuard guard(mutex_);
+  return dirty_list_.is_empty();
 }
 
 int ObTableLoadManager::add_dirty_list(ObTableLoadTableCtx *table_ctx)

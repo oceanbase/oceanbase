@@ -328,7 +328,6 @@ void ObResourceGroup::update_queue_size()
 int ObResourceGroup::acquire_more_worker(int64_t num, int64_t &succ_num)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObTenantSwitchGuard guard(tenant_);
 
   const auto need_num = num;
@@ -337,7 +336,7 @@ int ObResourceGroup::acquire_more_worker(int64_t num, int64_t &succ_num)
   while (OB_SUCC(ret) && need_num > succ_num) {
     ObThWorker *w = nullptr;
     if (OB_FAIL(create_worker(w, tenant_, group_id_, INT32_MAX, this))) {
-      LOG_ERROR("create worker failed", K(ret));
+      LOG_WARN("create worker failed", K(ret));
     } else if (!workers_.add_last(&w->worker_node_)) {
       OB_ASSERT(false);
       ret = OB_ERR_UNEXPECTED;
@@ -647,10 +646,15 @@ int ObTenant::init(const ObTenantMeta &meta)
         // do nothing
       } else if (OB_FAIL(OB_PX_TARGET_MGR.add_tenant(id_))) {
         LOG_WARN("add tenant into px target mgr failed", K(ret), K(id_));
+      } else if (OB_FAIL(G_RES_MGR.get_col_mapping_rule_mgr().add_tenant(id_))) {
+        LOG_WARN("add tenant into res col maping rule mgr failed", K(ret), K(id_));
       }
     } else {
       disable_user_sched(); // disable_user_sched for virtual tenant
     }
+  }
+
+  if (OB_SUCC(ret)) {
     int64_t succ_cnt = 0L;
     if (OB_FAIL(acquire_more_worker(2, succ_cnt))) {
       LOG_WARN("create worker in init failed", K(ret), K(succ_cnt));
@@ -665,13 +669,6 @@ int ObTenant::init(const ObTenantMeta &meta)
         succ_cnt = 0L;
       }
       timeup();
-    }
-  }
-  if (OB_SUCC(ret) && !is_virtual_tenant_id(id_)) {
-    if (OB_FAIL(OB_PX_TARGET_MGR.add_tenant(id_))) {
-      LOG_WARN("add tenant into px target mgr failed", K(ret), K(id_));
-    } else if (OB_FAIL(G_RES_MGR.get_col_mapping_rule_mgr().add_tenant(id_))) {
-      LOG_WARN("add tenant into res col maping rule mgr failed", K(ret), K(id_));
     }
   }
 
@@ -1384,7 +1381,7 @@ int ObTenant::acquire_level_worker(int64_t num, int64_t &succ_num, int32_t level
     while (OB_SUCC(ret) && need_num > succ_num) {
       ObThWorker *w = nullptr;
       if (OB_FAIL(create_worker(w, this, 0, level))) {
-        LOG_ERROR("create worker failed", K(ret));
+        LOG_WARN("create worker failed", K(ret));
       } else if (!nesting_workers_.add_last(&w->worker_node_)) {
         OB_ASSERT(false);
         ret = OB_ERR_UNEXPECTED;
@@ -1416,7 +1413,7 @@ int ObTenant::acquire_more_worker(int64_t num, int64_t &succ_num)
   while (OB_SUCC(ret) && num > succ_num) {
     ObThWorker *w = nullptr;
     if (OB_FAIL(create_worker(w, this, 0, 0))) {
-      LOG_ERROR("create worker failed", K(ret));
+      LOG_WARN("create worker failed", K(ret));
     } else if (!workers_.add_last(&w->worker_node_)) {
       OB_ASSERT(false);
       ret = OB_ERR_UNEXPECTED;
@@ -1445,10 +1442,10 @@ void ObTenant::lq_wait(ObThWorker &w)
 {
   int64_t last_query_us = ObTimeUtility::current_time() - w.get_last_wakeup_ts();
   int64_t lq_group_worker_cnt = w.get_group()->get_token_cnt();
-  int64_t unit_min_cpu = unit_min_cpu_;
+  int64_t default_group_worker_cnt = token_cnt_;
   double large_query_percentage = GCONF.large_query_worker_percentage / 100.0;
   int64_t wait_us = static_cast<int64_t>(last_query_us * lq_group_worker_cnt /
-                                        (unit_min_cpu * large_query_percentage) -
+                                        (default_group_worker_cnt * large_query_percentage) -
                                          last_query_us);
   wait_us = std::min(wait_us, min(100 * 1000, w.get_timeout_remain()));
   if (wait_us > 10 * 1000) {
@@ -1461,8 +1458,10 @@ int ObTenant::lq_yield(ObThWorker &w)
 {
   int ret = OB_SUCCESS;
   ATOMIC_INC(&tt_large_quries_);
-  if (!cgroup_ctrl_.is_valid() && w.get_group_id() == share::OBCG_LQ) {
-    lq_wait(w);
+  if (!cgroup_ctrl_.is_valid()) {
+    if (w.get_group_id() == share::OBCG_LQ) {
+      lq_wait(w);
+    }
   } else if (w.is_lq_yield()) {
     // avoid duplicate change group
   } else if (OB_FAIL(cgroup_ctrl_.add_thread_to_cgroup(w.get_tid(), id_, OBCG_LQ))) {

@@ -1726,16 +1726,28 @@ int ObLSTabletService::get_tablet_with_timeout(
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
+  int64_t check_timeout_us = get_timeout_us;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US != get_timeout_us
+      && ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US != get_timeout_us) {
+    check_timeout_us = retry_timeout_us - ObTimeUtil::current_time();
+    if (check_timeout_us <= 0) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("get tablet timeout", K(ret), K(retry_timeout_us), K(ObTimeUtil::current_time()), K(get_timeout_us));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_UNLIKELY(!tablet_id.is_valid()
       || get_timeout_us < ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(get_timeout_us));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, get_timeout_us))) {
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, check_timeout_us))) {
     while (OB_ALLOCATE_MEMORY_FAILED == ret && ObClockGenerator::getClock() < retry_timeout_us) {
-      ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, get_timeout_us);
+      ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, check_timeout_us);
     }
     if (OB_ALLOCATE_MEMORY_FAILED == ret) {
       ret = OB_TIMEOUT;

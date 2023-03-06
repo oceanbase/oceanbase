@@ -306,7 +306,7 @@ public:
   int merge_obj(common::ObObj &obj,
                 ObIAllocator &max_alloc,
                 ObIAllocator &min_alloc);
-  int merge_obj(ObObj &obj);
+  int merge_obj(const ObObj &obj);
   // normal copy
   //shallow copy
   void merge_max_val(const common::ObObj &max_val) {

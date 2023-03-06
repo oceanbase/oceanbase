@@ -173,7 +173,13 @@ int ObRpcProxy::init_pkt(
     // For request, src_cluster_id must be the cluster_id of this cluster, directly hard-coded
     pkt->set_src_cluster_id(src_cluster_id_);
     pkt->set_unis_version(0);
-    pkt->set_group_id((0 != get_group_id()) ? get_group_id() : this_worker().get_group_id());
+    if (0 != get_group_id()) {
+      pkt->set_group_id(get_group_id());
+    } else if (this_worker().get_group_id() == 100) {
+      pkt->set_group_id(0);
+    } else {
+      pkt->set_group_id(this_worker().get_group_id());
+    }
     if (need_increment_request_level(pcode)) {
       if (this_worker().get_worker_level() == INT32_MAX) { // The inner sql request is not sent from the tenant thread, so the worker level is still the initial value, given
                                                    // inner sql a special nesting level

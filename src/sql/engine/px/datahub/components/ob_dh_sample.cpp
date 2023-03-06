@@ -574,31 +574,46 @@ int ObDynamicSamplePieceMsgCtx::on_message(
 
   // send whole message when all piece received
   if (OB_SUCC(ret) && received_ == task_cnt_) {
-    SMART_VAR(ObDynamicSampleWholeMsg, whole) {
-      whole.op_id_ = op_id_;
-      if (OB_FAIL(build_whole_msg(whole))) {
-        LOG_WARN("build sample whole message failed", K(ret), K(*this));
+    if (OB_FAIL(send_whole_msg(sqcs))) {
+      LOG_WARN("fail to send whole msg", K(ret));
+    }
+    IGNORE_RETURN reset_resource();
+  }
+  return ret;
+}
+
+int ObDynamicSamplePieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObDynamicSampleWholeMsg, whole) {
+    whole.op_id_ = op_id_;
+    if (OB_FAIL(build_whole_msg(whole))) {
+      LOG_WARN("build sample whole message failed", K(ret), K(*this));
+    }
+    ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
+      dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+      if (OB_ISNULL(ch)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null expected", K(ret));
+      } else if (OB_FAIL(ch->send(whole, timeout_ts_))) {
+        LOG_WARN("fail push data to channel", K(ret));
+      } else if (OB_FAIL(ch->flush(true, false))) {
+        LOG_WARN("fail flush dtl data", K(ret));
+      } else {
+        LOG_TRACE("dispatched sample whole msg",
+                  K(idx), K(cnt), K(whole), K(*ch));
       }
-      ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-        dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
-        if (OB_ISNULL(ch)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("null expected", K(ret));
-        } else if (OB_FAIL(ch->send(whole, timeout_ts_))) {
-          LOG_WARN("fail push data to channel", K(ret));
-        } else if (OB_FAIL(ch->flush(true, false))) {
-          LOG_WARN("fail flush dtl data", K(ret));
-        } else {
-          LOG_TRACE("dispatched sample whole msg",
-                    K(idx), K(cnt), K(whole), K(*ch));
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs))) {
-        LOG_WARN("failed to wait response", K(ret));
-      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs))) {
+      LOG_WARN("failed to wait response", K(ret));
     }
   }
   return ret;
+}
+
+void ObDynamicSamplePieceMsgCtx::reset_resource()
+{
+  received_ = 0;
 }
 
 int ObDynamicSamplePieceMsgListener::on_message(

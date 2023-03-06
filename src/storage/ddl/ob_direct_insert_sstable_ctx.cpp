@@ -553,6 +553,7 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
         break;
       } else if (!ddl_committed && OB_FAIL(sstable_slice_writer->append_row(*row_val))) {
         int tmp_ret = OB_SUCCESS;
+        int report_ret_code = OB_SUCCESS;
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && table_schema->is_unique_index()) {
           LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE,
               "", static_cast<int>(sizeof("UNIQUE IDX") - 1), "UNIQUE IDX");
@@ -566,8 +567,12 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
           } else if (OB_TMP_FAIL(ObDDLErrorMessageTableOperator::get_index_task_id(*GCTX.sql_proxy_, *table_schema, task_id))) {
             LOG_WARN("get task id of index table failed", K(tmp_ret), K(task_id), KPC(table_schema));
           } else if (OB_TMP_FAIL(ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(ret, *table_schema,
-            task_id, row_tablet_id.id(), GCTX.self_addr(), *GCTX.sql_proxy_, index_key_buffer))) {
-            LOG_WARN("generate index ddl error message", K(tmp_ret), K(ret));
+            task_id, row_tablet_id.id(), GCTX.self_addr(), *GCTX.sql_proxy_, index_key_buffer, report_ret_code))) {
+            LOG_WARN("generate index ddl error message", K(tmp_ret), K(ret), K(report_ret_code));
+          }
+          if (OB_ERR_DUPLICATED_UNIQUE_KEY == report_ret_code) {
+            //error message of OB_ERR_PRIMARY_KEY_DUPLICATE is not compatiable with oracle, so use a new error code
+            ret = OB_ERR_DUPLICATED_UNIQUE_KEY;
           }
         } else if (OB_TRANS_COMMITED == ret) {
           ret = OB_SUCCESS;
@@ -732,7 +737,9 @@ int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSch
       } else if (OB_ISNULL(index_builder_ = new (builder_buf) ObSSTableIndexBuilder())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to new ObSSTableIndexBuilder", K(ret));
-      } else if (OB_FAIL(index_builder_->init(data_desc))) {
+      } else if (OB_FAIL(index_builder_->init(data_desc,
+                                              nullptr, // macro block flush callback
+                                              ObSSTableIndexBuilder::DISABLE))) {
         LOG_WARN("failed to init index builder", K(ret), K(data_desc));
       }
       if (OB_FAIL(ret)) {

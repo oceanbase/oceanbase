@@ -92,7 +92,7 @@ int ObSqlMemMgrProcessor::init(
   int64_t max_mem_size = MAX_SQL_MEM_SIZE;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
-      profile_.get_work_area_type(), tenant_id_, max_mem_size))) {
+      profile_.get_work_area_type(), tenant_id_, exec_ctx, max_mem_size))) {
     LOG_WARN("failed to get workarea size", K(ret), K(tenant_id_), K(max_mem_size));
   }
   if (!profile_.get_auto_policy()) {
@@ -305,24 +305,47 @@ int ObSqlMemMgrProcessor::alloc_dir_id(int64_t &dir_id)
   return ret;
 }
 
-int ObSqlWorkareaUtil::get_workarea_size(const ObSqlWorkAreaType wa_type, const int64_t tenant_id, int64_t &value)
+int ObSqlWorkareaUtil::get_workarea_size(const ObSqlWorkAreaType wa_type,
+                                         const int64_t tenant_id,
+                                         ObExecContext *exec_ctx,
+                                         int64_t &value)
 {
   int ret = OB_SUCCESS;
-  ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    if (HASH_WORK_AREA == wa_type) {
-      value = tenant_config->_hash_area_size;
-    } else if (SORT_WORK_AREA == wa_type) {
-      value = tenant_config->_sort_area_size;
+
+  if (NULL != exec_ctx) {
+    if (OB_ISNULL(exec_ctx->get_my_session())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected exec_ctx or session", K(ret), K(wa_type), K(tenant_id), KP(exec_ctx));
+    } else {
+      if (HASH_WORK_AREA == wa_type) {
+        value = exec_ctx->get_my_session()->get_tenant_hash_area_size();
+      } else if (SORT_WORK_AREA == wa_type) {
+        value = exec_ctx->get_my_session()->get_tenant_sort_area_size();
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: workarea type", K(wa_type), K(tenant_id));
+      }
+    }
+  } else {
+    ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      if (HASH_WORK_AREA == wa_type) {
+        value = tenant_config->_hash_area_size;
+      } else if (SORT_WORK_AREA == wa_type) {
+        value = tenant_config->_sort_area_size;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: workarea type", K(wa_type), K(tenant_id));
+      }
+      LOG_DEBUG("debug workarea size", K(value), K(tenant_id), K(lbt()));
     } else {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status: workarea type", K(wa_type), K(tenant_id));
+      LOG_WARN("failed to init tenant config", K(tenant_id), K(ret));
     }
-    LOG_DEBUG("debug workarea size", K(value), K(tenant_id), K(lbt()));
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to init tenant config", K(tenant_id), K(ret));
   }
+
+  LOG_DEBUG("debug workarea size", K(value), K(tenant_id), K(lbt()));
+
   return ret;
 }
 

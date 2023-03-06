@@ -19,6 +19,7 @@
 #include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -284,6 +285,8 @@ int ObStorageHATabletsBuilder::get_tablet_info_ob_reader_(
   } else if (FALSE_IT(reader = ob_reader)) {
   } else if (OB_FAIL(arg.tablet_id_list_.assign(param_.tablet_id_array_))) {
     LOG_WARN("failed to assign tablet id array", K(ret), K(param_));
+  } else if (OB_FAIL(ObStorageHAUtils::get_server_version(arg.version_))) {
+    LOG_WARN("failed to get server version", K(ret), K_(param));
   } else {
     arg.tenant_id_ = param_.tenant_id_;
     arg.ls_rebuild_seq_ = param_.local_rebuild_seq_;
@@ -541,6 +544,8 @@ int ObStorageHATabletsBuilder::build_copy_tablets_sstable_info_arg_(
   } else if (!param_.need_check_seq_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K_(param));
+  } else if (OB_FAIL(ObStorageHAUtils::get_server_version(arg.version_))) {
+    LOG_WARN("failed to get server version", K(ret), K_(param));
   } else {
     arg.tenant_id_ = param_.tenant_id_;
     arg.ls_rebuild_seq_ = param_.local_rebuild_seq_;

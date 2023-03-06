@@ -180,18 +180,30 @@ int ObITransCallback::remove()
 }
 
 ObTransCallbackMgr::WRLockGuard::WRLockGuard(const SpinRWLock &rwlock)
+#ifdef ENABLE_DEBUG_LOG
   : time_guard_(5 * 1000 * 1000), // 5 second
     lock_guard_(rwlock)
 {
   time_guard_.click();
 }
+#else
+  : lock_guard_(rwlock)
+{
+}
+#endif
 
 ObTransCallbackMgr::RDLockGuard::RDLockGuard(const SpinRWLock &rwlock)
+#ifdef ENABLE_DEBUG_LOG
   : time_guard_(5 * 1000 * 1000), // 5 second
     lock_guard_(rwlock)
 {
   time_guard_.click();
 }
+#else
+  : lock_guard_(rwlock)
+{
+}
+#endif
 
 void ObTransCallbackMgr::reset()
 {

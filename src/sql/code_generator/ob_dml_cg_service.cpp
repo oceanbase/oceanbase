@@ -587,6 +587,12 @@ int ObDmlCgService::get_table_unique_key_exprs(ObLogDelUpd &op,
 // When generating an insert to generate a primary key conflict,
 //    the conflicting column information needs to be returned
 // For a partitioned table without primary key, return hidden primary key + partition key
+// The partition key is a generated column, and there is no need to replace
+//    it with a real generated column calculation expression here, for the following reasons:
+// 1. The generated columns on the main table are not used as primary keys,
+//      and the generated columns on the index table are actually stored, and can be read directly
+// 2. For non-primary key partition tables (generated columns are used as partition keys),
+//      primary table writing will not cause primary key conflicts, unless it is a bug
 int ObDmlCgService::table_unique_key_for_conflict_checker(ObLogDelUpd &op,
                                                           const IndexDMLInfo &index_dml_info,
                                                           ObIArray<ObRawExpr*> &rowkey_exprs)
@@ -762,12 +768,15 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
-
-  // todo @jingfeng.jf need fix some bug of generated_column
+  bool is_heap_table = false;
+  // When the partition key is a virtual generated column,
+  // the table with the primary key needs to be replaced,
+  // and the table without the primary key does not need to be replaced
   if (OB_FAIL(table_unique_key_for_conflict_checker(op, index_dml_info, rowkey_exprs))) {
     LOG_WARN("get table unique key exprs failed", K(ret), K(index_dml_info));
-  } else if (OB_FAIL(adjust_unique_key_exprs(rowkey_exprs))) {
-    // 替换其中的生成列
+  } else if (OB_FAIL(check_is_heap_table(op, index_dml_info.ref_table_id_, is_heap_table))) {
+    LOG_WARN("check is heap table failed", K(ret));
+  } else if (!is_heap_table && OB_FAIL(adjust_unique_key_exprs(rowkey_exprs))) {
     LOG_WARN("fail to replace generated column exprs", K(ret), K(rowkey_exprs));
   } else if (OB_FAIL(cg_.generate_rt_exprs(rowkey_exprs, conflict_checker_ctdef.data_table_rowkey_expr_))) {
     LOG_WARN("fail to generate data_table rowkey_expr", K(ret), K(rowkey_exprs));

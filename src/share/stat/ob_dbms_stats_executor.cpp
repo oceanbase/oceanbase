@@ -130,21 +130,26 @@ int ObDbmsStatsExecutor::do_gather_stats(ObExecContext &ctx,
                                          ObIArray<ObOptStat> &opt_stats)
 {
   int ret = OB_SUCCESS;
-  ObBasicStatsEstimator basic_est(ctx);
-  ObHybridHistEstimator hybrid_est(ctx);
-  if (OB_FAIL(init_opt_stats(ctx.get_allocator(), param, extra, opt_stats))) {
+  if (OB_ISNULL(param.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(param.allocator_));
+  } else if (OB_FAIL(init_opt_stats(*param.allocator_, param, extra, opt_stats))) {
     LOG_WARN("failed to init opt stats", K(ret));
   } else if (opt_stats.empty()) {
     /*do nothing*/
-  } else if (OB_FAIL(basic_est.estimate(param, extra, opt_stats))) {
-    LOG_WARN("failed to estimate basic statistics", K(ret));
-  } else if (OB_FAIL(hybrid_est.estimate(param, extra, opt_stats))) {
-    LOG_WARN("failed to estimate hybrid histogram", K(ret));
-  } else {/*do nothing*/}
+  } else {
+    ObBasicStatsEstimator basic_est(ctx, *param.allocator_);
+    ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
+    if (OB_FAIL(basic_est.estimate(param, extra, opt_stats))) {
+      LOG_WARN("failed to estimate basic statistics", K(ret));
+    } else if (OB_FAIL(hybrid_est.estimate(param, extra, opt_stats))) {
+      LOG_WARN("failed to estimate hybrid histogram", K(ret));
+    } else {/*do nothing*/}
+  }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObIncrementalStatEstimator::try_drive_global_stat(ctx, param,
-                                                                       extra, approx_part_opt_stats,
-                                                                       opt_stats))) {
+                                                                      extra, approx_part_opt_stats,
+                                                                      opt_stats))) {
     LOG_WARN("failed to try drive global stat", K(ret));
   } else if (OB_FAIL(check_all_cols_range_skew(param, opt_stats))) {
     LOG_WARN("failed to check all cols range skew", K(ret));
@@ -278,9 +283,11 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
   ObOptColumnStat::Key key;
   ObSEArray<ObOptColumnStat *, 4> column_stats;
   char *buf = NULL;
-  if (OB_UNLIKELY(param.table_param_.column_params_.count() != 1)) {
+  if (OB_UNLIKELY(param.table_param_.column_params_.count() != 1) ||
+      OB_ISNULL(param.table_param_.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(param.table_param_.column_params_.count()));
+    LOG_WARN("get unexpected error", K(ret), K(param.table_param_.column_params_.count()),
+                                     K(param.table_param_.allocator_));
   } else {
     StatLevel stat_level = TABLE_LEVEL;
     key.tenant_id_ = param.table_param_.tenant_id_;
@@ -300,7 +307,7 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
     } else if (OB_ISNULL(col_stat_handle.stat_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(col_stat_handle.stat_), K(ret));
-    } else if (OB_ISNULL(buf = static_cast<char*>(ctx.get_allocator().alloc(col_stat_handle.stat_->size())))) {
+    } else if (OB_ISNULL(buf = static_cast<char*>(param.table_param_.allocator_->alloc(col_stat_handle.stat_->size())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("memory is not enough", K(ret), K(buf));
     } else {
@@ -331,7 +338,8 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
       } else if (OB_FAIL(mgr.update_column_stat(ctx.get_virtual_table_ctx().schema_guard_,
                                                 param.table_param_.tenant_id_,
                                                 column_stats,
-                                                true))) {
+                                                true,
+                                                CREATE_OBJ_PRINT_PARAM(ctx.get_my_session())))) {
         LOG_WARN("failed to update column stats", K(ret));
       } else {
         LOG_TRACE("end set column stats", K(param), K(*col_stat));
@@ -754,21 +762,26 @@ int ObDbmsStatsExecutor::do_gather_index_stats(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObOptStat, 4> opt_stats;
-  ObIndexStatsEstimator index_est(ctx);
-  if (OB_FAIL(init_opt_stats(ctx.get_allocator(), param, extra, opt_stats))) {
+  if (OB_ISNULL(param.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(param.allocator_));
+  } else if (OB_FAIL(init_opt_stats(*param.allocator_, param, extra, opt_stats))) {
     LOG_WARN("failed to init opt stats", K(ret));
   } else if (opt_stats.empty()) {
     /*do nothing*/
-  } else if (OB_FAIL(index_est.estimate(param, extra, opt_stats))) {
-    LOG_WARN("failed to estimate basic statistics", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < opt_stats.count(); ++i) {
-      if (OB_ISNULL(opt_stats.at(i).table_stat_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(opt_stats.at(i).table_stat_));
-      } else if (OB_FAIL(all_index_stats.push_back(opt_stats.at(i).table_stat_))) {
-        LOG_WARN("failed to append", K(ret));
-      } else {/*do nothing*/}
+    ObIndexStatsEstimator index_est(ctx, *param.allocator_);
+    if (OB_FAIL(index_est.estimate(param, extra, opt_stats))) {
+      LOG_WARN("failed to estimate basic statistics", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < opt_stats.count(); ++i) {
+        if (OB_ISNULL(opt_stats.at(i).table_stat_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(opt_stats.at(i).table_stat_));
+        } else if (OB_FAIL(all_index_stats.push_back(opt_stats.at(i).table_stat_))) {
+          LOG_WARN("failed to append", K(ret));
+        } else {/*do nothing*/}
+      }
     }
   }
   return ret;

@@ -17,8 +17,7 @@
 #include "lib/checksum/ob_parity_check.h" // parity_check
 #include "lib/utility/utility.h"          // !FALSE_IT
 #include "lib/oblog/ob_log_module.h"      // LOG*
-#include "share/rc/ob_tenant_base.h"      // mtl_malloc
-#include "share/scn.h"                       // SCN
+#include "share/scn.h"                    // SCN
 #include "log_define.h"                   // is_valid_log_id...
 #include "log_writer_utils.h"             // LogWriteBuf
 
@@ -118,41 +117,85 @@ int LogGroupEntryHeader::calculate_log_checksum_(const bool is_padding_log,
     data_checksum = PADDING_LOG_DATA_CHECKSUM;
     PALF_LOG(INFO, "This is a padding log, set log data checksum to 0", K(data_checksum), K(data_len));
   } else {
-    char *tmp_buf = NULL;
-    bool need_free_mem = false;
     const int64_t total_buf_len = data_len + LogGroupEntryHeader::HEADER_SER_SIZE;
-    // no need memcpy
-    if (log_write_buf.check_memory_is_continous()) {
-      int64_t unused_buf_len = 0;
-      const char *first_buf = NULL;
-      if (OB_FAIL(log_write_buf.get_write_buf(0, first_buf, unused_buf_len))) {
-        PALF_LOG(ERROR, "get_write_buf failed", K(ret), K(log_write_buf), K(data_len));
-      } else {
-        tmp_buf = const_cast<char*>(first_buf);
-        assert(total_buf_len == log_write_buf.get_total_size());
-      }
+    ob_assert(total_buf_len == log_write_buf.get_total_size());
+    char *curr_log_buf = NULL;
+    const char *log_buf = NULL;
+    int64_t buf_idx = 0, curr_buf_len = 0;
+    const int64_t buf_cnt = log_write_buf.get_buf_count();
+    if (OB_FAIL(log_write_buf.get_write_buf(buf_idx, log_buf, curr_buf_len))) {
+      PALF_LOG(ERROR, "get_write_buf failed", K(ret), K(log_write_buf), K(data_len));
     } else {
-      assert(total_buf_len == log_write_buf.get_total_size());
-      if (NULL == (tmp_buf = reinterpret_cast<char *>(mtl_malloc(total_buf_len, "LogChecksum")))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        PALF_LOG(ERROR, "allocate memory failed", K(ret));
-      } else {
-        need_free_mem = true;
-        log_write_buf.memcpy_to_continous_memory(tmp_buf);
-      }
+      curr_log_buf = const_cast<char*>(log_buf);
     }
-    int64_t pos = LogGroupEntryHeader::HEADER_SER_SIZE;  // skip group entry header
-    assert(total_buf_len > pos);
     LogEntryHeader log_entry_header;
     int64_t log_entry_data_checksum = 0;
     int64_t tmp_log_checksum = 0;
-    while (OB_SUCC(ret) && NULL != tmp_buf && pos < total_buf_len) {
-      if (OB_FAIL(log_entry_header.deserialize(tmp_buf, total_buf_len, pos))) {
-        PALF_LOG(ERROR, "log_entry_header deserialize failed", K(ret), KP(tmp_buf), K(pos), K(total_buf_len));
+    int64_t pos = LogGroupEntryHeader::HEADER_SER_SIZE;  // skip group entry header
+    const int64_t log_header_size = LogEntryHeader::HEADER_SER_SIZE;
+    char tmp_buf[log_header_size];
+    int64_t tmp_buf_pos = 0;
+    while (OB_SUCC(ret)) {
+      bool need_use_tmp_buf = false;
+      if (curr_buf_len - pos <= 0) {
+        if ((buf_idx + 1) >= buf_cnt) {
+          // calculate finished, end loop
+          break;
+        } else {
+          // switch to next log_buf
+          // update pos to new val at new log_buf
+          pos = pos - curr_buf_len;
+          buf_idx++;
+          if (OB_FAIL(log_write_buf.get_write_buf(buf_idx, log_buf, curr_buf_len))) {
+            PALF_LOG(ERROR, "get_write_buf failed", K(ret), K(log_write_buf), K(data_len));
+          } else {
+            curr_log_buf = const_cast<char*>(log_buf);
+          }
+          if (pos == curr_buf_len) {
+            // Reach end of log_write_buf, end loop.
+            break;
+          }
+          ob_assert(pos < curr_buf_len);
+        }
+      } else if (curr_buf_len - pos < log_header_size) {
+        need_use_tmp_buf = true;
+        const int64_t curr_copy_size = curr_buf_len - pos;
+        // copy the first part of log_entry_header
+        memcpy(tmp_buf, curr_log_buf + pos, curr_copy_size);
+        // update pos to the log_entry_header's tail pos at next log_buf
+        pos = log_header_size - curr_copy_size;
+        // inc buf_idx and get the next log_buf
+        buf_idx++;
+        ob_assert(buf_idx < buf_cnt);
+        if (OB_FAIL(log_write_buf.get_write_buf(buf_idx, log_buf, curr_buf_len))) {
+          PALF_LOG(ERROR, "get_write_buf failed", K(ret), K(log_write_buf), K(data_len));
+        } else {
+          curr_log_buf = const_cast<char*>(log_buf);
+          ob_assert(log_header_size > curr_copy_size);
+          // copy the second part of log_entry_header
+          memcpy(tmp_buf + curr_copy_size, curr_log_buf, log_header_size - curr_copy_size);
+          // set the pos of tmp_buf to 0
+          tmp_buf_pos = 0;
+        }
+        PALF_LOG(INFO, "[WRAP LOG HEADER]", K(ret), K(log_write_buf), K(data_len),
+            K(pos), K(log_header_size), K(curr_copy_size));
+      } else {
+        // The rest buf contains a valid log_entry_header.
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (false == need_use_tmp_buf
+          && OB_FAIL(log_entry_header.deserialize(curr_log_buf, curr_buf_len, pos))) {
+        PALF_LOG(ERROR, "log_entry_header deserialize failed", K(ret), KP(curr_log_buf),
+            K(curr_buf_len), K(pos), K(total_buf_len), K(log_write_buf), K(buf_idx));
+      } else if (true == need_use_tmp_buf
+          && OB_FAIL(log_entry_header.deserialize(tmp_buf, log_header_size, tmp_buf_pos))) {
+        PALF_LOG(ERROR, "log_entry_header deserialize failed", K(ret), KP(curr_log_buf), K(curr_buf_len),
+            K(pos), K(total_buf_len), K(tmp_buf_pos), K(log_write_buf), K(buf_idx));
       } else if (false == log_entry_header.check_header_integrity()) {
         ret = OB_ERR_UNEXPECTED;
-        PALF_LOG(ERROR, "log_entry_header is invalid", K(ret), KP(tmp_buf), K(pos), K(total_buf_len),
-            K(log_entry_header));
+        PALF_LOG(ERROR, "log_entry_header is invalid", K(ret), KP(curr_log_buf), K(curr_buf_len), K(pos), K(total_buf_len),
+            K(log_entry_header), K(log_write_buf), K(buf_idx));
       } else {
         log_entry_data_checksum = log_entry_header.get_data_checksum();
         tmp_log_checksum = common::ob_crc64(tmp_log_checksum, &log_entry_data_checksum, sizeof(log_entry_data_checksum));
@@ -163,12 +206,8 @@ int LogGroupEntryHeader::calculate_log_checksum_(const bool is_padding_log,
     if (OB_SUCC(ret)) {
       data_checksum = tmp_log_checksum;
     }
-
-    if (NULL != tmp_buf && need_free_mem) {
-      mtl_free(tmp_buf);
-    }
   }
-  PALF_LOG(TRACE, "calculate_log_checksum_ finished", K(ret), K(*this), K(data_checksum));
+  PALF_LOG(TRACE, "calculate_log_checksum_ finished", K(ret), K(log_write_buf), K(*this), K(data_checksum));
   return ret;
 }
 

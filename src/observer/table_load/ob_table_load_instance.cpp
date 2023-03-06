@@ -36,10 +36,12 @@ ObTableLoadInstance::~ObTableLoadInstance() { destroy(); }
 
 void ObTableLoadInstance::destroy()
 {
+  int ret = OB_SUCCESS;
   trans_ctx_.reset();
   if (nullptr != table_ctx_) {
-    ObTableLoadService::remove_ctx(table_ctx_);
-    if (!is_committed_) {
+    if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx_))) {
+      LOG_WARN("table ctx may remove by service", KR(ret), KP(table_ctx_));
+    } else if (!is_committed_) {
       ObTableLoadCoordinator::abort_ctx(table_ctx_, *session_info_);
     }
     ObTableLoadService::put_ctx(table_ctx_);
@@ -99,15 +101,19 @@ int ObTableLoadInstance::create_table_ctx(ObTableLoadParam &param,
   // start redef table
   ObTableLoadRedefTableStartArg start_arg;
   ObTableLoadRedefTableStartRes start_res;
+  uint64_t data_version = 0;
   start_arg.tenant_id_ = param.tenant_id_;
   start_arg.table_id_ = param.table_id_;
   start_arg.parallelism_ = param.session_count_;
-  if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *session_info_))) {
+  if (OB_FAIL(GET_MIN_DATA_VERSION(param.tenant_id_, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret));
+  } else if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *session_info_))) {
     LOG_WARN("fail to start redef table", KR(ret), K(start_arg));
   } else {
     ddl_param.dest_table_id_ = start_res.dest_table_id_;
     ddl_param.task_id_ = start_res.task_id_;
     ddl_param.schema_version_ = start_res.schema_version_;
+    ddl_param.data_version_ = data_version;
   }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {

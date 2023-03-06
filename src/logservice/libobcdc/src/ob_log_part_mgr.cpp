@@ -38,10 +38,14 @@
 #define CHECK_SCHEMA_VERSION(check_schema_version, fmt, arg...) \
     do { \
       if (OB_UNLIKELY(check_schema_version < ATOMIC_LOAD(&cur_schema_version_))) { \
-        LOG_ERROR(fmt, K(tenant_id_), K(cur_schema_version_), K(check_schema_version), ##arg); \
-        if (!TCONF.skip_reversed_schema_verison) { \
-          ret = OB_INVALID_ARGUMENT; \
+        if (ATOMIC_LOAD(&enable_check_schema_version_)) { \
+          LOG_ERROR(fmt, K(tenant_id_), K(cur_schema_version_), K(check_schema_version), ##arg); \
+          if (!TCONF.skip_reversed_schema_verison) { \
+            ret = OB_INVALID_ARGUMENT; \
+          } \
         } \
+      } else if (OB_UNLIKELY(! ATOMIC_LOAD(&enable_check_schema_version_))) { \
+        ATOMIC_SET(&enable_check_schema_version_, true); \
       } \
     } while (0)
 
@@ -94,6 +98,7 @@ int ObLogPartMgr::init(const uint64_t tenant_id,
     table_id_cache_ = &table_id_cache;
     cur_schema_version_ = start_schema_version;
     enable_oracle_mode_match_case_sensitive_ = enable_oracle_mode_match_case_sensitive;
+    enable_check_schema_version_ = false;
 
     inited_ = true;
     LOG_INFO("init PartMgr succ", K(tenant_id), K(start_schema_version));
@@ -111,6 +116,7 @@ void ObLogPartMgr::reset()
   tablet_to_table_info_.destroy();
   cur_schema_version_ = OB_INVALID_VERSION;
   enable_oracle_mode_match_case_sensitive_ = false;
+  enable_check_schema_version_ = false;
   schema_cond_.destroy();
 }
 

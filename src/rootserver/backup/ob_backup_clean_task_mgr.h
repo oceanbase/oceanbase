@@ -95,6 +95,7 @@ private:
   int delete_backup_set_dir_();
   int delete_meta_info_dir_();
   int delete_single_piece_info_();
+  int delete_tenant_archive_piece_infos();
   int delete_piece_info_file_();
   int delete_piece_inner_placeholder_file_();
   int delete_piece_checkpoint_file_();

@@ -57,6 +57,8 @@ public:
   int start();
   void stop();
   void wait();
+  void mtl_thread_stop();
+  void mtl_thread_wait();
   int create(const char* thread_name, int tg_def_id, ObTenantThreadHelper &tenant_thread);
   void idle(const int64_t idle_time_us);
 public:
@@ -79,7 +81,6 @@ public:
  static int get_zone_priority(const ObZone &primary_zone,
                                  const share::schema::ObTenantSchema &tenant_schema,
                                  common::ObSqlString &primary_zone_str);
-
 protected:
  int wait_tenant_schema_and_version_ready_(
      const uint64_t tenant_id, const uint64_t &data_version);
@@ -93,7 +94,25 @@ private:
   const char* thread_name_;
 };
 
-
+#define DEFINE_MTL_FUNC(TYPE)\
+  static int mtl_init(TYPE *&ka) {\
+    int ret = OB_SUCCESS;\
+    if (OB_ISNULL(ka)) {\
+      ret = OB_ERR_UNEXPECTED;\
+    } else if (OB_FAIL(ka->init())) {\
+    }\
+    return ret;\
+  }\
+  static void mtl_stop(TYPE *&ka) {\
+    if (OB_NOT_NULL(ka)) {\
+      ka->mtl_thread_stop();\
+    }\
+  }\
+  static void mtl_wait(TYPE *&ka) {\
+    if (OB_NOT_NULL(ka)) {\
+      ka->mtl_thread_wait();\
+    }\
+  }
 }
 }
 

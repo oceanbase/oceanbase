@@ -385,9 +385,6 @@ void ObTxDesc::reset()
   xa_ctx_ = NULL;
   tlog_.reset();
   xa_ctx_ = NULL;
-#ifndef NDEBUG
-  alloc_link_.reset();
-#endif
 }
 
 const ObString &ObTxDesc::get_tx_state_str() const {

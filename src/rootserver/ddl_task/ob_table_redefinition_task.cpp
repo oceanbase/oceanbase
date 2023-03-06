@@ -22,6 +22,9 @@
 #include "rootserver/ddl_task/ob_ddl_redefinition_task.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "sql/engine/cmd/ob_load_data_utils.h"
+#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "lib/mysqlclient/ob_mysql_result.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -96,7 +99,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
   } else if (!task_record.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_record));
-  } else if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
+  } else if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
     LOG_WARN("deserialize params from message failed", K(ret), K(task_record.message_), K(common::lbt()));
   } else if (OB_FAIL(set_ddl_stmt_str(task_record.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
@@ -392,6 +395,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
       alter_table_arg_.ddl_task_type_ = share::REBUILD_INDEX_TASK;
       alter_table_arg_.table_id_ = object_id_;
       alter_table_arg_.hidden_table_id_ = target_object_id_;
+      alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
       if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
         LOG_WARN("get schema guard failed", K(ret));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, table_schema))) {
@@ -528,6 +532,7 @@ int ObTableRedefinitionTask::copy_table_constraints()
         alter_table_arg_.ddl_task_type_ = share::REBUILD_CONSTRAINT_TASK;
         alter_table_arg_.table_id_ = object_id_;
         alter_table_arg_.hidden_table_id_ = target_object_id_;
+        alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
         int64_t ddl_rpc_timeout = 0;
         if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
           LOG_WARN("get ddl rpc timeout fail", K(ret));
@@ -599,6 +604,7 @@ int ObTableRedefinitionTask::copy_table_foreign_keys()
           alter_table_arg_.ddl_task_type_ = share::REBUILD_FOREIGN_KEY_TASK;
           alter_table_arg_.table_id_ = object_id_;
           alter_table_arg_.hidden_table_id_ = target_object_id_;
+          alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
           int64_t ddl_rpc_timeout = 0;
           if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
             LOG_WARN("get ddl rpc timeout fail", K(ret));
@@ -719,6 +725,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
   alter_table_arg_.hidden_table_id_ = target_object_id_;
   // offline ddl is allowed on table with trigger(enable/disable).
   alter_table_arg_.need_rebuild_trigger_ = true;
+  alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
   ObRootService *root_service = GCTX.root_service_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
@@ -950,10 +957,12 @@ int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_
   } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, do_finish))) {
     LOG_WARN("fail to serialize is_do_finish");
   }
+  FLOG_INFO("serialize message for table redefinition", K(ret),
+      K(copy_indexes), K(copy_triggers), K(copy_constraints), K(copy_foreign_keys), K(ignore_errors), K(do_finish), K(*this));
   return ret;
 }
 
-int ObTableRedefinitionTask::deserlize_params_from_message(const char *buf, const int64_t data_len, int64_t &pos)
+int ObTableRedefinitionTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int8_t copy_indexes = 0;
@@ -963,13 +972,15 @@ int ObTableRedefinitionTask::deserlize_params_from_message(const char *buf, cons
   int8_t ignore_errors = 0;
   int8_t do_finish = 0;
   obrpc::ObAlterTableArg tmp_arg;
-  if (OB_UNLIKELY(nullptr == buf || data_len <= 0)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
     LOG_WARN("fail to deserialize task version", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &parallelism_))) {
@@ -998,6 +1009,8 @@ int ObTableRedefinitionTask::deserlize_params_from_message(const char *buf, cons
       is_do_finish_ = static_cast<bool>(do_finish);
     }
   }
+  FLOG_INFO("deserialize message for table redefinition", K(ret),
+      K(copy_indexes), K(copy_triggers), K(copy_constraints), K(copy_foreign_keys), K(ignore_errors), K(do_finish), K(*this));
   return ret;
 }
 
@@ -1128,6 +1141,15 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
       }
       break;
     }
+    case ObDDLTaskStatus::REPENDING: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: REPENDING"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
     case ObDDLTaskStatus::FAIL: {
       if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
@@ -1151,6 +1173,28 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
       break;
     }
   }
+
+  // append direct load information to the message
+  if (OB_SUCC(ret) && (ObDDLType::DDL_DIRECT_LOAD == get_task_type())) {
+    common::ObArenaAllocator allocator(lib::ObLabel("RedefTask"));
+    sql::ObLoadDataStat job_stat;
+    if (OB_FAIL(get_direct_load_job_stat(allocator, job_stat))) {
+      LOG_WARN("failed to get direct load job_stat", KR(ret));
+    } else if (job_stat.job_id_ > 0) {
+      databuff_printf(stat_info_.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos,
+          ", TABLE_ID: %ld, BATCH_SIZE: %ld, PARALLEL: %ld, MAX_ALLOWED_ERROR_ROWS: %ld"
+          ", DETECTED_ERROR_ROWS: %ld, PROCESSED_ROWS: %ld, LOAD_STATUS: %.*s",
+          job_stat.job_id_,
+          job_stat.batch_size_,
+          job_stat.parallel_,
+          job_stat.max_allowed_error_rows_,
+          job_stat.detected_error_rows_,
+          job_stat.coordinator.received_rows_,
+          job_stat.coordinator.status_.length(),
+          job_stat.coordinator.status_.ptr());
+    }
+  }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copy_longops_stat(value))) {
     LOG_WARN("failed to collect common longops stat", K(ret));
@@ -1212,4 +1256,51 @@ void ObTableRedefinitionTask::flt_set_status_span_tag() const
     break;
   }
   }
+}
+
+int ObTableRedefinitionTask::get_direct_load_job_stat(common::ObArenaAllocator &allocator,
+                                                      sql::ObLoadDataStat &job_stat)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLProxy &sql_proxy = *GCTX.sql_proxy_;
+  ObSqlString select_sql;
+  sqlclient::ObMySQLResult *select_result = NULL;
+  SMART_VAR(ObMySQLProxy::MySQLResult, select_res) {
+    if (OB_FAIL(select_sql.assign_fmt(
+        "SELECT JOB_ID, BATCH_SIZE, PARALLEL, MAX_ALLOWED_ERROR_ROWS, DETECTED_ERROR_ROWS, "
+        "COORDINATOR_RECEIVED_ROWS, COORDINATOR_STATUS FROM %s WHERE TENANT_ID=%lu "
+        "AND JOB_ID=%ld AND JOB_TYPE='direct' AND COORDINATOR_STATUS!='none'",
+        OB_ALL_VIRTUAL_LOAD_DATA_STAT_TNAME, tenant_id_, object_id_))) {
+      LOG_WARN("failed to assign sql", KR(ret));
+    } else if (OB_FAIL(sql_proxy.read(select_res, OB_SYS_TENANT_ID, select_sql.ptr()))) {
+      LOG_WARN("fail to execute sql", KR(ret), K(select_sql));
+    } else if (OB_ISNULL(select_result = select_res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, query result must not be NULL", KR(ret));
+    }
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(select_result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get next row", KR(ret));
+        }
+      } else {
+        ObString load_status;
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "JOB_ID", job_stat.job_id_, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "BATCH_SIZE", job_stat.batch_size_, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "PARALLEL", job_stat.parallel_, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "MAX_ALLOWED_ERROR_ROWS", job_stat.max_allowed_error_rows_, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "DETECTED_ERROR_ROWS", job_stat.detected_error_rows_, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "COORDINATOR_RECEIVED_ROWS", job_stat.coordinator.received_rows_, int64_t);
+        EXTRACT_VARCHAR_FIELD_MYSQL(*select_result, "COORDINATOR_STATUS", load_status);
+        if (OB_SUCC(ret)
+            && OB_FAIL(ob_write_string(allocator, load_status, job_stat.coordinator.status_))) {
+          LOG_WARN("failed to write string", KR(ret));
+        }
+      }
+    }
+  }
+  return ret;
 }

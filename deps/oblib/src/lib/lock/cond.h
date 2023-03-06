@@ -81,7 +81,7 @@ Cond::wait_impl(const M& mutex) const
 
   LockState state;
   mutex.unlock(state);
-  const int rc = pthread_cond_wait(&_cond, state.mutex);
+  const int rc = ob_pthread_cond_wait(&_cond, state.mutex);
   mutex.lock(state);
 
   if ( 0 != rc ) {
@@ -112,7 +112,7 @@ Cond::timed_wait_impl(const M& mutex, const ObSysTime& timeout) const
     timespec ts;
     ts.tv_sec  = tv.tv_sec + timeout/1000;
     ts.tv_nsec = tv.tv_usec * 1000 + ( timeout % 1000 ) * 1000000;*/
-    const int rc = pthread_cond_timedwait(&_cond, state.mutex, &ts);
+    const int rc = ob_pthread_cond_timedwait(&_cond, state.mutex, &ts);
     mutex.lock(state);
 
     if (rc != 0) {

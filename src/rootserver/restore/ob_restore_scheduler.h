@@ -44,15 +44,10 @@ public:
 public:
   ObRestoreService();
   virtual ~ObRestoreService();
-  static int mtl_init(ObRestoreService *&ka);
-  int init(share::schema::ObMultiVersionSchemaService *schema_service,
-           common::ObMySQLProxy *sql_proxy,
-           obrpc::ObCommonRpcProxy *rpc_proxy,
-           obrpc::ObSrvRpcProxy *srv_rpc_proxy,
-           share::ObLSTableOperator *lst_operator,
-           const common::ObAddr &self_addr);
+  int init();
   virtual void do_work() override;
   void destroy();
+  DEFINE_MTL_FUNC(ObRestoreService)
 public:
   virtual share::SCN get_rec_scn() override { return share::SCN::max_scn();}
   virtual int flush(share::SCN &rec_scn) override { return OB_SUCCESS; }

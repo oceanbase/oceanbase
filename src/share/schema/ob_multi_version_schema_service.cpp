@@ -153,7 +153,7 @@ void ObSchemaConstructTask::wait(const int64_t version)
   }
   int rc = 0;
   do {
-    rc = pthread_cond_timedwait(&schema_cond_, &schema_mutex_, &ts);
+    rc = ob_pthread_cond_timedwait(&schema_cond_, &schema_mutex_, &ts);
   } while (0);
   (void) rc; // make compiler happy
 }

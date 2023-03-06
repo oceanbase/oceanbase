@@ -70,6 +70,7 @@ ObBinlogRecordPrinter::ObBinlogRecordPrinter() : inited_(false),
                                                  enable_print_lob_md5_(false),
                                                  enable_verify_mode_(false),
                                                  enable_print_detail_(false),
+                                                 enable_print_special_detail_(false),
                                                  dml_tx_br_count_(0),
                                                  total_tx_count_(0),
                                                  total_br_count_(0),
@@ -90,9 +91,11 @@ int ObBinlogRecordPrinter::init(const char *data_file,
     const bool enable_print_hex,
     const bool enable_print_lob_md5,
     const bool enable_verify_mode,
-    const bool enable_print_detail)
+    const bool enable_print_detail,
+    const bool enable_print_special_detail)
 {
   int ret = OB_SUCCESS;
+
   if (inited_) {
     ret = OB_INIT_TWICE;
   } else if (NULL != data_file && OB_FAIL(open_file_(data_file, data_file_fd_))) {
@@ -108,8 +111,10 @@ int ObBinlogRecordPrinter::init(const char *data_file,
     enable_print_lob_md5_ = enable_print_lob_md5;
     enable_verify_mode_ = enable_verify_mode;
     enable_print_detail_ = enable_print_detail;
+    enable_print_special_detail_ = enable_print_special_detail;
     inited_ = true;
   }
+
   return ret;
 }
 
@@ -132,6 +137,7 @@ void ObBinlogRecordPrinter::destroy()
   enable_print_lob_md5_ = false;
   enable_verify_mode_ = false;
   enable_print_detail_ = false;
+  enable_print_special_detail_ = false;
   dml_tx_br_count_ = 0;
   total_tx_count_ = 0;
   total_br_count_ = 0;
@@ -192,8 +198,10 @@ int ObBinlogRecordPrinter::print_binlog_record(IBinlogRecord *br)
     } else if (data_file_fd_ >= 0) {
       bool need_rotate_file = false;
 
-      if (OB_FAIL(output_data_file(br, record_type, oblog_br, data_file_fd_, only_print_hex_, only_print_dml_tx_checksum_, enable_print_hex_,
-          enable_print_lob_md5_, enable_verify_mode_, enable_print_detail_, dml_tx_br_count_, dml_data_crc_, need_rotate_file))) {
+      if (OB_FAIL(output_data_file(br, record_type, oblog_br, data_file_fd_, only_print_hex_,
+          only_print_dml_tx_checksum_, enable_print_hex_,
+          enable_print_lob_md5_, enable_verify_mode_, enable_print_detail_, enable_print_special_detail_,
+          dml_tx_br_count_, dml_data_crc_, need_rotate_file))) {
         LOG_ERROR("output_data_file fail", K_(data_file_fd), K_(data_file), K(ret));
       } else if (need_rotate_file && OB_FAIL(rotate_data_file_())) {
         LOG_ERROR("rotate_data_file fail", K(ret));
@@ -268,6 +276,7 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
     const bool enable_print_lob_md5,
     const bool enable_verify_mode,
     const bool enable_print_detail,
+    const bool enable_print_special_detail,
     int64_t &tx_br_count,
     uint64_t &dml_data_crc,
     bool &need_rotate_file)
@@ -324,6 +333,9 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
     } else if (ECOMMIT == record_type) {
       if (only_print_dml_tx_checksum) {
         ri++;
+        // TODO
+        // Support to print CRC value, at present PDML transaction data change order is not stable
+        dml_data_crc = 0;
         ROW_PRINTF(ptr, size, pos, ri, "TX_BR_COUNT:%ld, TX_DATA_CRC:%lu", tx_br_count, dml_data_crc);
         tx_br_count = 0;
         dml_data_crc = 0;
@@ -405,13 +417,13 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
       }
 
       // if trace_info is not empty and enable_print_detail, then print
-      if (enable_print_detail && 0 < trace_info.length()) {
+      if (enable_print_special_detail && 0 < trace_info.length()) {
         ROW_PRINTF(ptr, size, pos, ri, "trace_info:[%.*s](%d)", trace_info.length(), trace_info.ptr(), trace_info.length());
       }
 
       for (int64_t index = 0; OB_SUCC(ret) && index < column_count; index++) {
         ret = output_data_file_column_data(br, table_meta, index, ptr, size, ri, only_print_hex, enable_print_hex,
-            enable_print_lob_md5, enable_print_detail, pos);
+            enable_print_lob_md5, enable_print_detail, enable_print_special_detail, pos);
       }
 
       DATABUFF_PRINTF(ptr, size, pos, "%s", STMT_DELEMITER);
@@ -508,6 +520,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
     const bool enable_print_hex,
     const bool enable_print_lob_md5,
     const bool enable_print_detail,
+    const bool enable_print_special_detail,
     int64_t &pos)
 {
   OB_ASSERT(NULL != br && NULL != table_meta && NULL != ptr && size > 0 && index >= 0 && pos >= 0);

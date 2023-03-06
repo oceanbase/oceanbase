@@ -370,22 +370,19 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   ObPhysicalPlan *plan = NULL;
   bool need_late_compilation = false;
   ObJITEnableMode jit_mode = ObJITEnableMode::OFF;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  bool enable_user_defined_rewrite_rules = false;
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
   if (cache_obj != NULL && ObLibCacheNameSpace::NS_CRSR == cache_obj->get_ns()) {
     plan = static_cast<ObPhysicalPlan *>(cache_obj);
   }
   if (OB_SUCC(ret)) {
-    if (!tenant_config.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant config is invalid", K(ret));
-    } else if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
+    if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null session info", K(ret));
     } else if (OB_FAIL(pc_ctx.sql_ctx_.session_info_->get_jit_enabled_mode(jit_mode))) {
       LOG_WARN("failed to get jit mode");
     } else {
-      // do nothing
+      enable_user_defined_rewrite_rules = pc_ctx.sql_ctx_.session_info_->enable_user_defined_rewrite_rules();
     }
   }
   if (OB_SUCC(ret) && plan != NULL) {
@@ -394,17 +391,17 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
     // when the global rule version changes or enable_user_defined_rewrite_rules changes
     // it is necessary to check whether the physical plan are expired
     if ((plan->get_rule_version() != rule_mgr->get_rule_version()
-      || plan->is_enable_udr() != tenant_config->enable_user_defined_rewrite_rules)) {
+      || plan->is_enable_udr() != enable_user_defined_rewrite_rules)) {
       if (OB_FAIL(rule_mgr->fuzzy_check_by_pattern_digest(pc_ctx.get_normalized_pattern_digest(), is_exists))) {
         LOG_WARN("failed to fuzzy check by pattern digest", K(ret));
       } else if (is_exists || plan->is_rewrite_sql()) {
         ret = OB_OLD_SCHEMA_VERSION;
         LOG_TRACE("Obsolete user-defined rewrite rules require eviction plan", K(ret),
-        K(is_exists), K(pc_ctx.raw_sql_), K(plan->is_enable_udr()), K(tenant_config->enable_user_defined_rewrite_rules),
+        K(is_exists), K(pc_ctx.raw_sql_), K(plan->is_enable_udr()), K(enable_user_defined_rewrite_rules),
         K(plan->is_rewrite_sql()), K(plan->get_rule_version()), K(rule_mgr->get_rule_version()));
       } else {
         plan->set_rule_version(rule_mgr->get_rule_version());
-        plan->set_is_enable_udr(tenant_config->enable_user_defined_rewrite_rules);
+        plan->set_is_enable_udr(enable_user_defined_rewrite_rules);
       }
     }
     if (OB_SUCC(ret)) {

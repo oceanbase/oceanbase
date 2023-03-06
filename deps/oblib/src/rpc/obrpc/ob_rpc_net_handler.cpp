@@ -23,6 +23,7 @@
 #include "lib/allocator/ob_tc_malloc.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_virtual_rpc_protocol_processor.h"
+#include "common/ob_clock_generator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::serialization;
@@ -142,7 +143,7 @@ void *ObRpcNetHandler::decode(easy_message_t *ms)
   ObRpcPacket *pkt = NULL;
   easy_connection_t *easy_conn = NULL;
   bool is_current_normal_mode = true;
-  common::ObTimeGuard timeguard("ObRpcNetHandler::decode", common::OB_EASY_HANDLER_COST_TIME);
+  const int64_t start_ts = common::ObClockGenerator::getClock();
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ms)) {
     ret = OB_INVALID_ARGUMENT;
@@ -191,15 +192,15 @@ void *ObRpcNetHandler::decode(easy_message_t *ms)
         LOG_ERROR("failed to decode", K(easy_conn), KP(ms), K(is_current_normal_mode), K(ret));
       } else {
         if (NULL != pkt) {
-          const int64_t receive_ts = common::ObTimeUtility::current_time();
+          const int64_t receive_ts = common::ObClockGenerator::getClock();
           const int64_t fly_ts = receive_ts - pkt->get_timestamp();
           if (!pkt->is_resp() && fly_ts > common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
             LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "packet fly cost too much time", "pcode", pkt->get_pcode(),
                     "fly_ts", fly_ts, "send_timestamp", pkt->get_timestamp(), "connection", easy_connection_str(ms->c));
           }
           pkt->set_receive_ts(receive_ts);
-          if (timeguard.get_diff() > common::OB_MAX_PACKET_DECODE_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
-            LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "packet decode cost too much time", "pcode", pkt->get_pcode(), K(timeguard), "connection", easy_connection_str(ms->c));
+          if (receive_ts - start_ts > common::OB_MAX_PACKET_DECODE_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
+            LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "packet decode cost too much time", "pcode", pkt->get_pcode(), "connection", easy_connection_str(ms->c));
           }
         } else {
           //receive data is not enough
@@ -256,7 +257,7 @@ int ObRpcNetHandler::encode(easy_request_t *req, void *packet)
       req->trace_id[3] = trace_id[3];
     }
 
-    const int64_t receive_ts = common::ObTimeUtility::current_time();
+    const int64_t receive_ts = common::ObClockGenerator::getClock();
     const int64_t wait_ts = receive_ts - pkt->get_timestamp();
 
     if (!pkt->is_resp() && wait_ts > common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {

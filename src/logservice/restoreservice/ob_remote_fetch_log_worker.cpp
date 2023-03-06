@@ -28,6 +28,7 @@
 #include "ob_fetch_log_task.h"                          // ObFetchLogTask
 #include "ob_log_restore_handler.h"                     // ObLogRestoreHandler
 #include "ob_log_restore_allocator.h"                       // ObLogRestoreAllocator
+#include "ob_log_restore_controller.h"
 #include "storage/tx_storage/ob_ls_handle.h"            // ObLSHandle
 #include "logservice/archiveservice/ob_archive_define.h"   // archive
 #include "storage/tx_storage/ob_ls_map.h"               // ObLSIterator
@@ -59,6 +60,7 @@ using namespace share;
 ObRemoteFetchWorker::ObRemoteFetchWorker() :
   inited_(false),
   tenant_id_(OB_INVALID_TENANT_ID),
+  restore_controller_(NULL),
   restore_service_(NULL),
   ls_svr_(NULL),
   task_queue_(),
@@ -73,6 +75,7 @@ ObRemoteFetchWorker::~ObRemoteFetchWorker()
 
 int ObRemoteFetchWorker::init(const uint64_t tenant_id,
     ObLogRestoreAllocator *allocator,
+    ObLogRestoreController *restore_controller,
     ObLogRestoreService *restore_service,
     ObLSService *ls_svr)
 {
@@ -84,15 +87,18 @@ int ObRemoteFetchWorker::init(const uint64_t tenant_id,
     LOG_ERROR("ObRemoteFetchWorker has been initialized", K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
       || OB_ISNULL(allocator)
+      || OB_ISNULL(restore_controller)
       || OB_ISNULL(restore_service)
       || OB_ISNULL(ls_svr)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(allocator), K(restore_service), K(ls_svr));
+    LOG_WARN("invalid argument", K(tenant_id), K(restore_controller),
+        K(allocator), K(restore_service), K(ls_svr));
   } else if (OB_FAIL(task_queue_.init(FETCH_LOG_TASK_LIMIT, "RFLTaskQueue", MTL_ID()))) {
     LOG_WARN("task_queue_ init failed", K(ret));
   } else {
     tenant_id_ = tenant_id;
     allocator_ = allocator;
+    restore_controller_ = restore_controller;
     restore_service_ = restore_service;
     ls_svr_ = ls_svr;
     inited_ = true;
@@ -122,6 +128,7 @@ void ObRemoteFetchWorker::destroy()
     restore_service_ = NULL;
     ls_svr_ = NULL;
     allocator_ = NULL;
+    restore_controller_ = NULL;
     inited_ = false;
   }
 }
@@ -334,6 +341,7 @@ int ObRemoteFetchWorker::submit_entries_(const ObLSID &id,
   int64_t size = 0;
   LSN lsn;
   while (OB_SUCC(ret) && ! has_set_stop()) {
+    bool quota_done = false;
     if (OB_FAIL(iter.next(entry, lsn, buf, size))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("ObRemoteLogIterator next failed", K(ret), K(iter));
@@ -345,6 +353,10 @@ int ObRemoteFetchWorker::submit_entries_(const ObLSID &id,
       LOG_WARN("entry is invalid", K(ret), K(entry), K(lsn), K(iter));
     } else if (base_lsn > lsn) {
       LOG_INFO("repeated log, just skip", K(ret), K(id), K(lsn), K(base_lsn), K(entry));
+    } else if (OB_FAIL(wait_restore_quota_(entry.get_serialize_size(), quota_done))) {
+      LOG_WARN("wait restore quota failed", K(ret), K(entry));
+    } else if (! quota_done) {
+      break;
     } else if (OB_FAIL(submit_log_(id, proposal_id, lsn,
             entry.get_scn(), buf, entry.get_serialize_size()))) {
       LOG_WARN("submit log failed", K(ret), K(iter), K(buf), K(entry), K(lsn));
@@ -352,6 +364,25 @@ int ObRemoteFetchWorker::submit_entries_(const ObLSID &id,
   } // while
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObRemoteFetchWorker::wait_restore_quota_(const int64_t size, bool &done)
+{
+  int ret = OB_SUCCESS;
+  done = false;
+  while (OB_SUCC(ret) && ! done && ! has_set_stop()) {
+    if (OB_FAIL(restore_controller_->get_quota(size, done))) {
+      LOG_WARN("get quota failed");
+    } else if (! done) {
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+        LOG_INFO("clog disk is not enough, just wait", K(size));
+      } else {
+        LOG_TRACE("get quota succ", K(size));
+      }
+      usleep(100 * 1000L);  // if get quota not done, sleep 100ms
+    }
   }
   return ret;
 }

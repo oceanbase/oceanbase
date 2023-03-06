@@ -157,13 +157,23 @@ int ObTableLoadTableCtx::init_coordinator_ctx(const ObIArray<int64_t> &idx_array
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("coordinator ctx already exist", KR(ret));
   } else {
-    if (OB_ISNULL(coordinator_ctx_ = OB_NEWx(ObTableLoadCoordinatorCtx, (&allocator_), this))) {
+    ObTableLoadCoordinatorCtx *coordinator_ctx = nullptr;
+    if (OB_ISNULL(coordinator_ctx = OB_NEWx(ObTableLoadCoordinatorCtx, (&allocator_), this))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadCoordinatorCtx", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->init(idx_array, user_id))) {
+    } else if (OB_FAIL(coordinator_ctx->init(idx_array, user_id))) {
       LOG_WARN("fail to init coordinator ctx", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->set_status_inited())) {
+    } else if (OB_FAIL(coordinator_ctx->set_status_inited())) {
       LOG_WARN("fail to set coordinator status inited", KR(ret));
+    } else {
+      coordinator_ctx_ = coordinator_ctx;
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != coordinator_ctx) {
+        coordinator_ctx->~ObTableLoadCoordinatorCtx();
+        allocator_.free(coordinator_ctx);
+        coordinator_ctx = nullptr;
+      }
     }
   }
   return ret;
@@ -181,13 +191,23 @@ int ObTableLoadTableCtx::init_store_ctx(
     ret = OB_ENTRY_EXIST;
     LOG_WARN("store ctx already exist", KR(ret));
   } else {
-    if (OB_ISNULL(store_ctx_ = OB_NEWx(ObTableLoadStoreCtx, (&allocator_), this))) {
+    ObTableLoadStoreCtx *store_ctx = nullptr;
+    if (OB_ISNULL(store_ctx = OB_NEWx(ObTableLoadStoreCtx, (&allocator_), this))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadStoreCtx", KR(ret));
-    } else if (OB_FAIL(store_ctx_->init(partition_id_array, target_partition_id_array))) {
+    } else if (OB_FAIL(store_ctx->init(partition_id_array, target_partition_id_array))) {
       LOG_WARN("fail to init store ctx", KR(ret));
-    } else if (OB_FAIL(store_ctx_->set_status_inited())) {
+    } else if (OB_FAIL(store_ctx->set_status_inited())) {
       LOG_WARN("fail to set store status inited", KR(ret));
+    } else {
+      store_ctx_ = store_ctx;
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != store_ctx) {
+        store_ctx->~ObTableLoadStoreCtx();
+        allocator_.free(store_ctx);
+        store_ctx = nullptr;
+      }
     }
   }
   return ret;

@@ -482,9 +482,9 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_truncate_failed)
     convert_to_normal_block(log_dir, block_id, block_path, OB_MAX_FILE_NAME_LENGTH);
     EXPECT_EQ(OB_ITER_END, read_log(leader));
     PALF_LOG_RET(ERROR, OB_SUCCESS, "truncate pos", K(max_lsn));
-    EXPECT_EQ(0, ftruncate(fd, max_lsn.val_));
+    EXPECT_EQ(0, ftruncate(fd, max_lsn.val_+MAX_INFO_BLOCK_SIZE));
     FileDirectoryUtils::get_file_size(block_path, file_size);
-    EXPECT_EQ(file_size, max_lsn.val_);
+    EXPECT_EQ(file_size, max_lsn.val_+MAX_INFO_BLOCK_SIZE);
   }
   PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());;
@@ -1132,6 +1132,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
 
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2, leader_idx, 200));
   SCN max_scn1 = leader.palf_handle_impl_->get_max_scn();
+  LSN max_lsn1 = leader.palf_handle_impl_->get_max_lsn();
   sleep(2);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2, leader_idx, 200));
   SCN max_scn2 = leader.palf_handle_impl_->get_max_scn();
@@ -1146,10 +1147,15 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
   EXPECT_EQ(OB_SUCCESS, iterator.next(max_scn1));
   EXPECT_EQ(OB_SUCCESS, iterator.next(max_scn1));
   PALF_LOG(INFO, "runlin trace case1", K(iterator));
+  EXPECT_EQ(OB_ITER_END, iterator.next(max_scn1));
 
   EXPECT_EQ(OB_SUCCESS, raw_write_leader.palf_handle_impl_->inner_flashback(max_scn1));
 
   EXPECT_EQ(max_scn1, raw_write_leader.palf_handle_impl_->get_max_scn());
+
+  EXPECT_EQ(OB_ITER_END, iterator.next(max_scn1));
+  EXPECT_EQ(iterator.iterator_impl_.log_storage_->get_lsn(iterator.iterator_impl_.curr_read_pos_-sizeof(LogGroupEntryHeader)),
+            max_lsn1);
 
   int64_t mode_version;
   switch_flashback_to_append(raw_write_leader, mode_version);

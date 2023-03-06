@@ -200,7 +200,10 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
 int ObMemtable::remove_unused_callback_for_uncommited_txn_()
 {
   int ret = OB_SUCCESS;
-  transaction::ObTransService *txs_svr = MTL(transaction::ObTransService *);
+  // NB: Do not use cache here, because the trans_service may be destroyed under
+  // MTL_DESTROY() and the cache is pointing to a broken memory.
+  transaction::ObTransService *txs_svr =
+    MTL_CTX()->get<transaction::ObTransService *>();
 
   if (NULL != txs_svr
       && OB_FAIL(txs_svr->remove_callback_for_uncommited_txn(this))) {

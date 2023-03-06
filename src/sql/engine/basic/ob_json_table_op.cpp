@@ -1334,6 +1334,7 @@ int JtColNode::check_col_res_type(JtScanCtx* ctx)
     } else {
       if (ob_is_json_tc(obj_type)) {
         ret = OB_ERR_USAGE_KEYWORD;
+        LOG_WARN("invalid usage of keyword EXISTS", K(ret));
       } else {
         ret = OB_ERR_NON_NUMERIC_CHARACTER_VALUE;
         SET_COVER_ERROR(ctx, ret);

@@ -37,7 +37,8 @@ ObMajorMergeProgressChecker::ObMajorMergeProgressChecker()
   : merge_time_statistics_(), is_inited_(false), tenant_id_(OB_INVALID_ID), sql_proxy_(nullptr),
     schema_service_(nullptr), zone_merge_mgr_(nullptr), lst_operator_(nullptr),
     server_trace_(nullptr), tablet_compaction_map_(), table_count_(0), table_ids_(),
-    table_compaction_map_(), tablet_validator_(), index_validator_(), cross_cluster_validator_()
+    table_compaction_map_(), tablet_validator_(), index_validator_(), cross_cluster_validator_(),
+    uncompacted_tablets_(), diagnose_rw_lock_(ObLatchIds::MAJOR_FREEZE_DIAGNOSE_LOCK)
 {}
 
 int ObMajorMergeProgressChecker::init(
@@ -212,6 +213,8 @@ int ObMajorMergeProgressChecker::check_merge_progress(
   } else {
     HEAP_VAR(ObZoneArray, all_zones) {
       all_progress.reset();
+      // reset uncompacted_tablets in the beginning of each round of check_merge_progress
+      reset_uncompacted_tablets();
 
       if (OB_FAIL(zone_merge_mgr_->get_zone(all_zones))) {
         LOG_WARN("fail to get_zone", KR(ret), K_(tenant_id));
@@ -300,6 +303,22 @@ void ObMajorMergeProgressChecker::set_major_merge_start_time(
      const int64_t major_merge_start_us)
 {
   cross_cluster_validator_.set_major_merge_start_time(major_merge_start_us);
+}
+
+int ObMajorMergeProgressChecker::get_uncompacted_tablets(
+    ObArray<ObTabletReplica> &uncompacted_tablets) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else {
+    SpinRLockGuard r_guard(diagnose_rw_lock_);
+    if (OB_FAIL(uncompacted_tablets.assign(uncompacted_tablets_))) {
+      LOG_WARN("fail to assign uncompacted_tablets", KR(ret), K_(tenant_id), K_(uncompacted_tablets));
+    }
+  }
+  return ret;
 }
 
 int ObMajorMergeProgressChecker::check_tablet(
@@ -434,6 +453,13 @@ int ObMajorMergeProgressChecker::check_tablet_compaction_scn(
                 LOG_INFO("replica not merged to target version or status not match", K_(tenant_id),
                         "current_version", r->get_snapshot_version(), K(global_broadcast_scn),
                         "current_status", r->get_status(), "compaction_replica", *r);
+              }
+              if (p->unmerged_tablet_cnt_ < 3) {
+                SpinWLockGuard w_guard(diagnose_rw_lock_);
+                if (OB_FAIL(uncompacted_tablets_.push_back(*r))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("fail to push_back", KR(ret), K_(tenant_id), K(global_broadcast_scn), KPC(r));
+                }
               }
               ++(p->unmerged_tablet_cnt_);
               p->unmerged_data_size_ += r->get_data_size();
@@ -657,6 +683,12 @@ int ObMajorMergeProgressChecker::mark_uncompacted_tables_as_verified(
     LOG_INFO("succ to mark uncompacted tables as verified", K(uncompacted_tables));
   }
   return ret;
+}
+
+void ObMajorMergeProgressChecker::reset_uncompacted_tablets()
+{
+  SpinWLockGuard w_guard(diagnose_rw_lock_);
+  uncompacted_tablets_.reset();
 }
 
 } // namespace rootserver

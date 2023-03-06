@@ -251,6 +251,7 @@ private:
   static int start_hook_if_need_(ObSQLSessionInfo &session,
                                  transaction::ObTransService *txs,
                                  bool &start_hook);
+  static uint32_t get_real_session_id(ObSQLSessionInfo &session);
 public:
   /*
    * create a savepoint without name

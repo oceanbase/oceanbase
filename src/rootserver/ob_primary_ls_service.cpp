@@ -33,11 +33,6 @@ namespace rootserver
 {
 
 //////////////ObPrimaryLSService
-int ObPrimaryLSService::mtl_init(ObPrimaryLSService *&ka)
-{
-  return ka->init();
-}
-
 int ObPrimaryLSService::init()
 {
   int ret = OB_SUCCESS;
@@ -72,7 +67,7 @@ void ObPrimaryLSService::do_work()
   } else if (OB_FAIL(wait_tenant_schema_and_version_ready_(tenant_id_, DATA_VERSION_4_1_0_0))) {
     LOG_WARN("failed to wait tenant schema version ready", KR(ret), K(tenant_id_), K(DATA_CURRENT_VERSION));
   } else {
-    int64_t idle_time_us = 100 * 1000L;
+    int64_t idle_time_us = 500 * 1000L;
     int tmp_ret = OB_SUCCESS;
     const uint64_t thread_idx = get_thread_idx();
     share::schema::ObTenantSchema tenant_schema;

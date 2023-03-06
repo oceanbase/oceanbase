@@ -390,33 +390,93 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
     // delete in replace only old part id expr is required
     for (int64_t i = 0; OB_SUCC(ret) && i < get_replace_index_dml_infos().count(); ++i) {
       IndexDMLInfo *index_info = get_replace_index_dml_infos().at(i);
-      if (OB_ISNULL(index_info)) {
+      ObSqlSchemaGuard *schema_guard = NULL;
+      const ObTableSchema *table_schema = NULL;
+      bool is_heap_table = false;
+      ObArray<ObRawExpr *> column_exprs;
+      if (OB_ISNULL(get_plan()) ||
+          OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("replae dml info is null", K(ret));
-      } else if (OB_FAIL(generate_old_calc_partid_expr(*index_info))) {
-        LOG_WARN("failed to generate calc partid expr", K(ret));
-      } else if (OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
-                                           index_info->old_part_id_expr_,
-                                           index_info->lookup_part_id_expr_))){
-        LOG_WARN("failed to replace expr", K(ret));
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(schema_guard->get_table_schema(index_info->ref_table_id_, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret));
+      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
+        // do nothing.
+      } else {
+        // When lookup_part_id_expr is a virtual generated column,
+        // the table with the primary key needs to be replaced,
+        // and the table without the primary key does not need to be replaced
+        ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+        if (OB_ISNULL(index_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("replae dml info is null", K(ret));
+        } else if (OB_FAIL(generate_old_calc_partid_expr(*index_info))) {
+          LOG_WARN("failed to generate calc partid expr", K(ret));
+        } else if (!is_heap_table && OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
+                                            index_info->old_part_id_expr_,
+                                            index_info->lookup_part_id_expr_))){
+          LOG_WARN("failed to replace expr", K(ret));
+        } else if (is_heap_table) {
+          if (OB_FAIL(generate_lookup_part_id_expr(*index_info))) {
+            LOG_WARN("failed to generate lookup part id expr", K(ret));
+          } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(
+                    index_info->lookup_part_id_expr_, column_exprs))) {
+            LOG_WARN("failed to extract column exprs", K(ret));
+          } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
+            LOG_WARN("failed to add skipped exprs", K(ret));
+          } else if (OB_FAIL(copier.copy(index_info->lookup_part_id_expr_,
+                                        index_info->lookup_part_id_expr_))) {
+            LOG_WARN("failed to copy lookup part id expr", K(ret));
+          }
+        }
       }
     }
   } else if (get_insert_up()) {
     // generate the calc_part_id_expr_ of update caluse
     for (int64_t i = 0; OB_SUCC(ret) && i < get_insert_up_index_dml_infos().count(); ++i) {
       IndexDMLInfo *dml_info = get_insert_up_index_dml_infos().at(i);
-      // insert on duplicate update stmt
-      if (OB_ISNULL(dml_info)) {
+      ObSqlSchemaGuard *schema_guard = NULL;
+      const ObTableSchema *table_schema = NULL;
+      bool is_heap_table = false;
+      ObArray<ObRawExpr *> column_exprs;
+      if (OB_ISNULL(get_plan()) ||
+          OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("insert_up dml info is null", K(ret));
-      } else if (OB_FAIL(generate_old_calc_partid_expr(*dml_info))) {
-        LOG_WARN("fail to generate calc partid expr", K(ret));
-      } else if (OB_FAIL(generate_update_new_calc_partid_expr(*dml_info))) {
-        LOG_WARN("failed to generate update new part id expr", K(ret));
-      } else if (OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
-                                           dml_info->old_part_id_expr_,
-                                           dml_info->lookup_part_id_expr_))){
-        LOG_WARN("failed to replace expr", K(ret));
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(schema_guard->get_table_schema(dml_info->ref_table_id_, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret));
+      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
+        // do nothing.
+      } else {
+        // When lookup_part_id_expr is a virtual generated column,
+        // the table with the primary key needs to be replaced,
+        // and the table without the primary key does not need to be replaced
+        ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+        // insert on duplicate update stmt
+        if (OB_ISNULL(dml_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("insert_up dml info is null", K(ret));
+        } else if (OB_FAIL(generate_old_calc_partid_expr(*dml_info))) {
+          LOG_WARN("fail to generate calc partid expr", K(ret));
+        } else if (OB_FAIL(generate_update_new_calc_partid_expr(*dml_info))) {
+          LOG_WARN("failed to generate update new part id expr", K(ret));
+        } else if (!is_heap_table && OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
+                                            dml_info->old_part_id_expr_,
+                                            dml_info->lookup_part_id_expr_))){
+          LOG_WARN("failed to replace expr", K(ret));
+        } else if (is_heap_table) {
+          if (OB_FAIL(generate_lookup_part_id_expr(*dml_info))) {
+            LOG_WARN("failed to generate lookup part id expr", K(ret));
+          } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(
+                    dml_info->lookup_part_id_expr_, column_exprs))) {
+            LOG_WARN("failed to extract column exprs", K(ret));
+          } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
+            LOG_WARN("failed to add skipped exprs", K(ret));
+          } else if (OB_FAIL(copier.copy(dml_info->lookup_part_id_expr_,
+                            dml_info->lookup_part_id_expr_))) {
+            LOG_WARN("failed to copy lookup part id expr", K(ret));
+          }
+        }
       }
     }
   }

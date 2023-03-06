@@ -27,6 +27,7 @@ public:
   int64_t snapshot_version_;
   int64_t execution_id_;
   int64_t ddl_task_id_;
+  int64_t data_version_;
   common::ObArray<table::ObTableLoadLSIdAndPartitionId> ls_partition_ids_;
 };
 

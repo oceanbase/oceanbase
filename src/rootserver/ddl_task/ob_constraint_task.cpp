@@ -550,7 +550,7 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
+  } else if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
     LOG_WARN("deserialize params from message failed", K(ret));
   } else {
     object_id_ = table_id;
@@ -1048,6 +1048,7 @@ int ObConstraintTask::set_foreign_key_constraint_validated()
       fk_arg.need_validate_data_ = false;
       alter_table_arg.exec_tenant_id_ = tenant_id_;
       alter_table_arg.based_schema_object_infos_.reset();
+      alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
       if (is_table_hidden_) {
         ObSArray<uint64_t> unused_ids;
         alter_table_arg.ddl_task_type_ = share::MODIFY_FOREIGN_KEY_STATE_TASK;
@@ -1121,6 +1122,7 @@ int ObConstraintTask::set_check_constraint_validated()
       } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
         LOG_WARN("get ddl rpc timeout failed", K(ret));
       } else if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
+        alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
         if (is_table_hidden_) {
           if (!is_oracle_mode) {
             // only mysql mode support modify not null column during offline ddl, support oracle later.
@@ -1399,6 +1401,7 @@ int ObConstraintTask::rollback_failed_foregin_key()
         ObSArray<uint64_t> unused_ids;
         alter_table_arg.ddl_task_type_ = share::MODIFY_FOREIGN_KEY_STATE_TASK;
         alter_table_arg.hidden_table_id_ = object_id_;
+        alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
         if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
             execute_ddl_task(alter_table_arg, unused_ids))) {
           LOG_WARN("alter table failed", K(ret));
@@ -1485,6 +1488,7 @@ int ObConstraintTask::rollback_failed_add_not_null_columns()
       alter_table_arg.ddl_task_type_ = share::DELETE_COLUMN_FROM_SCHEMA;
       alter_table_arg.index_arg_list_.reset();
       alter_table_arg.foreign_key_arg_list_.reset();
+      alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
       AlterColumnSchema *col_schema = NULL;
       for (int64_t i = 0; i < alter_table_arg.alter_table_schema_.get_column_count() && OB_SUCC(ret); i++) {
         if (OB_ISNULL(col_schema = static_cast<AlterColumnSchema *>(
@@ -1815,17 +1819,19 @@ int ObConstraintTask::serialize_params_to_message(char *buf, const int64_t buf_l
   return ret;
 }
 
-int ObConstraintTask::deserlize_params_from_message(const char *buf, const int64_t data_len, int64_t &pos)
+int ObConstraintTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   ObAlterTableArg tmp_arg;
-  if (OB_UNLIKELY(nullptr == buf || data_len <= 0)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
     LOG_WARN("fail to deserialize task version", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
   }

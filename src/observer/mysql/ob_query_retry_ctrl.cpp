@@ -744,6 +744,13 @@ void ObQueryRetryCtrl::switch_consumer_group_retry_proc(ObRetryParam &v)
   retry_obj.test(switch_group_retry);
 }
 
+void ObQueryRetryCtrl::timeout_proc(ObRetryParam &v)
+{
+  if (is_try_lock_row_err(v.session_.get_retry_info().get_last_query_retry_err())) {
+    v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+    v.retry_type_ = RETRY_TYPE_NONE;
+  }
+}
 
 /////// For inner SQL only ///////////////
 void ObQueryRetryCtrl::inner_try_lock_row_conflict_proc(ObRetryParam &v)
@@ -832,9 +839,6 @@ void ObQueryRetryCtrl::empty_proc(ObRetryParam &v)
   // 根据"给用户返回导致不重试的最后一个错误码"的原则，
   // 这里是err不在重试错误码列表中的情况，需要将client_ret设置为相应的值
   v.client_ret_ = v.err_;
-  if (is_timeout_err(v.err_) && is_try_lock_row_err(v.session_.get_retry_info().get_last_query_retry_err())) {
-    v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
-  }
   v.retry_type_ = RETRY_TYPE_NONE;
   if (OB_ERR_PROXY_REROUTE != v.client_ret_) {
     LOG_DEBUG("no retry handler for this err code, no need retry", K(v),
@@ -978,6 +982,11 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SQL",      OB_NO_PARTITION_FOR_INTERVAL_PART,  short_wait_retry_proc,             short_wait_retry_proc);
   ERR_RETRY_FUNC("SQL",      OB_SQL_RETRY_SPM,                   force_local_retry_proc,            force_local_retry_proc);
   ERR_RETRY_FUNC("SQL",      OB_NEED_SWITCH_CONSUMER_GROUP,      switch_consumer_group_retry_proc,  empty_proc);
+
+  /* timeout */
+  ERR_RETRY_FUNC("SQL",      OB_TIMEOUT,                         timeout_proc,                timeout_proc);
+  ERR_RETRY_FUNC("SQL",      OB_TRANS_TIMEOUT,                   timeout_proc,                timeout_proc);
+  ERR_RETRY_FUNC("SQL",      OB_TRANS_STMT_TIMEOUT,              timeout_proc,                timeout_proc);
 
   /* ddl */
 

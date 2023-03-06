@@ -52,7 +52,7 @@ struct ObLobAccessParam {
 public:
   int set_lob_locator(common::ObLobLocatorV2 *lob_locator);
   TO_STRING_KV(K_(ls_id), K_(tablet_id), KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size),
-    K_(coll_type), K_(offset), K_(len), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
+    K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
     K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(inrow_read_nocopy));
 public:
   transaction::ObTxDesc *tx_desc_; // for write/update/delete

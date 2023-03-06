@@ -40,10 +40,10 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
   // but it has serveral limitations, hence we check its usage here
   for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
     RowCountEstMethod method;
-    bool is_vt = false;
-    if (OB_FAIL(choose_best_estimation_method(paths.at(i), meta, method, is_vt))) {
+    bool use_default_vt = false;
+    if (OB_FAIL(choose_best_estimation_method(paths.at(i), meta, method, use_default_vt))) {
       LOG_WARN("failed to choose best estimation method", K(ret));
-    } else if (is_vt) {
+    } else if (use_default_vt) {
       if (OB_FAIL(process_vtable_estimation(paths.at(i)))) {
         LOG_WARN("failed to process virtual table estimation", K(ret));
       }
@@ -67,7 +67,7 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
 int ObAccessPathEstimation::choose_best_estimation_method(const AccessPath *path,
                                                           const ObTableMetaInfo &meta,
                                                           RowCountEstMethod &method,
-                                                          bool &is_vt)
+                                                          bool &use_default_vt)
 {
   int ret = OB_SUCCESS;
   const ObTablePartitionInfo *part_info = NULL;
@@ -76,8 +76,8 @@ int ObAccessPathEstimation::choose_best_estimation_method(const AccessPath *path
     LOG_WARN("access path is invalid", K(ret), K(path));
   } else if (is_virtual_table(path->ref_table_id_) &&
              !share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
-    method = RowCountEstMethod::DEFAULT_STAT;
-    is_vt = true;
+    use_default_vt = !meta.has_opt_stat_;
+    method = meta.has_opt_stat_ ? RowCountEstMethod::BASIC_STAT : RowCountEstMethod::DEFAULT_STAT;
   } else {
     if (meta.is_empty_table_) {
       method = RowCountEstMethod::BASIC_STAT;

@@ -23,6 +23,7 @@
 #include "logservice/ob_log_handler.h"
 #include "storage/restore/ob_ls_restore_handler.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -216,7 +217,8 @@ ObCopyTabletInfoArg::ObCopyTabletInfoArg()
     tablet_id_list_(),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
-    is_only_copy_major_(false)
+    is_only_copy_major_(false),
+    version_(OB_INVALID_ID)
 {
 }
 
@@ -228,6 +230,7 @@ void ObCopyTabletInfoArg::reset()
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
   is_only_copy_major_ = false;
+  version_ = OB_INVALID_ID;
 }
 
 bool ObCopyTabletInfoArg::is_valid() const
@@ -235,17 +238,19 @@ bool ObCopyTabletInfoArg::is_valid() const
   return tenant_id_ != OB_INVALID_ID
       && ls_id_.is_valid()
       && tablet_id_list_.count() > 0
-      && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
+      && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_)
+      && version_ != OB_INVALID_ID;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletInfoArg,
-    tenant_id_, ls_id_, tablet_id_list_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_);
+    tenant_id_, ls_id_, tablet_id_list_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_, version_);
 
 ObCopyTabletInfo::ObCopyTabletInfo()
   : tablet_id_(),
     status_(ObCopyTabletStatus::MAX_STATUS),
     param_(),
-    data_size_(0)
+    data_size_(0),
+    version_(OB_INVALID_ID)
 {
 }
 
@@ -255,6 +260,7 @@ void ObCopyTabletInfo::reset()
   status_ = ObCopyTabletStatus::MAX_STATUS;
   param_.reset();
   data_size_ = 0;
+  version_ = OB_INVALID_ID;
 }
 
 bool ObCopyTabletInfo::is_valid() const
@@ -262,7 +268,8 @@ bool ObCopyTabletInfo::is_valid() const
   return tablet_id_.is_valid()
       && ObCopyTabletStatus::is_valid(status_)
       && ((ObCopyTabletStatus::TABLET_EXIST == status_ && param_.is_valid() && data_size_ >= 0)
-        || ObCopyTabletStatus::TABLET_NOT_EXIST == status_);
+        || ObCopyTabletStatus::TABLET_NOT_EXIST == status_)
+      && version_ != OB_INVALID_ID;
 }
 
 int ObCopyTabletInfo::assign(const ObCopyTabletInfo &info)
@@ -276,11 +283,12 @@ int ObCopyTabletInfo::assign(const ObCopyTabletInfo &info)
   } else {
     status_ = info.status_;
     data_size_ = info.data_size_;
+    version_ = info.version_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCopyTabletInfo, tablet_id_, status_, param_, data_size_);
+OB_SERIALIZE_MEMBER(ObCopyTabletInfo, tablet_id_, status_, param_, data_size_, version_);
 
 /******************ObCopyTabletSSTableInfoArg*********************/
 ObCopyTabletSSTableInfoArg::ObCopyTabletSSTableInfoArg()
@@ -320,7 +328,8 @@ ObCopyTabletsSSTableInfoArg::ObCopyTabletsSSTableInfoArg()
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
     is_only_copy_major_(false),
-    tablet_sstable_info_arg_list_()
+    tablet_sstable_info_arg_list_(),
+    version_(OB_INVALID_ID)
 {
 }
 
@@ -337,6 +346,7 @@ void ObCopyTabletsSSTableInfoArg::reset()
   ls_rebuild_seq_ = -1;
   is_only_copy_major_ = false;
   tablet_sstable_info_arg_list_.reset();
+  version_ = OB_INVALID_ID;
 }
 
 bool ObCopyTabletsSSTableInfoArg::is_valid() const
@@ -344,11 +354,12 @@ bool ObCopyTabletsSSTableInfoArg::is_valid() const
   return OB_INVALID_ID != tenant_id_
       && ls_id_.is_valid()
       && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_)
-      && tablet_sstable_info_arg_list_.count() > 0;
+      && tablet_sstable_info_arg_list_.count() > 0
+      && version_ != OB_INVALID_ID;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletsSSTableInfoArg,
-    tenant_id_, ls_id_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_, tablet_sstable_info_arg_list_);
+    tenant_id_, ls_id_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_, tablet_sstable_info_arg_list_, version_);
 
 
 ObCopyTabletSSTableInfo::ObCopyTabletSSTableInfo()
@@ -378,7 +389,8 @@ OB_SERIALIZE_MEMBER(ObCopyTabletSSTableInfo,
 
 ObCopyLSInfoArg::ObCopyLSInfoArg()
   : tenant_id_(OB_INVALID_ID),
-    ls_id_()
+    ls_id_(),
+    version_(OB_INVALID_ID)
 {
 }
 
@@ -386,22 +398,25 @@ void ObCopyLSInfoArg::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
+  version_ = OB_INVALID_ID;
 }
 
 bool ObCopyLSInfoArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_
-      && ls_id_.is_valid();
+      && ls_id_.is_valid()
+      && version_ != OB_INVALID_ID;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyLSInfoArg,
-    tenant_id_, ls_id_);
+    tenant_id_, ls_id_, version_);
 
 
 ObCopyLSInfo::ObCopyLSInfo()
   : ls_meta_package_(),
     tablet_id_array_(),
-    is_log_sync_(false)
+    is_log_sync_(false),
+    version_(OB_INVALID_ID)
 {
 }
 
@@ -410,19 +425,21 @@ void ObCopyLSInfo::reset()
   ls_meta_package_.reset();
   tablet_id_array_.reset();
   is_log_sync_ = false;
+  version_ = OB_INVALID_ID;
 }
 
 bool ObCopyLSInfo::is_valid() const
 {
-  return ls_meta_package_.is_valid() && tablet_id_array_.count() > 0;
+  return ls_meta_package_.is_valid() && tablet_id_array_.count() > 0 && version_ != OB_INVALID_ID;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyLSInfo,
-    ls_meta_package_, tablet_id_array_, is_log_sync_);
+    ls_meta_package_, tablet_id_array_, is_log_sync_, version_);
 
 ObFetchLSMetaInfoArg::ObFetchLSMetaInfoArg()
   : tenant_id_(OB_INVALID_ID),
-    ls_id_()
+    ls_id_(),
+    version_(OB_INVALID_ID)
 {
 }
 
@@ -430,33 +447,38 @@ void ObFetchLSMetaInfoArg::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
+  version_ = OB_INVALID_ID;
 }
 
 bool ObFetchLSMetaInfoArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_
-      && ls_id_.is_valid();
+      && ls_id_.is_valid()
+      && version_ != OB_INVALID_ID;
 }
 
-OB_SERIALIZE_MEMBER(ObFetchLSMetaInfoArg, tenant_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObFetchLSMetaInfoArg, tenant_id_, ls_id_, version_);
 
 
 ObFetchLSMetaInfoResp::ObFetchLSMetaInfoResp()
-  : ls_meta_package_()
+  : ls_meta_package_(),
+    version_(OB_INVALID_ID)
 {
 }
 
 void ObFetchLSMetaInfoResp::reset()
 {
   ls_meta_package_.reset();
+  version_ = OB_INVALID_ID;
 }
 
 bool ObFetchLSMetaInfoResp::is_valid() const
 {
-  return ls_meta_package_.is_valid();
+  return ls_meta_package_.is_valid()
+      && version_ != OB_INVALID_ID;
 }
 
-OB_SERIALIZE_MEMBER(ObFetchLSMetaInfoResp, ls_meta_package_);
+OB_SERIALIZE_MEMBER(ObFetchLSMetaInfoResp, ls_meta_package_, version_);
 
 ObFetchLSMemberListArg::ObFetchLSMemberListArg()
   : tenant_id_(OB_INVALID_ID),
@@ -580,7 +602,8 @@ ObCopyTabletSSTableHeader::ObCopyTabletSSTableHeader()
   : tablet_id_(),
     status_(ObCopyTabletStatus::MAX_STATUS),
     sstable_count_(0),
-    tablet_meta_()
+    tablet_meta_(),
+    version_(OB_INVALID_ID)
 {
 }
 
@@ -590,6 +613,7 @@ void ObCopyTabletSSTableHeader::reset()
   status_ = ObCopyTabletStatus::MAX_STATUS;
   sstable_count_ = 0;
   tablet_meta_.reset();
+  version_ = OB_INVALID_ID;
 }
 
 bool ObCopyTabletSSTableHeader::is_valid() const
@@ -598,11 +622,12 @@ bool ObCopyTabletSSTableHeader::is_valid() const
       && ObCopyTabletStatus::is_valid(status_)
       && sstable_count_ >= 0
       && ((ObCopyTabletStatus::TABLET_EXIST == status_ && tablet_meta_.is_valid())
-          || ObCopyTabletStatus::TABLET_NOT_EXIST == status_);
+          || ObCopyTabletStatus::TABLET_NOT_EXIST == status_)
+      && version_ != OB_INVALID_ID;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletSSTableHeader,
-    tablet_id_, status_, sstable_count_, tablet_meta_);
+    tablet_id_, status_, sstable_count_, tablet_meta_, version_);
 
 ObNotifyRestoreTabletsArg::ObNotifyRestoreTabletsArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_array_(), restore_status_(), leader_proposal_id_(0)
@@ -1247,6 +1272,8 @@ int ObFetchLSInfoP::process()
       ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
       STORAGE_LOG(WARN, "src migration status do not allow to migrate out", K(ret), "src migration status",
           migration_status);
+    } else if (OB_FAIL(ObStorageHAUtils::get_server_version(result_.version_))) {
+      LOG_WARN("failed to get server version", K(ret), K_(arg));
     } else if (OB_FAIL(MTL(logservice::ObLogService*)->get_palf_role(ls->get_ls_id(), role, proposal_id))) {
       STORAGE_LOG(WARN, "failed to get palf role", K(ret), K(arg_), "meta package", result_.ls_meta_package_);
     } else if (is_strong_leader(role)) {
@@ -1298,6 +1325,8 @@ int ObFetchLSMetaInfoP::process()
       LOG_WARN("log handler should not be NULL", K(ret), KP(log_handler), K(arg_));
     } else if (OB_FAIL(ls->get_ls_meta_package(check_archive, result_.ls_meta_package_))) {
       LOG_WARN("failed to get ls meta package", K(ret), K(arg_));
+    } else if (OB_FAIL(ObStorageHAUtils::get_server_version(result_.version_))) {
+      LOG_WARN("failed to get server version", K(ret), K_(arg));
     }
   }
   return ret;
@@ -1840,7 +1869,9 @@ int ObStorageRpc::post_ls_info_request(
     ObCopyLSInfoArg arg;
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).fetch_ls_info(arg, ls_info))) {
+    if (OB_FAIL(ObStorageHAUtils::get_server_version(arg.version_))) {
+      LOG_WARN("failed to get server version", K(ret), K(ls_id));
+    } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).fetch_ls_info(arg, ls_info))) {
       LOG_WARN("failed to fetch ls info", K(ret), K(arg), K(src_info));
     } else {
       FLOG_INFO("fetch ls info successfully", K(ls_info));
@@ -1867,7 +1898,9 @@ int ObStorageRpc::post_ls_meta_info_request(
     ObFetchLSMetaInfoArg arg;
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).fetch_ls_meta_info(arg, ls_info))) {
+    if (OB_FAIL(ObStorageHAUtils::get_server_version(arg.version_))) {
+      LOG_WARN("failed to get server version", K(ret), K(arg));
+    } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).fetch_ls_meta_info(arg, ls_info))) {
       LOG_WARN("failed to fetch ls info", K(ret), K(arg), K(src_info));
     } else {
       FLOG_INFO("fetch ls meta info successfully", K(ls_info));

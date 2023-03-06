@@ -53,7 +53,6 @@ int ObNetClient::init_(const ObNetOptions opts)
   } else if (OB_FAIL(net_.start())) {
     LOG_ERROR("Start client network fail", K(ret));
   } else {
-    pn_provision(-1, 1, 1);
     inited_ = true;
   }
 

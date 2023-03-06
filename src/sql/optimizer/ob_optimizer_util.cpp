@@ -519,6 +519,8 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
     // do nothing
   } else if (from == to) {
     found = true;
+  } else if (!from->is_generalized_column() && from->same_as(*to)) {
+    found = true;
   } else if (equal_sets.empty()) {
     // do nothing
   } else if (ObRawExprUtils::expr_is_order_consistent(from, to, is_consistent)
@@ -534,6 +536,20 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
         found = true;
       }
     }
+  }
+  return found;
+}
+
+bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
+                                         const ObRawExpr *to)
+{
+  bool found = false;
+  if (OB_ISNULL(from) || OB_ISNULL(to)) {
+    // do nothing
+  } else if (from == to) {
+    found = true;
+  } else if (!from->is_generalized_column() && from->same_as(*to)) {
+    found = true;
   }
   return found;
 }
@@ -1117,6 +1133,21 @@ bool ObOptimizerUtil::find_equal_expr(const ObIArray<ObRawExpr*> &exprs,
      }
    }
    return found;
+}
+
+bool ObOptimizerUtil::find_equal_expr(const ObIArray<ObRawExpr *> &exprs,
+                                      const ObRawExpr *expr,
+                                      int64_t &idx)
+{
+  bool found = false;
+  int64_t N = exprs.count();
+  for (int64_t i = 0; !found && i < N; ++i) {
+    if (is_expr_equivalent(exprs.at(i), expr)) {
+      found = true;
+      idx = i;
+    }
+  }
+  return found;
 }
 
 int ObOptimizerUtil::find_stmt_expr_direction(const ObDMLStmt &stmt,
@@ -4867,6 +4898,15 @@ int ObOptimizerUtil::convert_subplan_scan_expr(ObRawExprCopier &copier,
     LOG_WARN("failed to check subplan scan expr validity", K(ret));
   } else if (!is_valid) {
     /*do nothing*/
+  } else if (OB_FAIL(get_parent_stmt_expr(equal_sets,
+                                          table_id,
+                                          parent_stmt,
+                                          child_stmt,
+                                          input_expr,
+                                          output_expr))) {
+    LOG_WARN("failed to get parent stmt expr", K(ret));
+  } else if (NULL != output_expr) {
+    // do nothing
   } else if (OB_FAIL(copier.copy_on_replace(input_expr,
                                             output_expr,
                                             &replacer))) {
@@ -8568,6 +8608,47 @@ int ObOptimizerUtil::replace_gen_column(ObLogPlan *log_plan, ObRawExpr *part_exp
         LOG_WARN("failed to copy on replace expr", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::truncate_string_for_opt_stats(const ObObj *old_obj,
+                                                   ObIAllocator &alloc,
+                                                   const ObObj *&new_obj)
+{
+  int ret = OB_SUCCESS;
+  bool is_truncated = false;
+  if (old_obj->is_string_type()) {
+    ObString str;
+    if (OB_FAIL(old_obj->get_string(str))) {
+      LOG_WARN("failed to get string", K(ret), K(str));
+    } else {
+      int64_t mb_len = ObCharset::strlen_char(old_obj->get_collation_type(), str.ptr(), str.length());
+      if (mb_len <= OPT_STATS_MAX_VALUE_CHAR_LEN) {
+      } else {
+        //need truncate string, because the opt stats is gathered after truncate string, such as: max_value、min_value、histogram.
+        ObObj *tmp_obj = NULL;
+        if (OB_ISNULL(tmp_obj = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc buf", K(ret));
+        } else {
+          int64_t valid_len = ObCharset::charpos(old_obj->get_collation_type(), str.ptr(),
+                                                 str.length(), OPT_STATS_MAX_VALUE_CHAR_LEN);
+          if (OB_UNLIKELY(valid_len <= 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error", K(ret), K(valid_len), K(str), K(OPT_STATS_MAX_VALUE_CHAR_LEN));
+          } else {
+            tmp_obj->set_varchar(str.ptr(), valid_len);
+            tmp_obj->set_meta_type(old_obj->get_meta());
+            new_obj = tmp_obj;
+            is_truncated = true;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_truncated) {
+    new_obj = old_obj;
   }
   return ret;
 }

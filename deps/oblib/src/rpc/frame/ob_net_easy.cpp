@@ -797,9 +797,8 @@ int ObNetEasy::start()
     LOG_ERROR("eio is NULL, not inited", K(is_inited_), KP_(rpc_eio), KP_(mysql_eio), KP_(batch_rpc_eio), K(ret));
   }
 
-  // TODO: rpc_port_ might not in use
-  global_ob_listener = &rpc_listener_;
   if (OB_SUCC(ret) && rpc_port_ > 0) {
+    global_ob_listener = &rpc_listener_;
     if (!global_poc_server.has_start()) {
       if (OB_FAIL(rpc_listener_.listen_create(rpc_port_))) {
         LOG_ERROR("create listen failed", K(ret));

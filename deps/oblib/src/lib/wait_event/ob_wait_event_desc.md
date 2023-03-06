@@ -311,3 +311,7 @@ Updating or getting max apply scn in apply status should be mutually exclusive.
 ## spinlock: gc handler lock wait
 
 The read and write operation on configs in gc handler should be mutually exclusive.
+
+## latch: cdcservice clientlsctx lock wait
+
+The read and write operation on source(RemoteLogParent) in ClientLSCtx should be mutually exclusive.

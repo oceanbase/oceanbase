@@ -443,6 +443,7 @@ constexpr int OB_ERR_ROOTSERVICE_START = -4752;
 constexpr int OB_ERR_ROOTSERVICE_STOP = -4753;
 constexpr int OB_ERR_ROOT_INSPECTION = -4754;
 constexpr int OB_ERR_ROOTSERVICE_THREAD_HUNG = -4755;
+constexpr int OB_MIGRATE_NOT_COMPATIBLE = -4756;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -1685,6 +1686,7 @@ constexpr int OB_ERR_ATTRIBUTE_ASSOCIATION = -9741;
 constexpr int OB_ERR_MERGE_INTO_WITH_POLICY = -9742;
 constexpr int OB_ERR_SP_NO_DROP_SP = -9743;
 constexpr int OB_ERR_RECOMPILATION_OBJECT = -9744;
+constexpr int OB_ERR_VARIABLE_NOT_IN_SELECT_LIST = -9745;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2237,6 +2239,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ROOTSERVICE_STOP__USER_ERROR_MSG "rootservice stop process has failure"
 #define OB_ERR_ROOT_INSPECTION__USER_ERROR_MSG "root inspection is not passed"
 #define OB_ERR_ROOTSERVICE_THREAD_HUNG__USER_ERROR_MSG "rootservice backgroud thread may be hung"
+#define OB_MIGRATE_NOT_COMPATIBLE__USER_ERROR_MSG "Migration src and dest version is not compatible."
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -3378,6 +3381,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
 #define OB_PACKET_CLUSTER_ID_NOT_MATCH__USER_ERROR_MSG "Packet cluster_id not match"
+#define OB_TENANT_ID_NOT_MATCH__USER_ERROR_MSG "Tenant id not match"
 #define OB_URI_ERROR__USER_ERROR_MSG "URI error"
 #define OB_FINAL_MD5_ERROR__USER_ERROR_MSG "OSS file MD5 error"
 #define OB_OSS_ERROR__USER_ERROR_MSG "OSS error"
@@ -3721,6 +3725,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__USER_ERROR_MSG "variable not in select list"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -4264,6 +4269,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ROOTSERVICE_STOP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4753, rootservice stop process has failure"
 #define OB_ERR_ROOT_INSPECTION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4754, root inspection is not passed"
 #define OB_ERR_ROOTSERVICE_THREAD_HUNG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4755, rootservice backgroud thread may be hung"
+#define OB_MIGRATE_NOT_COMPATIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4756, Migration src and dest version is not compatible."
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -5405,6 +5411,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8003, Packet checksum error"
 #define OB_PACKET_CLUSTER_ID_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8004, Packet cluster_id not match"
+#define OB_TENANT_ID_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8005, Tenant id not match"
 #define OB_URI_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9001, URI error"
 #define OB_FINAL_MD5_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9002, OSS file MD5 error"
 #define OB_OSS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9003, OSS error"
@@ -5748,8 +5755,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__ORA_USER_ERROR_MSG "ORA-01007: variable not in select list"
 
-extern int g_all_ob_errnos[2023];
+extern int g_all_ob_errnos[2025];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

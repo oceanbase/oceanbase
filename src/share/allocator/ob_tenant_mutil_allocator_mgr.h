@@ -41,8 +41,6 @@ public:
                                  ObTenantMutilAllocator *&out_allocator);
   int get_tenant_log_allocator(const uint64_t tenant_id,
                                ObILogAllocator *&out_allocator);
-  int get_tenant_replay_allocator(const uint64_t tenant_id,
-                                  ObIReplayTaskAllocator *&out_allocator);
   int get_tenant_limit(const uint64_t tenant_id, int64_t &limit);
   int set_tenant_limit(const uint64_t tenant_id, const int64_t new_limit);
   void *alloc_log_entry_buf(const int64_t size)
@@ -71,7 +69,7 @@ private:
   obsys::ObRWLock locks_[PRESERVED_TENANT_COUNT];
   ObTenantMutilAllocator *tma_array_[PRESERVED_TENANT_COUNT];
   ObBlockAllocMgr clog_body_blk_alloc_;
-  ObVSliceAlloc clog_entry_alloc_; 
+  ObVSliceAlloc clog_entry_alloc_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantMutilAllocatorMgr);
 }; // end of class ObTenantMutilAllocatorMgr

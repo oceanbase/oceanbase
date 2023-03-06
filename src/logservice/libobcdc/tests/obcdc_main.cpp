@@ -56,6 +56,7 @@ ObLogMain::ObLogMain() : inited_(false),
                          verify_mode_(false),
                          enable_reentrant_(false),
                          output_br_detail_(false),
+                         output_br_special_detail_(false),
                          start_timestamp_usec_(0),
                          tenant_id_(OB_INVALID_TENANT_ID),
                          tg_match_pattern_(NULL),
@@ -81,9 +82,10 @@ int ObLogMain::init(int argc, char **argv)
     LOG_ERROR("check arguments fail");
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(br_printer_.init(data_file_, heartbeat_file_, print_console_, only_print_hex_, only_print_dml_tx_checksum_,
-      print_hex_, print_lob_md5_, verify_mode_, output_br_detail_))) {
+      print_hex_, print_lob_md5_, verify_mode_, output_br_detail_, output_br_special_detail_))) {
     LOG_ERROR("init binlog record printer fail", K(ret), K(data_file_), K(heartbeat_file_),
-        K(print_console_), K(only_print_hex_), K_(only_print_dml_tx_checksum), K(print_hex_), K(print_lob_md5_), K(verify_mode_), K_(output_br_detail));
+        K(print_console_), K(only_print_hex_), K_(only_print_dml_tx_checksum), K(print_hex_), K(print_lob_md5_),
+        K(verify_mode_), K_(output_br_detail), K_(output_br_special_detail));
   } else {
     stop_flag_ = true;
     inited_ = true;
@@ -117,6 +119,7 @@ void ObLogMain::destroy()
   last_heartbeat_timestamp_micro_sec_ = 0;
   stop_flag_ = true;
   output_br_detail_ = false;
+  output_br_special_detail_ = false;
   br_printer_.destroy();
 }
 
@@ -126,7 +129,7 @@ int ObLogMain::parse_args_(int argc, char **argv)
 
   // option variables
   int opt = -1;
-  const char *opt_string = "ivcdD:f:hH:oVt:rR:OxmT:Pp:";
+  const char *opt_string = "iIvcdD:f:hH:oVt:rR:OxmT:Pp:";
   struct option long_opts[] =
   {
     {"print_dml_checksum", 0, NULL, 'c'},
@@ -148,6 +151,7 @@ int ObLogMain::parse_args_(int argc, char **argv)
     {"version", 0, NULL, 'v'},
     {"verify_begin_trans_id", 0, NULL, 'P'},
     {"output_br_detail", 0, NULL, 'i'},
+    {"output_br_special_detail", 0, NULL, 'I'},
     {"parse_timezone_info", 0, NULL, 'p'},
     {0, 0, 0, 0}
   };
@@ -246,6 +250,13 @@ int ObLogMain::parse_args_(int argc, char **argv)
       case 'i': {
         // output detail info of binlog record, default off
         output_br_detail_ = true;
+        break;
+      }
+
+      case 'I': {
+        // output special detail info of binlog record, default off
+        // Such as, ObTraceInfo
+        output_br_special_detail_ = true;
         break;
       }
 

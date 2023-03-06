@@ -225,6 +225,7 @@ private:
   int check_sys_view_(const uint64_t tenant_id,
                       const share::schema::ObTableSchema &hard_code_table);
   int check_cancel();
+  int check_tenant_status_(const uint64_t tenant_id);
 private:
   bool inited_;
   volatile bool stopped_;

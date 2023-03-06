@@ -5908,8 +5908,8 @@ int ObTransformUtils::check_group_by_consistent(ObSelectStmt *sel_stmt,
         LOG_WARN("get unexpected error", K(ret));
       } else if (expr->has_flag(CNT_AGG) ||
                  expr->is_const_raw_expr() ||
-                 ObOptimizerUtil::find_equal_expr(sel_stmt->get_group_exprs(), expr) ||
-                 ObOptimizerUtil::find_equal_expr(sel_stmt->get_rollup_exprs(), expr)) {
+                 ObOptimizerUtil::find_item(sel_stmt->get_group_exprs(), expr) ||
+                 ObOptimizerUtil::find_item(sel_stmt->get_rollup_exprs(), expr)) {
         /*do nothing*/
       } else {
         is_consistent = false;

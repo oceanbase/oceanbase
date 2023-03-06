@@ -234,7 +234,6 @@ static int connection_redispatch(int conn_fd, io_threads_pipefd_pool_t *ths_fd_p
 {
   int ret = OB_SUCCESS;
   int wrfd = -1;
-  int count = ths_fd_pool->count;
   int64_t write_bytes = 0;
 
   if (OB_ISNULL(ths_fd_pool)) {
@@ -244,6 +243,7 @@ static int connection_redispatch(int conn_fd, io_threads_pipefd_pool_t *ths_fd_p
     RPC_LOG(ERROR, "conn_fd invalid", K(conn_fd));
     ret = OB_INVALID_ARGUMENT;
   } else {
+    int count = ths_fd_pool->count;
     wrfd = ths_fd_pool->pipefd[index % count];
     RPC_LOG(INFO, "dipatch", K(conn_fd), K(count), K(index), K(wrfd));
     while ((write_bytes = write(wrfd, &conn_fd, sizeof(conn_fd))) < 0 && errno == EINTR);

@@ -3223,6 +3223,8 @@ int ObWindowFunctionOp::participator_coordinate(
   return ret;
 }
 
+// Store from store_begin_idx to store_begin_idx + store_num
+// Skip rows of beginning that have been stored already but haven't been restore
 int ObWindowFunctionOp::store_all_expr_datums(int64_t store_begin_idx, int64_t store_num)
 {
   int ret = OB_SUCCESS;
@@ -3231,14 +3233,14 @@ int ObWindowFunctionOp::store_all_expr_datums(int64_t store_begin_idx, int64_t s
     LOG_WARN("backup interval not continuous", K(ret), K(store_begin_idx), K(restore_row_cnt_));
   } else if (restore_row_cnt_ < store_begin_idx + store_num) {
     const ObIArray<ObExpr *> &all_expr = get_all_expr();
-    int64_t memcpy_length = store_num * sizeof(ObDatum);
+    int64_t memcpy_length = (store_begin_idx + store_num - restore_row_cnt_) * sizeof(ObDatum);
     if (OB_LIKELY(memcpy_length > 0)) {
       ObIArray<ObDatum*> &src_datums = all_expr_datums_;
       ObIArray<ObDatum*> &dest_datums = all_expr_datums_copy_;
       for (int64_t i = 0; i < all_expr_datums_.count(); i++) {
         const bool expr_batch_result = all_expr.at(i)->is_batch_result();
-        ObDatum *src_datum = src_datums.at(i) + store_begin_idx;
-        ObDatum *dest_datum = dest_datums.at(i) + store_begin_idx;
+        ObDatum *src_datum = src_datums.at(i) + restore_row_cnt_;
+        ObDatum *dest_datum = dest_datums.at(i) + restore_row_cnt_;
         if (expr_batch_result) {
           MEMCPY(dest_datum, src_datum, memcpy_length);
         } else if (0 == store_begin_idx && store_num >= 1) {

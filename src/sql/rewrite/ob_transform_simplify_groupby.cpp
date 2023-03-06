@@ -620,7 +620,7 @@ int ObTransformSimplifyGroupby::remove_group_by_duplicates(ObDMLStmt *&stmt, boo
     ObArray<ObRawExpr*> new_group_exprs;
     ObIArray<ObRawExpr*> &group_exprs = select_stmt->get_group_exprs();
     for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs.count(); ++i) {
-      if (ObOptimizerUtil::find_equal_expr(new_group_exprs, group_exprs.at(i))) {
+      if (ObOptimizerUtil::find_item(new_group_exprs, group_exprs.at(i))) {
         /*do nothing*/
       } else if (OB_FAIL(new_group_exprs.push_back(group_exprs.at(i)))) {
         LOG_WARN("new group exprs push back failed", K(ret), K(group_exprs.at(i)));
@@ -1724,11 +1724,11 @@ int ObTransformSimplifyGroupby::is_first_rollup_with_duplicates(ObSelectStmt *st
     LOG_WARN("invalid rollup expr idx", K(rollup_expr_idx), K(ret));
   } else if (FALSE_IT(rollup_expr = stmt->get_rollup_exprs().at(rollup_expr_idx))) {
     // do nothing
-  } else if (ObOptimizerUtil::find_equal_expr(stmt->get_group_exprs(), rollup_expr)) {
+  } else if (ObOptimizerUtil::find_item(stmt->get_group_exprs(), rollup_expr)) {
     is_first = false;
-  } else if (OB_UNLIKELY(!ObOptimizerUtil::find_equal_expr(stmt->get_rollup_exprs(),
-                                                           rollup_expr,
-                                                           idx))) {
+  } else if (OB_UNLIKELY(!ObOptimizerUtil::find_item(stmt->get_rollup_exprs(),
+                                                     rollup_expr,
+                                                     &idx))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to find rollup expr in rollup exprs", K(ret));
   } else {

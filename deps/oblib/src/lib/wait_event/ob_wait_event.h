@@ -298,6 +298,7 @@ WAIT_EVENT_DEF(CLOG_CKPT_RWLOCK_WAIT, 15253, "rwlock: clog checkpoint rwlock wai
 WAIT_EVENT_DEF(TENANT_IO_CONFIG_WAIT, 15254, "rwlock: tenant io config wait", "address", "number", "tries", CONCURRENCY, "rwlock: tenant io config wait", true)
 WAIT_EVENT_DEF(SQL_WF_PARTICIPATOR_LOCK_WAIT, 15255, "latch: window function participator cond lock wait", "address", "", "", CONCURRENCY, "window function participator cond lock wait", true)
 WAIT_EVENT_DEF(SQL_WF_PARTICIPATOR_COND_WAIT, 15256, "mutex: window function participator cond wait", "address", "", "", CONCURRENCY, "window function participator cond wait", true)
+WAIT_EVENT_DEF(MAJOR_FREEZE_DIAGNOSE_LOCK_WAIT, 15257, "latch: major_freeze diagnose lock wait", "address", "number", "tries", CONCURRENCY, "latch: major_freeze diagnose lock wait", true)
 
 //transaction
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,"wait end trans", false)
@@ -364,7 +365,7 @@ WAIT_EVENT_DEF(DDL_EXECUTE_LOCK_WAIT, 16056, "ddl execute lock wait", "", "", ""
 //replication group
 WAIT_EVENT_DEF(RG_TRANSFER_LOCK_WAIT, 17000, "transfer lock wait", "src_rg", "dst_rg", "transfer_pkey", CONCURRENCY, "transfer lock wait", false)
 
-// liboblog
+// libobcdc
 WAIT_EVENT_DEF(OBCDC_PART_MGR_SCHEMA_VERSION_WAIT, 18000, "oblog part mgr schema version wait", "", "", "", CONCURRENCY, "oblog part mgr schema version wait", true)
 WAIT_EVENT_DEF(OBCDC_PROGRESS_RECYCLE_LOCK_WAIT, 18001, "latch: obcdc progress recycle lock wait", "", "", "", CONCURRENCY, "latch: obcdc progress recycle lock wait", true)
 WAIT_EVENT_DEF(OBCDC_METAINFO_LOCK_WAIT, 18002, "latch: obcdc metainfo lock wait", "", "", "", CONCURRENCY, "latch: obcdc metainfo lock wait", true)
@@ -375,6 +376,7 @@ WAIT_EVENT_DEF(OBCDC_TIMEZONE_GETTER_LOCK_WAIT, 18006, "latch: obcdc timezone ge
 WAIT_EVENT_DEF(OBCDC_FETCHLOG_ARPC_LOCK_WAIT, 18007, "latch: obcdc fetchlog arpc lock wait", "", "", "", CONCURRENCY, "latch: obcdc fetchlog arpc lock wait", true)
 WAIT_EVENT_DEF(OBCDC_FETCHSTREAM_CONTAINER_LOCK_WAIT, 18008, "latch: obcdc fetchstream container lock wait", "", "", "", CONCURRENCY, "latch: obcdc fetchstream container lock wait", true)
 WAIT_EVENT_DEF(EXT_SVR_BLACKLIST_LOCK_WAIT, 18009, "latch: external server blacklist lock wait", "", "", "", CONCURRENCY, "latch: external server blacklist lock wait", true)
+WAIT_EVENT_DEF(CDC_SERVICE_LS_CTX_LOCK_WAIT, 18010, "latch: cdcservice clientlsctx lock wait", "", "", "", CONCURRENCY, "latch: cdcservice clientlsctx lock wait", true)
 
 // palf
 WAIT_EVENT_DEF(PALF_SW_SUBMIT_INFO_WAIT, 19000, "palf sw last submit log info lock wait", "", "", "", CONCURRENCY, "PALF_SW_SUBMIT_INFO_WAIT", true)

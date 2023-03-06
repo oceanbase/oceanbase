@@ -424,7 +424,8 @@ bool ObSSTableIndexBuilder::check_index_desc(const ObDataStoreDesc &index_desc) 
   if (!index_desc.is_valid()
       || index_desc.need_prebuild_bloomfilter_
       || index_desc.merge_info_ != nullptr
-      || index_desc.row_column_count_ != index_desc.rowkey_column_count_ + 1) {
+      || index_desc.row_column_count_ != index_desc.rowkey_column_count_ + 1
+      || (index_desc.is_major_merge() && index_desc.major_working_cluster_version_ < DATA_VERSION_4_0_0_0)) {
     ret = false;
   }
   return ret;

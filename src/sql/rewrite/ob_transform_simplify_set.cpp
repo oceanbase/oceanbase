@@ -817,8 +817,8 @@ int ObTransformSimplifySet::check_first_stmt_removable(common::ObIArray<ObParent
 {
   int ret = OB_SUCCESS;
   can_remove = true;
-  ObDMLStmt* parent_stmt;
-  TableItem* table_item;
+  ObDMLStmt* parent_stmt = NULL;
+  TableItem* table_item = NULL;
   bool is_dml_table = false;
   if (parent_stmts.empty()) {
     // do nothing

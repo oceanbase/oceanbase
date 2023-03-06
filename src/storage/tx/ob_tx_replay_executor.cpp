@@ -238,7 +238,9 @@ int ObTxReplayExecutor::try_get_tx_ctx_(int64_t tx_id, int64_t tenant_id, const 
 
   ObTransID trans_id(tx_id);
   // replay ls log without part_ctx
-  if (trans_id.is_valid() && nullptr == ctx_) {
+  if (ctx_ != nullptr) {
+    first_created_ctx_ = false;
+  } else if (trans_id.is_valid() && nullptr == ctx_) {
 
     if (OB_FAIL(ls_tx_srv_->get_tx_ctx(tx_id, true, ctx_)) && OB_TRANS_CTX_NOT_EXIST != ret) {
       TRANS_LOG(WARN, "[Replay Tx] get tx ctx from ctx_mgr failed", K(ret), K(tx_id), KP(ctx_));

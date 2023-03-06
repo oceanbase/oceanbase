@@ -3195,6 +3195,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
           || (package_id != OB_INVALID_ID && OB_INVALID_ID == routine_id);
         if (is_server_cursor) {
           OZ (ObPLCursorInfo::prepare_entity(*session_info, cursor->get_cursor_entity()));
+          OX (cursor->set_spi_cursor(NULL));
         }
       }
       OZ (session_info->ps_use_stream_result_set(use_stream));
@@ -3449,6 +3450,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         // 此处只能处理cursor.get_cursor_entity(), 不能处理cursor.get_dbms_entity(),否则exec_params等的值的allocator被reset
         // 会导致core
         LOG_WARN("failed to alloc ref cursor entity", K(ret));
+      } else {
+        cursor.set_spi_cursor(NULL);
       }
     }
   }

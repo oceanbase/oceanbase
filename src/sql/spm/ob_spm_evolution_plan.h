@@ -68,11 +68,9 @@ public:
       evolution_count_ts_(DEFAULT_EVOLUTION_COUNT_THRESHOLD),
       evolution_timeout_ts_(DEFAULT_EVOLUTION_TIMEOUT_THRESHOLD),
       evolving_plan_(NULL),
-      evolving_plan_stat_(NULL),
       history_exec_time_(0),
       is_inited_(false),
       current_stage_cnt_(0),
-      evolution_finish_count_(0),
       lazy_finished_(false),
       lazy_better_(false)
   {
@@ -152,6 +150,7 @@ private:
                                             ObPlanCacheCtx &ctx,
                                             ObPhysicalPlan *&plan);
   int64_t get_baseline_plan_error_cnt();
+  int64_t get_plan_finish_cnt();
 
 protected:
   ObSqlPlanSet *plan_set_;
@@ -166,14 +165,11 @@ protected:
   ObPhysicalPlan *evolving_plan_;
   common::ObSEArray<ObPhysicalPlan *, 4> baseline_plans_; 
   common::ObSEArray<ObPhysicalPlan *, 4> garbage_list_;
-  ObEvolutionStat *evolving_plan_stat_;
-  ObSEArray<ObEvolutionStat*, 4> baseline_plans_stat_;
   int64_t history_exec_time_;
   bool is_inited_;
   bool is_evo_best_plan_;
   int64_t best_plan_cnt_;
   int64_t current_stage_cnt_;
-  int64_t evolution_finish_count_;
   bool lazy_finished_;
   bool lazy_better_;
 };

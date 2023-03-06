@@ -584,6 +584,15 @@ int ObTmpMacroBlock::free(const int32_t start_page_id, const int32_t page_nums)
   return ret;
 }
 
+int64_t ObTmpMacroBlock::get_used_page_nums() const
+{
+  int64_t used_page_nums = 0;
+  for (int64_t i = using_extents_.count() - 1; i >= 0; --i) {
+    used_page_nums += std::ceil(using_extents_.at(i)->get_offset() / DEFAULT_PAGE_SIZE);
+  }
+  return used_page_nums;
+}
+
 void ObTmpMacroBlock::set_io_desc(const common::ObIOFlag &io_desc)
 {
   io_desc_ = io_desc;

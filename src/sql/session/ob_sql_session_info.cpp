@@ -2312,6 +2312,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       }
       // 4.sort area size
       ATOMIC_STORE(&sort_area_size_, tenant_config->_sort_area_size);
+      ATOMIC_STORE(&hash_area_size_, tenant_config->_hash_area_size);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
         LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,

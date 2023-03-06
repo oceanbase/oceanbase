@@ -214,6 +214,7 @@ ob_set_subtarget(oblib_lib thread
   thread/protected_stack_allocator.cpp
   thread/thread.cpp
   thread/threads.cpp
+  thread/ob_tenant_hook.cpp
 )
 
 ob_set_subtarget(oblib_lib utility

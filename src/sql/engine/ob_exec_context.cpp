@@ -860,7 +860,8 @@ int ObExecContext::get_pwj_map(PWJTabletIdMap *&pwj_map)
   return ret;
 }
 
-int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch_id)
+int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params,
+    int64_t batch_id, sql::ObExpr::ObExprIArray &array)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(phy_plan_ctx_)) {
@@ -872,7 +873,6 @@ int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch
   } else {
     common::ObIArray<common::ObObjParam> &one_params =
         params.get_one_batch_params(batch_id);
-    sql::ObExpr::ObExprIArray *array = sql::ObExpr::get_serialize_array();
     ObEvalCtx eval_ctx(*this);
     for (int i = 0; OB_SUCC(ret) && i < one_params.count(); ++i) {
       if (i > params.param_idxs_.count()) {
@@ -884,11 +884,11 @@ int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch
           sql::ObExpr *expr = NULL;
           int64_t idx = params.param_expr_idxs_.at(i);
           if (OB_FAIL(ret)) {
-          } else if (OB_UNLIKELY(NULL == array) || OB_UNLIKELY(idx > array->count())) {
+          } else if (OB_UNLIKELY(idx > array.count())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("expr index out of expr array range", K(ret), KP(array), K(idx), K(array->count()));
+            LOG_WARN("expr index out of expr array range", K(ret), K(array), K(idx), K(array.count()));
           } else {
-            expr = &array->at(idx - 1);
+            expr = &array.at(idx - 1);
             expr->get_eval_info(eval_ctx).clear_evaluated_flag();
             ObDynamicParamSetter::clear_parent_evaluated_flag(eval_ctx, *expr);
             ObDatum &param_datum = expr->locate_datum_for_write(eval_ctx);

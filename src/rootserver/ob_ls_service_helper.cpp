@@ -1793,9 +1793,9 @@ int ObRecoveryLSHelper::report_tenant_sys_recovery_scn_trans_(const share::SCN &
   } else if (OB_FAIL(tenant_report->get_tenant_info(tenant_info))) {
     LOG_WARN("failed to get tenant info", KR(ret));
   } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_sys_recovery_scn_in_trans(
-             tenant_id_, sys_recovery_scn, true, trans))) {
+             tenant_id_, sys_recovery_scn, update_sys_recovery_scn, trans))) {
     LOG_WARN("failed to update tenant sys recovery scn", KR(ret), K(tenant_id_),
-             K(sys_recovery_scn), K(tenant_info));
+             K(sys_recovery_scn), K(tenant_info), K(update_sys_recovery_scn));
   } else {
    //double check sync can not fallback
    //log will be truncated during the flashback.

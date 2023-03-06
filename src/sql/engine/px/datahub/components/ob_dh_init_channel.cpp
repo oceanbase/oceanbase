@@ -33,28 +33,10 @@ int ObInitChannelPieceMsgListener::on_message(
   // have received all piece from px receive
   // send whole msg to px transmit
   if (OB_SUCC(ret) && ctx.received_ == ctx.task_cnt_) {
-    // get child transmit op's id.
-    // in current impl. the paired transmit op id = receive op id + 1
-    //TODO : https://aone.alibaba-inc.com/task/43312101
-    ctx.whole_msg_.op_id_ = ctx.op_id_ + 1;
-    ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-      dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
-      if (OB_ISNULL(ch)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null expected", K(ret));
-      } else if (OB_FAIL(ch->send(ctx.whole_msg_, ctx.timeout_ts_))) {
-        LOG_WARN("fail push data to channel", K(ret));
-      } else if (OB_FAIL(ch->flush(true, false))) {
-        LOG_WARN("fail flush dtl data", K(ret));
-      } else {
-        LOG_DEBUG("dispatched winbuf whole msg",
-                  K(idx), K(cnt), K(ctx.whole_msg_), K(*ch));
-      }
+    if (OB_FAIL(ctx.send_whole_msg(sqcs))) {
+      LOG_WARN("fail to send whole msg", K(ret));
     }
-    if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs))) {
-      LOG_WARN("failed to wait response", K(ret));
-    }
-    ctx.whole_msg_.reset();
+    IGNORE_RETURN ctx.reset_resource();
   }
   return ret;
 }
@@ -92,3 +74,36 @@ int ObInitChannelWholeMsg::assign(const ObInitChannelWholeMsg &other, common::Ob
 }
 
 bool ObInitChannelPieceMsgCtx::enable_dh_channel_sync(const bool channel_sync_enabled) { return channel_sync_enabled; }
+
+int ObInitChannelPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+{
+  int ret = OB_SUCCESS;
+  // get child transmit op's id.
+  // in current impl. the paired transmit op id = receive op id + 1
+  //TODO : https://aone.alibaba-inc.com/task/43312101
+  whole_msg_.op_id_ = op_id_ + 1;
+  ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
+    dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+    if (OB_ISNULL(ch)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null expected", K(ret));
+    } else if (OB_FAIL(ch->send(whole_msg_, timeout_ts_))) {
+      LOG_WARN("fail push data to channel", K(ret));
+    } else if (OB_FAIL(ch->flush(true, false))) {
+      LOG_WARN("fail flush dtl data", K(ret));
+    } else {
+      LOG_DEBUG("dispatched winbuf whole msg",
+                K(idx), K(cnt), K(whole_msg_), K(*ch));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs))) {
+    LOG_WARN("failed to wait response", K(ret));
+  }
+  return ret;
+}
+
+void ObInitChannelPieceMsgCtx::reset_resource()
+{
+  whole_msg_.reset();
+  received_ = 0;
+}

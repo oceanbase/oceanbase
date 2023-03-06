@@ -72,10 +72,10 @@ static int get_tx_service(ObBasicSessionInfo *session,
 {
   int ret = OB_SUCCESS;
   auto effective_tenant_id = session->get_effective_tenant_id();
-  if (session->get_tx_desc() != NULL) {
+  if (OB_NOT_NULL(session->get_tx_desc())) {
     auto tx_tenant_id = session->get_tx_desc()->get_tenant_id();
     if (effective_tenant_id != tx_tenant_id) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_TENANT_ID_NOT_MATCH;
       LOG_ERROR("effective_tenant_id not equals to tx_tenant_id", K(ret), K(effective_tenant_id), K(tx_tenant_id), KPC(session));
     }
   }
@@ -348,9 +348,9 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
         // and disassocate with session
         if (tx_desc->is_xa_trans() && tx_desc->get_addr() == GCONF.self_addr_) {
           auto txs = MTL(transaction::ObTransService*);
-          CK (OB_NOT_NULL(txs));
-          OZ (txs->release_tx_ref(*tx_desc));
-          OX (session->get_tx_desc() = NULL);
+          CK (OB_NOT_NULL(txs), session_id, tx_id);
+          OZ (txs->release_tx_ref(*tx_desc), session_id, tx_id);
+          session->get_tx_desc() = NULL;
         }
       } else  if (tx_desc->is_xa_trans()) {
         const transaction::ObXATransID xid = session->get_xid();
@@ -722,7 +722,7 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
   OZ (acquire_tx_if_need_(txs, *session));
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
-  OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, !session->get_xid().empty() ? session->get_sessid() : 0), sp_name);
+  OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session)), sp_name);
   if (start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {
@@ -731,6 +731,11 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
     }
   }
   return ret;
+}
+
+uint32_t ObSqlTransControl::get_real_session_id(ObSQLSessionInfo &session)
+{
+  return session.get_xid().empty() ? 0 : (session.get_proxy_sessid() != 0 ? session.get_proxy_sessid() : session.get_sessid());
 }
 
 int ObSqlTransControl::start_hook_if_need_(ObSQLSessionInfo &session,
@@ -762,7 +767,7 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
   OX (stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session));
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
-  OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, !session->get_xid().empty() ? session->get_sessid() : 0), sp_name);
+  OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, get_real_session_id(*session)), sp_name);
   if (start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {
@@ -786,7 +791,7 @@ int ObSqlTransControl::release_savepoint(ObExecContext &exec_ctx,
   OZ (acquire_tx_if_need_(txs, *session));
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
-  OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name, !session->get_xid().empty() ? session->get_sessid() : 0), *session, sp_name);
+  OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session)), *session, sp_name);
   if (start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {
@@ -996,6 +1001,7 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, bool 
   LOG_DEBUG("reset session tx state", KPC(session->get_tx_desc()), K(lbt()));
   if (OB_NOT_NULL(session->get_tx_desc())) {
     auto &tx_desc = *session->get_tx_desc();
+    auto tx_id = tx_desc.get_tx_id();
     auto effect_tid = session->get_effective_tenant_id();
     MTL_SWITCH(effect_tid) {
       transaction::ObTransService *txs = NULL;
@@ -1003,12 +1009,12 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, bool 
       if (reuse_tx_desc) {
         if (OB_FAIL(txs->reuse_tx(tx_desc))) {
           LOG_ERROR("reuse txn descriptor fail, will release it", K(ret), KPC(session), K(tx_desc));
-          OZ (txs->release_tx(tx_desc));
-          OX (session->get_tx_desc() = NULL);
+          OZ (txs->release_tx(tx_desc), tx_id);
+          session->get_tx_desc() = NULL;
         }
       } else {
-        OZ (txs->release_tx(tx_desc), *session, tx_desc);
-        OX (session->get_tx_desc() = NULL);
+        OZ (txs->release_tx(tx_desc), *session, tx_id, tx_desc);
+        session->get_tx_desc() = NULL;
       }
     }
   }

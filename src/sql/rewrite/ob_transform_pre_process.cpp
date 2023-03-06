@@ -1315,7 +1315,7 @@ bool ObTransformPreProcess::is_select_expr_in_other_groupby_exprs(
     if (i == cur_index) {
       /*do nothing */
     } else {
-      is_true = ObOptimizerUtil::find_equal_expr(groupby_exprs_list.at(i).groupby_exprs_, expr);
+      is_true = ObOptimizerUtil::find_item(groupby_exprs_list.at(i).groupby_exprs_, expr);
     }
   }
   return is_true;
@@ -1496,7 +1496,7 @@ int ObTransformPreProcess::extract_replace_expr_from_select_expr(ObRawExpr *expr
              select_stmt->is_expr_in_groupings_sets_item(expr) ||
              select_stmt->is_expr_in_multi_rollup_items(expr)) {
     //here use find_equal_expr function, because same exprs in groupings set item have different ptr
-    if (!ObOptimizerUtil::find_equal_expr(old_exprs, expr)) {
+    if (!ObOptimizerUtil::find_item(old_exprs, expr)) {
       if (OB_FAIL(old_exprs.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else {/*do nothing*/}

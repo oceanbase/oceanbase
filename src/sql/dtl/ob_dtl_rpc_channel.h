@@ -101,8 +101,6 @@ public:
   virtual int feedup(ObDtlLinkedBuffer *&buffer) override;
   virtual int send_message(ObDtlLinkedBuffer *&buf);
 
-private:
-  int64_t recv_mock_eof_cnt_;
 };
 
 }  // dtl

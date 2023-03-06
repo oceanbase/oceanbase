@@ -269,7 +269,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       select_plan_type_(INVALID_TYPE),
       cur_baseline_not_enable_(false),
       need_spm_timeout_(false),
-      baseline_exec_time_(0)
+      baseline_exec_time_(0),
+      evolution_task_in_two_plan_set_(false)
   {}
   enum SpmMode {
     MODE_INVALID,
@@ -333,6 +334,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   bool cur_baseline_not_enable_;
   bool need_spm_timeout_;
   int64_t baseline_exec_time_;
+  bool evolution_task_in_two_plan_set_;
 };
 
 struct EvolutionTaskResult

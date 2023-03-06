@@ -36,7 +36,7 @@ struct EstimateBlockRes
 class ObBasicStatsEstimator : public ObStatsEstimator
 {
 public:
-  ObBasicStatsEstimator(ObExecContext &ctx);
+  explicit ObBasicStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator);
 
   static int estimate_block_count(ObExecContext &ctx,
                                   const ObTableStatParam &param,

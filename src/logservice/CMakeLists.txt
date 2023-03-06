@@ -172,6 +172,7 @@ ob_set_subtarget(ob_logservice restoreservice
   restoreservice/ob_log_restore_allocator.cpp
   restoreservice/ob_remote_fetch_context.cpp
   restoreservice/ob_log_restore_scheduler.cpp
+  restoreservice/ob_log_restore_controller.cpp
 )
 
 

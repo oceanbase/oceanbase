@@ -233,9 +233,7 @@ int ObGtsSource::get_gts(const MonotonicTs stc,
             if (EXECUTE_COUNT_PER_SEC(16)) {
               TRANS_LOG(WARN, "get_gts_from_local_timestamp_service fail", K(leader), K_(server), K(tmp_ret));
             }
-            if (OB_GTS_NOT_READY == tmp_ret) {
-              ret = OB_GTS_NOT_READY;
-            } else {
+            if (OB_GTS_NOT_READY != tmp_ret) {
               refresh_gts_location();
             }
           }

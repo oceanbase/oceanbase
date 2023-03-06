@@ -79,30 +79,22 @@ void ObCtxTxData::destroy()
 int ObCtxTxData::insert_into_tx_table()
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard tg("part_ctx::insert_into_tx_table", 100 * 1000);
   WLockGuard guard(lock_);
-  tg.click();
 
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret));
   } else {
-    tg.click();
     ObTxTable *tx_table = nullptr;
     GET_TX_TABLE_(tx_table)
     if (OB_FAIL(ret)) {
     } else {
-      tg.click();
       tx_commit_data_ = *(tx_data_guard_.tx_data());
       if (OB_FAIL(insert_tx_data_(tx_table, tx_data_guard_.tx_data()))) {
         TRANS_LOG(WARN, "insert tx data failed", K(ret), K(*this));
       } else {
-        tg.click();
         read_only_ = true;
       }
     }
-  }
-  if (tg.get_diff() > 100000) {
-    TRANS_LOG(INFO, "ObCtxData insert into tx table const too much time", K(tg));
   }
 
   return ret;

@@ -112,7 +112,7 @@ int ObStatMaxValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
                                      " MAX(SUBSTR(`%.*s`, 1, %ld))",
                                      col_param_->column_name_.length(),
                                      col_param_->column_name_.ptr(),
-                                     OPT_STATS_MAX_VALUE_CAHR_LEN))) {
+                                     OPT_STATS_MAX_VALUE_CHAR_LEN))) {
     LOG_WARN("failed to print max(col) expr", K(ret));
   }
   return ret;
@@ -149,7 +149,7 @@ int ObStatMinValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
                                      " MIN(SUBSTR(`%.*s`, 1, %ld))",
                                      col_param_->column_name_.length(),
                                      col_param_->column_name_.ptr(),
-                                     OPT_STATS_MAX_VALUE_CAHR_LEN))) {
+                                     OPT_STATS_MAX_VALUE_CHAR_LEN))) {
     LOG_WARN("failed to print max(col) expr", K(ret));
   }
   return ret;
@@ -277,7 +277,7 @@ int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
                                   err_rate,
                                   col_param_->column_name_.length(),
                                   col_param_->column_name_.ptr(),
-                                  OPT_STATS_MAX_VALUE_CAHR_LEN,
+                                  OPT_STATS_MAX_VALUE_CHAR_LEN,
                                   bkt_num))) {
         LOG_WARN("failed to print buf topk hist expr", K(ret));
       }
@@ -696,7 +696,7 @@ int ObStatHybridHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
                                      " HYBRID_HIST(SUBSTR(`%.*s`, 1, %ld), %ld)",
                                      col_param_->column_name_.length(),
                                      col_param_->column_name_.ptr(),
-                                     OPT_STATS_MAX_VALUE_CAHR_LEN,
+                                     OPT_STATS_MAX_VALUE_CHAR_LEN,
                                      col_param_->bucket_num_))) {
     LOG_WARN("failed to print buf", K(ret));
   } else {/*do nothing*/}

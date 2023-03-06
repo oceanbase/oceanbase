@@ -427,7 +427,7 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
 }
 
 // deep copy max/min, using inner_allocator
-int ObOptColumnStat::merge_obj(ObObj &obj)
+int ObOptColumnStat::merge_obj(const ObObj &obj)
 {
   int ret = OB_SUCCESS;
   //calc avg_len: avg_len should update before num_null, null_not_null -- since these are use in merge_avg_len.

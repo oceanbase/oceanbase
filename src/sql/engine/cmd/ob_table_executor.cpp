@@ -1695,19 +1695,36 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       //impossible
     } else if (!stmt.is_truncate_oracle_temp_table()) {
       int64_t foreign_key_checks = 0;
+      share::schema::ObSchemaGetterGuard schema_guard;
       my_session->get_foreign_key_checks(foreign_key_checks);
       const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks);
       const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode()
         ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
       int64_t affected_rows = 0;
       uint64_t compat_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(truncate_table_arg.tenant_id_, compat_version))) {
-        LOG_WARN("get min data_version failed", K(ret), K(truncate_table_arg.tenant_id_));
-      } else if (compat_version < DATA_VERSION_4_1_0_0) {
+      const ObTableSchema *table_schema = NULL;
+      const uint64_t tenant_id = truncate_table_arg.tenant_id_;
+      const ObString table_name = truncate_table_arg.table_name_;
+      const ObString database_name = truncate_table_arg.database_name_;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+      } else if (OB_ISNULL(GCTX.schema_service_)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("GCTX schema_service not init", K(ret));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_name, table_name, false, table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), K(database_name), K(table_name));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table is not exist", K(ret), K(database_name), K(table_name));
+      // Avoiding the impact of new_truncate_table on mysql auotinc, then we need to execute the old logic
+      } else if (compat_version < DATA_VERSION_4_1_0_0
+                || table_schema->get_autoinc_column_id() != 0) {
         if (OB_FAIL(common_rpc_proxy->truncate_table(truncate_table_arg, res))) {
           LOG_WARN("rpc proxy alter table failed", K(ret));
         } else if (res.is_valid()
-          && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(res.tenant_id_, res.task_id_, *my_session, common_rpc_proxy, affected_rows))) {
+          && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(tenant_id, res.task_id_, *my_session, common_rpc_proxy, affected_rows))) {
           LOG_WARN("wait ddl finish failed", K(ret));
         }
       } else {
@@ -1720,7 +1737,8 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
           while (OB_SUCC(ret)) {
             if (OB_FAIL(common_rpc_proxy->truncate_table_v2(truncate_table_arg, res))) {
               LOG_WARN("rpc proxy truncate table failed", K(ret));
-              if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TIMEOUT == ret || OB_NOT_MASTER == ret || OB_RS_NOT_MASTER == ret) && ctx.get_timeout() > 0) {
+              if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TIMEOUT == ret || OB_NOT_MASTER == ret
+                    || OB_RS_NOT_MASTER == ret || OB_RS_SHUTDOWN == ret || OB_TENANT_NOT_IN_SERVER == ret) && ctx.get_timeout() > 0) {
                 ob_usleep(1 * 1000 * 1000);
                 // retry
                 ret = OB_SUCCESS;

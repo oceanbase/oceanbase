@@ -470,7 +470,10 @@ int ObTenantSwitchGuard::switch_to(uint64_t tenant_id, bool need_check_allow)
 {
   int ret = OB_SUCCESS;
 
-  if (tenant_id == MTL_ID()) {
+  if (!common::is_valid_tenant_id(tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid tenant id to switch", K(ret), K(tenant_id));
+  } else if (tenant_id == MTL_ID()) {
     // no need to switch
   } else if (is_virtual_tenant_id(tenant_id)) {
     ret = OB_OP_NOT_ALLOW;

@@ -38,13 +38,15 @@ public:
 
   static int64_t get_default_avg_row_size();
 
-  int check_has_opt_stat(const uint64_t tenant_id,
+  int check_has_opt_stat(share::schema::ObSchemaGetterGuard &schema_guard,
+                         const uint64_t tenant_id,
                          const uint64_t table_ref_id,
                          const ObIArray<int64_t> &part_ids,
                          const int64_t part_cnt,
                          bool &has_opt_stat);
 
-  int check_stat_version(const uint64_t tenant_id,
+  int check_stat_version(share::schema::ObSchemaGetterGuard &schema_guard,
+                         const uint64_t tenant_id,
                          const uint64_t tab_ref_id,
                          const int64_t part_id,
                          int64_t &last_analyzed);
@@ -133,7 +135,8 @@ public:
   virtual int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                  const uint64_t tenant_id,
                                  const common::ObIArray<ObOptColumnStat *> &column_stats,
-                                 bool only_update_col_stat = false);
+                                 bool only_update_col_stat = false,
+                                 const ObObjPrintParams &print_params = ObObjPrintParams());
 
   int delete_table_stat(const uint64_t tenant_id,
                         const uint64_t ref_id,
@@ -168,7 +171,8 @@ public:
                   ObIArray<ObOptColumnStat *> &column_stats,
                   const int64_t current_time,
                   const bool is_index_stat,
-                  const bool is_history_stat);
+                  const bool is_history_stat,
+                  const ObObjPrintParams &print_params);
 
   /**  @brief  外部获取行统计信息的接口 */
   virtual int get_table_stat(const uint64_t tenant_id,
@@ -192,6 +196,9 @@ public:
     return instance_;
   }
   bool is_inited() const { return inited_; }
+  int check_stat_tables_ready(share::schema::ObSchemaGetterGuard &schema_guard,
+                              const uint64_t tenant_id,
+                              bool &are_stat_tables_ready);
 protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;

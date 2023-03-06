@@ -150,7 +150,6 @@ void ObTxDataMemtable::reset()
 
 int ObTxDataMemtable::insert(ObTxData *tx_data)
 {
-  common::ObTimeGuard tg("tx_data_memtable::insert", 100 * 1000);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
@@ -172,15 +171,10 @@ int ObTxDataMemtable::insert(ObTxData *tx_data)
     STORAGE_LOG(ERROR, "insert the tx data into tx_data_map_ fail.", KP(tx_data), KPC(tx_data),
                   KR(ret), KP(tx_data_map_));
   } else {
-    tg.click();
     // insert_and_get success
     max_tx_scn_.inc_update(tx_data->end_scn_);
     atomic_update_(tx_data);
     ATOMIC_INC(&inserted_cnt_);
-    tg.click();
-  }
-  if (tg.get_diff() > 100000) {
-    STORAGE_LOG(INFO, "tx data memtable insert cost too much time", K(tg));
   }
 
   return ret;

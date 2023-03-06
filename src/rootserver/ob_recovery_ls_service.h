@@ -39,10 +39,10 @@ public:
   ObRecoveryLSService() : inited_(false),
   tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL) {}
   virtual ~ObRecoveryLSService() {}
-  static int mtl_init(ObRecoveryLSService *&ka);
   int init();
   void destroy();
   virtual void do_work() override;
+  DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
  void try_tenant_upgrade_end_();
  int get_min_data_version_(uint64_t &compatible);

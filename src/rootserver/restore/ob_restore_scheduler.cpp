@@ -56,21 +56,6 @@ ObRestoreService::ObRestoreService()
 {
 }
 
-int ObRestoreService::mtl_init(ObRestoreService *&ka)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ka)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("restore service is null", KR(ret));
-  } else if (OB_FAIL(ka->init(
-          GCTX.schema_service_, GCTX.sql_proxy_,
-          GCTX.rs_rpc_proxy_, GCTX.srv_rpc_proxy_,
-          GCTX.lst_operator_, GCTX.self_addr()))) {
-    LOG_WARN("failed to init restore service", KR(ret));
-  }
-  return ret;
-}
-
 ObRestoreService::~ObRestoreService()
 {
   if (!has_set_stop()) {
@@ -83,40 +68,34 @@ void ObRestoreService::destroy()
   ObTenantThreadHelper::destroy();
   inited_ = false;
 }
-int ObRestoreService::init(
-    ObMultiVersionSchemaService *schema_service,
-    ObMySQLProxy *sql_proxy,
-    ObCommonRpcProxy *rpc_proxy,
-    obrpc::ObSrvRpcProxy *srv_rpc_proxy,
-    ObLSTableOperator *lst_operator,
-    const common::ObAddr &self_addr)
+int ObRestoreService::init()
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_ISNULL(schema_service) || OB_ISNULL(sql_proxy)
-      || OB_ISNULL(rpc_proxy) || OB_ISNULL(srv_rpc_proxy)
-      || OB_ISNULL(lst_operator)) {
+  } else if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)
+      || OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.srv_rpc_proxy_)
+      || OB_ISNULL(GCTX.lst_operator_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(schema_service), KP(sql_proxy),
-        KP(rpc_proxy), KP(srv_rpc_proxy), KP(lst_operator));
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_), KP(GCTX.sql_proxy_),
+        KP(GCTX.rs_rpc_proxy_), KP(GCTX.srv_rpc_proxy_), KP(GCTX.lst_operator_));
   } else if (OB_FAIL(ObTenantThreadHelper::create("REST_SER", lib::TGDefIDs::SimpleLSService, *this))) {
     LOG_WARN("failed to create thread", KR(ret));
   } else if (OB_FAIL(ObTenantThreadHelper::start())) {
     LOG_WARN("fail to start thread", KR(ret));
   } else if (OB_FAIL(upgrade_processors_.init(
                      ObBaseUpgradeProcessor::UPGRADE_MODE_PHYSICAL_RESTORE,
-                     *sql_proxy, *srv_rpc_proxy, *rpc_proxy, *schema_service, *this))) {
+                     *GCTX.sql_proxy_, *GCTX.srv_rpc_proxy_, *GCTX.rs_rpc_proxy_, *GCTX.schema_service_, *this))) {
     LOG_WARN("fail to init upgrade processors", KR(ret));
   } else {
-    schema_service_ = schema_service;
-    sql_proxy_ = sql_proxy;
-    rpc_proxy_ = rpc_proxy;
-    srv_rpc_proxy_ = srv_rpc_proxy;
-    lst_operator_ = lst_operator;
+    schema_service_ = GCTX.schema_service_;
+    sql_proxy_ = GCTX.sql_proxy_;
+    rpc_proxy_ = GCTX.rs_rpc_proxy_;
+    srv_rpc_proxy_ = GCTX.srv_rpc_proxy_;
+    lst_operator_ = GCTX.lst_operator_;
     tenant_id_ = is_sys_tenant(MTL_ID()) ? MTL_ID() : gen_user_tenant_id(MTL_ID());
-    self_addr_ = self_addr;
+    self_addr_ = GCTX.self_addr();
     inited_ = true;
   }
   return ret;

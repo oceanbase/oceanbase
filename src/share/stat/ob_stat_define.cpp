@@ -117,6 +117,7 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   data_table_id_ = other.data_table_id_;
   need_estimate_block_ = other.need_estimate_block_;
   is_temp_table_ = other.is_temp_table_;
+  allocator_ = other.allocator_;
   if (OB_FAIL(part_infos_.assign(other.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpart_infos_.assign(other.subpart_infos_))) {
@@ -163,6 +164,7 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   stattype_ = other.stattype_;
   need_approx_ndv_ = other.need_approx_ndv_;
   duration_time_ = other.duration_time_;
+  allocator_ = other.allocator_;
   return ret;
 }
 

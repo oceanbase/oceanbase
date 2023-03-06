@@ -312,8 +312,10 @@ bool ObFailureDetector::is_clog_disk_has_fatal_error()
          || ATOMIC_LOAD(&has_add_clog_full_event_);
 }
 
-bool ObFailureDetector::is_data_disk_has_fatal_error()
+bool ObFailureDetector::is_data_disk_has_fatal_error(bool &slog_hang, bool &data_hang)
 {
+  ATOMIC_SET(&slog_hang, has_add_slog_hang_event_);
+  ATOMIC_SET(&data_hang, has_add_sstable_hang_event_);
   return ATOMIC_LOAD(&has_add_slog_hang_event_)
          || ATOMIC_LOAD(&has_add_sstable_hang_event_);
 }

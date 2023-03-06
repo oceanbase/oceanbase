@@ -516,6 +516,7 @@ int ObUpdateDDLTaskActiveTimeArg::assign(const ObUpdateDDLTaskActiveTimeArg &arg
 bool ObCreateHiddenTableArg::is_valid() const
 {
   return (OB_INVALID_ID != tenant_id_
+          && OB_INVALID_TENANT_ID != exec_tenant_id_
           && OB_INVALID_ID != table_id_
           && OB_INVALID_ID != dest_tenant_id_
           && share::DDL_INVALID != ddl_type_);
@@ -551,6 +552,8 @@ OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(ObDDLArg::serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize DDLArg", K(ret), K(buf_len), K(pos));
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE,
                 tenant_id_,
@@ -576,7 +579,10 @@ OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
 OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
 {
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_DECODE,
+  if (OB_FAIL(ObDDLArg::deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize DDLArg", K(ret), K(data_len), K(pos));
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE,
               tenant_id_,
               table_id_,
               dest_tenant_id_,
@@ -586,7 +592,6 @@ OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
               sql_mode_,
               tz_info_,
               tz_info_wrap_);
-  if (OB_SUCC(ret)) {
     ObString tmp_string;
     char *tmp_ptr[ObNLSFormatEnum::NLS_MAX] = {};
     for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
@@ -618,6 +623,7 @@ OB_DEF_SERIALIZE_SIZE(ObCreateHiddenTableArg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else {
+    len += ObDDLArg::get_serialize_size();
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 tenant_id_,
                 table_id_,

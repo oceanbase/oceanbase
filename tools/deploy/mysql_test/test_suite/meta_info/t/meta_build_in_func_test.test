@@ -421,7 +421,6 @@ select str_to_date('04/30/2004 ', '%m/%d/%Y ');
 #select date_add(str_to_date(substr('2014-06-05 16:24:54.270374',1,8),'%Y%m%d'),interval 2 day);
 #--error 16
 #select str_to_date('2014-06-','%Y%m%d');
-###ADD CASE about http://rb.corp.taobao.com/r/94323/
 #--error 5085
 select '+' + 1;
 #--error 5085

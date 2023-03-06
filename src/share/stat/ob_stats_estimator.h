@@ -35,7 +35,7 @@ enum CopyStatType
 class ObStatsEstimator
 {
 public:
-  ObStatsEstimator(ObExecContext &ctx);
+  explicit ObStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator);
 
 protected:
 
@@ -108,6 +108,7 @@ private:
 protected:
 
   ObExecContext &ctx_;
+  ObIAllocator &allocator_;
 
   ObString db_name_;
   ObString from_table_;

@@ -916,11 +916,9 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
                   K(prev_lsn), K(prev_log_pid), K(last_submit_log_id), K(last_submit_lsn), K(last_submit_log_pid),
                   K(tmp_log_id), KPC(log_task));
             } else if (OB_FAIL(generate_group_entry_header_(tmp_log_id, log_task, group_entry_header,
-                    group_log_data_checksum))) {
+                    group_log_data_checksum, is_accum_checksum_acquired))) {
               PALF_LOG(WARN, "generate_group_entry_header_ failed", K_(palf_id), K_(self));
             } else {
-              // set flag for rollback accum_checksum
-              is_accum_checksum_acquired = true;
               log_task->lock();
               if (!state_mgr_->is_follower_active()) {
                 // Updating data_checksum, accum_checksum, committed_end_lsn for log_task.
@@ -1048,7 +1046,8 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
 int LogSlidingWindow::generate_group_entry_header_(const int64_t log_id,
                                                    LogTask *log_task,
                                                    LogGroupEntryHeader &group_header,
-                                                   int64_t &group_log_data_checksum)
+                                                   int64_t &group_log_data_checksum,
+                                                   bool &is_accum_checksum_acquired)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_LOG_ID == log_id
@@ -1089,6 +1088,8 @@ int LogSlidingWindow::generate_group_entry_header_(const int64_t log_id,
     } else if (OB_FAIL(checksum_.acquire_accum_checksum(group_log_data_checksum, accum_checksum))) {
       PALF_LOG(WARN, "update_accumulated_checksum failed", K(ret), K_(palf_id), K_(self));
     } else {
+      // set flag for rollback accum_checksum
+      is_accum_checksum_acquired = true;
       (void) group_header.update_accumulated_checksum(accum_checksum);
       (void) group_header.update_header_checksum();
       PALF_LOG(TRACE, "generate_group_entry_header_ success", K(ret), K_(palf_id), K_(self), K(is_padding_log),
@@ -1214,6 +1215,9 @@ int LogSlidingWindow::period_freeze_last_log()
   } else if (OB_FAIL(try_freeze_last_log_task_(last_log_id, last_log_end_lsn, is_need_handle))) {
     PALF_LOG(WARN, "try_freeze_last_log_task_ failed", K(ret), K_(palf_id), K_(self), K(last_log_id), K(last_log_end_lsn));
   } else {
+  }
+  if (get_max_log_id() > get_last_submit_log_id_()) {
+    // try handle next submit log
     bool is_committed_lsn_updated = false;
     (void) handle_next_submit_log_(is_committed_lsn_updated);
   }
@@ -2061,7 +2065,10 @@ void LogSlidingWindow::try_fetch_log_streamingly_(const LSN &log_end_lsn)
     int64_t last_submit_log_pid = INVALID_PROPOSAL_ID;
     (void) get_last_submit_log_info_(last_submit_lsn, last_submit_end_lsn, last_submit_log_id, last_submit_log_pid);
     const int64_t fetch_start_log_id = last_submit_log_id + 1;
-    const int64_t fetch_log_size = group_buffer_.get_available_buffer_size();
+    // fetch_log_size need sub MAX_LOG_BUFFER_SIZE to ensure the incoming last fetched log's end_lsn
+    // is not smaller than last_fetch_end_lsn, then it can successfully trigger next streaming fetch.
+    // And all the incoming fetched logs can be filled into group_buffer.
+    const int64_t fetch_log_size = group_buffer_.get_available_buffer_size() - MAX_LOG_BUFFER_SIZE;
     const LSN fetch_begin_lsn = last_submit_end_lsn;
     const LSN prev_lsn = last_submit_lsn;
     ObAddr dest;
@@ -3150,9 +3157,18 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
     LogTaskGuard guard(this);
     int64_t group_log_data_checksum = 0;
     int64_t pos = 0;
+    LSN last_slide_end_lsn;
+    get_last_slide_end_lsn_(last_slide_end_lsn);
 
     if (OB_FAIL(group_entry_header.deserialize(buf, buf_len, pos))) {
       PALF_LOG(WARN, "group_entry_header deserialize failed", K(ret), K_(palf_id), K_(self));
+    } else if (lsn < last_slide_end_lsn && group_entry_header.get_log_id() < get_start_id()) {
+      // raw_write may submit an old group_log which is smaller than start log of sw,
+      // just return success for this case.
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        PALF_LOG(INFO, "this group_log has slid out, no need submit", K(ret), K_(palf_id), K_(self),
+            K(lsn), K(last_slide_end_lsn), K(group_entry_header));
+      }
     } else if (!leader_can_submit_group_log_(lsn, buf_len)) {
       LSN curr_max_lsn;
       (void) lsn_allocator_.get_curr_end_lsn(curr_max_lsn);

@@ -50,8 +50,8 @@ int create_worker(ObThWorker* &worker, ObTenant *tenant, int32_t group_id,
 {
   int ret = OB_SUCCESS;
   if (tenant->total_worker_cnt() >= tenant->max_worker_cnt()) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_ERROR("create worker fail", K(ret), K(tenant->id()), K(group_id), K(level),
+    ret = OB_RESOURCE_OUT;
+    LOG_WARN("create worker fail", K(ret), K(tenant->id()), K(group_id), K(level),
                                     K(tenant->total_worker_cnt()), K(tenant->max_worker_cnt()));
   } else if (OB_ISNULL(worker = OB_NEW(ObThWorker,
                                        ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(),

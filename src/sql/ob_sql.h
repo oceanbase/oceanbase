@@ -483,7 +483,7 @@ private:
                              ParamStore &fixed_param_store);
 
   int handle_text_execute(const ObStmt *basic_stmt, ObSqlCtx &sql_ctx, ObResultSet &result);
-  int check_need_reroute(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan *plan, bool &need_reroute);
+  int check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session, ObPhysicalPlan *plan, bool &need_reroute);
   int get_first_batched_multi_stmt(ObMultiStmtItem& multi_stmt_item, ObString& sql);
   static int add_param_to_param_store(const ObObjParam &param,
                                       ParamStore &param_store);

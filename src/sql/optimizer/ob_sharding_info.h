@@ -182,10 +182,6 @@ public:
                                              const common::ObIArray<ObRawExpr *> &target_part_keys,
                                              bool &is_match_join_keys);
 
-  static int is_physically_equal_partitioned(const ObShardingInfo &left_sharding,
-                                             const ObShardingInfo &right_sharding,
-                                             bool &is_equal_partition);
-
   static int is_physically_both_shuffled_serverlist(ObIArray<ObAddr> &left_server_list,
                                                     ObIArray<ObAddr> &right_server_list,
                                                     bool &is_both_shuffled_serverlist);

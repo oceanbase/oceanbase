@@ -28,7 +28,6 @@ enum ObLeakCheckObjType
 {
   LEAK_CHECK_OBJ_TABLET_HANDLE,
   LEAK_CHECK_OBJ_LS_HANDLE,
-  LEAK_CHECK_OBJ_TABLE_HANDLE,
   LEAK_CHECK_OBJ_MAX_NUM
 };
 
@@ -81,7 +80,27 @@ public:
     ob_assert(it != obj_map.end());
     obj_map.erase(it);
   }
-  ObLeakCheckAllMap &get_map() { return map_; }
+
+  void print_obj_leak(const uint64_t tenant_id, const ObLeakCheckObjType obj_type)
+  {
+    common::ObSpinLockGuard guard(lock_);
+    auto it = map_.find(tenant_id);
+    if (it != map_.end()) {
+      if (LEAK_CHECK_OBJ_MAX_NUM == obj_type) {
+        for (int64_t i = 0; i < LEAK_CHECK_OBJ_MAX_NUM; i++) {
+          auto &obj_map = it->second.at(i);
+          for (auto &pair : obj_map) {
+            SHARE_LOG(INFO, "dump leak obj", K(pair.first), K(pair.second.c_str()));
+          }
+        }
+      } else {
+        auto &obj_map = it->second.at(obj_type);
+        for (auto &pair : obj_map) {
+          SHARE_LOG(INFO, "dump leak obj", K(pair.first), K(pair.second.c_str()));
+        }
+      }
+    }
+  }
 
 private:
   ObSpinLock lock_;
@@ -143,24 +162,8 @@ public:
 // if obj_type == LEAK_CHECK_OBJ_MAX_NUM, dump all type obj
 #define PRINT_OBJ_LEAK(tenant_id, obj_type)                                       \
   {                                                                               \
-    auto &leak_map = OBJ_LEAK_CHECKER.get_map();                                  \
-    auto it = leak_map.find(tenant_id);                                           \
-    if (it != leak_map.end()) {                                                   \
-      if (LEAK_CHECK_OBJ_MAX_NUM == obj_type) {                                   \
-        for (int64_t i = 0; i < LEAK_CHECK_OBJ_MAX_NUM; i++) {                    \
-          auto &obj_map = it->second.at(i);                                       \
-          for (auto &pair : obj_map) {                                            \
-            LOG_INFO("dump leak obj", K(pair.first), K(pair.second.c_str()));     \
-          }                                                                       \
-        }                                                                         \
-      } else {                                                                    \
-        auto &obj_map = it->second.at(obj_type);                                  \
-        for (auto &pair : obj_map) {                                              \
-          LOG_INFO("dump leak obj", K(pair.first), K(pair.second.c_str()));       \
-        }                                                                         \
-      }                                                                           \
-    }                                                                             \
-  }                                                                               
+    OBJ_LEAK_CHECKER.print_obj_leak(tenant_id, obj_type);                         \
+  }
 
 #else
 #define DEFINE_OBJ_LEAK_DEBUG_NODE(node)

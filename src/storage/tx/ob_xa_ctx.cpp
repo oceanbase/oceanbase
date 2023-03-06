@@ -2325,7 +2325,10 @@ int ObXACtx::one_phase_end_trans(const ObXATransID &xid,
   } else if (OB_FAIL(check_terminated_())) {
     TRANS_LOG(WARN, "check terminated failed", K(ret), K(*this));
   } else if (OB_FAIL(check_trans_state_(is_rollback, request_id, true))) {
-    TRANS_LOG(WARN, "check trans state failed", K(ret), K(*this));
+    if (!((is_rollback && OB_TRANS_ROLLBACKED == ret)
+        || (!is_rollback && OB_TRANS_COMMITED == ret))) {
+      TRANS_LOG(WARN, "check trans state failed", K(ret), K(*this));
+    }
   } else if (OB_FAIL(is_one_phase_end_trans_allowed_(xid, is_rollback))) {
     TRANS_LOG(WARN, "one phase xa end trans is not allowed", K(ret), K(xid), K(*this));
   } else {
@@ -2337,7 +2340,7 @@ int ObXACtx::one_phase_end_trans(const ObXATransID &xid,
     }
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_EAGAIN != ret) {
     if (is_rollback && is_tightly_coupled_) {
       set_terminated_();
     }
@@ -2844,7 +2847,10 @@ int ObXACtx::two_phase_end_trans(const ObXATransID &xid,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa ctx not inited", K(ret), K(*this));
   } else if (OB_FAIL(check_trans_state_(is_rollback, request_id, false))) {
-    TRANS_LOG(WARN, "check trans state fail", K(ret), K(xid), K(is_rollback), K(timeout_us));
+    if (!((is_rollback && OB_TRANS_ROLLBACKED == ret)
+        || (!is_rollback && OB_TRANS_COMMITED == ret))) {
+      TRANS_LOG(WARN, "check trans state fail", K(ret), K(xid), K(is_rollback), K(timeout_us));
+    }
   } else {
     ObTxDesc *tx = NULL;
     if (OB_FAIL(MTL(ObTransService*)->end_two_phase_tx(trans_id_, xid, coord, timeout_us,
@@ -2965,12 +2971,12 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
       }
       case ObXATransState::COMMITTING:
       case ObXATransState::COMMITTED: {
-        ret = OB_TRANS_COMMITED;
+        ret = OB_TRANS_XA_PROTO;
         break;
       }
       case ObXATransState::ACTIVE: {
         if (!is_xa_one_phase) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         } else {
           ret = OB_SUCCESS;
         }
@@ -2992,6 +2998,7 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
         if (request_id_ == request_id) {
           ret = OB_EAGAIN;
         } else {
+          // todo lixinze:error or not
           if (is_xa_one_phase_) {
             ret = OB_TRANS_ROLLBACKED;
           } else {
@@ -3002,19 +3009,19 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
       }
       case ObXATransState::NON_EXISTING:
       case ObXATransState::IDLE: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
       case ObXATransState::UNKNOWN: {
         if (!is_xa_one_phase) {
           ret = OB_SUCCESS;
         } else {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         }
         break;
       }
       default: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
     }
@@ -3022,7 +3029,7 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
     switch (xa_trans_state_) {
       case ObXATransState::PREPARING:{
         if (!is_xa_one_phase) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         } else {
           ret = OB_SUCCESS;
         }
@@ -3045,11 +3052,11 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
         break;
       }
       case ObXATransState::PREPARED: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
       case ObXATransState::ROLLBACKED: {
-        ret = OB_TRANS_ROLLBACKED;
+        ret = OB_TRANS_XA_PROTO;
         break;
       }
       case ObXATransState::ROLLBACKING: {
@@ -3058,7 +3065,7 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
       }
       case ObXATransState::ACTIVE: {
         if (!is_xa_one_phase) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         } else {
           ret = OB_SUCCESS;
         }
@@ -3066,19 +3073,19 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
       }
       case ObXATransState::NON_EXISTING:
       case ObXATransState::IDLE: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
       case ObXATransState::UNKNOWN: {
         if (!is_xa_one_phase) {
           ret = OB_SUCCESS;
         } else {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         }
         break;
       }
       default: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
     }

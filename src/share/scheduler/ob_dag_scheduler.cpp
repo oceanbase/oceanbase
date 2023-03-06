@@ -2166,6 +2166,7 @@ int ObTenantDagScheduler::diagnose_minor_exe_dag(
     ObThreadCondGuard guard(scheduler_sync_);
     ObIDag *head = dag_list_[READY_DAG_LIST].get_head(ObDagPrio::DAG_PRIO_COMPACTION_MID);
     ObIDag *cur = head->get_next();
+    bool find = false;
     while (head != cur && OB_SUCC(ret)) {
       if (cur->get_type() == ObDagType::DAG_TYPE_MERGE_EXECUTE) {
         compaction::ObTabletMergeExecuteDag *exe_dag = static_cast<compaction::ObTabletMergeExecuteDag *>(cur);
@@ -2173,12 +2174,16 @@ int ObTenantDagScheduler::diagnose_minor_exe_dag(
           if (OB_FAIL(exe_dag->diagnose_compaction_info(progress))) {
             LOG_WARN("failed to diagnose compaction dag", K(ret), K(exe_dag));
           } else {
+            find = true;
             break;
           }
         }
       }
       cur = cur->get_next();
     } // end of while
+    if (OB_SUCC(ret) && !find) {
+      ret = OB_HASH_NOT_EXIST;
+    }
   }
   return ret;
 }

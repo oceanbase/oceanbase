@@ -1736,11 +1736,12 @@ public:
   uint64_t tenant_id_;
 };
 
-struct ObCreateHiddenTableArg final
+struct ObCreateHiddenTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  TO_STRING_KV(K_(tenant_id),
+  TO_STRING_KV(K_(exec_tenant_id),
+               K_(tenant_id),
                K_(table_id),
                K_(dest_tenant_id),
                K_(session_id),
@@ -1751,6 +1752,7 @@ public:
                K_(tz_info_wrap),
                "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
   ObCreateHiddenTableArg() :
+    ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
     table_id_(common::OB_INVALID_ID),
     dest_tenant_id_(common::OB_INVALID_ID),

@@ -166,7 +166,8 @@ ObTenantTabletScheduler::ObTenantTabletScheduler()
    merge_loop_task_(),
    medium_loop_task_(),
    sstable_gc_task_(),
-   fast_freeze_checker_()
+   fast_freeze_checker_(),
+   enable_adaptive_compaction_(false)
 {
   STATIC_ASSERT(static_cast<int64_t>(NO_MAJOR_MERGE_TYPE_CNT) == ARRAYSIZEOF(MERGE_TYPES), "merge type array len is mismatch");
 }
@@ -204,6 +205,7 @@ int ObTenantTabletScheduler::init()
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
       schedule_interval = tenant_config->ob_compaction_schedule_interval;
+      enable_adaptive_compaction_ = tenant_config->_enable_adaptive_compaction;
       fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
     }
   } // end of ObTenantConfigGuard
@@ -266,6 +268,7 @@ int ObTenantTabletScheduler::reload_tenant_config()
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
       merge_schedule_interval = tenant_config->ob_compaction_schedule_interval;
+      enable_adaptive_compaction_ = tenant_config->_enable_adaptive_compaction;
       fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
     }
   } // end of ObTenantConfigGuard
@@ -931,13 +934,6 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     bool is_leader = false;
     bool could_major_merge = false;
     const int64_t major_frozen_scn = get_frozen_version();
-    bool enable_adaptive_compaction = true;
-    {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-      if (tenant_config.is_valid()) {
-        enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
-      }
-    }
 
     if (MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
       could_major_merge = true;
@@ -1001,13 +997,13 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
           } else if (ObTimeUtility::fast_current_time() <
               tablet->get_medium_compaction_info_list().get_wait_check_medium_scn() + WAIT_MEDIUM_CHECK_THRESHOLD) {
             // need wait 10 mins before schedule meta major
-          } else if (enable_adaptive_compaction && OB_TMP_FAIL(schedule_tablet_meta_major_merge(ls_handle, tablet_handle))) {
+          } else if (enable_adaptive_compaction_ && OB_TMP_FAIL(schedule_tablet_meta_major_merge(ls_handle, tablet_handle))) {
             if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
               LOG_WARN("failed to schedule tablet merge", K(tmp_ret), K(ls_id), K(tablet_id));
             }
           }
         } else if (could_major_merge
-          && (!tablet_merge_finish || enable_adaptive_compaction)
+          && (!tablet_merge_finish || enable_adaptive_compaction_)
           && OB_TMP_FAIL(func.schedule_next_medium_for_leader(
             tablet_merge_finish ? 0 : merge_version, schedule_stats_))) { // schedule another round
           LOG_WARN("failed to schedule next medium", K(tmp_ret), K(ls_id), K(tablet_id));
@@ -1046,6 +1042,9 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
     // do nothing, should not loop tablets
     if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("compat_version is smaller than DATA_VERSION_4_1_0_0, cannot schedule medium", K(compat_version));
+      ADD_SUSPECT_INFO(MEDIUM_MERGE, share::ObLSID(INT64_MAX), ObTabletID(INT64_MAX),
+        "invalid data version to schedule all tablets medium",
+        K(compat_version), "DATA_VERSION_4_1_0_0", DATA_VERSION_4_1_0_0);
     }
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get ls iterator", K(ret));
@@ -1136,7 +1135,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
     if (OB_SUCC(ret) && tenant_merge_finish && merge_version > merged_version_) {
       merged_version_ = merge_version;
       LOG_INFO("all tablet major merge finish", K(merged_version_), K(merge_version));
-
+      DEL_SUSPECT_INFO(MEDIUM_MERGE, share::ObLSID(INT64_MAX), ObTabletID(INT64_MAX));
       if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress(
           merge_version,
           share::ObIDag::DAG_STATUS_FINISH))) {
