@@ -145,6 +145,7 @@ private:
 private:
   ObLS *ls_; // 8B
   common::SpinRWLock lock_def_; //8B
+  int64_t retry_times_; // 8B
   ObStorageSchemaRecorder schema_recorder_; // 120B
   compaction::ObTabletMediumCompactionInfoRecorder medium_info_recorder_; // 96B
 };

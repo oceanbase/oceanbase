@@ -36,6 +36,7 @@ ObTabletMemtableMgr::ObTabletMemtableMgr()
   : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
     ls_(NULL),
     lock_def_(common::ObLatchIds::TABLET_MEMTABLE_LOCK),
+    retry_times_(0),
     schema_recorder_(),
     medium_info_recorder_()
 {
@@ -71,6 +72,7 @@ void ObTabletMemtableMgr::destroy()
   freezer_ = nullptr;
   schema_recorder_.destroy();
   medium_info_recorder_.destroy();
+  retry_times_ = 0;
   is_inited_ = false;
 }
 
@@ -106,6 +108,7 @@ int ObTabletMemtableMgr::init(const common::ObTabletID &tablet_id,
     t3m_ = t3m;
     table_type_ = ObITable::TableType::DATA_MEMTABLE;
     freezer_ = freezer;
+    retry_times_ = 0;
     is_inited_ = true;
     TRANS_LOG(DEBUG, "succeeded to init tablet memtable mgr", K(ret), K(ls_id), K(tablet_id));
   }
@@ -186,12 +189,13 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
     ret = OB_ENTRY_EXIST;
   } else if (get_memtable_count_() >= MAX_MEMSTORE_CNT) {
     ret = OB_MINOR_FREEZE_NOT_ALLOW;
-    if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
+    ob_usleep(1 * 1000);
+    if ((++retry_times_ % (60 * 1000)) == 0) { // 1 min
       ObTableHandleV2 first_frozen_memtable;
       get_first_frozen_memtable_(first_frozen_memtable);
-      LOG_WARN("cannot create more memtable", K(ret), K(ls_id), K(tablet_id_), K(MAX_MEMSTORE_CNT),
-               K(get_memtable_count_()),
-               KPC(first_frozen_memtable.get_table()));
+      LOG_ERROR("cannot create more memtable", K(ret), K(ls_id), K(tablet_id_), K(MAX_MEMSTORE_CNT),
+                K(get_memtable_count_()),
+                KPC(first_frozen_memtable.get_table()));
     }
   } else if (OB_FAIL(get_newest_clog_checkpoint_scn(new_clog_checkpoint_scn))) {
     LOG_WARN("failed to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id_), K(new_clog_checkpoint_scn));
@@ -206,6 +210,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
     table_key.scn_range_.end_scn_.set_max();
     memtable::ObMemtable *memtable = NULL;
     ObLSHandle ls_handle;
+    retry_times_ = 0;
 
     if (OB_FAIL(t3m_->acquire_memtable(memtable_handle))) {
       LOG_WARN("failed to create memtable", K(ret), K(ls_id), K(tablet_id_));
