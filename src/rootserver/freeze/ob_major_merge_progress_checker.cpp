@@ -51,16 +51,15 @@ int ObMajorMergeProgressChecker::init(
     ObIServerTrace &server_trace)
 {
   int ret = OB_SUCCESS;
-  const int64_t DEFAULT_TABLET_CNT = 8;
-  const int64_t DEFAULT_TABLE_CNT = 128;
+  const int64_t DEFAULT_MAP_BUCKET_CNT = 10000;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_FAIL(tablet_compaction_map_.create(DEFAULT_TABLET_CNT, "MFTatCompactMap",
+  } else if (OB_FAIL(tablet_compaction_map_.create(DEFAULT_MAP_BUCKET_CNT, "MFTatCompactMap",
       "MFTatCompactMap", tenant_id))) {
-    LOG_WARN("fail to create tablet compaction status map", KR(ret), K(tenant_id), K(DEFAULT_TABLET_CNT));
-  } else if (OB_FAIL(table_compaction_map_.create(DEFAULT_TABLE_CNT, "MFTbCompMap", "MFTbCompMap", tenant_id))) {
-    LOG_WARN("fail to create table compaction status map", KR(ret), K(tenant_id), K(DEFAULT_TABLE_CNT));
+    LOG_WARN("fail to create tablet compaction status map", KR(ret), K(tenant_id), K(DEFAULT_MAP_BUCKET_CNT));
+  } else if (OB_FAIL(table_compaction_map_.create(DEFAULT_MAP_BUCKET_CNT, "MFTbCompMap", "MFTbCompMap", tenant_id))) {
+    LOG_WARN("fail to create table compaction status map", KR(ret), K(tenant_id), K(DEFAULT_MAP_BUCKET_CNT));
   } else if (OB_FAIL(tablet_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
     LOG_WARN("fail to init tablet validator", KR(ret), K(tenant_id));
   } else if (OB_FAIL(index_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
