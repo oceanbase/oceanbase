@@ -1018,6 +1018,8 @@ int ObCopyTabletInfoObProducer::build_deleted_tablet_info_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("copy tablet info ob producer do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHAUtils::get_server_version(tablet_info.version_))) {
+    LOG_WARN("failed to get server version", K(ret));
   } else {
     const ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::FULL;
     const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
