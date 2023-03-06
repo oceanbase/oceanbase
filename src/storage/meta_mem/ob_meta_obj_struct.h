@@ -287,7 +287,7 @@ void ObMetaObjGuard<T>::reset_obj()
         if (nullptr != obj_pool_) {
           obj_pool_->release(obj_);
         } else {
-          STORAGE_LOG(INFO, "release obj from allocator", KP(obj_), KP(allocator_));
+          STORAGE_LOG(DEBUG, "release obj from allocator", KP(obj_), KP(allocator_));
           obj_->reset();
           obj_->~T();
           allocator_->free(obj_);
