@@ -241,11 +241,13 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
   LOG_DEBUG("schedule next medium in primary cluster", K(ret), KPC(this), K(schedule_medium_flag),
       K(schedule_major_snapshot), K(adaptive_merge_reason), KPC(last_major), K(medium_list), K(max_sync_medium_scn));
 #ifdef ERRSIM
-  ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
-  if (OB_FAIL(ret) && tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
-    FLOG_INFO("set schedule medium with errsim", KPC(this));
-    ret = OB_SUCCESS;
-    schedule_medium_flag = true;
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
+    if (OB_FAIL(ret) && tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+      FLOG_INFO("set schedule medium with errsim", KPC(this));
+      ret = OB_SUCCESS;
+      schedule_medium_flag = true;
+    }
   }
 #endif
 
@@ -358,10 +360,12 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       }
     }
 #ifdef ERRSIM
-  ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
-  if (OB_FAIL(ret) && tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
-    FLOG_INFO("set schedule medium with errsim", KPC(this));
-    ret = OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
+    if (OB_FAIL(ret) && tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+      FLOG_INFO("set schedule medium with errsim", KPC(this));
+      ret = OB_SUCCESS;
+    }
   }
 #endif
     if (FAILEDx(prepare_medium_info(result, medium_info))) {
@@ -620,18 +624,20 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
     LOG_WARN("table is deleted", K(ret), K(table_id));
   }
 #ifdef ERRSIM
-  static bool have_set_errno = false;
-  static ObTabletID errno_tablet_id;
-  ret = OB_E(EventTable::EN_SCHEDULE_MAJOR_GET_TABLE_SCHEMA) ret;
-  if (OB_FAIL(ret)) {
-    if (tablet_id.id() > ObTabletID::MIN_USER_TABLET_ID
-      && tablet_id != tablet.get_tablet_meta().data_tablet_id_
-      && ATOMIC_BCAS(&have_set_errno, false, true)) {
-      LOG_INFO("set get table schema failed with errsim", K(ret), K(table_id), K(tablet_id));
-      errno_tablet_id = tablet_id;
-      return ret;
-    } else {
-      ret = OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    static bool have_set_errno = false;
+    static ObTabletID errno_tablet_id;
+    ret = OB_E(EventTable::EN_SCHEDULE_MAJOR_GET_TABLE_SCHEMA) ret;
+    if (OB_FAIL(ret)) {
+      if (tablet_id.id() > ObTabletID::MIN_USER_TABLET_ID
+        && tablet_id != tablet.get_tablet_meta().data_tablet_id_
+        && ATOMIC_BCAS(&have_set_errno, false, true)) {
+        LOG_INFO("set get table schema failed with errsim", K(ret), K(table_id), K(tablet_id));
+        errno_tablet_id = tablet_id;
+        return ret;
+      } else {
+        ret = OB_SUCCESS;
+      }
     }
   }
 #endif
@@ -754,9 +760,11 @@ int ObMediumCompactionScheduleFunc::check_medium_checksum_table(
       }
     }
 #ifdef ERRSIM
-    ret = OB_E(EventTable::EN_MEDIUM_REPLICA_CHECKSUM_ERROR) OB_SUCCESS;
-    if (OB_FAIL(ret)) {
-      STORAGE_LOG(INFO, "ERRSIM EN_MEDIUM_REPLICA_CHECKSUM_ERROR", K(ret), K(ls_id), K(tablet_id));
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_MEDIUM_REPLICA_CHECKSUM_ERROR) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(INFO, "ERRSIM EN_MEDIUM_REPLICA_CHECKSUM_ERROR", K(ret), K(ls_id), K(tablet_id));
+      }
     }
 #endif
     if (OB_CHECKSUM_ERROR == ret) {

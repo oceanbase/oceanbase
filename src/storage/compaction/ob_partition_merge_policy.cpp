@@ -1343,10 +1343,12 @@ int ObAdaptiveMergePolicy::find_meta_major_tables(
     }
 
 #ifdef ERRSIM
-  ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
-  if (OB_FAIL(ret) && tablet.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
-    FLOG_INFO("set schedule medium with errsim", "tablet_id", tablet.get_tablet_meta().tablet_id_);
-    ret = OB_SUCCESS;
+  if (OB_NO_NEED_MERGE = ret) {
+    ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
+    if (OB_FAIL(ret) && tablet.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+      FLOG_INFO("set schedule medium with errsim", "tablet_id", tablet.get_tablet_meta().tablet_id_);
+      ret = OB_SUCCESS;
+    }
   }
 #endif
 
