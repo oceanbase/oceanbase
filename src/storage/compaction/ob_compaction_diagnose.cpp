@@ -501,6 +501,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
                 }
               }
             } // end of while
+            LOG_INFO("finish ls merge diagnose", K(ret), K(ls_id));
           }
         }
       } // end of while
@@ -524,6 +525,8 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_major_merge()
     } else if (need_diagnose) {
       if (OB_FAIL(do_tenant_major_merge_diagnose(major_freeze_service))) {
         LOG_WARN("fail to do tenant major merge diagnose", KR(ret));
+      } else {
+        LOG_INFO("finish diagnose tenant major merge", K(ret));
       }
     }
   }
@@ -576,6 +579,7 @@ int ObCompactionDiagnoseMgr::do_tenant_major_merge_diagnose(
         LOG_WARN("fail to get uncompacted tablets", KR(ret));
       } else {
         int64_t uncompacted_tablets_cnt = uncompacted_tablets.count();
+        LOG_INFO("finish get uncompacted tablets for diagnose", K(ret), K(uncompacted_tablets_cnt));
         for (int64_t i = 0; (OB_SUCCESS == ret) && i < uncompacted_tablets_cnt; ++i) {
           if (can_add_diagnose_info()) {
             if (OB_FAIL(SET_DIAGNOSE_INFO(info_array_[idx_++], MAJOR_MERGE, MTL_ID(),
