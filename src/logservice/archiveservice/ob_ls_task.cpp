@@ -77,7 +77,7 @@ int ObLSArchiveTask::update_ls_task(const StartArchiveHelper &helper)
 bool ObLSArchiveTask::check_task_valid(const ArchiveWorkStation &station)
 {
   RLockGuard guard(rwlock_);
-  return is_task_stale_(station);
+  return ! is_task_stale_(station);
 }
 
 void ObLSArchiveTask::destroy()

@@ -273,11 +273,11 @@ int ObLogRestoreHandler::raw_write(const palf::LSN &lsn,
 {
   int ret = OB_SUCCESS;
   int64_t wait_times = 0;
-  const bool need_nonblock = false;
+  const bool need_nonblock = true;
   palf::PalfAppendOptions opts;
   opts.need_nonblock = need_nonblock;
   opts.need_check_proposal_id = true;
-  while (true) {
+  while (wait_times < MAX_RAW_WRITE_RETRY_TIMES) {
     do {
       RLockGuard guard(lock_);
       if (IS_NOT_INIT) {

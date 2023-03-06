@@ -224,20 +224,26 @@ int ObRemoteLogIterator::build_location_data_generator_(const int64_t pre_log_ts
 int ObRemoteLogIterator::next_entry_(LogGroupEntry &entry, LSN &lsn, char *&buf, int64_t &buf_size)
 {
   int ret = OB_SUCCESS;
+  bool done = false;
   if (data_buffer_.is_empty() && !data_buffer_.is_valid()) {
     ret = prepare_buf_(data_buffer_);
   }
 
-  if (OB_SUCC(ret)) {
-    ret = get_entry_(entry, lsn, buf, buf_size);
-    if (OB_ITER_END == ret) {
-      update_data_gen_max_lsn_();
+  while (OB_SUCC(ret) && ! done) {
+    if (OB_FAIL(get_entry_(entry, lsn, buf, buf_size))) {
+      if (OB_ITER_END == ret) {
+        update_data_gen_max_lsn_();
+      } else {
+        LOG_WARN("get entry failed");
+      }
+    } else if (lsn < start_lsn_) {
+      // do nothing
+      LOG_TRACE("entry lsn smaller than start_lsn, just skip", K(entry), K(lsn));
+    } else {
+      cur_lsn_ = lsn + entry.get_serialize_size();
+      cur_log_ts_ = entry.get_header().get_max_timestamp();
+      done = true;
     }
-  }
-
-  if (OB_SUCC(ret)) {
-    cur_lsn_ = lsn + entry.get_serialize_size();
-    cur_log_ts_ = entry.get_header().get_max_timestamp();
   }
 
   if (OB_FAIL(ret) && OB_ITER_END != ret && ! is_io_error(ret)) {

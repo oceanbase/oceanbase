@@ -96,7 +96,10 @@ public:
       // TODO: fake lease
       ObArchiveLease lease(epoch, 0, 0);
       ArchiveWorkStation station(key_, lease);
-      bret = task->check_task_valid(station);
+      bret = ! task->check_task_valid(station);
+      if (bret) {
+        ARCHIVE_LOG(INFO, "task not valid, delete it", K(id), K(station), KPC(task));
+      }
     }
     return bret;
   }

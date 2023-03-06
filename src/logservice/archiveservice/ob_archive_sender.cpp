@@ -175,7 +175,7 @@ int ObArchiveSender::push_task_status(ObArchiveTaskStatus *task_status)
   } else if (OB_FAIL(task_queue_.push(task_status))) {
     ARCHIVE_LOG(WARN, "push fail", K(ret), KPC(task_status));
   } else {
-    ARCHIVE_LOG(INFO, "push succ", KPC(task_status));
+    ARCHIVE_LOG(INFO, "push succ", KP(task_status));
   }
   return ret;
 }

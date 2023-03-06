@@ -58,6 +58,7 @@ using oceanbase::common::ObAddr;
 // The interface to submit log for physical restore and physical standby
 class ObLogRestoreHandler : public ObLogHandlerBase
 {
+  static const int64_t MAX_RAW_WRITE_RETRY_TIMES = 1000;
 public:
   ObLogRestoreHandler();
   ~ObLogRestoreHandler();
