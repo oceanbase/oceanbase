@@ -2740,8 +2740,8 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_INDEXES,
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE,
                        NULL,
-                       "SELECT span_name as `Operation`, start_ts as `StartTime`, concat(elapse, ' µs')  as `ElapseTime` from %s.%s",
-                       R"(SELECT span_name as "OPERATION", to_char(start_ts,'yyyy/mm/dd hh24:mi:ss') as "START_TIME", concat(elapse, ' µs') as "ELAPSE_TIME" FROM %s.%s)",
+                       "SELECT span_name as `Operation`, start_ts as `StartTime`, concat(cast(elapse/1000 as number(20, 3)), ' ms')  as `ElapseTime` from %s.%s",
+                       R"(SELECT span_name as "OPERATION", to_char(start_ts,'yyyy/mm/dd hh24:mi:ss') as "START_TIME", concat(cast(elapse/1000 as number(20, 3)), ' ms') as "ELAPSE_TIME" FROM %s.%s)",
                        NULL);
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE_JSON,

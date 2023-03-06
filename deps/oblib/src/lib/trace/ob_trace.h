@@ -118,7 +118,8 @@ public:
   union {
     uint8_t policy_;
     struct {
-      uint8_t level_ : 7;
+      uint8_t level_ : 6;
+      bool enable_show_trace_ : 1;
       bool auto_flush_ : 1;
     };
   };
@@ -270,9 +271,11 @@ struct ObTrace
   OB_INLINE UUID get_root_span_id() { return root_span_id_; }
   OB_INLINE uint8_t get_policy() { return policy_; }
   OB_INLINE uint8_t get_level() { return level_; }
-  OB_INLINE void set_level(uint8_t level) { level_ = 0x7f & level; }
+  OB_INLINE void set_level(uint8_t level) { level_ = 0x3f & level; }
   OB_INLINE void set_auto_flush(bool auto_flush) { auto_flush_ = auto_flush; }
   OB_INLINE bool is_auto_flush() { return auto_flush_; }
+  OB_INLINE void set_enable_show_trace(bool enable_show_trace) { enable_show_trace_ = enable_show_trace; }
+  OB_INLINE bool is_enable_show_trace() { return enable_show_trace_; }
   void check_leak_span();
   void reset();
   void dump_span();
@@ -341,7 +344,8 @@ private:
   union {
     uint8_t policy_;
     struct {
-      uint8_t level_ : 7;
+      uint8_t level_ : 6;
+      bool enable_show_trace_ : 1;
       bool auto_flush_ : 1;
     };
   };
