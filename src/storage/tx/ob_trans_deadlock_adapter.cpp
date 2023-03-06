@@ -628,39 +628,40 @@ int ObTransDeadlockDetectorAdapter::create_detector_node_and_set_parent_if_neede
 int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::ObExecContext &exec_ctx,
                                                                          const bool is_rollback)
 {
-  #define PRINT_WRAPPER KR(ret), KR(exec_ctx.get_errcode()), KPC(session),\
+  #define PRINT_WRAPPER K(step), KR(ret), KR(exec_ctx.get_errcode()), KPC(session),\
                         KPC(desc), K(is_rollback), K(conflict_txs)
   int ret = OB_SUCCESS;
+  int step = 0;
   CHECK_DEADLOCK_ENABLED();
   memtable::ObLockWaitMgr::Node *node = nullptr;
   ObSQLSessionInfo *session = nullptr;
   ObTxDesc *desc = nullptr;
   ObArray<ObTransIDAndAddr> conflict_txs;
-  if (OB_ISNULL(session = GET_MY_SESSION(exec_ctx))) {
+  if (++step && OB_ISNULL(session = GET_MY_SESSION(exec_ctx))) {
     ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(ERROR, "session is NULL", PRINT_WRAPPER);
-  } else if (session->is_inner()) {
+  } else if (++step && session->is_inner()) {
     DETECT_LOG(INFO, "inner session no need register to deadlock", PRINT_WRAPPER);
-  } else if (memtable::TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR) {
+  } else if (++step && memtable::TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR) {
     DETECT_LOG(INFO, "thread local flag marked local execution, no need register to deadlock here", PRINT_WRAPPER);
-  } else if (OB_ISNULL(desc = session->get_tx_desc())) {
+  } else if (++step && OB_ISNULL(desc = session->get_tx_desc())) {
     ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(ERROR, "desc in session is NULL", PRINT_WRAPPER);
-  } else if (!desc->is_valid()) {
+  } else if (++step && !desc->is_valid()) {
     DETECT_LOG(INFO, "invalid tx desc no need register to deadlock", PRINT_WRAPPER);
-  } else if (is_rollback) {// statment is failed, maybe will try again, check if need register to deadlock detector
-    if (session->get_query_timeout_ts() < ObClockGenerator::getCurrentTime()) {
+  } else if (++step && is_rollback) {// statment is failed, maybe will try again, check if need register to deadlock detector
+    if (++step && session->get_query_timeout_ts() < ObClockGenerator::getCurrentTime()) {
       unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_TIMEOUT);
       DETECT_LOG(INFO, "query timeout, no need register to deadlock", PRINT_WRAPPER);
-    } else if (OB_FAIL(desc->fetch_conflict_txs(conflict_txs))) {
+    } else if (++step && OB_FAIL(desc->fetch_conflict_txs(conflict_txs))) {
       DETECT_LOG(WARN, "fail to get conflict txs from desc", PRINT_WRAPPER);
-    } else if (conflict_txs.empty()) {
+    } else if (++step && conflict_txs.empty()) {
       unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_NO_CONFLICT);
       DETECT_LOG(INFO, "try unregister deadlock detecotr cause conflict array is empty", PRINT_WRAPPER);
-    } else if (exec_ctx.get_errcode() != OB_TRY_LOCK_ROW_CONFLICT) {
+    } else if (++step && exec_ctx.get_errcode() != OB_TRY_LOCK_ROW_CONFLICT) {
       unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_OTHER_ERR);
       DETECT_LOG(INFO, "try unregister deadlock detecotr cause meet non-lock error", PRINT_WRAPPER);
-    } else if (OB_FAIL(register_remote_execution_or_replace_conflict_trans_ids(desc->tid(),
+    } else if (++step && OB_FAIL(register_remote_execution_or_replace_conflict_trans_ids(desc->tid(),
                                                                                session->get_sessid(),
                                                                                conflict_txs))) {
       DETECT_LOG(WARN, "register or replace list failed", PRINT_WRAPPER);
@@ -674,7 +675,9 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
   if (OB_NOT_NULL(desc)) {// whether registered or not, clean conflict info anyway
     desc->reset_conflict_txs();
   }
-  DETECT_LOG(INFO, "maintain deadlock info", PRINT_WRAPPER);
+  if (OB_SUCCESS != exec_ctx.get_errcode()) {
+    DETECT_LOG(INFO, "maintain deadlock info", PRINT_WRAPPER);
+  }
   return ret;
   #undef PRINT_WRAPPER
 }
