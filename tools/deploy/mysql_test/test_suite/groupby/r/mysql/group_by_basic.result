@@ -360,15 +360,15 @@ insert into t1 (c1, c2, c3) values (2, 3, 2);
 insert into t1 (c1, c2, c3) values (2, 3, 3);
 select c2, avg(distinct c3) from t1 group by c2;
 c2	avg(distinct c3)
-1	1.5000
 2	2.5000
+1	1.5000
 3	2.5000
 select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2;
 c1	c2	group_concat(distinct c3 order by c3 desc)
 1	1	1
-1	2	3,2
-2	1	2
 2	3	3,2
+2	1	2
+1	2	3,2
 select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2 with rollup;
 c1	c2	group_concat(distinct c3 order by c3 desc)
 1	1	1
