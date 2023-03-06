@@ -236,7 +236,9 @@ int ObTabletMediumCompactionInfoRecorder::prepare_struct_in_lock(
   clog_len = 0;
   const logservice::ObLogBaseHeader log_header(
       logservice::ObLogBaseType::MEDIUM_COMPACTION_LOG_BASE_TYPE,
-      logservice::ObReplayBarrierType::PRE_BARRIER);
+      logservice::ObReplayBarrierType::NO_NEED_BARRIER,
+      tablet_id_.id());
+  // record tablet_id as trans_id to make medium clogs of same tablet replay serially
 
   int64_t pos = 0;
   char *buf = nullptr;

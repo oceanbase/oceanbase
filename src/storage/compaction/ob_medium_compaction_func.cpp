@@ -323,10 +323,10 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       if (OB_NO_NEED_MERGE != ret) {
         LOG_WARN("failed to choose medium snapshot", K(ret), KPC(this));
       }
-    } else if (is_major) {
-      // do nothing
     } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn) {
       ret = OB_NO_NEED_MERGE;
+    } else if (is_major) {
+      // do nothing
     } else if (OB_FAIL(get_max_reserved_snapshot(max_reserved_snapshot))) {
       LOG_WARN("failed to get multi_version_start", K(ret), KPC(this));
     } else if (medium_info.medium_snapshot_ < max_reserved_snapshot) {
