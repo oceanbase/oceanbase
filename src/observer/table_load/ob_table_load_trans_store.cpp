@@ -106,7 +106,6 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     param_(trans_ctx_->ctx_->param_),
     allocator_("TLD_TSWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_),
     table_data_desc_(nullptr),
-    column_descs_(nullptr),
     ref_count_(0),
     is_flush_(false),
     is_inited_(false)
@@ -134,13 +133,12 @@ int ObTableLoadTransStoreWriter::init()
   } else if (OB_UNLIKELY(trans_store_->session_store_array_.count() != param_.session_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(trans_store_));
-  } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(param_.tenant_id_, tz_info_.get_tz_map_wrap()))) {
-    LOG_WARN("fail to get tenant time zone", KR(ret), K(param_.tenant_id_));
   } else {
-    table_data_desc_ = &trans_ctx_->ctx_->store_ctx_->table_data_desc_;
+    table_data_desc_ = &store_ctx_->table_data_desc_;
     collation_type_ = trans_ctx_->ctx_->schema_.collation_type_;
-    column_descs_ = &(trans_ctx_->ctx_->schema_.column_descs_);
-    if (OB_FAIL(init_session_ctx_array())) {
+    if (OB_FAIL(OTTZ_MGR.get_tenant_tz(param_.tenant_id_, tz_info_.get_tz_map_wrap()))) {
+      LOG_WARN("fail to get tenant time zone", KR(ret), K(param_.tenant_id_));
+    } else if (OB_FAIL(init_session_ctx_array())) {
       LOG_WARN("fail to init session ctx array", KR(ret));
     } else if (OB_FAIL(init_column_schemas())) {
       LOG_WARN("fail to init column schemas", KR(ret));
@@ -154,15 +152,16 @@ int ObTableLoadTransStoreWriter::init()
 int ObTableLoadTransStoreWriter::init_column_schemas()
 {
   int ret = OB_SUCCESS;
+  const ObIArray<ObColDesc> &column_descs = store_ctx_->ctx_->schema_.column_descs_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
   if (OB_FAIL(ObTableLoadSchema::get_table_schema(param_.tenant_id_, param_.table_id_, schema_guard,
                                                   table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(param_));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_column_count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColumnSchemaV2 *column_schema =
-      table_schema->get_column_schema(column_descs_->at(i).col_id_);
+      table_schema->get_column_schema(column_descs.at(i).col_id_);
     if (column_schema->is_hidden()) {
     } else if (OB_FAIL(column_schemas_.push_back(column_schema))) {
       LOG_WARN("failed to push back column schema", K(ret), K(i), KPC(column_schema));

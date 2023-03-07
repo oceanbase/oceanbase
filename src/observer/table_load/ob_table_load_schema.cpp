@@ -146,7 +146,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     has_autoinc_column_(false),
     has_identity_column_(false),
     rowkey_column_count_(0),
-    column_count_(0),
+    store_column_count_(0),
     collation_type_(CS_TYPE_INVALID),
     schema_version_(0),
     is_inited_(false)
@@ -168,7 +168,7 @@ void ObTableLoadSchema::reset()
   has_autoinc_column_ = false;
   has_identity_column_ = false;
   rowkey_column_count_ = 0;
-  column_count_ = 0;
+  store_column_count_ = 0;
   collation_type_ = CS_TYPE_INVALID;
   schema_version_ = 0;
   column_descs_.reset();
@@ -211,15 +211,16 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     is_heap_table_ = table_schema->is_heap_table();
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
     rowkey_column_count_ = table_schema->get_rowkey_column_num();
-    column_count_ = table_schema->get_column_count();
     collation_type_ = table_schema->get_collation_type();
     schema_version_ = table_schema->get_schema_version();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));
-    } else if (OB_FAIL(table_schema->get_column_ids(column_descs_))) {
+    } else if (OB_FAIL(table_schema->get_store_column_count(store_column_count_))) {
+      LOG_WARN("fail to get store column count", KR(ret));
+    } else if (OB_FAIL(table_schema->get_column_ids(column_descs_, false))) {
       LOG_WARN("fail to get column descs", KR(ret));
-     } else if (OB_FAIL(table_schema->get_multi_version_column_descs(multi_version_column_descs_))) {
+    } else if (OB_FAIL(table_schema->get_multi_version_column_descs(multi_version_column_descs_))) {
       LOG_WARN("fail to get multi version column descs", KR(ret));
     } else if (OB_FAIL(datum_utils_.init(multi_version_column_descs_, rowkey_column_count_,
                                          lib::is_oracle_mode(), allocator_))) {

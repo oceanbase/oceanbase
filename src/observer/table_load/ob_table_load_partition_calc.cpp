@@ -127,7 +127,7 @@ int ObTableLoadPartitionCalc::init_rowkey_index(const ObTableSchema *table_schem
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObColDesc, 64> column_descs;
-  if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+  if (OB_FAIL(table_schema->get_column_ids(column_descs, false))) {
     LOG_WARN("fail to get column ids", KR(ret));
   } else if (OB_UNLIKELY(column_descs.empty())) {
     ret = OB_ERR_UNEXPECTED;

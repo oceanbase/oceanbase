@@ -25,10 +25,11 @@ public:
   ObDirectLoadDataFuseParam();
   ~ObDirectLoadDataFuseParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(table_data_desc), KP_(datum_utils), KP_(error_row_handler),
-               KP_(result_info));
+  TO_STRING_KV(K_(tablet_id), K_(store_column_count), K_(table_data_desc), KP_(datum_utils),
+               KP_(error_row_handler), KP_(result_info));
 public:
   common::ObTabletID tablet_id_;
+  int64_t store_column_count_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   observer::ObTableLoadErrorRowHandler *error_row_handler_;

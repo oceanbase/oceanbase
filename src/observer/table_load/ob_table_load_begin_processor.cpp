@@ -165,7 +165,7 @@ int ObTableLoadBeginP::init_idx_array(const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObColDesc, 64> column_descs;
-  if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+  if (OB_FAIL(table_schema->get_column_ids(column_descs, false))) {
     LOG_WARN("fail to get column ids", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && (i < column_descs.count()); ++i) {
