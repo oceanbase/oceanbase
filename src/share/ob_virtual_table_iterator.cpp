@@ -415,7 +415,7 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
         && is_lob_storage(col_schema->get_data_type())
         && !cur_row->cells_[i].has_lob_header()) { // cannot be json type;
         ObObj &obj_convert = cur_row->cells_[i];
-      if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj_convert, *allocator_))) {
+      if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj_convert, row_calc_buf_))) {
         LOG_WARN("fail to add lob header", KR(ret), "object", cur_row->cells_[i]);
       }
     }

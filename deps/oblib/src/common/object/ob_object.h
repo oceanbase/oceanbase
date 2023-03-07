@@ -650,8 +650,8 @@ struct ObMemLobCommon
   static const uint32_t MAGIC_CODE2 = 0x7F7FABCD; // LOB magic for debug
 
   ObMemLobCommon(ObMemLobType type, bool is_simple) :
-    lob_common_(), type_(type), read_only_(0), has_inrow_data_(1), is_open_(0),
-    is_simple_(is_simple), has_extern_(0), reserved_(0), version_(MEM_LOB_LOCATOR_VERSION)
+    lob_common_(), version_(MEM_LOB_LOCATOR_VERSION), type_(type), read_only_(0),
+    has_inrow_data_(1), is_open_(0), is_simple_(is_simple), has_extern_(0), reserved_(0)
   { lob_common_.is_mem_loc_ = 1; }
 
   OB_INLINE void set_extern(bool has_extern) { has_extern_ = has_extern ? 1 : 0; };
@@ -690,6 +690,7 @@ struct ObMemLobCommon
   ObLobCommon lob_common_;
 
   // version, type, flags total 4 bytes, correspoinding to the old locator version
+  uint32_t version_ : 8;
   uint32_t type_ : 4;     // ObMemLobType (Persistent/TmpFull/TmpDelta)
 
   // flags, 20 bits
@@ -703,7 +704,6 @@ struct ObMemLobCommon
   uint32_t has_extern_ : 1; // Indicate whether the lob locator has extern segment
   uint32_t reserved_  : 15;
 
-  uint32_t version_ : 8;
 
   char data_[0];
 };
