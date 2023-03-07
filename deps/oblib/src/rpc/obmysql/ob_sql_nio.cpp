@@ -308,7 +308,8 @@ private:
       if ((wbytes = ob_write_regard_ssl(fd, buf + pos, sz - pos)) >= 0) {
         pos += wbytes;
       } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
-        LOG_INFO("write return EAGAIN");
+        LOG_INFO("write return EAGAIN", K(fd));
+        ret = OB_EAGAIN;
       } else if (EINTR == errno) {
         // pass
       } else {
@@ -316,8 +317,9 @@ private:
         LOG_WARN("write data error", K(errno));
       }
     }
-    if (OB_SUCCESS == ret) {
+    if (OB_SUCCESS == ret || EAGAIN == ret) {
       consume_bytes = pos;
+      ret = OB_SUCCESS;
     }
     return ret;
   }
