@@ -128,14 +128,14 @@ private:
       ClientLSCtx &ctx);
   int init_archive_source_(ClientLSCtx &ctx, ObLSID ls_id);
   // Check whether has reached time limit
-  inline bool is_time_up_(const int64_t log_count, const int64_t end_tstamp)
+  inline bool is_time_up_(const int64_t scan_round, const int64_t end_tstamp)
   {
     // every batch of logs, check whether has timed out
-    static const int64_t CHECK_TIMEOUT_LOG_COUNT = 100;
-    static const int64_t CHECK_TIMEOUT_LOG_INDEX = 10;
+    static const int64_t CHECK_TIMEOUT_SCAN_ROUND = 100;
+    static const int64_t CHECK_TIMEOUT_SCAN_INDEX = 10;
     bool bool_ret = false;
 
-    if (((log_count % CHECK_TIMEOUT_LOG_COUNT) == CHECK_TIMEOUT_LOG_INDEX)) {
+    if (((scan_round % CHECK_TIMEOUT_SCAN_ROUND) == CHECK_TIMEOUT_SCAN_INDEX)) {
       int64_t cur_time = ObTimeUtility::current_time();
       bool_ret = cur_time > end_tstamp;
     }
