@@ -1758,7 +1758,10 @@ int ObTransService::is_tx_active(const ObTransID &tx_id, bool &active)
   }
   return ret;
 }
-int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, const uint32_t session_id)
+int ObTransService::sql_stmt_start_hook(const ObXATransID &xid,
+                                        ObTxDesc &tx,
+                                        const uint32_t session_id,
+                                        const uint32_t real_session_id)
 {
   int ret = OB_SUCCESS;
   if (tx.is_xa_trans()) {
@@ -1770,7 +1773,7 @@ int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, co
         TRANS_LOG(WARN, "register tx fail", K(ret), K_(tx.tx_id), K(xid), KP(&tx));
       } else { registed = true; }
     }
-    if (OB_SUCC(ret) && OB_FAIL(MTL(ObXAService*)->start_stmt(xid, session_id, tx))) {
+    if (OB_SUCC(ret) && OB_FAIL(MTL(ObXAService*)->start_stmt(xid, real_session_id, tx))) {
       TRANS_LOG(WARN, "xa trans start stmt failed", K(ret), K_(tx.xid), K(xid));
       ObGlobalTxType global_tx_type = tx.get_global_tx_type(xid);
       if (ObGlobalTxType::DBLINK_TRANS == global_tx_type && OB_TRANS_XA_BRANCH_FAIL == ret) {

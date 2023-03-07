@@ -425,6 +425,7 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
   }
   if (session->associated_xa() && !is_explicit) {
     ret = OB_TRANS_XA_RMFAIL;
+    LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()), KPC(tx_ptr));
   } else {
     /*
      * normal transaction control
@@ -504,7 +505,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OZ (get_tx_service(session, txs), tenant_id);
   OZ (acquire_tx_if_need_(txs, *session));
   OZ (stmt_sanity_check_(session, plan, plan_ctx));
-  OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid()));
+  OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid(), get_real_session_id(*session)));
   bool start_hook = OB_SUCC(ret) && !session->get_xid().empty() ? true : false;
   if (OB_SUCC(ret)
       && txs->get_tx_elr_util().check_and_update_tx_elr_info(*session->get_tx_desc())) {
@@ -744,7 +745,7 @@ int ObSqlTransControl::start_hook_if_need_(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   if (!session.get_tx_desc()->is_shadow() && !session.has_start_stmt() &&
-      OB_SUCC(txs->sql_stmt_start_hook(session.get_xid(), *session.get_tx_desc(), session.get_sessid()))) {
+      OB_SUCC(txs->sql_stmt_start_hook(session.get_xid(), *session.get_tx_desc(), session.get_sessid(), get_real_session_id(session)))) {
     start_hook = true;
   }
   return ret;
