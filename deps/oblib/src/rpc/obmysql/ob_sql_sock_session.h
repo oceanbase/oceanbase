@@ -61,6 +61,7 @@ public:
   void set_sql_session_info(void* sess);
   int set_ssl_enabled();
   SSL* get_ssl_st();
+  bool is_inited() const { return is_inited_; }
   ObSqlNio* nio_;
   ObISMConnectionCallback& sm_conn_cb_;
   rpc::ObRequest sql_req_;
@@ -70,6 +71,8 @@ public:
   const char* pending_write_buf_;
   int64_t pending_write_sz_;
   common::ObAddr client_addr_;
+private:
+  bool is_inited_;
 };
 
 }; // end namespace obmysql

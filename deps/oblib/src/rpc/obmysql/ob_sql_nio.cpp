@@ -852,15 +852,11 @@ private:
           break;
         }
       } else {
-        int err = 0;
-        if (0 != (err = do_accept_one(fd))) {
-          LOG_ERROR_RET(OB_ERR_SYS, "do_accept_one fail", K(fd), K(err));
-          close(fd);
-        }
+        do_accept_one(fd);
       }
     }
   }
-  int do_accept_one(int fd) {
+  void do_accept_one(int fd) {
     int err = 0;
     ObSqlSock* s = NULL;
     int enable_tcp_nodelay = 1;
@@ -871,18 +867,33 @@ private:
     } else if (NULL == (s = alloc_sql_sock(fd))) {
       err = -ENOMEM;
       LOG_WARN_RET(OB_ERR_SYS, "alloc_sql_sock fail", K(fd), K(err));
-    } else if (0 != (err = epoll_regist(epfd_, fd, epflag, s))) {
-      LOG_WARN_RET(OB_ERR_SYS, "epoll_regist fail", K(fd), K(err));
     } else if (0 != (err = handler_.on_connect(s->sess_, fd))) {
       LOG_WARN_RET(OB_ERR_SYS, "on_connect fail", K(err));
+    } else if (0 != (err = epoll_regist(epfd_, fd, epflag, s))) {
+      LOG_WARN_RET(OB_ERR_SYS, "epoll_regist fail", K(fd), K(err));
     } else {
       LOG_INFO("accept one succ", K(*s));
     }
-    if (0 != err && NULL != s) {
-      ObSqlSockSession* sess = (ObSqlSockSession *)s->sess_;
-      sess->destroy_sock();
+    if (0 != err) {
+      if (NULL != s) {
+        ObSqlSockSession* sess = (ObSqlSockSession *)s->sess_;
+        if (sess->is_inited()) {
+          /*
+           * if ObSqlSockSession is inited, ObSMConnection and ObSqlSockSession
+           * may also been inited, we need on_disconnect and destroy procedure
+           * to clear related struct
+          */
+          s->on_disconnect();
+          sess->destroy();
+          s->do_close();
+        } else {
+          close(fd);
+        }
+        free_sql_sock(s);
+      } else {
+        close(fd);
+      }
     }
-    return err;
   }
 private:
   ObSqlSock* alloc_sql_sock(int fd) {

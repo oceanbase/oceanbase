@@ -31,6 +31,7 @@ ObSqlSockSession::ObSqlSockSession(ObISMConnectionCallback& conn_cb, ObSqlNio* n
     pending_write_sz_(0)
 {
   sql_req_.set_server_handle_context(this);
+  is_inited_ = true;
 }
 
 ObSqlSockSession::~ObSqlSockSession() {}
