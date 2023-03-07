@@ -199,8 +199,9 @@ public:
   int state_advance();
   void set_cur_agg_list(DasTaskLinkedList *list) { cur_agg_list_ = list; };
   DasTaskLinkedList *get_cur_agg_list() { return cur_agg_list_; };
-  void set_remote_op_result(ObIDASTaskResult *op_result) { op_result_ = op_result; };
 
+  ObIDASTaskResult *get_op_result() const { return op_result_; }
+  void set_op_result(ObIDASTaskResult *op_result) { op_result_ = op_result; }
 protected:
   int start_das_task();
   int end_das_task();
@@ -241,7 +242,7 @@ protected:
   DasTaskNode das_task_node_;  // tasks's linked list node, do not serialize
   ObDasAggregatedTasks *agg_tasks_;  // task's agg task, do not serialize
   DasTaskLinkedList *cur_agg_list_;  // task's agg_list, do not serialize
-  ObIDASTaskResult* op_result_;  // as async result, do not serialize
+  ObIDASTaskResult *op_result_;
 
 public:
   const static uint32_t DAS_ROW_EXTEND_SIZE = 16;
@@ -256,6 +257,7 @@ public:
   ObIDASTaskResult() : task_id_(0) { }
   virtual ~ObIDASTaskResult() { }
   virtual int init(const ObIDASTaskOp &task_op, common::ObIAllocator &alloc) = 0;
+  virtual int reuse() = 0;
   virtual int link_extra_result(ObDASExtraData &extra_result)
   {
     UNUSED(extra_result);

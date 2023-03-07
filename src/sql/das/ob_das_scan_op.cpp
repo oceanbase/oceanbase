@@ -729,6 +729,14 @@ int ObDASScanResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
   return ret;
 }
 
+int ObDASScanResult::reuse()
+{
+  int ret = OB_SUCCESS;
+  result_iter_.reset();
+  datum_store_.reset();
+  return ret;
+}
+
 int ObDASScanResult::link_extra_result(ObDASExtraData &extra_result)
 {
   extra_result.set_output_info(output_exprs_, eval_ctx_);

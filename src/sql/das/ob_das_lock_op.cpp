@@ -169,6 +169,13 @@ int ObDASLockResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
   return OB_SUCCESS;
 }
 
+int ObDASLockResult::reuse()
+{
+  int ret = OB_SUCCESS;
+  affected_rows_ = 0;
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObDASLockResult, ObIDASTaskResult),
                     affected_rows_);
 }  // namespace sql

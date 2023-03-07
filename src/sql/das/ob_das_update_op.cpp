@@ -410,6 +410,13 @@ int ObDASUpdateResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
   return OB_SUCCESS;
 }
 
+int ObDASUpdateResult::reuse()
+{
+  int ret = OB_SUCCESS;
+  affected_rows_ = 0;
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObDASUpdateResult, ObIDASTaskResult),
                     affected_rows_);
 }  // namespace sql

@@ -465,6 +465,18 @@ int ObDASInsertResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
   return OB_SUCCESS;
 }
 
+int ObDASInsertResult::reuse()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 != result_buffer_.get_row_cnt())) {
+    ret = OB_NOT_SUPPORTED;
+  } else {
+    affected_rows_ = 0;
+    is_duplicated_ = false;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObDASInsertResult, ObIDASTaskResult),
                     affected_rows_,
                     result_buffer_,
