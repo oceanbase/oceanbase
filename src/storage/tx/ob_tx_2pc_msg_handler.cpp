@@ -472,15 +472,18 @@ int ObPartTransCtx::set_2pc_commit_version_(const SCN &commit_version)
 int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
 {
   int ret = OB_SUCCESS;
+  ObTwoPhaseCommitMsgType cache_msg_type = switch_msg_type_(msg_2pc_cache_->type_);
 
   if (OB_ISNULL(msg_2pc_cache_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "empty 2pc msg", K(ret));
-  } else if (switch_msg_type_(msg_2pc_cache_->type_) != msg_type) {
+  } else if (cache_msg_type != msg_type
+             && (ObTwoPhaseCommitMsgType::OB_MSG_TX_COMMIT_RESP != msg_type
+                 || ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_RESP != cache_msg_type)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "unexpected 2pc msg type", K(ret), K(msg_type), KPC(msg_2pc_cache_));
   } else {
-    switch (msg_type) {
+    switch (cache_msg_type) {
     case ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REDO_REQ: {
       const Ob2pcPrepareRedoReqMsg &msg = *(static_cast<const Ob2pcPrepareRedoReqMsg *>(msg_2pc_cache_));
       if (FALSE_IT(set_trans_type_(TransType::DIST_TRANS))) {
