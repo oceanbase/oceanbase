@@ -38,8 +38,6 @@
 #include "storage/tx/ob_standby_timestamp_service.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "rootserver/ob_primary_ls_service.h"
-#include "rootserver/ob_common_ls_service.h"
-#include "rootserver/ob_tenant_info_report.h"
 #include "rootserver/ob_recovery_ls_service.h"
 #include "rootserver/restore/ob_restore_scheduler.h"
 #include "sql/das/ob_das_id_service.h"
@@ -199,27 +197,18 @@ int ObLS::init(const share::ObLSID &ls_id,
         REGISTER_TO_LOGSERVICE(logservice::GAIS_LOG_BASE_TYPE, MTL(share::ObGlobalAutoIncService *));
         MTL(share::ObGlobalAutoIncService *)->set_cache_ls(this);
       }
-      if (OB_SUCC(ret) && ls_id.is_sys_ls() && is_user_tenant(tenant_id)) {
+      if (OB_SUCC(ret) && ls_id.is_sys_ls()) {
+        //meta tenant need create thread for ls manager
         REGISTER_TO_LOGSERVICE(logservice::PRIMARY_LS_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObPrimaryLSService *));
-        LOG_INFO("primary ls manager register to logservice success");
-      }
-      if (OB_SUCC(ret) && ls_id.is_sys_ls() && !is_user_tenant(tenant_id)) {
-        REGISTER_TO_LOGSERVICE(logservice::COMMON_LS_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObCommonLSService *));
-        LOG_INFO("common ls manager register to logservice success");
-
+        LOG_INFO("primary ls manager registre to logservice success");
       }
 
-      if (OB_SUCC(ret) && ls_id.is_sys_ls() && is_meta_tenant(tenant_id)) {
-        //sys no need to report
-        REGISTER_TO_LOGSERVICE(logservice::TENANT_INFO_REPORTOR_LOG_BASE_TYPE, MTL(rootserver::ObTenantInfoReportor *));
-        LOG_INFO("tenant info report register to logservice success");
-      }
       if (OB_SUCC(ret) && is_user_tenant(tenant_id) && ls_id.is_sys_ls()) {
         // only user tenant need dump datadict
         REGISTER_TO_LOGSERVICE(logservice::DATA_DICT_LOG_BASE_TYPE, MTL(datadict::ObDataDictService *));
         //only user table need recovery
         REGISTER_TO_RESTORESERVICE(logservice::RECOVERY_LS_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObRecoveryLSService *));
-        LOG_INFO("recovery ls manager register to restoreservice success");
+        LOG_INFO("recovery ls manager registre to restoreservice success");
       }
 
       if (OB_SUCC(ret) && !is_user_tenant(tenant_id) && ls_id.is_sys_ls()) {
@@ -643,23 +632,19 @@ void ObLS::destroy()
     UNREGISTER_FROM_LOGSERVICE(logservice::GAIS_LOG_BASE_TYPE, MTL(share::ObGlobalAutoIncService *));
     MTL(share::ObGlobalAutoIncService *)->set_cache_ls(nullptr);
   }
-  if (ls_meta_.ls_id_.is_sys_ls() && is_user_tenant(MTL_ID())) {
+  if (OB_SUCC(ret) && ls_meta_.ls_id_.is_sys_ls()) {
     rootserver::ObPrimaryLSService* ls_service = MTL(rootserver::ObPrimaryLSService*);
     UNREGISTER_FROM_LOGSERVICE(logservice::PRIMARY_LS_SERVICE_LOG_BASE_TYPE, ls_service);
   }
-  if (ls_meta_.ls_id_.is_sys_ls() && !is_user_tenant(MTL_ID())) {
-    rootserver::ObCommonLSService *ls_service = MTL(rootserver::ObCommonLSService*);
-    UNREGISTER_FROM_LOGSERVICE(logservice::COMMON_LS_SERVICE_LOG_BASE_TYPE, ls_service);
-    rootserver::ObRestoreService * restore_service = MTL(rootserver::ObRestoreService*);
-    UNREGISTER_FROM_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, restore_service);
-  }
-  if (ls_meta_.ls_id_.is_sys_ls() && is_meta_tenant(MTL_ID())) {
-    UNREGISTER_FROM_LOGSERVICE(logservice::TENANT_INFO_REPORTOR_LOG_BASE_TYPE,  MTL(rootserver::ObTenantInfoReportor*));
-  }
-  if (is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
+
+  if (OB_SUCC(ret) && is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     UNREGISTER_FROM_LOGSERVICE(logservice::DATA_DICT_LOG_BASE_TYPE, MTL(datadict::ObDataDictService *));
     rootserver::ObRecoveryLSService* ls_service = MTL(rootserver::ObRecoveryLSService*);
     UNREGISTER_FROM_RESTORESERVICE(logservice::RECOVERY_LS_SERVICE_LOG_BASE_TYPE, ls_service);
+  }
+  if (OB_SUCC(ret) && !is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
+    rootserver::ObRestoreService * restore_service = MTL(rootserver::ObRestoreService*);
+    UNREGISTER_FROM_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, restore_service);
   }
   tx_table_.destroy();
   lock_table_.destroy();

@@ -2152,7 +2152,7 @@ int ObAdminDumpBackupDataExecutor::dump_ls_attr_info_(const share::ObLSAttr &ls_
   PrintHelper::print_dump_line("ls_group_id", ls_attr.get_ls_group_id());
   PrintHelper::print_dump_line("flag", ls_attr.get_ls_flag());
   PrintHelper::print_dump_line("status", ls_attr.get_ls_status());
-  PrintHelper::print_dump_line("operation_type", ls_attr.get_ls_operation_type());
+  PrintHelper::print_dump_line("operation_type", ls_attr.get_ls_operatin_type());
   return ret;
 }
 

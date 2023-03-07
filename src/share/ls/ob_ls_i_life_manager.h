@@ -241,44 +241,7 @@ int ObLSTemplateOperator::exec_write(const uint64_t &tenant_id,
   return ret;
 }
 
-#define DEFINE_IN_TRANS_FUC(func_name, ...)\
-int func_name ##_in_trans(__VA_ARGS__, ObMySQLTransaction &trans);\
-int func_name(__VA_ARGS__);
 
-#define DEFINE_IN_TRANS_FUC1(func_name, ...)\
-static int func_name ##_in_trans(__VA_ARGS__, ObMySQLTransaction &trans);\
-static int func_name(__VA_ARGS__, ObISQLClient *proxy);
-
-#define TAKE_IN_TRANS(func_name, proxy, exec_tenant_id, ...)\
-do {\
-  ObMySQLTransaction trans; \
-  if (FAILEDx(trans.start(proxy, exec_tenant_id))) {\
-    SHARE_LOG(WARN, "failed to start trans", KR(ret), K(exec_tenant_id));\
-  } else if (OB_FAIL(func_name##_in_trans(__VA_ARGS__, trans))) {\
-    SHARE_LOG(WARN, "failed to do it in trans", KR(ret));\
-  }\
-  if (trans.is_started()) {\
-    int tmp_ret = OB_SUCCESS;\
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {\
-      SHARE_LOG(WARN, "failed to commit trans", KR(ret), KR(tmp_ret));\
-      ret = OB_SUCC(ret) ? tmp_ret : ret;\
-    }\
-  }\
-} while (0)
-
-#define START_TRANSACTION(proxy, exec_tenant_id)                          \
-  ObMySQLTransaction trans;                                               \
-  if (FAILEDx(trans.start(proxy, exec_tenant_id))) {                      \
-    SHARE_LOG(WARN, "failed to start trans", KR(ret), K(exec_tenant_id)); \
-  }
-#define END_TRANSACTION(trans)\
-  if (trans.is_started()) {\
-    int tmp_ret = OB_SUCCESS;\
-    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {\
-      ret = OB_SUCC(ret) ? tmp_ret : ret;\
-      SHARE_LOG(WARN, "failed to end trans", KR(ret), K(tmp_ret));\
-    }\
-  }
 }
 }
 

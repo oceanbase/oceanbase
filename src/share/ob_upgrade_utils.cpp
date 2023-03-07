@@ -21,10 +21,6 @@
 #include "rootserver/ob_root_service.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "share/ob_rpc_struct.h"
-#include "share/ob_tenant_info_proxy.h"//AllTenantInfo
-#include "share/ls/ob_ls_i_life_manager.h"//start_transaction
-#include "rootserver/ob_ls_service_helper.h"
-#include "ob_upgrade_utils.h"
 
 namespace oceanbase
 {
@@ -795,8 +791,6 @@ int ObUpgradeFor4100Processor::post_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(recompile_all_views_and_synonyms(tenant_id))) {
     LOG_WARN("fail to init rewrite rule version", K(ret), K(tenant_id));
-  } else if (OB_FAIL(init_tenant_sys_recovery_scn(tenant_id))) {
-    LOG_WARN("failed to init tenant sys recovery scn", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -930,106 +924,6 @@ int ObUpgradeFor4100Processor::recompile_all_views_and_synonyms(const uint64_t t
   return ret;
 }
 
-int ObUpgradeFor4100Processor::init_tenant_sys_recovery_scn(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  int64_t start = ObTimeUtility::current_time();
-  if (!is_user_tenant(tenant_id)) {
-    //no need to update meta tenant or sys tenant sys recovery scn
-  } else {
-    //check sys recovery scn, make status to equal and set sys_recovery_scn
-    const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-    ObAllTenantInfo tenant_info;
-    SCN sync_scn;
-    ObTenantSchema tenant_schema;
-    if (OB_FAIL(rootserver::ObTenantThreadHelper::get_tenant_schema(tenant_id, tenant_schema))) {
-        LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id));
-    }
-    START_TRANSACTION(sql_proxy_, exec_tenant_id);
-    rootserver::ObTenantLSInfo tenant_stat(sql_proxy_, &tenant_schema,
-                                           tenant_id, GCTX.srv_rpc_proxy_,
-                                           GCTX.lst_operator_);
-    if (FAILEDx(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans,
-             true, tenant_info))) {
-      LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
-    } else if (!tenant_info.get_sys_recovery_scn().is_min()) {
-      LOG_INFO("tenant sys recovery scn already update, no need to init", K(tenant_info));
-    } else if (OB_FAIL(tenant_stat.revision_to_equal_status(trans))) {
-      LOG_WARN("failed to make revision status", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(get_sys_ls_max_sync_scn_(tenant_id, sync_scn))) {
-      LOG_WARN("failed to get sys ls max sync scn", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_sys_recovery_scn_in_trans(
-                     tenant_id, sync_scn, false, trans))) {
-      LOG_WARN("failed to update tenant sys recovery scn", KR(ret), K(tenant_id),
-                     K(sync_scn), K(tenant_info));
-    } else {
-      LOG_INFO("init tenant sys recovery scn success", K(tenant_id), K(sync_scn));
-    }
-    END_TRANSACTION(trans);
-  }
-
-  LOG_INFO("add tenant sys recovery scn finish", K(ret), K(tenant_id_), "cost", ObTimeUtility::current_time() - start);
-  return ret;
-}
-
-int ObUpgradeFor4100Processor::get_sys_ls_max_sync_scn_(const uint64_t tenant_id, SCN &sync_scn)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.srv_rpc_proxy_) ||
-      OB_ISNULL(GCTX.location_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpcted", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.srv_rpc_proxy_),
-    KP(GCTX.location_service_));
-  } else {
-    ObTimeoutCtx ctx;
-    ObAddr leader;
-    obrpc::ObGetLSSyncScnArg arg;
-    ObGetLSSyncScnRes res;
-    int tmp_ret = OB_SUCCESS;
-    rootserver::ObGetLSSyncScnProxy proxy(
-        *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_ls_sync_scn);
-    const int64_t timeout = GCONF.internal_sql_execute_timeout;
-    if (FAILEDx(arg.init(tenant_id, SYS_LS, false))) {
-      LOG_WARN("failed to init arg", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, timeout))) {
-      LOG_WARN("fail to set timeout ctx", KR(ret), K(timeout));
-    }
-    while (OB_SUCC(ret)) {
-      proxy.reuse();
-      if (ctx.is_timeouted()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("already timeout, failed to get sys ls sync scn", KR(ret), K(ctx), K(tenant_id));
-      } else {
-        if (OB_FAIL(GCTX.location_service_->get_leader(
-                GCONF.cluster_id, tenant_id, SYS_LS, true, leader))) {
-          LOG_WARN("failed to get leader", KR(ret), K(tenant_id));
-        } else if (OB_FAIL(proxy.call(leader, ctx.get_timeout(), tenant_id, arg))) {
-          LOG_WARN("failed to get ls sync scn", KR(ret), K(arg), K(ctx),
-                   K(leader));
-        }
-        if (OB_TMP_FAIL(proxy.wait())) {
-          ret = OB_SUCC(ret) ? tmp_ret : ret;
-          LOG_WARN("failed to wait all", KR(ret), KR(tmp_ret));
-        } else if (OB_FAIL(ret)) {
-        } else if (1 != proxy.get_results().count() ||
-                   OB_ISNULL(proxy.get_results().at(0))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to get rpc result", KR(ret), "proxy result", proxy.get_results());
-        } else {
-          sync_scn = proxy.get_results().at(0)->get_cur_sync_scn();
-          break;
-        }
-        if (OB_FAIL(ret)) {
-          //ignore error of each rpc until timeout
-          LOG_WARN("failed to get sys ls sync scn, sleep and try again", KR(ret));
-          ret = OB_SUCCESS;
-          usleep(100 * 1000L);
-        }
-      }
-    }
-  }
-  return ret;
-}
 /* =========== 4100 upgrade processor end ============= */
 /* =========== special upgrade processor end   ============= */
 } // end share

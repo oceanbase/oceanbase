@@ -43,12 +43,9 @@ bool is_valid_tenant_scn(
   const share::SCN &sync_scn,
   const share::SCN &replayable_scn,
   const share::SCN &standby_scn,
-  const share::SCN &recovery_until_scn,
-  const share::SCN &sys_recovery_scn);
+  const share::SCN &recovery_until_scn);
 
-SCN gen_new_sync_scn(const share::SCN &cur_sync_scn, const share::SCN &desired_sync_scn,
-                     const share::SCN &cur_recovery_until_scn,
-                     const share::SCN &sys_recovery_scn);
+SCN gen_new_sync_scn(const share::SCN &cur_sync_scn, const share::SCN &desired_sync_scn, const share::SCN &cur_recovery_until_scn);
 
 struct ObAllTenantInfo
 {
@@ -67,7 +64,6 @@ public:
   * @param[in] standby_scn
   * @param[in] recovery_until_scn
   * @param[in] log_mode
-  * @param[in] sys_recovery_scn
   */
  int init(const uint64_t tenant_id,
           const ObTenantRole &tenant_role,
@@ -77,8 +73,7 @@ public:
           const SCN &replayable_scn = SCN::base_scn(),
           const SCN &standby_scn = SCN::base_scn(),
           const SCN &recovery_until_scn = SCN::base_scn(),
-          const ObArchiveMode &log_mode = NOARCHIVE_MODE,
-          const SCN &sys_recovery_scn = SCN::base_scn());
+          const ObArchiveMode &log_mode = NOARCHIVE_MODE);
  ObAllTenantInfo &operator=(const ObAllTenantInfo &other);
  void assign(const ObAllTenantInfo &other);
  void reset();
@@ -95,7 +90,12 @@ public:
   * Because STS will be changed when switchover to standby.
   */
  bool is_sts_ready() const { return !(tenant_role_.is_primary()
-                                      || is_switching_to_standby_status());}
+                                      || tenant_is_switchover_to_standby()); }
+
+ // ************* Functions that describe what tenant is doing *********************
+ // tenant is in switchover from primary to standby
+ bool tenant_is_switchover_to_standby() const { return is_prepare_switching_to_standby_status()
+                                                       || is_switching_to_standby_status(); }
 
  // ObTenantSwitchoverStatus related function
 #define IS_TENANT_STATUS(STATUS) \
@@ -106,12 +106,13 @@ IS_TENANT_STATUS(switching_to_primary)
 IS_TENANT_STATUS(prepare_flashback_for_failover_to_primary)
 IS_TENANT_STATUS(flashback) 
 IS_TENANT_STATUS(switching_to_standby)
+IS_TENANT_STATUS(prepare_switching_to_standby)
 IS_TENANT_STATUS(prepare_flashback_for_switch_to_primary)
 #undef IS_TENANT_STATUS 
 
  TO_STRING_KV(K_(tenant_id), K_(tenant_role), K_(switchover_status),
               K_(switchover_epoch), K_(sync_scn), K_(replayable_scn),
-              K_(standby_scn), K_(recovery_until_scn), K_(log_mode), K_(sys_recovery_scn));
+              K_(standby_scn), K_(recovery_until_scn), K_(log_mode));
 
   // Getter&Setter
   const ObTenantRole &get_tenant_role() const { return tenant_role_; }
@@ -131,7 +132,6 @@ public:\
   Property_declare_var(share::SCN, standby_scn)
   Property_declare_var(share::SCN, recovery_until_scn)
   Property_declare_var(ObArchiveMode, log_mode)
-  Property_declare_var(share::SCN, sys_recovery_scn)
 #undef Property_declare_var
 private:
   ObTenantRole tenant_role_;
@@ -173,12 +173,14 @@ public:
    * @description: update tenant recovery status 
    * @param[in] tenant_id
    * @param[in] proxy
+   * @param[in] status: the target status while update recovery status
    * @param[in] sync_scn : sync point 
    * @param[in] replay_scn : max replay point 
    * @param[in] reabable_scn : standby readable scn
    */
   static int update_tenant_recovery_status(const uint64_t tenant_id,
                                            ObMySQLProxy *proxy,
+                                           ObTenantSwitchoverStatus status,
                                            const SCN &sync_scn,
                                            const SCN &replay_scn,
                                            const SCN &reabable_scn);
@@ -221,7 +223,6 @@ public:
     const share::SCN &replayable_scn,
     const share::SCN &readable_scn,
     const share::SCN &recovery_until_scn,
-    const share::SCN &sys_recovery_scn,
     const int64_t old_switchover_epoch);
 
   /**
@@ -284,23 +285,6 @@ public:
     ObISQLClient *proxy,
     const ObArchiveMode &old_log_mode,
     const ObArchiveMode &new_log_mode);
-
- /**
-   * @description: update tenant sys ls log sys recovery scn
-   * @param[in] tenant_id
-   * @param[in] trans
-   * @param[in] sys_recovery_scn new sys recovery scn
-   * @param[in] update_sync_scn : When iterating to the LS operations, these operations can be executed provided that
-   *  the sync_scn of other ls have reached the LS operation's point,
-   *  so when updating the sys_recovery_scn, can the sync_scn be updated at the same time.
-   *  return :
-   *   OB_SUCCESS update tenant sys recovery scn successfully
-   *   OB_NEED_RETRY sys recovery scn backoff, need retry
-   */
-  DEFINE_IN_TRANS_FUC1(update_tenant_sys_recovery_scn,
-    const uint64_t tenant_id,
-    const share::SCN &sys_recovery_scn,
-    bool update_sync_scn);
 
 };
 }

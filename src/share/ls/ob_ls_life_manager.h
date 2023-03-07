@@ -71,19 +71,19 @@ public:
    * @param[in]zone_priority: the primary_zone of OB_ALL_LS_ELECTION_REFERENCE_INFO
    * @param[in] working_sw_status only support working on specified switchover status
    * */
-  DEFINE_IN_TRANS_FUC(create_new_ls, const ObLSStatusInfo &ls_info,\
-                    const SCN &create_ls_scn,\
-                    const common::ObString &zone_priority,\
-                    const share::ObTenantSwitchoverStatus &working_sw_status)
+  int create_new_ls(const ObLSStatusInfo &ls_info,
+                    const SCN &create_ls_scn,
+                    const common::ObString &zone_priority,
+                    const share::ObTenantSwitchoverStatus &working_sw_status);
   /*
    * description: for primary cluster and GC of standby, delete ls from each inner_table
    * @param[in] tenant_id: tenant_id
    * @param[in] ls_id: need delete ls
    * @param[in] working_sw_status only support working on specified switchover status
    * */
-  DEFINE_IN_TRANS_FUC(drop_ls, const uint64_t &tenant_id,\
-              const share::ObLSID &ls_id,\
-              const ObTenantSwitchoverStatus &working_sw_status)
+  int drop_ls(const uint64_t &tenant_id,
+              const share::ObLSID &ls_id,
+              const ObTenantSwitchoverStatus &working_sw_status);
   /*
    * description: for primary cluster set ls to wait offline from tenant_dropping or dropping status 
    * @param[in] tenant_id: tenant_id
@@ -92,11 +92,11 @@ public:
    * @param[in] drop_scn: there is no user data after drop_scn except offline
    * @param[in] working_sw_status only support working on specified switchover status
    * */
-  DEFINE_IN_TRANS_FUC(set_ls_offline, const uint64_t &tenant_id,\
-                      const share::ObLSID &ls_id,\
-                      const ObLSStatus &ls_status,\
-                      const SCN &drop_scn,\
-                      const ObTenantSwitchoverStatus &working_sw_status)
+  int set_ls_offline(const uint64_t &tenant_id,
+                      const share::ObLSID &ls_id,
+                      const ObLSStatus &ls_status,
+                      const SCN &drop_scn,
+                      const ObTenantSwitchoverStatus &working_sw_status);
   /*
    * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 
    * @param[in] tenant_id: tenant_id
@@ -109,6 +109,32 @@ public:
       const share::ObLSID &ls_id,
       const common::ObZone &primary_zone,
       const common::ObString &zone_priority);
+
+public:
+  /*
+   * description: for standby cluster, create new ls
+   */
+  int create_new_ls_in_trans(const ObLSStatusInfo &ls_info,
+                            const SCN &create_ls_scn,
+                            const common::ObString &zone_priority,
+                            const share::ObTenantSwitchoverStatus &working_sw_status,
+                            ObMySQLTransaction &trans);
+  /*
+   * description: for standby cluster, create new ls
+   */
+  int drop_ls_in_trans(const uint64_t &tenant_id,
+                      const share::ObLSID &ls_id,
+                      const ObTenantSwitchoverStatus &working_sw_status,
+                      ObMySQLTransaction &trans);
+  /*
+   * description: for  standby cluster set ls to offline
+   * */
+  int set_ls_offline_in_trans(const uint64_t &tenant_id,
+                      const share::ObLSID &ls_id,
+                      const ObLSStatus &ls_status,
+                      const SCN &drop_scn,
+                      const ObTenantSwitchoverStatus &working_sw_status,
+                      ObMySQLTransaction &trans);
 
 private:
   bool inited_;

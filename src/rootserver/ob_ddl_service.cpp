@@ -72,7 +72,7 @@
 #include "rootserver/ddl_task/ob_ddl_retry_task.h"
 #include "rootserver/freeze/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
-#include "rootserver/ob_tenant_thread_helper.h"//get_zone_priority
+#include "rootserver/ob_primary_ls_service.h"//ObTenantLSInfo
 #include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server_struct.h"
 #include "storage/tx/ob_ts_mgr.h"
@@ -20721,7 +20721,7 @@ int ObDDLService::create_tenant_sys_ls(
     } else if (OB_UNLIKELY(0 == primary_zone_list.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("primary zone is empty", KR(ret), K(tenant_schema));
-    } else if (OB_FAIL(ObTenantThreadHelper::get_zone_priority(
+    } else if (OB_FAIL(ObTenantLSInfo::get_zone_priority(
             primary_zone_list.at(0), tenant_schema, zone_priority))) {
       LOG_WARN("failed to get zone priority", KR(ret), K(primary_zone_list), K(tenant_schema));
     } else if (OB_FAIL(ls_creator.create_tenant_sys_ls(
@@ -21203,7 +21203,7 @@ int ObDDLService::set_sys_ls_status(const uint64_t tenant_id)
     if (OB_FAIL(new_ls.init(SYS_LS, ls_group_id, flag,
             share::OB_LS_NORMAL, share::OB_LS_OP_CREATE_END, create_scn))) {
       LOG_WARN("failed to init new operation", KR(ret), K(flag), K(create_scn));
-    } else if (OB_FAIL(ls_operator.insert_ls(new_ls, ls_group_id))) {
+    } else if (OB_FAIL(ls_operator.insert_ls(new_ls, ls_group_id, share::NORMAL_SWITCHOVER_STATUS))) {
       LOG_WARN("failed to insert new ls", KR(ret), K(new_ls), K(ls_group_id));
     }
   }
