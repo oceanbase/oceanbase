@@ -150,7 +150,9 @@ int ObOptStatService::load_table_stat_and_put_cache(const uint64_t tenant_id,
     ret = OB_NOT_INIT;
     LOG_WARN("table statistics service is not initialized. ", K(ret), K(key));
   } else if (OB_FAIL(sql_service_.fetch_table_stat(tenant_id, key, all_part_stats))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
+    if (OB_ENTRY_NOT_EXIST != ret &&
+        !is_sys_table(key.table_id_) &&
+        !is_virtual_table(key.table_id_)) {//sys table and virtual table failed, use default
       LOG_WARN("fetch table stat failed. ", K(ret), K(key));
     } else {
       // it's not guaranteed that table stat exists.
@@ -372,7 +374,11 @@ int ObOptStatService::load_table_rowcnt_and_put_cache(const uint64_t tenant_id,
   } else if (OB_FAIL(sql_service_.fetch_table_rowcnt(tenant_id, table_id,
                                                      all_tablet_ids, all_ls_ids,
                                                      tstats))) {
-    LOG_WARN("fetch table stat failed. ", K(ret));
+    if (!is_sys_table(table_id) && !is_virtual_table(table_id)) {//sys table and virtual table failed, use default
+      LOG_WARN("failed to fetch table rowcnt ", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tstats.count(); ++i) {
       ObOptTableStat::Key key(tenant_id, table_id, tstats.at(i).get_tablet_id());
