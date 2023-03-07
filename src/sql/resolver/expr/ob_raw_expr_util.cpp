@@ -3840,8 +3840,10 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
       LOG_ERROR("allocate expr operator failed", K(ret));
     } else {
       out_expr->set_func_name(ObString::make_string(func_name));
-      if (is_lob_storage(dst_type)) {
-        out_expr->set_extra(1);
+      if (ob_is_large_text(dst_type)) {
+        out_expr->set_extra(static_cast<uint64_t>(dst_type));
+      } else {
+        out_expr->set_extra(0);
       }
     }
 

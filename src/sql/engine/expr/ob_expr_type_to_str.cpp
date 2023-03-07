@@ -58,10 +58,16 @@ int ObExprTypeToStr::calc_result_type2(ObExprResType &type,
   UNUSED(type_ctx);
   UNUSED(type2);
   int ret = OB_SUCCESS;
-  if (get_raw_expr()->get_extra() == 1) {
-    type.set_type(ObLongTextType);
-  } else {
+  if (get_raw_expr()->get_extra() == 0) {
     type.set_type(ObVarcharType);
+  } else {
+    ObObjType dst_type = static_cast<ObObjType>(get_raw_expr()->get_extra());
+    if (!ob_is_large_text(dst_type)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid dst type", K(ret), K(dst_type));
+    } else {
+      type.set_type(dst_type);
+    }
   }
   type.set_collation_type(type1.get_collation_type());
   type.set_collation_level(CS_LEVEL_IMPLICIT);
