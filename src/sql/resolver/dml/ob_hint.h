@@ -133,6 +133,7 @@ struct ObGlobalHint {
   int merge_dop_hint(uint64_t dfo, uint64_t dop);
   int merge_dop_hint(const ObIArray<ObDopHint> &dop_hints);
   void merge_query_timeout_hint(int64_t hint_time);
+  void reset_query_timeout_hint() { query_timeout_ = -1; }
   void merge_dblink_info_hint(int64_t tx_id, int64_t tm_sessid);
   void reset_dblink_info_hint();
   void merge_max_concurrent_hint(int64_t max_concurrent);
