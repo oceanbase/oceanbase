@@ -323,6 +323,12 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
       if (OB_FAIL(tx->decode_static_state(buf, len, pos))) {
         // unretryable
         TRANS_LOG(WARN, "decode static state failed", K(ret));
+      } else if (tx->addr_ == self_ && tx->sess_id_ != session_id && !tx->is_xa_trans()) {
+        // receive static state which was born in this node, and its session is not current session
+        // this can only happened for XA which xa_start on remote
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "receive tx static-state born in this node of another session", K(ret),
+                  K(tx->sess_id_), K(session_id), KPC(tx));
       } else if (need_add_tx && !tx->is_xa_trans()
                  && OB_FAIL(tx_desc_mgr_.add_with_txid(tx->tx_id_, *tx))) {
         // unretryable
