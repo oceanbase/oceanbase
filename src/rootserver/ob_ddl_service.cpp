@@ -20039,6 +20039,16 @@ int ObDDLService::create_sys_tenant(
           LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         }
       }
+      if (OB_SUCC(ret)) {
+        // If tenant config version in RS is valid first and ddl trans doesn't commit,
+        // observer may read from empty __tenant_parameter successfully and raise its tenant config version,
+        // which makes some initial tenant configs are not actually updated before related observer restarts.
+        // To fix this problem, tenant config version in RS should be valid after ddl trans commits.
+        const int64_t config_version = omt::ObTenantConfig::INITIAL_TENANT_CONF_VERSION + 1;
+        if (OB_FAIL(OTC_MGR.set_tenant_config_version(OB_SYS_TENANT_ID, config_version))) {
+          LOG_WARN("failed to set tenant config version", KR(ret), "tenant_id", OB_SYS_TENANT_ID);
+        }
+      }
     }
   }
   return ret;
@@ -21085,6 +21095,21 @@ int ObDDLService::init_tenant_schema(
           LOG_WARN("trans end failed", K(commit), K(temp_ret));
         }
       }
+
+      if (OB_SUCC(ret) && is_meta_tenant(tenant_id)) {
+        // If tenant config version in RS is valid first and ddl trans doesn't commit,
+        // observer may read from empty __tenant_parameter successfully and raise its tenant config version,
+        // which makes some initial tenant configs are not actually updated before related observer restarts.
+        // To fix this problem, tenant config version in RS should be valid after ddl trans commits.
+        const int64_t config_version = omt::ObTenantConfig::INITIAL_TENANT_CONF_VERSION + 1;
+        const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+        if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id, config_version))) {
+          LOG_WARN("failed to set tenant config version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(OTC_MGR.set_tenant_config_version(user_tenant_id, config_version))) {
+          LOG_WARN("failed to set tenant config version", KR(ret), K(user_tenant_id));
+        }
+      }
+
       ObLSInfo sys_ls_info;
       ObAddrArray addrs;
       if (FAILEDx(GCTX.lst_operator_->get(

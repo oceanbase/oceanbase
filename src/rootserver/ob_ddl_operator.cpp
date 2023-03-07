@@ -5764,8 +5764,6 @@ int ObDDLOperator::init_tenant_config_(
     } else if (config_cnt != affected_rows) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("affected_rows not match", KR(ret), K(tenant_id), K(config_cnt), K(affected_rows));
-    } else if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id, config_version))) {
-      LOG_WARN("failed to set tenant config version", KR(ret), K(tenant_id), K(config_version));
     }
   }
   return ret;
@@ -5783,13 +5781,14 @@ int ObDDLOperator::init_tenant_config_from_seed_(
                 "from __all_seed_parameter";
   ObSQLClientRetryWeak sql_client_retry_weak(&sql_proxy_);
   SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-    int64_t max_version = 0, expected_rows = 0;
+    int64_t expected_rows = 0;
+    int64_t config_version = omt::ObTenantConfig::INITIAL_TENANT_CONF_VERSION + 1;
     bool is_first = true;
     if (OB_FAIL(sql_client_retry_weak.read(result, OB_SYS_TENANT_ID, from_seed))) {
       LOG_WARN("read config from __all_seed_parameter failed", K(from_seed), K(ret));
     } else {
       sql.reset();
-      if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
+      if (OB_FAIL(sql.assign_fmt("INSERT IGNORE INTO %s "
           "(TENANT_ID, ZONE, SVR_TYPE, SVR_IP, SVR_PORT, NAME, DATA_TYPE, VALUE, INFO, "
           "SECTION, SCOPE, SOURCE, EDIT_LEVEL, CONFIG_VERSION) VALUES",
           OB_TENANT_PARAMETER_TNAME))) {
@@ -5804,7 +5803,7 @@ int ObDDLOperator::init_tenant_config_from_seed_(
         } else {
           ObString var_zone, var_svr_type, var_svr_ip, var_name, var_data_type;
           ObString var_value, var_info, var_section, var_scope, var_source, var_edit_level;
-          int64_t var_config_version = 0, var_svr_port = 0;
+          int64_t var_svr_port = 0;
           EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "zone", var_zone);
           EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "svr_type", var_svr_type);
           EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "svr_ip", var_svr_ip);
@@ -5817,8 +5816,6 @@ int ObDDLOperator::init_tenant_config_from_seed_(
           EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "source", var_source);
           EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "edit_level", var_edit_level);
           EXTRACT_INT_FIELD_MYSQL(*rs, "svr_port", var_svr_port, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*rs, "config_version", var_config_version, int64_t);
-          max_version = std::max(max_version, var_config_version);
           if (FAILEDx(sql.append_fmt("%s('%lu', '%.*s', '%.*s', '%.*s', %ld, '%.*s', '%.*s', '%.*s',"
               "'%.*s', '%.*s', '%.*s', '%.*s', '%.*s', %ld)",
               is_first ? " " : ", ",
@@ -5833,7 +5830,7 @@ int ObDDLOperator::init_tenant_config_from_seed_(
               var_section.length(), var_section.ptr(),
               var_scope.length(), var_scope.ptr(),
               var_source.length(), var_source.ptr(),
-              var_edit_level.length(), var_edit_level.ptr(), var_config_version))) {
+              var_edit_level.length(), var_edit_level.ptr(), config_version))) {
             LOG_WARN("sql append failed", K(ret));
           }
         }
@@ -5848,11 +5845,10 @@ int ObDDLOperator::init_tenant_config_from_seed_(
           int64_t affected_rows = 0;
           if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
             LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
-          } else if (expected_rows != affected_rows) {
+          } else if (OB_UNLIKELY(affected_rows < 0
+                     || expected_rows < affected_rows)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected affected_rows", K(expected_rows), K(affected_rows));
-          } else if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id, max_version))) {
-            LOG_WARN("failed to set tenant config version", K(tenant_id), K(ret));
+            LOG_WARN("unexpected affected_rows", KR(ret),  K(expected_rows), K(affected_rows));
           }
         }
       } else {
