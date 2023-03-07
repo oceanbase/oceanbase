@@ -4944,15 +4944,6 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
     if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null schema guard", K(ret));
-    } else if (OB_ISNULL(pc_ctx.sql_ctx_.cur_stmt_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid null stmt", K(ret));
-    } else if (OB_ISNULL(pc_ctx.sql_ctx_.cur_stmt_->get_query_ctx())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid null query context", K(ret));
-    } else if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid null session", K(ret));
     } else if (should_reroute) {
       if (DAS_CTX(pc_ctx.exec_ctx_).get_table_loc_list().empty()) {
         ret = OB_ERR_UNEXPECTED;
@@ -4979,14 +4970,11 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
           LOG_WARN("get full ls replica location failed", K(ret), KPC(first_tablet_loc));
         } else {
           bool is_weak = false;
-          if (stmt::T_SELECT == pc_ctx.sql_ctx_.cur_stmt_->get_stmt_type()) {
+          if (plan->is_select_plan()) {
             if (pc_ctx.sql_ctx_.is_protocol_weak_read_) {
               is_weak = true;
-            } else if (OB_UNLIKELY(INVALID_CONSISTENCY
-                   != pc_ctx.sql_ctx_.cur_stmt_->get_query_ctx()->
-                      get_global_hint().read_consistency_)) {
-              is_weak = (WEAK == pc_ctx.sql_ctx_.cur_stmt_->
-                          get_query_ctx()->get_global_hint().read_consistency_);
+            } else if (OB_UNLIKELY(INVALID_CONSISTENCY != plan->get_phy_plan_hint().read_consistency_)) {
+              is_weak = (WEAK == plan->get_phy_plan_hint().read_consistency_);
             } else {
               is_weak = (WEAK == pc_ctx.sql_ctx_.session_info_->get_consistency_level());
             }
