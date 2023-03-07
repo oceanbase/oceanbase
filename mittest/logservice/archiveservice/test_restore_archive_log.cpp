@@ -11,6 +11,7 @@
  */
 
 #include "lib/ob_errno.h"
+#include "logservice/palf/log_define.h"
 #include "share/ob_errno.h"
 #include "share/ob_ls_id.h"
 #include <cstdint>
@@ -218,7 +219,7 @@ TEST(FakeArchivePieceContext, get_piece)
   lsn = LSN(10 * 64 * ONE_MB);
   CLOG_LOG(INFO, "print get piece 8", K(lsn));
   ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn, to_newest);
-  EXPECT_EQ(OB_ITER_END, ret);
+  EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, ret);
 
   archive_context.reset_locate_info();
   log_ts = 1010;

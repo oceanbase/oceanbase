@@ -52,6 +52,8 @@ public:
 
   void reset();
 
+  bool is_valid() const;
+
   int get_piece(const share::SCN &pre_scn,
       const palf::LSN &start_lsn,
       int64_t &dest_id,
@@ -230,11 +232,11 @@ private:
   // 如果round不满足数据需求, 支持切round
   int switch_round_if_need_(const share::SCN &scn, const palf::LSN &lsn);
 
-  void check_if_switch_round_(const palf::LSN &lsn, RoundOp &op);
+  void check_if_switch_round_(const share::SCN &scn, const palf::LSN &lsn, RoundOp &op);
   bool is_max_round_done_(const palf::LSN &lsn) const;
   bool need_backward_round_(const palf::LSN &lsn) const;
   bool need_forward_round_(const palf::LSN &lsn) const;
-  bool need_load_round_info_(const palf::LSN &lsn) const;
+  bool need_load_round_info_(const share::SCN &scn, const palf::LSN &lsn) const;
 
   // 获取指定round元信息
   virtual int load_round_(const int64_t round_id, RoundContext &round_context, bool &exist);
