@@ -602,12 +602,13 @@ class ObTxDataBackup
 
 public:
   ObTxDataBackup();
-  int init(const storage::ObTxData * const tx_data);
+  int init(const share::SCN &start_scn);
   void reset();
 
   share::SCN get_start_log_ts() const { return start_log_ts_; }
 
   TO_STRING_KV(K(start_log_ts_));
+
 private:
   share::SCN start_log_ts_;
 };
@@ -653,7 +654,7 @@ public:
     commit_version_ = commit_version;
     before_serialize();
   }
-  int init_tx_data_backup(const storage::ObTxData *const tx_data);
+  int init_tx_data_backup(const share::SCN &start_scn);
   const ObTxDataBackup &get_tx_data_backup() const { return tx_data_backup_; }
   share::SCN get_commit_version() const { return commit_version_; }
   uint64_t get_checksum() const { return checksum_; }
@@ -663,6 +664,8 @@ public:
   const ObLSLogInfoArray &get_ls_log_info_arr() const { return ls_log_info_arr_; }
   const LogOffSet &get_prev_lsn() const { return prev_lsn_; }
   void set_prev_lsn(const LogOffSet &lsn) { prev_lsn_ = lsn; }
+
+  const share::SCN get_backup_start_scn() { return tx_data_backup_.get_start_log_ts(); }
 
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
@@ -762,9 +765,11 @@ public:
   }
   const ObTxBufferNodeArray &get_multi_source_data() const { return multi_source_data_; }
 
-  int init_tx_data_backup(const storage::ObTxData *const tx_data);
+  int init_tx_data_backup(const share::SCN &start_scn);
 
   const ObTxDataBackup &get_tx_data_backup() const { return tx_data_backup_; }
+
+  const share::SCN get_backup_start_scn() { return tx_data_backup_.get_start_log_ts(); }
 
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 

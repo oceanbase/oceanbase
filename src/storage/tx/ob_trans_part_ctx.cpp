@@ -2910,12 +2910,13 @@ int ObPartTransCtx::submit_commit_log_()
     bool redo_log_submitted = false;
 
     if (OB_SUCC(ret)) {
-      const ObTxData *tx_data = NULL;
-      auto guard = ctx_tx_data_.get_tx_data();
-      if (OB_FAIL(guard.get_tx_data(tx_data))) {
-        TRANS_LOG(WARN, "get tx data failed", K(ret));
-      } else if (OB_FAIL(commit_log.init_tx_data_backup(tx_data))) {
+      if (OB_FAIL(commit_log.init_tx_data_backup(ctx_tx_data_.get_start_log_ts()))) {
         TRANS_LOG(WARN, "init tx data backup failed", K(ret));
+      } else if (exec_info_.redo_lsns_.count() > 0 || exec_info_.max_applying_log_ts_.is_valid()) {
+        if (!commit_log.get_backup_start_scn().is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "unexpected start scn in commit log", K(ret), K(commit_log), KPC(this));
+        }
       }
     }
 
@@ -3054,12 +3055,15 @@ int ObPartTransCtx::submit_abort_log_()
   ObTxAbortLog abort_log(tmp_array);
 
   if (OB_SUCC(ret)) {
-    const ObTxData *tx_data = NULL;
-    auto guard = ctx_tx_data_.get_tx_data();
-    if (OB_FAIL(guard.get_tx_data(tx_data))) {
-      TRANS_LOG(WARN, "get tx data failed", K(ret));
-    } else if (OB_FAIL(abort_log.init_tx_data_backup(tx_data))) {
-      TRANS_LOG(WARN, "init tx data backup failed", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(abort_log.init_tx_data_backup(ctx_tx_data_.get_start_log_ts()))) {
+        TRANS_LOG(WARN, "init tx data backup failed", K(ret));
+      } else if (exec_info_.redo_lsns_.count() > 0 || exec_info_.max_applying_log_ts_.is_valid()) {
+        if (!abort_log.get_backup_start_scn().is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "unexpected start scn in commit log", K(ret), K(abort_log), KPC(this));
+        }
+      }
     }
   }
 
