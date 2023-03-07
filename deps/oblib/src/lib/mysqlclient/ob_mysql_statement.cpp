@@ -92,6 +92,9 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid mysql stmt", K_(conn), KP_(stmt), KP_(sql_str), K(ret));
   } else {
+    if (OB_UNLIKELY(!conn_->get_exec_succ())) {
+      LOG_ERROR("conn already failed, should not execute query again!", K(conn_));
+    }
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
     if (0 != (tmp_ret = mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_)))) {
       ret = -mysql_errno(stmt_);
@@ -120,6 +123,9 @@ ObMySQLResult *ObMySQLStatement::execute_query()
     LOG_ERROR("invalid mysql stmt", K_(conn), K_(stmt), KP_(sql_str), K(ret));
   } else {
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
+    if (OB_UNLIKELY(!conn_->get_exec_succ())) {
+      LOG_ERROR("conn already failed, should not execute query again!", K(conn_));
+    }
     if (0 != mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_))) {
       ret = -mysql_errno(stmt_);
       const int ER_LOCK_WAIT_TIMEOUT = -1205;

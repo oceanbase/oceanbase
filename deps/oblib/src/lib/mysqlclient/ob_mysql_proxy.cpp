@@ -512,6 +512,9 @@ int ObDbLinkProxy::execute_init_sql(ObISQLConnection *dblink_conn, int link_type
       }
     }
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(dblink_conn)) {
+    dblink_conn->set_exec_succ(false);
+  }
   return ret;
 }
 
@@ -539,6 +542,7 @@ int ObDbLinkProxy::dblink_read(ObISQLConnection *dblink_conn, ReadResult &result
     LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
   } else if (OB_FAIL(dblink_conn->execute_read(OB_INVALID_TENANT_ID, sql, result))) {
     LOG_WARN("read from dblink failed", K(ret), K(dblink_conn), KCSTRING(sql));
+    dblink_conn->set_exec_succ(false);
   } else {
     LOG_DEBUG("succ to read from dblink", K(sql));
   }
@@ -553,6 +557,7 @@ int ObDbLinkProxy::dblink_write(ObISQLConnection *dblink_conn, int64_t &affected
     LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
   } else if (OB_FAIL(dblink_conn->execute_write(OB_INVALID_TENANT_ID, sql, affected_rows))) {
     LOG_WARN("write to dblink failed", K(ret), K(dblink_conn), K(sql));
+    dblink_conn->set_exec_succ(false);
   } else {
     LOG_DEBUG("succ to write by dblink", K(sql));
   }
@@ -566,6 +571,7 @@ int ObDbLinkProxy::rollback(ObISQLConnection *dblink_conn)
     LOG_WARN("dblink conn is NULL", K(ret));
   } else if (OB_FAIL(dblink_conn->rollback())) {
     LOG_WARN("read from dblink failed", K(ret));
+    dblink_conn->set_exec_succ(false);
   }
   return ret;
 }
