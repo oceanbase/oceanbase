@@ -80,6 +80,7 @@ public:
   int get_ddl_major_merge_param(const ObTabletMeta &tablet_meta, ObDDLTableMergeDagParam &merge_param);
   int get_rec_scn(share::SCN &rec_scn);
   void prepare_info_for_checksum_report(const uint64_t table_id, const int64_t ddl_task_id) { table_id_ = table_id; ddl_task_id_ = ddl_task_id; }
+  int ddl_recover_nolock(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &commit_scn);
   TO_STRING_KV(K_(is_inited), K_(success_start_scn), K_(ls_id), K_(tablet_id), K_(table_key),
       K_(data_format_version), K_(start_scn), K_(commit_scn), K_(max_freeze_scn),
       K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));
@@ -97,8 +98,9 @@ private:
   void cleanup_unlock();
   void destroy();
   bool is_commit_success_unlock() const;
-private:
+public:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 64;
+private:
   bool is_inited_;
   share::SCN success_start_scn_;
   share::ObLSID ls_id_;
