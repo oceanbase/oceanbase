@@ -897,9 +897,8 @@ int ObSimpleLogClusterTestEnv::read_log(PalfHandleImplGuard &leader, const LSN &
       bool is_raw_write = false;
       if (OB_FAIL(iterator.next())) {
       } else if (OB_FAIL(iterator.get_entry(buf, buf_len, scn, log_offset, is_raw_write))) {
-      } else if (true == is_raw_write){
-        ret = OB_ERR_UNEXPECTED;
-        PALF_LOG(ERROR, "the log mustn't be raw write", K(ret), K(iterator), K(log_offset));
+      } else {
+        PALF_LOG(TRACE, "print log entry", K(is_raw_write));
       }
     }
   }
@@ -920,6 +919,8 @@ int ObSimpleLogClusterTestEnv::read_group_log(PalfHandleImplGuard &leader, LSN l
       } else if (iterator.iterator_impl_.curr_entry_is_raw_write_ != entry.get_header().is_raw_write()) {
         ret = OB_ERR_UNEXPECTED;
         PALF_LOG(ERROR, "raw write not match, unexpected error", K(ret), K(iterator));
+      } else {
+        PALF_LOG(TRACE, "print log group entry", K(entry));
       }
     }
   }

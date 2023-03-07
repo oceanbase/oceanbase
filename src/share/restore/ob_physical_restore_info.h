@@ -160,9 +160,9 @@ public:
 
   Property_declare_int(int64_t, restore_start_ts)
   Property_declare_int(share::SCN, restore_scn)
-  // TODO(chongrong.th): should use tenant's data version
-  Property_declare_int(uint64_t, post_cluster_version)
+  Property_declare_int(uint64_t, post_data_version)
   Property_declare_int(uint64_t, source_cluster_version)
+  Property_declare_int(uint64_t, source_data_version)
   //from cmd
   Property_declare_ObString(restore_option)
   Property_declare_ObString(backup_dest)

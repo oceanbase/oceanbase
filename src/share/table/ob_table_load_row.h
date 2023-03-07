@@ -32,6 +32,10 @@ public:
   {
     allocator_handle_ = allocator_handle;
   }
+  ObTableLoadSharedAllocatorHandle& get_allocator_handler()
+  {
+    return allocator_handle_;
+  }
   TO_STRING_KV(K_(count));
 
 private:

@@ -1665,7 +1665,7 @@ int ObOptStatSqlService::get_valid_obj_str(const ObObj &src_obj,
     if (OB_SUCC(ret) && OB_FAIL(get_obj_str(dst_obj, allocator, dest_str, print_params))) {
       LOG_WARN("fail to get obj str", K(ret));
     }
-    LOG_TRACE("succeed to get valid obj str", K(src_obj), K(dst_column_meta), K(dest_str));
+    LOG_TRACE("succeed to get valid obj str", K(src_obj), K(dst_obj));
   } else if (OB_FAIL(get_obj_str(src_obj, allocator, dest_str, print_params))) {
     LOG_WARN("failed to get obj str", K(ret), K(src_obj));
   } else {/*do nothing*/}

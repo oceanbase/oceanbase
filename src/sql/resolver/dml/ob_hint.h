@@ -931,6 +931,31 @@ private:
   Algos algos_;
 };
 
+class ObAggHint : public ObOptHint
+{
+public:
+  ObAggHint(ObItemType hint_type)
+    : ObOptHint(hint_type),
+      sort_method_valid_(false),
+      use_partition_sort_(false)
+  {
+  }
+  int assign(const ObAggHint &other);
+  virtual ~ObAggHint() {}
+
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  void set_use_partition_sort(bool use_part_sort) { sort_method_valid_ = is_disable_hint(); use_partition_sort_ = sort_method_valid_ && use_part_sort; }
+  void reset_use_partition_sort() { sort_method_valid_ = false; use_partition_sort_ = false; }
+  bool force_partition_sort()  const { return is_disable_hint() && sort_method_valid_ && use_partition_sort_; }
+  bool force_normal_sort()  const { return is_disable_hint() && sort_method_valid_ && !use_partition_sort_; }
+
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(sort_method_valid), K_(use_partition_sort));
+
+private:
+  bool sort_method_valid_;
+  bool use_partition_sort_;
+};
+
 struct ObDDLSchemaVersionHint
 {
   ObDDLSchemaVersionHint() : schema_version_(0) {}

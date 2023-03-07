@@ -61,6 +61,8 @@ public:
   table::ObTableLoadArray<IndexAndType> rowkey_obj_index_;
   common::ObTimeZoneInfo tz_info_;
   ObTableLoadTimeConverter time_cvrt_;
+  bool is_partition_with_autoinc_;
+  int64_t partition_with_autoinc_idx_;
 private:
   // data members
   uint64_t tenant_id_;

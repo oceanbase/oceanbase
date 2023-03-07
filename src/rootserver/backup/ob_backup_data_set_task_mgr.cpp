@@ -867,7 +867,7 @@ int ObBackupSetTaskMgr::backup_data_()
     } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
       LOG_WARN("fail to start trans", K(ret));
     } else {
-      if (OB_FAIL(ObBackupDataScheduler::get_scn(*sql_proxy_, job_attr_->tenant_id_, end_scn))) {
+      if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, job_attr_->tenant_id_, false/*end scn*/, end_scn))) {
         LOG_WARN("[DATA_BACKUP]failed to get end ts", K(ret), "tenant_id", job_attr_->tenant_id_);
       } else if (OB_FAIL(build_index_(build_index_attr, set_task_attr_.data_turn_id_, set_task_attr_.task_id_, finish_build_index))) {
         LOG_WARN("[DATA_BACKUP]failed to wait build index", K(ret), K(set_task_attr_), KPC(build_index_attr));
@@ -1604,19 +1604,29 @@ int ObBackupSetTaskMgr::write_backup_set_info_(
 {
   int ret = OB_SUCCESS;
   int64_t dest_id = 0;
-  uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
   ObBackupSetFileDesc &backup_set_file = backup_set_info.backup_set_file_;
   ObBackupDest backup_dest;
-  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, set_task_attr.backup_path_, backup_dest))) {
+  uint64_t cur_data_version = 0;
+  uint64_t cur_cluster_version = 0;
+  if (OB_FAIL(ObShareUtil::fetch_current_data_version(*sql_proxy_, job_attr_->tenant_id_, cur_data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_cluster_version(*sql_proxy_, cur_cluster_version))) {
+    LOG_WARN("failed to get cluster version", K(ret));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, set_task_attr.backup_path_, backup_dest))) {
     LOG_WARN("[DATA_BACKUP]fail to get backup dest", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
     LOG_WARN("[DATA_BACKUP]failed to get dest id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(*sql_proxy_, false/*for update*/, job_attr_->backup_set_id_, job_attr_->incarnation_id_, 
       job_attr_->tenant_id_, dest_id, backup_set_file))) {
     LOG_WARN("[DATA_BACKUP]failed to get backup set", K(ret), KPC(job_attr_));
-  } else if (cluster_version != backup_set_file.tenant_compatible_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("[DATA_BACKUP]when cluster_version change, backup can't continue", K(ret), K(cluster_version), K(backup_set_file.tenant_compatible_));
+  } else if (cur_data_version != backup_set_file.tenant_compatible_ || cur_cluster_version != backup_set_file.cluster_version_) {
+    ret = OB_VERSION_NOT_MATCH;
+
+    LOG_WARN("cluster version or tenant data version are not match", K(ret),
+        K(cur_data_version),
+        "backup_data_version", backup_set_file.tenant_compatible_,
+        K(cur_cluster_version),
+        "backup_cluster_version", backup_set_file.cluster_version_);
   } else {
     backup_set_file.backup_set_id_ = job_attr_->backup_set_id_;
     backup_set_file.incarnation_ = job_attr_->incarnation_id_;

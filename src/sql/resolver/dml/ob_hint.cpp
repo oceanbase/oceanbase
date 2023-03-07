@@ -2511,5 +2511,29 @@ int ObWindowDistHint::print_hint_desc(PlanText &plan_text) const
   return ret;
 }
 
+int ObAggHint::assign(const ObAggHint &other)
+{
+  int ret = OB_SUCCESS;
+  sort_method_valid_ = other.sort_method_valid_;
+  use_partition_sort_ = other.use_partition_sort_;
+  return ret;
+}
+
+int ObAggHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  if (sort_method_valid_) {
+    char *buf = plan_text.buf_;
+    int64_t &buf_len = plan_text.buf_len_;
+    int64_t &pos = plan_text.pos_;
+    if (use_partition_sort_ && OB_FAIL(BUF_PRINTF("PARTITION_SORT"))) {
+      LOG_WARN("print failed", K(ret));
+    } else if (!use_partition_sort_ && OB_FAIL(BUF_PRINTF("NO_PARTITION_SORT"))) {
+      LOG_WARN("print failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 }//end of namespace sql
 }//end of namespace oceanbase

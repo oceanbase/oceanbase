@@ -1756,6 +1756,32 @@ bool ObLogPlanHint::has_disable_hint(ObItemType hint_type) const
   return NULL != cur_hint ? cur_hint->is_disable_hint() : is_outline_data_;
 }
 
+int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
+                                        bool &force_use_merge,
+                                        bool &force_part_sort,
+                                        bool &force_normal_sort) const
+{
+  int ret = OB_SUCCESS;
+  force_use_hash = false;
+  force_use_merge = false;
+  force_part_sort = false;
+  force_normal_sort = false;
+  const ObAggHint *agg_hint = static_cast<const ObAggHint*>(get_normal_hint(T_USE_HASH_AGGREGATE));
+  if (NULL != agg_hint) {
+    force_use_hash = agg_hint->is_enable_hint();
+    force_use_merge = agg_hint->is_disable_hint();
+    force_part_sort = agg_hint->force_partition_sort();
+    force_normal_sort = agg_hint->force_normal_sort();
+    if (force_use_merge && !force_part_sort && !force_normal_sort && is_outline_data_) {
+      force_normal_sort = true;
+    }
+  } else if (is_outline_data_) {
+    force_use_merge = true;
+    force_normal_sort = true;
+  }
+  return ret;
+}
+
 const ObWindowDistHint *ObLogPlanHint::get_window_dist() const
 {
   return static_cast<const ObWindowDistHint*>(

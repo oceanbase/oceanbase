@@ -87,22 +87,14 @@ int ObTabletDDLKvMgr::init(const share::ObLSID &ls_id, const common::ObTabletID 
   return ret;
 }
 
-// ddl start from log
-//    cleanup ddl sstable
-// ddl start from checkpoint
-//    keep ddl sstable table
-
-int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
-                                const ObITable::TableKey &table_key,
-                                const SCN &start_scn,
-                                const int64_t data_format_version,
-                                const int64_t execution_id,
-                                const SCN &checkpoint_scn)
+int ObTabletDDLKvMgr::ddl_start_nolock(const ObITable::TableKey &table_key,
+                                       const SCN &start_scn,
+                                       const int64_t data_format_version,
+                                       const int64_t execution_id,
+                                       const SCN &checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   bool is_brand_new = false;
-  SCN saved_start_scn;
-  int64_t saved_snapshot_version = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
@@ -114,7 +106,6 @@ int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
     ret = OB_ERR_SYS;
     LOG_WARN("tablet id not same", K(ret), K(table_key), K(tablet_id_));
   } else {
-    ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
     if (start_scn_.is_valid_and_not_min()) {
       if (execution_id >= execution_id_ && start_scn >= start_scn_) {
         LOG_INFO("execution id changed, need cleanup", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_scn_), K(start_scn));
@@ -137,7 +128,33 @@ int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
       start_scn_ = start_scn;
       max_freeze_scn_ = SCN::max(start_scn, checkpoint_scn);
     }
-    if (OB_SUCC(ret)) {
+  }
+  return ret;
+}
+
+// ddl start from log
+//    cleanup ddl sstable
+// ddl start from checkpoint
+//    keep ddl sstable table
+
+int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
+                                const ObITable::TableKey &table_key,
+                                const SCN &start_scn,
+                                const int64_t data_format_version,
+                                const int64_t execution_id,
+                                const SCN &checkpoint_scn)
+{
+  int ret = OB_SUCCESS;
+  SCN saved_start_scn;
+  int64_t saved_snapshot_version = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else {
+    ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+    if (OB_FAIL(ddl_start_nolock(table_key, start_scn, data_format_version, execution_id, checkpoint_scn))) {
+      LOG_WARN("failed to ddl start", K(ret));
+    } else {
       // save variables under lock
       saved_start_scn = start_scn_;
       saved_snapshot_version = table_key_.get_snapshot_version();
@@ -149,7 +166,7 @@ int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
       LOG_WARN("clean up ddl sstable failed", K(ret), K(ls_id_), K(tablet_id_));
     }
   }
-  FLOG_INFO("start ddl kv mgr finished", K(ret), K(is_brand_new), K(start_scn), K(execution_id), K(checkpoint_scn), K(*this));
+  FLOG_INFO("start ddl kv mgr finished", K(ret), K(start_scn), K(execution_id), K(checkpoint_scn), K(*this));
   return ret;
 }
 

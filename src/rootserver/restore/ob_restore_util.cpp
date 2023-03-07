@@ -27,6 +27,7 @@
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "storage/backup/ob_backup_extern_info_mgr.h"//ObExternLSMetaMgr
 #include "storage/ls/ob_ls_meta_package.h"//ls_meta
+#include "share/ob_upgrade_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase;
@@ -545,15 +546,52 @@ int ObRestoreUtil::do_fill_backup_info_(
     } else if (!backup_set_info.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid backup set file", K(ret), K(backup_set_info));
+    } else if (OB_FAIL(check_backup_set_version_match_(backup_set_info.backup_set_file_))) {
+      LOG_WARN("failed to check backup set version match", K(ret));
     } else if (OB_FAIL(job.set_backup_tenant_name(locality_info.tenant_name_.ptr()))) {
       LOG_WARN("fail to set backup tenant name", K(ret), "tenant name", locality_info.tenant_name_);
     } else if (OB_FAIL(job.set_backup_cluster_name(locality_info.cluster_name_.ptr()))) {
       LOG_WARN("fail to set backup cluster name", K(ret), "cluster name", locality_info.cluster_name_);
     } else {
-      job.set_source_cluster_version(backup_set_info.backup_set_file_.tenant_compatible_);
+      job.set_source_data_version(backup_set_info.backup_set_file_.tenant_compatible_);
+      job.set_source_cluster_version(backup_set_info.backup_set_file_.cluster_version_);
       job.set_compat_mode(locality_info.compat_mode_);
       job.set_backup_tenant_id(backup_set_info.backup_set_file_.tenant_id_);
     }
+  }
+  return ret;
+}
+
+int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (!backup_file_desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(backup_file_desc));
+  } else if (CLUSTER_VERSION_4_0_0_0 > backup_file_desc.cluster_version_
+          || CLUSTER_VERSION_4_1_0_0 < backup_file_desc.cluster_version_) { // TODO(chongrong.th) wait yanmu provide the check cluster version exist interface
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("data version are not exist", K(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "cluster version of backup set");
+  } else if (!ObUpgradeChecker::check_data_version_exist(backup_file_desc.tenant_compatible_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("data version are not exist", K(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant compatible of backup set");
+  } else if (GET_MIN_CLUSTER_VERSION() < backup_file_desc.cluster_version_) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("restore from higher cluster version is not allowed", K(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore from higher cluster version is");
+  } else if (OB_FAIL(ObUpgradeChecker::get_data_version_by_cluster_version(GET_MIN_CLUSTER_VERSION(), data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (data_version < backup_file_desc.tenant_compatible_) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("restore from higher data version is not allowed", K(ret), K(data_version), K(backup_file_desc.tenant_compatible_));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore from higher data version is");
+  } else if (backup_file_desc.tenant_compatible_ < DATA_VERSION_4_1_0_0 && data_version >= DATA_VERSION_4_1_0_0) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("restore from version 4.0 is not allowd", K(ret), K(backup_file_desc.tenant_compatible_), K(data_version));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore from version 4.0 is");
   }
   return ret;
 }

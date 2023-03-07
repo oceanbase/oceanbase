@@ -23,6 +23,7 @@
 #include "share/backup/ob_backup_config.h"
 #include "share/backup/ob_backup_lease_info_mgr.h"
 #include "storage/tx/ob_i_ts_source.h"
+#include "storage/tx/ob_ts_mgr.h"
 
 
 using namespace oceanbase;
@@ -2030,6 +2031,22 @@ int ObBaseBackupInfoStruct::check_backup_info_match(
   return ret;
 }
 
+int ObBackupUtils::check_tenant_data_version_match(const uint64_t tenant_id, const uint64_t data_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t cur_data_version = 0;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, cur_data_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K(tenant_id));
+  } else if (cur_data_version != data_version) {
+    ret = OB_VERSION_NOT_MATCH;
+    LOG_WARN("tenant data version is not match", K(ret), K(tenant_id), K(cur_data_version), K(data_version));
+  }
+  return ret;
+}
+
 int ObBackupUtils::get_backup_info_default_timeout_ctx(ObTimeoutCtx &ctx)
 {
   int ret = OB_SUCCESS;
@@ -2161,6 +2178,37 @@ int ObBackupUtils::convert_timestamp_to_date(
       date = tmp_date;
     }
   }
+  return ret;
+}
+
+int ObBackupUtils::get_backup_scn(const uint64_t &tenant_id, share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
+  } else {
+    ret = OB_EAGAIN;
+    const transaction::MonotonicTs stc = transaction::MonotonicTs::current_time();
+    transaction::MonotonicTs unused_ts(0);
+    const int64_t start_time = ObTimeUtility::fast_current_time();
+    const int64_t TIMEOUT = 10 * 1000 * 1000; //10s
+    while (OB_EAGAIN == ret) {
+      if (ObTimeUtility::fast_current_time() - start_time > TIMEOUT) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("stmt is timeout", KR(ret), K(start_time), K(TIMEOUT));
+      } else if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, stc, NULL,
+                                           scn, unused_ts))) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to get gts", KR(ret), K(tenant_id));
+        } else {
+          // waiting 10ms
+          ob_usleep(10L * 1000L);
+        }
+      }
+    }
+  }
+  LOG_INFO("get tenant gts", KR(ret), K(tenant_id), K(scn));
   return ret;
 }
 
@@ -3465,7 +3513,7 @@ int ObBackupLSTaskAttr::assign(const ObBackupLSTaskAttr &other)
 OB_SERIALIZE_MEMBER(ObBackupSetFileDesc, backup_set_id_, incarnation_, tenant_id_, dest_id_, backup_type_,
     plus_archivelog_, date_, prev_full_backup_set_id_, prev_inc_backup_set_id_, stats_, start_time_, end_time_, status_,
     result_, encryption_mode_, passwd_, file_status_, backup_path_, start_replay_scn_, min_restore_scn_,
-    tenant_compatible_, backup_compatible_, data_turn_id_, meta_turn_id_);
+    tenant_compatible_, backup_compatible_, data_turn_id_, meta_turn_id_, cluster_version_);
 
 ObBackupSetFileDesc::ObBackupSetFileDesc()
   : backup_set_id_(0),
@@ -3491,7 +3539,8 @@ ObBackupSetFileDesc::ObBackupSetFileDesc()
     tenant_compatible_(0),
     backup_compatible_(Compatible::MAX_COMPATIBLE_VERSION),
     data_turn_id_(0),
-    meta_turn_id_(0)
+    meta_turn_id_(0),
+    cluster_version_(0)
 {
 }
 
@@ -3521,6 +3570,7 @@ void ObBackupSetFileDesc::reset()
   backup_compatible_ = Compatible::MAX_COMPATIBLE_VERSION;
   data_turn_id_ = 0;
   meta_turn_id_ = 0;
+  cluster_version_ = 0;
 }
 
 
@@ -3656,6 +3706,7 @@ int ObBackupSetFileDesc::assign(const ObBackupSetFileDesc &other)
     backup_compatible_ = other.backup_compatible_;
     data_turn_id_ = other.data_turn_id_;
     meta_turn_id_ = other.meta_turn_id_;
+    cluster_version_ = other.cluster_version_;
   }
   return ret;
 }

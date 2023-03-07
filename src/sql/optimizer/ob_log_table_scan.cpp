@@ -1760,6 +1760,10 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
     } else if (NULL != table_hint->parallel_hint_ && table_hint->parallel_hint_->get_parallel() > 1
                && OB_FAIL(table_hint->parallel_hint_->print_hint(plan_text))) {
       LOG_WARN("failed to print table parallel hint", K(ret));
+    } else if (NULL != table_hint->use_das_hint_
+               && use_das() == table_hint->use_das_hint_->is_enable_hint()
+               && OB_FAIL(table_hint->use_das_hint_->print_hint(plan_text))) {
+      LOG_WARN("failed to print use das hint", K(ret));
     } else if (table_hint->index_list_.empty()) {
       /*do nothing*/
     } else if (OB_UNLIKELY(table_hint->index_list_.count() != table_hint->index_hints_.count())) {

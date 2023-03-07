@@ -305,7 +305,7 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
     } else if (OB_FAIL(check_hint_valid(*stmt, *table->ref_query_, hint_valid))) {
       LOG_WARN("check hint failed", K(ret));
     } else if (!hint_valid) {
-      is_valid = false;
+      // can not set is_valid as false, may pullup other table
       OPT_TRACE("hint reject transform");
     } else if (OB_FALSE_IT(myhint = static_cast<const ObViewMergeHint*>(sub_stmt->get_stmt_hint().get_normal_hint(T_MERGE_HINT)))) {
     } else if (ignore_tables.has_member(stmt->get_table_bit_index(table->table_id_))) {
@@ -1071,11 +1071,11 @@ int ObTransformGroupByPullup::need_transform(const common::ObIArray<ObParentDMLS
       } else {
         need_trans = query_hint->is_valid_outline_transform(ctx_->trans_list_loc_,
                                                   get_hint(table->ref_query_->get_stmt_hint()));
-        if (!need_trans) {
-          OPT_TRACE("outline reject transform");
-        }
         LOG_DEBUG("need trans pullup0", K(need_trans));
       }
+    }
+    if (OB_SUCC(ret) && !need_trans) {
+      OPT_TRACE("outline reject transform");
     }
   }
   LOG_DEBUG("need trans pullup", K(need_trans));

@@ -76,7 +76,10 @@ public:
         aggr_stage_(ObThreeStageAggrStage::NONE_STAGE),
         three_stage_info_(),
         rollup_adaptive_info_(),
-        force_push_down_(false)
+        force_push_down_(false),
+        use_hash_aggr_(false),
+        has_push_down_(false),
+        use_part_sort_(false)
   {}
   virtual ~ObLogGroupBy()
   {}
@@ -197,6 +200,8 @@ public:
   { return ObRollupStatus::ROLLUP_COLLECTOR == rollup_adaptive_info_.rollup_status_; }
   inline void set_force_push_down(bool force_push_down)
   { force_push_down_ = force_push_down; }
+  void set_group_by_outline_info(bool use_hash_aggr, bool has_push_down, bool use_part_sort = false)
+  { use_hash_aggr_ = use_hash_aggr; has_push_down_ = has_push_down; use_part_sort_ = use_part_sort; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
 
@@ -230,6 +235,10 @@ private:
   // for rollup distributor and collector
   ObRollupAdaptiveInfo rollup_adaptive_info_;
   bool force_push_down_; // control by _aggregation_optimization_settings
+  // use print outline
+  bool use_hash_aggr_;
+  bool has_push_down_;
+  bool use_part_sort_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

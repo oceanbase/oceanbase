@@ -78,12 +78,11 @@ PalfHandleImpl::PalfHandleImpl()
     flashback_lock_(),
     last_dump_info_time_us_(OB_INVALID_TIMESTAMP),
     is_flashback_done_(false),
-    cached_palf_stat_lock_(),
-    cached_palf_stat_for_query_(),
     last_check_sync_time_us_(OB_INVALID_TIMESTAMP),
     last_renew_loc_time_us_(OB_INVALID_TIMESTAMP),
     last_print_in_sync_time_us_(OB_INVALID_TIMESTAMP),
     chaning_config_warn_time_(OB_INVALID_TIMESTAMP),
+    cached_is_in_sync_(false),
     has_higher_prio_config_change_(false),
     is_inited_(false)
 {
@@ -220,12 +219,12 @@ void PalfHandleImpl::destroy()
     PALF_EVENT("PalfHandleImpl destroy", palf_id_, KPC(this));
     is_inited_ = false;
     diskspace_enough_ = true;
+    cached_is_in_sync_ = false;
     lc_cb_ = NULL;
     self_.reset();
     palf_id_ = INVALID_PALF_ID;
     fetch_log_engine_ = NULL;
     allocator_ = NULL;
-    cached_palf_stat_for_query_.reset();
     election_.stop();
     log_engine_.destroy();
     reconfirm_.destroy();
@@ -3679,14 +3678,6 @@ int PalfHandleImpl::revoke_leader(const int64_t proposal_id)
   return ret;
 }
 
-int PalfHandleImpl::stat(PalfStat &palf_stat)
-{
-  int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(cached_palf_stat_lock_);
-  palf_stat = cached_palf_stat_for_query_;
-  return ret;
-}
-
 int PalfHandleImpl::diagnose(PalfDiagnoseInfo &diagnose_info) const
 {
   int ret = OB_SUCCESS;
@@ -4074,17 +4065,12 @@ int PalfHandleImpl::cut_last_log_and_append_it_(char *last_log_buf,
   return ret;
 }
 
-int PalfHandleImpl::update_palf_stat()
+int PalfHandleImpl::stat(PalfStat &palf_stat)
 {
   int ret = OB_SUCCESS;
-  PalfStat palf_stat;
-  bool is_in_sync = false;
-  bool is_use_sync_cache = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    is_in_sync_(is_in_sync, is_use_sync_cache);
-
     LSN last_rebuild_lsn;
     do {
       SpinLockGuard guard(last_rebuild_lsn_lock_);
@@ -4120,12 +4106,24 @@ int PalfHandleImpl::update_palf_stat()
     palf_stat.is_need_rebuild_ = (palf_stat.end_lsn_.is_valid() &&
                                   last_rebuild_lsn.is_valid() &&
                                   palf_stat.end_lsn_ < last_rebuild_lsn);
+    palf_stat.is_in_sync_ = cached_is_in_sync_;
     PALF_LOG(TRACE, "PalfHandleImpl stat", K(palf_stat));
   }
-  if (OB_SUCC(ret)) {
-    ObSpinLockGuard guard(cached_palf_stat_lock_);
-    palf_stat.is_in_sync_ = (is_use_sync_cache)? cached_palf_stat_for_query_.is_in_sync_: is_in_sync;
-    cached_palf_stat_for_query_ = palf_stat;
+  return OB_SUCCESS;
+}
+
+int PalfHandleImpl::update_palf_stat()
+{
+  int ret = OB_SUCCESS;
+  bool is_in_sync = false;
+  bool is_use_sync_cache = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    is_in_sync_(is_in_sync, is_use_sync_cache);
+    if (false == is_use_sync_cache) {
+      cached_is_in_sync_ = is_in_sync;
+    }
   }
   return OB_SUCCESS;
 }
@@ -4159,7 +4157,7 @@ void PalfHandleImpl::is_in_sync_(bool &is_log_sync, bool &is_use_cache)
     is_use_cache = true;
   }
 
-  const bool is_in_sync = (is_use_cache)? cached_palf_stat_for_query_.is_in_sync_: is_log_sync;
+  const bool is_in_sync = (is_use_cache) ? cached_is_in_sync_ : is_log_sync;
   const int64_t log_print_interval = (is_in_sync)? 600 * 1000 * 1000: 10 * 1000 * 1000;
   if (palf_reach_time_interval(log_print_interval, last_print_in_sync_time_us_)) {
     CLOG_LOG(INFO, "is_in_sync", K(ret), K_(palf_id), K(is_in_sync), K(is_use_cache),

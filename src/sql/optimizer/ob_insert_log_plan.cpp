@@ -166,7 +166,7 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
     LOG_WARN("get unexpected null pointer", K(ret), K(insert_stmt->get_insert_table_info()));
   } else if (OB_UNLIKELY(ins_table->is_system_table_ || ins_table->is_index_table_)
              || insert_stmt->is_insert_up()
-             || insert_stmt->value_from_select()
+             || !insert_stmt->value_from_select()
              || (!get_optimizer_context().get_session_info()->is_user_session())) {
     need_gathering = false;
   }

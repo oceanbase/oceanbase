@@ -108,6 +108,7 @@ private:
   static int do_fill_backup_info_(
              const share::ObBackupSetPath & backup_set_path,
              share::ObPhysicalRestoreJob &job);
+  static int check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc);
   static int get_encrypt_backup_dest_format_str(
       const ObArray<ObString> &original_dest_list,
       common::ObArenaAllocator &allocator,

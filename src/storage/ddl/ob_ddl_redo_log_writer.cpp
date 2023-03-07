@@ -704,7 +704,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
   } else if (OB_ISNULL(cb = op_alloc(ObDDLStartClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_FAIL(cb->init(lock_tid, ddl_kv_mgr_handle))) {
+  } else if (OB_FAIL(cb->init(log.get_table_key(), log.get_data_format_version(), log.get_execution_id(), lock_tid, ddl_kv_mgr_handle))) {
     LOG_WARN("failed to init cb", K(ret));
   } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("failed to serialize log base header", K(ret));
@@ -747,15 +747,13 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
       }
     }
     if (OB_SUCC(ret)) {
+      const int64_t saved_snapshot_version = log.get_table_key().get_snapshot_version();
       start_scn = scn;
-      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*tablet_handle.get_obj(),
-                                                          log.get_table_key(),
-                                                          start_scn,
-                                                          log.get_data_format_version(),
-                                                          log.get_execution_id(),
-                                                          SCN::min_scn()/*checkpoint_scn*/))) {
-        LOG_WARN("start ddl log failed", K(ret), K(start_scn), K(log));
+      // remove ddl sstable if exists and flush ddl start log ts and snapshot version into tablet meta
+      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->update_tablet(start_scn, saved_snapshot_version, start_scn))) {
+        LOG_WARN("clean up ddl sstable failed", K(ret), K(log));
       }
+      FLOG_INFO("start ddl kv mgr finished", K(ret), K(start_scn), K(log));
     }
     tmp_cb->try_release(); // release the memory no matter succ or not
   }

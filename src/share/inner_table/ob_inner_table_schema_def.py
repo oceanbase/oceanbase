@@ -2846,6 +2846,7 @@ all_backup_set_files_def = dict(
     ('tenant_compatible', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH'),
     ('backup_compatible', 'int'),
     ('path', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ('cluster_version', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'false', ''),
   ],
 )
 def_table_schema(**all_backup_set_files_def)
@@ -14970,7 +14971,8 @@ def_table_schema(
     PASSWD,
     TENANT_COMPATIBLE,
     BACKUP_COMPATIBLE,
-    PATH
+    PATH,
+    CLUSTER_VERSION
     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_SET_FILES
 """.replace("\n", " ")
 )
@@ -21689,7 +21691,8 @@ def_table_schema(
     PASSWD,
     TENANT_COMPATIBLE,
     BACKUP_COMPATIBLE,
-    PATH
+    PATH,
+    CLUSTER_VERSION
     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_SET_FILES
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -41084,7 +41087,8 @@ def_table_schema(
     PASSWD,
     TENANT_COMPATIBLE,
     BACKUP_COMPATIBLE,
-    PATH
+    PATH,
+    CLUSTER_VERSION
     FROM SYS.ALL_VIRTUAL_BACKUP_SET_FILES
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")

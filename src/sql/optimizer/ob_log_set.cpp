@@ -809,7 +809,7 @@ int ObLogSet::print_outline_data(PlanText &plan_text)
     LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(construct_pq_set_hint(hint))) {
     LOG_WARN("fail to construct pq set hint", K(ret));
-  } else if (hint.get_dist_methods().empty()) {
+  } else if (hint.get_dist_methods().empty() && hint.get_left_branch().empty()) {
     /*do nothing*/
   } else if (OB_FALSE_IT(hint.set_qb_name(qb_name))) {
   } else if (hint.print_hint(plan_text)) {

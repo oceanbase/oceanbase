@@ -566,7 +566,7 @@ int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMe
   while (OB_SUCC(ret) && ! iter_end && ! piece_change && ! has_set_stop()) {
     buffer = NULL;
     if (OB_FAIL(iter.next(max_scn))) {
-      if (OB_ITER_END == ret) {
+      if (OB_ITER_END == ret || common::OB_NEED_RETRY == ret) {
         ARCHIVE_LOG(TRACE, "iterate log entry to end", K(ret), K(iter));
       } else {
         ARCHIVE_LOG(WARN, "iterate log entry failed", K(ret), K(iter));
@@ -611,7 +611,7 @@ int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMe
       }
     }
   }
-  if (OB_ITER_END == ret) {
+  if (OB_ITER_END == ret || OB_NEED_RETRY == ret) {
     ret = OB_SUCCESS;
   }
 

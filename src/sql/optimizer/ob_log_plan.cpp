@@ -6321,6 +6321,8 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
     } else if (OB_FAIL(third_group_by->set_rollup_info(third_rollup_status,
                                                        helper.rollup_id_expr_))) {
       LOG_WARN("failed to set rollup parallel info", K(ret));
+    } else {
+      third_group_by->set_group_by_outline_info(HASH_AGGREGATE == second_aggr_algo, true);
     }
   }
   return ret;
@@ -6527,7 +6529,9 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
                                                is_from_povit,
                                                origin_child_card))) {
       LOG_WARN("failed to allocate scala group by as top", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(false, false);
+    }
   } else if (!groupby_helper.distinct_exprs_.empty() &&
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(groupby_helper.distinct_exprs_,
                                                                      is_partition_wise))) {
@@ -6566,7 +6570,9 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
                                                       is_from_povit,
                                                       origin_child_card))) {
       LOG_WARN("failed to allocate scala group by as top", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(false, groupby_helper.can_basic_pushdown_ || is_partition_wise); //zzydebug
+    }
   }
 
   return ret;
@@ -6645,8 +6651,6 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   ObSEArray<ObRawExpr*, 4> group_rollup_exprs;
   bool push_group = false;
   groupby_helper.is_scalar_group_by_ = true;
-  groupby_helper.force_use_hash_ = get_log_plan_hint().use_hash_aggregate();
-  groupby_helper.force_use_merge_ = get_log_plan_hint().use_merge_aggregate();
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan) ||
@@ -6659,6 +6663,11 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   } else if (OB_FAIL(append(group_rollup_exprs, group_exprs)) ||
              OB_FAIL(append(group_rollup_exprs, rollup_exprs))) {
     LOG_WARN("failed to append group rollup exprs", K(ret));
+  } else if (OB_FAIL(get_log_plan_hint().get_aggregation_info(groupby_helper.force_use_hash_,
+                                                              groupby_helper.force_use_merge_,
+                                                              groupby_helper.force_part_sort_,
+                                                              groupby_helper.force_normal_sort_))) {
+    LOG_WARN("failed to get aggregation info from hint", K(ret));
   } else if (OB_FAIL(check_scalar_groupby_pushdown(aggr_items,
                                                    groupby_helper.can_scalar_pushdown_))) {
     LOG_WARN("failed to check scalar group by pushdown", K(ret));

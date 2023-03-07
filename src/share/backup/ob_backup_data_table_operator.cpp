@@ -63,8 +63,12 @@ int ObBackupSetFileOperator::fill_dml_with_backup_set_(const ObBackupSetFileDesc
 {
   int ret = OB_SUCCESS;
   char tenant_version_display[OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH] = "";
+  char cluster_version_display[OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH] = "";
   const int64_t pos =  ObClusterVersion::get_instance().print_version_str(
     tenant_version_display, OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH, backup_set_desc.tenant_compatible_);
+  const int64_t pos1 =  ObClusterVersion::get_instance().print_version_str(
+    cluster_version_display, OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH, backup_set_desc.cluster_version_);
+
   const char *comment =  OB_SUCCESS == backup_set_desc.result_ ? "" : common::ob_strerror(backup_set_desc.result_);
   if (OB_FAIL(dml.add_pk_column(OB_STR_BACKUP_SET_ID, backup_set_desc.backup_set_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
@@ -97,6 +101,8 @@ int ObBackupSetFileOperator::fill_dml_with_backup_set_(const ObBackupSetFileDesc
   } else if (OB_FAIL(dml.add_column(OB_STR_PATH, backup_set_desc.backup_path_.ptr()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_TENANT_COMPATIBLE, tenant_version_display))) {
+    LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
+  } else if (OB_FAIL(dml.add_column(OB_STR_CLUSTER_VERSION, cluster_version_display))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_BACKUP_COMPATIBLE, backup_set_desc.backup_compatible_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
@@ -312,6 +318,7 @@ int ObBackupSetFileOperator::do_parse_backup_set_(ObMySQLResult &result, ObBacku
   char passwd[OB_MAX_PASSWORD_LENGTH] = "";
   char backup_type_str[OB_SYS_TASK_TYPE_LENGTH] = "";
   char tenant_version_str[OB_CLUSTER_VERSION_LENGTH] = "";
+  char cluster_version_str[OB_CLUSTER_VERSION_LENGTH] = "";
   char file_status_str[OB_DEFAULT_STATUS_LENTH] = "";
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
   char plus_archivelog_str[OB_DEFAULT_STATUS_LENTH] = "";
@@ -342,6 +349,7 @@ int ObBackupSetFileOperator::do_parse_backup_set_(ObMySQLResult &result, ObBacku
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_BACKUP_PASSWD, passwd, OB_MAX_PASSWORD_LENGTH, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_PATH, backup_path, OB_MAX_BACKUP_DEST_LENGTH, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_TENANT_COMPATIBLE, tenant_version_str, OB_CLUSTER_VERSION_LENGTH, real_length);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_CLUSTER_VERSION, cluster_version_str, OB_CLUSTER_VERSION_LENGTH, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_FILE_STATUS, file_status_str, OB_DEFAULT_STATUS_LENTH, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_STATUS, status_str, OB_DEFAULT_STATUS_LENTH, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_BACKUP_PLUS_ARCHIVELOG, plus_archivelog_str, OB_DEFAULT_STATUS_LENTH, real_length);
@@ -355,7 +363,9 @@ int ObBackupSetFileOperator::do_parse_backup_set_(ObMySQLResult &result, ObBacku
   } else if (OB_FAIL(backup_set_desc.backup_type_.set_backup_type(backup_type_str))) {
     LOG_WARN("[DATA_BACKUP]failed to set backup_type", K(ret), K(backup_type_str));
   } else if (OB_FAIL(ObClusterVersion::get_version(tenant_version_str, backup_set_desc.tenant_compatible_))) {
-    LOG_WARN("[DATA_BACKUP]failed to parse cluster version", K(ret), K(tenant_version_str));
+    LOG_WARN("[DATA_BACKUP]failed to parse tenant version", K(ret), K(tenant_version_str));
+  } else if (OB_FAIL(ObClusterVersion::get_version(cluster_version_str, backup_set_desc.cluster_version_))) {
+    LOG_WARN("[DATA_BACKUP]failed to parse cluster version", K(ret), K(cluster_version_str));
   } else if (OB_FAIL(backup_set_desc.set_backup_set_status(status_str))) {
     LOG_WARN("[DATA_BACKUP]failed to parse status", K(ret), K(status_str)); 
   } else if (OB_FAIL(backup_set_desc.set_plus_archivelog(plus_archivelog_str))) {
@@ -2580,6 +2590,64 @@ int ObLSBackupInfoOperator::get_next_dest_id(common::ObISQLClient &trans, const 
   return ret;
 }
 
+int ObLSBackupInfoOperator::set_backup_version(common::ObISQLClient &trans, const uint64_t tenant_id, const uint64_t data_version)
+{
+  int ret = OB_SUCCESS;
+  InfoItem item;
+  item.name_ = OB_STR_BACKUP_DATA_VERSION;
+  if (OB_FAIL(set_item_value(item.value_, data_version))) {
+    LOG_WARN("failed to set item value", K(ret), K(data_version));
+  } else if (OB_FAIL(insert_item_with_update(trans, tenant_id, item))) {
+    LOG_WARN("failed to insert item", K(ret), K(tenant_id), K(item));
+  }
+  return ret;
+}
+int ObLSBackupInfoOperator::get_backup_version(common::ObISQLClient &trans, const uint64_t tenant_id, uint64_t &data_version)
+{
+  int ret = OB_SUCCESS;
+  InfoItem item;
+  item.name_ = OB_STR_BACKUP_DATA_VERSION;
+  char *endptr = NULL;
+  if (OB_FAIL(get_item(trans, tenant_id, item, false))) {
+    LOG_WARN("failed to get item", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ob_strtoull(item.value_.ptr(), endptr, data_version))) {
+    LOG_WARN("failed str to ull", K(ret), K(item));
+  } else if (OB_ISNULL(endptr) || OB_UNLIKELY('\0' != *endptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(item));
+  }
+  return ret;
+}
+
+int ObLSBackupInfoOperator::set_cluster_version(common::ObISQLClient &trans, const uint64_t tenant_id, const uint64_t cluster_version)
+{
+  int ret = OB_SUCCESS;
+  InfoItem item;
+  item.name_ = OB_STR_CLUSTER_VERSION;
+  if (OB_FAIL(set_item_value(item.value_, cluster_version))) {
+    LOG_WARN("failed to set item value", K(ret), K(cluster_version));
+  } else if (OB_FAIL(insert_item_with_update(trans, tenant_id, item))) {
+    LOG_WARN("failed to insert item", K(ret), K(tenant_id), K(item));
+  }
+  return ret;
+}
+int ObLSBackupInfoOperator::get_cluster_version(common::ObISQLClient &trans, const uint64_t tenant_id, uint64_t &cluster_version)
+{
+  int ret = OB_SUCCESS;
+  InfoItem item;
+  item.name_ = OB_STR_CLUSTER_VERSION;
+  char *endptr = NULL;
+  if (OB_FAIL(get_item(trans, tenant_id, item, false))) {
+    LOG_WARN("failed to get item", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ob_strtoull(item.value_.ptr(), endptr, cluster_version))) {
+    LOG_WARN("failed str to ull", K(ret), K(item));
+  } else if (OB_ISNULL(endptr) || OB_UNLIKELY('\0' != *endptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(item));
+  }
+  return ret;
+}
+
 int ObLSBackupInfoOperator::get_item(
     common::ObISQLClient &proxy, 
     const uint64_t tenant_id, 
@@ -2671,6 +2739,23 @@ int ObLSBackupInfoOperator::set_item_value(Value &dst_value, int64_t src_value)
     }
   } else {
     int strlen = sprintf(dst_value.ptr(), "%ld", src_value);
+    if (strlen <= 0 || strlen > common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to set value", K(ret), K(src_value), K(strlen));
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupInfoOperator::set_item_value(Value &dst_value, uint64_t src_value)
+{
+  int ret = OB_SUCCESS;
+  if (0 == src_value) {
+    if (OB_FAIL(set_item_value(dst_value, ""))) {
+      LOG_WARN("failed to set value", K(ret), K(src_value));
+    }
+  } else {
+    int strlen = sprintf(dst_value.ptr(), "%lu", src_value);
     if (strlen <= 0 || strlen > common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to set value", K(ret), K(src_value), K(strlen));
