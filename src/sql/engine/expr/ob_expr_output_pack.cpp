@@ -328,45 +328,103 @@ int ObExprOutputPack::convert_text_value_charset(common::ObObj& value,
       LOG_WARN("invalid collation", K(from_collation_type), K(to_collation_type), K(ret));
     } else if (CS_TYPE_BINARY != from_collation_type && CS_TYPE_BINARY != to_collation_type
         && strcmp(from_charset_info->csname, to_charset_info->csname) != 0) {
-
-      // get full data, buffer size is full byte length * 4
-      ObString data_str;
-      ObLobLocatorV2 loc(raw_str, value.has_lob_header());
-      ObTextStringIter str_iter(value);
-      if (OB_FAIL(str_iter.init(0, &my_session, &alloc))) {
-        LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
-      } else if (OB_FAIL(str_iter.get_full_data(data_str))) {
-        LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
-      } else {
-        // mock result buffer and reserve data length
-        // could do streaming charset convert
-        ObTextStringResult new_tmp_lob(type, res_has_lob_header, &alloc);
-        char *buf = NULL;
-        int64_t buf_len = 0;
-        int64_t lob_data_byte_len = 0;
-        uint32_t result_len = 0;
-
-        if (OB_FAIL(loc.get_lob_data_byte_len(lob_data_byte_len))) {
-          LOG_WARN("Lob: get lob data byte len failed", K(ret), K(loc));
-        } else if (OB_FAIL(new_tmp_lob.init(lob_data_byte_len * 4))) {
-          LOG_WARN("Lob: init tmp lob failed", K(ret), K(lob_data_byte_len * 4));
-        } else if (OB_FAIL(new_tmp_lob.get_reserved_buffer(buf, buf_len))) {
-          LOG_WARN("Lob: get empty buffer failed", K(ret), K(lob_data_byte_len * 4));
-        } else if (OB_FAIL(convert_string_charset(data_str, from_collation_type, to_collation_type,
-                                                  buf, buf_len, result_len))) {
-          LOG_WARN("convert string charset failed", K(ret));
-        } else if (OB_FAIL(new_tmp_lob.lseek(result_len, 0))) {
-          LOG_WARN("temp lob lseek failed", K(ret));
+      if (value.is_lob_storage() && value.has_lob_header() && res_has_lob_header &&
+          my_session.is_client_use_lob_locator() && lib::is_oracle_mode()) {
+        ObLobLocatorV2 lob;
+        ObString inrow_data;
+        if (OB_FAIL(process_lob_locator_results(value, alloc, my_session))) {
+          LOG_WARN("fail to process lob locator", K(ret), K(value));
+        } else if (OB_FAIL(value.get_lob_locatorv2(lob))) {
+          LOG_WARN("fail to lob locator v2", K(ret), K(value));
+        } else if (!lob.has_inrow_data()) {
+          // do nothing
+        } else if (OB_FAIL(lob.get_inrow_data(inrow_data))) {
+          LOG_WARN("fail to get inrow data", K(ret), K(lob));
         } else {
-          ObString lob_loc_str;
-          new_tmp_lob.get_result_buffer(lob_loc_str);
-          LOG_INFO("Lob: new temp convert_text_value_charset in convert_text_value",
-              K(ret), K(raw_str), K(type), K(to_collation_type), K(from_collation_type),
-              K(from_charset_info->csname), K(to_charset_info->csname));
-          value.set_lob_value(type, lob_loc_str.ptr(), lob_loc_str.length());
-          value.set_collation_type(to_collation_type);
-          if (new_tmp_lob.has_lob_header()) {
-            value.set_has_lob_header();
+          int64_t lob_data_byte_len = inrow_data.length();
+          int64_t offset_len = reinterpret_cast<uint64_t>(inrow_data.ptr()) - reinterpret_cast<uint64_t>(lob.ptr_);
+          int64_t res_len = offset_len + lob_data_byte_len * ObCharset::CharConvertFactorNum;
+          char *buf = static_cast<char*>(alloc.alloc(res_len));
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc memory", K(ret), K(res_len));
+          } else {
+            MEMCPY(buf, lob.ptr_, offset_len);
+            uint32_t result_len = 0;
+            if (OB_FAIL(convert_string_charset(inrow_data, from_collation_type, to_collation_type,
+                                               buf + offset_len, res_len - offset_len, result_len))) {
+              LOG_WARN("Lob: convert string charset failed", K(ret));
+            } else {
+              // refresh payload size
+              if (lob.has_extern()) {
+                ObMemLobExternHeader *ex_header = nullptr;
+                if (OB_FAIL(lob.get_extern_header(ex_header))) {
+                  LOG_WARN("fail to get extern header", K(ret), K(lob));
+                } else {
+                  ex_header->payload_size_ = result_len;
+                }
+              }
+              // refresh lob data size
+              if (OB_SUCC(ret)) {
+                ObLobCommon *lob_common = nullptr;
+                if (OB_FAIL(lob.get_disk_locator(lob_common))) {
+                  LOG_WARN("fail to get lob common", K(ret), K(lob));
+                } else if (lob_common->is_init_) {
+                  ObLobData *lob_data = reinterpret_cast<ObLobData*>(lob_common->buffer_);
+                  lob_data->byte_size_ = result_len;
+                }
+              }
+              if (OB_SUCC(ret)) {
+                LOG_INFO("Lob: new temp convert_text_value_charset in convert_text_value",
+                K(ret), K(raw_str), K(type), K(to_collation_type), K(from_collation_type),
+                K(from_charset_info->csname), K(to_charset_info->csname));
+                value.set_lob_value(type, buf, offset_len + result_len);
+                value.set_collation_type(to_collation_type);
+                value.set_has_lob_header();
+              }
+            }
+          }
+        }
+      } else {
+        // get full data, buffer size is full byte length * 4
+        ObString data_str;
+        ObLobLocatorV2 loc(raw_str, value.has_lob_header());
+        ObTextStringIter str_iter(value);
+        if (OB_FAIL(str_iter.init(0, &my_session, &alloc))) {
+          LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
+        } else if (OB_FAIL(str_iter.get_full_data(data_str))) {
+          LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
+        } else {
+          // mock result buffer and reserve data length
+          // could do streaming charset convert
+          ObTextStringResult new_tmp_lob(type, res_has_lob_header, &alloc);
+          char *buf = NULL;
+          int64_t buf_len = 0;
+          int64_t lob_data_byte_len = 0;
+          uint32_t result_len = 0;
+
+          if (OB_FAIL(loc.get_lob_data_byte_len(lob_data_byte_len))) {
+            LOG_WARN("Lob: get lob data byte len failed", K(ret), K(loc));
+          } else if (OB_FAIL(new_tmp_lob.init(lob_data_byte_len * 4))) {
+            LOG_WARN("Lob: init tmp lob failed", K(ret), K(lob_data_byte_len * 4));
+          } else if (OB_FAIL(new_tmp_lob.get_reserved_buffer(buf, buf_len))) {
+            LOG_WARN("Lob: get empty buffer failed", K(ret), K(lob_data_byte_len * 4));
+          } else if (OB_FAIL(convert_string_charset(data_str, from_collation_type, to_collation_type,
+                                                    buf, buf_len, result_len))) {
+            LOG_WARN("convert string charset failed", K(ret));
+          } else if (OB_FAIL(new_tmp_lob.lseek(result_len, 0))) {
+            LOG_WARN("temp lob lseek failed", K(ret));
+          } else {
+            ObString lob_loc_str;
+            new_tmp_lob.get_result_buffer(lob_loc_str);
+            LOG_INFO("Lob: new temp convert_text_value_charset in convert_text_value",
+                K(ret), K(raw_str), K(type), K(to_collation_type), K(from_collation_type),
+                K(from_charset_info->csname), K(to_charset_info->csname));
+            value.set_lob_value(type, lob_loc_str.ptr(), lob_loc_str.length());
+            value.set_collation_type(to_collation_type);
+            if (new_tmp_lob.has_lob_header()) {
+              value.set_has_lob_header();
+            }
           }
         }
       }
@@ -441,7 +499,7 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
         // should not come here
         OB_ASSERT(0);
       }
-      if (!is_support_outrow_locator_v2 && !loc.is_inrow()) {
+      if (!is_support_outrow_locator_v2 && !loc.has_inrow_data()) {
         if (OB_FAIL(ObTextStringIter::append_outrow_lob_fulldata(value, &my_session, alloc))) {
           LOG_WARN("Lob: convert lob to outrow failed", K(value), K(GET_MIN_CLUSTER_VERSION()));
         }
