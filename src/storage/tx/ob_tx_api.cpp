@@ -1522,7 +1522,7 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   int64_t start_ts = ObClockGenerator::getClock();
   retries = 0;
-  int64_t min_retry_intval = max_retry_intval / 3;
+  int64_t min_retry_intval = 10 * 1000; // 10 ms
   expire_ts = std::max(ObTimeUtility::current_time() + MIN_WAIT_TIME, expire_ts);
   while (OB_SUCC(ret)) {
     int64_t retry_intval = std::min(min_retry_intval * (1 + retries), max_retry_intval);
