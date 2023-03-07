@@ -365,6 +365,8 @@ int ObTenantConfig::read_dump_config(int64_t tenant_id)
   if (OB_ISNULL(pp_item = container_.get(ObConfigStringKey(COMPATIBLE)))) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("Invalid config string", K(tenant_id), K(ret));
+  } else if (!(*pp_item)->dump_value_updated()) {
+    LOG_INFO("config dump value is not set, no need read", K(tenant_id), K((*pp_item)->spfile_str()));
   } else if (!(*pp_item)->set_value((*pp_item)->spfile_str())) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("Invalid config value", K(tenant_id), K((*pp_item)->spfile_str()), K(ret));
