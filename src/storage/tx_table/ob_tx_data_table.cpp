@@ -776,13 +776,20 @@ int ObTxDataTable::get_min_end_ts_from_single_tablet_(ObTabletHandle &tablet_han
   } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
     // skip inner tablet
   } else {
-    end_ts = tablet->get_tablet_meta().clog_checkpoint_ts_;
     ObTabletTableStore &table_store = tablet->get_table_store();
-    ObITable *first_minor_mini_sstable
-      = table_store.get_minor_sstables().get_boundary_table(false /*is_last*/);
+    ObITable *first_minor_mini_sstable = table_store.get_minor_sstables().get_boundary_table(false /*is_last*/);
+    ObITable *last_major_sstable = nullptr;
 
     if (OB_NOT_NULL(first_minor_mini_sstable)) {
+      // step 1 : get end_ts if minor/mini sstable exist
       end_ts = first_minor_mini_sstable->get_end_log_ts();
+    } else if (FALSE_IT(last_major_sstable = table_store.get_major_sstables().get_boundary_table(true /*is_last*/))) {
+    } else if (OB_NOT_NULL(last_major_sstable)) {
+      // step 2 : if minor/mini sstable do not exist, get end_scn from major sstable
+      end_ts = last_major_sstable->get_end_log_ts();
+    } else {
+      // step 3 : if minor/major sstable do not exist, get end_scn from tablet clog_checkpoint
+      end_ts = tablet->get_tablet_meta().clog_checkpoint_ts_;
     }
   }
   return ret;
