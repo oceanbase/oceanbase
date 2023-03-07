@@ -153,9 +153,8 @@ int ObTableLoadTransStoreWriter::init_column_schemas()
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObColDesc> &column_descs = store_ctx_->ctx_->schema_.column_descs_;
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(ObTableLoadSchema::get_table_schema(param_.tenant_id_, param_.table_id_, schema_guard,
+  if (OB_FAIL(ObTableLoadSchema::get_table_schema(param_.tenant_id_, param_.table_id_, schema_guard_,
                                                   table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(param_));
   }

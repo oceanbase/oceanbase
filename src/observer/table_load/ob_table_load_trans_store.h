@@ -114,6 +114,7 @@ private:
   int64_t ref_count_ CACHE_ALIGNED;
   bool is_flush_;
   bool is_inited_;
+  ObSchemaGetterGuard schema_guard_;
 };
 
 } // namespace observer
