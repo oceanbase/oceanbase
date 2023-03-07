@@ -64,6 +64,7 @@ inline void ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
   tx.tenant_id_ = tenant_id_;
   tx.addr_      = self_;
   tx.sess_id_   = session_id;
+  tx.assoc_sess_id_ = session_id;
   tx.alloc_ts_  = ObClockGenerator::getClock();
   tx.expire_ts_ = INT64_MAX;
   tx.op_sn_     = 1;
@@ -94,17 +95,19 @@ int ObTransService::finalize_tx_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(tx.lock_);
-  tx.flags_.RELEASED_ = true;
-  if (tx.is_tx_active() && !tx.flags_.REPLICA_) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "release tx when tx is active", K(ret), KPC(this), K(tx));
-    tx.print_trace_();
-  } else if (tx.is_committing()) {
-    TRANS_LOG(WARN, "release tx when tx is committing", KPC(this), K(tx));
-  }
-  tx.cancel_commit_cb();
-  if (tx.tx_id_.is_valid()) {
-    tx_desc_mgr_.remove(tx);
+  if (!tx.flags_.RELEASED_) {
+    tx.flags_.RELEASED_ = true;
+    if (tx.is_tx_active() && !tx.flags_.REPLICA_) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "release tx when tx is active", K(ret), KPC(this), K(tx));
+      tx.print_trace_();
+    } else if (tx.is_committing()) {
+      TRANS_LOG(WARN, "release tx when tx is committing", KPC(this), K(tx));
+    }
+    tx.cancel_commit_cb();
+    if (tx.tx_id_.is_valid()) {
+      tx_desc_mgr_.remove(tx);
+    }
   }
   return ret;
 }

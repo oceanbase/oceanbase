@@ -216,6 +216,7 @@ ObTxDesc::ObTxDesc()
     snapshot_uncertain_bound_(0),
     snapshot_scn_(0),
     sess_id_(0),
+    assoc_sess_id_(0),
     global_tx_type_(ObGlobalTxType::PLAIN),
     op_sn_(0),                          // default is from 0
     state_(State::INVL),

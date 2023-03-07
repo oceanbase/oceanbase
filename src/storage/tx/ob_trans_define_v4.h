@@ -344,6 +344,7 @@ protected:
   int64_t snapshot_uncertain_bound_;   // uncertain bound of @snapshot_version_
   int64_t snapshot_scn_;               // the time of acquire @snapshot_version_
   uint32_t sess_id_;                   // sesssion id
+  uint32_t assoc_sess_id_;             // the session which associated with
   ObGlobalTxType global_tx_type_;      // global trans type, i.e., xa or dblink
 
   uint64_t op_sn_;                     // Tx level operation sequence No
@@ -494,6 +495,7 @@ public:
                K_(addr),
                K_(tenant_id),
                "session_id", sess_id_,
+               "assoc_session_id", assoc_sess_id_,
                "xid", PC((!xid_.empty() ? &xid_ : (ObXATransID*)nullptr)),
                "xa_mode", xid_.empty() ? "" : (xa_tightly_couple_ ? "tightly" : "loosely"),
                K_(xa_start_addr),
