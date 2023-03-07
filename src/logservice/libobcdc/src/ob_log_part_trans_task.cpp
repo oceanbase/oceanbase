@@ -2584,7 +2584,10 @@ int PartTransTask::get_tenant_schema_info_with_inc_dict(const uint64_t tenant_id
   return ret;
 }
 
-int PartTransTask::get_database_schema_info_with_inc_dict(const uint64_t tenant_id, const uint64_t db_id, DBSchemaInfo &db_schema_info)
+int PartTransTask::get_database_schema_info_with_inc_dict(
+    const uint64_t tenant_id,
+    const uint64_t db_id,
+    DBSchemaInfo &db_schema_info)
 {
   int ret = OB_SUCCESS;
 

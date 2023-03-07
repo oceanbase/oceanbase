@@ -1316,10 +1316,12 @@ char *lbt_oblog()
 
   for (int idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
     char *res_idx = res[idx];
+    int tmp_ret = OB_SUCCESS;
 
     if (NULL != res_idx) {
-      if (OB_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
-        LOG_ERROR("databuff_printf fail", KR(ret), K(buf), K(pos), K(LBT_BUFFER_LENGTH));
+      if (OB_TMP_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
+        LOG_WARN("atabuff_printf fail when lbt, ignore", KR(tmp_ret), K(idx), K(size), K(buf), K(pos),
+            K(LBT_BUFFER_LENGTH));
       }
     }
   }

@@ -351,6 +351,15 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
       tenant = NULL;
     }
 
+    if (OB_SUCC(ret)) {
+      // start tenant service
+      if (OB_FAIL(start_tenant_service_(tenant_id, is_new_created_tenant, is_new_tenant_by_restore, tenant_start_serve_ts_ns,
+              tenant_start_schema_version, timeout))) {
+        LOG_ERROR("start tenant service fail", KR(ret), K(tenant_id), K(is_new_created_tenant),
+            K(start_tstamp_ns), K(tenant_start_serve_ts_ns), K(use_add_tenant_start_ddl_commit_version), K(tenant_start_schema_version));
+      }
+    }
+
     if (OB_FAIL(ret)) {
       if (NULL != tenant) {
         (void)tenant_hash_map_.del(tid);
@@ -358,15 +367,9 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
         tenant = NULL;
       }
     }
-    // start tenant service
-    else if (OB_FAIL(start_tenant_service_(tenant_id, is_new_created_tenant, is_new_tenant_by_restore, tenant_start_serve_ts_ns,
-            tenant_start_schema_version, timeout))) {
-      LOG_ERROR("start tenant service fail", KR(ret), K(tenant_id), K(is_new_created_tenant),
-          K(start_tstamp_ns), K(tenant_start_serve_ts_ns), K(use_add_tenant_start_ddl_commit_version), K(tenant_start_schema_version));
-    }
   }
 
-  if (OB_SUCCESS == ret && is_tenant_served) {
+  if (OB_SUCC(ret) && is_tenant_served) {
     if (OB_FAIL(add_served_tenant_for_stat_(tenant_name, tenant_id))) {
       LOG_ERROR("trans stat mgr add serverd tenant fail", KR(ret), K(tenant_id), K(tenant_name));
     } else if (OB_FAIL(add_served_tenant_into_set_(tenant_name, tenant_id))) {
@@ -376,7 +379,7 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
     }
   }
 
-  if (OB_SUCCESS == ret) {
+  if (OB_SUCC(ret)) {
     ISTAT("[ADD_TENANT]", K(tenant_id), K(tenant_name), K(is_new_created_tenant), K(is_new_tenant_by_restore),
         K(is_tenant_served), K(start_tstamp_ns), K(tenant_start_serve_ts_ns), K(sys_schema_version),
         "with add_tenant_start_ddl", use_add_tenant_start_ddl_commit_version,
@@ -669,11 +672,16 @@ int ObLogTenantMgr::add_tenant(
     }
   }
 
-  // NOTE: currently add_tenant is NOT serialize executed, thus reset all info in add_tenant_start_ddl_info_map_ is NOT safe.
-  // (meta_tenant add_tenant_start -> user_tenant add_tenant_start -> meta_tenant add_tenant_end -> user_tenant add_tenant_end.)
-  // reset tenant_start_ddl_info for specified tenant_id regardless of ret(in case of tenant already dropped or not serve
-  // and other unexpected case, otherwise global_heartbeat will be stucked.)
-  try_del_tenant_start_ddl_info_(tenant_id);
+  // 1. NOTE: currently add_tenant is NOT serialize executed, thus reset all info in add_tenant_start_ddl_info_map_ is NOT safe.
+  // Consider the following sequence:
+  // (meta_tenant add_tenant_start -> user_tenant add_tenant_start -> meta_tenant add_tenant_end -> user_tenant add_tenant_end).
+  // reset tenant_start_ddl_info for specified tenant_id regardless of ret exclude OB_TIMEOUT(The add_tenant interface will be externally retried)
+  //
+  // 2. The tenant start ddl info need be removed in case of tenant already dropped or not serve and other unexpected case,
+  // otherwise global_heartbeat will be stucked.
+  if (OB_TIMEOUT != ret) {
+    try_del_tenant_start_ddl_info_(tenant_id);
+  }
 
   if (! add_tenant_succ) {
     ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
@@ -1725,6 +1733,7 @@ void ObLogTenantMgr::try_del_tenant_start_ddl_info_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   TenantID tid(tenant_id);
+
   if (OB_FAIL(add_tenant_start_ddl_info_map_.del(tid))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("try_del_tenant_start_ddl_info_ failed, ignore", KR(ret), K(tenant_id));
@@ -1732,6 +1741,8 @@ void ObLogTenantMgr::try_del_tenant_start_ddl_info_(const uint64_t tenant_id)
       LOG_INFO("add_tenant_start_ddl_info is not found, ignore", KR(ret), K(tenant_id));
     }
     // no need return error code.
+  } else {
+    LOG_INFO("try_del_tenant_start_ddl_info_ succ", K(tenant_id));
   }
 }
 
