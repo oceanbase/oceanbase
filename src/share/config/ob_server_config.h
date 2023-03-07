@@ -90,13 +90,13 @@ public:
   bool enable_defensive_check() const
   {
     int64_t v = _enable_defensive_check;
-    return v > 0 && lib::is_diagnose_info_enabled();
+    return v > 0;
   }
 
   bool enable_strict_defensive_check() const
   {
     int64_t v = _enable_defensive_check;
-    return v == 2 && lib::is_diagnose_info_enabled();
+    return v == 2;
   }
 
   // false for 1.4.2 -> 1.4.3
