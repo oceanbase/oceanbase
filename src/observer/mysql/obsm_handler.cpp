@@ -226,13 +226,13 @@ int ObSMHandler::on_close(easy_connection_t *c)
       }
       // free session locally
       if (OB_FAIL(ret)) {
-        int tmp_ret = gctx_.session_mgr_->free_session(ctx);
-        if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-          LOG_WARN("free session fail", K(ctx), K(tmp_ret));
-          ret = tmp_ret;
+        ObMPDisconnect disconnect_processor(ctx);
+        rpc::frame::ObReqProcessor *processor = static_cast<rpc::frame::ObReqProcessor *>(&disconnect_processor);
+        if (OB_FAIL(processor->run())) {
+          LOG_WARN("free session fail", K(ctx));
         } else {
           LOG_INFO("free session successfully", K(conn->sessid_),
-                   "proxy_sessid", conn->proxy_sessid_, K(ctx));
+                    "proxy_sessid", conn->proxy_sessid_, K(ctx));
         }
       }
     }
