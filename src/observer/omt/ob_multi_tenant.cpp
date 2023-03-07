@@ -631,12 +631,6 @@ int ObMultiTenant::create_virtual_tenants()
     LOG_ERROR("add ext_log tenant fail", K(ret));
 
   } else if (OB_FAIL(create_tenant_without_unit(
-                         OB_MONITOR_TENANT_ID,
-                         OB_MONITOR_CPU,
-                         OB_MONITOR_CPU))) {
-    LOG_ERROR("add monitor tenant fail", K(ret));
-
-  } else if (OB_FAIL(create_tenant_without_unit(
                          OB_DATA_TENANT_ID,
                          OB_DATA_CPU,
                          OB_DATA_CPU))) {

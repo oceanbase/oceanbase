@@ -781,7 +781,7 @@ const char *const OB_FAKE_TENANT_NAME = "fake_tenant";
 const char *const OB_GTS_TENANT_NAME = "gts";
 const char *const OB_SYS_HOST_NAME = "%";
 const char *const OB_DEFAULT_HOST_NAME = "%";
-const char *const OB_MONITOR_TENANT_NAME = "monitor";
+// const char *const OB_MONITOR_TENANT_NAME = "monitor";
 const char *const OB_DIAG_TENANT_NAME = "diag";
 //for sync ddl (ClusterID_TenantID_SchemaVersion)
 const char *const OB_DDL_ID_VAR_NAME = "__oceanbase_ddl_id";
@@ -819,7 +819,7 @@ const uint64_t OB_GTS_TENANT_ID = 2;
 const uint64_t OB_SERVER_TENANT_ID = 500;
 const uint64_t OB_ELECT_TENANT_ID = 501;
 const uint64_t OB_EXT_LOG_TENANT_ID = 506;
-const uint64_t OB_MONITOR_TENANT_ID = 507;
+// const uint64_t OB_MONITOR_TENANT_ID = 507;
 const uint64_t OB_DTL_TENANT_ID = 508;
 const uint64_t OB_DATA_TENANT_ID = 509;
 const uint64_t OB_RS_TENANT_ID = 510;

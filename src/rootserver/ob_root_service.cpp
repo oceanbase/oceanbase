@@ -5865,7 +5865,6 @@ int ObRootService::drop_user_defined_function(const obrpc::ObDropUserDefinedFunc
 bool ObRootService::is_sys_tenant(const ObString &tenant_name)
 {
   return (0 == tenant_name.case_compare(OB_SYS_TENANT_NAME)
-          || 0 == tenant_name.case_compare(OB_MONITOR_TENANT_NAME)
           || 0 == tenant_name.case_compare(OB_DIAG_TENANT_NAME)
           || 0 == tenant_name.case_compare(OB_GTS_TENANT_NAME));
 }

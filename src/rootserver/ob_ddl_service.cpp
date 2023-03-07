@@ -20085,6 +20085,10 @@ int ObDDLService::create_tenant(
       LOG_USER_ERROR(OB_MISS_ARGUMENT, "resource_pool_list");
     }
     LOG_WARN("missing arg to create tenant", KR(ret), K(arg));
+  } else if (tenant_name.case_compare(OB_DIAG_TENANT_NAME) == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_name \'diag\' is reserved for diagnose tenant", KR(ret), K(arg));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant_name (\'diag\' is reserved for diagnose tenant)");
   } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("create tenant when cluster is upgrading not allowed", K(ret));
