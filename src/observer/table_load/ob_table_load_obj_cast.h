@@ -9,6 +9,7 @@
 #include "observer/table_load/ob_table_load_time_convert.h"
 #include "share/object/ob_obj_cast.h"
 #include "share/schema/ob_column_schema.h"
+#include "observer/table_load/ob_table_load_struct.h"
 
 namespace oceanbase
 {
@@ -34,11 +35,12 @@ public:
 struct ObTableLoadCastObjCtx
 {
 public:
-  ObTableLoadCastObjCtx(const ObTableLoadTimeConverter *time_cvrt, common::ObCastCtx *cast_ctx,
+  ObTableLoadCastObjCtx(const ObTableLoadParam &param, const ObTableLoadTimeConverter *time_cvrt, common::ObCastCtx *cast_ctx,
                         const bool is_need_check)
-    : time_cvrt_(time_cvrt), cast_ctx_(cast_ctx), is_need_check_(is_need_check){}
+    : param_(param), time_cvrt_(time_cvrt), cast_ctx_(cast_ctx), is_need_check_(is_need_check){}
 
 public:
+  const ObTableLoadParam &param_;
   const ObTableLoadTimeConverter *time_cvrt_;
   common::ObCastCtx *cast_ctx_;
   ObTableLoadNumberFastCtx number_fast_ctx_;
@@ -56,6 +58,7 @@ public:
                       const common::ObObj &src, common::ObObj &dst);
 
 private:
+  static int pad_column(const ObAccuracy accuracy, common::ObIAllocator &padding_alloc, common::ObObj &cell);
   static int convert_obj(const common::ObObjType &expect_type, const common::ObObj &src,
                          const common::ObObj *&dest);
   static int handle_string_to_enum_set(ObTableLoadCastObjCtx &cast_obj_ctx,
@@ -74,7 +77,7 @@ private:
   static int cast_obj_check(ObTableLoadCastObjCtx &cast_obj_ctx,
                             const share::schema::ObColumnSchemaV2 *column_schema,
                             common::ObObj &obj);
-  static int to_type(const common::ObObjType &expect_type, ObTableLoadCastObjCtx &cast_obj_ctx,
+  static int to_type(const common::ObObjType &expect_type, const share::schema::ObColumnSchemaV2 *column_schema, ObTableLoadCastObjCtx &cast_obj_ctx,
                      const common::ObAccuracy &accuracy, const common::ObObj &src, common::ObObj &dst);
   static int string_datetime_oracle(const common::ObObjType expect_type,
                                     common::ObObjCastParams &params, const common::ObObj &in,

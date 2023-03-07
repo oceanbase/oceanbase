@@ -190,7 +190,7 @@ int ObTableLoadPartitionCalc::calc(ObTableLoadPartitionCalcContext &ctx) const
     LOG_WARN("ObTableLoadPartitionCalc not init", KR(ret), KP(this));
   } else {
     const ObTableLoadObjRowArray &obj_rows = ctx.obj_rows_;
-    const int64_t column_count = ctx.column_count_;
+    const int64_t column_count = ctx.param_.column_count_;
     if (OB_UNLIKELY(obj_rows.empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid args", KR(ret), K(column_count), K(obj_rows.count()));
@@ -208,7 +208,7 @@ int ObTableLoadPartitionCalc::calc(ObTableLoadPartitionCalcContext &ctx) const
         for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
           ObNewRow part_row;
           if (OB_FAIL(
-                get_row(obj_rows.at(i), column_count, part_row, ctx.allocator_))) {
+                get_row(ctx, obj_rows.at(i), column_count, part_row, ctx.allocator_))) {
             LOG_WARN("fail to get rowkey", KR(ret));
           } else if (OB_FAIL(part_rows.push_back(part_row))) {
             LOG_WARN("failed to push back partition row", KR(ret), K(part_row));
@@ -226,7 +226,7 @@ int ObTableLoadPartitionCalc::calc(ObTableLoadPartitionCalcContext &ctx) const
 }
 
 // FIXME: TODO, 对于非分区表，不能进入到这里计算
-int ObTableLoadPartitionCalc::get_row(const ObTableLoadObjRow &obj_row, int32_t length, ObNewRow &part_row,
+int ObTableLoadPartitionCalc::get_row(ObTableLoadPartitionCalcContext &ctx, const ObTableLoadObjRow &obj_row, int32_t length, ObNewRow &part_row,
                                       ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
@@ -234,7 +234,7 @@ int ObTableLoadPartitionCalc::get_row(const ObTableLoadObjRow &obj_row, int32_t 
   ObObj *rowkey_objs = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * rowkey_obj_count));
   ObDataTypeCastParams cast_params(&tz_info_);
   ObCastCtx cast_ctx(&allocator, &cast_params, CM_NONE, ObCharset::get_system_collation());
-  ObTableLoadCastObjCtx cast_obj_ctx(&time_cvrt_, &cast_ctx, false);
+  ObTableLoadCastObjCtx cast_obj_ctx(ctx.param_, &time_cvrt_, &cast_ctx, false);
   if (OB_ISNULL(rowkey_objs)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret));
@@ -249,6 +249,7 @@ int ObTableLoadPartitionCalc::get_row(const ObTableLoadObjRow &obj_row, int32_t 
                                                     obj_row.cells_[obj_index], rowkey_objs[i]))) {
       LOG_WARN("fail to cast obj", KR(ret));
     }
+
   }
   if (OB_SUCC(ret)) {
     part_row.assign(rowkey_objs, rowkey_obj_count);

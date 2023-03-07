@@ -12,6 +12,7 @@
 #include "sql/optimizer/ob_table_location.h"
 #include "sql/engine/ob_exec_context.h"
 #include "observer/table_load/ob_table_load_time_convert.h"
+#include "observer/table_load/ob_table_load_struct.h"
 
 namespace oceanbase
 {
@@ -22,13 +23,13 @@ class ObTableLoadSchema;
 struct ObTableLoadPartitionCalcContext
 {
   ObTableLoadPartitionCalcContext(const table::ObTableLoadObjRowArray &obj_rows,
-                                  int64_t column_count, common::ObIAllocator &allocator)
-    : obj_rows_(obj_rows), column_count_(column_count), allocator_(allocator)
+                                  const ObTableLoadParam &param, common::ObIAllocator &allocator)
+    : obj_rows_(obj_rows), param_(param), allocator_(allocator)
   {
     partition_ids_.set_block_allocator(common::ModulePageAllocator(allocator_));
   }
   const table::ObTableLoadObjRowArray &obj_rows_;
-  const int64_t column_count_;
+  const ObTableLoadParam &param_;
   common::ObIAllocator &allocator_;
   common::ObArray<table::ObTableLoadPartitionId> partition_ids_;
 };
@@ -45,7 +46,7 @@ public:
 private:
   int init_rowkey_index(const share::schema::ObTableSchema *table_schema,
                         common::ObIAllocator &allocator);
-  int get_row(const table::ObTableLoadObjRow &obj_row, int32_t length, common::ObNewRow &part_row,
+  int get_row(ObTableLoadPartitionCalcContext &ctx, const table::ObTableLoadObjRow &obj_row, int32_t length, common::ObNewRow &part_row,
               common::ObIAllocator &allocator) const;
   int get_partition_by_row(common::ObIArray<common::ObNewRow> &part_rows,
                            common::ObIArray<table::ObTableLoadPartitionId> &partition_ids) const;
