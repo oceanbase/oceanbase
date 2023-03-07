@@ -586,8 +586,9 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
     }
     case ObTwoPhaseCommitMsgType::OB_MSG_TX_CLEAR_REQ: {
       const Ob2pcClearReqMsg &msg = *(static_cast<const Ob2pcClearReqMsg *>(msg_2pc_cache_));
-      if (msg.max_commit_log_scn_ < max_2pc_commit_scn_
-          || msg.max_commit_log_scn_ < ctx_tx_data_.get_end_log_ts()) {
+      if (CLUSTER_VERSION_4_1_0_0 <= GET_MIN_CLUSTER_VERSION()
+          && (msg.max_commit_log_scn_ < max_2pc_commit_scn_
+              || msg.max_commit_log_scn_ < ctx_tx_data_.get_end_log_ts())) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "unexpected max commit log scn in clear request", K(ret), KPC(this));
       } else {
