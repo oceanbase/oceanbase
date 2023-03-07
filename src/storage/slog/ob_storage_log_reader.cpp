@@ -434,7 +434,7 @@ int ObStorageLogReader::read_log(
     STORAGE_REDO_LOG(WARN, "Fail to close file", K(ret), K(disk_addr));
   } else {
     pos = entry.get_serialize_size();
-    STORAGE_REDO_LOG(INFO, "Successfully read targeted log", K(ret), K(disk_addr), K(buf_len));
+    STORAGE_REDO_LOG(TRACE, "Successfully read targeted log", K(ret), K(disk_addr), K(buf_len));
   }
 
   return ret;

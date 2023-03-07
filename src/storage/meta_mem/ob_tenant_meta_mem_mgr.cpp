@@ -254,7 +254,7 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
     if (OB_FAIL(free_tables_queue_.push((ObLink *)item))) {
       LOG_ERROR("fail to push back into free_tables_queue_", K(ret), KPC(item));
     } else {
-      FLOG_INFO("succeed to push table into gc queue", KP(table), K(table_type), K(lbt()));
+      LOG_DEBUG("succeed to push table into gc queue", KP(table), K(table_type), K(lbt()));
     }
   }
 

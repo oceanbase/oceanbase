@@ -143,7 +143,7 @@ int ObTabletPointer::wash_obj()
   if (OB_FAIL(obj_.ptr_->inc_macro_disk_ref())) {
     LOG_WARN("fail to inc macro disk ref", K(ret), K(obj_));
   } else {
-    FLOG_INFO("succeed to wash one tablet", KP(obj_.ptr_), K(ls_id), K(tablet_id), K(wash_score), K(phy_addr_));
+    LOG_DEBUG("succeed to wash one tablet", KP(obj_.ptr_), K(ls_id), K(tablet_id), K(wash_score), K(phy_addr_));
     reset_obj();
   }
   return ret;

@@ -96,7 +96,7 @@ ObTablet::~ObTablet()
 
 void ObTablet::reset()
 {
-  FLOG_INFO("reset tablet", KP(this));
+  LOG_DEBUG("reset tablet", KP(this));
   wash_score_ = INT64_MIN;
   tablet_meta_.reset();
   table_store_.reset();
@@ -638,7 +638,7 @@ int ObTablet::load_deserialize(
       tablet_meta_.max_sync_storage_schema_version_ = storage_schema_.schema_version_;
     }
     is_inited_ = true;
-    LOG_INFO("succeeded to deserialize tablet", K(ret), K(*this));
+    LOG_DEBUG("succeeded to deserialize tablet", K(ret), K(*this));
   } else if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
