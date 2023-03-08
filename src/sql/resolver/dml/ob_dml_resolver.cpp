@@ -353,6 +353,7 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
   int8_t depth = 0;
   bool exist_fun = false;
   bool check_res = true;
+  bool check_valid = false;
 
   if (OB_ISNULL(col_node)) { // do nothing
   } else if (OB_ISNULL(tmp_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
@@ -377,6 +378,8 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
       } else if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_,
                           col_node->children_[0]->str_value_, tmp_node, T_COLUMN_REF))) {
         LOG_WARN("create json doc node fail", K(ret));
+      } else {
+        check_valid = true;
       }
     } else if (depth == 2) {
       // childe[1]列名 child[0]表名
@@ -401,12 +404,13 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
           table_node->str_len_ = col_node->children_[0]->str_len_;
           table_node->text_len_ = col_node->children_[0]->text_len_;
           tmp_node->children_[1] = table_node;
+          check_valid = true;
         }
       }
     }
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(ObDMLResolver::check_column_json_type(tmp_node, format_json, only_is_json))) {
+  if (OB_SUCC(ret) && check_valid && OB_FAIL(ObDMLResolver::check_column_json_type(tmp_node, format_json, only_is_json))) {
     LOG_WARN("fail to check is_json", K(ret));
   }
   return ret;
