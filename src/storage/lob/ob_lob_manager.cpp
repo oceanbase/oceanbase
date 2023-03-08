@@ -453,10 +453,14 @@ int ObLobManager::query_remote(ObLobAccessParam& param, common::ObAddr& dst_addr
       arg.lob_locator_.ptr_ = param.lob_locator_->ptr_;
       arg.lob_locator_.size_ = param.lob_locator_->size_;
       arg.lob_locator_.has_lob_header_ = param.lob_locator_->has_lob_header_;
+      int64_t timeout = param.timeout_ - ObTimeUtility::current_time();
+      if (timeout < ObStorageRpcProxy::STREAM_RPC_TIMEOUT) {
+        timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+      }
       ret = svr_rpc_proxy->to(dst_addr).by(arg.tenant_id_)
                           .dst_cluster_id(GCONF.cluster_id)
                           .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                          .timeout(ObStorageRpcProxy::STREAM_RPC_TIMEOUT)
+                          .timeout(timeout)
                           .lob_query(arg, rpc_buffer, handle);
       if (OB_FAIL(ret)) {
         LOG_WARN("failed to do remote query", K(ret));
@@ -1808,10 +1812,14 @@ int ObLobManager::getlength_remote(ObLobAccessParam& param, common::ObAddr& dst_
       arg.lob_locator_.ptr_ = param.lob_locator_->ptr_;
       arg.lob_locator_.size_ = param.lob_locator_->size_;
       arg.lob_locator_.has_lob_header_ = param.lob_locator_->has_lob_header_;
+      int64_t timeout = param.timeout_ - ObTimeUtility::current_time();
+      if (timeout < ObStorageRpcProxy::STREAM_RPC_TIMEOUT) {
+        timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+      }
       ret = svr_rpc_proxy->to(dst_addr).by(arg.tenant_id_)
                           .dst_cluster_id(GCONF.cluster_id)
                           .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                          .timeout(ObStorageRpcProxy::STREAM_RPC_TIMEOUT)
+                          .timeout(timeout)
                           .lob_query(arg, rpc_buffer, handle);
       if (OB_FAIL(ret)) {
         LOG_WARN("failed to do remote query", K(ret));

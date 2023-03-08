@@ -1706,8 +1706,9 @@ int ObLobQueryP::process_read()
     param.scan_backward_ = arg_.scan_backward_;
     param.from_rpc_ = true;
     ObLobQueryIter *iter = nullptr;
+    int64_t timeout = rpc_pkt_->get_timeout() + get_send_timestamp();
     if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
-        arg_.len_, ObStorageRpcProxy::STREAM_RPC_TIMEOUT, arg_.lob_locator_))) {
+        arg_.len_, timeout, arg_.lob_locator_))) {
       LOG_WARN("failed to build lob param", K(ret));
     } else if (OB_FAIL(lob_mngr->query(param, iter))) {
       LOG_WARN("failed to query lob.", K(ret), K(param));
@@ -1752,7 +1753,7 @@ int ObLobQueryP::process_getlength()
   param.from_rpc_ = true;
   header.reset();
   uint64_t len = 0;
-  int64_t timeout = ObTimeUtility::current_time() + ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+  int64_t timeout = rpc_pkt_->get_timeout() + get_send_timestamp();
   if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
       arg_.len_, timeout, arg_.lob_locator_))) {
     LOG_WARN("failed to build lob param", K(ret));
