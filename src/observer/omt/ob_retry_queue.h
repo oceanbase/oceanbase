@@ -30,7 +30,7 @@ public:
   }
   enum { RETRY_QUEUE_SIZE = 256 };
   int push(rpc::ObRequest &req, const uint64_t timestamp);
-  int pop(common::ObLink *&task);
+  int pop(common::ObLink *&task, bool need_clear = false);
   uint64_t get_last_timestamp() const;
 
 private:

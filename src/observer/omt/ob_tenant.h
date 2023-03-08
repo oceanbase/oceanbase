@@ -446,7 +446,7 @@ public:
   int recv_request(rpc::ObRequest &req);
   int recv_large_request(rpc::ObRequest &req);
   int push_retry_queue(rpc::ObRequest &req, const uint64_t idx);
-  void handle_retry_req();
+  void handle_retry_req(bool need_clear = false);
   void check_worker_count(ObThWorker &w);
   void update_queue_size();
 
