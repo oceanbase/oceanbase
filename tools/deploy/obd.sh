@@ -282,7 +282,7 @@ function deploy_cluster {
   then
     config_yaml=$YAML_CONF
   else
-    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml && "$(grep config_status .data | awk '{print $2}')" == "UNCHNAGE" ]]
+    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml && "$(grep config_status .data | awk '{print $2}')" != "UNCHNAGE" ]]
     then
       config_yaml=$OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml
     else
