@@ -353,7 +353,7 @@ int ObAggregateProcessor::GroupConcatExtraResult::init(const uint64_t tenant_id,
     } else {
       int64_t sort_area_size = 0;
       if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
-                  SORT_WORK_AREA, tenant_id, &eval_ctx.exec_ctx_, sort_area_size))) {
+                  SORT_WORK_AREA, tenant_id, sort_area_size))) {
         LOG_WARN("failed to get workarea size", K(ret), K(tenant_id));
       } else if (OB_FAIL(row_store_.init(sort_area_size,
                                          tenant_id,
