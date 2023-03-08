@@ -37,9 +37,9 @@ using namespace sql;
       LOG_WARN("fail to set default timeout ctx", KR(ret));                       \
     } else if (OB_FAIL(ObServer::get_instance()                                   \
                          .get_table_rpc_proxy()                                   \
+                         .to(addr)                                                \
                          .timeout(ctx.get_timeout())                              \
                          .by(MTL_ID())                                            \
-                         .to(addr)                                                \
                          .name(request, ##__VA_ARGS__))) {                        \
       LOG_WARN("fail to rpc call " #name, KR(ret), K(addr), K(request));          \
     }                                                                             \
