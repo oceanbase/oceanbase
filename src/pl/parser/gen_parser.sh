@@ -22,6 +22,11 @@ fi
 bison -v -Werror -d ../../../src/pl/parser/pl_parser_mysql_mode.y -o ../../../src/pl/parser/pl_parser_mysql_mode_tab.c
 if [ $? -ne 0 ]
 then
+    echo Compile error[$?], abort
+    exit 1
+fi
+if [ $? -ne 0 ]
+then
     echo Compile error[$?], abort.
     exit 1
 fi
