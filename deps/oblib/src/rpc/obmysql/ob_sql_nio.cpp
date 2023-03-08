@@ -317,7 +317,7 @@ private:
         LOG_WARN("write data error", K(errno));
       }
     }
-    if (OB_SUCCESS == ret || EAGAIN == ret) {
+    if (OB_SUCCESS == ret || OB_EAGAIN == ret) {
       consume_bytes = pos;
       ret = OB_SUCCESS;
     }
