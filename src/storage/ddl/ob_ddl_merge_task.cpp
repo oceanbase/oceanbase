@@ -671,6 +671,13 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(sstable_index_builder->close(column_count, res))) {
         LOG_WARN("close sstable index builder close failed", K(ret));
+      } else if (OB_UNLIKELY((ddl_param.table_key_.is_major_sstable() ||
+                              ddl_param.table_key_.is_ddl_sstable()) &&
+                             res.row_count_ > 0 &&
+                             res.max_merged_trans_version_ != ddl_param.snapshot_version_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("max_merged_trans_version_ in res is different from ddl snapshot version", K(ret),
+                 K(res), K(ddl_param));
       } else {
         ObTabletCreateSSTableParam param;
         param.table_key_ = ddl_param.table_key_;

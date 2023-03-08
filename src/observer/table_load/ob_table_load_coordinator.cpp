@@ -225,6 +225,7 @@ int ObTableLoadCoordinator::pre_begin_peers()
     request.dup_action_ = param_.dup_action_;
     request.px_mode_ = param_.px_mode_;
     request.online_opt_stat_gather_ = param_.online_opt_stat_gather_;
+    request.snapshot_version_ = param_.snapshot_version_;
     request.dest_table_id_ = ctx_->ddl_param_.dest_table_id_;
     request.task_id_ = ctx_->ddl_param_.task_id_;
     request.schema_version_ = ctx_->ddl_param_.schema_version_;

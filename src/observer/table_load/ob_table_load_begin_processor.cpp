@@ -113,6 +113,7 @@ int ObTableLoadBeginP::process()
       param.online_opt_stat_gather_ = false;
       param.data_type_ = static_cast<ObTableLoadDataType>(arg_.config_.flag_.data_type_);
       param.dup_action_ = ObLoadDupActionType::LOAD_STOP_ON_DUP;
+      param.snapshot_version_ = ObTimeUtil::current_time_ns();
       if (OB_FAIL(param.normalize())) {
         LOG_WARN("fail to normalize param", KR(ret));
       }
@@ -274,6 +275,7 @@ int ObTableLoadPreBeginPeerP::process()
     param.px_mode_ = arg_.px_mode_;
     param.online_opt_stat_gather_ = arg_.online_opt_stat_gather_;
     param.dup_action_ = arg_.dup_action_;
+    param.snapshot_version_ = arg_.snapshot_version_;
     ObTableLoadDDLParam ddl_param;
     uint64_t data_version = 0;
     ddl_param.dest_table_id_ = arg_.dest_table_id_;
