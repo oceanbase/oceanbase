@@ -317,7 +317,7 @@ install(PROGRAMS
   DESTINATION lib
   COMPONENT libs
 )
-if(OB_BUILD_OBMAIN)
+if(OB_BUILD_OBADMIN)
     ## oceanbase-utils
     install(PROGRAMS
       ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
