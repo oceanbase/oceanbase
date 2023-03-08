@@ -1245,7 +1245,7 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   } else if (OB_FAIL(param_->get_hidden_table_key(hidden_table_key))) {
     LOG_WARN("fail to get hidden table key", K(ret), K(hidden_table_key));
   } else if (OB_FAIL(context_->data_sstable_redo_writer_.end_ddl_redo_and_create_ddl_sstable(
-      ls_handle, context_->ddl_kv_mgr_handle_, hidden_table_key, param_->dest_table_id_, param_->execution_id_, param_->task_id_))) {
+      ls_handle, hidden_table_key, param_->dest_table_id_, param_->execution_id_, param_->task_id_))) {
     LOG_WARN("failed to end ddl redo", K(ret));
   }
   return ret;
