@@ -167,7 +167,8 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
                                         sql::ObSQLSessionInfo &sess,
                                         ObIArray<ObObjKV> *extra_info,
                                         ObIArray<obmysql::Obp20Encoder*> *extra_info_ecds,
-                                        bool is_new_extra_info)
+                                        bool is_new_extra_info,
+                                        bool need_sync_sys_var)
 {
   int ret = OB_SUCCESS;
   if (!sess.has_sess_info_modified()) {
@@ -186,7 +187,9 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
       if (OB_FAIL(sess.get_sess_encoder(info_type, encoder))) {
         LOG_WARN("failed to get session encoder", K(ret));
       } else {
-        if (encoder->is_changed_) {
+        if (info_type == SESSION_SYNC_SYS_VAR && !need_sync_sys_var) {
+          // do nothing.
+        } else if (encoder->is_changed_) {
           sess_size[i] = encoder->get_serialize_size(sess);
           size += ObProtoTransUtil::get_serialize_size(sess_size[i]);
           LOG_DEBUG("get seri size", K(sess_size[i]), K(encoder->get_serialize_size(sess)));
@@ -214,6 +217,8 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
         oceanbase::sql::SessionSyncInfoType encoder_type = (oceanbase::sql::SessionSyncInfoType)(i);
         if (OB_FAIL(sess.get_sess_encoder(encoder_type, encoder))) {
           LOG_WARN("failed to get session encoder", K(ret));
+        } else if (encoder_type == SESSION_SYNC_SYS_VAR && !need_sync_sys_var) {
+          // do nothing.
         } else if (encoder->is_changed_) {
           int16_t info_type = (int16_t)i;
           int32_t info_len = sess_size[i];
