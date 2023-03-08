@@ -1727,34 +1727,36 @@ int ObLSTabletService::get_tablet_with_timeout(
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
   int64_t check_timeout_us = get_timeout_us;
+  const int64_t timeout_step_us = 100 * 1000; // 100 ms
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid()
+      || get_timeout_us < ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(tablet_id), K(get_timeout_us));
   } else if (ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US != get_timeout_us
       && ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US != get_timeout_us) {
-    check_timeout_us = retry_timeout_us - ObTimeUtil::current_time();
+    check_timeout_us = MIN(retry_timeout_us - ObTimeUtil::current_time(), timeout_step_us);
     if (check_timeout_us <= 0) {
       ret = OB_TIMEOUT;
       LOG_WARN("get tablet timeout", K(ret), K(retry_timeout_us), K(ObTimeUtil::current_time()), K(get_timeout_us));
     }
   }
 
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_UNLIKELY(!tablet_id.is_valid()
-      || get_timeout_us < ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tablet_id), K(get_timeout_us));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, check_timeout_us))) {
-    while (OB_ALLOCATE_MEMORY_FAILED == ret && ObClockGenerator::getClock() < retry_timeout_us) {
-      ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, check_timeout_us);
-    }
-    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-      ret = OB_TIMEOUT;
-      LOG_WARN("retry until reaching the timeout", K(ret), K(retry_timeout_us));
-    } else if (OB_FAIL(ret)) {
-      LOG_WARN("fail to check and get tablet", K(ret), K(key));
-    }
+  // Because ObTabletStatusChecker doesn't refresh tablet when memstore retired. The on demand refresh is
+  // executed by caller. From 4.2 after adapt to new MDS, ObTabletStatusChecker can be removed.
+  if (OB_SUCC(ret)) {
+    do {
+      if (OB_FAIL(ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, check_timeout_us))) {
+        if (OB_ALLOCATE_MEMORY_FAILED == ret || OB_TIMEOUT == ret) {
+          ret = OB_TIMEOUT;
+        } else {
+          LOG_WARN("fail to check and get tablet", K(ret), K(key), K(check_timeout_us));
+        }
+      }
+    } while (OB_TIMEOUT == ret && retry_timeout_us > ObTimeUtil::current_time());
   }
   return ret;
 }
