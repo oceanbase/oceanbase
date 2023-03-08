@@ -51,16 +51,15 @@ int ObMajorMergeProgressChecker::init(
     ObIServerTrace &server_trace)
 {
   int ret = OB_SUCCESS;
-  const int64_t DEFAULT_TABLET_CNT = 8;
-  const int64_t DEFAULT_TABLE_CNT = 128;
+  const int64_t DEFAULT_MAP_BUCKET_CNT = 10000;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_FAIL(tablet_compaction_map_.create(DEFAULT_TABLET_CNT, "MFTatCompactMap",
+  } else if (OB_FAIL(tablet_compaction_map_.create(DEFAULT_MAP_BUCKET_CNT, "MFTatCompactMap",
       "MFTatCompactMap", tenant_id))) {
-    LOG_WARN("fail to create tablet compaction status map", KR(ret), K(tenant_id), K(DEFAULT_TABLET_CNT));
-  } else if (OB_FAIL(table_compaction_map_.create(DEFAULT_TABLE_CNT, "MFTbCompMap", "MFTbCompMap", tenant_id))) {
-    LOG_WARN("fail to create table compaction status map", KR(ret), K(tenant_id), K(DEFAULT_TABLE_CNT));
+    LOG_WARN("fail to create tablet compaction status map", KR(ret), K(tenant_id), K(DEFAULT_MAP_BUCKET_CNT));
+  } else if (OB_FAIL(table_compaction_map_.create(DEFAULT_MAP_BUCKET_CNT, "MFTbCompMap", "MFTbCompMap", tenant_id))) {
+    LOG_WARN("fail to create table compaction status map", KR(ret), K(tenant_id), K(DEFAULT_MAP_BUCKET_CNT));
   } else if (OB_FAIL(tablet_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
     LOG_WARN("fail to init tablet validator", KR(ret), K(tenant_id));
   } else if (OB_FAIL(index_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
@@ -379,9 +378,7 @@ int ObMajorMergeProgressChecker::check_tablet(
         LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K(ls_id));
       }
     }
-    if (FAILEDx(check_majority_integrated(schema_guard, tablet_info, ls_info))) {
-      LOG_WARN("fail to check majority integrated", KR(ret), K(tablet_info), K(ls_info));
-    } else if (OB_FAIL(check_tablet_compaction_scn(all_progress, global_broadcast_scn, tablet_info, ls_info))) {
+    if (FAILEDx(check_tablet_compaction_scn(all_progress, global_broadcast_scn, tablet_info, ls_info))) {
       LOG_WARN("fail to check data version", KR(ret), K(tablet_info), K(ls_info));
     }
   }
@@ -486,109 +483,6 @@ int ObMajorMergeProgressChecker::check_tablet_compaction_scn(
   return ret;
 }
 
-int ObMajorMergeProgressChecker::check_majority_integrated(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const ObTabletInfo &tablet_info,
-    const share::ObLSInfo &ls_info)
-{
-  int ret = OB_SUCCESS;
-  int64_t full_cnt = 0;
-  int64_t majority = 0;
-  int64_t all_replica_num = OB_INVALID_COUNT;
-  int64_t full_replica_num = OB_INVALID_COUNT;
-  int64_t paxos_replica_num = OB_INVALID_COUNT;
-  bool is_in_member_list = false;
-  ObLSReplica::MemberList member_list;
-
-  if (OB_FAIL(get_associated_replica_num(schema_guard, paxos_replica_num,
-          full_replica_num, all_replica_num, majority))) {
-    LOG_WARN("fail to get associated replica num", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(get_member_list(ls_info, member_list))) { // member_list of ls leader replica
-    LOG_WARN("fail to get member_list", KR(ret), K_(tenant_id), K(ls_info));
-  } else {
-    const int64_t tablet_replica_cnt = tablet_info.replica_count();
-    int64_t paxos_cnt = 0;
-    const ObLSReplica *ls_r = nullptr;
-    FOREACH_CNT_X(r, tablet_info.get_replicas(), OB_SUCC(ret)) {
-      if (OB_ISNULL(r)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid replica", KR(ret), K_(tenant_id), K(tablet_info));
-      } else if (OB_FAIL(is_replica_in_ls_member_list(*r, member_list, is_in_member_list))) {
-        LOG_WARN("fail to check if replica is in ls member_list", KR(ret), K_(tenant_id),
-                 KPC(r), K(member_list));
-      } else if (!is_in_member_list) {
-        // Ignore tablet replicas that are not in member list. E.g., after ls replica migration,
-        // source ls meta has been deleted, but source tablet meta has not been deleted yet.
-        LOG_INFO("ignore this tablet replica, sicne it is not in ls member_list", K_(tenant_id),
-                 KPC(r), K(member_list));
-      } else if (OB_FAIL(ls_info.find(r->get_server(), ls_r))) {
-        LOG_WARN("fail to find", KR(ret), "addr", r->get_server());
-      } else if (OB_UNLIKELY(nullptr == ls_r)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid ls replica", KR(ret), KPC(r));
-      } else if (ObReplicaStatus::REPLICA_STATUS_NORMAL != ls_r->get_replica_status()) {
-        // nothing
-      } else if (ObReplicaTypeCheck::is_paxos_replica_V2(ls_r->get_replica_type())) {
-        paxos_cnt++;
-        if (REPLICA_TYPE_FULL == ls_r->get_replica_type()) {
-          full_cnt++;
-        }
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if ((full_cnt <= 0) || (paxos_cnt < majority)) {
-        ret = OB_ROOT_NOT_INTEGRATED;
-        if (tablet_replica_cnt < majority) {
-          LOG_WARN("tablet replica meta may create too late, wait next round check", KR(ret), 
-            K(tablet_replica_cnt), K(majority), K(paxos_cnt), K(ls_info.get_replicas()));
-        } else {
-          LOG_ERROR("not integrated", K(full_cnt), K(paxos_cnt), K(majority), K(all_replica_num),
-            K(full_replica_num), K(paxos_replica_num), K(tablet_info), K(ls_info.get_replicas()));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObMajorMergeProgressChecker::get_associated_replica_num(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    int64_t &paxos_replica_num,
-    int64_t &full_replica_num,
-    int64_t &all_replica_num,
-    int64_t &majority)
-{
-  int ret = OB_SUCCESS;
-
-  const ObTenantSchema *tenant_schema = nullptr;
-  if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
-    LOG_WARN("fail to get tenant info", KR(ret), K_(tenant_id));
-  } else if (OB_UNLIKELY(nullptr == tenant_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant_schema is null", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(tenant_schema->get_paxos_replica_num(schema_guard, paxos_replica_num))) {
-    LOG_WARN("fail to get table paxos replica num", KR(ret), K_(tenant_id));
-  } else {
-    full_replica_num = tenant_schema->get_full_replica_num();
-    all_replica_num = tenant_schema->get_all_replica_num();
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(paxos_replica_num <= 0)
-             || OB_UNLIKELY(full_replica_num <= 0)
-             || OB_UNLIKELY(all_replica_num <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected replica num", KR(ret), K(paxos_replica_num),
-             K(full_replica_num), K(all_replica_num));
-  } else {
-    majority = rootserver::majority(paxos_replica_num);
-  }
-
-  return ret;
-}
-
 int ObMajorMergeProgressChecker::check_verification(
     const volatile bool &stop,
     const bool is_primary_service,
@@ -621,47 +515,6 @@ int ObMajorMergeProgressChecker::check_verification(
     }
   } else {
     LOG_INFO("none tablet finished compaction, no need to check verification", K(global_broadcast_scn));
-  }
-  return ret;
-}
-
-int ObMajorMergeProgressChecker::get_member_list(
-    const share::ObLSInfo &ls_info,
-    share::ObLSReplica::MemberList &member_list) const
-{
-  int ret = OB_SUCCESS;
-  const ObLSReplica *ls_leader_replica = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(ls_info.find_leader(ls_leader_replica))) {
-    LOG_WARN("fail to find ls leader replica", KR(ret), K_(tenant_id), K(ls_info));
-  } else if (OB_ISNULL(ls_leader_replica)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls leader replica is null", KR(ret), K_(tenant_id), K(ls_info));
-  } else {
-    member_list = ls_leader_replica->get_member_list();
-  }
-  return ret;
-}
-
-int ObMajorMergeProgressChecker::is_replica_in_ls_member_list(
-    const share::ObTabletReplica &replica,
-    const ObLSReplica::MemberList &member_list,
-    bool &is_in_member_list) const
-{
-  int ret = OB_SUCCESS;
-  is_in_member_list = false;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else {
-    for (int i = 0; i < member_list.count(); ++i) {
-      if (replica.get_server() == member_list.at(i).get_server()) {
-        is_in_member_list = true;
-        break;
-      }
-    }
   }
   return ret;
 }

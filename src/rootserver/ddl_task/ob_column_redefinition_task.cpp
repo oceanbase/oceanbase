@@ -56,7 +56,7 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     LOG_WARN("deep copy alter table arg failed", K(ret));
   } else if (OB_FAIL(set_ddl_stmt_str(alter_table_arg_.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_format_version))) {
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*GCTX.sql_proxy_, tenant_id, tenant_data_format_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
     task_type_ = ddl_type;

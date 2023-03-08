@@ -12,6 +12,7 @@
 
 #include "share/config/ob_system_config.h"
 #include "share/config/ob_config.h"
+#include "share/config/ob_server_config.h"
 
 namespace oceanbase
 {
@@ -342,7 +343,20 @@ int ObSystemConfig::read_config(const ObSystemConfigKey &key,
         }
       }
 
-      if (item.reboot_effective()) {
+      const ObString compatible_cfg(COMPATIBLE);
+      if (compatible_cfg.case_compare(key.name()) == 0) {
+        if (!item.set_dump_value(pvalue->value())) {
+          ret = OB_ERR_UNEXPECTED;
+          SHARE_LOG(WARN, "set config item dump value failed",
+                    K(ret), K(key.name()), K(pvalue->value()), K(version));
+        } else {
+          item.set_value_updated();
+          item.set_dump_value_updated();
+          item.set_version(version);
+          SHARE_LOG(INFO, "set config item dump value success",
+                    K(ret), K(key.name()), K(item.spfile_str()), K(item.str()), K(version));
+        }
+      } else if (item.reboot_effective()) {
         // 以 STATIC_EFFECTIVE 的 stack_size 举例说明：
         //   > show parameters like 'stack_size'
         //     stack_size = 4M

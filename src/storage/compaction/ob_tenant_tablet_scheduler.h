@@ -195,7 +195,7 @@ private:
   class MediumLoopTask : public common::ObTimerTask
   {
   public:
-    MediumLoopTask() = default;
+    MediumLoopTask() { disable_timeout_check(); }
     virtual ~MediumLoopTask() = default;
     virtual void runTimerTask() override;
   };

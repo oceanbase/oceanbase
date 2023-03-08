@@ -459,7 +459,8 @@ int ObMPPacketSender::send_error_packet(int err,
             ok_param.take_trace_id_to_client_ = true;
           }
           if (OB_ERR_PROXY_REROUTE == err) {
-            ok_param.reroute_info_ = static_cast<ObFeedbackRerouteInfo *>(extra_err_info);
+            ObFeedbackRerouteInfo *rt_info = static_cast<ObFeedbackRerouteInfo *>(extra_err_info);
+            ok_param.reroute_info_ = rt_info;
           }
           if (OB_FAIL(send_ok_packet(*session, ok_param, &epacket))) {
             LOG_WARN("failed to send ok packet", K(ok_param), K(ret));

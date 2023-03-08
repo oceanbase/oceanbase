@@ -29,7 +29,7 @@ bool MemberList::only_membership_version_different(const MemberList &rhs) const
 {
   bool ret = true;
   if (*this == rhs) {
-    ELECT_LOG(ERROR, "even membership version is same", K(*this), K(rhs), KR(ret));
+    ELECT_LOG(WARN, "even membership version is same", K(*this), K(rhs), KR(ret));
   } else if (replica_num_ != rhs.replica_num_) {
     ret = false;
   } else if (addr_list_.count() != rhs.addr_list_.count()) {

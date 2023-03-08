@@ -332,7 +332,7 @@ int ObSelectLogPlan::candi_allocate_three_stage_group_by(const ObIArray<ObRawExp
                                                                   is_partition_wise))) {
         LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
       } else if (!candidate_plan.plan_tree_->is_distributed() || is_partition_wise) {
-        bool part_sort_valid = !groupby_helper.force_normal_sort_;
+        bool part_sort_valid = !groupby_helper.force_normal_sort_ && !group_by_exprs.empty();
         bool normal_sort_valid = !groupby_helper.force_part_sort_;
         bool can_ignore_merge_plan = !(groupby_plans.empty() || groupby_helper.force_use_merge_);
         if (OB_FAIL(update_part_sort_method(part_sort_valid, normal_sort_valid))) {
@@ -931,6 +931,7 @@ int ObSelectLogPlan::create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_
 {
   int ret = OB_SUCCESS;
   CandidatePlan part_sort_mgb_plan = candidate_plan;
+  bool can_ignore_no_part_sort_plan = can_ignore_merge_plan;
   if (part_sort_valid && OB_FAIL(inner_create_merge_group_plan(reduce_exprs,
                                                               group_by_exprs,
                                                               group_directions,
@@ -947,6 +948,7 @@ int ObSelectLogPlan::create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_
   } else if (part_sort_valid && NULL != part_sort_mgb_plan.plan_tree_
              && OB_FAIL(candidate_plans.push_back(part_sort_mgb_plan))) {
     LOG_WARN("failed to push merge group by", K(ret));
+  } else if (OB_FALSE_IT(can_ignore_no_part_sort_plan |= part_sort_valid && NULL != part_sort_mgb_plan.plan_tree_)) {
   } else if (normal_sort_valid && OB_FAIL(inner_create_merge_group_plan(reduce_exprs,
                                                                         group_by_exprs,
                                                                         group_directions,
@@ -958,7 +960,7 @@ int ObSelectLogPlan::create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_
                                                                         groupby_helper,
                                                                         candidate_plan.plan_tree_,
                                                                         false,
-                                                                        can_ignore_merge_plan))) {
+                                                                        can_ignore_no_part_sort_plan))) {
     LOG_WARN("failed to create merge group by plan", K(ret));
   } else if (normal_sort_valid && NULL != candidate_plan.plan_tree_ &&
              OB_FAIL(candidate_plans.push_back(candidate_plan))) {

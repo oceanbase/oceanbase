@@ -85,6 +85,7 @@ public:
   int wrunlock();
 
   int read_config();
+  int read_dump_config(int64_t tenant_id);
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_current_version() const { return current_version_; }
   const TenantConfigUpdateTask &get_update_task() const { return  update_task_; }

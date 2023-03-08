@@ -559,15 +559,21 @@ int ObExprLike::cg_expr(ObExprCGCtx &op_cg_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child is null", K(ret), K(rt_expr.args_[0]), K(rt_expr.args_[1]),
                               K(rt_expr.args_[2]));
+  } else if (OB_UNLIKELY(!((ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)
+                            || ObLongTextType == rt_expr.args_[0]->datum_meta_.type_
+                            || ObNullType == rt_expr.args_[0]->datum_meta_.type_)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param type", K(ret), K(rt_expr.args_[0]->datum_meta_));
+  } else if (OB_UNLIKELY(!(ob_is_string_tc(rt_expr.args_[1]->datum_meta_.type_)
+                           || ObLongTextType == rt_expr.args_[1]->datum_meta_.type_
+                           || ObNullType == rt_expr.args_[1]->datum_meta_.type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param type", K(ret), K(rt_expr.args_[1]->datum_meta_));
+  } else if (OB_UNLIKELY(!(ObVarcharType == rt_expr.args_[2]->datum_meta_.type_
+              || ObNullType == rt_expr.args_[2]->datum_meta_.type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param type", K(ret), K(rt_expr.args_[2]->datum_meta_));
   } else {
-    OB_ASSERT(ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)
-              || ObLongTextType == rt_expr.args_[0]->datum_meta_.type_
-              || ObNullType == rt_expr.args_[0]->datum_meta_.type_);
-    OB_ASSERT(ob_is_string_tc(rt_expr.args_[1]->datum_meta_.type_)
-              || ObLongTextType == rt_expr.args_[1]->datum_meta_.type_
-              || ObNullType == rt_expr.args_[1]->datum_meta_.type_);
-    OB_ASSERT(ObVarcharType == rt_expr.args_[2]->datum_meta_.type_
-              || ObNullType == rt_expr.args_[2]->datum_meta_.type_);
     //Do optimization even if pattern_expr/escape is pushdown parameter, pattern and escape are 
     //checked whether the same as last time which is recorded in like_ctx for each row in execution.
     bool pattern_literal = pattern_expr->is_const_expr();

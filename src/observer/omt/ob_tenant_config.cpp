@@ -347,12 +347,29 @@ int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLRe
   if (OB_SUCC(ret)) {
     if (OB_FAIL(read_config())) {
       LOG_ERROR("Read tenant config failed", K_(tenant_id), K(ret));
-    } else if (save2file && OB_FAIL(config_mgr_->dump2file())) {
+    } else if (save2file && OB_FAIL(config_mgr_->dump2file(tenant_id_))) {
       LOG_WARN("Dump to file failed", K(ret));
     }
     print();
   } else {
     LOG_WARN("Read tenant config from inner table error", K_(tenant_id), K(ret));
+  }
+  return ret;
+}
+
+int ObTenantConfig::read_dump_config(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObConfigItem *const *pp_item = NULL;
+  DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
+  if (OB_ISNULL(pp_item = container_.get(ObConfigStringKey(COMPATIBLE)))) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("Invalid config string", K(tenant_id), K(ret));
+  } else if (!(*pp_item)->set_value((*pp_item)->spfile_str())) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("Invalid config value", K(tenant_id), K((*pp_item)->spfile_str()), K(ret));
+  } else {
+    LOG_INFO("read dump config succ", K(tenant_id), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
   }
   return ret;
 }
@@ -381,6 +398,7 @@ int ObTenantConfig::add_extra_config(const char *config_str,
     buf[config_str_length] = '\0';
     DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
     token = STRTOK_R(buf, ",\n", &saveptr);
+    const ObString compatible_cfg(COMPATIBLE);
     while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {
       char *saveptr_one = NULL;
       const char *name = NULL;
@@ -411,20 +429,31 @@ int ObTenantConfig::add_extra_config(const char *config_str,
           LOG_WARN("Invalid config string, no such config item", K(name), K(value), K(ret));
         }
         if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
-        } else if (!(*pp_item)->set_value(value)) {
-          ret = OB_INVALID_CONFIG;
-          LOG_WARN("Invalid config value", K(name), K(value), K(ret));
-        } else if (!(*pp_item)->check()) {
-          ret = OB_INVALID_CONFIG;
-          const char* range = (*pp_item)->range();
-          if (OB_ISNULL(range) || strlen(range) == 0) {
-            LOG_ERROR("Invalid config, value out of range", K(name), K(value), K(ret));
+        } else if (compatible_cfg.case_compare(name) == 0) {
+          if (!(*pp_item)->set_dump_value(value)) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("Invalid config value", K(name), K(value), K(ret));
           } else {
-            _LOG_ERROR("Invalid config, value out of %s (for reference only). name=%s, value=%s, ret=%d", range, name, value, ret);
+            (*pp_item)->set_dump_value_updated();
+            (*pp_item)->set_version(version);
+            LOG_INFO("Load tenant config dump value succ", K(name), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
           }
         } else {
-          (*pp_item)->set_version(version);
-          LOG_INFO("Load tenant config succ", K(name), K(value));
+          if (!(*pp_item)->set_value(value)) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("Invalid config value", K(name), K(value), K(ret));
+          } else if (!(*pp_item)->check()) {
+            ret = OB_INVALID_CONFIG;
+            const char* range = (*pp_item)->range();
+            if (OB_ISNULL(range) || strlen(range) == 0) {
+              LOG_ERROR("Invalid config, value out of range", K(name), K(value), K(ret));
+            } else {
+              _LOG_ERROR("Invalid config, value out of %s (for reference only). name=%s, value=%s, ret=%d", range, name, value, ret);
+            }
+          } else {
+            (*pp_item)->set_version(version);
+            LOG_INFO("Load tenant config succ", K(name), K(value));
+          }
         }
         token = STRTOK_R(NULL, ",\n", &saveptr);
       }

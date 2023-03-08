@@ -826,6 +826,7 @@ constexpr int OB_ERR_PATH_EXPRESSION_NOT_LITERAL = -5487;
 constexpr int OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL = -5488;
 constexpr int OB_ERR_SCHEMA_HISTORY_EMPTY = -5489;
 constexpr int OB_ERR_TABLE_NAME_NOT_IN_LIST = -5490;
+constexpr int OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART = -5491;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -4720,6 +4721,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL__ORA_USER_ERROR_MSG "PLS-00185: invalid argument for %s call"
 #define OB_ERR_SCHEMA_HISTORY_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5489, Schema history is empty"
 #define OB_ERR_TABLE_NAME_NOT_IN_LIST__ORA_USER_ERROR_MSG "ORA-00964: table name not in FROM list"
+#define OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART__ORA_USER_ERROR_MSG "ORA-14318: DEFAULT partition must be last partition specified"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"

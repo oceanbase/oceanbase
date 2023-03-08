@@ -689,17 +689,27 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
     ret = OB_TASK_EXPIRED;
     LOG_INFO("receive a old execution id, don't do ddl start", K(ret), K(log));
   } else if (ddl_kv_mgr_handle.get_obj()->get_commit_scn_nolock(tablet_handle.get_obj()->get_tablet_meta()).is_valid_and_not_min()) {
-    start_scn = ddl_kv_mgr_handle.get_obj()->get_start_scn();
-    if (!start_scn.is_valid_and_not_min()) {
-      start_scn = tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_;
-    }
-    if (!start_scn.is_valid_and_not_min()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("start scn must be valid after commit", K(ret), K(start_scn));
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->set_execution_id_nolock(log.get_execution_id()))) {
-      LOG_WARN("failed to set execution id", K(ret));
+    // ddl commit log already written
+    if (ddl_kv_mgr_handle.get_obj()->get_start_scn().is_valid_and_not_min()) {
+      start_scn = ddl_kv_mgr_handle.get_obj()->get_start_scn();
+      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->set_execution_id_nolock(log.get_execution_id()))) {
+        LOG_WARN("failed to set execution id", K(ret));
+      }
+      LOG_INFO("already committed, use new execution id", K(ret), K(start_scn),
+          K(log.get_execution_id()), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
     } else {
-      LOG_INFO("already committed, use previous start scn", K(ret), K(tablet_handle.get_obj()->get_tablet_meta()));
+      // ddl kv mgr is freed when ddl merge task finished, this is a new one, so recover it
+      start_scn = tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_;
+      SCN commit_scn = tablet_handle.get_obj()->get_tablet_meta().ddl_commit_scn_;
+      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_recover_nolock(log.get_table_key(),
+                                                                  start_scn,
+                                                                  log.get_data_format_version(),
+                                                                  log.get_execution_id(),
+                                                                  commit_scn))) {
+        LOG_WARN("start ddl log failed", K(ret), K(start_scn), K(log));
+      }
+      LOG_INFO("already committed, recover to success status", K(ret), K(start_scn), K(commit_scn),
+          K(log.get_execution_id()), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
     }
   } else if (OB_ISNULL(cb = op_alloc(ObDDLStartClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1079,6 +1089,7 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
 
 int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     ObLSHandle &ls_handle,
+    ObDDLKvMgrHandle &ddl_kv_mgr_handle,
     const ObITable::TableKey &table_key,
     const uint64_t table_id,
     const int64_t execution_id,
@@ -1086,20 +1097,17 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
   const ObTabletID &tablet_id = table_key.tablet_id_;
   ObLS *ls = nullptr;
   ObLSID ls_id;
   SCN ddl_start_scn = get_start_scn();
   SCN commit_scn = SCN::min_scn();
-  if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_UNLIKELY(!table_key.is_valid())) {
+  if (OB_ISNULL(ls = ls_handle.get_ls()) || !ddl_kv_mgr_handle.is_valid() || OB_UNLIKELY(!table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid ls", K(ret), K(table_key));
+    LOG_WARN("invalid ls", K(ret), KP(ls), K(ddl_kv_mgr_handle), K(table_key));
   } else if (OB_FALSE_IT(ls_id = ls->get_ls_id())) {
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle))) {
     LOG_WARN("get tablet failed", K(ret));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FALSE_IT(ddl_kv_mgr_handle.get_obj()->prepare_info_for_checksum_report(table_id, ddl_task_id))) {
   } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, table_key, table_id, execution_id, ddl_task_id, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {

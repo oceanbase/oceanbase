@@ -1002,6 +1002,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   const ParseNode *group_by = NULL;
   const ParseNode *having = NULL;
   ObSelectStmt *select_stmt = get_select_stmt();
+  bool has_rollup = false;
   CK(OB_NOT_NULL(select_stmt),
      OB_NOT_NULL(session_info_),
      OB_NOT_NULL(select_stmt->get_query_ctx()));
@@ -1023,6 +1024,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   OZ( search_connect_group_by_clause(parse_tree, start_with, connect_by, group_by, having) );
   if (OB_SUCC(ret) && OB_NOT_NULL(group_by)) {
     set_has_group_by_clause();
+    OZ (check_rollup_clause(group_by, has_rollup));
   }
   if (OB_SUCC(ret) && (start_with != NULL || connect_by != NULL)) {
     select_stmt->set_hierarchical_query(true);
@@ -1044,11 +1046,19 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   if (!is_oracle_mode()) {
     // mysql resolve: from->where->select_item->group by->having->order by
     count_name_win_expr = select_stmt->get_window_func_count();
+    if (has_rollup) {
+      expr_resv_ctx_.set_new_scope();
+    }
     OZ( resolve_field_list(*(parse_tree.children_[PARSE_SELECT_SELECT])));
   }
 
   /* resolve group by clause */
   OZ( resolve_group_clause(group_by) );
+
+  if (has_rollup && is_oracle_mode()) {
+    expr_resv_ctx_.set_new_scope();
+  }
+
   /* resolve having clause */
   OZ( resolve_having_clause(having) );
 
@@ -3602,6 +3612,30 @@ int ObSelectResolver::resolve_group_clause(const ParseNode *node)
     LOG_WARN("failed to check grouping columns", K(ret));
   } // do nothing
 
+  return ret;
+}
+
+int ObSelectResolver::check_rollup_clause(const ParseNode *node, bool &has_rollup)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node) || OB_ISNULL(node->children_) ||
+      OB_UNLIKELY(T_GROUPBY_CLAUSE != node->type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid resolver arguments", K(ret), K(node));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      const ParseNode *child_node = node->children_[i];
+      if (OB_ISNULL(child_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(child_node));
+      } else if (child_node->type_ == T_ROLLUP_LIST ||
+                 child_node->type_ == T_CUBE_LIST ||
+                 child_node->type_ == T_GROUPING_SETS_LIST ||
+                 child_node->type_ == T_WITH_ROLLUP_CLAUSE) {
+        has_rollup = true;
+      }
+    }
+  }
   return ret;
 }
 

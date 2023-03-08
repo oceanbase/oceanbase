@@ -80,12 +80,12 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
   #undef PRINT_WRAPPER
 }
 
-//           |     Leader     | Follower
-// ----------|----------------|-----------------
-//  APPEND   |    max_scn     | max_replayed_scn
-// ----------|----------------|-----------------
-// RAW_WRITE | replayable_scn | max_replayed_scn
-// ----------|----------------|-----------------
+//           |           Leader             | Follower
+// ----------|------------------------------|-----------------
+//  APPEND   |           max_scn            | max_replayed_scn
+// ----------|------------------------------|-----------------
+// RAW_WRITE | min(replayable_scn, max_scn) | max_replayed_scn
+// ----------|------------------------------|-----------------
 // OTHER     |          like RAW_WRITE
 int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
 {
@@ -96,6 +96,7 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
   palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
   ObLogService* log_service = MTL(ObLogService*);
   common::ObRole role;
+  SCN replayable_scn, max_scn;
   int64_t unused_pid = -1;
   if (OB_ISNULL(log_service)) {
     COORDINATOR_LOG_(ERROR, "ObLogService is nullptr");
@@ -114,9 +115,18 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
     if (CLICK_FAIL(palf_handle_guard.get_max_scn(scn))) {
       COORDINATOR_LOG_(WARN, "get_max_scn failed");
     }
-  } else if (CLICK_FAIL(log_service->get_log_replay_service()->get_replayable_point(scn))) {
+  } else if (CLICK_FAIL(log_service->get_log_replay_service()->get_replayable_point(replayable_scn))) {
     COORDINATOR_LOG_(WARN, "failed to get_replayable_point");
     ret = OB_SUCCESS;
+  } else if (CLICK_FAIL(palf_handle_guard.get_max_scn(max_scn))) {
+    COORDINATOR_LOG_(WARN, "get_max_scn failed");
+  } else {
+    // For LEADER in RAW_WRITE mode, scn = min(replayable_scn, max_scn)
+    if (max_scn < replayable_scn) {
+      scn = max_scn;
+    } else {
+      scn = replayable_scn;
+    }
   }
   // scn may fallback because palf's role may be different with apply_service.
   // So we need check it here to keep inc update semantic.

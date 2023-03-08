@@ -435,11 +435,20 @@ public:
   void reset();
 
   bool handle_batched_multi_stmt() const { return multi_stmt_item_.is_batched_multi_stmt(); }
-  share::ObFeedbackRerouteInfo *get_reroute_info()
+  void reset_reroute_info() {
+    if (nullptr != reroute_info_) {
+      op_reclaim_free(reroute_info_);
+    }
+    reroute_info_ = NULL;
+  }
+  share::ObFeedbackRerouteInfo *get_or_create_reroute_info()
   {
     if (nullptr == reroute_info_) {
       reroute_info_ = op_reclaim_alloc(share::ObFeedbackRerouteInfo);
     }
+    return reroute_info_;
+  }
+  share::ObFeedbackRerouteInfo *get_reroute_info() {
     return reroute_info_;
   }
   // release dynamic allocated memory

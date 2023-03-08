@@ -170,6 +170,39 @@ int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
   return ret;
 }
 
+int ObTabletDDLKvMgr::ddl_recover_nolock(const ObITable::TableKey &table_key,
+                                         const SCN &start_scn,
+                                         const int64_t data_format_version,
+                                         const int64_t execution_id,
+                                         const SCN &commit_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn.is_valid_and_not_min() || execution_id < 0 || data_format_version < 0
+        || (commit_scn.is_valid_and_not_min() && commit_scn < start_scn))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(execution_id), K(data_format_version), K(commit_scn));
+  } else if (table_key.get_tablet_id() != tablet_id_) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("tablet id not same", K(ret), K(table_key), K(tablet_id_));
+  } else if (start_scn_.is_valid_and_not_min()) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("start scn has set", K(ret), K(start_scn_));
+  } else {
+    table_key_ = table_key;
+    data_format_version_ = data_format_version;
+    execution_id_ = execution_id;
+    start_scn_ = start_scn;
+    max_freeze_scn_ = commit_scn;
+    commit_scn_ = commit_scn;
+    success_start_scn_ = start_scn;
+  }
+  FLOG_INFO("ddl recover finished", K(ret), K(*this));
+  return ret;
+}
+
 int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn,
                                  const SCN &commit_scn,
                                  const uint64_t table_id,
@@ -317,6 +350,12 @@ int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &co
       if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
         LOG_INFO("wait build ddl sstable", K(ret), K(ls_id_), K(tablet_id_), K(start_scn_), K(commit_scn), K(max_freeze_scn_),
             "wait_elpased_s", (ObTimeUtility::fast_current_time() - wait_start_ts) / 1000000L);
+      }
+    }
+    if (OB_TASK_EXPIRED == ret) { // maybe ddl merge task has finished
+      if (is_commit_success()) {
+        ret = OB_SUCCESS;
+        FLOG_INFO("ddl commit already succeed", K(start_scn), K(commit_scn), K(*this));
       }
     }
   }
@@ -779,8 +818,6 @@ int ObTabletDDLKvMgr::create_empty_ddl_sstable(ObTableHandleV2 &table_handle)
     ObArray<const ObDataMacroBlockMeta *> empty_meta_array;
     if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(ddl_param, empty_meta_array, nullptr/*first_ddl_sstable*/, table_handle))) {
       LOG_WARN("create empty ddl sstable failed", K(ret));
-    } else if (OB_FAIL(ObTabletDDLUtil::update_ddl_table_store(ddl_param, table_handle))) {
-      LOG_WARN("update ddl table store failed", K(ret), K(ddl_param), K(table_handle));
     }
   }
   return ret;

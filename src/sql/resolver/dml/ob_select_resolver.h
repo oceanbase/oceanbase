@@ -147,6 +147,8 @@ protected:
                                 ObSelectStmt *select_stmt,
                                 bool &has_explicit_dir,
                                 bool is_groupby_expr);
+  int check_rollup_clause(const ParseNode *node, bool &has_rollup);
+
   int resolve_group_by_list(const ParseNode *node,
                             common::ObIArray<ObRawExpr*> &groupby_exprs,
                             common::ObIArray<ObRawExpr*> &rollup_exprs,

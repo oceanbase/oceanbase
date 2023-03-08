@@ -93,7 +93,7 @@ int ObSSTable::init(const ObTabletCreateSSTableParam &param, common::ObIAllocato
 
 void ObSSTable::reset()
 {
-  FLOG_INFO("reset sstable.", KP(this), K(key_));
+  LOG_DEBUG("reset sstable.", KP(this), K(key_));
   // dec ref first, then reset sstable meta
   if (hold_macro_ref_) {
     dec_macro_ref();

@@ -312,7 +312,7 @@ int ObDDLTableMergeTask::init(const ObDDLTableMergeDagParam &ddl_dag_param)
 int ObDDLTableMergeTask::process()
 {
   int ret = OB_SUCCESS;
-  int64_t MAX_DDL_SSTABLE = 128;
+  int64_t MAX_DDL_SSTABLE = ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE * 0.5;
 #ifdef ERRSIM
   if (0 != GCONF.errsim_max_ddl_sstable_count) {
     MAX_DDL_SSTABLE = GCONF.errsim_max_ddl_sstable_count;
@@ -426,6 +426,10 @@ int ObDDLTableMergeTask::process()
         }
       } else {
         LOG_INFO("commit ddl sstable succ", K(ddl_param), K(merge_param_));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(merge_param_.start_scn_, ddl_kv_mgr_handle))) {
+          LOG_WARN("unregister ddl kv mgr from tablet failed", K(tmp_ret), K(merge_param_));
+        }
       }
     }
   }

@@ -256,7 +256,7 @@ int ObTenantConfigMgr::init_tenant_config(const obrpc::ObTenantConfigArg &arg)
     LOG_WARN("fail to add tenant config", KR(ret), K(arg));
   } else if (OB_FAIL(add_extra_config(arg))) {
     LOG_WARN("fail to add extra config", KR(ret), K(arg));
-  } else if (OB_FAIL(dump2file())) {
+  } else if (OB_FAIL(dump2file(arg.tenant_id_))) {
     LOG_WARN("fail to dump config to file", KR(ret), K(arg));
   }
   return ret;
@@ -418,11 +418,28 @@ void ObTenantConfigMgr::print() const
   } // for
 }
 
-int ObTenantConfigMgr::dump2file(const char *path) const
+int ObTenantConfigMgr::dump2file(const int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(sys_config_mgr_->dump2file(path))) {
-    ret = sys_config_mgr_->config_backup();
+  if (OB_FAIL(sys_config_mgr_->dump2file())) {
+    LOG_WARN("failed to dump2file", K(ret));
+  } else if (OB_FAIL(sys_config_mgr_->config_backup())) {
+    LOG_WARN("failed to dump2file backup", K(ret));
+  } else if (OB_FAIL(read_dump_config(tenant_id))) {
+    LOG_WARN("failed to read_dump_config", K(ret));
+  }
+  return ret;
+}
+
+int ObTenantConfigMgr::read_dump_config(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  DRWLock::RDLockGuard guard(rwlock_);
+  ObTenantConfig *config = nullptr;
+  if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
+    LOG_WARN("No tenant config found", K(tenant_id), K(ret));
+  } else {
+    ret = config->read_dump_config(tenant_id);
   }
   return ret;
 }

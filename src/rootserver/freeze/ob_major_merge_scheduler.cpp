@@ -706,6 +706,8 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
                      K(global_broadcast_scn_val));
           } else if (OB_FAIL(zone_merge_mgr_->try_update_global_last_merged_scn(expected_epoch))) {
             LOG_WARN("try update global last_merged_scn failed", KR(ret), K(expected_epoch));
+          } else if (OB_FAIL(progress_checker_.prepare_handle())) { // free memory of compaction_map
+            LOG_WARN("fail to do prepare handle of progress checker", KR(ret), K(expected_epoch));
           } else {
             ROOTSERVICE_EVENT_ADD("daily_merge", "global_merged", K_(tenant_id),
                                   "global_broadcast_scn", global_broadcast_scn_val);

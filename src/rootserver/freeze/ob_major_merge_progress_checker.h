@@ -169,21 +169,6 @@ private:
                                   const share::SCN &global_broadcast_scn,
                                   const share::ObTabletInfo &tablet,
                                   const share::ObLSInfo &ls_info);
-  int check_majority_integrated(share::schema::ObSchemaGetterGuard &schema_guard, 
-                                const share::ObTabletInfo &tablet_info,
-                                const share::ObLSInfo &ls_info);
-
-  int get_associated_replica_num(share::schema::ObSchemaGetterGuard &schema_guard,
-                                 int64_t &paxos_replica_num,
-                                 int64_t &full_replica_num,
-                                 int64_t &all_replica_num,
-                                 int64_t &majority);
-  // get member_list of ls leader replica
-  int get_member_list(const share::ObLSInfo &ls_info,
-                      share::ObLSReplica::MemberList &member_list) const;
-  int is_replica_in_ls_member_list(const share::ObTabletReplica &replica,
-                                   const share::ObLSReplica::MemberList &member_list,
-                                   bool &is_in_member_list) const;
   int mark_uncompacted_tables_as_verified(const common::ObIArray<share::ObTableCompactionInfo> &uncompacted_tables);
   void reset_uncompacted_tablets();
 

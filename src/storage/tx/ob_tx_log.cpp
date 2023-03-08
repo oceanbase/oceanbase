@@ -937,34 +937,22 @@ int ObTxMultiDataSourceLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
   return ret;
 }
 
-ObTxDataBackup::ObTxDataBackup()
-{
-  reset();
-}
+ObTxDataBackup::ObTxDataBackup() { reset(); }
 
-int ObTxDataBackup::init(const storage::ObTxData *const tx_data)
+int ObTxDataBackup::init(const share::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(tx_data)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KP(tx_data));
-  } else {
-    start_log_ts_ = tx_data->start_scn_;
-  }
+  start_log_ts_ = start_scn;
   return ret;
 }
 
-void ObTxDataBackup::reset()
-{
-  start_log_ts_.reset();
-}
+void ObTxDataBackup::reset() { start_log_ts_.reset(); }
 
-
-int ObTxCommitLog::init_tx_data_backup(const storage::ObTxData * const tx_data)
+int ObTxCommitLog::init_tx_data_backup(const share::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(tx_data_backup_.init(tx_data))) {
+  if (OB_FAIL(tx_data_backup_.init(start_scn))) {
     TRANS_LOG(WARN, "init tx_data_backup_ failed", K(ret));
   }
 
@@ -972,11 +960,11 @@ int ObTxCommitLog::init_tx_data_backup(const storage::ObTxData * const tx_data)
   return ret;
 }
 
-int ObTxAbortLog::init_tx_data_backup(const storage::ObTxData * const tx_data)
+int ObTxAbortLog::init_tx_data_backup(const share::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(tx_data_backup_.init(tx_data))) {
+  if (OB_FAIL(tx_data_backup_.init(start_scn))) {
     TRANS_LOG(WARN, "init tx_data_backup_ failed", K(ret));
   }
 

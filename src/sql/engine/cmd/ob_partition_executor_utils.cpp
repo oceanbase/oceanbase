@@ -283,7 +283,9 @@ int ObPartitionExecutorUtils::cast_list_expr_to_obj(
         LOG_WARN("get unexpected expr", K(ret), K(value_expr));
       } else if (ObMaxType == value_expr->get_data_type()) {
         ++default_count;
-        if (row_expr->get_param_count() != 1) {
+        if (i != list_values_exprs.count() - 1) {
+          ret = OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART;
+        } else if (row_expr->get_param_count() != 1) {
           ret = OB_ERR_MULTIPLE_DEF_CONST_IN_LIST_PART;
         } else if (default_count > 1) {
           ret = OB_ERR_MULTIPLE_DEF_CONST_IN_LIST_PART;
