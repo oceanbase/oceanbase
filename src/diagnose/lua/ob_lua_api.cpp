@@ -1,4 +1,4 @@
-/**
+			/**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -65,9 +65,14 @@ public:
   {
     void *ret = nullptr;
     if (0 != size) {
-      ret = ::mmap(nullptr, size + 8, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-      *static_cast<uint64_t *>(ret) = size;
-      ret = (char*)ret + 8;
+#if defined(OB_USE_ASAN) || defined(ENABLE_SANITY)
+      if (OB_NOT_NULL(ret = ::malloc(size + 8))) {
+#else
+      if (OB_NOT_NULL(ret = ::mmap(nullptr, size + 8, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+#endif
+        *static_cast<uint64_t *>(ret) = size;
+        ret = (char*)ret + 8;
+      }
     }
     return ret;
   }
@@ -80,7 +85,11 @@ public:
   {
     if (OB_NOT_NULL(ptr)) {
       const uint64_t size = *(uint64_t *)((char *)ptr - 8);
-      ::munmap((void *)((char *)ptr - 8), size);
+#if defined(OB_USE_ASAN) || defined(ENABLE_SANITY)
+      ::free((void *)((char *)ptr - 8));
+#else
+      ::munmap((void *)((char *)ptr - 8), size + 8);
+#endif
     }
   }
 };
