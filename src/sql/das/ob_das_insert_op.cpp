@@ -473,6 +473,8 @@ int ObDASInsertResult::reuse()
   } else {
     affected_rows_ = 0;
     is_duplicated_ = false;
+    result_buffer_.~ObDASWriteBuffer();
+    new(&result_buffer_) ObDASWriteBuffer();
   }
   return ret;
 }
