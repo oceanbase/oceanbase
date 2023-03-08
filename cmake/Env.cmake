@@ -67,6 +67,8 @@ if (ENABLE_EXE_PIE)
   set(OB_EXE_LINKER_OPT "-pie")
 endif()
 
+set(OB_OBJCOPY_BIN "${DEVTOOLS_DIR}/bin/objcopy")
+
 if (OB_USE_CLANG)
   find_program(OB_CC clang
   "${DEVTOOLS_DIR}/bin"

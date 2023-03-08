@@ -11,7 +11,7 @@ macro(gen_local_lib NAME)
   add_custom_command(
     OUTPUT ${NAME}
     COMMAND ${OB_LD_BIN} -r $<TARGET_OBJECTS:${TGT}> -o ${NAME}
-    COMMAND objcopy --localize-hidden ${NAME}
+    COMMAND ${OB_OBJCOPY_BIN} --localize-hidden ${NAME}
     DEPENDS ${TGT}
     DEPENDS $<TARGET_OBJECTS:${TGT}>
     COMMAND_EXPAND_LISTS

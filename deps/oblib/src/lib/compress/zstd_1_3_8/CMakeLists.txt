@@ -60,7 +60,7 @@ target_link_libraries(zstd_1_3_8_objs PUBLIC oblib_base_base)
 add_custom_command(
   OUTPUT zstd_1_3_8_objs.o
   COMMAND ${OB_LD_BIN} -r $<TARGET_OBJECTS:zstd_1_3_8_objs> -o zstd_1_3_8_objs.tmp.o
-  COMMAND objcopy --localize-hidden zstd_1_3_8_objs.tmp.o zstd_1_3_8_objs.o
+  COMMAND ${OB_OBJCOPY_BIN} --localize-hidden zstd_1_3_8_objs.tmp.o zstd_1_3_8_objs.o
   DEPENDS zstd_1_3_8_objs
   BYPRODUCTS zstd_1_3_8_objs.o
   COMMAND_EXPAND_LISTS
