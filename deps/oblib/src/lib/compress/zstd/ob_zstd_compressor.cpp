@@ -105,7 +105,8 @@ int ObZstdCompressor::compress(const char *src_buffer,
                                           dst_buffer,
                                           static_cast<size_t>(dst_buffer_size),
                                           compress_ret_size))) {
-    LIB_LOG(WARN, "failed to compress zstd", K(ret), K(compress_ret_size));
+    LIB_LOG(WARN, "failed to compress zstd", K(ret), K(compress_ret_size),
+        KP(src_buffer), K(src_data_size), KP(dst_buffer), K(dst_buffer_size));
   } else {
     dst_data_size = compress_ret_size;
   }
@@ -141,7 +142,8 @@ int ObZstdCompressor::decompress(const char *src_buffer,
                                               dst_buffer,
                                               dst_buffer_size,
                                               decompress_ret_size))) {
-    LIB_LOG(WARN, "failed to decompress zstd", K(ret), K(decompress_ret_size));
+    LIB_LOG(WARN, "failed to decompress zstd", K(ret), K(decompress_ret_size),
+        KP(src_buffer), K(src_data_size), KP(dst_buffer), K(dst_buffer_size));
   } else {
     dst_data_size = decompress_ret_size;
   }
