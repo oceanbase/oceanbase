@@ -11746,6 +11746,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_DBMS_STATS: {
+      CHECK_HINT_PARAM(hint_node, 0) {
+        global_hint.set_dbms_stats();
+      }
+      break;
+    }
     case T_DOP: {
       CHECK_HINT_PARAM(hint_node, 2) {
         if (OB_FAIL(global_hint.merge_dop_hint(static_cast<uint64_t>(child0->value_),

@@ -163,6 +163,8 @@ struct ObGlobalHint {
   { return MIN_OUTLINE_ENABLE_VERSION <= version && CLUSTER_CURRENT_VERSION >= version; }
   bool disable_query_transform() const { return disable_transform_; }
   bool disable_cost_based_transform() const { return disable_cost_based_transform_; }
+  inline bool has_dbms_stats_hint() const { return has_dbms_stats_hint_; }
+  inline void set_dbms_stats() { has_dbms_stats_hint_ = true; }
   bool has_append() const {
     return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT) ? true : false;
   }
@@ -217,7 +219,8 @@ struct ObGlobalHint {
                K_(enable_append),
                K_(opt_params),
                K_(ob_ddl_schema_versions),
-               K_(osg_hint));
+               K_(osg_hint),
+               K_(has_dbms_stats_hint));
   int64_t frozen_version_;
   int64_t topk_precision_;
   int64_t sharding_minimum_row_count_;
@@ -244,6 +247,7 @@ struct ObGlobalHint {
   ObOptParamHint opt_params_;
   common::ObSArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
   ObOptimizerStatisticsGatheringHint osg_hint_;
+  bool has_dbms_stats_hint_;
 };
 
 // used in physical plan
