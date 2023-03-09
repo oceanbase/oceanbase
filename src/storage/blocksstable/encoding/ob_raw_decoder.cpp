@@ -734,9 +734,10 @@ int ObRawDecoder::fast_comparison_operator(
   } else {
     const int64_t type_store_size = get_type_size_map()[col_ctx.col_header_->get_store_obj_type()];
     const uint64_t node_value = filter.get_objs().at(0).v_.uint64_;
+    const int64_t node_store_size = get_type_size_map()[filter.get_objs().at(0).meta_.get_type()];
     const sql::ObWhiteFilterOperatorType &op_type = filter.get_op_type();
     bool exceed_stored_value_range = ~INTEGER_MASK_TABLE[col_ctx.col_header_->length_]
-        & (INTEGER_MASK_TABLE[type_store_size] & node_value);
+        & (INTEGER_MASK_TABLE[node_store_size] & node_value);
     if (exceed_stored_value_range) {
       if (sql::WHITE_OP_EQ == op_type) {
         // All false
@@ -747,7 +748,7 @@ int ObRawDecoder::fast_comparison_operator(
         }
       } else if (is_signed_data) {
         // ObIntTC, ObDateTimeTC, ObDateTC, ObTimeTC
-        if ((~(INTEGER_MASK_TABLE[type_store_size] >> 1)) & node_value) {
+        if ((~(INTEGER_MASK_TABLE[node_store_size] >> 1)) & node_value) {
           // negative node value, node value always smaller
           if (sql::WHITE_OP_GT == op_type || sql::WHITE_OP_GE == op_type) {
             if (OB_FAIL(result_bitmap.bit_not())) {
