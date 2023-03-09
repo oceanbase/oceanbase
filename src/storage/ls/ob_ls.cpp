@@ -1044,6 +1044,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     ls_info.checkpoint_scn_ = ls_meta_.get_clog_checkpoint_scn();
     ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
     ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
+    ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
   }
   return ret;
 }
