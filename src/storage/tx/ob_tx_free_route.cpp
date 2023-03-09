@@ -240,6 +240,7 @@ int ObTransService::txn_free_route__handle_tx_exist_(const ObTransID &tx_id, ObT
     } else if (OB_FAIL(release_tx(*tmp_tx))) {
       TRANS_LOG(WARN, "release tx failed", K(ret), K(assoc_sess_id), K(tx_id));
     } else {
+      tmp_tx = NULL;
       int tmp_ret = tx_desc_mgr_.get(tx_id, tmp_tx);
       if (OB_ENTRY_NOT_EXIST != tmp_ret) {
         ret = OB_ERR_UNEXPECTED;
