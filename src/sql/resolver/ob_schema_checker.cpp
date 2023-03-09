@@ -1677,11 +1677,12 @@ int ObSchemaChecker::get_synonym_schema(uint64_t tenant_id,
                                         uint64_t &synonym_id,
                                         ObString &object_table_name,
                                         bool &exist,
-                                        bool search_public_schema) const
+                                        bool search_public_schema,
+                                        bool *is_public) const
 {
   return schema_mgr_->get_object_with_synonym(tenant_id,database_id,synonym_name,
                                               object_database_id,synonym_id, object_table_name,
-                                              exist, search_public_schema);
+                                              exist, search_public_schema, is_public);
 }
 
 int ObSchemaChecker::get_obj_info_recursively_with_synonym(const uint64_t tenant_id,

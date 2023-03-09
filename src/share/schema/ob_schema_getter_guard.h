@@ -726,7 +726,8 @@ public:
                               uint64_t &synonym_id,
                               common::ObString &obj_table_name,
                               bool &do_exist,
-                              bool search_public_schema = true) const;
+                              bool search_public_schema = true,
+                              bool *is_public = NULL) const;
   int get_outline_info_with_sql_id(const uint64_t tenant_id,
                                       const uint64_t database_id,
                                       const common::ObString &sql_id,

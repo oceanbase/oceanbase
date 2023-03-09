@@ -5328,7 +5328,8 @@ int ObSchemaGetterGuard::get_object_with_synonym(const uint64_t tenant_id,
                                                  uint64_t &synonym_id,
                                                  ObString &obj_table_name,
                                                  bool &do_exist,
-                                                 bool search_public_schema) const
+                                                 bool search_public_schema,
+                                                 bool *is_public) const
 {
   int ret = OB_SUCCESS;
   const ObSchemaMgr *mgr = NULL;
@@ -5339,7 +5340,8 @@ int ObSchemaGetterGuard::get_object_with_synonym(const uint64_t tenant_id,
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else {
     ret = mgr->synonym_mgr_.get_object(tenant_id, database_id, name, obj_database_id,
-                                       synonym_id, obj_table_name, do_exist, search_public_schema);
+                                       synonym_id, obj_table_name, do_exist, search_public_schema,
+                                       is_public);
   }
   return ret;
 }

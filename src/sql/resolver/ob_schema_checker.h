@@ -364,7 +364,8 @@ public:
                          uint64_t &synonym_id,
                          common::ObString &object_table_name,
                          bool &exist,
-                         bool search_public_schema = true) const;
+                         bool search_public_schema = true,
+                         bool *is_public = NULL) const;
   int get_obj_info_recursively_with_synonym(const uint64_t tenant_id,
                                             const uint64_t syn_db_id,
                                             const common::ObString &syn_name,

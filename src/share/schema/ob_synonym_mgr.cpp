@@ -357,7 +357,8 @@ int ObSynonymMgr::get_object(const uint64_t tenant_id,
                              uint64_t &synonym_id,
                              ObString &obj_table_name,
                              bool &do_exist,
-                             bool search_public_schema) const
+                             bool search_public_schema,
+                             bool *is_public) const
 {
   int ret = OB_SUCCESS;
   do_exist = false;
@@ -381,6 +382,9 @@ int ObSynonymMgr::get_object(const uint64_t tenant_id,
       LOG_DEBUG("synonym is not exist", K(tenant_id), K(cur_database_id), K(name), K(ret));
     } else {
       do_exist = true;
+      if (NULL != is_public) {
+        *is_public = is_public_database_id(cur_database_id);
+      }
     }
   }
 
