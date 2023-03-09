@@ -3664,7 +3664,6 @@ inline bool ObObj::strict_equal(const ObObj &other) const
     bret = false;
   } else {
     //here must use CS_TYPE_BINARY to compare, avoid spaces at the end of the string be ignored
-    //https://aone.alibaba-inc.com/project/81079/issue/17919616
     bret = (0 == compare(other, CS_TYPE_BINARY));
     if (bret && is_timestamp_tz()) {
       //for the data type of timestamp with time zone,
