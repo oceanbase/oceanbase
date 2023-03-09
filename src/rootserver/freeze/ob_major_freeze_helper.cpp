@@ -229,7 +229,7 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
           LOG_WARN("tenant_major_freeze rpc failed", KR(ret), K(tenant_id), K(leader), K(freeze_info));
         } else if (FALSE_IT(ret = resp.err_code_)) {
         } else if (OB_FAIL(ret)) {
-          if (OB_LEADER_NOT_EXIST == ret) {
+          if (OB_LEADER_NOT_EXIST == ret || OB_EAGAIN == ret) {
             const int64_t RESERVED_TIME_US = 600 * 1000; // 600 ms
             const int64_t timeout_remain_us = THIS_WORKER.get_timeout_remain();
             const int64_t idle_time_us = 200 * 1000 * (i + 1);
