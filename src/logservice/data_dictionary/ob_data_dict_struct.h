@@ -138,6 +138,7 @@ public:
         && ! tenant_name_.empty();
   }
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
+  OB_INLINE void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   OB_INLINE const char *get_tenant_name() const { return extract_str(tenant_name_); }
   OB_INLINE int64_t get_schema_version() const { return schema_version_; }
   OB_INLINE common::ObCompatibilityMode get_compatibility_mode() const { return compatibility_mode_; }
@@ -162,6 +163,11 @@ public:
 
 private:
   ObIAllocator *allocator_;
+  // Won't serialize tenant_id in dict.
+  // DATADICT of StandBy is the same with Promary tenant. However tenant_id of standby tenant may not consist with primary tenant
+  //
+  // OBCDC will set tenant_id when consume and replay DATADICT
+  // Anyother consumer of DATADICT should also notice this feature.
   uint64_t tenant_id_;
   int64_t schema_version_;
   common::ObString tenant_name_;
@@ -196,6 +202,7 @@ public:
         && ! database_name_.empty();
   }
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
+  OB_INLINE void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   OB_INLINE uint64_t get_database_id() const { return database_id_; }
   OB_INLINE int64_t get_schema_version() const { return schema_version_; }
   OB_INLINE const char *get_database_name() const { return extract_str(database_name_); }
@@ -218,6 +225,11 @@ private:
 
 private:
   ObIAllocator *allocator_;
+  // Won't serialize tenant_id in dict.
+  // DATADICT of StandBy is the same with Promary tenant. However tenant_id of standby tenant may not consist with primary tenant
+  //
+  // OBCDC will set tenant_id when consume and replay DATADICT
+  // Anyother consumer of DATADICT should also notice this feature.
   uint64_t tenant_id_;
   uint64_t database_id_;
   int64_t schema_version_;
@@ -341,6 +353,7 @@ public:
 public:
   // for user like OBCDC
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
+  OB_INLINE void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   OB_INLINE uint64_t get_database_id() const { return database_id_; }
   OB_INLINE uint64_t get_table_id() const { return table_id_; }
   OB_INLINE const char *get_table_name() const { return extract_str(table_name_); }
@@ -451,6 +464,11 @@ private:
 
 private:
   ObIAllocator *allocator_;
+  // Won't serialize tenant_id in dict.
+  // DATADICT of StandBy is the same with Promary tenant. However tenant_id of standby tenant may not consist with primary tenant
+  //
+  // OBCDC will set tenant_id when consume and replay DATADICT
+  // Anyother consumer of DATADICT should also notice this feature.
   uint64_t tenant_id_;
   uint64_t database_id_;
   uint64_t table_id_;

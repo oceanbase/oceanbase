@@ -87,7 +87,8 @@ TEST(ObDictTenantMeta, test_raw)
   ob_free(buf);
 
   EXPECT_EQ(serialize_size, deserialize_pos);
-  EXPECT_EQ(tenant_meta.tenant_id_, tenant_meta_after.tenant_id_);
+  EXPECT_EQ(OB_INVALID_TENANT_ID, tenant_meta_after.tenant_id_);
+  // EXPECT_EQ(tenant_meta.tenant_id_, tenant_meta_after.tenant_id_);
   EXPECT_EQ(tenant_meta.tenant_name_, tenant_meta_after.tenant_name_);
   EXPECT_EQ(ls_arr[1], tenant_meta_after.ls_arr_[1]);
   EXPECT_TRUE(tenant_meta == tenant_meta_after);
@@ -124,7 +125,8 @@ TEST(ObDictDatabaseMeta, test_raw)
 
   EXPECT_EQ(serialize_size, deserialize_pos);
   EXPECT_EQ(db_meta.database_id_, db_meta_after.database_id_);
-  EXPECT_EQ(db_meta.tenant_id_, db_meta_after.tenant_id_);
+  EXPECT_EQ(OB_INVALID_TENANT_ID, db_meta_after.tenant_id_);
+  //EXPECT_EQ(db_meta.tenant_id_, db_meta_after.tenant_id_);
   EXPECT_EQ(db_meta.database_name_, db_meta_after.database_name_);
   EXPECT_EQ(db_meta.schema_version_, db_meta_after.schema_version_);
   EXPECT_EQ(db_meta.name_case_mode_, db_meta_after.name_case_mode_);

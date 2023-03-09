@@ -249,7 +249,6 @@ DEFINE_EQUAL(ObDictTenantMeta)
 {
   bool is_equal = true;
   LST_DO_CODE(IS_ARG_EQUAL,
-      tenant_id_,
       schema_version_,
       tenant_name_,
       compatibility_mode_,
@@ -270,7 +269,6 @@ DEFINE_SERIALIZE(ObDictTenantMeta)
   if (OB_FAIL(ret)) {
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE,
-      tenant_id_,
       schema_version_,
       tenant_name_,
       compatibility_mode_,
@@ -293,7 +291,6 @@ DEFINE_DESERIALIZE(ObDictTenantMeta)
   } else {
     ObString tmp_tenant_name;
     LST_DO_CODE(OB_UNIS_DECODE,
-      tenant_id_,
       schema_version_,
       tmp_tenant_name,
       compatibility_mode_,
@@ -317,7 +314,6 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictTenantMeta)
   int64_t len = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-      tenant_id_,
       schema_version_,
       tenant_name_,
       compatibility_mode_,
@@ -437,7 +433,6 @@ DEFINE_EQUAL(ObDictDatabaseMeta)
 {
   bool is_equal = true;
   LST_DO_CODE(IS_ARG_EQUAL,
-      tenant_id_,
       database_id_,
       schema_version_,
       database_name_,
@@ -456,7 +451,6 @@ DEFINE_SERIALIZE(ObDictDatabaseMeta)
   if (OB_FAIL(ret)) {
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE,
-      tenant_id_,
       database_id_,
       schema_version_,
       database_name_,
@@ -477,7 +471,6 @@ DEFINE_DESERIALIZE(ObDictDatabaseMeta)
   } else {
     ObString tmp_db_name;
     LST_DO_CODE(OB_UNIS_DECODE,
-      tenant_id_,
       database_id_,
       schema_version_,
       tmp_db_name,
@@ -499,7 +492,6 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictDatabaseMeta)
   int64_t len = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-      tenant_id_,
       database_id_,
       schema_version_,
       database_name_,
@@ -839,7 +831,6 @@ DEFINE_EQUAL(ObDictTableMeta)
 {
   bool is_equal = true;
   LST_DO_CODE(IS_ARG_EQUAL,
-      tenant_id_,
       database_id_,
       table_id_,
       schema_version_,
@@ -872,7 +863,6 @@ DEFINE_SERIALIZE(ObDictTableMeta)
   if (OB_FAIL(ret)) {
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE,
-        tenant_id_,
         database_id_,
         table_id_,
         schema_version_,
@@ -908,7 +898,6 @@ DEFINE_DESERIALIZE(ObDictTableMeta)
     ObString tmp_table_name;
 
     LST_DO_CODE(OB_UNIS_DECODE,
-        tenant_id_,
         database_id_,
         table_id_,
         schema_version_,
@@ -945,7 +934,6 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictTableMeta)
   int64_t len = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-      tenant_id_,
       database_id_,
       table_id_,
       schema_version_,
