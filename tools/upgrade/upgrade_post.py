@@ -1995,7 +1995,7 @@
 #      check_ddl_task_execute(query_cur)
 #      # all check func should execute before check_fail_list
 #      check_fail_list()
-#      #modify_server_permanent_offline_time(cur)
+#      modify_server_permanent_offline_time(cur)
 #    except Exception, e:
 #      logging.exception('run error')
 #      raise e
