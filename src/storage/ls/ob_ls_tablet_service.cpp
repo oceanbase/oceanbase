@@ -1313,7 +1313,7 @@ int ObLSTabletService::update_medium_compaction_info(
     ObMetaDiskAddr disk_addr;
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
 
-    if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle))) {
+    if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle, true/*only acquire*/))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_TABLET_NOT_EXIST;
       } else {

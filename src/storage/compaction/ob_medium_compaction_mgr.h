@@ -124,6 +124,10 @@ public:
   {
     return (ObMediumCompactionInfo::ObCompactionType)last_compaction_type_;
   }
+  OB_INLINE int64_t get_last_compaction_scn() const
+  {
+    return last_medium_scn_;
+  }
   void get_schedule_scn(
     const int64_t major_compaction_scn,
     int64_t &schedule_scn,

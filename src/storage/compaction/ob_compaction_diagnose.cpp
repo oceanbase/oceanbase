@@ -574,6 +574,8 @@ int ObCompactionDiagnoseMgr::do_tenant_major_merge_diagnose(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(major_freeze_service));
   } else {
+    ObTenantTabletScheduler *scheduler = MTL(ObTenantTabletScheduler*);
+    const int64_t frozen_scn = MAX(scheduler->get_frozen_version(), MTL(ObTenantFreezeInfoMgr*)->get_latest_frozen_version());
     SMART_VAR(ObArray<ObTabletReplica>, uncompacted_tablets) {
       if (OB_FAIL(major_freeze_service->get_uncompacted_tablets(uncompacted_tablets))) {
         LOG_WARN("fail to get uncompacted tablets", KR(ret));
@@ -582,15 +584,21 @@ int ObCompactionDiagnoseMgr::do_tenant_major_merge_diagnose(
         LOG_INFO("finish get uncompacted tablets for diagnose", K(ret), K(uncompacted_tablets_cnt));
         for (int64_t i = 0; (OB_SUCCESS == ret) && i < uncompacted_tablets_cnt; ++i) {
           if (can_add_diagnose_info()) {
-            if (OB_FAIL(SET_DIAGNOSE_INFO(info_array_[idx_++], MAJOR_MERGE, MTL_ID(),
-                  uncompacted_tablets.at(i).get_ls_id(),
-                  uncompacted_tablets.at(i).get_tablet_id(),
-                  ObCompactionDiagnoseInfo::DIA_STATUS_UNCOMPACTED,
-                  ObTimeUtility::fast_current_time(),
-                  "server", uncompacted_tablets.at(i).get_server(),
-                  "status", uncompacted_tablets.at(i).get_status(),
-                  "compaction_scn", uncompacted_tablets.at(i).get_snapshot_version(),
-                  "report_scn", uncompacted_tablets.at(i).get_report_scn()))) {
+            bool compaction_scn_not_valid = frozen_scn > uncompacted_tablets.at(i).get_snapshot_version();
+            const char *status =
+                ObTabletReplica::SCN_STATUS_ERROR == uncompacted_tablets.at(i).get_status()
+                    ? "CHECKSUM_ERROR"
+                    : (compaction_scn_not_valid ? "compaction_scn_not_update" : "report_scn_not_update");
+            if (OB_FAIL(SET_DIAGNOSE_INFO(
+                    info_array_[idx_++], MAJOR_MERGE, MTL_ID(),
+                    uncompacted_tablets.at(i).get_ls_id(),
+                    uncompacted_tablets.at(i).get_tablet_id(),
+                    ObCompactionDiagnoseInfo::DIA_STATUS_UNCOMPACTED,
+                    ObTimeUtility::fast_current_time(), "server",
+                    uncompacted_tablets.at(i).get_server(), "status", status,
+                    "frozen_scn", frozen_scn,
+                    "compaction_scn", uncompacted_tablets.at(i).get_snapshot_version(),
+                    "report_scn", uncompacted_tablets.at(i).get_report_scn()))) {
               LOG_WARN("fail to set diagnose info", KR(ret), "uncompacted_tablet",
                        uncompacted_tablets.at(i));
               ret = OB_SUCCESS; // ignore ret, and process next uncompacted_tablet
