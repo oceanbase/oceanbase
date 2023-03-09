@@ -172,6 +172,18 @@ private:
       const ObBackupDataCleanElement &clean_element,
       common::ObIArray<ObLogArchiveRound> &log_archive_rounds,
       common::ObIArray<ObBackupPieceInfoKey> &backup_piece_keys);
+  int get_sys_tenant_prepare_clog_round(
+      const share::ObBackupCleanInfo &clean_info,
+      const ObLogArchiveRound &log_archive_round,
+      const ObBackupDataCleanElement &clean_element,
+      bool &is_delete_inorder,
+      common::ObIArray<ObLogArchiveRound> &log_archive_rounds);
+  int get_sys_tenant_prepare_clog_piece(
+      const share::ObBackupCleanInfo &clean_info,
+      const ObLogArchiveRound &log_archive_round,
+      const ObBackupDataCleanElement &clean_element,
+      bool &is_delete_inorder,
+      common::ObIArray<ObBackupPieceInfoKey> &backup_piece_keys);
   int get_sys_tenant_doing_clog_round_and_piece(
       const share::ObBackupCleanInfo &clean_info,
       const ObBackupDataCleanElement &clean_element,

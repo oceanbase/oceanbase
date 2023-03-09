@@ -2416,6 +2416,142 @@ int ObBackupDataClean::get_sys_tenant_delete_clog_round_and_piece(const share::O
   return ret;
 }
 
+int ObBackupDataClean::get_sys_tenant_prepare_clog_piece(const share::ObBackupCleanInfo &clean_info,
+    const ObLogArchiveRound &log_archive_round, const ObBackupDataCleanElement &clean_element, bool &is_delete_inorder,
+    common::ObIArray<ObBackupPieceInfoKey> &backup_piece_keys)
+{
+  int ret = OB_SUCCESS;
+  const int64_t backup_copies = clean_element.backup_dest_option_.backup_copies_;
+  const bool overwrite_key = true;
+  ObSimplePieceKey simple_piece_key;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data clean do not init", K(ret));
+  } else if (!clean_info.is_valid() || !log_archive_round.is_valid() || !clean_element.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument is invalid", K(ret), K(clean_info), K(log_archive_round), K(clean_element));
+  } else {
+    for (int64_t j = 0; OB_SUCC(ret) && is_delete_inorder && j < log_archive_round.piece_infos_.count(); ++j) {
+      const ObSimplePieceInfo &simple_piece_info = log_archive_round.piece_infos_.at(j);
+      if (simple_piece_info.max_ts_ > clean_info.clog_gc_snapshot_ ||
+          ObBackupPieceStatus::BACKUP_PIECE_FROZEN != simple_piece_info.status_ ||
+          ObBackupFileStatus::BACKUP_FILE_COPYING == simple_piece_info.file_status_ ||
+          simple_piece_info.copies_num_ < backup_copies) {
+        is_delete_inorder = false;
+      } else if (ObBackupFileStatus::BACKUP_FILE_DELETED == simple_piece_info.file_status_) {
+        // do nothing
+      } else {
+        ObBackupPieceInfoKey piece_info_key;
+        piece_info_key.backup_piece_id_ = simple_piece_info.backup_piece_id_;
+        piece_info_key.copy_id_ = log_archive_round.copy_id_;
+        piece_info_key.incarnation_ = clean_element.incarnation_;
+        piece_info_key.round_id_ = log_archive_round.log_archive_round_;
+        piece_info_key.tenant_id_ = clean_info.tenant_id_;
+
+        simple_piece_key.reset();
+        simple_piece_key.incarnation_ = piece_info_key.incarnation_;
+        simple_piece_key.round_id_ = piece_info_key.round_id_;
+        simple_piece_key.backup_piece_id_ = piece_info_key.backup_piece_id_;
+        simple_piece_key.copy_id_ = piece_info_key.copy_id_;
+        char trace_id[common::OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+        int trace_length = 0;
+        if (OB_FAIL(backup_piece_keys.push_back(piece_info_key))) {
+          LOG_WARN("failed to push piece info key into array", K(ret), K(simple_piece_info), K(piece_info_key));
+        } else if (OB_FAIL(sys_tenant_deleted_backup_piece_.set_refactored_1(simple_piece_key, overwrite_key))) {
+          LOG_WARN("failed to set simple piece key", K(ret), K(simple_piece_key));
+        } else if (FALSE_IT(trace_length = ObCurTraceId::get_trace_id()->to_string(
+                                trace_id, common::OB_MAX_TRACE_ID_BUFFER_SIZE))) {
+        } else if (trace_length > OB_MAX_TRACE_ID_BUFFER_SIZE) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get trace id", K(ret), K(*ObCurTraceId::get_trace_id()));
+        } else {
+          FLOG_INFO("[BACKUP_CLEAN]succ add backup clean piece", K(simple_piece_key), K(clean_info));
+          ROOTSERVICE_EVENT_ADD("backup_clean",
+              "backup_piece",
+              "tenant_id",
+              clean_info.tenant_id_,
+              "round_id",
+              simple_piece_key.round_id_,
+              "backup_piece_id",
+              simple_piece_key.backup_piece_id_,
+              "copy_id",
+              simple_piece_key.copy_id_,
+              "trace_id",
+              trace_id);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDataClean::get_sys_tenant_prepare_clog_round(const share::ObBackupCleanInfo &clean_info,
+    const ObLogArchiveRound &log_archive_round, const ObBackupDataCleanElement &clean_element, bool &is_delete_inorder,
+    common::ObIArray<ObLogArchiveRound> &log_archive_rounds)
+{
+  int ret = OB_SUCCESS;
+  const int64_t backup_copies = clean_element.backup_dest_option_.backup_copies_;
+  const bool overwrite_key = true;
+  ObSimpleArchiveRound simple_archive_round;
+  int piece_num = log_archive_round.piece_infos_.count();
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data clean do not init", K(ret));
+  } else if (!clean_info.is_valid() || !log_archive_round.is_valid() || !clean_element.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument is invalid", K(ret), K(clean_info), K(log_archive_round), K(clean_element));
+  } else if (ObLogArchiveStatus::STOP != log_archive_round.log_archive_status_) {
+    // do nothing
+  } else if (log_archive_round.checkpoint_ts_ > clean_info.clog_gc_snapshot_ ||
+             log_archive_round.copies_num_ < backup_copies) {
+    is_delete_inorder = false;
+  } else if (piece_num < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("piece num is less than 0", K(piece_num), K(log_archive_round));
+  } else {
+    if (0 == piece_num) {
+      is_delete_inorder = true;
+    } else {
+      const ObSimplePieceInfo &simple_piece_info = log_archive_round.piece_infos_.at(piece_num - 1);
+      if (simple_piece_info.max_ts_ > clean_info.clog_gc_snapshot_) {
+        is_delete_inorder = false;
+      }
+    }
+    if (!is_delete_inorder) {
+    } else if (OB_FAIL(log_archive_rounds.push_back(log_archive_round))) {
+      LOG_WARN("failed to push log archive round into array", K(ret), K(log_archive_round));
+    } else {
+      char trace_id[common::OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+      int trace_length = 0;
+      simple_archive_round.reset();
+      simple_archive_round.incarnation_ = clean_element.incarnation_;
+      simple_archive_round.round_id_ = log_archive_round.log_archive_round_;
+      simple_archive_round.copy_id_ = log_archive_round.copy_id_;
+      if (OB_FAIL(sys_tenant_deleted_backup_round_.set_refactored_1(simple_archive_round, overwrite_key))) {
+        LOG_WARN("failed to set sys tenant deleted backup round", K(ret), K(simple_archive_round));
+      } else if (FALSE_IT(trace_length =
+                              ObCurTraceId::get_trace_id()->to_string(trace_id, common::OB_MAX_TRACE_ID_BUFFER_SIZE))) {
+      } else if (trace_length > OB_MAX_TRACE_ID_BUFFER_SIZE) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get trace id", K(ret), K(*ObCurTraceId::get_trace_id()));
+      } else {
+        FLOG_INFO("[BACKUP_CLEAN]succ add backup clean round", K(simple_archive_round), K(clean_info));
+        ROOTSERVICE_EVENT_ADD("backup_clean",
+            "backup_round",
+            "tenant_id",
+            clean_info.tenant_id_,
+            "round_id",
+            simple_archive_round.round_id_,
+            "copy_id",
+            simple_archive_round.copy_id_,
+            "trace_id",
+            trace_id);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupDataClean::get_sys_tenant_prepare_clog_round_and_piece(const share::ObBackupCleanInfo &clean_info,
     const ObBackupDataCleanElement &clean_element, common::ObIArray<ObLogArchiveRound> &log_archive_rounds,
     common::ObIArray<ObBackupPieceInfoKey> &backup_piece_keys)
@@ -2423,16 +2559,8 @@ int ObBackupDataClean::get_sys_tenant_prepare_clog_round_and_piece(const share::
   int ret = OB_SUCCESS;
   log_archive_rounds.reset();
   backup_piece_keys.reset();
-  const int64_t clog_gc_snapshot = clean_info.clog_gc_snapshot_;
   ObLogArchiveBackupInfoMgr log_info_mgr;
-  const uint64_t tenant_id = clean_info.tenant_id_;
-  const int64_t incarnation = clean_element.incarnation_;
-  const int64_t backup_copies = clean_element.backup_dest_option_.backup_copies_;
-  ObSimpleArchiveRound simple_archive_round;
-  ObSimplePieceKey simple_piece_key;
-  const bool overwrite_key = true;
   bool is_delete_inorder = true;
-
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data clean do not init", K(ret));
@@ -2447,108 +2575,12 @@ int ObBackupDataClean::get_sys_tenant_prepare_clog_round_and_piece(const share::
         break;
       } else if (clean_info.is_delete_backup_set() && 0 != log_archive_round.start_piece_id_) {
         // do nothing
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && is_delete_inorder && j < log_archive_round.piece_infos_.count(); ++j) {
-          const ObSimplePieceInfo &simple_piece_info = log_archive_round.piece_infos_.at(j);
-          if (simple_piece_info.max_ts_ > clog_gc_snapshot ||
-              ObBackupPieceStatus::BACKUP_PIECE_FROZEN != simple_piece_info.status_ ||
-              ObBackupFileStatus::BACKUP_FILE_COPYING == simple_piece_info.file_status_ ||
-              simple_piece_info.copies_num_ < backup_copies) {
-            is_delete_inorder = false;
-          } else if (ObBackupFileStatus::BACKUP_FILE_DELETED == simple_piece_info.file_status_) {
-            // do nothing
-          } else {
-            ObBackupPieceInfoKey piece_info_key;
-            piece_info_key.backup_piece_id_ = simple_piece_info.backup_piece_id_;
-            piece_info_key.copy_id_ = log_archive_round.copy_id_;
-            piece_info_key.incarnation_ = incarnation;
-            piece_info_key.round_id_ = log_archive_round.log_archive_round_;
-            piece_info_key.tenant_id_ = tenant_id;
-
-            simple_piece_key.reset();
-            simple_piece_key.incarnation_ = piece_info_key.incarnation_;
-            simple_piece_key.round_id_ = piece_info_key.round_id_;
-            simple_piece_key.backup_piece_id_ = piece_info_key.backup_piece_id_;
-            simple_piece_key.copy_id_ = piece_info_key.copy_id_;
-            char trace_id[common::OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
-            int trace_length = 0;
-            if (OB_FAIL(backup_piece_keys.push_back(piece_info_key))) {
-              LOG_WARN("failed to push piece info key into array", K(ret), K(simple_piece_info), K(piece_info_key));
-            } else if (OB_FAIL(sys_tenant_deleted_backup_piece_.set_refactored_1(simple_piece_key, overwrite_key))) {
-              LOG_WARN("failed to set simple piece key", K(ret), K(simple_piece_key));
-            } else if (FALSE_IT(trace_length = ObCurTraceId::get_trace_id()->to_string(
-                                    trace_id, common::OB_MAX_TRACE_ID_BUFFER_SIZE))) {
-            } else if (trace_length > OB_MAX_TRACE_ID_BUFFER_SIZE) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to get trace id", K(ret), K(*ObCurTraceId::get_trace_id()));
-            } else {
-              FLOG_INFO("[BACKUP_CLEAN]succ add backup clean piece", K(simple_piece_key), K(clean_info));
-              ROOTSERVICE_EVENT_ADD("backup_clean",
-                  "backup_piece",
-                  "tenant_id",
-                  clean_info.tenant_id_,
-                  "round_id",
-                  simple_piece_key.round_id_,
-                  "backup_piece_id",
-                  simple_piece_key.backup_piece_id_,
-                  "copy_id",
-                  simple_piece_key.copy_id_,
-                  "trace_id",
-                  trace_id);
-            }
-          }
-        }
-      }
-
-      int piece_num = log_archive_round.piece_infos_.count();
-      if (OB_FAIL(ret)) {
-      } else if (ObLogArchiveStatus::STOP != log_archive_round.log_archive_status_) {
-        // do nothing
-      } else if (log_archive_round.checkpoint_ts_ > clog_gc_snapshot || log_archive_round.copies_num_ < backup_copies) {
-        is_delete_inorder = false;
-      } else if (piece_num < 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("piece num is less than 0", K(piece_num), K(log_archive_round));
-      } else {
-        if (0 == piece_num) {
-          is_delete_inorder = true;
-        } else {
-          const ObSimplePieceInfo &simple_piece_info = log_archive_round.piece_infos_.at(piece_num - 1);
-          if (simple_piece_info.max_ts_ > clog_gc_snapshot) {
-            is_delete_inorder = false;
-          }
-        }
-        if (!is_delete_inorder) {
-        } else if (OB_FAIL(log_archive_rounds.push_back(log_archive_round))) {
-          LOG_WARN("failed to push log archive round into array", K(ret), K(log_archive_round));
-        } else {
-          char trace_id[common::OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
-          int trace_length = 0;
-          simple_archive_round.reset();
-          simple_archive_round.incarnation_ = clean_element.incarnation_;
-          simple_archive_round.round_id_ = log_archive_round.log_archive_round_;
-          simple_archive_round.copy_id_ = log_archive_round.copy_id_;
-          if (OB_FAIL(sys_tenant_deleted_backup_round_.set_refactored_1(simple_archive_round, overwrite_key))) {
-            LOG_WARN("failed to set sys tenant deleted backup round", K(ret), K(simple_archive_round));
-          } else if (FALSE_IT(trace_length = ObCurTraceId::get_trace_id()->to_string(
-                                  trace_id, common::OB_MAX_TRACE_ID_BUFFER_SIZE))) {
-          } else if (trace_length > OB_MAX_TRACE_ID_BUFFER_SIZE) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get trace id", K(ret), K(*ObCurTraceId::get_trace_id()));
-          } else {
-            FLOG_INFO("[BACKUP_CLEAN]succ add backup clean round", K(simple_archive_round), K(clean_info));
-            ROOTSERVICE_EVENT_ADD("backup_clean",
-                "backup_round",
-                "tenant_id",
-                clean_info.tenant_id_,
-                "round_id",
-                simple_archive_round.round_id_,
-                "copy_id",
-                simple_archive_round.copy_id_,
-                "trace_id",
-                trace_id);
-          }
-        }
+      } else if (OB_FAIL(get_sys_tenant_prepare_clog_piece(
+                     clean_info, log_archive_round, clean_element, is_delete_inorder, backup_piece_keys))) {
+        LOG_WARN("get sys tenant delete clog piece", K(ret), K(clean_info), K(log_archive_round));
+      } else if (OB_FAIL(get_sys_tenant_prepare_clog_round(
+                     clean_info, log_archive_round, clean_element, is_delete_inorder, log_archive_rounds))) {
+        LOG_WARN("get sys tenant delete clog round", K(ret), K(clean_info), K(log_archive_round), K(backup_piece_keys));
       }
     }
   }
