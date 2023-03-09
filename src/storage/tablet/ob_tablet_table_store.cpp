@@ -1549,7 +1549,7 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
     LOG_WARN("failed to get minor tables", K(ret), K(tables_handle));
   } else if (OB_FAIL(check_minor_tables_continue_(minor_tables.count(), minor_tables.get_data()))) {
     LOG_WARN("minor tables is not continue", K(ret), K(param), K(minor_tables), K(old_store));
-  } else if (minor_tables.at(0)->get_start_scn() != tablet_ptr_->get_tablet_meta().start_scn_
+  } else if (minor_tables.at(0)->get_start_scn() > tablet_ptr_->get_tablet_meta().start_scn_
       || minor_tables.at(minor_tables.count() - 1)->get_end_scn() != tablet_ptr_->get_tablet_meta().clog_checkpoint_scn_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(minor_tables), K(param), K(old_store));
