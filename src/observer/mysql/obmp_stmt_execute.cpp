@@ -2007,7 +2007,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
         } else if (FALSE_IT(buf_len = ob_gcvt_strict(value, OB_GCVT_ARG_DOUBLE, alloc_size,
                                                      buf, NULL, TRUE/*is_oracle_mode*/,
                                                      FALSE/*is_binary_double*/, FALSE))) {
-        } else if (OB_FAIL(nb.from(buf, buf_len, allocator))) {
+        } else if (OB_FAIL(nb.from_sci_opt(buf, buf_len, allocator))) {
           LOG_WARN("decode double param to number failed", K(ret));
         } else {
           param.set_number(nb);
