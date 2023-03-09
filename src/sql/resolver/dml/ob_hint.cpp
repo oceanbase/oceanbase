@@ -448,7 +448,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
   }
   if (OB_SUCC(ret) && ObPDMLOption::NOT_SPECIFIED != pdml_option_) { //PDML
     if (ObPDMLOption::ENABLE == pdml_option_) {
-      PRINT_GLOBAL_HINT_STR("ENABLE_PARALLEL_DML");
+      if (!ignore_parallel) {
+        PRINT_GLOBAL_HINT_STR("ENABLE_PARALLEL_DML");
+      }
     } else if (ObPDMLOption::DISABLE == pdml_option_) {
       PRINT_GLOBAL_HINT_STR("DISABLE_PARALLEL_DML");
     } else {

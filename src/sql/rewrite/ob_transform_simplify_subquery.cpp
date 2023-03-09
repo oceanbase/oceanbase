@@ -1463,8 +1463,8 @@ int ObTransformSimplifySubquery::eliminate_subquery_in_exists(ObDMLStmt *stmt,
     } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), subq_expr))) {
       LOG_WARN("remove expr failed", K(ret));
     } else {
-      ObConstRawExpr *c_expr = NULL;
-      if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, (T_OP_EXISTS == expr->get_expr_type()), c_expr))) {
+      ObRawExpr *c_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(expr_factory, c_expr, (T_OP_EXISTS == expr->get_expr_type())))) {
         LOG_WARN("failed to create expr", K(ret));
       } else if (OB_ISNULL(c_expr)) {
         ret = OB_ERR_UNEXPECTED;
