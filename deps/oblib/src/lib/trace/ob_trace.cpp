@@ -433,6 +433,7 @@ ObSpanCtx* ObTrace::begin_span(uint32_t span_type, uint8_t level, bool is_follow
       new_span = freed_span_.remove_last();
       current_span_.add_first(new_span);
       new_span->span_type_ = span_type;
+      new_span->span_id_.high_ = 0;
       new_span->span_id_.low_ = ++seq_;
       new_span->source_span_ = last_active_span_;
       new_span->is_follow_ = is_follow;

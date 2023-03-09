@@ -28,7 +28,7 @@
 #define FLT_END_SPAN(span)                                      \
 if (OB_NOT_NULL(span)) {                                        \
   OBTRACE->end_span(span);                                      \
-  if (span->span_id_.is_inited() && OBTRACE->is_auto_flush()) { \
+  if (span->is_inited() && OBTRACE->is_auto_flush()) { \
     FLUSH_TRACE();                                              \
   }                                                             \
 }
@@ -118,6 +118,7 @@ public:
 
 struct ObTagCtxBase
 {
+  friend void flush_trace();
   ObTagCtxBase() : next_(nullptr), tag_type_(0) {}
   virtual ~ObTagCtxBase() {}
   virtual int tostring(char* buf, const int64_t buf_len, int64_t& pos)
@@ -138,6 +139,7 @@ struct ObTagCtxBase
     }
     return ret;
   }
+protected:
   ObTagCtxBase* next_;
   uint16_t tag_type_;
 };
@@ -178,6 +180,7 @@ int tag_to_string(char* buf, const int64_t buf_len, int64_t& pos, const T& value
 template <typename T>
 struct ObTagCtx final : public ObTagCtxBase
 {
+  friend struct ObTrace;
   ObTagCtx() {}
   virtual ~ObTagCtx() override {}
   virtual int tostring(char* buf, const int64_t buf_len, int64_t& pos) override
@@ -190,13 +193,18 @@ struct ObTagCtx final : public ObTagCtxBase
     }
     return ret;
   }
+private:
   T data_;
 };
 
 struct ObSpanCtx final : public common::ObDLinkBase<ObSpanCtx>
 {
+  friend struct ObTrace;
+  friend void flush_trace();
+public:
   ObSpanCtx();
-
+  OB_INLINE bool is_inited() const { return span_id_.is_inited(); }
+  UUID get_span_id() const { return span_id_; }
   UUID span_id_;
   ObSpanCtx* source_span_;
   int64_t start_ts_;
@@ -332,7 +340,7 @@ public:
   {
     span_ = OBTRACE->begin_span(span_type, level, false);
 #ifndef NDEBUG
-    if (OB_NOT_NULL(span_) && span_->span_id_.is_inited()) {
+    if (OB_NOT_NULL(span_) && span_->is_inited()) {
       FLT_SET_TAG(span_back_trace, lbt());
     }
 #endif
