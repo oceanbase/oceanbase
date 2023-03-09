@@ -280,7 +280,6 @@ typedef struct ObCollationHandler
   // 获取weight_string结果的长度
   size_t (*strnxfrmlen)(const struct ObCharsetInfo *, size_t);
   // makes a sortkey suitable for memcmp() corresponding to the given variable length string
-  // for more details: https://yuque.antfin.com/guoyun.lgy/gz2cw4/fdsv1b
   size_t  (*strnxfrm_varlen)(const struct ObCharsetInfo*,
                              uchar* dst, size_t dst_len, uint nweights,
                              const uchar *src, size_t srclen,

@@ -459,7 +459,6 @@ const int64_t OB_MYSQL_COMPRESSED_HEADER_SIZE = OB_MYSQL_HEADER_LENGTH + 3;  /* 
 
 
 //-----------------------------------oceanbase 2.0 c/s protocol----------------------//
-// https://lark.alipay.com/quanwei.wqw/aap9pg/wrga61
 const uint16_t OB20_PROTOCOL_MAGIC_NUM = 0x20AB;
 const int64_t OB20_PROTOCOL_HEADER_LENGTH = 24;
 const int64_t OB20_PROTOCOL_TAILER_LENGTH = 4;  // for CRC32
