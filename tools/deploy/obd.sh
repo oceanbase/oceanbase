@@ -270,7 +270,12 @@ function deploy_cluster {
   then
     config_yaml=$YAML_CONF
   else
-    config_yaml=$OBD_CLUSTER_PATH/$deploy_name/config.yaml
+    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml && "$(grep config_status .data | awk '{print $2}')" != "UNCHNAGE" ]]
+    then
+      config_yaml=$OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml
+    else
+      config_yaml=$OBD_CLUSTER_PATH/$deploy_name/config.yaml
+    fi
   fi
   [[ "$(grep -E "^obproxy:" $config_yaml)" != "" ]] && ( get_obproxy || exit 1 )
 
