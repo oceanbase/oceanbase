@@ -65,7 +65,7 @@ static int send_handshake(ObSqlSockSession& sess, const OMPKHandshake &hsp)
   } else if (OB_UNLIKELY(pkt_count <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid pkt count", K(pkt_count), K(ret));
-  } else if (OB_FAIL(sess.write_data(buf, pos))) {
+  } else if (OB_FAIL(sess.write_hanshake_packet(buf, pos))) {
     LOG_WARN("write handshake packet data fail", K(ret));
   }
 

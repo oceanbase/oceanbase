@@ -436,6 +436,7 @@ public:
   void shutdown() { ::shutdown(fd_, SHUT_RD); }
   int set_ssl_enabled();
   SSL* get_ssl_st();
+  int write_handshake_packet(const char* buf, int64_t sz);
 public:
   ObDLink dlink_;
   ObDLink all_list_link_;
@@ -476,6 +477,27 @@ int ObSqlSock::set_ssl_enabled()
 SSL* ObSqlSock::get_ssl_st()
 {
   return ob_fd_get_ssl_st(fd_);
+}
+
+int ObSqlSock::write_handshake_packet(const char* buf, int64_t sz) {
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  while(pos < sz && OB_SUCCESS == ret) {
+    int64_t wbytes = 0;
+    if ((wbytes = write(fd_, buf + pos, sz - pos)) >= 0) {
+      pos += wbytes;
+    } else if (EINTR == errno) {
+      //continue
+    } else {
+      //when send handshake packet, only process EINTR as normal, other errno
+      //will be treated as error
+      IGNORE_RETURN(set_error(EIO));
+      ret = OB_IO_ERROR;
+      LOG_WARN("write data error", K_(fd), K(errno));
+    }
+  }
+  last_write_time_ = ObTimeUtility::current_time();
+  return ret;
 }
 
 static struct epoll_event *__make_epoll_event(struct epoll_event *event, uint32_t event_flag, void* val) {
@@ -1173,5 +1195,9 @@ void ObSqlNio::update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_k
   }
 }
 
+int ObSqlNio::write_handshake_packet(void* sess, const char* buf, int64_t sz)
+{
+  return sess2sock(sess)->write_handshake_packet(buf, sz);
+}
 }; // end namespace obmysql
 }; // end namespace oceanbase

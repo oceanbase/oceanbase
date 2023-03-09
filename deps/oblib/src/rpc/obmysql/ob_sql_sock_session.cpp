@@ -172,5 +172,10 @@ SSL* ObSqlSockSession::get_ssl_st()
   return nio_->get_ssl_st((void *)this);
 }
 
+int ObSqlSockSession::write_hanshake_packet(const char *buf, int64_t sz)
+{
+  return nio_->write_handshake_packet((void *)this, buf, sz);
+}
+
 }; // end namespace obmysql
 }; // end namespace oceanbase

@@ -58,6 +58,7 @@ public:
     return ATOMIC_FAA(&dispatch_idx_, 1) % get_thread_count();
   }
   void update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt);
+  int write_handshake_packet(void* sess, const char* buf, int64_t sz);
 private:
   void run(int64_t idx);
 private:
