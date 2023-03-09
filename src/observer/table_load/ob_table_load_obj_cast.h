@@ -156,6 +156,25 @@ private:
     if (n2 > 0) {
       digits[1] = n2;
     }
+
+    //normalize
+    if (d.len_ == 2) {
+      if (digits[0] == 0) {
+        d.len_ = 1;
+        digits[0] = digits[1];
+        d.exp_ -= 1;
+      } else if (digits[1] == 0) {
+        d.len_ = 1;
+      }
+    }
+
+    if (d.len_ == 1) {
+      if (digits[0] == 0) {
+        d.len_ = 0;
+        d.exp_ = 0;
+      }
+    }
+
     number_fast_ctx.is_fast_number_ = true;
     return ret;
   }
