@@ -16504,7 +16504,7 @@ int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_
     }
   } else if (0 != table_schema.get_autoinc_column_id()) {
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-    LOG_WARN("table with autoinc column should not get in new_truncate_table", KR(ret));
+    LOG_WARN("table with autoinc column should not get in new_truncate_table", KR(ret), K(table_id), K(table_name), K(database_name));
   } else if (table_schema.is_sys_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("truncate table is not supported on system table", KR(ret), K(table_id), K(table_name));

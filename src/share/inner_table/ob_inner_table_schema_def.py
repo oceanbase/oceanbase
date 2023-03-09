@@ -1451,6 +1451,7 @@ def_table_schema(
       ('sequence_name', 'varchar:OB_MAX_SEQUENCE_NAME_LENGTH', 'true'),
       ('sequence_value', 'uint', 'true'),
       ('sync_value', 'uint'),
+      ('truncate_version', 'int', 'false', '-1'),
     ],
 )
 
