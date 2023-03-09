@@ -1407,7 +1407,7 @@ int ObXAService::start_stmt(const ObXATransID &xid, const uint32_t session_id, O
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa service not inited", K(ret));
-  } else if (tx_desc.is_xa_tightly_couple()) {
+  } else if (tx_desc.is_xa_tightly_couple() || tx_desc.xa_start_addr() == GCONF.self_addr_) {
     ObXACtx *xa_ctx = tx_desc.get_xa_ctx();
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;

@@ -1761,6 +1761,8 @@ int ObXACtx::start_stmt(const ObXATransID &xid, const uint32_t session_id)
   } else if (OB_ISNULL(tx_desc_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "trans desc is null", K(ret), K(*this));
+  } else if (OB_FAIL(create_xa_savepoint_if_need_(xid, session_id))) {
+    TRANS_LOG(WARN, "check xa savepoint fail", K(ret), K(xid), K(session_id), K(*this));
   } else if (!is_tightly_coupled_) {
     // loosely coupled mode
     // do nothing
@@ -1769,8 +1771,6 @@ int ObXACtx::start_stmt(const ObXATransID &xid, const uint32_t session_id)
     if (is_executing_) {
       ret = OB_TRANS_STMT_NEED_RETRY;
       TRANS_LOG(INFO, "another branch is executing stmt, try again", K(ret), K(*this));
-    } else if (OB_FAIL(create_xa_savepoint_if_need_(xid, session_id))) {
-      TRANS_LOG(WARN, "check xa savepoint fail", K(ret), K(xid), K(session_id), K(*this));
     } else {
       // this flag indicates that a branch is executing normal stmt
       is_executing_ = true;
