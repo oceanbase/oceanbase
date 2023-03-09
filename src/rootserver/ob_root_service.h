@@ -721,6 +721,7 @@ public:
   int submit_max_availability_mode_task(const common::ObProtectionLevel level, const int64_t cluster_version);
 
   int submit_ddl_single_replica_build_task(share::ObAsyncTask &task);
+  int check_weak_read_version_refresh_interval(int64_t refresh_interval, bool &valid);
   // may modify arg before taking effect
   int set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg);
   // arg is readonly after take effect

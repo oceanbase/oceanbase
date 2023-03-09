@@ -636,8 +636,14 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
     SCN snapshot_version = SCN::min_scn();
     if (OB_FAIL(txs->get_weak_read_snapshot_version(session->get_ob_max_read_stale_time(),
-                                                    snapshot_version))) {
+                snapshot_version))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
+      int64_t stale_time = session->get_ob_max_read_stale_time();
+      int64_t refresh_interval = GCONF.weak_read_version_refresh_interval;
+      if (refresh_interval > stale_time) {
+        TRANS_LOG(WARN, "weak_read_version_refresh_interval is larger than ob_max_read_stale_time ",
+                  K(refresh_interval), K(stale_time), KPC(txs));
+      }
     } else {
       snapshot.init_weak_read(snapshot_version);
     }

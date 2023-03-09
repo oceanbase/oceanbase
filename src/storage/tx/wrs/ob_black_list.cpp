@@ -243,17 +243,19 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
     if (OB_FAIL(get_info_from_result_(*result, bl_key, ls_info))) {
       TRANS_LOG(WARN, "get_info_from_result_ fail ", KR(ret), K(result));
     } else if (LEADER == ls_info.ls_state_) {
-      // 该日志流是leader，不能加入黑名单
+      // cannot add leader into blacklist
+    } else if (ls_info.weak_read_scn_ == 0 && ls_info.migrate_status_ == OB_MIGRATE_STATUS_NONE) {
+      // log stream is initializing, should't be put into blacklist
     } else {
       max_stale_time = get_tenant_max_stale_time_(bl_key.get_tenant_id());
       int64_t max_stale_time_ns = max_stale_time * 1000;
       if (curr_time_ns > ls_info.weak_read_scn_ + max_stale_time_ns) {
-        // 时间戳落后，将对应日志流加入黑名单
+        // scn is out-of-time，add this log stream into blacklist
         if (OB_FAIL(ls_bl_mgr_.update(bl_key, ls_info))) {
           TRANS_LOG(WARN, "ls_bl_mgr_ add fail ", K(bl_key), K(ls_info));
         }
       } else if (curr_time_ns + BLACK_LIST_WHITEWASH_INTERVAL_NS < ls_info.weak_read_scn_ + max_stale_time_ns) {
-        // 时间戳赶上，将对应日志流从黑名单中移除
+        // scn is new enough，remove this log stream in the blacklist
         ls_bl_mgr_.remove(bl_key);
       } else {
         // do nothing
