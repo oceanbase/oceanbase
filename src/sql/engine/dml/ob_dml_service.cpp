@@ -1950,6 +1950,8 @@ int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
           LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
                     K(tablet_loc), K(tablet_ids),
                     KPC(dml_rtdef.check_row_), KPC(dml_rtdef.check_location_));
+          LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret), K(table_schema->get_schema_version()), K(dml_ctdef.das_base_ctdef_.schema_version_),
+                    KPC(tmp_location), KPC(table_schema));
         }
       }
     }
