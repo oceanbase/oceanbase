@@ -391,7 +391,7 @@ int ObAllVirtualProxySchema::inner_open()
         const ObString &table_name = input_table_names_.at(i);
         const ObTabletID &tablet_id = tablet_ids_.at(i);
         if (i != 0) {
-          if (OB_FAIL(sql.append_fmt(" AND"))) {
+          if (OB_FAIL(sql.append_fmt(" OR"))) {
             LOG_WARN("fail to append_fmt", K(ret));
           }
         }
