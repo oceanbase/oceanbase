@@ -1750,20 +1750,44 @@ int ObTabletCreateDeleteHelper::ensure_skip_create_all_tablets_safe(
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
+  ObSArray<int64_t> skip_idx;
+
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablets_.count(); ++i) {
     const ObCreateTabletInfo &info = arg.tablets_.at(i);
     const ObTabletID &data_tablet_id = info.data_tablet_id_;
-    if (is_mixed_tablets(info) || is_pure_data_tablets(info)) {
+    if (is_contain(skip_idx, i)) {
+      // do nothing
+      LOG_INFO("pure aux tablet info should be skipped", K(ret), K(info));
+    } else if (is_mixed_tablets(info) || is_pure_data_tablets(info)) {
       // data tablet already checked, can ignore
-    } else if (OB_FAIL(ls_.replay_get_tablet(data_tablet_id, log_ts, tablet_handle))) {
-      if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
-        LOG_WARN("failed to replay get tablet", K(ret), K(data_tablet_id), K(log_ts));
-      } else if (OB_TABLET_NOT_EXIST == ret) {
-        // data tablet is deleted after log_ts of this transaction, safe to skip creation
-        ret = OB_SUCCESS;
+    } else if (is_pure_aux_tablets(info) || is_pure_hidden_tablets(info)) {
+      if (is_pure_hidden_tablets(info)) {
+        // If hidden tablets and related lob tablets are created simultaneously,
+        // upper layer ensures that hidden tablet info occurs before lob tablets(as aux tablet info).
+        // So here we only need to find aux info which is related to hidden tablets,
+        // and the related aux tablet info will be skipped later.
+        for (int64_t j = 0; OB_SUCC(ret) && j < info.tablet_ids_.count(); ++j) {
+          int64_t aux_idx = -1;
+          if (find_related_aux_info(arg, info.tablet_ids_.at(j), aux_idx)) {
+            if (OB_FAIL(skip_idx.push_back(aux_idx))) {
+              LOG_WARN("failed to push back skip idx", K(ret), K(aux_idx));
+            }
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ls_.replay_get_tablet(data_tablet_id, log_ts, tablet_handle))) {
+        if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
+          LOG_WARN("failed to replay get tablet", K(ret), K(data_tablet_id), K(log_ts));
+        } else if (OB_TABLET_NOT_EXIST == ret) {
+          // data tablet is deleted after log_ts of this transaction, safe to skip creation
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
+
   return ret;
 }
 
