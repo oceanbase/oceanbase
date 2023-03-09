@@ -52,7 +52,8 @@ public:
   }
   virtual bool is_inited() const;
   int check_table_exist(const ObITable::TableKey &table_key, bool &is_exist) const;
-  int check_major_macro_block_exist(const int64_t data_version, const int64_t data_seq, bool &is_exist) const;
+  int check_major_macro_block_exist(
+      const ObITable::TableKey &table_key, const int64_t data_version, const int64_t data_seq, bool &is_exist) const;
 
   TO_STRING_KV(K_(is_inited));
 
@@ -70,8 +71,8 @@ private:
       const ObITable::TableKey &table_key, const common::ObIArray<ObBackupTableMacroIndex> &index_list);
   int init_one_file(const ObString &path, const ObString &storage_info);
   int get_table_key_ptr(const ObITable::TableKey &table_key, const ObITable::TableKey *&table_key_ptr);
-  int get_macro_index_list_(
-      const int64_t data_version, const common::ObArray<ObBackupTableMacroIndex> *&index_list) const;
+  int get_macro_index_list_(const ObITable::TableKey &table_key, const int64_t data_version,
+      const common::ObArray<ObBackupTableMacroIndex> *&index_list) const;
 
 private:
   static const int64_t BUCKET_SIZE = 100000;  // 10w

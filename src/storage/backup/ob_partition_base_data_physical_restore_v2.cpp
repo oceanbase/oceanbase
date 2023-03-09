@@ -2224,7 +2224,7 @@ int ObPhyRestoreMacroIndexStoreV2::check_table_exist(const ObITable::TableKey &t
 }
 
 int ObPhyRestoreMacroIndexStoreV2::check_major_macro_block_exist(
-    const int64_t data_version, const int64_t data_seq, bool &is_exist) const
+    const ObITable::TableKey &table_key, const int64_t data_version, const int64_t data_seq, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
   is_exist = false;
@@ -2235,7 +2235,7 @@ int ObPhyRestoreMacroIndexStoreV2::check_major_macro_block_exist(
   } else if (data_version < 0 || data_seq < 0) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get invalid args", K(ret), K(data_version), K(data_seq));
-  } else if (OB_FAIL(get_macro_index_list_(data_version, index_list))) {
+  } else if (OB_FAIL(get_macro_index_list_(table_key, data_version, index_list))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       STORAGE_LOG(INFO, "macro index not exist, may be empty sstable", K(ret), K(data_version), K(data_seq));
@@ -2248,7 +2248,8 @@ int ObPhyRestoreMacroIndexStoreV2::check_major_macro_block_exist(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < index_list->count(); ++i) {
       const ObBackupTableMacroIndex &index = index_list->at(i);
-      if (data_version == index.data_version_ && data_seq == index.data_seq_) {
+      if (table_key.table_id_ == index.table_key_ptr_->table_id_ && data_version == index.data_version_ &&
+          data_seq == index.data_seq_) {
         is_exist = true;
         break;
       }
@@ -2257,7 +2258,7 @@ int ObPhyRestoreMacroIndexStoreV2::check_major_macro_block_exist(
   return ret;
 }
 
-int ObPhyRestoreMacroIndexStoreV2::get_macro_index_list_(
+int ObPhyRestoreMacroIndexStoreV2::get_macro_index_list_(const ObITable::TableKey &table_key,
     const int64_t data_version, const common::ObArray<ObBackupTableMacroIndex> *&index_list) const
 {
   int ret = OB_SUCCESS;
@@ -2269,8 +2270,10 @@ int ObPhyRestoreMacroIndexStoreV2::get_macro_index_list_(
     STORAGE_LOG(WARN, "macro index store do not init", K(ret));
   } else {
     for (MacroIndexMap::const_iterator iter = index_map_.begin(); iter != index_map_.end() && !found; ++iter) {
-      const ObITable::TableKey &table_key = iter->first;
-      if (table_key.version_.version_ < data_version) {
+      const ObITable::TableKey &tmp_table_key = iter->first;
+      if (tmp_table_key.version_.version_ < data_version) {
+        // do nothing
+      } else if (table_key.table_id_ != tmp_table_key.table_id_) {
         // do nothing
       } else {
         index_list = iter->second;

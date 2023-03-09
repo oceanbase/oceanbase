@@ -3147,7 +3147,7 @@ int ObBackupPhysicalPGCtx::check_major_macro_block_exist(const ObITable::TableKe
   if (OB_UNLIKELY(!macro_index_store.is_inited() || !table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(macro_index_store), K(table_key));
-  } else if (OB_FAIL(macro_index_store.check_major_macro_block_exist(data_version, data_seq, is_exist))) {
+  } else if (OB_FAIL(macro_index_store.check_major_macro_block_exist(table_key, data_version, data_seq, is_exist))) {
     STORAGE_LOG(WARN, "failed to check table exist", K(ret), K(table_key), K(data_version), K(data_seq));
   }
   return ret;
