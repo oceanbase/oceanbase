@@ -218,7 +218,7 @@ int ObLogMetaManager::get_table_meta(
             // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("add_and_get_table_meta_ fail", KR(ret), K(tenant_id),
-                  K(global_schema_version),
+                  K(global_schema_version), K(meta_info),
                   "table_name", table_schema->get_table_name(),
                   "table_id", table_schema->get_table_id());
             }
@@ -280,7 +280,7 @@ int ObLogMetaManager::get_table_meta(
           // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("add_and_get_table_meta_ fail", KR(ret), K(tenant_id),
-                K(global_schema_version),
+                K(global_schema_version), K(meta_info),
                 "table_name", table_schema->get_table_name(),
                 "table_id", table_schema->get_table_id());
           }
@@ -498,6 +498,7 @@ int ObLogMetaManager::get_meta_info_(MetaMapType &meta_map,
 
         if (OB_SUCC(ret)) {
           meta_info = tmp_meta_info;
+          LOG_TRACE("insert meta_info into meta_map succ", K(key), K(meta_info));
         } else {
           tmp_meta_info->~MetaInfoType();
           allocator_.free(static_cast<void*>(tmp_meta_info));
@@ -509,6 +510,8 @@ int ObLogMetaManager::get_meta_info_(MetaMapType &meta_map,
             } else if (OB_ISNULL(meta_info)) {
               LOG_ERROR("get meta info from meta_map fail", KR(ret), K(meta_info));
               ret = OB_ERR_UNEXPECTED;
+            } else {
+              LOG_TRACE("get meta_info from meta_map succ", K(key), K(meta_info));
             }
           } else {
             LOG_ERROR("insert meta info into map fail", KR(ret), K(key));
@@ -519,6 +522,7 @@ int ObLogMetaManager::get_meta_info_(MetaMapType &meta_map,
       LOG_ERROR("get meta info from map fail", KR(ret), K(key));
     } else {
       // OB_SUCCESS == ret
+      LOG_TRACE("get meta_info from meta_map succ", K(key), K(meta_info));
     }
   }
 
@@ -588,7 +592,7 @@ int ObLogMetaManager::add_and_get_table_meta_(
       if (OB_FAIL(build_table_meta_(table_schema, schema_mgr, table_meta, stop_flag))) {
         // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
         if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("build_table_meta_ fail", KR(ret), KP(table_schema));
+          LOG_ERROR("build_table_meta_ fail", K(version), K(meta_info), KR(ret), KP(table_schema));
         }
       } else if (OB_FAIL(meta_info->set(version, table_meta))) {
         LOG_ERROR("set meta info meta info fail", KR(ret), K(version), KP(table_meta));

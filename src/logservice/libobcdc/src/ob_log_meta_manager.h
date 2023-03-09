@@ -210,6 +210,8 @@ private:
     MetaInfo();
     ~MetaInfo();
 
+    TO_STRING_KV(K_(num), K_(head), K_(tail));
+
     int get(const int64_t target_version, Type *&meta);
     int set(const int64_t version, Type *meta);
   };

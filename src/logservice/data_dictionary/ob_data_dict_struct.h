@@ -428,6 +428,7 @@ public:
       K_(tenant_id),
       K_(database_id),
       K_(table_id),
+      K_(schema_version),
       K_(table_name),
       K_(table_type),
       "tablet_count", tablet_id_arr_.count(),

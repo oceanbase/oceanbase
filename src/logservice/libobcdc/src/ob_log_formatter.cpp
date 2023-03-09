@@ -638,7 +638,7 @@ int ObLogFormatter::handle_dml_stmt_with_dict_schema_(
         br.set_is_valid(false);
         ret = OB_SUCCESS;
       } else if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("set_meta_info_ fail", KR(ret), K(table_schema), K(db_schema_info), K(br),
+        LOG_ERROR("set_meta_info_ fail", KR(ret), K(tenant_id), K(table_schema), K(db_schema_info), K(br),
             "compat_mode", print_compat_mode(compat_mode));
       }
     } else if (OB_FAIL(format_row_(
