@@ -1037,6 +1037,8 @@ int ObSSTableIndexBuilder::do_check_and_rewrite_sstable(ObBlockInfo &block_info)
   } else if (OB_FAIL(parse_macro_header(read_handle.get_buffer(), read_handle.get_data_size(), macro_header))) {
     STORAGE_LOG(WARN, "fail to parse macro header", K(ret));
   } else {
+    roots_[0]->meta_block_offset_ = macro_header.fixed_header_.meta_block_offset_;
+    roots_[0]->meta_block_size_ = macro_header.fixed_header_.meta_block_size_;
     const int64_t align_size = upper_align(
       macro_header.fixed_header_.meta_block_offset_ + macro_header.fixed_header_.meta_block_size_,
       DIO_READ_ALIGN_SIZE);
