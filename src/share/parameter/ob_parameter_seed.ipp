@@ -31,7 +31,7 @@ DEF_STR(redundancy_level, OB_CLUSTER_PARAMETER, "NORMAL",
         "HIGH: tolerate two disk failure if disk count is enough",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 // background information about disk space configuration
-// https://yuque.antfin-inc.com/ob/rootservice/buzmfz
+// ObServerUtils::get_data_disk_info_in_config()
 DEF_CAP(datafile_size, OB_CLUSTER_PARAMETER, "0", "[0M,)", "size of the data file. Range: [0, +∞)",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(datafile_disk_percentage, OB_CLUSTER_PARAMETER, "0", "[0,99]",

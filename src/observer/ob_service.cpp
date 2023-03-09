@@ -494,7 +494,7 @@ int ObService::get_min_sstable_schema_version(
     for (int i = 0; OB_SUCC(ret) && i < arg.tenant_id_arg_list_.size(); ++i) {
       // The minimum schema_version used by storage will increase with the major version,
       // storage only need to keep schema history used by a certain number major version.
-      // For storage, there is no need to the server level statistics: https://yuque.antfin-inc.com/ob/rootservice/feqqfr
+      // For storage, there is no need to the server level statistics.
       // min_schema_version = scheduler.get_min_schema_version(arg.tenant_id_arg_list_.at(i));
       int tmp_ret = OB_SUCCESS;
       const uint64_t tenant_id = arg.tenant_id_arg_list_.at(i);
@@ -1840,7 +1840,8 @@ int ObService::detect_master_rs_ls(
     }
   } else if (replica.is_strong_leader()) {
     // case 2 : replica is leader, do not use in_service to check whether it is leader or not
-    //          use in_service could lead to bad case: https://yuque.antfin.com/ob/rootservice/pbw2qw
+    //          use in_service could lead to bad case:
+    //          For more info, to see docs on yuque rootservice/pbw2qw
     if (OB_FAIL(generate_master_rs_ls_info_(replica, ls_info))) {
       LOG_WARN("generate master rs ls info failed", KR(ret), K(replica), K(ls_info));
     } else if (OB_FAIL(result.init(ObRole::LEADER, master_rs, replica, ls_info))) {

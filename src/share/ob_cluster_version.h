@@ -177,7 +177,6 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 // 1. After 4.0, each cluster_version is corresponed to a data version.
 // 2. cluster_version and data_version is not compariable.
 // 3. TODO: If you update data_version below, please update DATA_CURRENT_VERSION & ObUpgradeChecker too.
-// For more detail: https://yuque.antfin-inc.com/ob/rootservice/xywr36
 #define DATA_VERSION_4_0_0_0 (oceanbase::common::cal_version(4, 0, 0, 0))
 #define DATA_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
 
