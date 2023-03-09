@@ -35,6 +35,7 @@ enum LogConfigChangeCmdType {
   REMOVE_LEARNER_CMD,
   SWITCH_TO_ACCEPTOR_CMD,
   SWITCH_TO_LEARNER_CMD,
+  FORCE_SINGLE_MEMBER_CMD,
 };
 
 inline const char *log_config_change_cmd2str(const LogConfigChangeCmdType state)

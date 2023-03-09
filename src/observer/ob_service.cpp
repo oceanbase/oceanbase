@@ -2581,6 +2581,51 @@ int ObService::get_ls_sync_scn(
   return ret;
 }
 
+int ObService::force_set_ls_as_single_replica(
+    const ObForceSetLSAsSingleReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_svr = nullptr;
+  LOG_INFO("force_set_ls_as_single_replica", K(arg));
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    ls_svr = MTL(ObLSService*);
+    logservice::ObLogService *log_ls_svr = MTL(logservice::ObLogService*);
+    ObLS *ls = nullptr;
+    ObLSHandle handle;
+    logservice::ObLogHandler *log_handler = NULL;
+    logservice::ObLogRestoreHandler *restore_handler = NULL;
+    ObLSID ls_id = arg.get_ls_id();
+    if (OB_ISNULL(ls_svr) || OB_ISNULL(log_ls_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "should not be null", KR(ret), KP(ls_svr), KP(log_ls_svr));
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+      COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "ls should not be null", KR(ret), K(ls_id));
+    } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log_handler is null", KR(ret), K(ls_id), KP(ls));
+    } else if (OB_FAIL(log_handler->force_set_as_single_replica())) {
+      LOG_WARN("failed to force_set_as_single_replica", KR(ret), K(ls_id), KPC(ls));
+    }
+  }
+  LOG_INFO("finish force_set_ls_as_single_replica", KR(ret), K(arg));
+  return ret;
+}
+
 int ObService::refresh_tenant_info(
     const ObRefreshTenantInfoArg &arg,
     ObRefreshTenantInfoRes &result)

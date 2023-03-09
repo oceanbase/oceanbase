@@ -67,6 +67,7 @@ enum LogConfigChangeType
   DEGRADE_ACCEPTOR_TO_LEARNER,
   UPGRADE_LEARNER_TO_ACCEPTOR,
   STARTWORKING,
+  FORCE_SINGLE_MEMBER,
 };
 
 typedef common::ObArrayHashMap<common::ObAddr, common::ObRegion> LogMemberRegionMap;
@@ -115,12 +116,17 @@ inline bool is_upgrade_or_degrade(const LogConfigChangeType type)
 
 inline bool is_use_replica_num_args(const LogConfigChangeType type)
 {
-  return ADD_MEMBER == type || REMOVE_MEMBER == type || CHANGE_REPLICA_NUM == type;
+  return ADD_MEMBER == type || REMOVE_MEMBER == type || CHANGE_REPLICA_NUM == type || FORCE_SINGLE_MEMBER == type;
+}
+
+inline bool need_exec_on_leader_(const LogConfigChangeType type)
+{
+  return (FORCE_SINGLE_MEMBER != type);
 }
 
 inline bool is_may_change_replica_num(const LogConfigChangeType type)
 {
-  return is_add_member_list(type) || is_remove_member_list(type) || CHANGE_REPLICA_NUM == type;
+  return is_add_member_list(type) || is_remove_member_list(type) || CHANGE_REPLICA_NUM == type || FORCE_SINGLE_MEMBER == type;
 }
 
 struct LogConfigChangeArgs
@@ -368,7 +374,7 @@ private:
                                LogConfigVersion &init_config_version);
   bool can_memberlist_majority_(const int64_t new_member_list_len, const int64_t new_replica_num) const;
   int check_config_change_args_(const LogConfigChangeArgs &args, bool &is_already_finished) const;
-  int check_config_version_matches_state_(const LogConfigVersion &config_version) const;
+  int check_config_version_matches_state_(const LogConfigChangeType &type, const LogConfigVersion &config_version) const;
   int generate_new_config_info_(const int64_t proposal_id,
                                 const LogConfigChangeArgs &args,
                                 LogConfigInfo &new_config_info) const;

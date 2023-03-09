@@ -198,6 +198,8 @@ public:
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
                          const int64_t timeout_us);
+  // @brief: force set self as single member
+  int force_set_as_single_replica();
 
   int get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                          common::GlobalLearnerList &degraded_list) const;
