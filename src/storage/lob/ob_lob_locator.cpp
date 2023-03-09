@@ -48,6 +48,12 @@ void ObLobLocatorHelper::reset()
   is_inited_ = false;
 }
 
+void ObLobLocatorHelper::reuse()
+{
+  locator_allocator_.reuse();
+  rowid_objs_.reuse();
+}
+
 int ObLobLocatorHelper::init(const share::schema::ObTableParam &table_param,
                              const int64_t snapshot_version)
 {

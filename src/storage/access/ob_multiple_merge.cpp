@@ -321,6 +321,7 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
     if (need_padding_) {
       padding_allocator_.reuse();
     }
+    reuse_lob_locator();
     while (OB_SUCC(ret)) {
       if (access_ctx_->is_limit_end()) {
         ret = OB_ITER_END;
@@ -444,6 +445,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     if (need_padding_) {
       padding_allocator_.reuse();
     }
+    reuse_lob_locator();
     while (OB_SUCC(ret) && !vector_store->is_end()) {
       bool can_batch = false;
       if (access_ctx_->is_limit_end()) {
@@ -548,6 +550,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
       int64_t batch_size = max(1, access_param_->op_->get_batch_size());
       access_param_->op_->get_eval_ctx().reuse(batch_size);
     }
+    reuse_lob_locator();
     while (OB_SUCC(ret) && !agg_row_store->is_end()) {
       bool can_batch = false;
       // clear evaluated flag for every row
@@ -1266,7 +1269,6 @@ int ObMultipleMerge::read_lob_columns(blocksstable::ObDatumRow &row)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid col count", K(row), KPC(out_cols_param));
   } else {
-    lob_reader_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < row.count_; ++i) {
       blocksstable::ObStorageDatum &datum = row.storage_datums_[i];
       if (out_cols_param->at(i)->get_meta_type().is_lob_v2()) {
@@ -1285,5 +1287,14 @@ bool ObMultipleMerge::need_read_lob_columns(const blocksstable::ObDatumRow &row)
 {
   return (has_lob_column_ && row.row_flag_.is_exist());
 }
+
+void ObMultipleMerge::reuse_lob_locator()
+{
+  if (NULL != access_ctx_->lob_locator_helper_) {
+    access_ctx_->lob_locator_helper_->reuse();
+  }
+  lob_reader_.reuse();
+}
+
 }
 }

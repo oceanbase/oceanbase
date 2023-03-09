@@ -26,6 +26,7 @@ public:
   ObLobLocatorHelper();
   virtual ~ObLobLocatorHelper();
   void reset();
+  void reuse();
   int init(const share::schema::ObTableParam &table_param, const int64_t snapshot_version);
   int fill_lob_locator(blocksstable::ObDatumRow &row, bool is_projected_row,
                         const ObTableAccessParam &access_param);

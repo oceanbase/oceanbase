@@ -112,6 +112,7 @@ private:
                      ObTableAccessContext &access_ctx);
   int read_lob_columns(blocksstable::ObDatumRow &row);
   bool need_read_lob_columns(const blocksstable::ObDatumRow &row);
+  void reuse_lob_locator();
 protected:
   common::ObArenaAllocator padding_allocator_;
   MergeIterators iters_;
