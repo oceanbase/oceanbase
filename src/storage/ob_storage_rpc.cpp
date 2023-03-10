@@ -1025,6 +1025,8 @@ int ObFetchTabletInfoP::process()
     ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
     ObCopyTabletInfoObProducer producer;
     ObCopyTabletInfo tablet_info;
+    const int64_t MAX_TABLET_NUM = 100;
+    int64_t tablet_count = 0;
     LOG_INFO("start to fetch tablet info", K(arg_));
 
     last_send_time_ = ObTimeUtility::current_time();
@@ -1072,8 +1074,19 @@ int ObFetchTabletInfoP::process()
           } else {
             STORAGE_LOG(WARN, "failed to get next tablet meta info", K(ret));
           }
+        } else if (tablet_count >= MAX_TABLET_NUM) {
+          if (this->result_.get_position() > 0 && OB_FAIL(flush_and_wait())) {
+            LOG_WARN("failed to flush and wait", K(ret), K(tablet_info));
+          } else {
+            tablet_count = 0;
+          }
+        }
+
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(fill_data(tablet_info))) {
           STORAGE_LOG(WARN, "fill to fill tablet info", K(ret), K(tablet_info));
+        } else {
+          tablet_count++;
         }
       }
       if (OB_SUCC(ret)) {
