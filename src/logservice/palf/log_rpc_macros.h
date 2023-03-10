@@ -85,6 +85,7 @@
                 .by(tenant_id)                                                                                \
                 .group_id(share::OBCG_CLOG)                                                                   \
                 .compressed(options.transport_compress_func_)                                                 \
+                .dst_cluster_id(src_cluster_id_)                                                              \
                 .post_packet(pkt, &cb);                                                                       \
     } else {                                                                                                  \
       ret = this->to(dst)                                                                                     \
@@ -93,6 +94,7 @@
                 .max_process_handler_time(100 * 1000)                                                         \
                 .by(tenant_id)                                                                                \
                 .group_id(share::OBCG_CLOG)                                                                   \
+                .dst_cluster_id(src_cluster_id_)                                                              \
                 .post_packet(pkt, &cb);                                                                       \
     }                                                                                                         \
     return ret;                                                                                               \
@@ -112,6 +114,7 @@
               .max_process_handler_time(100 * 1000)                                                           \
               .by(tenant_id)                                                                                  \
               .group_id(share::OBCG_ELECTION)                                                                 \
+              .dst_cluster_id(src_cluster_id_)                                                                \
               .post_packet(pkt, &cb);                                                                         \
     return ret;                                                                                               \
   }
@@ -138,6 +141,7 @@
                 .by(tenant_id)                                                                                      \
                 .group_id(share::OBCG_CLOG)                                                                         \
                 .compressed(options.transport_compress_func_)                                                       \
+                .dst_cluster_id(src_cluster_id_)                                                                    \
                 .NAME(pkt, resp);                                                                                   \
     } else {                                                                                                        \
       ret = this->to(dst)                                                                                           \
@@ -146,6 +150,7 @@
                 .max_process_handler_time(100 * 1000)                                                               \
                 .by(tenant_id)                                                                                      \
                 .group_id(share::OBCG_CLOG)                                                                         \
+                .dst_cluster_id(src_cluster_id_)                                                                    \
                 .NAME(pkt, resp);                                                                                   \
     }                                                                                                               \
     return ret;                                                                                                     \
