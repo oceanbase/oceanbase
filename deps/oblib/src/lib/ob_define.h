@@ -33,7 +33,6 @@ namespace common
 // All objects have common ID Type, including Table/Partition and so on.
 // Define 'uint64_t' as Object ID Type for code-compatibility temporarily.
 // TODO: Use 'int64_t' instead when all objects are ready.
-// See: https://yuque.antfin-inc.com/ob/rootservice/lvnlgi
 
 // Common Object ID Type
 typedef uint64_t ObObjectID;
@@ -853,8 +852,6 @@ const int64_t OB_SCHEMA_CODE_VERSION = 1;
  *
  * OBJECT_ID FOR INNER OBJECTS (0, 500000)
  *
- * For more details: https://yuque.antfin-inc.com/ob/product_functionality_review/fgcxak
- *
  * To avolid confict, border for each range should not be used.
  *
  * ################################################################################
@@ -1449,7 +1446,6 @@ OB_INLINE uint64_t combine_sequence_id(int64_t rootservice_epoch, uint64_t pure_
  * 1) If tenant_id = OB_SYS_TENANT_ID, it's sys tenant.
  * 2) If tenant_id is odd, it's meta tenant.
  * 3) If tenant_id is even, it't user tenant.
- * https://yuque.antfin-inc.com/ob/rootservice/cnxdv7#pIAUC
  */
 OB_INLINE bool is_sys_tenant(const uint64_t tenant_id)
 {
