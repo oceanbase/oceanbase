@@ -452,6 +452,39 @@ def check_ddl_task_execute(query_cur):
     fail_list.append("There are DDL task in progress")
   logging.info('check ddl task execut status success')
 
+# 10. 检查无备份任务
+def check_backup_job_exist(query_cur):
+  # Backup jobs cannot be in-progress during upgrade.
+  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_BACKUP_JOBS""")
+  if len(results) != 1 or len(results[0]) != 1:
+    fail_list.append('failed to backup job cnt')
+  elif results[0][0] != 0:
+    fail_list.append("""still has backup job, upgrade is not allowed temporarily""")
+  else:
+    logging.info('check backup job success')
+
+# 11. 检查无归档任务
+def check_archive_job_exist(query_cur):
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+
+    # Archive jobs cannot be in-progress before upgrade from 4.0.
+    if min_cluster_version < get_version("4.1.0.0"):
+      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_ARCHIVELOG where status!='STOP'""")
+      if len(results) != 1 or len(results[0]) != 1:
+        fail_list.append('failed to archive job cnt')
+      elif results[0][0] != 0:
+        fail_list.append("""still has archive job, upgrade is not allowed temporarily""")
+      else:
+        logging.info('check archive job success')
+
 # last check of do_check, make sure no function execute after check_fail_list
 def check_fail_list():
   if len(fail_list) != 0 :
@@ -486,6 +519,8 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_restore_job_exist(query_cur)
       check_tenant_primary_zone(query_cur)
       check_ddl_task_execute(query_cur)
+      check_backup_job_exist(query_cur)
+      check_archive_job_exist(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)
