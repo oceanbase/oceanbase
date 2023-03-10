@@ -97,8 +97,9 @@ private:
   void cleanup_unlock();
   void destroy();
   bool is_commit_success_unlock() const;
+public:
+  static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 16;
 private:
-  static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 64;
   bool is_inited_;
   share::SCN success_start_scn_;
   share::ObLSID ls_id_;

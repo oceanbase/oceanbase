@@ -312,7 +312,7 @@ int ObDDLTableMergeTask::init(const ObDDLTableMergeDagParam &ddl_dag_param)
 int ObDDLTableMergeTask::process()
 {
   int ret = OB_SUCCESS;
-  int64_t MAX_DDL_SSTABLE = 128;
+  int64_t MAX_DDL_SSTABLE = ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE * 0.5;
 #ifdef ERRSIM
   if (0 != GCONF.errsim_max_ddl_sstable_count) {
     MAX_DDL_SSTABLE = GCONF.errsim_max_ddl_sstable_count;
