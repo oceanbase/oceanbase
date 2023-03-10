@@ -63,12 +63,13 @@ public:
   int get_next_row(ObLobMetaInfo &row);
   int get_next_row(ObLobMetaScanResult &result);
   uint64_t get_cur_pos() { return cur_pos_; }
+  uint64_t get_cur_byte_pos() { return cur_byte_pos_; }
   ObLobMetaInfo get_cur_info() { return cur_info_; }
   void reset();
   bool is_range_begin(const ObLobMetaInfo& info);
   bool is_range_end(const ObLobMetaInfo& info);
   bool is_range_over(const ObLobMetaInfo& info);
-  TO_STRING_KV(K_(cur_pos), K_(cur_info));
+  TO_STRING_KV(K_(cur_pos), K_(cur_byte_pos), K_(cur_info));
 private:
   bool is_in_range(const ObLobMetaInfo& info);
 private:
@@ -77,6 +78,7 @@ private:
   ObLobAccessParam param_;
   ObTableScanParam scan_param_;
   uint64_t cur_pos_;
+  uint64_t cur_byte_pos_;
   ObLobMetaInfo cur_info_;
 };
 
