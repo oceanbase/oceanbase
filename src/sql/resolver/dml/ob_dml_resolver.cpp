@@ -7823,7 +7823,6 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
     common::ObAccuracy accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[1][obj_type];
     common::ObLengthSemantics length_semantics = parse_tree.length_semantics_;
     accuracy.set_length_semantics(length_semantics);
-
     ObObjTypeClass dest_tc = ob_obj_type_class(obj_type);
 
     if (ObStringTC == dest_tc) {
@@ -7835,7 +7834,7 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
     } else if (ObRawTC == dest_tc) {
       accuracy.set_length(parse_tree.int32_values_[1]);
     } else if (ObTextTC == dest_tc || ObJsonTC == dest_tc) {
-      accuracy.set_length(parse_tree.int32_values_[1] < 0 ?
+      accuracy.set_length(parse_tree.int32_values_[1] <= 0 ?
           ObAccuracy::DDL_DEFAULT_ACCURACY[obj_type].get_length() : parse_tree.int32_values_[1]);
     } else if (ObIntervalTC == dest_tc) {
       if (OB_UNLIKELY(!ObIntervalScaleUtil::scale_check(parse_tree.int16_values_[3]) ||
@@ -7856,6 +7855,8 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
         accuracy.set_precision(parse_tree.int16_values_[2]);
         accuracy.set_scale(parse_tree.int16_values_[3]);
       } else if (ObIntType == obj_type) {
+        data_type.set_int();
+        accuracy = def_acc;
       } else {
         accuracy.set_precision(parse_tree.int16_values_[2]);
         accuracy.set_scale(parse_tree.int16_values_[3]);
