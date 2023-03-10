@@ -99,7 +99,7 @@ int ObTableLoadObjCaster::convert_obj(const ObObjType &expect_type, const ObObj 
   int ret = OB_SUCCESS;
   dest = &src;
   if (src.is_string_type() && !src.is_null() && lib::is_mysql_mode() && 0 == src.get_val_len() &&
-      !ob_is_string_tc(expect_type)) {
+      !ob_is_string_type(expect_type)) {
     dest = &zero_obj;
   } else if (src.is_string_type() && lib::is_oracle_mode() &&
              (src.is_null_oracle() || 0 == src.get_val_len())) {
