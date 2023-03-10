@@ -207,8 +207,9 @@ int ObTransformWinMagic::check_subquery_validity(
     } else if (OB_ISNULL(outer_param) || OB_ISNULL(inner_param)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("equal param have null", K(ret), K(outer_param), K(inner_param));
-    } else if (map_info.cond_map_.at(i) != OB_INVALID_ID) {
-      // existed in the main query
+    } else if (map_info.cond_map_.at(i) != OB_INVALID_ID &&
+               cond->get_expr_levels().has_member(subquery->get_current_level())) {
+      // existed in the main query and is correlated with current level
     } else if (!inner_param->same_as(*outer_param, &context)) {
       // self mapped condition (i.e. t1.c1 = t1'.c1)
       is_valid = false;
