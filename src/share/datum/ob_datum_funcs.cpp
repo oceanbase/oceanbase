@@ -127,7 +127,7 @@ ObDatumCmpFuncType ObDatumFuncs::get_nullsafe_cmp_func(const ObObjType type1, co
 bool ObDatumFuncs::is_string_type(const ObObjType type)
 {
   const ObObjTypeClass tc = OBJ_TYPE_TO_CLASS[type];
-  return (tc == ObStringTC || tc == ObRawTC || tc == ObTextTC || tc == ObEnumSetInnerTC);
+  return (tc == ObStringTC || tc == ObRawTC || tc == ObTextTC);
 }
 
 bool ObDatumFuncs::is_json(const ObObjType type)
