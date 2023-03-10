@@ -618,7 +618,7 @@ int ObDDLRedoLogWriter::write(
   } else if (OB_ISNULL(cb = op_alloc(ObDDLMacroBlockClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_FAIL(cb->init(ls_id, log.get_redo_info(), macro_block_id, lock_tid, ddl_kv_mgr_handle))) {
+  } else if (OB_FAIL(cb->init(ls_id, log.get_redo_info(), macro_block_id, ddl_kv_mgr_handle))) {
     LOG_WARN("init ddl clog callback failed", K(ret));
   } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("failed to serialize log base header", K(ret));

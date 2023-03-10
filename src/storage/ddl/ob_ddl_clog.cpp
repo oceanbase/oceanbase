@@ -138,7 +138,7 @@ void ObDDLStartClogCb::try_release()
 
 ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
   : is_inited_(false), status_(), ls_id_(), redo_info_(), macro_block_id_(),
-    arena_("ddl_clog_cb", OB_MALLOC_BIG_BLOCK_SIZE), data_buffer_lock_(), is_data_buffer_freed_(false), lock_tid_(0), ddl_kv_mgr_handle_()
+    arena_("ddl_clog_cb", OB_MALLOC_BIG_BLOCK_SIZE), data_buffer_lock_(), is_data_buffer_freed_(false), ddl_kv_mgr_handle_()
 {
 
 }
@@ -146,14 +146,13 @@ ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
 int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
                                 const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                                 const blocksstable::MacroBlockId &macro_block_id,
-                                const uint32_t lock_tid,
                                 ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid() || 0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid() || !ddl_kv_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
   } else {
@@ -169,7 +168,6 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
       redo_info_.start_scn_ = redo_info.start_scn_;
       ls_id_ = ls_id;
       macro_block_id_ = macro_block_id;
-      lock_tid_ = lock_tid;
       ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
     }
   }
@@ -224,7 +222,6 @@ int ObDDLMacroBlockClogCb::on_success()
 
 int ObDDLMacroBlockClogCb::on_failure()
 {
-  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
   status_.set_state(STATE_FAILED);
   try_release();
   return OB_SUCCESS;

@@ -107,7 +107,6 @@ public:
   int init(const share::ObLSID &ls_id,
            const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
            const blocksstable::MacroBlockId &macro_block_id,
-           const uint32_t lock_tid,
            ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   virtual int on_success() override;
   virtual int on_failure() override;
@@ -125,7 +124,6 @@ private:
   ObArenaAllocator arena_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
-  uint32_t lock_tid_;
   ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };
 
