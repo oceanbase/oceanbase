@@ -594,13 +594,13 @@ int ObTableInsertUp::calc_insert_row(ObExecContext& ctx, ObExprCtx& expr_ctx, co
     expr_ctx.calc_buf_->reset();
     update_ctx->reset_update_row();
     if (OB_FAIL(copy_cur_row(*update_ctx, insert_row))) {
-      LOG_WARN("fail to copy row", K(ret), K(*insert_row));
+      LOG_WARN("fail to copy row", K(ret));
     } else if (OB_ISNULL(insert_row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("copy cur row fail", K(ret), K(insert_row));
-    } else if (OB_FAIL(calculate_row(expr_ctx, *const_cast<ObNewRow*>(insert_row))) ||
-               OB_FAIL(validate_row(expr_ctx, expr_ctx.column_conv_ctx_, *const_cast<ObNewRow*>(insert_row)))) {
-      LOG_WARN("calculate or validate row failed", K(ret), KPC(insert_row));
+    } else if (OB_FAIL(calculate_row(expr_ctx, *const_cast<ObNewRow *>(insert_row))) ||
+               OB_FAIL(validate_row(expr_ctx, expr_ctx.column_conv_ctx_, *const_cast<ObNewRow *>(insert_row)))) {
+      LOG_WARN("calculate or validate row failed", K(ret));
       int64_t err_col_idx = (expr_ctx.err_col_idx_) % column_ids_.count();
       log_user_error_inner(ret, err_col_idx, update_ctx->found_rows_ + 1, ctx);
     } else {
