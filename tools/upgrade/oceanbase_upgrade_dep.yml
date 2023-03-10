@@ -1,5 +1,5 @@
 # 描述oceanbase各个版本升级依赖关系
-# 参考https://yuque.antfin-inc.com/ob/release/ptw5y7
+# 参考文档 release/ptw5y7
 
 # 对于每一个正式发布的ob版本，在下面的yaml文档中添加一项，包括如下属性：
 #  * version: 待升级的版本，或者升级过程中经过的版本；一般用A.B.C的版本号，如果是A.B.C-D的形式，表示build号必须大于等于D
