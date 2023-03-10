@@ -3494,7 +3494,7 @@ OB_INLINE bool ObNumber::try_fast_add(ObNumber &l_num, ObNumber &r_num,
       }
     }
     res_desc.sign_ = POSITIVE;
-    res_desc.reserved_ = 0; // must assign 0 explicitly here, due to optimization in sql, https://work.aone.alibaba-inc.com/issue/40852179.
+    res_desc.reserved_ = 0; // must assign 0 explicitly here, due to optimization in sql.
   }
 
   return is_fast_panel;
