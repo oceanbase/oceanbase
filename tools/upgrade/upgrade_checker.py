@@ -398,13 +398,38 @@ def check_cluster_status(query_cur):
 
 # 5. 检查是否有异常租户(creating，延迟删除，恢复中)
 def check_tenant_status(query_cur):
-  (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
-  if len(results) != 1 or len(results[0]) != 1:
-    fail_list.append('results len not match')
-  elif 0 != results[0][0]:
-    fail_list.append('has abnormal tenant, should stop')
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
   else:
-    logging.info('check tenant status success')
+    min_cluster_version = get_version(results[0][0])
+
+    # check tenant schema
+    (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
+    if len(results) != 1 or len(results[0]) != 1:
+      fail_list.append('results len not match')
+    elif 0 != results[0][0]:
+      fail_list.append('has abnormal tenant, should stop')
+    else:
+      logging.info('check tenant status success')
+
+    # check tenant info
+    # 1. don't support standby tenant upgrade from 4.0.0.0
+    # 2. don't support restore tenant upgrade
+    sub_sql = ''
+    if min_cluster_version >= get_version("4.1.0.0"):
+      sub_sql = """ and tenant_role != 'STANDBY'"""
+    (desc, results) = query_cur.exec_query("""select count(*) as count from oceanbase.__all_virtual_tenant_info where tenant_role != 'PRIMARY' {0}""".format(sub_sql))
+    if len(results) != 1 or len(results[0]) != 1:
+      fail_list.append('results len not match')
+    elif 0 != results[0][0]:
+      fail_list.append('has abnormal tenant info, should stop')
+    else:
+      logging.info('check tenant info success')
 
 # 6. 检查无恢复任务
 def check_restore_job_exist(query_cur):

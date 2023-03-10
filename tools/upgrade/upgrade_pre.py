@@ -1905,13 +1905,38 @@
 #
 ## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
 #def check_tenant_status(query_cur):
-#  (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
-#  if len(results) != 1 or len(results[0]) != 1:
-#    fail_list.append('results len not match')
-#  elif 0 != results[0][0]:
-#    fail_list.append('has abnormal tenant, should stop')
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
 #  else:
-#    logging.info('check tenant status success')
+#    min_cluster_version = get_version(results[0][0])
+#
+#    # check tenant schema
+#    (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
+#    if len(results) != 1 or len(results[0]) != 1:
+#      fail_list.append('results len not match')
+#    elif 0 != results[0][0]:
+#      fail_list.append('has abnormal tenant, should stop')
+#    else:
+#      logging.info('check tenant status success')
+#
+#    # check tenant info
+#    # 1. don't support standby tenant upgrade from 4.0.0.0
+#    # 2. don't support restore tenant upgrade
+#    sub_sql = ''
+#    if min_cluster_version >= get_version("4.1.0.0"):
+#      sub_sql = """ and tenant_role != 'STANDBY'"""
+#    (desc, results) = query_cur.exec_query("""select count(*) as count from oceanbase.__all_virtual_tenant_info where tenant_role != 'PRIMARY' {0}""".format(sub_sql))
+#    if len(results) != 1 or len(results[0]) != 1:
+#      fail_list.append('results len not match')
+#    elif 0 != results[0][0]:
+#      fail_list.append('has abnormal tenant info, should stop')
+#    else:
+#      logging.info('check tenant info success')
 #
 ## 6. 检查无恢复任务
 #def check_restore_job_exist(query_cur):
@@ -2499,11 +2524,8 @@
 #
 ## 2 检查租户版本号
 #def check_data_version(cur, query_cur, timeout):
-#  # check compatible
-#  current_data_version = actions.get_current_data_version()
-#  actions.wait_parameter_sync(cur, True, "compatible", current_data_version, 10)
 #
-#  # check target_data_version/current_data_version except standby tenant
+#  # get tenant except standby tenant
 #  sql = "select tenant_id from oceanbase.__all_tenant except select tenant_id from oceanbase.__all_virtual_tenant_info where tenant_role = 'STANDBY'"
 #  (desc, results) = query_cur.exec_query(sql)
 #  if len(results) == 0:
@@ -2514,6 +2536,39 @@
 #  for index, row in enumerate(results):
 #    tenant_ids_str += """{0}{1}""".format((',' if index > 0 else ''), row[0])
 #
+#  # get server cnt
+#  sql = "select count(*) from oceanbase.__all_server";
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1 or len(results[0]) != 1:
+#    logging.warn('result cnt not match')
+#    raise e
+#  server_count = results[0][0]
+#
+#  # check compatible sync
+#  parameter_count = int(server_count) * int(tenant_count)
+#  current_data_version = actions.get_current_data_version()
+#  sql = """select count(*) as cnt from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value = '{0}' and tenant_id in ({1})""".format(current_data_version, tenant_ids_str)
+#  times = (timeout if timeout > 0 else 60) / 5
+#  while times >= 0:
+#    logging.info(sql)
+#    cur.execute(sql)
+#    result = cur.fetchall()
+#    if len(result) != 1 or len(result[0]) != 1:
+#      logging.exception('result cnt not match')
+#      raise e
+#    elif result[0][0] == parameter_count:
+#      logging.info("""'compatible' is sync, value is {0}""".format(current_data_version))
+#      break
+#    else:
+#      logging.info("""'compatible' is not sync, value should be {0}, expected_cnt should be {1}, current_cnt is {2}""".format(current_data_version, parameter_count, result[0][0]))
+#
+#    times -= 1
+#    if times == -1:
+#      logging.exception("""check compatible:{0} sync timeout""".format(current_data_version))
+#      raise e
+#    time.sleep(5)
+#
+#  # check target_data_version/current_data_version from __all_core_table
 #  int_current_data_version = actions.get_version(current_data_version)
 #  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
 #  (desc, results) = query_cur.exec_query(sql)
