@@ -24,7 +24,6 @@ namespace oceanbase
 namespace common
 {
 
-// 学习字符集推荐个网站 https://www.qqxiuzi.cn/daohang.htm
 // 我们目前的字符集实现参考MySQL，现在MySQL源码，进入strings目录，
 // 根据文件名后缀可以大体找到对应编码实现
 
@@ -84,7 +83,6 @@ enum ObCollationType
 
 // oracle 模式下字符集名称对应的 ID 值
 // https://docs.oracle.com/cd/B19306_01/server.102/b14200/functions095.htm
-// https://blog.csdn.net/guizicjj/article/details/4434088
 enum ObNlsCharsetId
 {
   CHARSET_INVALID_ID = 0,

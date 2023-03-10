@@ -28,7 +28,6 @@
  * 3. ObHKVTable
  * 4. ObTableServiceClient
  *
- * @see https://lark.alipay.com/ob-public/ob_nosql for the user guide.
  */
 namespace oceanbase
 {
