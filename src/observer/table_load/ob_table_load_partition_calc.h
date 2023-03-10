@@ -42,14 +42,14 @@ public:
 public:
   ObTableLoadPartitionCalc();
   int init(uint64_t tenant_id, uint64_t table_id);
-  int calc(ObTableLoadPartitionCalcContext &ctx) const;
+  int calc(ObTableLoadPartitionCalcContext &ctx);
 private:
-  int init_rowkey_index(const share::schema::ObTableSchema *table_schema,
+  int init_part_key_index(const share::schema::ObTableSchema *table_schema,
                         common::ObIAllocator &allocator);
   int get_row(ObTableLoadPartitionCalcContext &ctx, const table::ObTableLoadObjRow &obj_row, int32_t length, common::ObNewRow &part_row,
               common::ObIAllocator &allocator) const;
   int get_partition_by_row(common::ObIArray<common::ObNewRow> &part_rows,
-                           common::ObIArray<table::ObTableLoadPartitionId> &partition_ids) const;
+                           common::ObIArray<table::ObTableLoadPartitionId> &partition_ids);
 public:
   struct IndexAndType
   {
@@ -59,7 +59,7 @@ public:
     TO_STRING_KV(K_(index), KP_(column_schema));
   };
 public:
-  table::ObTableLoadArray<IndexAndType> rowkey_obj_index_;
+  table::ObTableLoadArray<IndexAndType> part_key_obj_index_;
   common::ObTimeZoneInfo tz_info_;
   ObTableLoadTimeConverter time_cvrt_;
   bool is_partition_with_autoinc_;
@@ -76,6 +76,7 @@ private:
   sql::ObSqlCtx sql_ctx_;
   sql::ObExecContext exec_ctx_;
   sql::ObTableLocation table_location_;
+  ObSchemaGetterGuard schema_guard_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadPartitionCalc);
 };

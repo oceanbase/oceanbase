@@ -215,7 +215,7 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
     ObTableLoadObjRow &obj_row = obj_rows.at(j);
     out_obj.set_null();
     const ObTableLoadPartitionCalc::IndexAndType &index_and_type =
-      coordinator_ctx_->partition_calc_.rowkey_obj_index_.at(
+      coordinator_ctx_->partition_calc_.part_key_obj_index_.at(
         coordinator_ctx_->partition_calc_.partition_with_autoinc_idx_);
     const ObColumnSchemaV2 *column_schema = index_and_type.column_schema_;
     const int64_t obj_index = index_and_type.index_;
