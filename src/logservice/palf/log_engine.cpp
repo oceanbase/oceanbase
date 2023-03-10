@@ -777,7 +777,7 @@ int LogEngine::update_manifest(const block_id_t block_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(log_meta_storage_.update_manifest_used_for_meta_storage(block_id))) {
-    PALF_LOG(WARN, "append_log_meta_ failed", K(ret), K_(palf_id), K_(is_inited));
+    PALF_LOG(WARN, "update_manifest_used_for_meta_storage failed", K(ret), K_(palf_id), K_(is_inited));
   } else {
     PALF_LOG(INFO,
              "update_max_block_id_for_switch_block_cb success",
