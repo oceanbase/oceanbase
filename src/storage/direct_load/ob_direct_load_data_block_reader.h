@@ -202,7 +202,7 @@ int ObDirectLoadDataBlockReader<Header, T>::switch_next_block()
 {
   int ret = common::OB_SUCCESS;
   int64_t data_size = 0;
-  if (buf_size_ - buf_pos_ == 0 && OB_FAIL(read_next_buffer())) { // empty buf
+  if (buf_size_ - buf_pos_ < data_block_size_ && OB_FAIL(read_next_buffer())) {
     if (OB_UNLIKELY(common::OB_ITER_END != ret)) {
       STORAGE_LOG(WARN, "fail to read next buffer", KR(ret));
     }
