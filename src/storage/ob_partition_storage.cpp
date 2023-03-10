@@ -1804,8 +1804,7 @@ int ObPartitionStorage::get_index_conflict_row(ObDMLRunningCtx &run_ctx, const O
   bool null_idx_val = false;
   ObSEArray<uint64_t, 16> pk_out_ids;
   ObArenaAllocator scan_allocator(ObModIds::OB_TABLE_SCAN_ITER);
-  ObIAllocator *allocator =
-      run_ctx.dml_param_.dml_allocator_ != nullptr ? run_ctx.dml_param_.dml_allocator_ : &scan_allocator;
+  ObIAllocator *allocator = &scan_allocator;
   ObSingleRowGetter index_row_getter(*allocator, store_);
   if (OB_FAIL(run_ctx.relative_tables_.data_table_.get_rowkey_column_ids(pk_out_ids))) {
     LOG_WARN("get rowkey column ids failed", K(ret));
@@ -1870,8 +1869,7 @@ int ObPartitionStorage::get_conflict_row(ObDMLRunningCtx &run_ctx, const ObIArra
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator scan_allocator(ObModIds::OB_TABLE_SCAN_ITER);
-  ObIAllocator *allocator =
-      run_ctx.dml_param_.dml_allocator_ != nullptr ? run_ctx.dml_param_.dml_allocator_ : &scan_allocator;
+  ObIAllocator *allocator = &scan_allocator;
   int64_t data_table_rowkey_cnt = run_ctx.relative_tables_.data_table_.get_rowkey_column_num();
   ObSingleRowGetter single_row_getter(*allocator, store_);
   if (OB_FAIL(single_row_getter.init_dml_access_ctx(run_ctx.store_ctx_, run_ctx.dml_param_))) {
@@ -1915,8 +1913,7 @@ int ObPartitionStorage::check_old_row_legitimacy(ObDMLRunningCtx &run_ctx, const
     // and the defense check skips the vertical partition function
     ObDMLBaseParam &dml_param = const_cast<ObDMLBaseParam &>(run_ctx.dml_param_);
     ObArenaAllocator scan_allocator(ObModIds::OB_TABLE_SCAN_ITER);
-    ObIAllocator *allocator =
-        run_ctx.dml_param_.dml_allocator_ != nullptr ? run_ctx.dml_param_.dml_allocator_ : &scan_allocator;
+    ObIAllocator *allocator = &scan_allocator;
     ObSingleRowGetter old_row_getter(*allocator, store_);
     ObNewRow *storage_old_row = nullptr;
     const ObIArray<uint64_t> &column_ids = *run_ctx.column_ids_;
@@ -2006,8 +2003,7 @@ int ObPartitionStorage::check_delete_index_legitimacy(
     // and the defense check skips the vertical partition function
     ObDMLBaseParam &dml_param = const_cast<ObDMLBaseParam &>(run_ctx.dml_param_);
     ObArenaAllocator scan_allocator(ObModIds::OB_TABLE_SCAN_ITER);
-    ObIAllocator *allocator = run_ctx.dml_param_.dml_allocator_ != nullptr ?
-        run_ctx.dml_param_.dml_allocator_ : &scan_allocator;
+    ObIAllocator *allocator = &scan_allocator;
     ObFixedArray<uint64_t, ObIAllocator> column_ids;
     ObSingleRowGetter old_row_getter(*allocator, store_);
     ObNewRow *storage_old_row = nullptr;
