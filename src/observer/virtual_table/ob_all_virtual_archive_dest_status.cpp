@@ -334,7 +334,7 @@ int ObVirtualArchiveDestStatus::get_ls_max_scn_(const uint64_t tenant_id)
             } else if (OB_FAIL(ls_end_map_.insert_and_get(ObLSID(ls_id), scn_value))) {
               SERVER_LOG(WARN, "ls_end_map insert and get failed", K(ret), K(ls_id), K(scn_value));
             } else {
-              SERVER_LOG(INFO, "get ls max_scn succ", K(ls_id), K(max_scn));
+              SERVER_LOG(INFO, "get ls max_scn succ", K(tenant_id), K(ls_id), K(max_scn));
               ls_end_map_.revert(scn_value);
               scn_value = NULL;
             }
@@ -371,9 +371,9 @@ int ObVirtualArchiveDestStatus::get_ls_checkpoint_scn_(const uint64_t tenant_id,
       ObSqlString sql;
 
       const static char *SELECT_LS_CHECKPOINT = "select ls_id, max(checkpoint_scn) as checkpoint_scn from %s "
-      "where ls_id in (select ls_id from %s where tenant_id=%d) and dest_id=%d group by ls_id";
+      "where ls_id in (select ls_id from %s where tenant_id=%d) and dest_id=%d and tenant_id=%d group by ls_id";
       if (OB_FAIL(sql.append_fmt(SELECT_LS_CHECKPOINT, OB_ALL_VIRTUAL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
-                                 OB_ALL_VIRTUAL_LS_STATUS_TNAME, tenant_id, dest_id))) {
+                                 OB_ALL_VIRTUAL_LS_STATUS_TNAME, tenant_id, dest_id, tenant_id))) {
         SERVER_LOG(WARN, "failed to append table name", K(ret));
       } else if (OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) {
         SERVER_LOG(WARN, "failed to execute sql", K(sql), K(ret));
@@ -400,6 +400,7 @@ int ObVirtualArchiveDestStatus::get_ls_checkpoint_scn_(const uint64_t tenant_id,
             } else if (OB_FAIL(ls_checkpoint_map_.insert_and_get(ObLSID(ls_id), scn_value))) {
               SERVER_LOG(WARN, "ls_end_map insert and get failed", K(ret), K(ls_id), K(scn_value));
             } else {
+              SERVER_LOG(INFO, "get archive checkpoint_scn success", K(tenant_id), K(dest_id), K(checkpoint_scn));
               ls_checkpoint_map_.revert(scn_value);
               scn_value = NULL;
             }
@@ -533,6 +534,8 @@ int ObVirtualArchiveDestStatus::compare_scn_map_()
         if (max_scn > ckpt_scn) {
           is_synced_ = false;
           break;
+        } else if (max_scn < ckpt_scn){
+          SERVER_LOG(ERROR, "it is wrong that archive checkpoint_scn is bigger than max_scn", K(max_scn), K(ckpt_scn));
         }
       }
     }
