@@ -483,7 +483,7 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
   int ret = OB_SUCCESS;
   // 1. if client is_use_lob_locator, return lob locator
   // 2. if client is_use_lob_locator, but not support outrow lob, return lob locator with inrow data
-  //    refer to https://yuque.antfin.com/ob/gtuwei/aibo1m
+  //    refer to sz/aibo1m
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
   bool is_use_lob_locator = my_session.is_client_use_lob_locator();
   bool is_support_outrow_locator_v2 = my_session.is_client_support_lob_locatorv2();

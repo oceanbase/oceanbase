@@ -640,7 +640,7 @@ enum ObMemLobType
   MAX_LOB_TYPE
 };
 
-// Memory Locator V2, Common Header, https://yuque.antfin.com/ob/gtuwei/mo6g8w
+// Memory Locator V2, Common Header, sz/mo6g8w
 // Notice: Do not add or remove fields from this sturct!
 // 8 bytes
 struct ObMemLobCommon

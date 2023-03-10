@@ -516,7 +516,7 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
   int ret = OB_SUCCESS;
   // 1. if client is_use_lob_locator, return lob locator
   // 2. if client is_use_lob_locator, but not support outrow lob, return lob locator with inrow data
-  //    refer to https://yuque.antfin.com/ob/gtuwei/aibo1m
+  //    refer to sz/aibo1m
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
   bool is_lob_type = value.is_lob() || value.is_json() || value.is_geometry() || value.is_lob_locator();
   if (!is_lob_type) {
