@@ -1132,7 +1132,7 @@ void ObSqlTransControl::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_de
 int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
                                          const share::ObLSID &ls_id,
                                          const common::ObAddr &addr,
-                                         const int64_t max_stale_time_ns,
+                                         const int64_t max_stale_time_us,
                                          bool &can_read)
 {
   int ret = OB_SUCCESS;
@@ -1140,9 +1140,9 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
 
   if (!ls_id.is_valid()
       || !addr.is_valid()
-      || max_stale_time_ns <= 0) {
+      || max_stale_time_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_ns));
+    LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_us));
   } else if (observer::ObServer::get_instance().get_self() == addr) {
     storage::ObLSService *ls_svr =  MTL(storage::ObLSService *);
     storage::ObLSHandle handle;
@@ -1156,9 +1156,11 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("id service log stream not exist");
-    } else if (ObTimeUtility::current_time() - max_stale_time_ns / 1000
+    } else if (ObTimeUtility::current_time() - max_stale_time_us
          < ls->get_ls_wrs_handler()->get_ls_weak_read_ts().convert_to_ts()) {
       can_read = true;
+    } else if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      LOG_WARN("log stream unreadable", K(ls_id), K(addr), K(max_stale_time_us));
     }
   } else {
     LOG_TRACE("log stream is not local", K(ls_id), K(addr));

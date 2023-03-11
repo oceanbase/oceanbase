@@ -238,7 +238,7 @@ public:
   static int check_ls_readable(const uint64_t tenant_id,
                                const share::ObLSID &ls_id,
                                const common::ObAddr &addr,
-                               const int64_t max_stale_time_ns,
+                               const int64_t max_stale_time_us,
                                bool &can_read);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlTransControl);
