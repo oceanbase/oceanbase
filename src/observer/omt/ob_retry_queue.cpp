@@ -28,15 +28,22 @@ int ObRetryQueue::push(ObRequest &req, const uint64_t timestamp)
   return queue_[queue_idx].push(&req);
 }
 
-int ObRetryQueue::pop(ObLink *&task)
+int ObRetryQueue::pop(ObLink *&task, bool need_clear)
 {
   int ret = OB_ENTRY_NOT_EXIST;
   uint64_t curr_timestamp = ObTimeUtility::current_time();
   uint64_t idx = last_timestamp_ / RETRY_QUEUE_TIMESTEP;
-  int queue_idx = idx & (RETRY_QUEUE_SIZE - 1);
-  while (last_timestamp_ <= curr_timestamp && OB_FAIL(queue_[queue_idx].pop(task))) {
-    ATOMIC_FAA(&last_timestamp_, RETRY_QUEUE_TIMESTEP);
-    queue_idx = (++idx) & (RETRY_QUEUE_SIZE - 1);
+  if (!need_clear) {
+    int queue_idx = idx & (RETRY_QUEUE_SIZE - 1);
+    while (last_timestamp_ <= curr_timestamp && OB_FAIL(queue_[queue_idx].pop(task))) {
+      ATOMIC_FAA(&last_timestamp_, RETRY_QUEUE_TIMESTEP);
+      queue_idx = (++idx) & (RETRY_QUEUE_SIZE - 1);
+    }
+  } else {
+    int queue_idx = 0;
+    while (queue_idx < RETRY_QUEUE_SIZE && OB_FAIL(queue_[queue_idx].pop(task))) {
+      queue_idx++;
+    }
   }
   return ret;
 }

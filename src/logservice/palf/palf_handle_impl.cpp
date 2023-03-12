@@ -555,6 +555,27 @@ int PalfHandleImpl::config_change_pre_check(const ObAddr &server,
   return ret;
 }
 
+int PalfHandleImpl::force_set_as_single_replica()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
+  } else {
+    const int64_t now_time_us = common::ObTimeUtility::current_time();
+    const ObMember member(self_, now_time_us);
+    const int64_t new_replica_num = 1;
+    LogConfigChangeArgs args(member, new_replica_num, FORCE_SINGLE_MEMBER);
+    const int64_t timeout_us = 10 * 1000 * 1000L;
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
+      PALF_LOG(WARN, "one_stage_config_change_ failed", KR(ret), KPC(this), K(member), K(new_replica_num));
+    } else {
+      PALF_EVENT("force_set_as_single_replica success", palf_id_, KR(ret), KPC(this), K(member), K(new_replica_num));
+    }
+  }
+  return ret;
+}
+
 int PalfHandleImpl::change_replica_num(
     const common::ObMemberList &member_list,
     const int64_t curr_replica_num,

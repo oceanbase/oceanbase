@@ -105,6 +105,10 @@ struct ObLSAttr
   {
     return ls_is_normal_status(status_);
   }
+  ObLSOperationType get_ls_operatin_type() const
+  {
+    return operation_type_;
+  }
   ObLSID get_ls_id() const 
   {
     return id_;
@@ -168,11 +172,24 @@ public:
   bool is_valid() const;
   int get_all_ls_by_order(
       ObLSAttrIArray &ls_array);
-  int insert_ls(const ObLSAttr &ls_attr, const uint64_t max_ls_group_id);
+  /**
+   * @description:
+   *    get ls list from all_ls table,
+   *    if want to get accurate LS list, set lock_sys_ls to true to lock SYS LS in __all_ls table
+   *    to make sure mutual exclusion with load balancing thread
+   * @param[in] lock_sys_ls whether lock SYS LS in __all_ls table
+   * @param[out] ls_operation_array ls list
+   * @return return code
+   */
+  int get_all_ls_by_order(const bool lock_sys_ls, ObLSAttrIArray &ls_operation_array);
+  int insert_ls(const ObLSAttr &ls_attr, const uint64_t max_ls_group_id,
+                const ObTenantSwitchoverStatus &working_sw_status);
   //prevent the concurrency of create and drop ls
   int delete_ls(const ObLSID &id,
-                const share::ObLSStatus &old_status);
-  int update_ls_status(const ObLSID &id, const share::ObLSStatus &old_status, const share::ObLSStatus &new_status);
+                const share::ObLSStatus &old_status,
+                const ObTenantSwitchoverStatus &working_sw_status);
+  int update_ls_status(const ObLSID &id, const share::ObLSStatus &old_status, const share::ObLSStatus &new_status,
+                       const ObTenantSwitchoverStatus &working_sw_status);
   static ObLSOperationType get_ls_operation_by_status(const ObLSStatus &ls_status);
   int get_ls_attr(const ObLSID &id, const bool for_update, common::ObISQLClient &client, ObLSAttr &ls_attr);
   /*
@@ -185,7 +202,8 @@ public:
 
 private:
   int process_sub_trans_(const ObLSAttr &ls_attr, ObMySQLTransaction &trans);
-  int operator_ls_(const ObLSAttr &ls_attr, const common::ObSqlString &sql, const uint64_t max_ls_group_id);
+  int operator_ls_(const ObLSAttr &ls_attr, const common::ObSqlString &sql, const uint64_t max_ls_group_id,
+                   const ObTenantSwitchoverStatus &working_sw_status);
 private:
   uint64_t tenant_id_;
   common::ObMySQLProxy *proxy_;

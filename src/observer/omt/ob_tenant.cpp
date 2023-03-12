@@ -421,6 +421,9 @@ int ObResourceGroup::clear_worker()
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(workers_lock_);
+  while (req_queue_.size() > 0) {
+    ob_usleep(10L * 1000L);
+  }
   while (workers_.get_size() > 0) {
     int ret = OB_SUCCESS;
     DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
@@ -829,6 +832,10 @@ int ObTenant::create_tenant_module()
 void ObTenant::wait()
 {
   int ret = OB_SUCCESS;
+  handle_retry_req(true);
+  while (req_queue_.size() > 0) {
+    ob_usleep(10L * 1000L);
+  }
   while (workers_.get_size() > 0) {
     if (OB_SUCC(workers_lock_.trylock())) {
       DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
@@ -1224,11 +1231,8 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
   int ret = OB_SUCCESS;
   req.set_enqueue_timestamp(ObTimeUtility::current_time());
   req.set_large_retry_flag(true);
-  if (ATOMIC_LOAD(&stopped_)) {
-    ret = OB_IN_STOP_STATE;
-    LOG_WARN("receive large request but tenant has already stopped", K(ret), K(id_));
-  } else if (0 != req.get_group_id()) {
-    if (OB_FAIL(recv_request(req))) {
+  if (0 != req.get_group_id()) {
+    if (OB_FAIL(recv_group_request(req, req.get_group_id()))) {
       LOG_WARN("tenant receive large retry request fail", K(ret));
     }
   } else if (OB_FAIL(recv_group_request(req, OBCG_LQ))){
@@ -1242,7 +1246,14 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
 
 int ObTenant::push_retry_queue(rpc::ObRequest &req, const uint64_t timestamp)
 {
-  return retry_queue_.push(req, timestamp);
+  int ret = OB_SUCCESS;
+  if (ATOMIC_LOAD(&stopped_)) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("receive retry request but tenant has already stopped", K(ret), K(id_));
+  } else if (OB_FAIL(retry_queue_.push(req, timestamp))) {
+    LOG_ERROR("push retry queue failed", K(ret), K(id_));
+  }
+  return ret;
 }
 
 int ObTenant::timeup()
@@ -1263,12 +1274,12 @@ int ObTenant::timeup()
   return OB_SUCCESS;
 }
 
-void ObTenant::handle_retry_req()
+void ObTenant::handle_retry_req(bool need_clear)
 {
   int ret = OB_SUCCESS;
   ObLink* task = nullptr;
   ObRequest *req = NULL;
-  while (OB_SUCC(retry_queue_.pop(task))) {
+  while (OB_SUCC(retry_queue_.pop(task, need_clear))) {
     req = static_cast<rpc::ObRequest*>(task);
     if (OB_FAIL(recv_large_request(*req))) {
       LOG_ERROR("tenant patrol push req fail", "tenant", id_);

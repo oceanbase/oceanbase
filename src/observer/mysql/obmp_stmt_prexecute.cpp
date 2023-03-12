@@ -219,7 +219,7 @@ int ObMPStmtPrexecute::before_process()
                   get_ctx().is_prepare_stage_ = true;
                   if (OB_FAIL(result.init())) {
                     LOG_WARN("result set init failed", K(ret));
-                  } else if (OB_FAIL(ObMPBase::set_session_active(sql_, *session,
+                  } else if (OB_FAIL(ObMPBase::set_session_active(sql_, *session, ObTimeUtil::current_time(),
                                   obmysql::ObMySQLCmd::COM_STMT_PREPARE))) {
                     LOG_WARN("fail to set session active", K(ret));
                   }

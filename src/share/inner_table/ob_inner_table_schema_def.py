@@ -1451,6 +1451,7 @@ def_table_schema(
       ('sequence_name', 'varchar:OB_MAX_SEQUENCE_NAME_LENGTH', 'true'),
       ('sequence_value', 'uint', 'true'),
       ('sync_value', 'uint'),
+      ('truncate_version', 'int', 'false', '-1'),
     ],
 )
 
@@ -4050,7 +4051,6 @@ def_table_schema(
     ('readable_scn', 'uint'),
     ('recovery_until_scn', 'uint', 'false', 'OB_MAX_SCN_TS_NS'),
     ('log_mode', 'varchar:100', 'false', 'NOARCHIVELOG'),
-    ("sys_recovery_scn", 'uint', 'false', 'OB_MIN_SCN_TS_NS'),
   ],
 )
 
@@ -10510,6 +10510,7 @@ def_table_schema(
   ('checkpoint_lsn', 'uint'),
   ('migrate_status', 'int'),
   ('rebuild_seq', 'int'),
+  ('tablet_change_checkpoint_scn_', 'uint'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -15456,12 +15457,6 @@ SELECT A.TENANT_ID,
             WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
             ELSE RECOVERY_UNTIL_SCN
         END) AS RECOVERY_UNTIL_SCN,
-
-       (CASE
-            WHEN A.TENANT_ID = 1 THEN NULL
-            WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
-            ELSE SYS_RECOVERY_SCN
-        END) AS SYS_RECOVERY_SCN,
 
        (CASE
             WHEN A.TENANT_ID = 1 THEN 'NOARCHIVELOG'

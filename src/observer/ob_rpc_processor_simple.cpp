@@ -2206,6 +2206,18 @@ int ObRpcGetLSSyncScnP::process()
   return ret;
 }
 
+int ObForceSetLSAsSingleReplicaP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->force_set_ls_as_single_replica(arg_))) {
+    COMMON_LOG(WARN, "force_set_ls_as_single_replica failed", KR(ret), K(arg_));
+  } else {}
+  return ret;
+}
+
 int ObRefreshTenantInfoP::process()
 {
   int ret = OB_SUCCESS;

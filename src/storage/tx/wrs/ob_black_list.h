@@ -19,7 +19,7 @@
 #include "storage/ob_storage_struct.h"        // ObMigrateStatus
 
 // 定期更新黑名单的时间间隔(us)
-#define BLACK_LIST_REFRESH_INTERVAL       5000000     // 5s
+#define BLACK_LIST_REFRESH_INTERVAL       3000000     // 3s
 // 判断时间戳是否赶上/落后的缓冲时间(ns)，避免阈值附近的日志流反复加入/移出黑名单
 #define BLACK_LIST_WHITEWASH_INTERVAL_NS  1000000000  // 1s
 // 黑名单信息打印时间间隔(us)

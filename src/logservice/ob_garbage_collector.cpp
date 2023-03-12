@@ -29,7 +29,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/ls/ob_ls_life_manager.h"
 #include "storage/tx_storage/ob_ls_handle.h"
-#include "rootserver/ob_tenant_info_loader.h"      // ObTenantInfoLoader
+#include "rootserver/ob_tenant_recovery_reportor.h"      // ObTenantRecoveryReportor
 #include "share/ob_occam_time_guard.h"
 
 namespace oceanbase
@@ -651,7 +651,7 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
 
 int ObGCHandler::get_tenant_readable_scn_(SCN &readable_scn)
 {
-  return MTL(rootserver::ObTenantInfoLoader *)->get_tenant_readable_scn(readable_scn);
+  return MTL(rootserver::ObTenantRecoveryReportor *)->get_tenant_readable_scn(readable_scn);
 }
 
 // 由于日志流GC导致的归档日志不完整是无法被归档检查出来的异常, 因此需要保证GC与归档状态互斥;

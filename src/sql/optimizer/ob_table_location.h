@@ -771,7 +771,8 @@ public:
   TO_STRING_KV(K_(loc_meta),
                K_(part_projector),
                K_(has_dynamic_exec_param),
-               K_(part_hint_ids));
+               K_(part_hint_ids),
+               K_(related_list));
 private:
   int init_table_location(ObExecContext &exec_ctx,
                           ObSqlSchemaGuard &schema_guard,

@@ -208,6 +208,19 @@ int ObLogArchivePieceContext::init(const share::ObLSID &id,
   return ret;
 }
 
+bool ObLogArchivePieceContext::is_valid() const
+{
+  return is_inited_
+    && locate_round_
+    && id_.is_valid()
+    && dest_id_ > 0
+    && min_round_id_ > 0
+    && max_round_id_ >= min_round_id_
+    && round_context_.is_valid()
+    && inner_piece_context_.is_valid()
+    && archive_dest_.is_valid();
+}
+
 int ObLogArchivePieceContext::get_piece(const SCN &pre_scn,
     const palf::LSN &start_lsn,
     int64_t &dest_id,
@@ -219,6 +232,11 @@ int ObLogArchivePieceContext::get_piece(const SCN &pre_scn,
     bool &to_newest)
 {
   int ret = OB_SUCCESS;
+  // if piece context not valid, reset it
+  if (! is_valid()) {
+    reset_locate_info();
+  }
+
   file_id = cal_archive_file_id_(start_lsn);
   if (OB_UNLIKELY(! pre_scn.is_valid() || ! start_lsn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -485,7 +503,7 @@ int ObLogArchivePieceContext::switch_round_if_need_(const SCN &scn, const palf::
   int ret = OB_SUCCESS;
   RoundOp op = RoundOp::NONE;
   RoundContext pre_round = round_context_;
-  check_if_switch_round_(lsn, op);
+  check_if_switch_round_(scn, lsn, op);
   switch (op) {
     case RoundOp::NONE:
       break;
@@ -512,7 +530,7 @@ int ObLogArchivePieceContext::switch_round_if_need_(const SCN &scn, const palf::
   return ret;
 }
 
-void ObLogArchivePieceContext::check_if_switch_round_(const palf::LSN &lsn, RoundOp &op)
+void ObLogArchivePieceContext::check_if_switch_round_(const share::SCN &scn, const palf::LSN &lsn, RoundOp &op)
 {
   op = RoundOp::NONE;
   if (min_round_id_ == 0 || max_round_id_ == 0
@@ -525,7 +543,7 @@ void ObLogArchivePieceContext::check_if_switch_round_(const palf::LSN &lsn, Roun
     op = RoundOp::BACKWARD;
   } else if (need_forward_round_(lsn)/*确定当前round日志全部小于需要消费日志, 并且当前round小于最大round id*/) {
     op = RoundOp::FORWARD;
-  } else if (need_load_round_info_(lsn)/*当前round能访问到的最大piece已经STOP, 并且当前round还是ACTIVE的*/) {
+  } else if (need_load_round_info_(scn, lsn)/*当前round能访问到的最大piece已经STOP, 并且当前round还是ACTIVE的*/) {
     op = RoundOp::LOAD;
   }
 
@@ -607,7 +625,7 @@ bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
 // 前提: 当前round_context状态非STOP
 // 1. 当前round_context信息是无效的
 // 2. 当前round最大piece不包含需要消费的日志
-bool ObLogArchivePieceContext::need_load_round_info_(const palf::LSN &lsn) const
+bool ObLogArchivePieceContext::need_load_round_info_(const share::SCN &scn, const palf::LSN &lsn) const
 {
   bool bret = false;
   if (round_context_.is_in_stop_state()) {
@@ -620,6 +638,8 @@ bool ObLogArchivePieceContext::need_load_round_info_(const palf::LSN &lsn) const
       && inner_piece_context_.is_fronze_()
       && lsn >= inner_piece_context_.max_lsn_in_piece_) {
     bret = true;
+  } else {
+    bret = cal_piece_id_(scn) > round_context_.max_piece_id_;
   }
   return bret;
 }

@@ -402,6 +402,9 @@ int ObMediumCompactionInfoList::init(common::ObIAllocator &allocator,
     if (medium_info_list_.get_size() > 0 || wait_check_flag_) {
       LOG_INFO("success to init list", K(ret), KPC(this), KPC(old_list), K(finish_medium_scn),
         "merge_type", merge_type_to_str(merge_type));
+      if (last_medium_scn_ > 0 && last_medium_scn_ < finish_medium_scn) { // only print log
+        LOG_WARN("medium list record old info", KPC(this), KPC(old_list), K(finish_medium_scn));
+      }
     }
   } else if (OB_UNLIKELY(!is_inited_)) {
     reset();
@@ -541,7 +544,7 @@ int ObMediumCompactionInfoList::inner_deep_copy_node(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium info list is invalid", K(ret), KPC(this));
   } else {
-    LOG_INFO("success to deep copy append medium info", K(ret), KPC(new_info));
+    LOG_TRACE("success to deep copy append medium info", K(ret), KPC(new_info));
   }
 
   if (OB_FAIL(ret) && nullptr != new_info) {

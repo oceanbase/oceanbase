@@ -1760,13 +1760,6 @@ int ObMPConnect::verify_connection(const uint64_t tenant_id) const
              || !ipv6_local.set_ip_addr(IPV6_LOCAL_STR, FAKE_PORT)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("set ObAddr failed", K(ret), K(IPV4_LOCAL_STR), K(IPV6_LOCAL_STR), K(FAKE_PORT));
-  } else if (OB_MONITOR_TENANT_ID == conn->tenant_id_) {
-    if (!(get_peer().is_equal_except_port(ipv4_local)
-          || get_peer().is_equal_except_port(ipv6_local)
-          || get_peer().is_equal_except_port(GCTX.self_addr())))  {
-      ret = OB_ERR_NO_PRIVILEGE;
-      LOG_WARN("The monitor isn't allowed to login by remote client", K(get_peer()), K(ret));
-    }
   } else if (OB_DIAG_TENANT_ID == conn->tenant_id_) {
     if (!(get_peer().is_equal_except_port(ipv4_local)
           || get_peer().is_equal_except_port(ipv6_local)
@@ -1829,12 +1822,7 @@ int ObMPConnect::verify_connection(const uint64_t tenant_id) const
 int ObMPConnect::check_update_tenant_id(ObSMConnection &conn, uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (tenant_name_.case_compare(OB_MONITOR_TENANT_NAME) == 0) {
-    tenant_name_ = ObString::make_string(OB_SYS_TENANT_NAME);
-    tenant_id = OB_SYS_TENANT_ID;
-    conn.tenant_id_ = tenant_id;
-    conn.resource_group_id_ = OB_MONITOR_TENANT_ID;
-  } else if (tenant_name_.case_compare(OB_DIAG_TENANT_NAME) == 0) {
+  if (tenant_name_.case_compare(OB_DIAG_TENANT_NAME) == 0) {
     tenant_name_ = user_name_;
     user_name_ = ObString::make_string("root");
     if (OB_FAIL(get_tenant_id(tenant_id))) {

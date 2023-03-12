@@ -647,11 +647,21 @@ int LogConfigMgr::is_state_changed_(bool &need_rlock, bool &need_wlock) const
   return ret;
 }
 
-int LogConfigMgr::check_config_version_matches_state_(const LogConfigVersion &config_version) const
+int LogConfigMgr::check_config_version_matches_state_(const LogConfigChangeType &type,
+    const LogConfigVersion &config_version) const
 {
   int ret = OB_SUCCESS;
   if (ConfigChangeState::INIT == state_) {
-    ret = (config_version.is_valid())? OB_ERR_UNEXPECTED: OB_SUCCESS;
+    if (config_version.is_valid()) {
+      if (FORCE_SINGLE_MEMBER != type) {
+        // For force set single member case, this may occur. After updating election's member_list,
+        // Self may be elected and finish reconfirm quickly, which will reset config_mgr state and
+        // write start_working log successfully.
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        PALF_LOG(INFO, "Another config change(maybe self reconfirm) has finished during force set single member", K_(palf_id), K_(self), K_(state), K(type), K(config_version), K_(log_ms_meta));
+      }
+    }
   } else {
     ret = (config_version != log_ms_meta_.curr_.config_version_)? OB_EAGAIN: OB_SUCCESS;
   }
@@ -714,7 +724,7 @@ int LogConfigMgr::change_config(const LogConfigChangeArgs &args,
   } else {
     ret = change_config_(args, proposal_id, election_epoch, config_version);
     PALF_LOG(INFO, "config_change stat", K_(palf_id), K_(self), K(args), K(proposal_id),
-      K_(prev_log_proposal_id), K_(prev_lsn), K_(prev_mode_pid), K_(state),
+      K_(prev_log_proposal_id), K_(prev_lsn), K_(prev_mode_pid), K_(state), K(config_version),
       K_(persistent_config_version), K_(ms_ack_list), K_(resend_config_version),
       K_(resend_log_list), K_(log_ms_meta), K_(last_submit_config_log_time_us));
   }
@@ -737,7 +747,8 @@ int LogConfigMgr::change_config_(const LogConfigChangeArgs &args,
 {
   int ret = OB_SUCCESS;
   // args may be invalid when background retry config_change, so don't check it here
-  if (false == is_leader_for_config_change_(args.type_, proposal_id, election_epoch)) {
+  if (need_exec_on_leader_(args.type_)
+      && false == is_leader_for_config_change_(args.type_, proposal_id, election_epoch)) {
     ret = OB_NOT_MASTER;
     PALF_LOG(WARN, "not leader, can't change member", KR(ret), K_(palf_id), K_(self),
         "role", state_mgr_->get_role(), "state", state_mgr_->get_state());
@@ -746,7 +757,7 @@ int LogConfigMgr::change_config_(const LogConfigChangeArgs &args,
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "is changing access_mode, try again", KR(ret), K_(palf_id), K_(self),
         "role", state_mgr_->get_role(), "state", state_mgr_->get_state());
-  } else if (OB_FAIL(check_config_version_matches_state_(config_version))) {
+  } else if (OB_FAIL(check_config_version_matches_state_(args.type_, config_version))) {
     PALF_LOG(WARN, "config_version does not match with state, try again", KR(ret), K_(palf_id), K_(self),
         K(config_version), K_(state), K_(log_ms_meta));
   } else {
@@ -1130,6 +1141,10 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
       {
         break;
       }
+      case FORCE_SINGLE_MEMBER:
+      {
+        break;
+      }
       default:
       {
         ret = OB_INVALID_ARGUMENT;
@@ -1200,7 +1215,8 @@ int LogConfigMgr::check_args_and_generate_config(const LogConfigChangeArgs &args
   SpinLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (false == is_leader_for_config_change_(args.type_, proposal_id, election_epoch)) {
+  } else if (need_exec_on_leader_(args.type_)
+      && false == is_leader_for_config_change_(args.type_, proposal_id, election_epoch)) {
     ret = OB_NOT_MASTER;
     PALF_LOG(WARN, "is_leader_for_config_change_ return false", K(ret), K_(palf_id), K_(self),
         K(args.type_), K(proposal_id), K(election_epoch));
@@ -1301,10 +1317,17 @@ int LogConfigMgr::append_config_meta_(const int64_t curr_proposal_id,
   if (INVALID_PROPOSAL_ID == curr_proposal_id || !args.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), K_(palf_id), K_(self), K(args), K(curr_proposal_id));
-  } else if (!(state_mgr_->get_leader() == self_ && state_mgr_->get_proposal_id() == curr_proposal_id)) {
+  } else if (need_exec_on_leader_(args.type_) &&
+      !(state_mgr_->get_leader() == self_ && state_mgr_->get_proposal_id() == curr_proposal_id)) {
     ret = OB_NOT_MASTER;
     PALF_LOG(WARN, "leader has switched during config changing", KR(ret), K_(palf_id), K_(self),
-        "role", state_mgr_->get_role(), K(curr_proposal_id), "proposal_id", state_mgr_->get_proposal_id());
+        "role", state_mgr_->get_role(), K(curr_proposal_id), "proposal_id", state_mgr_->get_proposal_id(),
+        "leader", state_mgr_->get_leader());
+  } else if (false == need_exec_on_leader_(args.type_) && !(state_mgr_->get_proposal_id() == curr_proposal_id)) {
+    ret = OB_STATE_NOT_MATCH;
+    PALF_LOG(WARN, "proposal_id has switched during config changing", KR(ret), K_(palf_id), K_(self),
+        "role", state_mgr_->get_role(), K(curr_proposal_id), "proposal_id", state_mgr_->get_proposal_id(),
+        "leader", state_mgr_->get_leader());
   } else if (OB_FAIL(check_config_change_args_(args, is_already_finished))) {
     PALF_LOG(WARN, "check_config_change_args_ failed", K(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(args));
   } else if (is_already_finished) {
@@ -1515,6 +1538,14 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
       } else {
         new_config_info.arbitration_member_.reset();
       }
+    }
+    if (OB_SUCC(ret) && FORCE_SINGLE_MEMBER == cc_type) {
+      // force set single member
+      new_config_info.log_sync_memberlist_.reset();
+      new_config_info.degraded_learnerlist_.reset();
+      new_config_info.arbitration_member_.reset();
+      new_config_info.log_sync_memberlist_.add_member(member);
+      new_config_info.log_sync_replica_num_ = new_log_sync_replica_num;
     }
     // learnerlist add
     if (OB_SUCC(ret) && is_add_learner_list(cc_type)) {

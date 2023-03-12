@@ -72,7 +72,7 @@
 #include "rootserver/ddl_task/ob_ddl_retry_task.h"
 #include "rootserver/freeze/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
-#include "rootserver/ob_tenant_thread_helper.h"//get_zone_priority
+#include "rootserver/ob_primary_ls_service.h"//ObTenantLSInfo
 #include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server_struct.h"
 #include "storage/tx/ob_ts_mgr.h"
@@ -16504,7 +16504,7 @@ int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_
     }
   } else if (0 != table_schema.get_autoinc_column_id()) {
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-    LOG_WARN("table with autoinc column should not get in new_truncate_table", KR(ret));
+    LOG_WARN("table with autoinc column should not get in new_truncate_table", KR(ret), K(table_id), K(table_name), K(database_name));
   } else if (table_schema.is_sys_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("truncate table is not supported on system table", KR(ret), K(table_id), K(table_name));
@@ -20039,6 +20039,16 @@ int ObDDLService::create_sys_tenant(
           LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         }
       }
+      if (OB_SUCC(ret)) {
+        // If tenant config version in RS is valid first and ddl trans doesn't commit,
+        // observer may read from empty __tenant_parameter successfully and raise its tenant config version,
+        // which makes some initial tenant configs are not actually updated before related observer restarts.
+        // To fix this problem, tenant config version in RS should be valid after ddl trans commits.
+        const int64_t config_version = omt::ObTenantConfig::INITIAL_TENANT_CONF_VERSION + 1;
+        if (OB_FAIL(OTC_MGR.set_tenant_config_version(OB_SYS_TENANT_ID, config_version))) {
+          LOG_WARN("failed to set tenant config version", KR(ret), "tenant_id", OB_SYS_TENANT_ID);
+        }
+      }
     }
   }
   return ret;
@@ -20075,6 +20085,10 @@ int ObDDLService::create_tenant(
       LOG_USER_ERROR(OB_MISS_ARGUMENT, "resource_pool_list");
     }
     LOG_WARN("missing arg to create tenant", KR(ret), K(arg));
+  } else if (tenant_name.case_compare(OB_DIAG_TENANT_NAME) == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_name \'diag\' is reserved for diagnose tenant", KR(ret), K(arg));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant_name (\'diag\' is reserved for diagnose tenant)");
   } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("create tenant when cluster is upgrading not allowed", K(ret));
@@ -20707,7 +20721,7 @@ int ObDDLService::create_tenant_sys_ls(
     } else if (OB_UNLIKELY(0 == primary_zone_list.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("primary zone is empty", KR(ret), K(tenant_schema));
-    } else if (OB_FAIL(ObTenantThreadHelper::get_zone_priority(
+    } else if (OB_FAIL(ObTenantLSInfo::get_zone_priority(
             primary_zone_list.at(0), tenant_schema, zone_priority))) {
       LOG_WARN("failed to get zone priority", KR(ret), K(primary_zone_list), K(tenant_schema));
     } else if (OB_FAIL(ls_creator.create_tenant_sys_ls(
@@ -21085,6 +21099,21 @@ int ObDDLService::init_tenant_schema(
           LOG_WARN("trans end failed", K(commit), K(temp_ret));
         }
       }
+
+      if (OB_SUCC(ret) && is_meta_tenant(tenant_id)) {
+        // If tenant config version in RS is valid first and ddl trans doesn't commit,
+        // observer may read from empty __tenant_parameter successfully and raise its tenant config version,
+        // which makes some initial tenant configs are not actually updated before related observer restarts.
+        // To fix this problem, tenant config version in RS should be valid after ddl trans commits.
+        const int64_t config_version = omt::ObTenantConfig::INITIAL_TENANT_CONF_VERSION + 1;
+        const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+        if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id, config_version))) {
+          LOG_WARN("failed to set tenant config version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(OTC_MGR.set_tenant_config_version(user_tenant_id, config_version))) {
+          LOG_WARN("failed to set tenant config version", KR(ret), K(user_tenant_id));
+        }
+      }
+
       ObLSInfo sys_ls_info;
       ObAddrArray addrs;
       if (FAILEDx(GCTX.lst_operator_->get(
@@ -21174,7 +21203,7 @@ int ObDDLService::set_sys_ls_status(const uint64_t tenant_id)
     if (OB_FAIL(new_ls.init(SYS_LS, ls_group_id, flag,
             share::OB_LS_NORMAL, share::OB_LS_OP_CREATE_END, create_scn))) {
       LOG_WARN("failed to init new operation", KR(ret), K(flag), K(create_scn));
-    } else if (OB_FAIL(ls_operator.insert_ls(new_ls, ls_group_id))) {
+    } else if (OB_FAIL(ls_operator.insert_ls(new_ls, ls_group_id, share::NORMAL_SWITCHOVER_STATUS))) {
       LOG_WARN("failed to insert new ls", KR(ret), K(new_ls), K(ls_group_id));
     }
   }

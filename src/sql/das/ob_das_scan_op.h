@@ -217,6 +217,7 @@ public:
   ObDASScanResult();
   virtual ~ObDASScanResult();
   virtual int init(const ObIDASTaskOp &op, common::ObIAllocator &alloc) override;
+  virtual int reuse() override;
   virtual int get_next_row(ObNewRow *&row) override;
   virtual int get_next_row() override;
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;

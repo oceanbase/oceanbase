@@ -1173,7 +1173,8 @@ int JtFuncHelpler::check_default_value_inner(JtScanCtx* ctx,
     LOG_WARN("default value not match returing type", K(ret));
   } else if (OB_FAIL(ObJsonExprHelper::pre_default_value_check(col_expr->datum_meta_.type_, in_str, default_expr->datum_meta_.type_))) {
     LOG_WARN("default value pre check fail", K(ret), K(in_str));
-  } else if (OB_FAIL(JtFuncHelpler::check_default_val_accuracy(col_info.data_type_.get_accuracy(), col_expr->datum_meta_.type_, emp_datum))) {
+  } else if (ob_obj_type_class(col_expr->datum_meta_.type_) == ob_obj_type_class(default_expr->datum_meta_.type_)
+             && OB_FAIL(JtFuncHelpler::check_default_val_accuracy(col_info.data_type_.get_accuracy(), default_expr->datum_meta_.type_, emp_datum))) {
     LOG_WARN("fail to check accuracy", K(ret));
   }
 

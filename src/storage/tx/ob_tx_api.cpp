@@ -64,6 +64,7 @@ inline void ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
   tx.tenant_id_ = tenant_id_;
   tx.addr_      = self_;
   tx.sess_id_   = session_id;
+  tx.assoc_sess_id_ = session_id;
   tx.alloc_ts_  = ObClockGenerator::getClock();
   tx.expire_ts_ = INT64_MAX;
   tx.op_sn_     = 1;
@@ -94,17 +95,19 @@ int ObTransService::finalize_tx_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(tx.lock_);
-  tx.flags_.RELEASED_ = true;
-  if (tx.is_tx_active() && !tx.flags_.REPLICA_) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "release tx when tx is active", K(ret), KPC(this), K(tx));
-    tx.print_trace_();
-  } else if (tx.is_committing()) {
-    TRANS_LOG(WARN, "release tx when tx is committing", KPC(this), K(tx));
-  }
-  tx.cancel_commit_cb();
-  if (tx.tx_id_.is_valid()) {
-    tx_desc_mgr_.remove(tx);
+  if (!tx.flags_.RELEASED_) {
+    tx.flags_.RELEASED_ = true;
+    if (tx.is_tx_active() && !tx.flags_.REPLICA_) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "release tx when tx is active", K(ret), KPC(this), K(tx));
+      tx.print_trace_();
+    } else if (tx.is_committing()) {
+      TRANS_LOG(WARN, "release tx when tx is committing", KPC(this), K(tx));
+    }
+    tx.cancel_commit_cb();
+    if (tx.tx_id_.is_valid()) {
+      tx_desc_mgr_.remove(tx);
+    }
   }
   return ret;
 }
@@ -1522,7 +1525,7 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   int64_t start_ts = ObClockGenerator::getClock();
   retries = 0;
-  int64_t min_retry_intval = max_retry_intval / 3;
+  int64_t min_retry_intval = 10 * 1000; // 10 ms
   expire_ts = std::max(ObTimeUtility::current_time() + MIN_WAIT_TIME, expire_ts);
   while (OB_SUCC(ret)) {
     int64_t retry_intval = std::min(min_retry_intval * (1 + retries), max_retry_intval);
@@ -1758,7 +1761,10 @@ int ObTransService::is_tx_active(const ObTransID &tx_id, bool &active)
   }
   return ret;
 }
-int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, const uint32_t session_id)
+int ObTransService::sql_stmt_start_hook(const ObXATransID &xid,
+                                        ObTxDesc &tx,
+                                        const uint32_t session_id,
+                                        const uint32_t real_session_id)
 {
   int ret = OB_SUCCESS;
   if (tx.is_xa_trans()) {
@@ -1770,7 +1776,7 @@ int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, co
         TRANS_LOG(WARN, "register tx fail", K(ret), K_(tx.tx_id), K(xid), KP(&tx));
       } else { registed = true; }
     }
-    if (OB_SUCC(ret) && OB_FAIL(MTL(ObXAService*)->start_stmt(xid, session_id, tx))) {
+    if (OB_SUCC(ret) && OB_FAIL(MTL(ObXAService*)->start_stmt(xid, real_session_id, tx))) {
       TRANS_LOG(WARN, "xa trans start stmt failed", K(ret), K_(tx.xid), K(xid));
       ObGlobalTxType global_tx_type = tx.get_global_tx_type(xid);
       if (ObGlobalTxType::DBLINK_TRANS == global_tx_type && OB_TRANS_XA_BRANCH_FAIL == ret) {

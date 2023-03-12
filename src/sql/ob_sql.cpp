@@ -4009,10 +4009,11 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
   pc_ctx.fp_result_.pc_key_.namespace_ = ObLibCacheNameSpace::NS_CRSR;
   plan_added = false;
   bool is_batch_exec = pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (OB_ISNULL(phy_plan) || OB_ISNULL(plan_cache)) {
     ret = OB_NOT_INIT;
     LOG_WARN("Fail to generate plan", K(phy_plan), K(plan_cache));
-  } else if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
+  } else if (!tenant_config.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant config is invalid", K(ret));
   } else if (OB_USE_PLAN_CACHE_NONE == phy_plan->get_phy_plan_hint().plan_cache_policy_) {
@@ -4037,7 +4038,7 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
     phy_plan->stat_.db_id_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.db_id_;
     phy_plan->stat_.is_rewrite_sql_ = pc_ctx.is_rewrite_sql_;
     phy_plan->stat_.rule_version_ = rule_mgr->get_rule_version();
-    phy_plan->stat_.enable_udr_ = pc_ctx.sql_ctx_.session_info_->enable_user_defined_rewrite_rules();
+    phy_plan->stat_.enable_udr_ = tenant_config->enable_user_defined_rewrite_rules;
 
     if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
       //远程SQL第二次进入plan，将raw_sql作为pc_key存入plan cache中，
@@ -4944,15 +4945,6 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
     if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null schema guard", K(ret));
-    } else if (OB_ISNULL(pc_ctx.sql_ctx_.cur_stmt_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid null stmt", K(ret));
-    } else if (OB_ISNULL(pc_ctx.sql_ctx_.cur_stmt_->get_query_ctx())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid null query context", K(ret));
-    } else if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid null session", K(ret));
     } else if (should_reroute) {
       if (DAS_CTX(pc_ctx.exec_ctx_).get_table_loc_list().empty()) {
         ret = OB_ERR_UNEXPECTED;
@@ -4979,14 +4971,11 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
           LOG_WARN("get full ls replica location failed", K(ret), KPC(first_tablet_loc));
         } else {
           bool is_weak = false;
-          if (stmt::T_SELECT == pc_ctx.sql_ctx_.cur_stmt_->get_stmt_type()) {
+          if (plan->is_select_plan()) {
             if (pc_ctx.sql_ctx_.is_protocol_weak_read_) {
               is_weak = true;
-            } else if (OB_UNLIKELY(INVALID_CONSISTENCY
-                   != pc_ctx.sql_ctx_.cur_stmt_->get_query_ctx()->
-                      get_global_hint().read_consistency_)) {
-              is_weak = (WEAK == pc_ctx.sql_ctx_.cur_stmt_->
-                          get_query_ctx()->get_global_hint().read_consistency_);
+            } else if (OB_UNLIKELY(INVALID_CONSISTENCY != plan->get_phy_plan_hint().read_consistency_)) {
+              is_weak = (WEAK == plan->get_phy_plan_hint().read_consistency_);
             } else {
               is_weak = (WEAK == pc_ctx.sql_ctx_.session_info_->get_consistency_level());
             }

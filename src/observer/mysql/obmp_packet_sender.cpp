@@ -245,6 +245,10 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
   int ret = OB_SUCCESS;
   extra_info_kvs_.reset();
   extra_info_ecds_.reset();
+  bool need_sync_sys_var = true;
+  if (pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_ERR) {
+    need_sync_sys_var = false;
+  }
   if (!conn_valid_) {
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection already disconnected", K(ret));
@@ -260,7 +264,7 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
     proto20_context_.txn_free_route_ = session->can_txn_free_route();
     if (OB_FAIL(ObMPUtils::append_modfied_sess_info(session->get_extra_info_alloc(),
                                                     *session, &extra_info_kvs_, &extra_info_ecds_,
-                                                    conn_->proxy_cap_flags_.is_new_extra_info_support()))) {
+                                                    conn_->proxy_cap_flags_.is_new_extra_info_support(), need_sync_sys_var))) {
       SERVER_LOG(WARN, "fail to add modified session info", K(ret));
     } else {
       // do nothing
@@ -465,7 +469,7 @@ int ObMPPacketSender::send_error_packet(int err,
           if (OB_FAIL(send_ok_packet(*session, ok_param, &epacket))) {
             LOG_WARN("failed to send ok packet", K(ok_param), K(ret));
           }
-          LOG_INFO("dump txn free route audit_record", "value", session->get_txn_free_route_flag());
+          LOG_INFO("dump txn free route audit_record", "value", session->get_txn_free_route_flag(), K(session->get_sessid()), K(session->get_proxy_sessid()));
         }
       } else {  // just a basic ok packet contain nothing
         OMPKOK okp;

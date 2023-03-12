@@ -186,7 +186,6 @@ private:
 // RetireStation is a data structure that guarantees memory safety through delayed delete
 // using a thread local retire list
 //
-// Doc: https://yuque.antfin-inc.com/ob/transaction/retire_station
 class RetireStation
 {
 public:

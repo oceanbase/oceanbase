@@ -1773,6 +1773,7 @@ int ObRootUtils::get_tenant_intersection(ObUnitManager &unit_mgr,
   return ret;
 }
 
+
 template<class T>
 bool ObRootUtils::has_intersection(const common::ObIArray<T> &this_array,
                                    const common::ObIArray<T> &other_array)

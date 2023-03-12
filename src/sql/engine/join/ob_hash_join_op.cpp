@@ -1417,7 +1417,7 @@ int ObHashJoinOp::get_max_memory_size(int64_t input_size)
   int64_t extra_memory_size = get_extra_memory_size();
   int64_t memory_size = (extra_memory_size + input_size) < 0 ? input_size : (extra_memory_size + input_size);
   if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
-      ObSqlWorkAreaType::HASH_WORK_AREA, tenant_id, &ctx_, hash_area_size))) {
+      ObSqlWorkAreaType::HASH_WORK_AREA, tenant_id, hash_area_size))) {
     LOG_WARN("failed to get workarea size", K(ret), K(tenant_id));
   } else if (FALSE_IT(remain_data_memory_size_ = hash_area_size * 80 / 100)) {
     // default data memory size: 80%
@@ -1670,7 +1670,7 @@ int ObHashJoinOp::get_processor_type()
       int64_t hash_area_size = 0;
       if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
           ObSqlWorkAreaType::HASH_WORK_AREA,
-          ctx_.get_my_session()->get_effective_tenant_id(), &ctx_, hash_area_size))) {
+          ctx_.get_my_session()->get_effective_tenant_id(), hash_area_size))) {
         LOG_WARN("failed to get workarea size", K(ret));
       }
       remain_data_memory_size_ = hash_area_size * 10;

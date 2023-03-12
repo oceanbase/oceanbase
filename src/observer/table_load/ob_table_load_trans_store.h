@@ -96,7 +96,8 @@ private:
   common::ObCollationType collation_type_;
   common::ObTimeZoneInfo tz_info_;
   ObTableLoadTimeConverter time_cvrt_;
-  const common::ObIArray<share::schema::ObColDesc> *column_descs_;
+  // does not contain hidden primary key columns
+  // and does not contain virtual generated columns
   common::ObArray<const share::schema::ObColumnSchemaV2 *> column_schemas_;
   struct SessionContext
   {
@@ -113,6 +114,7 @@ private:
   int64_t ref_count_ CACHE_ALIGNED;
   bool is_flush_;
   bool is_inited_;
+  ObSchemaGetterGuard schema_guard_;
 };
 
 } // namespace observer

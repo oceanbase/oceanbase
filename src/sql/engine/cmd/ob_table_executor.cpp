@@ -1713,6 +1713,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
         LOG_WARN("GCTX schema_service not init", K(ret));
       } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+      } else if (FALSE_IT(schema_guard.set_session_id(truncate_table_arg.session_id_))) {
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_name, table_name, false, table_schema))) {
         LOG_WARN("fail to get table schema", K(ret), K(database_name), K(table_name));
       } else if (OB_ISNULL(table_schema)) {

@@ -1626,7 +1626,7 @@ static int common_copy_string_zf_to_text_result(const ObExpr &expr,
     } else {
       int64_t zf_len = out_len - src.length();
       if (0 < zf_len) {
-        if (OB_FAIL(str_result.fill(0, 0, zf_len))) {
+        if (OB_FAIL(str_result.fill(0, '0', zf_len))) {
         } else if (OB_FAIL(str_result.lseek(zf_len, 0))) {
         } else { /* do nothing */ };
       }

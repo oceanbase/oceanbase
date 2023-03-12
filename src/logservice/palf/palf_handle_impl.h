@@ -277,6 +277,8 @@ public:
                                  const int64_t curr_replica_num,
                                  const int64_t new_replica_num,
                                  const int64_t timeout_us) = 0;
+  // @brief: force set self as single replica.
+  virtual int force_set_as_single_replica() = 0;
 
   // @brief, add a member into paxos group
   // @param[in] common::ObMember &member: member which will be added
@@ -663,6 +665,7 @@ public:
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const override final;
   int get_election_leader(common::ObAddr &addr) const;
+  int force_set_as_single_replica() override final;
   int change_replica_num(const common::ObMemberList &member_list,
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,

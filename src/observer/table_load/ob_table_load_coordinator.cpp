@@ -37,9 +37,9 @@ using namespace sql;
       LOG_WARN("fail to set default timeout ctx", KR(ret));                       \
     } else if (OB_FAIL(ObServer::get_instance()                                   \
                          .get_table_rpc_proxy()                                   \
+                         .to(addr)                                                \
                          .timeout(ctx.get_timeout())                              \
                          .by(MTL_ID())                                            \
-                         .to(addr)                                                \
                          .name(request, ##__VA_ARGS__))) {                        \
       LOG_WARN("fail to rpc call " #name, KR(ret), K(addr), K(request));          \
     }                                                                             \
@@ -225,6 +225,7 @@ int ObTableLoadCoordinator::pre_begin_peers()
     request.dup_action_ = param_.dup_action_;
     request.px_mode_ = param_.px_mode_;
     request.online_opt_stat_gather_ = param_.online_opt_stat_gather_;
+    request.snapshot_version_ = param_.snapshot_version_;
     request.dest_table_id_ = ctx_->ddl_param_.dest_table_id_;
     request.task_id_ = ctx_->ddl_param_.task_id_;
     request.schema_version_ = ctx_->ddl_param_.schema_version_;

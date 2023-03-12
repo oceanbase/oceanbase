@@ -458,6 +458,93 @@ TEST_F(TestDupMsgMockOb2pcCtx, test_dup_2pc_commit_response)
   EXPECT_EQ(true, ctx2.check_status_valid(true/*should commit*/));
 }
 
+TEST_F(TestDupMsgMockOb2pcCtx, test_dup_2pc_commit_response2)
+{
+  MockOb2pcCtx ctx1;
+  MockOb2pcCtx ctx2;
+  ctx1.init(&mailbox_mgr_);
+  ctx2.init(&mailbox_mgr_);
+  auto addr1 = ctx1.get_addr();
+  auto addr2 = ctx2.get_addr();
+  MockObParticipants participants;
+  participants.push_back(addr1);
+  participants.push_back(addr2);
+
+  // ========== Prepare Duplicated Messages ==========
+  // Mock duplicated 2pc commit mail
+  ObMail<ObTwoPhaseCommitMsgType> dup_commit_mail;
+  EXPECT_EQ(OB_SUCCESS, dup_commit_mail.init(addr2 /*from*/,
+                                             addr1 /*to*/,
+                                             sizeof(ObTwoPhaseCommitMsgType),
+                                             ObTwoPhaseCommitMsgType::OB_MSG_TX_COMMIT_RESP));
+  // Mock duplicated 2pc abort mail
+  ObMail<ObTwoPhaseCommitMsgType> dup_abort_mail;
+  EXPECT_EQ(OB_SUCCESS, dup_abort_mail.init(addr2 /*from*/,
+                                            addr1 /*to*/,
+                                            sizeof(ObTwoPhaseCommitMsgType),
+                                            ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_RESP));
+
+  // ========== Two Phase Commit prepare Phase ==========
+  // ctx1 start to commit
+  ctx1.commit(participants);
+  // ctx2 handle prepare request
+  EXPECT_EQ(OB_SUCCESS, ctx2.handle_all());
+  // ctx2 handle prepare request
+  EXPECT_EQ(OB_SUCCESS, ctx2.apply());
+  // ctx1 handle prepare response
+  EXPECT_EQ(OB_SUCCESS, ctx1.handle_all());
+  // ctx1 apply prepare log
+  EXPECT_EQ(OB_SUCCESS, ctx1.apply());
+
+  // ========== Two Phase Commit pre commit Phase ======
+  // ctx2 handle commit request
+  EXPECT_EQ(OB_SUCCESS, ctx2.handle_all());
+  // ctx1 handle commit response
+  EXPECT_EQ(OB_SUCCESS, ctx1.handle_all());
+  // [DUP_MSG]: ctx1 handle duplicated commit response
+  EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_commit_mail, &ctx1));
+  // [DUP_MSG]: ctx1 handle duplicated commit response
+  EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_commit_mail, &ctx1));
+
+  // ========== Two Phase Commit commit Phase ==========
+  // ctx2 handle commit request
+  EXPECT_EQ(OB_SUCCESS, ctx2.handle_all());
+  // ctx2 apply commit log
+  EXPECT_EQ(OB_SUCCESS, ctx2.apply());
+  // ctx1 handle commit response
+  EXPECT_EQ(OB_SUCCESS, ctx1.handle_all());
+  // [DUP_MSG]: ctx1 handle duplicated commit response
+  EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_commit_mail, &ctx1));
+  // ctx1 apply commit log
+  EXPECT_EQ(OB_SUCCESS, ctx1.apply());
+  // // [DUP_MSG]: ctx1 handle duplicated commit response
+  // EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_commit_mail, &ctx1));
+
+  TRANS_LOG(INFO, "qc debug");
+  // [DUP_MSG]: ctx1 handle duplicated abort response
+  EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_abort_mail, &ctx1));
+
+  // ========== Two Phase Commit clear Phase ==========
+  // [DUP_MSG]: ctx1 handle duplicated commit response
+  EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_commit_mail, &ctx1));
+  // ctx1 apply clear log
+  EXPECT_EQ(OB_SUCCESS, ctx1.apply());
+  // [DUP_MSG]: ctx1 handle duplicated commit response
+  EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_commit_mail, &ctx1));
+  // ctx2 handle clear request
+  EXPECT_EQ(OB_SUCCESS, ctx2.handle_all());
+  // [DUP_MSG]: ctx1 handle duplicated commit response
+  EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_commit_mail, &ctx1));
+  // ctx2 apply clear log
+  EXPECT_EQ(OB_SUCCESS, ctx2.apply());
+  // [DUP_MSG]: ctx1 handle duplicated commit response
+  EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_commit_mail, &ctx1));
+
+  // ========== Check Test Valid ==========
+  EXPECT_EQ(true, ctx1.check_status_valid(true/*should commit*/));
+  EXPECT_EQ(true, ctx2.check_status_valid(true/*should commit*/));
+}
+
 TEST_F(TestDupMsgMockOb2pcCtx, test_dup_2pc_clear_request)
 {
   MockOb2pcCtx ctx1;

@@ -267,20 +267,5 @@ int ObAllTenantInfoCache::get_tenant_info(share::ObAllTenantInfo &tenant_info)
   return ret;
 }
 
-int ObTenantInfoLoader::get_tenant_readable_scn(SCN &readable_scn)
-{
-  int ret = OB_SUCCESS;
-  share::ObAllTenantInfo tenant_info;
-  if (OB_FAIL(get_tenant_info(tenant_info))) {
-    LOG_WARN("get_tenant_info failed", K(ret));
-  } else if (OB_UNLIKELY(! tenant_info.is_valid())) {
-    ret = OB_EAGAIN;
-    LOG_WARN("tenant info not valid", K(ret), K(tenant_info));
-  } else {
-    readable_scn = tenant_info.get_standby_scn();
-  }
-  return ret;
-}
-
 }
 }

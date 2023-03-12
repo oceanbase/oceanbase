@@ -15,7 +15,7 @@
 
 #include "share/backup/ob_backup_info_mgr.h"
 #include "rootserver/restore/ob_restore_util.h"
-#include "rootserver/ob_tenant_thread_helper.h"//ObTenantThreadHelper
+#include "rootserver/ob_primary_ls_service.h"//ObTenantThreadHelper
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_common_rpc_proxy.h"

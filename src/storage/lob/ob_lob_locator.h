@@ -27,7 +27,11 @@ public:
   ObLobLocatorHelper();
   virtual ~ObLobLocatorHelper();
   void reset();
-  void reuse() { locator_allocator_.reuse(); }
+  void reuse() {
+    locator_allocator_.reuse();
+    rowid_objs_.reuse();
+    rowkey_str_.reset();
+  }
   int init(const ObTableScanParam &scan_param,
            const ObStoreCtx &ctx,
            const share::ObLSID &ls_id,

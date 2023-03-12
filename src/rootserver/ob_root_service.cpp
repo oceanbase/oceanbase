@@ -5865,7 +5865,6 @@ int ObRootService::drop_user_defined_function(const obrpc::ObDropUserDefinedFunc
 bool ObRootService::is_sys_tenant(const ObString &tenant_name)
 {
   return (0 == tenant_name.case_compare(OB_SYS_TENANT_NAME)
-          || 0 == tenant_name.case_compare(OB_MONITOR_TENANT_NAME)
           || 0 == tenant_name.case_compare(OB_DIAG_TENANT_NAME)
           || 0 == tenant_name.case_compare(OB_GTS_TENANT_NAME));
 }
@@ -8993,6 +8992,59 @@ int ObRootService::update_stat_cache(const obrpc::ObUpdateStatCacheArg &arg)
   return ret;
 }
 
+int ObRootService::check_weak_read_version_refresh_interval(int64_t refresh_interval, bool &valid)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard sys_schema_guard;
+  ObArray<uint64_t> tenant_ids;
+  valid = true;
+
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, sys_schema_guard))) {
+    LOG_WARN("get sys schema guard failed", KR(ret));
+  } else if (OB_FAIL(sys_schema_guard.get_tenant_ids(tenant_ids))) {
+    LOG_WARN("get tenant ids failed", KR(ret));
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    const ObSimpleTenantSchema *tenant_schema = NULL;
+    const ObSysVarSchema *var_schema = NULL;
+    ObObj obj;
+    int64_t session_max_stale_time = 0;
+    uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    for (int64_t i = 0; OB_SUCC(ret) && valid && i < tenant_ids.count(); i++) {
+      tenant_id = tenant_ids[i];
+      if (OB_FAIL(sys_schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+        LOG_WARN("fail to get tenant schema", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant_schema)) {
+        ret = OB_SUCCESS;
+        LOG_WARN("tenant schema is null, skip and continue", KR(ret), K(tenant_id));
+      } else if (!tenant_schema->is_normal()) {
+        ret = OB_SUCCESS;
+        LOG_WARN("tenant schema is not normal, skip and continue", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("get schema guard failed", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id,
+                         OB_SV_MAX_READ_STALE_TIME, var_schema))) {
+        LOG_WARN("get tenant system variable failed", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(var_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("var schema is null", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(var_schema->get_value(NULL, NULL, obj))) {
+        LOG_WARN("get value failed", KR(ret), K(tenant_id), K(obj));
+      } else if (OB_FAIL(obj.get_int(session_max_stale_time))) {
+        LOG_WARN("get int failed", KR(ret), K(tenant_id), K(obj));
+      } else if (refresh_interval > session_max_stale_time) {
+        valid = false;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                       "weak_read_version_refresh_interval is larger than ob_max_read_stale_time");
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -9022,6 +9074,14 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
         }
+      }
+    } else if (0 == STRCMP(item->name_.ptr(), WEAK_READ_VERSION_REFRESH_INTERVAL)) {
+      int64_t refresh_interval = ObConfigTimeParser::get(item->value_.ptr(), valid);
+      if (valid && OB_FAIL(check_weak_read_version_refresh_interval(refresh_interval, valid))) {
+        LOG_WARN("check refresh interval failed ", KR(ret), K(*item));
+      } else if (!valid) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("config invalid", KR(ret), K(*item));
       }
     }
   }

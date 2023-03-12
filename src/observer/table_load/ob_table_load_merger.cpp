@@ -189,9 +189,8 @@ int ObTableLoadMerger::build_merge_ctx()
   merge_param.table_id_ = param_.table_id_;
   merge_param.target_table_id_ = store_ctx_->ctx_->ddl_param_.dest_table_id_;
   merge_param.rowkey_column_num_ = store_ctx_->ctx_->schema_.rowkey_column_count_;
-  merge_param.schema_column_count_ =
-    (store_ctx_->ctx_->schema_.is_heap_table_ ? store_ctx_->table_data_desc_.column_count_ + 1
-                                              : store_ctx_->table_data_desc_.column_count_);
+  merge_param.store_column_count_ = store_ctx_->ctx_->schema_.store_column_count_;
+  merge_param.snapshot_version_ = param_.snapshot_version_;
   merge_param.table_data_desc_ = store_ctx_->table_data_desc_;
   merge_param.datum_utils_ = &(store_ctx_->ctx_->schema_.datum_utils_);
   merge_param.col_descs_ = &(store_ctx_->ctx_->schema_.column_descs_);

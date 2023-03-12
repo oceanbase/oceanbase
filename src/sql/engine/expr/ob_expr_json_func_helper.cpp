@@ -647,7 +647,7 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("buf allocate failed", K(ret), K(type));
         } else {
-          json_node = (ObJsonDouble *)new(buf)ObJsonDouble(datum.get_double());
+          json_node = (ObJsonDouble *)new(buf)ObJsonDouble(val);
         }
       }
       break;

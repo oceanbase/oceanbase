@@ -21,6 +21,7 @@
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "rootserver/ddl_task/ob_table_redefinition_task.h"
+#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {
@@ -101,8 +102,11 @@ int ObDDLServerClient::copy_table_dependents(const obrpc::ObCopyTableDependentsA
   } else {
     while (OB_SUCC(ret)) {
       int tmp_ret = OB_SUCCESS;
+      omt::ObTenant *tenant = nullptr;
       if (OB_TMP_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
         LOG_WARN("fail to rootservice address", K(tmp_ret));
+      } else if (OB_FAIL(GCTX.omt_->get_tenant(arg.tenant_id_, tenant))) {
+        LOG_WARN("fail to get tenant, maybe tenant deleted", K_(arg.tenant_id));
       } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).copy_table_dependents(arg))) {
         LOG_WARN("copy table dependents failed", K(ret), K(arg));
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -137,8 +141,11 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
   } else {
     while (OB_SUCC(ret)) {
       int tmp_ret = OB_SUCCESS;
+      omt::ObTenant *tenant = nullptr;
       if (OB_TMP_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
         LOG_WARN("fail to get rootservice address", K(tmp_ret));
+      } else if (OB_FAIL(GCTX.omt_->get_tenant(arg.tenant_id_, tenant))) {
+        LOG_WARN("fail to get tenant, maybe tenant deleted", K_(arg.tenant_id));
       } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).abort_redef_table(arg))) {
         LOG_WARN("abort redef table failed", K(ret), K(arg));
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -156,7 +163,8 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     }
-    if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(arg.tenant_id_, arg.task_id_, session, common_rpc_proxy))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(arg.tenant_id_, arg.task_id_, session, common_rpc_proxy))) {
       LOG_WARN("wait ddl finish failed", K(ret), K(arg.tenant_id_), K(arg.task_id_));
     }
     int tmp_ret = OB_SUCCESS;
@@ -185,8 +193,11 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
   } else {
     while (OB_SUCC(ret)) {
       int tmp_ret = OB_SUCCESS;
+      omt::ObTenant *tenant = nullptr;
       if (OB_TMP_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
         LOG_WARN("fail to rootservice address", K(tmp_ret));
+      } else if (OB_FAIL(GCTX.omt_->get_tenant(finish_redef_arg.tenant_id_, tenant))) {
+        LOG_WARN("fail to get tenant, maybe tenant deleted", K_(finish_redef_arg.tenant_id));
       } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).finish_redef_table(finish_redef_arg))) {
         LOG_WARN("finish redef table failed", K(ret), K(finish_redef_arg));
         if (OB_ENTRY_NOT_EXIST == ret) {

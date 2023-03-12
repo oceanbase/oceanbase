@@ -308,7 +308,8 @@ private:
       if ((wbytes = ob_write_regard_ssl(fd, buf + pos, sz - pos)) >= 0) {
         pos += wbytes;
       } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
-        LOG_INFO("write return EAGAIN");
+        LOG_INFO("write return EAGAIN", K(fd));
+        ret = OB_EAGAIN;
       } else if (EINTR == errno) {
         // pass
       } else {
@@ -316,8 +317,9 @@ private:
         LOG_WARN("write data error", K(errno));
       }
     }
-    if (OB_SUCCESS == ret) {
+    if (OB_SUCCESS == ret || OB_EAGAIN == ret) {
       consume_bytes = pos;
+      ret = OB_SUCCESS;
     }
     return ret;
   }
@@ -434,6 +436,7 @@ public:
   void shutdown() { ::shutdown(fd_, SHUT_RD); }
   int set_ssl_enabled();
   SSL* get_ssl_st();
+  int write_handshake_packet(const char* buf, int64_t sz);
 public:
   ObDLink dlink_;
   ObDLink all_list_link_;
@@ -474,6 +477,27 @@ int ObSqlSock::set_ssl_enabled()
 SSL* ObSqlSock::get_ssl_st()
 {
   return ob_fd_get_ssl_st(fd_);
+}
+
+int ObSqlSock::write_handshake_packet(const char* buf, int64_t sz) {
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  while(pos < sz && OB_SUCCESS == ret) {
+    int64_t wbytes = 0;
+    if ((wbytes = write(fd_, buf + pos, sz - pos)) >= 0) {
+      pos += wbytes;
+    } else if (EINTR == errno) {
+      //continue
+    } else {
+      //when send handshake packet, only process EINTR as normal, other errno
+      //will be treated as error
+      IGNORE_RETURN(set_error(EIO));
+      ret = OB_IO_ERROR;
+      LOG_WARN("write data error", K_(fd), K(errno));
+    }
+  }
+  last_write_time_ = ObTimeUtility::current_time();
+  return ret;
 }
 
 static struct epoll_event *__make_epoll_event(struct epoll_event *event, uint32_t event_flag, void* val) {
@@ -852,15 +876,11 @@ private:
           break;
         }
       } else {
-        int err = 0;
-        if (0 != (err = do_accept_one(fd))) {
-          LOG_ERROR_RET(OB_ERR_SYS, "do_accept_one fail", K(fd), K(err));
-          close(fd);
-        }
+        do_accept_one(fd);
       }
     }
   }
-  int do_accept_one(int fd) {
+  void do_accept_one(int fd) {
     int err = 0;
     ObSqlSock* s = NULL;
     int enable_tcp_nodelay = 1;
@@ -871,18 +891,33 @@ private:
     } else if (NULL == (s = alloc_sql_sock(fd))) {
       err = -ENOMEM;
       LOG_WARN_RET(OB_ERR_SYS, "alloc_sql_sock fail", K(fd), K(err));
-    } else if (0 != (err = epoll_regist(epfd_, fd, epflag, s))) {
-      LOG_WARN_RET(OB_ERR_SYS, "epoll_regist fail", K(fd), K(err));
     } else if (0 != (err = handler_.on_connect(s->sess_, fd))) {
       LOG_WARN_RET(OB_ERR_SYS, "on_connect fail", K(err));
+    } else if (0 != (err = epoll_regist(epfd_, fd, epflag, s))) {
+      LOG_WARN_RET(OB_ERR_SYS, "epoll_regist fail", K(fd), K(err));
     } else {
       LOG_INFO("accept one succ", K(*s));
     }
-    if (0 != err && NULL != s) {
-      ObSqlSockSession* sess = (ObSqlSockSession *)s->sess_;
-      sess->destroy_sock();
+    if (0 != err) {
+      if (NULL != s) {
+        ObSqlSockSession* sess = (ObSqlSockSession *)s->sess_;
+        if (sess->is_inited()) {
+          /*
+           * if ObSqlSockSession is inited, ObSMConnection and ObSqlSockSession
+           * may also been inited, we need on_disconnect and destroy procedure
+           * to clear related struct
+          */
+          s->on_disconnect();
+          sess->destroy();
+          s->do_close();
+        } else {
+          close(fd);
+        }
+        free_sql_sock(s);
+      } else {
+        close(fd);
+      }
     }
-    return err;
   }
 private:
   ObSqlSock* alloc_sql_sock(int fd) {
@@ -1160,5 +1195,9 @@ void ObSqlNio::update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_k
   }
 }
 
+int ObSqlNio::write_handshake_packet(void* sess, const char* buf, int64_t sz)
+{
+  return sess2sock(sess)->write_handshake_packet(buf, sz);
+}
 }; // end namespace obmysql
 }; // end namespace oceanbase

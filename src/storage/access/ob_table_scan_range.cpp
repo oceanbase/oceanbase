@@ -191,8 +191,7 @@ int ObTableScanRange::init_rowkeys(const common::ObIArray<common::ObNewRange> &r
       if (OB_SUCC(ret)) {
         if (rowkeys_.empty()) {
           status_ = EMPTY;
-        } else if (rowkeys_.count() > 1 && nullptr != datum_utils
-            && (scan_flag.scan_order_ == ObQueryFlag::Forward || scan_flag.scan_order_ == ObQueryFlag::Reverse)) {
+        } else if (rowkeys_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
           ObDatumComparor<ObDatumRowkey> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
           std::sort(rowkeys_.begin(), rowkeys_.end(), comparor);
           if (OB_FAIL(ret)) {
@@ -240,8 +239,7 @@ int ObTableScanRange::init_ranges(const common::ObIArray<common::ObNewRange> &ra
       if (OB_SUCC(ret)) {
         if (ranges_.empty()) {
           status_ = EMPTY;
-        } else if (ranges_.count() > 1 && nullptr != datum_utils
-            && (scan_flag.scan_order_ == ObQueryFlag::Forward || scan_flag.scan_order_ == ObQueryFlag::Reverse)) {
+        } else if (ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
           ObDatumComparor<ObDatumRange> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
           std::sort(ranges_.begin(), ranges_.end(), comparor);
           if (OB_FAIL(ret)) {
@@ -288,8 +286,7 @@ int ObTableScanRange::init_ranges_in_skip_scan(const common::ObIArray<common::Ob
     if (OB_SUCC(ret)) {
       if (wrapped_ranges_.empty()) {
         status_ = EMPTY;
-      } else if (wrapped_ranges_.count() > 1 && nullptr != datum_utils
-          && (scan_flag.scan_order_ == ObQueryFlag::Forward || scan_flag.scan_order_ == ObQueryFlag::Reverse)) {
+      } else if (wrapped_ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
         ObDatumComparor<ObSkipScanWrappedRange> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
         std::sort(wrapped_ranges_.begin(), wrapped_ranges_.end(), comparor);
         if (OB_FAIL(ret)) {

@@ -207,7 +207,7 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
   ObDataTypeCastParams cast_params(&(coordinator_ctx_->partition_calc_.tz_info_));
   ObCastCtx cast_ctx(&autoinc_allocator, &cast_params, CM_NONE,
                       ObCharset::get_system_collation());
-  ObTableLoadCastObjCtx cast_obj_ctx(&(coordinator_ctx_->partition_calc_.time_cvrt_), &cast_ctx,
+  ObTableLoadCastObjCtx cast_obj_ctx(param_, &(coordinator_ctx_->partition_calc_.time_cvrt_), &cast_ctx,
                                       false);
   ObObj out_obj;
   for (int64_t j = 0; OB_SUCC(ret) && j < row_count; ++j) {
@@ -215,7 +215,7 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
     ObTableLoadObjRow &obj_row = obj_rows.at(j);
     out_obj.set_null();
     const ObTableLoadPartitionCalc::IndexAndType &index_and_type =
-      coordinator_ctx_->partition_calc_.rowkey_obj_index_.at(
+      coordinator_ctx_->partition_calc_.part_key_obj_index_.at(
         coordinator_ctx_->partition_calc_.partition_with_autoinc_idx_);
     const ObColumnSchemaV2 *column_schema = index_and_type.column_schema_;
     const int64_t obj_index = index_and_type.index_;
@@ -309,7 +309,7 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("TLD_Misc", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_);
-  ObTableLoadPartitionCalcContext calc_ctx(obj_rows, param_.column_count_, allocator);
+  ObTableLoadPartitionCalcContext calc_ctx(obj_rows, param_, allocator);
   if (OB_FAIL(coordinator_ctx_->partition_calc_.calc(calc_ctx))) {
     LOG_WARN("fail to calc partition", KR(ret));
   }

@@ -184,7 +184,7 @@ USE_DISTRIBUTED_DML NO_USE_DISTRIBUTED_DML
 // direct load data hint
 DIRECT
 // hint related to optimizer statistics
-APPEND NO_GATHER_OPTIMIZER_STATISTICS GATHER_OPTIMIZER_STATISTICS
+APPEND NO_GATHER_OPTIMIZER_STATISTICS GATHER_OPTIMIZER_STATISTICS DBMS_STATS
 // other
 NEG_SIGN
 
@@ -8452,6 +8452,10 @@ READ_CONSISTENCY '(' consistency_level ')'
 | GATHER_OPTIMIZER_STATISTICS
 {
   malloc_terminal_node($$, result->malloc_pool_, T_GATHER_OPTIMIZER_STATISTICS);
+}
+| DBMS_STATS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_DBMS_STATS);
 }
 ;
 

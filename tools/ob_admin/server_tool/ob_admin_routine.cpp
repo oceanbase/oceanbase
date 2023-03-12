@@ -333,6 +333,35 @@ DEF_COMMAND(SERVER, force_set_all_as_single_replica, 1, "#force set all as singl
   return ret;
 }
 
+DEF_COMMAND(SERVER, force_set_ls_as_single_replica, 1, "tenant_id:ls_id  # force set as single replica")
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObForceSetLSAsSingleReplicaArg arg;
+  string arg_str;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("## Error: should provide tenant_id:ls_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+  uint64_t tenant_id = 0;
+  int64_t ls_id_val = -1;
+  if (OB_FAIL(ret)) {
+  } else if (2 != sscanf(arg_str.c_str(), "%ld:%ld", &tenant_id, &ls_id_val)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret));
+  } else {
+    share::ObLSID ls_id(ls_id_val);
+    if (OB_SUCCESS != (ret = arg.init(tenant_id, ls_id))) {
+      COMMON_LOG(ERROR, "init arg failed", K(ret), K(arg), K(tenant_id), K(ls_id));
+    } else if (OB_SUCCESS != (ret = client_->force_set_ls_as_single_replica(arg))) {
+      COMMON_LOG(ERROR, "send req failed", K(ret), K(arg));
+    }
+  }
+  COMMON_LOG(INFO, "force_set_ls_as_single_replica", K(ret), K(arg));
+  return ret;
+}
+
 DEF_COMMAND(SERVER, force_create_sys_table, 1, "tenant_id:table_id:last_replay_log_id # force create sys table")
 {
   int ret = OB_SUCCESS;

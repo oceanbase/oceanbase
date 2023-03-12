@@ -38,7 +38,8 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
   : table_id_(OB_INVALID_ID),
     target_table_id_(OB_INVALID_ID),
     rowkey_column_num_(0),
-    schema_column_count_(0),
+    store_column_count_(0),
+    snapshot_version_(0),
     datum_utils_(nullptr),
     col_descs_(nullptr),
     is_heap_table_(false),
@@ -56,9 +57,9 @@ ObDirectLoadMergeParam::~ObDirectLoadMergeParam()
 
 bool ObDirectLoadMergeParam::is_valid() const
 {
-  return OB_INVALID_ID != table_id_ && 0 < rowkey_column_num_ && 0 < schema_column_count_ &&
-         table_data_desc_.is_valid() && nullptr != datum_utils_ && nullptr != col_descs_ &&
-         nullptr != insert_table_ctx_ &&  nullptr != error_row_handler_;
+  return OB_INVALID_ID != table_id_ && 0 < rowkey_column_num_ && 0 < store_column_count_ &&
+         snapshot_version_ > 0 && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
+         nullptr != col_descs_ && nullptr != insert_table_ctx_ && nullptr != error_row_handler_;
 }
 
 /**
@@ -209,8 +210,7 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
   } else {
     int64_t table_row_cnt = 0;
     int64_t table_avg_len = 0;
-    int64_t col_cnt =
-      param_.is_heap_table_ ? param_.schema_column_count_ - 1 : param_.schema_column_count_;
+    int64_t col_cnt = param_.table_data_desc_.column_count_;
     ObOptTableStat *table_stat = nullptr;
     ObOptDmlStat dml_stat;
     StatLevel stat_level;

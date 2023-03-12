@@ -33,7 +33,7 @@ namespace common
 // All objects have common ID Type, including Table/Partition and so on.
 // Define 'uint64_t' as Object ID Type for code-compatibility temporarily.
 // TODO: Use 'int64_t' instead when all objects are ready.
-// See: https://yuque.antfin-inc.com/ob/rootservice/lvnlgi
+// See: docs on yuque rootservice/lvnlgi
 
 // Common Object ID Type
 typedef uint64_t ObObjectID;
@@ -459,7 +459,6 @@ const int64_t OB_MYSQL_COMPRESSED_HEADER_SIZE = OB_MYSQL_HEADER_LENGTH + 3;  /* 
 
 
 //-----------------------------------oceanbase 2.0 c/s protocol----------------------//
-// https://lark.alipay.com/quanwei.wqw/aap9pg/wrga61
 const uint16_t OB20_PROTOCOL_MAGIC_NUM = 0x20AB;
 const int64_t OB20_PROTOCOL_HEADER_LENGTH = 24;
 const int64_t OB20_PROTOCOL_TAILER_LENGTH = 4;  // for CRC32
@@ -781,7 +780,7 @@ const char *const OB_FAKE_TENANT_NAME = "fake_tenant";
 const char *const OB_GTS_TENANT_NAME = "gts";
 const char *const OB_SYS_HOST_NAME = "%";
 const char *const OB_DEFAULT_HOST_NAME = "%";
-const char *const OB_MONITOR_TENANT_NAME = "monitor";
+// const char *const OB_MONITOR_TENANT_NAME = "monitor";
 const char *const OB_DIAG_TENANT_NAME = "diag";
 //for sync ddl (ClusterID_TenantID_SchemaVersion)
 const char *const OB_DDL_ID_VAR_NAME = "__oceanbase_ddl_id";
@@ -819,7 +818,7 @@ const uint64_t OB_GTS_TENANT_ID = 2;
 const uint64_t OB_SERVER_TENANT_ID = 500;
 const uint64_t OB_ELECT_TENANT_ID = 501;
 const uint64_t OB_EXT_LOG_TENANT_ID = 506;
-const uint64_t OB_MONITOR_TENANT_ID = 507;
+// const uint64_t OB_MONITOR_TENANT_ID = 507;
 const uint64_t OB_DTL_TENANT_ID = 508;
 const uint64_t OB_DATA_TENANT_ID = 509;
 const uint64_t OB_RS_TENANT_ID = 510;
@@ -854,7 +853,7 @@ const int64_t OB_SCHEMA_CODE_VERSION = 1;
  *
  * OBJECT_ID FOR INNER OBJECTS (0, 500000)
  *
- * For more details: https://yuque.antfin-inc.com/ob/product_functionality_review/fgcxak
+ * For more details: see docs on yuque product_functionality_review/fgcxak
  *
  * To avolid confict, border for each range should not be used.
  *
@@ -1450,7 +1449,7 @@ OB_INLINE uint64_t combine_sequence_id(int64_t rootservice_epoch, uint64_t pure_
  * 1) If tenant_id = OB_SYS_TENANT_ID, it's sys tenant.
  * 2) If tenant_id is odd, it's meta tenant.
  * 3) If tenant_id is even, it't user tenant.
- * https://yuque.antfin-inc.com/ob/rootservice/cnxdv7#pIAUC
+ * see more docs on yuque rootservice/cnxdv7#pIAUC
  */
 OB_INLINE bool is_sys_tenant(const uint64_t tenant_id)
 {

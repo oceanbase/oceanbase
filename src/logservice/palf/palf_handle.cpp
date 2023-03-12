@@ -308,6 +308,11 @@ int PalfHandle::change_replica_num(const common::ObMemberList &member_list,
   CHECK_VALID;
   return palf_handle_impl_->change_replica_num(member_list, curr_replica_num, new_replica_num, timeout_us);
 }
+int PalfHandle::force_set_as_single_replica()
+{
+  CHECK_VALID;
+  return palf_handle_impl_->force_set_as_single_replica();
+}
 int PalfHandle::get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                                    common::GlobalLearnerList &degraded_list) const
 {

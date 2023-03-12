@@ -126,5 +126,6 @@ int main(int argc, char **argv)
   OB_LOGGER.set_log_level("INFO");
   PALF_LOG(INFO, "begin unittest::test_log_meta_entry");
   ::testing::InitGoogleTest(&argc, argv);
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }

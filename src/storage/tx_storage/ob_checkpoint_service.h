@@ -19,13 +19,6 @@
 
 namespace oceanbase
 {
-namespace logservice
-{
-class ObLogHandler;
-}
-namespace palf {
-struct LSN;
-}
 namespace storage
 {
 namespace checkpoint
@@ -82,8 +75,6 @@ private:
     virtual ~ObCheckpointTask() {}
 
     virtual void runTimerTask();
-  private:
-    int get_sys_ls_recovery_lsn_(logservice::ObLogHandler *log_handler, palf::LSN &recovery_lsn);
   };
 
   class ObTraversalFlushTask : public common::ObTimerTask

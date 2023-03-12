@@ -66,6 +66,7 @@ class MockLSAdapter;
   OB_LOGGER.set_enable_async_log(false); \
   SERVER_LOG(INFO, "begin unittest"); \
   ::testing::InitGoogleTest(&argc, argv); \
+  ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION); \
   return RUN_ALL_TESTS();
 
 int generate_data(char *&buf, int buf_len, int &real_data_size, const int wanted_data_size);

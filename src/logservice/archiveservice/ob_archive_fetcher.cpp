@@ -175,6 +175,7 @@ int ObArchiveFetcher::set_archive_info(
     const ObCompressorType type,
     const bool need_encrypt)
 {
+  UNUSED(unit_size);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(interval_us <= 0 || !genesis_scn.is_valid() || base_piece_id < 1 || unit_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -186,7 +187,6 @@ int ObArchiveFetcher::set_archive_info(
     UNUSED(need_encrypt);
     genesis_scn_ = genesis_scn;
     base_piece_id_ = base_piece_id;
-    unit_size_ = unit_size;
     unit_size_ = 1;
   }
   return ret;

@@ -77,7 +77,7 @@ private:
 private:
   common::ObArenaAllocator allocator_;
   ObDirectLoadOriginTable *origin_table_;
-  ObSEArray<int32_t, OB_MAX_COLUMN_NUMBER> col_ids_;
+  ObArray<int32_t> col_ids_;
   share::schema::ObTableSchemaParam schema_param_;
   ObTableAccessParam table_access_param_;
   ObDirectLoadIOCallback io_callback_;

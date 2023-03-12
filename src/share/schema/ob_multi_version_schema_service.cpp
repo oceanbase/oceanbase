@@ -2224,8 +2224,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
 /*
  * 1. If tenant_id is OB_INVALID_TENANT_ID, it means refresh the schema of all tenants,
  *  otherwise only the schema of the corresponding tenant will be refreshed.
- * 2. The new schema_version broadcast mechanism does not support the read-only zone scheme. For details, see:
- *  https://yuque.antfin-inc.com/ob/rootservice/gxom1e
+ * 2. The new schema_version broadcast mechanism does not support the read-only zone scheme.
  * 3. When refreshing the schema, you must first obtain the schema_version version
  *  that each tenant wants to refresh from the internal table:
  *  1) For system tenants of the primary cluster and standalone cluster, the schema refresh is strengthened

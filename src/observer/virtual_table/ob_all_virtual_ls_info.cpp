@@ -185,6 +185,10 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           // rebuild_seq
           cur_row_.cells_[i].set_int(ls_info.rebuild_seq_);
           break;
+        case OB_APP_MIN_COLUMN_ID + 13:
+          // clog_checkpoint_ts
+          cur_row_.cells_[i].set_uint64(!ls_info.tablet_change_checkpoint_scn_.is_valid() ? 0 : ls_info.tablet_change_checkpoint_scn_.get_val_for_tx());
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

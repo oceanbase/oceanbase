@@ -444,6 +444,7 @@ int ObMySQLConnectionPool::acquire(const uint64_t tenant_id, ObMySQLConnection *
       LOG_WARN("fail to get connection", K(ret), K(tenant_id));
     } else if (OB_FAIL(try_connect(connection))) {
       LOG_WARN("failed to try connection, will release connection", K(ret), K(tenant_id));
+      connection->set_exec_succ(false);
       const bool succ = false;
       if (OB_SUCCESS != release(connection, succ)) { // ignore ret
         LOG_WARN("failed to release connection, ignore ret");
@@ -798,6 +799,7 @@ int ObMySQLConnectionPool::acquire_dblink(uint64_t dblink_id, const dblink_param
     LOG_WARN("fail to acquire dblink", K(ret), K(dblink_id));
   } else if (OB_FAIL(try_connect_dblink(dblink_conn, sql_request_level))) {
     LOG_WARN("fail to try connect dblink", K(ret), K(dblink_id));
+    dblink_conn->set_exec_succ(false);
     int release_ret = release_dblink(dblink_conn, sessid);
     if (release_ret != OB_SUCCESS) {
       LOG_WARN("fail to release dblink conn", K(release_ret), K(dblink_id));
@@ -810,7 +812,8 @@ int ObMySQLConnectionPool::acquire_dblink(uint64_t dblink_id, const dblink_param
 int ObMySQLConnectionPool::release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(release(dynamic_cast<ObMySQLConnection *>(dblink_conn), true, sessid))) {
+  const bool succ = OB_NOT_NULL(dblink_conn) ? dblink_conn->get_exec_succ() : false;
+  if (OB_FAIL(release(dynamic_cast<ObMySQLConnection *>(dblink_conn), succ, sessid))) {
     LOG_WARN("fail to release dblink conn", K(ret));
   }
   return ret;

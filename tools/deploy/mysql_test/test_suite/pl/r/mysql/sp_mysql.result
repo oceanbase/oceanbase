@@ -800,6 +800,7 @@ show create procedure chistics|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% PROCEDURE `test`.`chistics`
 ()
+
 MODIFIES SQL DATA
 COMMENT `Characteristics procedure test`
  insert into t1 values ("chistics", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
@@ -813,6 +814,7 @@ show create procedure chistics|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% PROCEDURE `test`.`chistics`
 ()
+
 MODIFIES SQL DATA
 INVOKER
 COMMENT `Characteristics procedure test`
@@ -828,7 +830,8 @@ comment 'Characteristics procedure test'
 show create function chistics|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% FUNCTION `test`.`chistics`
-() RETURNS int(11)
+()
+ RETURNS int(11)
 DETERMINISTIC
 INVOKER
 COMMENT `Characteristics procedure test`
@@ -842,7 +845,8 @@ comment 'Characteristics function test'|
 show create function chistics|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% FUNCTION `test`.`chistics`
-() RETURNS int(11)
+()
+ RETURNS int(11)
 DETERMINISTIC
 INVOKER
 COMMENT `Characteristics procedure test`
@@ -1312,8 +1316,7 @@ Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Da
 opp		CREATE DEFINER = admin@% PROCEDURE `test`.`opp`
 (
  IN `n` bigint(20) unsigned, OUT `pp` tinyint(1)
-)
- begin
+) begin
 declare r double;
 declare b, s bigint unsigned default 0;
 set r = sqrt(n);
@@ -1951,8 +1954,8 @@ end	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 call bug2267_4()|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug2267_4		CREATE DEFINER = admin@% FUNCTION `test`.`bug2267_4`
-() RETURNS int(11)
- return 100	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+()
+ RETURNS int(11) return 100	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure bug2267_1|
 drop procedure bug2267_2|
 drop procedure bug2267_3|
@@ -2237,6 +2240,7 @@ show create procedure bug2564_1|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 bug2564_1		CREATE DEFINER = admin@% PROCEDURE `test`.`bug2564_1`
 ()
+
 COMMENT `Joe's procedure`
  insert into `t1` values ("foo", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create procedure bug2564_2|
@@ -2246,15 +2250,13 @@ Function	sql_mode	Create Function	character_set_client	collation_connection	Data
 bug2564_3		CREATE DEFINER = admin@% FUNCTION `test`.`bug2564_3`
 (
  `x` int(11), `y` int(11)
-) RETURNS int(11)
- return x || y	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+) RETURNS int(11) return x || y	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create function bug2564_4|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug2564_4	REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ANSI	CREATE DEFINER = admin@% FUNCTION `test`.`bug2564_4`
 (
  `x` int(11), `y` int(11)
-) RETURNS int(11)
- return x || y	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+) RETURNS int(11) return x || y	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure bug2564_1|
 drop procedure bug2564_2|
 ERROR 42000: PROCEDURE test.bug2564_2 does not exist
@@ -3689,17 +3691,17 @@ call bug12589_1()|
 Table	Create Table
 tm1	CREATE TEMPORARY TABLE `tm1` (
   `spv1` decimal(3,3) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 call bug12589_2()|
 Table	Create Table
 tm1	CREATE TEMPORARY TABLE `tm1` (
   `spv1` decimal(6,3) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 call bug12589_3()|
 Table	Create Table
 tm1	CREATE TEMPORARY TABLE `tm1` (
   `spv1` decimal(6,3) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 drop procedure bug12589_1|
 drop procedure bug12589_2|
 drop procedure bug12589_3|
@@ -4622,7 +4624,7 @@ show create table t3|
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `j` int(11) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 select * from t3|
 j
 0
@@ -4802,23 +4804,23 @@ RETURN ""|
 SHOW CREATE FUNCTION bug16211_f1|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug16211_f1		CREATE DEFINER = admin@% FUNCTION `mysqltest1`.`bug16211_f1`
-() RETURNS char(10)
- RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+()
+ RETURNS char(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION bug16211_f2|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug16211_f2		CREATE DEFINER = admin@% FUNCTION `mysqltest1`.`bug16211_f2`
-() RETURNS binary(10)
- RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+()
+ RETURNS binary(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION mysqltest2.bug16211_f3|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug16211_f3		CREATE DEFINER = admin@% FUNCTION `mysqltest2`.`bug16211_f3`
-() RETURNS char(10)
- RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+()
+ RETURNS char(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION mysqltest2.bug16211_f4|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug16211_f4		CREATE DEFINER = admin@% FUNCTION `mysqltest2`.`bug16211_f4`
-() RETURNS binary(10)
- RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+()
+ RETURNS binary(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest1" AND ROUTINE_NAME = "bug16211_f1"|
@@ -4860,23 +4862,23 @@ ALTER DATABASE mysqltest2 CHARACTER SET utf8mb4|
 SHOW CREATE FUNCTION bug16211_f1|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug16211_f1		CREATE DEFINER = admin@% FUNCTION `mysqltest1`.`bug16211_f1`
-() RETURNS char(10)
- RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+()
+ RETURNS char(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION bug16211_f2|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug16211_f2		CREATE DEFINER = admin@% FUNCTION `mysqltest1`.`bug16211_f2`
-() RETURNS binary(10)
- RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+()
+ RETURNS binary(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION mysqltest2.bug16211_f3|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug16211_f3		CREATE DEFINER = admin@% FUNCTION `mysqltest2`.`bug16211_f3`
-() RETURNS char(10)
- RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+()
+ RETURNS char(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION mysqltest2.bug16211_f4|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug16211_f4		CREATE DEFINER = admin@% FUNCTION `mysqltest2`.`bug16211_f4`
-() RETURNS binary(10)
- RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+()
+ RETURNS binary(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest1" AND ROUTINE_NAME = "bug16211_f1"|
@@ -6138,8 +6140,7 @@ Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Da
 proc_25411_b		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_25411_b`
 (
  IN `p1` int(11), IN `p2` int(11), IN `p3` int(11)
-)
- begin
+) begin
 select p1, p2;
 end	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 select name, param_list, body from mysql.proc where name like "%25411%";
@@ -6248,7 +6249,7 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `v` datetime DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 
 DROP TABLE t1;
 
@@ -6257,7 +6258,7 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `v` datetime DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 
 DROP TABLE t1;
 
@@ -6266,7 +6267,7 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `v` int(11) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 
 DROP TABLE t1;
 
@@ -6275,7 +6276,7 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `v` int(11) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 
 DROP TABLE t1;
 
@@ -6690,8 +6691,7 @@ Function	sql_mode	Create Function	character_set_client	collation_connection	Data
 f1		CREATE DEFINER = admin@% FUNCTION `test`.`f1`
 (
  `p` int(11)
-) RETURNS enum
- BEGIN
+) RETURNS enum BEGIN
 CASE p
 WHEN 1 THEN
 RETURN 'Very_long_enum_element_identifier';

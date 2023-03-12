@@ -257,7 +257,7 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
     // for major, need select inner_table to check RS status
     if (OB_FAIL(get_status_from_inner_table(ls_.get_ls_id(), tablet_.get_tablet_meta().tablet_id_, ret_info))) {
       LOG_WARN("failed to get status from inner tablet", K(ret), KPC(this));
-    } else if (ret_info.could_schedule_next_round(last_major->get_snapshot_version())) {
+    } else if (ret_info.could_schedule_next_round(medium_list.get_last_compaction_scn())) {
       LOG_INFO("success to check RS major checksum validation finished", K(ret), KPC(this), K(ret_info));
       ret = decide_medium_snapshot(is_major);
     } else {

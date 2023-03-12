@@ -453,10 +453,14 @@ int ObLobManager::query_remote(ObLobAccessParam& param, common::ObAddr& dst_addr
       arg.lob_locator_.ptr_ = param.lob_locator_->ptr_;
       arg.lob_locator_.size_ = param.lob_locator_->size_;
       arg.lob_locator_.has_lob_header_ = param.lob_locator_->has_lob_header_;
+      int64_t timeout = param.timeout_ - ObTimeUtility::current_time();
+      if (timeout < ObStorageRpcProxy::STREAM_RPC_TIMEOUT) {
+        timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+      }
       ret = svr_rpc_proxy->to(dst_addr).by(arg.tenant_id_)
                           .dst_cluster_id(GCONF.cluster_id)
                           .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                          .timeout(ObStorageRpcProxy::STREAM_RPC_TIMEOUT)
+                          .timeout(timeout)
                           .lob_query(arg, rpc_buffer, handle);
       if (OB_FAIL(ret)) {
         LOG_WARN("failed to do remote query", K(ret));
@@ -1808,10 +1812,14 @@ int ObLobManager::getlength_remote(ObLobAccessParam& param, common::ObAddr& dst_
       arg.lob_locator_.ptr_ = param.lob_locator_->ptr_;
       arg.lob_locator_.size_ = param.lob_locator_->size_;
       arg.lob_locator_.has_lob_header_ = param.lob_locator_->has_lob_header_;
+      int64_t timeout = param.timeout_ - ObTimeUtility::current_time();
+      if (timeout < ObStorageRpcProxy::STREAM_RPC_TIMEOUT) {
+        timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+      }
       ret = svr_rpc_proxy->to(dst_addr).by(arg.tenant_id_)
                           .dst_cluster_id(GCONF.cluster_id)
                           .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                          .timeout(ObStorageRpcProxy::STREAM_RPC_TIMEOUT)
+                          .timeout(timeout)
                           .lob_query(arg, rpc_buffer, handle);
       if (OB_FAIL(ret)) {
         LOG_WARN("failed to do remote query", K(ret));
@@ -2226,14 +2234,14 @@ int ObLobManager::write_outrow_inner(ObLobAccessParam& param, ObLobQueryIter *it
           } else {
             if (meta_iter.is_range_begin(result.meta_result_.info_)) {
               if (OB_FAIL(range_begin.deep_copy(*param.allocator_, result.meta_result_.info_))) {
-                LOG_WARN("deep copy meta info failed", K(ret));
+                LOG_WARN("deep copy meta info failed", K(ret), K(meta_iter));
               } else {
                 found_begin = true;
               }
             }
             if (OB_SUCC(ret) && meta_iter.is_range_end(result.meta_result_.info_)) {
               if (OB_FAIL(range_end.deep_copy(*param.allocator_, result.meta_result_.info_))) {
-                LOG_WARN("deep copy meta info failed", K(ret));
+                LOG_WARN("deep copy meta info failed", K(ret), K(meta_iter));
               } else {
                 found_end = true;
               }
@@ -2302,9 +2310,11 @@ int ObLobManager::write_outrow_inner(ObLobAccessParam& param, ObLobQueryIter *it
       // prepare write iter
       ObLobMetaWriteIter write_iter(read_buf, param.allocator_, ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE);
       if (OB_FAIL(write_iter.open(param, iter, read_buf, padding_size, post_data, remain_buf, seq_id_st, seq_id_ed))) {
-        LOG_WARN("failed to open meta writer", K(ret), K(write_iter), K(meta_iter), K(found_begin), K(found_end));
+        LOG_WARN("failed to open meta writer", K(ret), K(write_iter), K(meta_iter), K(found_begin), K(found_end),
+                 K(range_begin), K(range_end));
       } else if (OB_FAIL(write_outrow_result(param, write_iter))) {
-        LOG_WARN("failed to write outrow result", K(ret), K(write_iter), K(meta_iter), K(found_begin), K(found_end));
+        LOG_WARN("failed to write outrow result", K(ret), K(write_iter), K(meta_iter), K(found_begin), K(found_end),
+                 K(range_begin), K(range_end));
       }
       write_iter.close();
     }

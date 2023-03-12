@@ -640,7 +640,7 @@ enum ObMemLobType
   MAX_LOB_TYPE
 };
 
-// Memory Locator V2, Common Header, https://yuque.antfin.com/ob/gtuwei/mo6g8w
+// Memory Locator V2, Common Header, sz/mo6g8w
 // Notice: Do not add or remove fields from this sturct!
 // 8 bytes
 struct ObMemLobCommon
@@ -650,8 +650,8 @@ struct ObMemLobCommon
   static const uint32_t MAGIC_CODE2 = 0x7F7FABCD; // LOB magic for debug
 
   ObMemLobCommon(ObMemLobType type, bool is_simple) :
-    lob_common_(), type_(type), read_only_(0), has_inrow_data_(1), is_open_(0),
-    is_simple_(is_simple), has_extern_(0), reserved_(0), version_(MEM_LOB_LOCATOR_VERSION)
+    lob_common_(), version_(MEM_LOB_LOCATOR_VERSION), type_(type), read_only_(0),
+    has_inrow_data_(1), is_open_(0), is_simple_(is_simple), has_extern_(0), reserved_(0)
   { lob_common_.is_mem_loc_ = 1; }
 
   OB_INLINE void set_extern(bool has_extern) { has_extern_ = has_extern ? 1 : 0; };
@@ -690,6 +690,7 @@ struct ObMemLobCommon
   ObLobCommon lob_common_;
 
   // version, type, flags total 4 bytes, correspoinding to the old locator version
+  uint32_t version_ : 8;
   uint32_t type_ : 4;     // ObMemLobType (Persistent/TmpFull/TmpDelta)
 
   // flags, 20 bits
@@ -703,7 +704,6 @@ struct ObMemLobCommon
   uint32_t has_extern_ : 1; // Indicate whether the lob locator has extern segment
   uint32_t reserved_  : 15;
 
-  uint32_t version_ : 8;
 
   char data_[0];
 };
@@ -3664,7 +3664,6 @@ inline bool ObObj::strict_equal(const ObObj &other) const
     bret = false;
   } else {
     //here must use CS_TYPE_BINARY to compare, avoid spaces at the end of the string be ignored
-    //https://aone.alibaba-inc.com/project/81079/issue/17919616
     bret = (0 == compare(other, CS_TYPE_BINARY));
     if (bret && is_timestamp_tz()) {
       //for the data type of timestamp with time zone,

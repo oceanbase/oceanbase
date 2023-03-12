@@ -351,6 +351,8 @@ int ObTableLoadInstance::px_commit_ddl()
       LOG_WARN("fail to init coordinator", KR(ret));
     } else if (OB_FAIL(coordinator.px_commit_ddl(*session_info_))) {
       LOG_WARN("fail to do px_commit_ddl", KR(ret));
+    } else {
+      is_committed_ = true;
     }
   }
   return ret;

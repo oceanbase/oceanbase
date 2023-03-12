@@ -30,10 +30,11 @@ public:
   ObDirectLoadFastHeapTableBuildParam();
   ~ObDirectLoadFastHeapTableBuildParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(table_data_desc), KP_(insert_table_ctx), KP_(fast_heap_table_ctx),
-               KP_(result_info), K_(online_opt_stat_gather));
+  TO_STRING_KV(K_(tablet_id), K_(snapshot_version), K_(table_data_desc), KP_(insert_table_ctx),
+               KP_(fast_heap_table_ctx), KP_(result_info), K_(online_opt_stat_gather));
 public:
   common::ObTabletID tablet_id_;
+  int64_t snapshot_version_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   ObDirectLoadInsertTableContext *insert_table_ctx_;

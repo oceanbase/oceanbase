@@ -866,8 +866,7 @@ int ObSSTableIndexBuilder::close(const int64_t column_cnt, ObSSTableMergeRes &re
     STORAGE_LOG(DEBUG, "sstable has no data", K(ret));
   } else if (OB_FAIL(sort_roots())) {
     STORAGE_LOG(WARN, "fail to sort roots", K(ret));
-  } else if (!index_store_desc_.is_major_merge()
-      || index_store_desc_.major_working_cluster_version_ >= DATA_VERSION_4_1_0_0) {
+  } else if (check_version_for_small_sstable(index_store_desc_)) {
     const bool is_single_block = check_single_block();
     if (is_single_block) {
       switch (optimization_mode_) {
@@ -937,6 +936,12 @@ int ObSSTableIndexBuilder::close(const int64_t column_cnt, ObSSTableMergeRes &re
     clean_status(); // clear since re-entrant
   }
   return ret;
+}
+
+bool ObSSTableIndexBuilder::check_version_for_small_sstable(const ObDataStoreDesc &index_desc)
+{
+  return !index_desc.is_major_merge()
+      || index_desc.major_working_cluster_version_ >= DATA_VERSION_4_1_0_0;
 }
 
 int ObSSTableIndexBuilder::check_and_rewrite_sstable(ObSSTableMergeRes &res)
@@ -1037,6 +1042,8 @@ int ObSSTableIndexBuilder::do_check_and_rewrite_sstable(ObBlockInfo &block_info)
   } else if (OB_FAIL(parse_macro_header(read_handle.get_buffer(), read_handle.get_data_size(), macro_header))) {
     STORAGE_LOG(WARN, "fail to parse macro header", K(ret));
   } else {
+    roots_[0]->meta_block_offset_ = macro_header.fixed_header_.meta_block_offset_;
+    roots_[0]->meta_block_size_ = macro_header.fixed_header_.meta_block_size_;
     const int64_t align_size = upper_align(
       macro_header.fixed_header_.meta_block_offset_ + macro_header.fixed_header_.meta_block_size_,
       DIO_READ_ALIGN_SIZE);
@@ -2177,7 +2184,8 @@ int ObMetaIndexBlockBuilder::close(
     } else if (OB_FAIL(build_single_node_tree(*allocator_, micro_block_desc, block_desc))) {
       STORAGE_LOG(WARN, "fail to build single node tree of meta", K(ret));
     }
-  } else if (row_count_ <= 0 && 1 == micro_block_desc.row_count_) {
+  } else if (row_count_ <= 0 && 1 == micro_block_desc.row_count_
+      && ObSSTableIndexBuilder::check_version_for_small_sstable(*index_store_desc_)) {
     // this sstable only has one data block, but the size of meta data exceeds ROOT_BLOCK_SIZE_LIMIT,
     // so sstable's root points to the tail of its data block (macro meta row)
     if (OB_FAIL(build_single_macro_row_desc(roots))) {

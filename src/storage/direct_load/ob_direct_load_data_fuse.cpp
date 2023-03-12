@@ -21,7 +21,10 @@ using namespace sql;
  */
 
 ObDirectLoadDataFuseParam::ObDirectLoadDataFuseParam()
-  : datum_utils_(nullptr), error_row_handler_(nullptr), result_info_(nullptr)
+  : store_column_count_(0),
+    datum_utils_(nullptr),
+    error_row_handler_(nullptr),
+    result_info_(nullptr)
 {
 }
 
@@ -31,8 +34,8 @@ ObDirectLoadDataFuseParam::~ObDirectLoadDataFuseParam()
 
 bool ObDirectLoadDataFuseParam::is_valid() const
 {
-  return tablet_id_.is_valid() && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
-         nullptr != error_row_handler_ && nullptr != result_info_;
+  return tablet_id_.is_valid() && store_column_count_ > 0 && table_data_desc_.is_valid() &&
+         nullptr != datum_utils_ && nullptr != error_row_handler_ && nullptr != result_info_;
 }
 
 /**
@@ -186,6 +189,9 @@ int ObDirectLoadDataFuse::supply_consume()
       } else {
         ret = OB_SUCCESS;
       }
+    } else if (OB_UNLIKELY(item.datum_row_->count_ != param_.store_column_count_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected column count", KR(ret), K(item.datum_row_->count_), K(param_.store_column_count_));
     } else {
       item.iter_idx_ = iter_idx;
       if (OB_FAIL(rows_merger_.push(item))) {

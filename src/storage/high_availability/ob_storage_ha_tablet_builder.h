@@ -111,6 +111,7 @@ private:
       const common::ObTabletID &tablet_id,
       ObTablesHandleArray &tables_handle,
       ObStorageSchema &storage_schema,
+      compaction::ObMediumCompactionInfoList &medium_info_list,
       common::ObIAllocator &allocator);
   int hold_local_complete_tablet_sstable_(
       ObTablet *tablet,
@@ -142,7 +143,8 @@ private:
       ObLS *ls,
       const obrpc::ObCopyTabletInfo &tablet_info,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const compaction::ObMediumCompactionInfoList &medium_info_list);
 private:
   bool is_inited_;
   ObStorageHATabletsBuilderParam param_;
@@ -279,7 +281,8 @@ public:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const compaction::ObMediumCompactionInfoList &medium_info_list);
   static int build_table_with_minor_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
@@ -306,7 +309,8 @@ private:
       ObLS *ls,
       ObTablet *tablet,
       ObITable *table,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const compaction::ObMediumCompactionInfoList &medium_info_list);
   static int inner_update_tablet_table_store_with_minor_(
       ObLS *ls,
       ObTablet *tablet,

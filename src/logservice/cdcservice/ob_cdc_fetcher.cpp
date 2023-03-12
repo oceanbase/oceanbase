@@ -391,7 +391,7 @@ int ObCdcFetcher::set_fetch_mode_before_fetch_log_(const ObLSID &ls_id,
       ctx.set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "LSNotExistInPalf");
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("logstream in sys tenant doesn't exist, unexpected", KR(ret));
+      LOG_WARN("logstream in sys tenant doesn't exist, unexpected", KR(ret), K(ls_id));
     }
   } else if (FetchMode::FETCHMODE_ARCHIVE == ctx.get_fetch_mode()) {
     int64_t end_ts_ns = OB_INVALID_TIMESTAMP;
@@ -468,6 +468,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
   // always reset remote_iter when need_init_iter is true
   // always set need_init_inter=true when switch fetch_mode
   bool need_init_iter = true;
+  bool log_exist_in_palf = true;
   int64_t retry_count = 0;
   const bool fetch_archive_only = ObCdcRpcTestFlag::is_fetch_archive_only(fetch_flag);
   // test switch fetch mode requires that the fetch mode should be FETCHMODE_ARCHIVE at first, and then
@@ -500,7 +501,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
     int64_t start_fetch_ts = ObTimeUtility::current_time();
     bool fetch_log_succ = false;
     const int64_t MAX_RETRY_COUNT = 3;
-    if (is_time_up_(fetched_log_count, end_tstamp)) { // time up, stop fetching logs globally
+    if (is_time_up_(scan_round_count, end_tstamp)) { // time up, stop fetching logs globally
       frt.stop("TimeUP");
       LOG_INFO("fetch log quit in time", K(end_tstamp), K(frt), K(fetched_log_count));
     } // time up
@@ -514,13 +515,19 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
           ret = OB_SUCCESS;
         } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
           // switch to fetchmode_archive, when in FETCHMODE_ONLINE, remote_iter is not inited
-          need_init_iter = true;
-          ctx.set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "PalfOutOfLowerBound");
-          ret = OB_SUCCESS;
+          if (OB_SYS_TENANT_ID != tenant_id_) {
+            need_init_iter = true;
+            log_exist_in_palf = false;
+            ctx.set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "PalfOutOfLowerBound");
+            ret = OB_SUCCESS;
+          } else {
+            LOG_INFO("log in sys tenant may be recycled", KR(ret), K(ls_id), K(resp));
+          }
         } else {
           LOG_WARN("fetching log in palf failed", KR(ret));
         }
       } else {
+        log_exist_in_palf = true;
         need_init_iter = false;
         fetch_log_succ = true;
       } // fetch log succ
@@ -535,10 +542,14 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
           remote_iter.update_source_cb();
           remote_iter.reset();
           if (ls_exist_in_palf) {
-            // switch to palf, reset remote_iter
-            need_init_iter = true;
-            ctx.set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "ArchiveIterEnd");
-            ret = OB_SUCCESS;
+            if (log_exist_in_palf) {
+              // switch to palf, reset remote_iter
+              need_init_iter = true;
+              ctx.set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "ArchiveIterEnd");
+              ret = OB_SUCCESS;
+            } else {
+              ret = OB_ERR_OUT_OF_LOWER_BOUND;
+            }
           } else {
             // exit
             reach_max_lsn = true;
@@ -559,6 +570,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
           }
         }
       } else { // OB_SUCCESS
+        log_exist_in_palf = true;
         need_init_iter = false;
         fetch_log_succ = true;
       } // fetch log succ

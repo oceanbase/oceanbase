@@ -5365,6 +5365,36 @@ OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
                     if_not_grant_,
                     unit_id_);
 
+int ObForceSetLSAsSingleReplicaArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+  }
+  return ret;
+}
+
+bool ObForceSetLSAsSingleReplicaArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid();
+}
+
+int ObForceSetLSAsSingleReplicaArg::assign(const ObForceSetLSAsSingleReplicaArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObForceSetLSAsSingleReplicaArg, tenant_id_, ls_id_);
+
 OB_SERIALIZE_MEMBER(ObGetLSSyncScnArg, tenant_id_, ls_id_, check_sync_to_latest_);
 
 bool ObGetLSSyncScnArg::is_valid() const

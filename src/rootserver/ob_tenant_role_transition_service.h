@@ -97,10 +97,10 @@ public:
     switch_optype_(switch_optype) {}
   virtual ~ObTenantRoleTransitionService() {}
   int failover_to_primary();
-  int switchover_to_standby(const share::ObAllTenantInfo &tenant_info);
   int check_inner_stat();
   int do_switch_access_mode_to_append(const share::ObAllTenantInfo &tenant_info,
                              const share::ObTenantRole &target_tenant_role);
+  int do_switch_access_mode_to_raw_rw(const share::ObAllTenantInfo &tenant_info);
   void set_switchover_epoch(const int64_t switchover_epoch)
   {
     switchover_epoch_ = switchover_epoch;
@@ -156,11 +156,10 @@ private:
   int do_failover_to_primary_(const share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_(share::ObAllTenantInfo &tenant_info);
   int do_flashback_(const share::ObAllTenantInfo &tenant_info);
-  int change_ls_access_mode_(const share::ObLSStatusInfoIArray &status_info_array,
-                             palf::AccessMode target_access_mode,
+  int change_ls_access_mode_(palf::AccessMode target_access_mode,
                              const share::SCN &ref_scn);
-  int get_ls_access_mode_(const share::ObLSStatusInfoIArray &status_info_array,
-  ObIArray<LSAccessModeInfo> &ls_access_info);
+  int update_tenant_stat_info_();
+  int get_ls_access_mode_(ObIArray<LSAccessModeInfo> &ls_access_info);
   int do_change_ls_access_mode_(const ObIArray<LSAccessModeInfo> &ls_access_info,
                                 palf::AccessMode target_access_mode,
                                 const share::SCN &ref_scn);
@@ -220,8 +219,6 @@ private:
   int do_prepare_flashback_for_switch_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
 
-  //switchover
-  int wait_sys_recovery_finish_(const ObLSStatusInfoIArray &ls_status);
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;
   const static int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;

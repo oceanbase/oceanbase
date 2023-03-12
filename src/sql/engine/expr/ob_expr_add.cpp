@@ -882,7 +882,6 @@ int ObExprAdd::add_number_number_batch(BATCH_EVAL_FUNC_ARG_DECL)
       ObNumber::Desc &desc_buf = const_cast<ObNumber::Desc &> (results.at(i)->get_number_desc());
       // Notice that, space of tmp is allocated in frame but without memset operation, which causes random memory content.
       // And the reserved in storage layer should be 0, thus you must replacement new here to avoid checksum error, etc.
-      // Reference: https://work.aone.alibaba-inc.com/issue/40852179
       ObNumber::Desc *res_desc = new (&desc_buf) ObNumber::Desc();
       // speedup detection
       if (ObNumber::try_fast_add(l_num, r_num, res_digits, *res_desc)) {

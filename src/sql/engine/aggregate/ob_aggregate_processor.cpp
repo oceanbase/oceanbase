@@ -353,7 +353,7 @@ int ObAggregateProcessor::GroupConcatExtraResult::init(const uint64_t tenant_id,
     } else {
       int64_t sort_area_size = 0;
       if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
-                  SORT_WORK_AREA, tenant_id, &eval_ctx.exec_ctx_, sort_area_size))) {
+                  SORT_WORK_AREA, tenant_id, sort_area_size))) {
         LOG_WARN("failed to get workarea size", K(ret), K(tenant_id));
       } else if (OB_FAIL(row_store_.init(sort_area_size,
                                          tenant_id,
@@ -6038,7 +6038,9 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
           scale1 = (val_type1 == ObBitType) ? aggr_info.param_exprs_.at(1)->datum_meta_.length_semantics_ : scale1;
           ObCollationType cs_type1 = tmp_obj[1].get_collation_type();
           ObString key_string = tmp_obj[0].get_string();
-          if (OB_SUCC(ret) && ObCharset::charset_type_by_coll(cs_type0) != CHARSET_UTF8MB4) {
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc, tmp_obj[0], key_string))) {
+            LOG_WARN("fail to read key string", K(ret), K(tmp_obj[0]));
+          } else if (ObCharset::charset_type_by_coll(cs_type0) != CHARSET_UTF8MB4) {
             ObString converted_key_str;
             if (OB_FAIL(ObExprUtil::convert_string_collation(key_string, cs_type0, converted_key_str, 
                                                                   CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {

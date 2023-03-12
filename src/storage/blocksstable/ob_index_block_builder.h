@@ -453,6 +453,8 @@ public:
   int close(const int64_t column_cnt, ObSSTableMergeRes &res);
   const ObDataStoreDesc &get_index_store_desc() const { return index_store_desc_; }
   TO_STRING_KV(K(roots_.count()));
+public:
+  static bool check_version_for_small_sstable(const ObDataStoreDesc &index_desc);
 private:
   int check_and_rewrite_sstable(ObSSTableMergeRes &res);
   int check_and_rewrite_sstable_without_size(ObSSTableMergeRes &res);

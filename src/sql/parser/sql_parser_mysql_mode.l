@@ -938,6 +938,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 }
 <hint>NO_GATHER_OPTIMIZER_STATISTICS  { return NO_GATHER_OPTIMIZER_STATISTICS; }
 <hint>GATHER_OPTIMIZER_STATISTICS  { return GATHER_OPTIMIZER_STATISTICS; }
+<hint>DBMS_STATS  { return DBMS_STATS; }
 <hint>LOG_LEVEL  { return LOG_LEVEL; }
 <hint>LEADING  { return LEADING_HINT; }
 <hint>ORDERED  { return ORDERED; }

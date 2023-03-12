@@ -1953,7 +1953,10 @@ int ObInnerSQLConnection::execute_read(const int64_t cluster_id,
 {
 
   int ret = OB_SUCCESS;
-  auto function = [&]() { return execute_read_inner(cluster_id, tenant_id, sql, res, is_user_sql, sql_exec_addr); };
+  auto function = [&]() {
+    res.reuse();
+    return execute_read_inner(cluster_id, tenant_id, sql, res, is_user_sql, sql_exec_addr);
+  };
   if (OB_FAIL(retry_while_no_tenant_resource(cluster_id, tenant_id, function))) {
     LOG_WARN("execute_read failed", K(ret), K(cluster_id), K(tenant_id));
   }
@@ -1994,7 +1997,6 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
   static_assert(ctx_size <= ObISQLClient::ReadResult::BUF_SIZE, "buffer not enough");
   ObSqlQueryExecutor executor(sql);
   const bool local_execute = is_local_execute(cluster_id, tenant_id);
-
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("connection not inited", K(ret));

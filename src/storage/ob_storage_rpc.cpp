@@ -1025,6 +1025,8 @@ int ObFetchTabletInfoP::process()
     ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
     ObCopyTabletInfoObProducer producer;
     ObCopyTabletInfo tablet_info;
+    const int64_t MAX_TABLET_NUM = 100;
+    int64_t tablet_count = 0;
     LOG_INFO("start to fetch tablet info", K(arg_));
 
     last_send_time_ = ObTimeUtility::current_time();
@@ -1072,8 +1074,19 @@ int ObFetchTabletInfoP::process()
           } else {
             STORAGE_LOG(WARN, "failed to get next tablet meta info", K(ret));
           }
+        } else if (tablet_count >= MAX_TABLET_NUM) {
+          if (this->result_.get_position() > 0 && OB_FAIL(flush_and_wait())) {
+            LOG_WARN("failed to flush and wait", K(ret), K(tablet_info));
+          } else {
+            tablet_count = 0;
+          }
+        }
+
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(fill_data(tablet_info))) {
           STORAGE_LOG(WARN, "fill to fill tablet info", K(ret), K(tablet_info));
+        } else {
+          tablet_count++;
         }
       }
       if (OB_SUCC(ret)) {
@@ -1706,8 +1719,9 @@ int ObLobQueryP::process_read()
     param.scan_backward_ = arg_.scan_backward_;
     param.from_rpc_ = true;
     ObLobQueryIter *iter = nullptr;
+    int64_t timeout = rpc_pkt_->get_timeout() + get_send_timestamp();
     if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
-        arg_.len_, ObStorageRpcProxy::STREAM_RPC_TIMEOUT, arg_.lob_locator_))) {
+        arg_.len_, timeout, arg_.lob_locator_))) {
       LOG_WARN("failed to build lob param", K(ret));
     } else if (OB_FAIL(lob_mngr->query(param, iter))) {
       LOG_WARN("failed to query lob.", K(ret), K(param));
@@ -1752,7 +1766,7 @@ int ObLobQueryP::process_getlength()
   param.from_rpc_ = true;
   header.reset();
   uint64_t len = 0;
-  int64_t timeout = ObTimeUtility::current_time() + ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+  int64_t timeout = rpc_pkt_->get_timeout() + get_send_timestamp();
   if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
       arg_.len_, timeout, arg_.lob_locator_))) {
     LOG_WARN("failed to build lob param", K(ret));

@@ -232,6 +232,7 @@ int ObDirectLoadPartitionRangeMergeTask::RowIterator::init(
     // init data_fuse_
     ObDirectLoadDataFuseParam data_fuse_param;
     data_fuse_param.tablet_id_ = tablet_id;
+    data_fuse_param.store_column_count_ = merge_param.store_column_count_;
     data_fuse_param.table_data_desc_ = merge_param.table_data_desc_;
     data_fuse_param.datum_utils_ = merge_param.datum_utils_;
     data_fuse_param.error_row_handler_ = merge_param.error_row_handler_;
@@ -241,13 +242,14 @@ int ObDirectLoadPartitionRangeMergeTask::RowIterator::init(
       LOG_WARN("fail to init data fuse", KR(ret));
     }
     // init datum_row_
-    else if (OB_FAIL(datum_row_.init(merge_param.schema_column_count_ +
+    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
                                      ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
       datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(-1); // fill trans_version
+      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
+        -merge_param.snapshot_version_); // fill trans_version
       datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
       rowkey_column_num_ = merge_param.rowkey_column_num_;
       is_inited_ = true;
@@ -386,6 +388,7 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::init(
     // init data_fuse_
     ObDirectLoadDataFuseParam data_fuse_param;
     data_fuse_param.tablet_id_ = tablet_id;
+    data_fuse_param.store_column_count_ = merge_param.store_column_count_;
     data_fuse_param.table_data_desc_ = merge_param.table_data_desc_;
     data_fuse_param.datum_utils_ = merge_param.datum_utils_;
     data_fuse_param.error_row_handler_ = merge_param.error_row_handler_;
@@ -395,13 +398,14 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::init(
       LOG_WARN("fail to init data fuse", KR(ret));
     }
     // init datum_row_
-    else if (OB_FAIL(datum_row_.init(merge_param.schema_column_count_ +
+    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
                                      ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
       datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(-1); // fill trans_version
+      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
+        -merge_param.snapshot_version_); // fill trans_version
       datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
       rowkey_column_num_ = merge_param.rowkey_column_num_;
       is_inited_ = true;
@@ -550,17 +554,18 @@ int ObDirectLoadPartitionHeapTableMergeTask::RowIterator::init(
       LOG_WARN("fail to init fragment scanner", KR(ret));
     }
     // init datum_row_
-    else if (OB_FAIL(datum_row_.init(merge_param.schema_column_count_ +
+    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
                                      ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
       datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(-1); // fill trans_version
+      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
+        -merge_param.snapshot_version_); // fill trans_version
       datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
       deserialize_datums_ = datum_row_.storage_datums_ + merge_param.rowkey_column_num_ +
                             ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-      deserialize_datum_cnt_ = merge_param.schema_column_count_ - merge_param.rowkey_column_num_;
+      deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
       pk_interval_ = pk_interval;
       result_info_ = merge_param.result_info_;
       is_inited_ = true;
@@ -702,17 +707,18 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::init(
       LOG_WARN("fail to init tablet whole scanner", KR(ret));
     }
     // init datum_row_
-    else if (OB_FAIL(datum_row_.init(merge_param.schema_column_count_ +
+    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
                                      ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
       datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(-1); // fill trans_version
+      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
+        -merge_param.snapshot_version_); // fill trans_version
       datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
       deserialize_datums_ = datum_row_.storage_datums_ + merge_param.rowkey_column_num_ +
                             ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-      deserialize_datum_cnt_ = merge_param.schema_column_count_ - merge_param.rowkey_column_num_;
+      deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
       pk_interval_ = pk_interval;
       result_info_ = merge_param.result_info_;
       is_inited_ = true;

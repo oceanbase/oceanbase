@@ -29,6 +29,7 @@ int ObLobMetaScanIter::open(ObLobAccessParam &param, ObILobApator* lob_adatper)
   lob_adatper_ = lob_adatper;
   param_ = param;
   cur_pos_ = 0;
+  cur_byte_pos_ = 0;
   if (OB_FAIL(lob_adatper->scan_lob_meta(param, scan_param_, meta_iter_))) {
     LOG_WARN("failed to open iter", K(ret));
   }
@@ -36,7 +37,7 @@ int ObLobMetaScanIter::open(ObLobAccessParam &param, ObILobApator* lob_adatper)
 }
 
 ObLobMetaScanIter::ObLobMetaScanIter()
-  : lob_adatper_(nullptr), meta_iter_(nullptr), param_(), scan_param_(), cur_pos_(0) {}
+  : lob_adatper_(nullptr), meta_iter_(nullptr), param_(), scan_param_(), cur_pos_(0), cur_byte_pos_(0) {}
 
 int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
 {
@@ -44,9 +45,13 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
   if (OB_ISNULL(meta_iter_)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("meta_iter is null.", K(ret));
+  } else if (cur_byte_pos_ > param_.byte_size_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("scan get lob meta byte len is bigger than byte size", K(ret), K(*this), K(param_));
+  } else if (cur_byte_pos_ == param_.byte_size_) {
+    ret = OB_ITER_END;
   } else {
     bool has_found = false;
-    uint64_t old_cur_pos = cur_pos_;
     bool is_char = param_.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
     while (OB_SUCC(ret) && !has_found) {
       common::ObNewRow* new_row = NULL;
@@ -77,6 +82,7 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
         }
         // update sum(len)
         cur_pos_ += (is_char) ? row.char_len_ : row.byte_len_;
+        cur_byte_pos_ += row.byte_len_;
       }
     }
   }
@@ -230,6 +236,7 @@ void ObLobMetaScanIter::reset()
   lob_adatper_ = nullptr;
   meta_iter_ = nullptr;
   cur_pos_ = 0;
+  cur_byte_pos_ = 0;
 }
 
 // called after 

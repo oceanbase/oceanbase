@@ -114,7 +114,8 @@ public:
                K_(log_block_header),
                K_(block_mgr),
                K(logical_block_size_),
-               K(curr_block_writable_size_));
+               K(curr_block_writable_size_),
+               KP(block_header_serialize_buf_));
 
 private:
   int do_init_(const char *log_dir,
@@ -176,6 +177,7 @@ private:
   mutable ObSpinLock tail_info_lock_;
   mutable ObSpinLock delete_block_lock_;
   UpdateManifestCallback update_manifest_cb_;
+  char block_header_serialize_buf_[MAX_INFO_BLOCK_SIZE];
   bool is_inited_;
 };
 

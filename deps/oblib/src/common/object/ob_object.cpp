@@ -594,6 +594,28 @@ int ObLobLocatorV2::get_inrow_data(ObString &inrow_data) const
       } else {
         inrow_data.assign_ptr(disk_loc->get_inrow_data_ptr(), disk_loc->get_byte_size(disk_loc_buff.length()));
       }
+    } else if (!is_lob_disk_locator() && has_inrow_data()) {
+      if (has_extern()) {
+        ObMemLobExternHeader *ext_header = nullptr;
+        if (OB_FAIL(get_extern_header(ext_header))) {
+          COMMON_LOG(WARN, "Lob: fail to get extern header", K(ret));
+        } else if (ext_header->payload_offset_ + ext_header->payload_size_ > size_) {
+          ret = OB_INVALID_ARGUMENT;
+          COMMON_LOG(WARN, "Lob: invalid payload data", K(ret), K(*ext_header), K(size_));
+        } else {
+          inrow_data.assign_ptr(ext_header->data_ + ext_header->payload_offset_, ext_header->payload_size_);
+        }
+      } else { // no extern [mem lob common][lob common][inrow data]
+        int64_t handle_offset = reinterpret_cast<intptr_t>(disk_loc) - reinterpret_cast<intptr_t>(ptr_);
+        int64_t byte_size = disk_loc->get_byte_size(disk_loc_buff.length());
+        int64_t handle_size = disk_loc->get_handle_size(byte_size);
+        if (byte_size + handle_size + handle_offset > size_) {
+          ret = OB_INVALID_ARGUMENT;
+          COMMON_LOG(WARN, "Lob: invalid inrow data", K(ret), K(byte_size), K(handle_size), K(*disk_loc), K(handle_offset));
+        } else {
+          inrow_data.assign_ptr(disk_loc_buff.ptr() + handle_size, byte_size);
+        }
+      }
     } else { // out row
       ret = OB_ERR_NULL_VALUE;
       COMMON_LOG(WARN, "Lob: Maybe a bug, get inrow data of outrow lob", K(ret), K(lbt()));

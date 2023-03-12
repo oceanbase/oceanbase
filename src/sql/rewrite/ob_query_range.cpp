@@ -2956,7 +2956,6 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
             LOG_WARN("failed to push back param", K(ret));
           } else {
             new_param_meta->pos_ = *key_pos;
-            new_param_meta->vals_.set_block_allocator(ModulePageAllocator(allocator_));
           }
         }
       }
@@ -3103,7 +3102,6 @@ int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
       tmp_key_part->in_keypart_->table_id_ = col_expr->get_table_id();
       tmp_key_part->in_keypart_->is_strict_in_ = true;
       new_param_meta->pos_ = *key_pos;
-      new_param_meta->vals_.set_block_allocator(ModulePageAllocator(allocator_));
       ObSEArray<int64_t, 4> invalid_val_idx;
       bool always_true = false;
       for (int64_t i = 0; OB_SUCC(ret) && !always_true && i < r_expr->get_param_count(); ++i) {

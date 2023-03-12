@@ -124,7 +124,7 @@ struct ObDataFrag : common::ObLink
     row_cnt(0),
     orig_data_size(0) {}
 
-  static const int64_t DEFAULT_STRUCT_SIZE = 8ll *1024;
+  static const int64_t DEFAULT_STRUCT_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t MAX_ROW_COUNT = 1024;
   int64_t get_remain() { return frag_size - frag_pos; }
   char *get_current() { return data + frag_pos; }

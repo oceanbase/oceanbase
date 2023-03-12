@@ -164,7 +164,7 @@ int ObGroupConcatRowStore::init(const uint64_t tenant_id,
   iter_idx_ = 0;
   if (sort_columns.empty()) {
     int64_t sort_area_size = 0;
-    if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(SORT_WORK_AREA, tenant_id, NULL, sort_area_size))) {
+    if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(SORT_WORK_AREA, tenant_id, sort_area_size))) {
       LOG_WARN("failed to get workarea size", K(ret), K(tenant_id));
     } else if (OB_FAIL(rs_.init(sort_area_size,
         tenant_id, ObCtxIds::WORK_AREA, ObModIds::OB_SQL_AGGR_FUN_GROUP_CONCAT,

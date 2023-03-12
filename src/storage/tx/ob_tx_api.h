@@ -545,5 +545,8 @@ int is_tx_active(const ObTransID &tx_id, bool &active);
  * between tighly couple branchs around the SQL stmt
  * these hooks place on stmt start and end position to handle these works
  *****************************************************************************/
-int sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, const uint32_t session_id);
+int sql_stmt_start_hook(const ObXATransID &xid,
+                        ObTxDesc &tx,
+                        const uint32_t session_id,
+                        const uint32_t real_session_id);
 int sql_stmt_end_hook(const ObXATransID &xid, ObTxDesc &tx);

@@ -425,6 +425,7 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
   }
   if (session->associated_xa() && !is_explicit) {
     ret = OB_TRANS_XA_RMFAIL;
+    LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()), KPC(tx_ptr));
   } else {
     /*
      * normal transaction control
@@ -504,8 +505,13 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OZ (get_tx_service(session, txs), tenant_id);
   OZ (acquire_tx_if_need_(txs, *session));
   OZ (stmt_sanity_check_(session, plan, plan_ctx));
-  OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid()));
-  bool start_hook = OB_SUCC(ret) && !session->get_xid().empty() ? true : false;
+  bool start_hook = false;
+  if (exec_ctx.get_nested_level() == 0) {
+    OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid(), get_real_session_id(*session)));
+    if (OB_SUCC(ret)) {
+      start_hook = true;
+    }
+  }
   if (OB_SUCC(ret)
       && txs->get_tx_elr_util().check_and_update_tx_elr_info(*session->get_tx_desc())) {
     LOG_WARN("check and update tx elr info", K(ret), KPC(session->get_tx_desc()));
@@ -630,8 +636,14 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
     SCN snapshot_version = SCN::min_scn();
     if (OB_FAIL(txs->get_weak_read_snapshot_version(session->get_ob_max_read_stale_time(),
-                                                    snapshot_version))) {
+                snapshot_version))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
+      int64_t stale_time = session->get_ob_max_read_stale_time();
+      int64_t refresh_interval = GCONF.weak_read_version_refresh_interval;
+      if (refresh_interval > stale_time) {
+        TRANS_LOG(WARN, "weak_read_version_refresh_interval is larger than ob_max_read_stale_time ",
+                  K(refresh_interval), K(stale_time), KPC(txs));
+      }
     } else {
       snapshot.init_weak_read(snapshot_version);
     }
@@ -744,7 +756,7 @@ int ObSqlTransControl::start_hook_if_need_(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   if (!session.get_tx_desc()->is_shadow() && !session.has_start_stmt() &&
-      OB_SUCC(txs->sql_stmt_start_hook(session.get_xid(), *session.get_tx_desc(), session.get_sessid()))) {
+      OB_SUCC(txs->sql_stmt_start_hook(session.get_xid(), *session.get_tx_desc(), session.get_sessid(), get_real_session_id(session)))) {
     start_hook = true;
   }
   return ret;
@@ -876,7 +888,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
     }
   }
   // call end stmt hook
-  if (OB_NOT_NULL(tx_desc) && OB_NOT_NULL(txs) && OB_NOT_NULL(session)) {
+  if (OB_NOT_NULL(tx_desc) && OB_NOT_NULL(txs) && OB_NOT_NULL(session) && exec_ctx.get_nested_level() == 0) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *tx_desc);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("call sql stmt end hook fail", K(tmp_ret));
@@ -1120,28 +1132,38 @@ void ObSqlTransControl::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_de
 int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
                                          const share::ObLSID &ls_id,
                                          const common::ObAddr &addr,
-                                         const int64_t max_stale_time_ns,
+                                         const int64_t max_stale_time_us,
                                          bool &can_read)
 {
   int ret = OB_SUCCESS;
-  can_read = true;
+  can_read = false;
 
   if (!ls_id.is_valid()
       || !addr.is_valid()
-      || max_stale_time_ns <= 0) {
+      || max_stale_time_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_ns));
-  } else {
-    // distribute plan and check black list
-    ObBLKey blk;
-    bool in_black_list = false;
-    if (OB_FAIL(blk.init(addr, tenant_id, ls_id))) {
-      LOG_WARN("ObBLKey init error", K(ret), K(addr), K(tenant_id), K(ls_id));
-    } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(blk, in_black_list))) {
-      LOG_WARN("check in black list error", K(ret), K(blk));
-    } else {
-      can_read = (in_black_list ? false : true);
+    LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_us));
+  } else if (observer::ObServer::get_instance().get_self() == addr) {
+    storage::ObLSService *ls_svr =  MTL(storage::ObLSService *);
+    storage::ObLSHandle handle;
+    ObLS *ls = nullptr;
+
+    if (OB_ISNULL(ls_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream service is NULL", K(ret));
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
+      LOG_WARN("get id service log stream failed");
+    } else if (OB_ISNULL(ls = handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("id service log stream not exist");
+    } else if (ObTimeUtility::current_time() - max_stale_time_us
+         < ls->get_ls_wrs_handler()->get_ls_weak_read_ts().convert_to_ts()) {
+      can_read = true;
+    } else if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      LOG_WARN("log stream unreadable", K(ls_id), K(addr), K(max_stale_time_us));
     }
+  } else {
+    LOG_TRACE("log stream is not local", K(ls_id), K(addr));
   }
   return ret;
 }

@@ -353,6 +353,7 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
   int8_t depth = 0;
   bool exist_fun = false;
   bool check_res = true;
+  bool check_valid = false;
 
   if (OB_ISNULL(col_node)) { // do nothing
   } else if (OB_ISNULL(tmp_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
@@ -377,6 +378,8 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
       } else if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_,
                           col_node->children_[0]->str_value_, tmp_node, T_COLUMN_REF))) {
         LOG_WARN("create json doc node fail", K(ret));
+      } else {
+        check_valid = true;
       }
     } else if (depth == 2) {
       // childe[1]列名 child[0]表名
@@ -401,12 +404,13 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
           table_node->str_len_ = col_node->children_[0]->str_len_;
           table_node->text_len_ = col_node->children_[0]->text_len_;
           tmp_node->children_[1] = table_node;
+          check_valid = true;
         }
       }
     }
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(ObDMLResolver::check_column_json_type(tmp_node, format_json, only_is_json))) {
+  if (OB_SUCC(ret) && check_valid && OB_FAIL(ObDMLResolver::check_column_json_type(tmp_node, format_json, only_is_json))) {
     LOG_WARN("fail to check is_json", K(ret));
   }
   return ret;
@@ -7819,7 +7823,6 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
     common::ObAccuracy accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[1][obj_type];
     common::ObLengthSemantics length_semantics = parse_tree.length_semantics_;
     accuracy.set_length_semantics(length_semantics);
-
     ObObjTypeClass dest_tc = ob_obj_type_class(obj_type);
 
     if (ObStringTC == dest_tc) {
@@ -7831,7 +7834,7 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
     } else if (ObRawTC == dest_tc) {
       accuracy.set_length(parse_tree.int32_values_[1]);
     } else if (ObTextTC == dest_tc || ObJsonTC == dest_tc) {
-      accuracy.set_length(parse_tree.int32_values_[1] < 0 ?
+      accuracy.set_length(parse_tree.int32_values_[1] <= 0 ?
           ObAccuracy::DDL_DEFAULT_ACCURACY[obj_type].get_length() : parse_tree.int32_values_[1]);
     } else if (ObIntervalTC == dest_tc) {
       if (OB_UNLIKELY(!ObIntervalScaleUtil::scale_check(parse_tree.int16_values_[3]) ||
@@ -7852,6 +7855,8 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
         accuracy.set_precision(parse_tree.int16_values_[2]);
         accuracy.set_scale(parse_tree.int16_values_[3]);
       } else if (ObIntType == obj_type) {
+        data_type.set_int();
+        accuracy = def_acc;
       } else {
         accuracy.set_precision(parse_tree.int16_values_[2]);
         accuracy.set_scale(parse_tree.int16_values_[3]);
@@ -11739,6 +11744,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     case T_APPEND: {
       CHECK_HINT_PARAM(hint_node, 0) {
         global_hint.merge_osg_hint(ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT);
+      }
+      break;
+    }
+    case T_DBMS_STATS: {
+      CHECK_HINT_PARAM(hint_node, 0) {
+        global_hint.set_dbms_stats();
       }
       break;
     }

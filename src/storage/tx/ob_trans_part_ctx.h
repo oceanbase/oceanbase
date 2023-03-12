@@ -535,6 +535,7 @@ private:
   int return_log_cb_(ObTxLogCb *log_cb);
   int get_max_submitting_log_info_(palf::LSN &lsn, share::SCN &log_ts);
   int get_prev_log_lsn_(const ObTxLogBlock &log_block, ObTxLogType prev_log_type, palf::LSN &lsn);
+  int set_start_scn_in_commit_log_(ObTxCommitLog &commit_log);
 
   // int init_tx_data_(const share::ObLSID&ls_id, const ObTransID &tx_id);
 

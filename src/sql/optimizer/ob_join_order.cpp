@@ -3180,9 +3180,10 @@ double ObJoinOrder::calc_single_parallel_rows(double rows, int64_t parallel)
   double ret = rows;
   if (rows < parallel) {
     parallel = rows;
-    //at least one parallel
-    parallel = parallel < 1 ? 1: parallel;
+
   }
+  //at least one parallel
+  parallel = parallel < 1 ? 1: parallel;
   ret = rows / parallel;
   return ret;
 }

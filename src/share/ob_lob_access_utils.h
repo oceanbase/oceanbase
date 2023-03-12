@@ -55,7 +55,7 @@ struct ObLobTextIterCtx
 
   ObLobTextIterCtx(ObLobLocatorV2 &locator, const sql::ObBasicSessionInfo *session,
                    ObIAllocator *allocator = NULL, uint32_t buffer_len = OB_LOB_ITER_DEFAULT_BUFFER_LEN) :
-    alloc_(allocator), session_(NULL), buff_(NULL), buff_byte_len_(buffer_len), start_offset_(0),
+    alloc_(allocator), session_(session), buff_(NULL), buff_byte_len_(buffer_len), start_offset_(0),
     total_access_len_(0), total_byte_len_(0), content_byte_len_(0), content_len_(0),
     reserved_byte_len_(0), reserved_len_(0), accessed_byte_len_(0), accessed_len_(0),
     last_accessed_byte_len_(0), last_accessed_len_(0), iter_count_(0), is_cloned_temporary_(false),

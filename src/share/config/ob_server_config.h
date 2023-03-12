@@ -53,6 +53,7 @@ const char* const CLUSTER_NAME = "cluster";
 const char* const FREEZE_TRIGGER_PERCENTAGE = "freeze_trigger_percentage";
 const char* const WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE = "writing_throttling_trigger_percentage";
 const char* const COMPATIBLE = "compatible";
+const char* const WEAK_READ_VERSION_REFRESH_INTERVAL = "weak_read_version_refresh_interval";
 class ObServerMemoryConfig;
 
 class ObServerConfig : public ObCommonConfig
@@ -90,13 +91,13 @@ public:
   bool enable_defensive_check() const
   {
     int64_t v = _enable_defensive_check;
-    return v > 0 && lib::is_diagnose_info_enabled();
+    return v > 0;
   }
 
   bool enable_strict_defensive_check() const
   {
     int64_t v = _enable_defensive_check;
-    return v == 2 && lib::is_diagnose_info_enabled();
+    return v == 2;
   }
 
   // false for 1.4.2 -> 1.4.3

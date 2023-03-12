@@ -472,21 +472,36 @@ int ObPartTransCtx::set_2pc_commit_version_(const SCN &commit_version)
 int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
 {
   int ret = OB_SUCCESS;
+  ObTwoPhaseCommitMsgType cache_msg_type = switch_msg_type_(msg_2pc_cache_->type_);
 
   if (OB_ISNULL(msg_2pc_cache_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "empty 2pc msg", K(ret));
-  } else if (switch_msg_type_(msg_2pc_cache_->type_) != msg_type) {
+  } else if (cache_msg_type != msg_type
+             && (ObTwoPhaseCommitMsgType::OB_MSG_TX_COMMIT_RESP != msg_type
+                 || ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_RESP != cache_msg_type)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "unexpected 2pc msg type", K(ret), K(msg_type), KPC(msg_2pc_cache_));
   } else {
-    switch (msg_type) {
+    switch (cache_msg_type) {
+    case ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REDO_REQ: {
+      const Ob2pcPrepareRedoReqMsg &msg = *(static_cast<const Ob2pcPrepareRedoReqMsg *>(msg_2pc_cache_));
+      if (FALSE_IT(set_trans_type_(TransType::DIST_TRANS))) {
+      } else if (OB_FAIL(set_2pc_upstream_(msg.upstream_))) {
+        TRANS_LOG(WARN, "set coordinator failed", KR(ret), K(msg), K(*this));
+      } else if (OB_FAIL(set_app_trace_info_(msg.app_trace_info_))) {
+        TRANS_LOG(WARN, "set app trace info failed", KR(ret), K(msg), K(*this));
+      } else {
+        exec_info_.xid_ = msg.xid_;
+        exec_info_.is_sub2pc_ = true;
+      }
+      break;
+    }
     case ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ: {
       if (is_sub2pc()) {
         // prepare version for xa trans
         // these actions has been done in entrance function handle_tx_2pc_prepare_version_req
       } else {
-        // if modify logic here, please check codes in handle_tx_2pc_prepare_redo (version)
         const Ob2pcPrepareReqMsg &msg = *(static_cast<const Ob2pcPrepareReqMsg *>(msg_2pc_cache_));
 
         if (FALSE_IT(set_trans_type_(TransType::DIST_TRANS))) {
@@ -574,8 +589,9 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
     }
     case ObTwoPhaseCommitMsgType::OB_MSG_TX_CLEAR_REQ: {
       const Ob2pcClearReqMsg &msg = *(static_cast<const Ob2pcClearReqMsg *>(msg_2pc_cache_));
-      if (msg.max_commit_log_scn_ < max_2pc_commit_scn_
-          || msg.max_commit_log_scn_ < ctx_tx_data_.get_end_log_ts()) {
+      if (CLUSTER_VERSION_4_1_0_0 <= GET_MIN_CLUSTER_VERSION()
+          && (msg.max_commit_log_scn_ < max_2pc_commit_scn_
+              || msg.max_commit_log_scn_ < ctx_tx_data_.get_end_log_ts())) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "unexpected max commit log scn in clear request", K(ret), KPC(this));
       } else {
@@ -663,23 +679,21 @@ int ObPartTransCtx::handle_tx_2pc_prepare_redo_req(const Ob2pcPrepareRedoReqMsg 
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
-  exec_info_.trans_type_ = TransType::DIST_TRANS;
-  exec_info_.xid_ = msg.xid_;
-  exec_info_.is_sub2pc_ = true;
 
-  if (FALSE_IT(set_trans_type_(TransType::DIST_TRANS))) {
-  } else if (OB_FAIL(set_2pc_upstream_(msg.upstream_))) {
-    TRANS_LOG(WARN, "set coordinator failed", KR(ret), K(msg), K(*this));
-  } else if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
-    TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
-  } else if (OB_FAIL(set_app_trace_info_(msg.app_trace_info_))) {
-    TRANS_LOG(WARN, "set app trace info failed", KR(ret), K(msg), K(*this));
-  } else if (OB_FAIL(handle_2pc_req(msg_type))) {
-    TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));
-  }
+  if (!is_2pc_logging()) {
+    exec_info_.xid_ = msg.xid_;
+    exec_info_.is_sub2pc_ = true;
+    msg_2pc_cache_ = &msg;
+    if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
+      TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
+    } else if (OB_FAIL(handle_2pc_req(msg_type))) {
+      TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));
+    }
 
-  if (OB_SUCC(ret)) {
-    part_trans_action_ = ObPartTransAction::COMMIT;
+    if (OB_SUCC(ret)) {
+      part_trans_action_ = ObPartTransAction::COMMIT;
+    }
+    msg_2pc_cache_ = nullptr;
   }
 
   TRANS_LOG(INFO, "handle prepare redo request", KR(ret), K(msg));

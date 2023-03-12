@@ -304,6 +304,7 @@ void ObGlobalHint::reset()
   ob_ddl_schema_versions_.reuse();
   enable_append_ = false;
   osg_hint_.flags_ = 0;
+  has_dbms_stats_hint_ = false;
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -329,6 +330,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   disable_cost_based_transform_ |= other.disable_cost_based_transform_;
   enable_append_ |= other.enable_append_;
   osg_hint_.flags_ |= other.osg_hint_.flags_;
+  has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -446,7 +448,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
   }
   if (OB_SUCC(ret) && ObPDMLOption::NOT_SPECIFIED != pdml_option_) { //PDML
     if (ObPDMLOption::ENABLE == pdml_option_) {
-      PRINT_GLOBAL_HINT_STR("ENABLE_PARALLEL_DML");
+      if (!ignore_parallel) {
+        PRINT_GLOBAL_HINT_STR("ENABLE_PARALLEL_DML");
+      }
     } else if (ObPDMLOption::DISABLE == pdml_option_) {
       PRINT_GLOBAL_HINT_STR("DISABLE_PARALLEL_DML");
     } else {
@@ -492,6 +496,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
   }
   if (OB_SUCC(ret) && OB_FAIL(osg_hint_.print_osg_hint(plan_text))) {
     LOG_WARN("failed to print optimizer statistics gathering hint", K(ret));
+  }
+  if (OB_SUCC(ret) && has_dbms_stats_hint()) {
+    PRINT_GLOBAL_HINT_STR("DBMS_STATS");
   }
   return ret;
 }

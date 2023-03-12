@@ -64,6 +64,7 @@ public:
       dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
       px_mode_(false),
       online_opt_stat_gather_(false),
+      snapshot_version_(0),
       dest_table_id_(common::OB_INVALID_ID),
       task_id_(0),
       schema_version_(0),
@@ -76,6 +77,7 @@ public:
                K_(dup_action),
                K_(px_mode),
                K_(online_opt_stat_gather),
+               K_(snapshot_version),
                K_(dest_table_id),
                K_(task_id),
                K_(schema_version),
@@ -90,6 +92,7 @@ public:
   sql::ObLoadDupActionType dup_action_;
   bool px_mode_;
   bool online_opt_stat_gather_;
+  int64_t snapshot_version_;
   // ddl param
   uint64_t dest_table_id_;
   int64_t task_id_;

@@ -149,11 +149,18 @@ int ObDictTenantInfo::insert_dict_db_meta(datadict::ObDictDatabaseMeta *dict_db_
     ret = OB_NOT_INIT;
     LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
   } else {
+    const uint64_t tenant_id = get_tenant_id();
     const uint64_t db_id = dict_db_meta->get_database_id();
     MetaDataKey meta_data_key(db_id);
 
-    if (OB_FAIL(db_map_.insert(meta_data_key, dict_db_meta))) {
+    if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_ERROR("expect valid tenant_id", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(db_map_.insert(meta_data_key, dict_db_meta))) {
       LOG_ERROR("db_map_ insert failed", KR(ret), K(meta_data_key), KPC(dict_db_meta));
+    } else {
+      // NOTICE: tenant_id should set while load baseline dict.
+      dict_db_meta->set_tenant_id(tenant_id);
     }
   }
 
@@ -217,11 +224,18 @@ int ObDictTenantInfo::insert_dict_table_meta(datadict::ObDictTableMeta *dict_tab
     ret = OB_NOT_INIT;
     LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
   } else {
+    const uint64_t tenant_id = get_tenant_id();
     const uint64_t table_id = dict_table_meta->get_table_id();
     MetaDataKey meta_data_key(table_id);
 
-    if (OB_FAIL(table_map_.insert(meta_data_key, dict_table_meta))) {
+    if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_ERROR("expect valid tenant_id", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(table_map_.insert(meta_data_key, dict_table_meta))) {
       LOG_ERROR("table_map_ insert failed", KR(ret), K(meta_data_key), KPC(dict_table_meta));
+    } else {
+      // NOTICE: tenant_id should set while load baseline dict.
+      dict_table_meta->set_tenant_id(tenant_id);
     }
   }
 

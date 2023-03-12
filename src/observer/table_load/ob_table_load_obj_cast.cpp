@@ -9,6 +9,7 @@
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/engine/expr/ob_datum_cast.h"
 
 namespace oceanbase
 {
@@ -19,6 +20,39 @@ using namespace sql;
 
 const ObObj ObTableLoadObjCaster::zero_obj(0);
 const ObObj ObTableLoadObjCaster::null_obj(ObObjType::ObNullType);
+
+static int pad_obj(ObTableLoadCastObjCtx &cast_obj_ctx, const ObColumnSchemaV2 *column_schema, ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  bool is_pad = false;
+  bool is_fixed_string = obj.is_fixed_len_char_type() || obj.is_binary();
+  //if (lib::is_mysql_mode()) {
+  //  if (is_fixed_string && (SMO_PAD_CHAR_TO_FULL_LENGTH & cast_obj_ctx.param_.sql_mode_)) {
+  //    is_pad = true;
+  //  }
+  //} else {
+  //  is_pad = is_fixed_string;
+  //}
+  if (is_fixed_string) {
+    int32_t fixed_len = column_schema->get_data_length();
+    if (fixed_len > obj.val_len_) {
+      char *buf = (char *)cast_obj_ctx.cast_ctx_->allocator_v2_->alloc(fixed_len);
+      if (buf == nullptr) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate buf", K(fixed_len), KR(ret));
+      }
+      if (OB_SUCC(ret)) {
+        const ObCharsetType &cs = ObCharset::charset_type_by_coll(obj.get_collation_type());
+        char padding_char = (CHARSET_BINARY == cs) ? OB_PADDING_BINARY : OB_PADDING_CHAR;
+        MEMCPY(buf, obj.v_.ptr_, obj.val_len_);
+        MEMSET(buf + obj.val_len_, padding_char, fixed_len - obj.val_len_);
+        obj.v_.ptr_ = buf;
+        obj.val_len_ = fixed_len;
+      }
+    }
+  }
+  return ret;
+}
 
 int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
                                    const ObColumnSchemaV2 *column_schema, const ObObj &src,
@@ -38,9 +72,15 @@ int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
         LOG_WARN("fail to convert string to enum or set", KR(ret), K(src), K(dst));
       }
     } else {
-      if (OB_FAIL(to_type(expect_type, cast_obj_ctx, accuracy, *convert_src_obj, dst))) {
+      if (OB_FAIL(to_type(expect_type, column_schema, cast_obj_ctx, accuracy, *convert_src_obj, dst))) {
         LOG_WARN("fail to do to type", KR(ret));
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(pad_obj(cast_obj_ctx, column_schema, dst))) {
+      LOG_WARN("fail to pad obj", KR(ret));
     }
   }
 
@@ -59,7 +99,7 @@ int ObTableLoadObjCaster::convert_obj(const ObObjType &expect_type, const ObObj 
   int ret = OB_SUCCESS;
   dest = &src;
   if (src.is_string_type() && !src.is_null() && lib::is_mysql_mode() && 0 == src.get_val_len() &&
-      !ob_is_string_tc(expect_type)) {
+      !ob_is_string_type(expect_type)) {
     dest = &zero_obj;
   } else if (src.is_string_type() && lib::is_oracle_mode() &&
              (src.is_null_oracle() || 0 == src.get_val_len())) {
@@ -234,17 +274,15 @@ int ObTableLoadObjCaster::string_to_set(ObIAllocator &alloc, const ObObj &src,
   return ret;
 }
 
-int ObTableLoadObjCaster::to_type(const ObObjType &expect_type, ObTableLoadCastObjCtx &cast_obj_ctx,
+int ObTableLoadObjCaster::to_type(const ObObjType &expect_type, const share::schema::ObColumnSchemaV2 *column_schema, ObTableLoadCastObjCtx &cast_obj_ctx,
                                   const ObAccuracy &accuracy, const ObObj &src, ObObj &dst)
 {
   int ret = OB_SUCCESS;
   ObCastCtx cast_ctx = *cast_obj_ctx.cast_ctx_;
+  cast_ctx.dest_collation_ = column_schema->get_collation_type();
   const ObTableLoadTimeConverter time_cvrt = *cast_obj_ctx.time_cvrt_;
   if (src.is_null()) {
     dst.set_null();
-  } else if (src.get_type() == expect_type && expect_type != ObVarcharType &&
-             expect_type != ObCharType && !ob_is_nstring_type(expect_type)) {
-    dst = src;
   } else if (src.get_type_class() == ObStringTC &&
              (expect_type == ObNumberType || expect_type == ObUNumberType)) {
     ObNumberDesc d(0);

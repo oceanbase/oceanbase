@@ -87,6 +87,9 @@ int ObTxCycleTwoPhaseCommitter::drive_self_2pc_phase(ObTxState next_phase)
     // do nothing about in-memory operation
   } else {
     switch (next_phase) {
+    case ObTxState::REDO_COMPLETE: {
+      break;
+    }
     case ObTxState::PREPARE: {
       if (OB_FAIL(do_prepare(no_need_submit_log))) {
         TRANS_LOG(WARN, "do prepare in memory failed", K(ret), KPC(this));

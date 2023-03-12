@@ -1377,25 +1377,6 @@ int ObInnerTableSchema::all_virtual_tenant_info_schema(ObTableSchema &table_sche
       log_mode_default,
       log_mode_default); //default_value
   }
-
-  if (OB_SUCC(ret)) {
-    ObObj sys_recovery_scn_default;
-    sys_recovery_scn_default.set_uint64(OB_MIN_SCN_TS_NS);
-    ADD_COLUMN_SCHEMA_T("sys_recovery_scn", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObUInt64Type, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(uint64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      sys_recovery_scn_default,
-      sys_recovery_scn_default); //default_value
-  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
@@ -9386,6 +9367,21 @@ int ObInnerTableSchema::all_virtual_ls_info_schema(ObTableSchema &table_schema)
       ObIntType, //column_type
       CS_TYPE_INVALID, //column_collation_type
       sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("tablet_change_checkpoint_scn_", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable

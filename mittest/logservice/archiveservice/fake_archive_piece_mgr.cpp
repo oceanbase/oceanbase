@@ -111,6 +111,7 @@ int FakeArchivePieceContext::init(const share::ObLSID &id, FakeRounds *rounds)
   } else {
     id_ = id;
     rounds_ = rounds;
+    archive_dest_.set("file:///data/1/");
     is_inited_ = true;
   }
   return ret;
@@ -146,6 +147,7 @@ int FakeArchivePieceContext::get_round_(const share::SCN &start_scn)
 int FakeArchivePieceContext::get_round_range_()
 {
   int ret = OB_SUCCESS;
+  dest_id_ = 1;
   min_round_id_ = rounds_->array_.at(0).round_id_;
   max_round_id_ = rounds_->array_.at(rounds_->array_.count() - 1).round_id_;
   return ret;
