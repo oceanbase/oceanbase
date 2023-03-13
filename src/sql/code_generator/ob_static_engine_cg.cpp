@@ -874,7 +874,6 @@ int ObStaticEngineCG::generate_calc_exprs(
           && !raw_expr->is_op_pseudo_column_expr()
           && !has_exist_in_array(dep_exprs, flattened_cur_exprs_arr.at(i))
           && (raw_expr->has_flag(CNT_VOLATILE_CONST)
-              || raw_expr->has_flag(CNT_DYNAMIC_PARAM)
               || contain_batch_stmt_parameter // 计算包含batch优化的折叠参数
               || !raw_expr->is_const_expr())) {
         if (check_eval_once
