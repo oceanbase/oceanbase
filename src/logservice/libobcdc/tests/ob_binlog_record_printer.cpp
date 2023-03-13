@@ -548,7 +548,8 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   bool is_generate_dep_column = col_meta ? col_meta->isDependent() : false;
   bool is_lob = is_lob_type(ctype);
   bool is_json = is_json_type(ctype);
-  std::string enum_set_values_str;
+  ObArenaAllocator str_allocator;
+  ObStringBuffer enum_set_values_str(&str_allocator);
   bool is_geometry = is_geometry_type(ctype);
 
   int64_t column_index = index + 1;
@@ -574,14 +575,18 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
       ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_define_length:%ld", column_index, col_data_length);
     }
     else if ((oceanbase::obmysql::MYSQL_TYPE_ENUM == ctype) || (oceanbase::obmysql::MYSQL_TYPE_SET == ctype)) {
-      const std::string delim = ",";
+      const char *delim = ",";
       for (int i = 0; i < values_of_enum_set->size(); i++) {
-        enum_set_values_str += (*values_of_enum_set)[i];
-        if (i != values_of_enum_set->size() - 1) {
-          enum_set_values_str += delim;
+        const char *elem_str = (*values_of_enum_set)[i];
+        if (OB_FAIL(enum_set_values_str.append(elem_str))) {
+          LOG_ERROR("enum_set_value_str append failed", K(i), K(elem_str),
+            "enum_set_value_str", enum_set_values_str.ptr());
+        } else if (i != values_of_enum_set->size() - 1 && OB_FAIL(enum_set_values_str.append(delim))) {
+          LOG_ERROR("enum_set_value_str append failed", K(i), K(delim),
+            "enum_set_value_str", enum_set_values_str.ptr());
         }
       }
-      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_extend_info:%s", column_index, enum_set_values_str.c_str());
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_extend_info:%s", column_index, enum_set_values_str.ptr());
     }
     // print precision & scale only in print detail mode, becacuse INT in oracle mode is also a kind of NUMBER(DECIMAL)
     // whose precision is 38 and scale is 0
