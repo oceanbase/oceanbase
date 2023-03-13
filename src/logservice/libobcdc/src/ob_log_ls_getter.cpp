@@ -47,27 +47,8 @@ int ObLogLsGetter::init(const common::ObIArray<uint64_t> &tenant_ids)
       if (OB_SYS_TENANT_ID == tenant_id
           || is_meta_tenant(tenant_id)) {
         // do nothing
-      } else {
-        ObLogSysTableHelper::TenantLSIDs tenant_ls_ids;
-        LSIDArray ls_ids;
-
-        if (OB_FAIL(query_tenant_ls_info_(tenant_id, tenant_ls_ids))) {
-          LOG_ERROR("query_tenant_ls_info_ failed", KR(ret), K(tenant_id));
-        } else {
-          ARRAY_FOREACH_N(tenant_ls_ids, ls_ids_idx, ls_ids_count) {
-            if (OB_FAIL(ls_ids.push_back(tenant_ls_ids.at(ls_ids_idx)))) {
-              LOG_ERROR("ls_ids push_back failed", KR(ret), K(ls_ids), K(tenant_ls_ids));
-            }
-          }
-
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(tenant_ls_ids_cache_.insert(tenant_id, ls_ids))) {
-              LOG_ERROR("tenant_ls_ids_cache_ insert failed", KR(ret), K(tenant_id), K(ls_ids));
-            } else {
-              LOG_INFO("tenant_ls_ids_cache_ insert succ", K(tenant_id), K(ls_ids));
-            }
-          } // OB_SUCC
-        }
+      } else if (OB_FAIL(query_and_set_tenant_ls_info_(tenant_id))) {
+        LOG_ERROR("query_and_set_tenant_ls_info_ failed", KR(ret), K(tenant_id));
       }
     }
 
@@ -98,13 +79,49 @@ int ObLogLsGetter::get_ls_ids(
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogLsGetter has not been inited", KR(ret));
   } else if (OB_FAIL(tenant_ls_ids_cache_.get(tenant_id, ls_ids))) {
-    LOG_ERROR("tenant_ls_ids_cache_ get failed", KR(ret), K(tenant_id), K(ls_ids));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_ERROR("tenant_ls_ids_cache_ get failed", KR(ret), K(tenant_id), K(ls_ids));
+    } else {
+      ret = OB_SUCCESS;
+      // query and set
+      if (OB_FAIL(query_and_set_tenant_ls_info_(tenant_id))) {
+        LOG_ERROR("query_and_set_tenant_ls_info_ failed", KR(ret), K(tenant_id));
+      }
+    }
   } else {
     ARRAY_FOREACH_N(ls_ids, idx, count) {
       if (OB_FAIL(ls_id_array.push_back(ls_ids.at(idx)))) {
         LOG_ERROR("ls_id_array push_back failed", KR(ret), K(ls_id_array));
       }
     }
+  }
+
+  return ret;
+}
+
+int ObLogLsGetter::query_and_set_tenant_ls_info_(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObLogSysTableHelper::TenantLSIDs tenant_ls_ids;
+  LSIDArray ls_ids;
+
+  if (OB_FAIL(query_tenant_ls_info_(tenant_id, tenant_ls_ids))) {
+    LOG_ERROR("query_tenant_ls_info_ failed", KR(ret), K(tenant_id));
+  } else {
+    ARRAY_FOREACH_N(tenant_ls_ids, ls_ids_idx, ls_ids_count) {
+      if (OB_FAIL(ls_ids.push_back(tenant_ls_ids.at(ls_ids_idx)))) {
+        LOG_ERROR("ls_ids push_back failed", KR(ret), K(ls_ids), K(tenant_ls_ids));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tenant_ls_ids_cache_.insert(tenant_id, ls_ids))) {
+        LOG_ERROR("tenant_ls_ids_cache_ insert failed", KR(ret), K(tenant_id), K(ls_ids));
+      } else {
+        LOG_INFO("tenant_ls_ids_cache_ insert succ", K(tenant_id), K(ls_ids));
+      }
+    } // OB_SUCC
   }
 
   return ret;
