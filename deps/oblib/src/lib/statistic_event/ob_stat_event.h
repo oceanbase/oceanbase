@@ -121,6 +121,8 @@ STAT_EVENT_ADD_DEF(HA_GTS_CACHE_MISS_COUNT, "ha gts cache miss count", ObStatCla
 STAT_EVENT_ADD_DEF(TRANS_ELR_ENABLE_COUNT, "trans early lock release enable count", ObStatClassIds::TRANS, "trans early lock releaes enable count", 30077, true, true)
 STAT_EVENT_ADD_DEF(TRANS_ELR_UNABLE_COUNT, "trans early lock release unable count", ObStatClassIds::TRANS, "trans early lock releaes unable count", 30078, true, true)
 STAT_EVENT_ADD_DEF(READ_ELR_ROW_COUNT, "read elr row count", ObStatClassIds::TRANS, "read elr row count", 30079, true, true)
+STAT_EVENT_ADD_DEF(TRANS_LOCAL_TOTAL_USED_TIME, "local trans total used time", ObStatClassIds::TRANS, "local trans total used time", 30080, true, true)
+STAT_EVENT_ADD_DEF(TRANS_DIST_TOTAL_USED_TIME, "distributed trans total used time", ObStatClassIds::TRANS, "distributed trans total used time", 30081, true, true)
 
 // SQL
 //STAT_EVENT_ADD_DEF(PLAN_CACHE_HIT, "PLAN_CACHE_HIT", SQL, "PLAN_CACHE_HIT")

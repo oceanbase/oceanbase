@@ -1633,6 +1633,15 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
   }
   // statistic
   if (tx.is_tx_end()) {
+    int64_t trans_used_time_us = 0;
+    if (tx.active_ts_ > 0) { // skip txn has not active
+      if (tx.finish_ts_ <= 0) {
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx finish ts is unset", K(tx));
+      } else if (tx.finish_ts_ > tx.active_ts_) {
+        trans_used_time_us = tx.finish_ts_ - tx.active_ts_;
+        TX_STAT_TIME_USED(trans_used_time_us);
+      }
+    }
     if (tx.is_committed()) {
       TX_STAT_COMMIT_INC;
       TX_STAT_COMMIT_TIME_USED(tx.finish_ts_ - tx.commit_ts_);
@@ -1648,15 +1657,13 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
     }
     switch(tx.parts_.count()) {
     case 0:  TX_STAT_READONLY_INC break;
-    case 1:  TX_STAT_LOCAL_INC break;
-    default: TX_STAT_DIST_INC;
-    }
-    if (tx.active_ts_ > 0) { // skip txn has not active
-      if (tx.finish_ts_ <= 0) {
-        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx finish ts is unset", K(tx));
-      } else if (tx.finish_ts_ > tx.active_ts_) {
-        TX_STAT_TIME_USED(tx.finish_ts_ - tx.active_ts_);
-      }
+    case 1:
+      TX_STAT_LOCAL_INC;
+      TX_STAT_LOCAL_TOTAL_TIME_USED(trans_used_time_us);
+      break;
+    default:
+      TX_STAT_DIST_INC;
+      TX_STAT_DIST_TOTAL_TIME_USED(trans_used_time_us);
     }
   }
   // release all savepoints
