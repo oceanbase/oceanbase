@@ -348,6 +348,11 @@ int ObLSLocationService::get_leader_with_retry_until_timeout(
   ObTimeoutCtx ctx;
   int64_t curr_abs_retry_timeout_ts = abs_retry_timeout;
   const int64_t DEFAULT_RETRY_TIMEOUT = GCONF.location_cache_refresh_sql_timeout;
+  const int64_t WARN_TIME_INTERVAL = max(DEFAULT_RETRY_TIMEOUT, GCONF.internal_sql_execute_timeout);
+  const int64_t start_time = ObTimeUtil::current_time();
+  const int64_t orig_ctx_abs_timeout = ctx.get_abs_timeout();
+  const int64_t orig_this_worker_timeout = THIS_WORKER.get_timeout_ts();
+  int64_t last_warn_time = start_time;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(!is_valid_key(cluster_id, tenant_id, ls_id))) {
@@ -373,6 +378,17 @@ int ObLSLocationService::get_leader_with_retry_until_timeout(
           } else if (ObTimeUtil::current_time() + retry_interval > curr_abs_retry_timeout_ts) {
             break;
           } else {
+            if (ObTimeUtil::current_time() - last_warn_time > WARN_TIME_INTERVAL) {
+              LOG_WARN("[LS_LOCATION] Attention! Failed to get leader for a long time. "
+                  "The thread may be querying for a nonexistent LS leader "
+                  "and the abs_retry_timeout may be set improperly. "
+                  "Please check the path which called this function.",
+                  KR(ret), K(cluster_id), K(tenant_id), K(ls_id), K(abs_retry_timeout), K(retry_interval),
+                  K(start_time), K(orig_ctx_abs_timeout), K(orig_this_worker_timeout),
+                  K(curr_abs_retry_timeout_ts), "curr_ctx_abs_timeout", ctx.get_abs_timeout(),
+                  "curr_this_worker_timeout_ts", THIS_WORKER.get_timeout_ts(), K(lbt()));
+              last_warn_time = ObTimeUtil::current_time();
+            }
             ob_usleep(static_cast<uint32_t>(retry_interval));
           }
         } else {
