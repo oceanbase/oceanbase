@@ -4754,11 +4754,13 @@ int ObPartTransCtx::replay_multi_data_source(const ObTxMultiDataSourceLog &log,
 
   const int64_t start = ObTimeUtility::current_time();
 
+  bool repeat_replay = (timestamp == exec_info_.max_applied_log_ts_);
+
   int64_t additional_index = exec_info_.multi_data_source_.count();
   if (OB_FAIL(check_replay_avaliable_(lsn, timestamp, part_log_no, need_replay))) {
     TRANS_LOG(WARN, "check replay available failed", KR(ret), K(lsn), K(timestamp), K(*this));
-  } else if (!need_replay) {
-    TRANS_LOG(INFO, "need not replay log", K(log), K(timestamp), K(lsn), K(*this));
+  } else if (!need_replay || repeat_replay) {
+    TRANS_LOG(INFO, "need not replay log", K(need_replay), K(repeat_replay), K(log), K(timestamp), K(lsn), K(*this));
     // no need to replay
   } else if (update_replaying_log_no_(timestamp, part_log_no)) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
@@ -5675,7 +5677,7 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
       TRANS_LOG(WARN, "notify data source failed", K(ret), K(arg));
     }
     if (notify_array.count() > 0) {
-      TRANS_LOG(INFO, "notify MDS", K(ret), K(trans_id_), K(ls_id_), K(notify_type), K(log_ts),
+      TRANS_LOG(INFO, "notify MDS", K(ret), K(trans_id_), K(ls_id_), K(notify_type), K(log_ts), K(notify_array.count()),
                 K(notify_array), K(total_time));
     }
   }

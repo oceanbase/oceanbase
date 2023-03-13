@@ -1399,8 +1399,28 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
   if (OB_FAIL(get_tx_ctx_(ls, tx_id, ctx))) {
     if (OB_NOT_MASTER == ret) {
     } else if (OB_TRANS_CTX_NOT_EXIST == ret && verify_epoch <= 0) {
-      if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx))) {
-        TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
+      int tx_state = ObTxData::RUNNING;
+      share::SCN commit_version;
+      if (OB_FAIL(get_tx_state_from_tx_table_(ls, tx_id, tx_state, commit_version))) {
+        TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(ls), K(tx_id));
+        if (OB_TRANS_CTX_NOT_EXIST == ret) {
+          if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx))) {
+            TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
+          }
+        }
+      } else {
+        switch (tx_state) {
+        case ObTxData::COMMIT:
+          ret = OB_TRANS_COMMITED;
+          break;
+        case ObTxData::ABORT:
+          ret = OB_TRANS_KILLED;
+          break;
+        case ObTxData::RUNNING:
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "tx in-progress but ctx miss", K(ret), K(tx_state), K(tx_id), K(ls));
+        }
       }
     } else {
       TRANS_LOG(WARN, "get transaction context error", K(ret), K(tx_id), K(ls));
