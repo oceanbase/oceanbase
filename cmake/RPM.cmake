@@ -51,6 +51,8 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
 #
 # - PATH is relative to the **ROOT directory** of project other than the cmake directory.
 
+set(BITCODE_TO_ELF_LIST "")
+
 ## server
 install(PROGRAMS
   tools/import_time_zone_info.py
@@ -105,6 +107,17 @@ endif()
 
 ## oceanbase-sql-parser
 if (OB_BUILD_LIBOB_SQL_PROXY_PARSER)
+
+  if (ENABLE_THIN_LTO)
+    message(STATUS "add libob_sql_proxy_parser_static_to_elf")
+    add_custom_command(
+      OUTPUT libob_sql_proxy_parser_static_to_elf
+      COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/bitcode_to_elfobj --ld=${OB_LD_BIN} --input=${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a --output=${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
+      DEPENDS ob_sql_proxy_parser_static
+      COMMAND_EXPAND_LISTS)
+    list(APPEND BITCODE_TO_ELF_LIST libob_sql_proxy_parser_static_to_elf)
+  endif()
+
   install(PROGRAMS
     ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
     DESTINATION lib
@@ -298,6 +311,17 @@ install(FILES
   COMPONENT table)
 
 if (OB_BUILD_LIBOBTABLE)
+
+  if (ENABLE_THIN_LTO)
+    message(STATUS "add libobtable_static_to_elf")
+    add_custom_command(
+      OUTPUT libobtable_static_to_elf
+      COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/bitcode_to_elfobj --ld=${OB_LD_BIN} --input=${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a --output=${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a
+      DEPENDS obtable_static
+      COMMAND_EXPAND_LISTS)
+      list(APPEND BITCODE_TO_ELF_LIST libobtable_static_to_elf)
+  endif()
+
   install(PROGRAMS
     ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so
     ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1
@@ -335,4 +359,6 @@ add_custom_target(rpm
   COMMAND +make package
   DEPENDS
   observer obcdc_tailf obtable obtable_static
-  ob_admin ob_error ob_sql_proxy_parser_static)
+  ob_admin ob_error ob_sql_proxy_parser_static
+  ${BITCODE_TO_ELF_LIST}
+  )
