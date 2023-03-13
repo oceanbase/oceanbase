@@ -152,7 +152,7 @@ def trigger_one_cmd(cmd):
     '''
     多线程调用命令函数
     '''
-    result = shell_run_command(cmd, need_print_all=False)
+    result = shell_run_command(cmd)
 
 def main():
     '''
@@ -181,7 +181,7 @@ def main():
     # 提取 目标文件
     print_log("开始分析静态库%s..." % static_lib_name)
 
-    result = shell_run_command("ar -t %s" % (GLOBAL_CONF.origin_static_abs_path), need_print_all=False)
+    result = shell_run_command("ar -t %s" % (GLOBAL_CONF.origin_static_abs_path))
     if result['return_code'] != ERROR_CODE.COMMON_SUCCESS:
         print(result['return_message'])
         print_log("[ERROR]获取目标文件列表失败，运行命令为: %s" % result['cmd'])
@@ -194,6 +194,9 @@ def main():
 
     for one_object in result['return_message']:
         one_object = one_object.strip()
+        # 消除不同的机器空行
+        if not one_object:
+            continue
         if one_object not in object_count_dict:
             object_count_dict[one_object] = 1
         else:
@@ -211,7 +214,7 @@ def main():
     print_log("开始提取静态库%s..." % static_lib_name)
     ar_after_object_list = []
     for one_object in all_object_list:
-        result = shell_run_command("cd %s && rm -rf %s && mkdir -p %s && cd %s && ar -xN %s %s %s" % (GLOBAL_CONF.workspace, one_object['id'], one_object['id'], one_object['id'], one_object['count'], GLOBAL_CONF.origin_static_abs_path, one_object['object']), need_print_all=False)
+        result = shell_run_command("cd %s && rm -rf %s && mkdir -p %s && cd %s && ar -xN %s %s %s" % (GLOBAL_CONF.workspace, one_object['id'], one_object['id'], one_object['id'], one_object['count'], GLOBAL_CONF.origin_static_abs_path, one_object['object']))
         if result['return_code'] != ERROR_CODE.COMMON_SUCCESS:
             print(result['return_message'])
             print_log("[ERROR]解压静态库失败, 运行命令为: %s" % result['cmd'])
@@ -239,7 +242,7 @@ def main():
     for one_object in ar_after_object_list:
         cmd_ar_finial += "%s " % one_object
 
-    result = shell_run_command(cmd_ar_finial, need_print_all=False)
+    result = shell_run_command(cmd_ar_finial)
     if result['return_code'] != ERROR_CODE.COMMON_SUCCESS:
         print(result['return_message'])
         print_log("[ERROR] 生成elf格式obj失败，运行命令为: %s" % result['cmd'])
