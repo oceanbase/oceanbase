@@ -342,6 +342,9 @@ int ObPxCoordOp::inner_open()
   int ret = OB_SUCCESS;
   ObDfo *root_dfo = NULL;
   if (OB_FAIL(ObPxReceiveOp::inner_open())) {
+  } else if (GCTX.server_id_ <= 0) {
+    ret = OB_SERVER_IS_INIT;
+    LOG_WARN("Server is initializing", K(ret), K(GCTX.server_id_));
   } else if (OB_FAIL(post_init_op_ctx())) {
     LOG_WARN("init operator context failed", K(ret));
   } else if (FALSE_IT(px_sequence_id_ = GCTX.sql_engine_->get_px_sequence_id())) {
