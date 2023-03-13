@@ -11097,6 +11097,18 @@ static const _error _error_OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5440, Named window cann't be modified by another ordering property",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5440, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
 };
+static const _error _error_OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART = {
+      .error_name            = "OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "42000",
+      .str_error             = "DEFAULT partition must be last partition specified",
+      .str_user_error        = "DEFAULT partition must be last partition specified",
+      .oracle_errno          = 14318,
+      .oracle_str_error      = "ORA-14318: DEFAULT partition must be last partition specified",
+      .oracle_str_user_error = "ORA-14318: DEFAULT partition must be last partition specified"
+};
 static const _error _error_OB_ERR_SP_ALREADY_EXISTS = {
       .error_name            = "OB_ERR_SP_ALREADY_EXISTS",
       .error_cause           = "Internal Error",
@@ -22911,6 +22923,7 @@ struct ObStrErrorInit
     _errors[-OB_EER_WINDOW_NO_CHILD_PARTITIONING] = &_error_OB_EER_WINDOW_NO_CHILD_PARTITIONING;
     _errors[-OB_EER_WINDOW_NO_INHERIT_FRAME] = &_error_OB_EER_WINDOW_NO_INHERIT_FRAME;
     _errors[-OB_EER_WINDOW_NO_REDEFINE_ORDER_BY] = &_error_OB_EER_WINDOW_NO_REDEFINE_ORDER_BY;
+    _errors[-OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART] = &_error_OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART;
     _errors[-OB_ERR_SP_ALREADY_EXISTS] = &_error_OB_ERR_SP_ALREADY_EXISTS;
     _errors[-OB_ERR_SP_DOES_NOT_EXIST] = &_error_OB_ERR_SP_DOES_NOT_EXIST;
     _errors[-OB_ERR_SP_UNDECLARED_VAR] = &_error_OB_ERR_SP_UNDECLARED_VAR;
