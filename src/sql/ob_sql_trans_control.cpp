@@ -506,7 +506,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OZ (acquire_tx_if_need_(txs, *session));
   OZ (stmt_sanity_check_(session, plan, plan_ctx));
   bool start_hook = false;
-  if (exec_ctx.get_nested_level() == 0) {
+  if (!ObSQLUtils::is_nested_sql(&exec_ctx)) {
     OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid(), get_real_session_id(*session)));
     if (OB_SUCC(ret)) {
       start_hook = true;
@@ -888,7 +888,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
     }
   }
   // call end stmt hook
-  if (OB_NOT_NULL(tx_desc) && OB_NOT_NULL(txs) && OB_NOT_NULL(session) && exec_ctx.get_nested_level() == 0) {
+  if (OB_NOT_NULL(tx_desc) && OB_NOT_NULL(txs) && OB_NOT_NULL(session) && !ObSQLUtils::is_nested_sql(&exec_ctx)) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *tx_desc);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("call sql stmt end hook fail", K(tmp_ret));
