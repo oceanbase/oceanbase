@@ -784,8 +784,6 @@ int ObLocalIndexLookupOp::init(const ObDASScanCtDef *lookup_ctdef,
          .set_properties(lib::USE_TL_PAGE_OPTIONAL);
     if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(lookup_memctx_, param))) {
       LOG_WARN("create lookup mem context entity failed", K(ret));
-    } else {
-      lookup_rtdef_->scan_allocator_.set_alloc(&lookup_memctx_->get_arena_allocator());
     }
   }
   int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_LOOKUPOP_INIT_ERROR);
@@ -1111,7 +1109,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.reserved_cell_count_ = lookup_ctdef_->access_column_ids_.count();
   scan_param_.allocator_ = &lookup_rtdef_->stmt_allocator_;
   scan_param_.sql_mode_ = lookup_rtdef_->sql_mode_;
-  scan_param_.scan_allocator_ = &lookup_rtdef_->scan_allocator_;
+  scan_param_.scan_allocator_ = &lookup_memctx_->get_arena_allocator();
   scan_param_.frozen_version_ = lookup_rtdef_->frozen_version_;
   scan_param_.force_refresh_lc_ = lookup_rtdef_->force_refresh_lc_;
   scan_param_.output_exprs_ = &(lookup_ctdef_->pd_expr_spec_.access_exprs_);
