@@ -2691,6 +2691,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL__USER_ERROR_MSG "invalid argument for %s call"
 #define OB_ERR_SCHEMA_HISTORY_EMPTY__USER_ERROR_MSG "Schema history is empty"
 #define OB_ERR_TABLE_NAME_NOT_IN_LIST__USER_ERROR_MSG "table name not in FROM list"
+#define OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART__USER_ERROR_MSG "DEFAULT partition must be last partition specified"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -3717,6 +3718,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MERGE_INTO_WITH_POLICY__USER_ERROR_MSG "The MERGE INTO syntax does not support the security policy"
 #define OB_ERR_SP_NO_DROP_SP__USER_ERROR_MSG "Can't drop or alter a '%s' from within another stored routine."
 #define OB_ERR_RECOMPILATION_OBJECT__USER_ERROR_MSG "errors during recompilation/revalidation of object"
+#define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__USER_ERROR_MSG "variable not in select list"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -3726,7 +3728,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__USER_ERROR_MSG "variable not in select list"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -5748,6 +5749,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MERGE_INTO_WITH_POLICY__ORA_USER_ERROR_MSG "ORA-28132: The MERGE INTO syntax does not support the security policy"
 #define OB_ERR_SP_NO_DROP_SP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9743, Can't drop or alter a '%s' from within another stored routine."
 #define OB_ERR_RECOMPILATION_OBJECT__ORA_USER_ERROR_MSG "ORA-04045: errors during recompilation/revalidation of %.*s.%.*s"
+#define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__ORA_USER_ERROR_MSG "ORA-01007: variable not in select list"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -5757,9 +5759,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__ORA_USER_ERROR_MSG "ORA-01007: variable not in select list"
 
-extern int g_all_ob_errnos[2025];
+extern int g_all_ob_errnos[2027];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
