@@ -104,10 +104,6 @@ int ObIndexTreePrefetcher::switch_context(
       for (int64_t i = 0; i < DEFAULT_GET_MICRO_DATA_HANDLE_CNT; ++i) {
         micro_handles_[i].reset();
       }
-      micro_block_handle_mgr_.reset();
-      if (OB_FAIL(micro_block_handle_mgr_.init(true, false, *access_ctx.stmt_allocator_))) {
-        LOG_WARN("failed to init block handle mgr", K(ret));
-      }
     }
   }
   return ret;
@@ -459,7 +455,7 @@ int ObIndexTreeMultiPassPrefetcher::init(
     bool is_multi_range = false;
     if (OB_FAIL(init_basic_info(iter_type, sstable, access_ctx, query_range, is_multi_range))) {
       LOG_WARN("Fail to init basic info", K(ret), K(access_ctx));
-    } else if (OB_FAIL(micro_block_handle_mgr_.init(is_multi_range, false, *access_ctx.stmt_allocator_))) {
+    } else if (OB_FAIL(micro_block_handle_mgr_.init(is_multi_range, access_ctx_->query_flag_.is_ordered_scan(), *access_ctx.stmt_allocator_))) {
       LOG_WARN("failed to init block handle mgr", K(ret));
     } else {
       for (int64_t level = 0; OB_SUCC(ret) && level < index_tree_height_; level++) {
@@ -499,10 +495,6 @@ int ObIndexTreeMultiPassPrefetcher::switch_context(
       }
       for (int16_t level = 0; level < tree_handles_.count(); level++) {
         tree_handles_.at(level).reset();
-      }
-      micro_block_handle_mgr_.reset();
-      if (OB_FAIL(micro_block_handle_mgr_.init(true, false, *access_ctx.stmt_allocator_))) {
-        LOG_WARN("failed to init block handle mgr", K(ret));
       }
     }
   }

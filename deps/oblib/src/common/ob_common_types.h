@@ -174,6 +174,7 @@ struct ObQueryFlag
   }
   void reset() { flag_ = 0; }
   inline bool is_reverse_scan() const { return scan_order_ == Reverse; }
+  inline bool is_ordered_scan() const { return scan_order_ == ObQueryFlag::Forward || scan_order_ == ObQueryFlag::Reverse; }
   inline bool is_daily_merge() const { return daily_merge_; }
   inline bool is_rmmb_optimized() const { return rmmb_optimize_; }
   inline bool is_whole_macro_scan() const { return whole_macro_scan_; }
