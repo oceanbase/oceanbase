@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX PALF
 #include "log_storage.h"
 #include "lib/ob_errno.h"            // OB_INVALID_ARGUMENT
-#include "share/rc/ob_tenant_base.h" // mtl_malloc
 #include "log_reader_utils.h"        // ReadBuf
 
 namespace oceanbase
@@ -94,14 +93,13 @@ int LogStorage::load_manifest_for_meta_storage(block_id_t &expected_next_block_i
 void LogStorage::destroy()
 {
   is_inited_ = false;
-  palf_id_ = INVALID_PALF_ID;
   logical_block_size_ = 0;
   block_mgr_.destroy();
   log_reader_.destroy();
   log_tail_.reset();
   log_block_header_.reset();
   curr_block_writable_size_ = 0;
-  need_append_block_header_ = false;
+  palf_id_ = INVALID_PALF_ID;
   PALF_LOG(INFO, "LogStorage destroy success");
 }
 
@@ -519,6 +517,7 @@ int LogStorage::do_init_(const char *base_dir,
                snprintf(log_dir, OB_MAX_FILE_NAME_LENGTH, "%s/%s", base_dir, sub_dir))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "LogStorage snprintf failed", K(ret), K(tmp_ret));
+  } else if (FALSE_IT(memset(block_header_serialize_buf_, '\0', MAX_INFO_BLOCK_SIZE))) {
   } else if (OB_FAIL(block_mgr_.init(log_dir,
                                      lsn_2_block(base_lsn, logical_block_size),
                                      logical_block_size + MAX_INFO_BLOCK_SIZE,
@@ -600,7 +599,6 @@ int LogStorage::update_block_header_(const block_id_t block_id,
                                      const int64_t block_min_ts_ns)
 {
   int ret = OB_SUCCESS;
-  char *block_header_seria_buf = NULL;
   int64_t pos = 0;
 
   log_block_header_.update_lsn_and_ts(block_min_lsn, block_min_ts_ns);
@@ -608,22 +606,16 @@ int LogStorage::update_block_header_(const block_id_t block_id,
       palf_id_, lsn_2_block(log_tail_, logical_block_size_));
   log_block_header_.calc_checksum();
 
-  if (OB_ISNULL(block_header_seria_buf =
-                    static_cast<char *>(mtl_malloc(MAX_INFO_BLOCK_SIZE, "LogStorage")))) {
-  } else if (FALSE_IT(memset(block_header_seria_buf, '\0', MAX_INFO_BLOCK_SIZE))) {
-  } else if (OB_FAIL(log_block_header_.serialize(block_header_seria_buf,
+  if (FALSE_IT(memset(block_header_serialize_buf_, '\0', MAX_INFO_BLOCK_SIZE))) {
+  } else if (OB_FAIL(log_block_header_.serialize(block_header_serialize_buf_,
                                                  MAX_INFO_BLOCK_SIZE, pos))) {
     PALF_LOG(ERROR, "serialize info block failed", K(ret));
-  } else if (OB_FAIL(block_mgr_.pwrite(block_id, 0, block_header_seria_buf,
+  } else if (OB_FAIL(block_mgr_.pwrite(block_id, 0, block_header_serialize_buf_,
                                        MAX_INFO_BLOCK_SIZE))) {
     PALF_LOG(ERROR, "write info block failed", K(ret), K(block_id), K(pos));
   } else {
-    PALF_LOG(INFO, "append_block_header_ success", K(ret), K(block_id),
-             K(log_block_header_));
+    PALF_LOG(INFO, "append_block_header_ success", K(ret), K(block_id), K(log_block_header_));
     need_append_block_header_ = false;
-  }
-  if (NULL != block_header_seria_buf) {
-    mtl_free(block_header_seria_buf);
   }
   return ret;
 }
