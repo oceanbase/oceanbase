@@ -179,6 +179,12 @@ int ObExprWeightString::calc_resultN(common::ObObj &result , const common::ObObj
                                           flags,
                                           &is_valid_unicode_tmp);
             result.set_varchar(out_buf,frm_length);
+            result.set_collation_type(CS_TYPE_BINARY);
+            if (as_binary) {
+              result.set_collation_level(CS_LEVEL_IMPLICIT);
+            } else {
+              result.set_collation_level(objs_array[0].get_collation_level());
+            }
           }
         }
       }
