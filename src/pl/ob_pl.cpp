@@ -1935,10 +1935,36 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
 {
   int ret = OB_SUCCESS;
   ParamStore *params = ctx_.params_;
+  ObObjParam copy_value;
+
   CK (OB_NOT_NULL(params));
   CK (OB_NOT_NULL(get_allocator()));
   CK (var_idx >= 0 && var_idx < params->count());
-  OZ (deep_copy_obj(*get_allocator(), value, params->at(var_idx)));
+
+  if (OB_SUCC(ret) && params->at(var_idx).is_pl_extend() && params->at(var_idx).get_ext() != 0) {
+    OZ (ObUserDefinedType::destruct_obj(params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (value.is_pl_extend() && value.get_ext() != 0) {
+    OZ (ObUserDefinedType::deep_copy_obj(*get_allocator(), value, copy_value));
+  } else {
+    OZ (deep_copy_obj(*get_allocator(), value, copy_value));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!copy_value.is_ext()) {
+    bool is_ref_cursor = params->at(var_idx).is_ref_cursor_type();
+    copy_value.ObObj::set_scale(params->at(var_idx).get_meta().get_scale());
+    copy_value.set_accuracy(params->at(var_idx).get_accuracy());
+    params->at(var_idx) = copy_value;
+    params->at(var_idx).set_is_ref_cursor_type(is_ref_cursor);
+    params->at(var_idx).set_param_meta();
+  } else if (!params->at(var_idx).is_ref_cursor_type()) {
+    int64_t udt_id = params->at(var_idx).get_udt_id();
+    params->at(var_idx) = copy_value;
+    params->at(var_idx).set_udt_id(udt_id);
+  }
   OX (params->at(var_idx).set_param_meta());
   return ret;
 }

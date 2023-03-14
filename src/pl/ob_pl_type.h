@@ -720,7 +720,7 @@ enum ObPLCursorFlag {
   REF_BY_REFCURSOR = 1, // this a ref cursor
   SESSION_CURSOR = 2, // this cursor is alloc in session memory
   TRANSFERING_RESOURCE = 4, // this cursor is returned by a udf
-  SYNC_CURSOR = 5, // this cursor from package cursor sync, can not used by this server.
+  SYNC_CURSOR = 8, // this cursor from package cursor sync, can not used by this server.
 };
 class ObPLCursorInfo
 {

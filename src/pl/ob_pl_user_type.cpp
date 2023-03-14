@@ -1613,7 +1613,7 @@ int ObPLRecord::deep_copy(ObPLRecord &src,
   const ObRecordType *record_type = NULL;
   if (NULL != ns) {
     OZ (ns->get_user_type(get_id(), user_type, NULL));
-    CK (OB_NOT_NULL(user_type));
+    OV (OB_NOT_NULL(user_type), OB_ERR_UNEXPECTED, K(get_id()), K(src.get_id()));
     CK (user_type->is_record_type());
     OX (record_type = static_cast<const ObRecordType*>(user_type));
   }

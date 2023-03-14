@@ -2761,6 +2761,7 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
       } else {
         CK (OB_NOT_NULL(ctx->allocator_));
         OZ (spi_cursor_alloc(*ctx->allocator_, obj));
+        OX (obj.set_extend(obj.get_ext(), PL_REF_CURSOR_TYPE));
         OX (cursor = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext()));
       }
       OX (cursor->set_ref_by_refcursor());
@@ -3055,29 +3056,9 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
     if (OB_FAIL(ret)) {
     } else if (DECL_PKG == loc) {
       OZ (spi_set_package_variable(ctx, package_id, formal_param_idxs[i], dummy_result));
-    } else if (DECL_SUBPROG == loc) {
+    } else {
       OZ (ObPLContext::set_subprogram_var_from_local(
         session_info, package_id, routine_id, formal_param_idxs[i], dummy_result));
-    } else {
-      int64_t result_idx = formal_param_idxs[i];
-      CK (DECL_LOCAL == loc);
-      CK (result_idx >= 0 && result_idx < ctx->params_->count());
-      if (OB_SUCC(ret)) {
-        ObObjParam &param = ctx->params_->at(result_idx);
-        bool is_ref_cursor = param.is_ref_cursor_type();
-        if (!dummy_result.is_ext()) {
-          dummy_result.ObObj::set_scale(param.get_meta().get_scale());
-          dummy_result.set_accuracy(ctx->params_->at(result_idx).get_accuracy());
-          param = dummy_result;
-          param.set_is_ref_cursor_type(is_ref_cursor);
-          param.set_param_meta();
-        } else if (!is_ref_cursor) {
-          int64_t orig_udt_id = ctx->params_->at(result_idx).get_udt_id();
-          ctx->params_->at(result_idx) = dummy_result;
-          ctx->params_->at(result_idx).set_udt_id(orig_udt_id);
-          ctx->params_->at(result_idx).set_param_meta();
-        }
-      }
     }
   }
 
@@ -5531,8 +5512,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             CK (OB_NOT_NULL(table));
             if (OB_SUCC(ret) && table->get_count() > 0) {
               if (implicit_cursor == NULL || !implicit_cursor->get_in_forall()) {
-                // only clear table data, do not reset collection allocator,
-                // because fetch rows already copy to collection allocator, in store_result only do shadow copy.
+                // only clear table data, do not reset collection allocator
                 table->set_count(0);
                 table->set_first(OB_INVALID_INDEX);
                 table->set_last(OB_INVALID_INDEX);
