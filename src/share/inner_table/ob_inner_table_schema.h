@@ -1583,6 +1583,9 @@ public:
   static int dba_ob_ls_arb_replica_tasks_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_ls_arb_replica_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_rsrc_io_directives_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_db_links_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_db_links_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_db_links_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_instance_schema(share::schema::ObTableSchema &table_schema);
@@ -3643,6 +3646,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_ls_arb_replica_tasks_ora_schema,
   ObInnerTableSchema::dba_ob_ls_arb_replica_task_history_ora_schema,
   ObInnerTableSchema::dba_ob_rsrc_io_directives_ora_schema,
+  ObInnerTableSchema::all_db_links_ora_schema,
+  ObInnerTableSchema::dba_db_links_ora_schema,
+  ObInnerTableSchema::user_db_links_ora_schema,
   ObInnerTableSchema::gv_ob_sql_audit_ora_schema,
   ObInnerTableSchema::v_ob_sql_audit_ora_schema,
   ObInnerTableSchema::gv_instance_schema,
@@ -4914,6 +4920,9 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_LS_ARB_REPLICA_TASKS_ORA_TID,
   OB_DBA_OB_LS_ARB_REPLICA_TASK_HISTORY_ORA_TID,
   OB_DBA_OB_RSRC_IO_DIRECTIVES_ORA_TID,
+  OB_ALL_DB_LINKS_ORA_TID,
+  OB_DBA_DB_LINKS_ORA_TID,
+  OB_USER_DB_LINKS_ORA_TID,
   OB_GV_OB_SQL_AUDIT_ORA_TID,
   OB_V_OB_SQL_AUDIT_ORA_TID,
   OB_GV_INSTANCE_TID,
@@ -6825,6 +6834,9 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_LS_ARB_REPLICA_TASKS_ORA_TNAME,
   OB_DBA_OB_LS_ARB_REPLICA_TASK_HISTORY_ORA_TNAME,
   OB_DBA_OB_RSRC_IO_DIRECTIVES_ORA_TNAME,
+  OB_ALL_DB_LINKS_ORA_TNAME,
+  OB_DBA_DB_LINKS_ORA_TNAME,
+  OB_USER_DB_LINKS_ORA_TNAME,
   OB_GV_OB_SQL_AUDIT_ORA_TNAME,
   OB_V_OB_SQL_AUDIT_ORA_TNAME,
   OB_GV_INSTANCE_TNAME,
@@ -9803,10 +9815,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 230;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 575;
-const int64_t OB_SYS_VIEW_COUNT = 654;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1464;
+const int64_t OB_SYS_VIEW_COUNT = 657;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1467;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1467;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1470;
 
 } // end namespace share
 } // end namespace oceanbase

@@ -42895,6 +42895,123 @@ def_table_schema(
        SYS.ALL_VIRTUAL_RES_MGR_DIRECTIVE_REAL_AGENT
 """.replace("\n", " ")
 )
+
+def_table_schema(
+  owner = 'ailing.lcq',
+  table_name      = 'ALL_DB_LINKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25224',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+           B.USER_NAME AS OWNER,
+           A.DBLINK_NAME AS DB_LINK,
+           A.USER_NAME AS USERNAME,
+           CAST('' AS VARCHAR2(128)) AS CREDENTIAL_NAME,
+           CAST('' AS VARCHAR2(128)) AS CREDENTIAL_OWNER,
+           CAST(CASE DRIVER_PROTO WHEN 1 THEN A.CONN_STRING ELSE A.HOST_IP END AS VARCHAR2(2000))AS HOST,
+           CAST(A.GMT_CREATE AS DATE) AS CREATED,
+           CAST('' AS VARCHAR2(3)) AS HIDDEN,
+           CAST('' AS VARCHAR2(3)) AS SHARD_INTERNAL,
+           CAST('YES' AS VARCHAR2(3)) AS VALID,
+           CAST('' AS VARCHAR2(3)) AS INTRA_CDB,
+           A.TENANT_NAME AS TENANT_NAME,
+           A.REVERSE_TENANT_NAME AS REVERSE_TENANT_NAME,
+           A.CLUSTER_NAME AS CLUSTER_NAME,
+           A.REVERSE_CLUSTER_NAME AS REVERSE_CLUSTER_NAME,
+           A.REVERSE_HOST_IP AS REVERSE_HOST,
+           A.REVERSE_HOST_PORT AS REVERSE_PORT,
+           A.REVERSE_USER_NAME AS REVERSE_USERNAME
+    FROM SYS.ALL_VIRTUAL_DBLINK_REAL_AGENT A,
+         SYS.ALL_VIRTUAL_USER_REAL_AGENT B,
+         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+    WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID() AND
+          A.OWNER_ID = B.USER_ID AND B.USER_NAME = DB.DATABASE_NAME AND
+          (DB.DATABASE_ID = USERENV('SCHEMAID') OR USER_CAN_ACCESS_OBJ(1, A.DBLINK_ID, DB.DATABASE_ID) = 1)
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'ailing.lcq',
+  table_name      = 'DBA_DB_LINKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25225',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+           B.USER_NAME AS OWNER,
+           A.DBLINK_NAME AS DB_LINK,
+           A.USER_NAME AS USERNAME,
+           CAST('' AS VARCHAR2(128)) AS CREDENTIAL_NAME,
+           CAST('' AS VARCHAR2(128)) AS CREDENTIAL_OWNER,
+           CAST(CASE DRIVER_PROTO WHEN 1 THEN A.CONN_STRING ELSE A.HOST_IP END AS VARCHAR2(2000))AS HOST,
+           CAST(A.GMT_CREATE AS DATE) AS CREATED,
+           CAST('' AS VARCHAR2(3)) AS HIDDEN,
+           CAST('' AS VARCHAR2(3)) AS SHARD_INTERNAL,
+           CAST('YES' AS VARCHAR2(3)) AS VALID,
+           CAST('' AS VARCHAR2(3)) AS INTRA_CDB,
+           A.TENANT_NAME AS TENANT_NAME,
+           A.REVERSE_TENANT_NAME AS REVERSE_TENANT_NAME,
+           A.CLUSTER_NAME AS CLUSTER_NAME,
+           A.REVERSE_CLUSTER_NAME AS REVERSE_CLUSTER_NAME,
+           A.REVERSE_HOST_IP AS REVERSE_HOST,
+           A.REVERSE_HOST_PORT AS REVERSE_PORT,
+           A.REVERSE_USER_NAME AS REVERSE_USERNAME
+    FROM SYS.ALL_VIRTUAL_DBLINK_REAL_AGENT A,
+         SYS.ALL_VIRTUAL_USER_REAL_AGENT B
+    WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID() AND A.OWNER_ID = B.USER_ID;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'ailing.lcq',
+  table_name      = 'USER_DB_LINKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25226',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+           A.DBLINK_NAME AS DB_LINK,
+           A.USER_NAME AS USERNAME,
+           CAST('' AS VARCHAR2(30)) AS PASSWORD,
+           CAST('' AS VARCHAR2(128)) AS CREDENTIAL_NAME,
+           CAST('' AS VARCHAR2(128)) AS CREDENTIAL_OWNER,
+           CAST(CASE DRIVER_PROTO WHEN 1 THEN A.CONN_STRING ELSE A.HOST_IP END AS VARCHAR2(2000))AS HOST,
+           CAST(A.GMT_CREATE AS DATE) AS CREATED,
+           CAST('' AS VARCHAR2(3)) AS HIDDEN,
+           CAST('' AS VARCHAR2(3)) AS SHARD_INTERNAL,
+           CAST('YES' AS VARCHAR2(3)) AS VALID,
+           CAST('' AS VARCHAR2(3)) AS INTRA_CDB,
+           A.TENANT_NAME AS TENANT_NAME,
+           A.REVERSE_TENANT_NAME AS REVERSE_TENANT_NAME,
+           A.CLUSTER_NAME AS CLUSTER_NAME,
+           A.REVERSE_CLUSTER_NAME AS REVERSE_CLUSTER_NAME,
+           A.REVERSE_HOST_IP AS REVERSE_HOST,
+           A.REVERSE_HOST_PORT AS REVERSE_PORT,
+           A.REVERSE_USER_NAME AS REVERSE_USERNAME
+    FROM SYS.ALL_VIRTUAL_DBLINK_REAL_AGENT A,
+         SYS.ALL_VIRTUAL_USER_REAL_AGENT B
+    WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID() AND
+          A.OWNER_ID = B.USER_ID AND
+          B.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER');
+""".replace("\n", " ")
+)
+
 #### End Data Dictionary View
 ################################################################################
 
