@@ -70,6 +70,7 @@ public:
                         const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                         int64_t &table_count,
                         hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                        const common::ObIArray<uint64_t> &ori_table_ids,
                         ObMergeTimeStatistics &merge_time_statistics,
                         const int64_t expected_epoch);
 
@@ -98,6 +99,7 @@ private:
                                                     const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                                     int64_t &table_count,
                                                     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                                    const common::ObIArray<uint64_t> &ori_table_ids,
                                                     ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) = 0;
 
@@ -126,6 +128,7 @@ private:
                                                     const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                                     int64_t &table_count,
                                                     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                                    const common::ObIArray<uint64_t> &ori_table_ids,
                                                     ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) override;
   // check whether all tablets of this table finished compaction or not,
@@ -173,6 +176,7 @@ private:
                                                     const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                                     int64_t &table_count,
                                                     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                                    const common::ObIArray<uint64_t> &ori_table_ids,
                                                     ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) override;
   int validate_cross_cluster_checksum(const volatile bool &stop,
@@ -227,6 +231,7 @@ private:
                                                     const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                                     int64_t &table_count,
                                                     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                                    const common::ObIArray<uint64_t> &ori_table_ids,
                                                     ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) override;
   void check_need_validate(const bool is_primary_service, bool &need_validate) const;
@@ -244,11 +249,13 @@ private:
   int handle_data_table_with_index(const volatile bool &stop,
                                    const share::SCN &frozen_scn,
                                    const common::ObIArray<uint64_t> &table_ids,
-                                   const ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
+                                   const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
+                                   const common::ObIArray<uint64_t> &ori_table_ids,
                                    hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
   // check data tables with index, return those need to be marked as INDEX_CKM_VERIFIED
   int check_data_table_with_index(const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
                                   hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                  const common::ObIArray<uint64_t> &ori_table_ids,
                                   common::ObIArray<uint64_t> &data_tables_to_update);
   // handle index tables. validate column checksum if needed, and mark index tables as INDEX_CKM_VERIFIED
   int handle_index_table(const share::SCN &frozen_scn,
