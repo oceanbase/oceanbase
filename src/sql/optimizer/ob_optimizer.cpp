@@ -671,7 +671,7 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
       ctx_.set_parallel(ObGlobalHint::DEFAULT_PARALLEL);
     }
     //following above rule, but if stmt contain pl_udf, force das, parallel should be 1
-    if (parallel > 1 && ctx_.has_pl_udf()) {
+    if (ctx_.get_parallel() > 1 && ctx_.has_pl_udf()) {
       ctx_.set_parallel_rule(PXParallelRule::PL_UDF_DAS_FORCE_SERIALIZE);
       ctx_.set_parallel(1);
       ctx_.add_plan_note(PARALLEL_DISABLED_BY_PL_UDF_DAS, 1);
