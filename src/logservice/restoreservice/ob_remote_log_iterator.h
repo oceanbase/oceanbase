@@ -117,7 +117,6 @@ private:
   int get_entry_(LogEntryType &entry, LSN &lsn, const char *&buf, int64_t &buf_size);
   void update_data_gen_max_lsn_();
   void mark_source_error_(const int ret_code);
-  bool is_retry_ret_(const bool ret_code) const;
 
 private:
   bool inited_;
