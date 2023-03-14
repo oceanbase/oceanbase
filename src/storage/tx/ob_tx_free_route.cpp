@@ -33,11 +33,9 @@ using namespace common::serialization;
 int64_t MAX_STATE_SIZE = 4 * 1024; // 4KB
 #endif
 #define TX_START_OR_RESUME_ADDR(tx) ((tx)->is_xa_trans() ? (tx)->xa_start_addr_ : (tx)->addr_)
-#define TX_START_OR_RESUME_LOCAL(tx) (TX_START_OR_RESUME_ADDR(tx) == GCONF.self_addr_)
 
 bool ObTxnFreeRouteCtx::is_temp(const ObTxDesc &tx) const
 {
-  //return !TX_START_OR_RESUME_LOCAL(&tx);
   UNUSED(tx);
   return txn_addr_.is_valid() && txn_addr_ != GCONF.self_addr_;
 }
@@ -76,7 +74,7 @@ void ObTxnFreeRouteCtx::init_before_handle_request(ObTxDesc *tx)
 #endif
 }
 
-int ObTransService::clean_txn_state_(ObTxDesc *&tx, const ObTransID &tx_id)
+int ObTransService::clean_txn_state_(ObTxDesc *&tx, ObTxnFreeRouteCtx &ctx, const ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
   // sanity : the tx not started on this session
@@ -88,7 +86,7 @@ int ObTransService::clean_txn_state_(ObTxDesc *&tx, const ObTransID &tx_id)
   bool release_ref = false, release = false;
   {
     ObSpinLockGuard guard(tx->lock_);
-    if (TX_START_OR_RESUME_LOCAL(tx)) {
+    if (ctx.txn_addr_ == self_) {
       if (tx->tx_id_ == tx_id) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "try to clean txn state on txn start node", K(ret), KPC(tx));
@@ -285,7 +283,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
   } else if (flag.is_tx_terminated_) {
     audit_record.upd_term_ = true;
     audit_record.upd_clean_tx_ = OB_NOT_NULL(tx);
-    if (OB_NOT_NULL(tx) && OB_FAIL(clean_txn_state_(tx, tx_id))) {
+    if (OB_NOT_NULL(tx) && OB_FAIL(clean_txn_state_(tx, ctx, tx_id))) {
       TRANS_LOG(WARN, "cleanup prev txn state fail", K(ret), K(tx_id), K(tx));
     }
   } else if (flag.is_fallback_) {

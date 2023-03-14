@@ -12,7 +12,7 @@ int tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTxDesc &tx, const 
 int tx_free_route_handle_check_alive(const ObTxFreeRouteCheckAliveMsg &msg, const int retcode);
 int tx_free_route_handle_push_state(const ObTxFreeRoutePushState &msg);
 private:
-int clean_txn_state_(ObTxDesc *&tx, const ObTransID &tx_id);
+int clean_txn_state_(ObTxDesc *&tx, ObTxnFreeRouteCtx &ctx, const ObTransID &tx_id);
 static int update_logic_clock_(const int64_t logic_clock);
 bool need_fallback_(ObTxDesc &tx, int64_t &state_size);
 int push_tx_state_to_remote_(ObTxDesc &tx, const ObAddr &txn_addr);

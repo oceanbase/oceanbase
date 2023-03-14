@@ -1257,6 +1257,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       // xa_start on new session, adjust tx_desc.sess_id_
       if (OB_SUCC(ret)) {
         tx_desc->set_sessid(session_id);
+        tx_desc->set_assoc_sessid(session_id);
       }
     }
   }
@@ -1373,6 +1374,7 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
   // xa_join/resume on new session, adjust tx_desc.sess_id_
   if (OB_SUCC(ret)) {
     tx_desc->set_sessid(session_id);
+    tx_desc->set_assoc_sessid(session_id);
   }
   return ret;
 }

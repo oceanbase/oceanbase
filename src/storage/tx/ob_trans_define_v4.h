@@ -343,7 +343,7 @@ protected:
   share::SCN snapshot_version_;           // snapshot for RR | SERIAL Isolation
   int64_t snapshot_uncertain_bound_;   // uncertain bound of @snapshot_version_
   int64_t snapshot_scn_;               // the time of acquire @snapshot_version_
-  uint32_t sess_id_;                   // sesssion id
+  uint32_t sess_id_;                   // sesssion id of txn start, for XA it is XA_START session id
   uint32_t assoc_sess_id_;             // the session which associated with
   ObGlobalTxType global_tx_type_;      // global trans type, i.e., xa or dblink
 
@@ -591,6 +591,7 @@ public:
   ObXACtx *get_xa_ctx() { return xa_ctx_; }
   void set_xid(const ObXATransID &xid) { xid_ = xid; }
   void set_sessid(const uint32_t session_id) { sess_id_ = session_id; }
+  void set_assoc_sessid(const uint32_t session_id) { assoc_sess_id_ = session_id; }
   const ObXATransID &get_xid() const { return xid_; }
   bool is_xa_trans() const { return !xid_.empty(); }
   bool is_xa_tightly_couple() const { return xa_tightly_couple_; }
