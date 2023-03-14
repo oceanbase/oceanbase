@@ -152,12 +152,13 @@ int ObPocRpcServer::start(int port, int net_thread_count, frame::ObReqDeliver* d
   int lfd = -1;
   int grp = 1;
   if ((lfd = pn_listen(port, serve_cb)) == -1) {
-    ret = OB_IO_ERROR;
+    ret = OB_SERVER_LISTEN_ERROR;
     RPC_LOG(ERROR, "pn_listen failed", K(ret));
   } else {
     global_deliver = deliver;
     int count = pn_provision(lfd, grp, net_thread_count);
     if (count != net_thread_count) {
+      ret = OB_ERR_SYS;
       RPC_LOG(WARN, "pn_provision error", K(count), K(net_thread_count));
     }
     has_start_ = true;

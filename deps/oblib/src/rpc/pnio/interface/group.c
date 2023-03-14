@@ -82,7 +82,7 @@ PN_API int pn_listen(int port, serve_cb_t cb)
   pn_listen_t* pnl = locate_listen(idx);
   addr_t addr;
   addr_init(&addr, "0.0.0.0", port);
-  if (listen_init(&pnl->l, addr, pnl_dispatch_accept) < 0) {
+  if (listen_init(&pnl->l, addr, pnl_dispatch_accept) != 0) {
     idx = -1;
   } else {
     pnl->serve_cb = cb;
