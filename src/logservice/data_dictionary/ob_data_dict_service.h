@@ -86,20 +86,26 @@ private:
   int generate_dict_and_dump_(const share::SCN &snapshot_scn);
   int get_tenant_schema_guard_(
       const int64_t schema_version,
-      share::schema::ObSchemaGetterGuard &tenant_guard);
+      share::schema::ObSchemaGetterGuard &tenant_guard,
+      const bool is_force_fallback);
   int check_tenant_status_normal_(
       share::schema::ObSchemaGetterGuard &tenant_schema_guard,
       bool &is_normal);
   int handle_tenant_meta_(
       const share::SCN &snapshot_scn,
-      share::schema::ObSchemaGetterGuard &schema_guard);
+      const int64_t schema_version,
+      ObIArray<uint64_t> &database_ids,
+      ObIArray<uint64_t> &table_ids);
+  int get_database_ids_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObIArray<uint64_t> &database_ids);
   int handle_database_metas_(
-      const share::SCN &snapshot_scn,
-      share::schema::ObSchemaGetterGuard &schema_guard);
+      const int64_t schema_version,
+      const ObIArray<uint64_t> &database_ids);
   int handle_table_metas_(
-      const share::SCN &snapshot_scn,
-      share::schema::ObSchemaGetterGuard &schema_guard);
-  int filter_table_(const share::schema::ObTableSchema *table_schema, bool &is_filtered);
+      const int64_t schema_version,
+      const ObIArray<uint64_t> &table_ids);
+  int filter_table_(const share::schema::ObTableSchema &table_schema, bool &is_filtered);
 private:
   static const int64_t TIMER_TASK_INTERVAL;
   static const int64_t PRINT_DETAIL_INTERVAL;

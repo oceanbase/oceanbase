@@ -203,6 +203,8 @@ public:
       bool is_hidden = false);
 	int get_table_schemas_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObSimpleTableSchemaV2 *> &table_schemas);
+  int get_database_schemas_in_tenant(const uint64_t tenant_id,
+      common::ObIArray<const ObSimpleDatabaseSchema *> &database_schemas);
 	int get_tablegroup_schemas_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObTablegroupSchema*> &tablegroup_schemas);
 
