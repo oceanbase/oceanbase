@@ -717,18 +717,23 @@ int ObLS::offline_()
     LOG_WARN("checkpoint executor offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_restore_handler_.offline())) {
     LOG_WARN("failed to offline ls restore handler", K(ret));
+  } else if (OB_FAIL(log_handler_.offline())) {
+    LOG_WARN("failed to offline log", K(ret));
+  // TODO: delete it if apply sequence
+  // force release memtables and freeze their allocators to reduce active tenant_memory
+  } else if (OB_FAIL(ls_tablet_svr_.offline())) {
+    LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(offline_compaction_())) {
     LOG_WARN("compaction offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_wrs_handler_.offline())) {
     LOG_WARN("weak read handler offline failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(log_handler_.offline())) {
-    LOG_WARN("failed to offline log", K(ret));
   } else if (OB_FAIL(ls_ddl_log_handler_.offline())) {
     LOG_WARN("ddl log handler offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(offline_tx_())) {
     LOG_WARN("offline tx service failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(lock_table_.offline())) {
     LOG_WARN("lock table offline failed", K(ret), K(ls_meta_));
+  // force release memtables created by force_tablet_freeze called during major
   } else if (OB_FAIL(ls_tablet_svr_.offline())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(tablet_gc_handler_.offline())) {
