@@ -289,8 +289,6 @@ static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
 static void pn_pktc_flush_cb(pktc_req_t* r)
 {
   pn_client_req_t* pn_req = structof(r, pn_client_req_t, req);
-  write_queue_t* wq = &r->sk->wq;
-  wq->categ_count_bucket[r->categ_id % arrlen(wq->categ_count_bucket)] --;
   cfifo_free(pn_req);
 }
 
@@ -462,12 +460,14 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz)
     r->errcode = 0;
     r->flush_cb = pn_pkts_flush_cb_func;
     r->sock_id = ctx->sock_id;
+    r->categ_id = 0;
     eh_copy_msg(&r->msg, ctx->pkt_id, buf, sz);
   } else {
     r = (typeof(r))(ctx->reserve);
     r->errcode = ENOMEM;
     r->flush_cb = pn_pkts_flush_cb_error_func;
     r->sock_id = ctx->sock_id;
+    r->categ_id = 0;
   }
   pkts_t* pkts = &ctx->pn->pkts;
   return pkts_resp(pkts, r);

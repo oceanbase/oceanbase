@@ -1,4 +1,5 @@
 str_t* sfl(link_t* l) { return (str_t*)(l+1); }
+int64_t cidfl(link_t* l) {return  *((int64_t*)l-1); }
 static int iov_from_blist(struct iovec* iov, int64_t limit, link_t* h) {
   int cnt = 0;
   for(; cnt < limit && h; h = h->next, cnt++) {
@@ -22,11 +23,16 @@ void wq_inc(write_queue_t* wq, link_t* l) {
   int64_t bytes = sfl(l)->s;
   wq->cnt ++;
   wq->sz += bytes;
+  int64_t cid = cidfl(l);
+  wq->categ_count_bucket[cid % arrlen(wq->categ_count_bucket)] ++;
 }
 
-void wq_dec(write_queue_t* wq, int64_t bytes) {
+void wq_dec(write_queue_t* wq, link_t* l) {
+  int64_t bytes = sfl(l)->s;
   wq->cnt --;
   wq->sz -= bytes;
+  int64_t cid = cidfl(l);
+  wq->categ_count_bucket[cid % arrlen(wq->categ_count_bucket)] --;
 }
 
 static link_t* wq_consume(write_queue_t* wq, int64_t bytes) {
@@ -35,12 +41,12 @@ static link_t* wq_consume(write_queue_t* wq, int64_t bytes) {
   link_t* h = top;
   if((s = sfl(h)->s - wq->pos) <= bytes) {
     bytes -= s;
-    wq_dec(wq, sfl(h)->s);
+    wq_dec(wq, h);
     h = h->next;
     while(bytes > 0 && (s = sfl(h)->s) <= bytes) {
       bytes -= s;
+      wq_dec(wq, h);
       h = h->next;
-      wq_dec(wq, s);
     }
     wq->pos = bytes;
   } else {

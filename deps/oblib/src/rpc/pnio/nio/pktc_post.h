@@ -39,12 +39,10 @@ static int pktc_wq_push_pre(write_queue_t* wq, pktc_req_t* r) {
   int16_t id = r->categ_id % arrlen(wq->categ_count_bucket);
   if (wq->cnt >= MAX_WRITE_QUEUE_COUNT || bucket[id] >= MAX_CATEG_COUNT) {
     if (PNIO_REACH_TIME_INTERVAL(500*1000)) {
-      rk_warn("too many requests in pktc write queue, wq_cnt=%ld, wq_sz=%ld, categ_id=%d, categ_cnt=%d, socket=(ptr=%p,fd=%d)",
+      rk_warn("too many requests in pktc write queue, wq_cnt=%ld, wq_sz=%ld, categ_id=%ld, categ_cnt=%d, socket=(ptr=%p,fd=%d)",
         wq->cnt, wq->sz, r->categ_id, bucket[id], r->sk, r->sk->fd);
     }
     err = -1;
-  } else {
-    bucket[id] ++;
   }
   return err;
 }
