@@ -6724,7 +6724,17 @@ int ObLogPlan::check_scalar_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> &
   } else if (has_virtual_col) {
     /* do not push down when exists virtual generated column */
   } else {
+    const ObIArray<ObRawExpr *> &filters = stmt->get_condition_exprs();
     can_push = true;
+    /*do not push down when filters contain pl udf*/
+    for (int64_t i = 0; OB_SUCC(ret) && can_push && i < filters.count(); i++) {
+      if (OB_ISNULL(filters.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (filters.at(i)->has_flag(ObExprInfoFlag::CNT_PL_UDF)) {
+        can_push = false;
+      }
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && can_push && i < aggrs.count(); ++i) {
     if (OB_ISNULL(cur_aggr = aggrs.at(i))) {
