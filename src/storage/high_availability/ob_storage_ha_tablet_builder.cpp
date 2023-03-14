@@ -839,17 +839,21 @@ int ObStorageHATabletsBuilder::hold_local_reuse_sstable_(
         }
       } else if (OB_FAIL(hold_local_complete_tablet_sstable_(tablet, tables_handle))) {
         LOG_WARN("failed to hold local complete tablet sstable", K(ret), KP(tablet));
-      } else if (!storage_schema.is_valid()
+      } else {
+        if (!storage_schema.is_valid()
           || storage_schema.get_schema_version() < tablet->get_storage_schema().get_schema_version()) {
-        allocator.reset();
-        storage_schema.reset();
-        if (OB_FAIL(storage_schema.init(allocator, tablet->get_storage_schema()))) {
-          LOG_WARN("failed to init storage schema", K(ret), KPC(tablet));
+          storage_schema.reset();
+          if (OB_FAIL(storage_schema.init(allocator, tablet->get_storage_schema()))) {
+            LOG_WARN("failed to init storage schema", K(ret), KPC(tablet));
+          }
         }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(medium_info_list.init(allocator, &tablet->get_medium_compaction_info_list()))) {
-          LOG_WARN("failed to init medium info list", K(ret), K(tablet->get_medium_compaction_info_list()));
+        if (OB_SUCC(ret)
+          && (!medium_info_list.is_valid()
+              || medium_info_list.get_last_compaction_scn() < tablet->get_medium_compaction_info_list().get_last_compaction_scn())) {
+          medium_info_list.reset();
+          if (OB_FAIL(medium_info_list.init(allocator, &tablet->get_medium_compaction_info_list()))) {
+            LOG_WARN("failed to init medium info list", K(ret), K(tablet->get_medium_compaction_info_list()));
+          }
         }
       }
 
@@ -863,7 +867,7 @@ int ObStorageHATabletsBuilder::hold_local_reuse_sstable_(
           LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id));
         }
       }
-    }
+    } // end of while
   }
   return ret;
 }
