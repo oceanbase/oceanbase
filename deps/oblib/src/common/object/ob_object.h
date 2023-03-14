@@ -1496,7 +1496,7 @@ public:
       ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
       if (OB_UNLIKELY(!loc.is_valid(false))) {
         inrow_data.assign_ptr(v_.string_, val_len_);
-      } else if (!loc.is_inrow()) {
+      } else if (!loc.has_inrow_data()) {
         inrow_data.assign_ptr("outrow", 6);
       } else if (OB_FAIL(loc.get_inrow_data(inrow_data))) {
         COMMON_LOG(WARN, "Lob: get inrow data failed in obobj", K(*this));
@@ -1519,7 +1519,7 @@ public:
       if (OB_UNLIKELY(!loc.is_valid(false))) {
         // do nothing, warn log inside
         COMMON_LOG(WARN, "Lob: invalid json lob", K(ret), K(json_data));
-      } else if (!loc.is_inrow()) {
+      } else if (!loc.has_inrow_data()) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s", "'outrow json'"))) {
           COMMON_LOG(WARN, "Lob: fail to print \"\'outrow json\'\"", K(ret), K(buf_len), K(pos));
         }
@@ -3045,7 +3045,7 @@ inline bool ObObj::is_outrow_lob() const
     } else {
       ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
       if (loc.is_valid()) {
-        bret = !loc.is_inrow();
+        bret = !loc.has_inrow_data();
       }
     }
   }

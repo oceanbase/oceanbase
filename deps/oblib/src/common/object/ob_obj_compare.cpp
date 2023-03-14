@@ -1417,7 +1417,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
       ObString wkb2 = obj2.get_string();                                                        \
       ObLobLocatorV2 lob1(wkb1, obj1.has_lob_header());                                         \
       ObLobLocatorV2 lob2(wkb2, obj2.has_lob_header());                                         \
-      if (lob1.is_inrow() && lob2.is_inrow()) {                                                 \
+      if (lob1.has_inrow_data() && lob2.has_inrow_data()) {                                     \
         (void)lob1.get_inrow_data(wkb1);                                                        \
         (void)lob2.get_inrow_data(wkb2);                                                        \
         cmp_ret = static_cast<int>(ObCharset::strcmpsp(CS_TYPE_BINARY,                          \
@@ -1450,7 +1450,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     ObString wkb2 = obj2.get_string();                                                          \
     ObLobLocatorV2 lob1(wkb1, obj1.has_lob_header());                                           \
     ObLobLocatorV2 lob2(wkb2, obj2.has_lob_header());                                           \
-    if (lob1.is_inrow() && lob2.is_inrow()) {                                                   \
+    if (lob1.has_inrow_data() && lob2.has_inrow_data()) {                                       \
       (void)lob1.get_inrow_data(wkb1);                                                          \
       (void)lob2.get_inrow_data(wkb2);                                                          \
     }                                                                                           \

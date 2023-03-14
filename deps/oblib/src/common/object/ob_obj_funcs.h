@@ -1541,7 +1541,7 @@ DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
       if (!lob.is_valid()) {                                                         \
         COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
         right_to_die_or_duty_to_live();                                              \
-      } else if (!lob.is_inrow()) {                                                  \
+      } else if (!lob.has_inrow_data()) {                                            \
         COMMON_LOG(WARN, "meet outrow lob do calc hash value", K(lob));              \
         hash_res = hash;                                                             \
       } else if (OB_FAIL(lob.get_inrow_data(wkb))) {                                 \
@@ -1616,7 +1616,7 @@ DEF_GEO_FUNCS(ObGeometryType, string, ObString);
       if (!lob.is_valid()) {                                                         \
         COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
         right_to_die_or_duty_to_live();                                              \
-      } else if (!lob.is_inrow()) {                                                  \
+      } else if (!lob.has_inrow_data()) {                                            \
         COMMON_LOG(WARN, "meet outrow lob do calc hash value", K(lob));              \
         hash_res = hash;                                                             \
       } else if (OB_FAIL(lob.get_inrow_data(j_bin_str))) {                           \

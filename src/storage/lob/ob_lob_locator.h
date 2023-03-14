@@ -57,6 +57,7 @@ public:
                KPC(rowid_project_), K_(rowid_objs), K_(enable_locator_v2), K_(is_inited));
 private:
   static const int64_t DEFAULT_LOCATOR_OBJ_ARRAY_SIZE = 8;
+  static const int64_t LOB_FORCE_INROW_SIZE = 64 * 1024L; // 64K
   int init_rowid_version(const share::schema::ObTableSchema &table_schema);
   int build_rowid_obj(blocksstable::ObDatumRow &row,
                       common::ObString &rowid_str,

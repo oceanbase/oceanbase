@@ -452,9 +452,15 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
     const ObLobCommon *lob_common =
       (payload.length() == 0 ? NULL : reinterpret_cast<const ObLobCommon *>(payload.ptr()));
     int64_t out_payload_len = payload.length();
+    int64_t byte_size = lob_common->get_byte_size(out_payload_len);
     bool is_src_inrow = (is_simple ? true : lob_common->in_row_);
     // systable read always get full lob data and output inrow lobs
-    bool is_dst_inrow = (is_systable ? true : is_src_inrow);
+    bool is_dst_inrow = ((is_systable) ? true : is_src_inrow);
+    if (byte_size <= LOB_FORCE_INROW_SIZE) {
+      // if lob is smaller than datum allow size
+      // let lob obj force inrow for hash/cmp cannot handle error
+      is_dst_inrow = true;
+    }
     // oracle user table lobs and mysql user table outrow lobs need extern.
     bool has_extern = (!is_simple) && (lib::is_oracle_mode() || !is_dst_inrow);
     ObMemLobExternFlags extern_flags(has_extern);
@@ -462,16 +468,18 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
     if (!is_src_inrow && is_dst_inrow) {
       // read outrow lobs but output as inrow lobs, need to calc the output payload lens
       // get byte size of out row lob, and calc total disk lob handle size if it is inrow
-      out_payload_len = lob_common->get_byte_size(out_payload_len);
-      out_payload_len = ObLobCommon::calc_inrow_handle_size(lob_common->is_init_, out_payload_len);
+      out_payload_len += byte_size; // need whole disk locator
     }
 
     int64_t full_loc_size = ObLobLocatorV2::calc_locator_full_len(extern_flags,
                                                                   rowid_str.length(),
                                                                   out_payload_len,
                                                                   is_simple);
-
-    if (OB_ISNULL(buf = reinterpret_cast<char *>(locator_allocator_.alloc(full_loc_size)))) {
+    if (full_loc_size > OB_MAX_LONGTEXT_LENGTH) {
+      ret = OB_SIZE_OVERFLOW;
+      STORAGE_LOG(WARN, "Failed to get lob data over size", K(ret), K(full_loc_size),
+                  K(rowid_str.length()), K(out_payload_len));
+    } else if (OB_ISNULL(buf = reinterpret_cast<char *>(locator_allocator_.alloc(full_loc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to alloc memory for lob locator", K(ret), K(full_loc_size));
     } else if (FALSE_IT(MEMSET(buf, 0, full_loc_size))) {
@@ -530,14 +538,8 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             STORAGE_LOG(WARN, "Lob: get disk locator failed", K(ret), K(column_id));
           } else {
             char *buffer = disk_loc_str.ptr();
-            MEMCPY(buffer, lob_common, sizeof(ObLobCommon));
-            int64_t offset = sizeof(ObLobCommon);
-            if (lob_common->is_init_) {
-              MEMCPY(buffer + offset, lob_common->buffer_, sizeof(ObLobData));
-              offset += sizeof(ObLobData); // copy lob id
-            }
-            ObLobCommon *new_lob_common = reinterpret_cast<ObLobCommon *>(buffer);
-            new_lob_common->in_row_ = 1; // set to inrow
+            MEMCPY(buffer, lob_common, payload.length());
+            int64_t offset = payload.length();
 
             // read full data to new locator
             storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
@@ -561,7 +563,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             param.timeout_ = access_ctx.timeout_;
             param.scan_backward_ = false;
             param.offset_ = 0;
-            param.len_ = (disk_loc_str.length() - offset);
+            param.len_ = param.byte_size_;
             ObString output_data;
             output_data.assign_buffer(buffer + offset, param.len_);
             if (OB_FAIL(lob_mngr->query(param, output_data))) {
