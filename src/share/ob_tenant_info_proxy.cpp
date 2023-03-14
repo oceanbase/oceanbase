@@ -404,6 +404,10 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expect updating one row", KR(ret), K(affected_rows), K(sql));
     }
+
+    LOG_TRACE("update_tenant_recovery_status", KR(ret), K(tenant_id), K(affected_rows), K(status),
+              K(sql), K(old_tenant_info), K(new_sync_scn), K(new_replay_scn), K(new_scn),
+              K(sync_scn), K(replay_scn), K(readable_scn));
   }
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;

@@ -6646,6 +6646,7 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
                 ret = OB_SUCCESS;
               }
             }
+            TRANS_LOG(INFO, "check for standby for unknown", K(ret), K(snapshot), K(can_read), K(trans_version), K(is_determined_state), K(tmp_state_info), K(readable_scn));
           }
           break;
         }
@@ -6793,7 +6794,7 @@ void ObPartTransCtx::handle_trans_ask_state_(const SCN &snapshot)
 {
   if (snapshot > lastest_snapshot_) {
     build_and_post_collect_state_msg_(snapshot);
-  } else if (snapshot <= lastest_snapshot_ && standby_part_collected_.num_members() != state_info_array_.count()-1) {
+  } else if (snapshot <= lastest_snapshot_ && standby_part_collected_.num_members() != state_info_array_.count()) {
     if (refresh_state_info_interval_.reach()) {
       build_and_post_collect_state_msg_(snapshot);
     }

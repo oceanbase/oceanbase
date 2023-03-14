@@ -3098,7 +3098,6 @@ int ObTransService::check_and_fill_state_info(const ObTransID &tx_id, ObStateInf
   int tx_state = ObTxData::RUNNING;
   SCN version;
   if (OB_FAIL(get_tx_state_from_tx_table_(state_info.ls_id_, tx_id, tx_state, version))) {
-    TRANS_LOG(INFO, "get tx state from tx table fail", K(ret), K(state_info.ls_id_), K(tx_id));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       ObLSService *ls_svr =  MTL(ObLSService *);
       ObLSHandle handle;
@@ -3118,6 +3117,7 @@ int ObTransService::check_and_fill_state_info(const ObTransID &tx_id, ObStateInf
       } else {
         ret = OB_TRANS_CTX_NOT_EXIST;
       }
+      TRANS_LOG(INFO, "get tx state from tx table fail", K(ret), K(state_info), K(tx_id), K(version));
     }
   } else {
     switch (tx_state) {
