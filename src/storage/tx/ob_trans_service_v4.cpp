@@ -851,11 +851,12 @@ int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransR
     TRANS_LOG(WARN, "get tx fail", K(ret), K(tx_id), K(msg));
   } else if (OB_ISNULL(tx)) {
     ret = OB_TRANS_CTX_NOT_EXIST;
+  } else if (tx->is_committed() && tx_id == tx->tx_id_) {
+    ret = OB_TRANS_COMMITED;
+  } else if (tx->is_rollbacked() && tx_id == tx->tx_id_) {
+    ret = OB_TRANS_ROLLBACKED;
   } else if (OB_SUCCESS != msg.status_) {
-    TRANS_LOG(WARN, "tx participant in failed, abort tx", KPC(tx), K(msg));
-    if (OB_FAIL(abort_tx(*tx, msg.status_))) {
-      TRANS_LOG(WARN, "do abort tx fail", K(ret), KPC(tx));
-    }
+    TRANS_LOG(WARN, "tx participant in failed status", K(msg));
   }
   ObTxKeepaliveRespMsg resp;
   resp.cluster_version_ = GET_MIN_CLUSTER_VERSION();

@@ -6316,7 +6316,7 @@ int ObPartTransCtx::tx_keepalive_response_(const int64_t status)
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
 
-  if (OB_TRANS_CTX_NOT_EXIST == status && can_be_recycled_()) {
+  if ((OB_TRANS_CTX_NOT_EXIST == status || OB_TRANS_ROLLBACKED == status) && can_be_recycled_()) {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       TRANS_LOG(WARN, "[TRANS GC] tx has quit, local tx will be aborted",
                 K(status), KPC(this));
@@ -6324,6 +6324,9 @@ int ObPartTransCtx::tx_keepalive_response_(const int64_t status)
     if (OB_FAIL(gc_ctx_())) {
       TRANS_LOG(WARN, "force kill part_ctx error", KR(ret), KPC(this));
     }
+  } else if (OB_TRANS_COMMITED == status && can_be_recycled_() && first_scn_ >= last_scn_ /*all changes were rollbacked*/) {
+    TRANS_LOG(WARN, "txn has comitted on scheduler, but this particiapnt can be recycled", KPC(this));
+    FORCE_PRINT_TRACE(tlog_, "[participant leaky] ");
   } else if (OB_SUCCESS != status) {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       TRANS_LOG(WARN, "[TRANS GC] tx keepalive fail", K(status), KPC(this));
