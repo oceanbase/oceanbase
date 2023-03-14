@@ -349,7 +349,7 @@ int ObIMemtableMgr::add_memtable_(ObTableHandleV2 &memtable_handle)
       memtable_tail_++;
       ObTaskController::get().allow_next_syslog();
       // FIXME : delete lbt()
-      STORAGE_LOG(INFO, "succeed to add memtable", K(get_memtable_count_()),
+      STORAGE_LOG(INFO, "succeed to add memtable", KP(this), K(get_memtable_count_()),
           K(memtable_handle), K(lbt()));
     }
   }
