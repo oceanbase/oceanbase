@@ -1932,6 +1932,21 @@ int ObDDLScheduler::add_task_to_longops_mgr(ObDDLTask *ddl_task)
   return ret;
 }
 
+int ObDDLScheduler::remove_task_from_longops_mgr(ObDDLTask *ddl_task)
+{
+  int ret = OB_SUCCESS;
+  ObLongopsMgr &longops_mgr = ObLongopsMgr::get_instance();
+  if (OB_ISNULL(ddl_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(ddl_task));
+  } else if (ddl_task->support_longops_monitoring()) {
+    if (OB_FAIL(longops_mgr.unregister_longops(ddl_task->get_longops_stat()))) {
+      LOG_WARN("failed to unregister longops", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDDLScheduler::remove_ddl_task(ObDDLTask *ddl_task)
 {
   int ret = OB_SUCCESS;
@@ -1942,9 +1957,8 @@ int ObDDLScheduler::remove_ddl_task(ObDDLTask *ddl_task)
   } else if (OB_FAIL(task_queue_.remove_task(ddl_task))) {
     LOG_WARN("fail to remove task, which should not happen", K(ret), KPC(ddl_task));
   } else {
-    int tmp_ret = OB_SUCCESS;
-    if (ddl_task->support_longops_monitoring() && OB_TMP_FAIL(longops_mgr.unregister_longops(ddl_task->get_longops_stat()))) {
-      LOG_WARN("failed to unregister longops", K(tmp_ret));
+    if (OB_FAIL(remove_task_from_longops_mgr(ddl_task))) {
+      LOG_WARN("failed to unregister longops", K(ret));
     }
     remove_sys_task(ddl_task);
     free_ddl_task(ddl_task);
@@ -1958,18 +1972,29 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task)
   if (OB_ISNULL(ddl_task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(ddl_task));
-  } else if (OB_FAIL(task_queue_.push_task(ddl_task))) {
-    if (OB_ENTRY_EXIST != ret) {
-      LOG_WARN("push back task to task queue failed", K(ret));
-    }
   } else {
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(add_sys_task(ddl_task))) {
-      LOG_WARN("add sys task failed", K(tmp_ret));
-    } else if (OB_TMP_FAIL(add_task_to_longops_mgr(ddl_task))) {
+    bool longops_added = true;
+    if (OB_TMP_FAIL(add_task_to_longops_mgr(ddl_task))) {
+      longops_added = false;
       LOG_WARN("add task to longops mgr failed", K(tmp_ret));
     }
-    idler_.wakeup();
+    if (OB_FAIL(task_queue_.push_task(ddl_task))) {
+      if (OB_ENTRY_EXIST != ret) {
+        LOG_WARN("push back task to task queue failed", K(ret));
+      }
+      if (longops_added) {
+        LOG_WARN("try to unregister longop because push ddl task failed", K(ret));
+        if (OB_FAIL(remove_task_from_longops_mgr(ddl_task))) {
+          LOG_WARN("failed to unregister longops", K(tmp_ret));
+        }
+      }
+    } else {
+      if (OB_TMP_FAIL(add_sys_task(ddl_task))) {
+        LOG_WARN("add sys task failed", K(tmp_ret));
+      }
+      idler_.wakeup();
+    }
   }
   return ret;
 }
