@@ -1875,9 +1875,11 @@ int ObChunkDatumStore::ChunkIterator::read_next_blk()
     }
   }
   if (OB_SUCC(ret) && !aio_blk_->magic_check()) {
+    #ifndef NDEBUG
+      ob_abort();
+    #endif
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("read corrupt data", K(ret), K(aio_blk_->magic_),
-             K(store_->file_size_), K(cur_iter_pos_));
+    LOG_WARN("read corrupt data", K(ret), K(*aio_blk_), K(*this), K(*store_));
   }
   if (OB_SUCC(ret)) {
     // data block is larger than min block
@@ -1911,6 +1913,9 @@ int ObChunkDatumStore::ChunkIterator::read_next_blk()
     read_blk_buf_ = aio_blk_buf_;
     aio_blk_ = NULL;
     aio_blk_buf_ = NULL;
+    #ifndef NDEBUG
+      LOG_INFO("read one block", K(*read_blk_), K(*this), K(*store_));
+    #endif
     if (OB_FAIL(read_blk_->swizzling(NULL))) {
       LOG_WARN("swizzling failed", K(ret));
     } else {
