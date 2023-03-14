@@ -5656,10 +5656,8 @@ int ret = OB_SUCCESS;
       } else if (ObFloatTC == child_tc || ObDoubleTC == child_tc) {
         if (child_tc == dst_tc || ObDoubleTC == dst_tc) {
           ObAccuracy lossless_acc = child_type.get_accuracy();
-          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
-            is_lossless = true;
-          } else if (dst_acc.get_precision() >= lossless_acc.get_precision() &&
-                     dst_acc.get_scale() >= lossless_acc.get_scale()) {
+          if (dst_acc.get_precision() >= lossless_acc.get_precision() &&
+                dst_acc.get_scale() == lossless_acc.get_scale()) {
             is_lossless = true;
           }
         }
@@ -5764,7 +5762,8 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
         }
       } else if (ObFloatTC == child_tc || ObDoubleTC == child_tc) {
         if (child_tc == dst_tc || ObDoubleTC == dst_tc) {
-          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+          ObAccuracy lossless_acc = child_type.get_accuracy();
+          if (lossless_acc.get_scale() == dst_acc.get_scale()) {
             is_lossless = true;
           }
         }
