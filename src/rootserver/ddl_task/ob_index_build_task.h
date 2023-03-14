@@ -127,7 +127,7 @@ private:
       const share::schema::ObTableSchema &index_schema,
       const share::schema::ObIndexStatus new_status);
   int check_health();
-  int try_reap_old_replica_build_task();
+  int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   int send_build_single_replica_request();
   int check_build_single_replica(bool &is_end);
   int check_need_verify_checksum(bool &need_verify);

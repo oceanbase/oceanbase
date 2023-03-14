@@ -2238,7 +2238,7 @@ int ObSyncTabletAutoincSeqCtx::call_and_process_all_tablet_autoinc_seqs(P &proxy
   return ret;
 }
 
-int ObDDLRedefinitionTask::try_reap_old_replica_build_task()
+int ObDDLRedefinitionTask::reap_old_replica_build_task(bool &need_exec_new_inner_sql)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -2261,17 +2261,19 @@ int ObDDLRedefinitionTask::try_reap_old_replica_build_task()
     const ObTabletID unused_tablet_id;
     const ObDDLTaskInfo unused_addition_info;
     const int old_ret_code = OB_SUCCESS;
-    bool need_exec_new_inner_sql = true;
     ObAddr invalid_addr;
-    (void)ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_, dest_table_id,
+    if (old_execution_id < 0) {
+      need_exec_new_inner_sql = true;
+    } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_, dest_table_id,
         task_id_, old_execution_id, invalid_addr, trace_id_,
-        table_schema->get_schema_version(), snapshot_version_, need_exec_new_inner_sql);
-    if (!need_exec_new_inner_sql) {
-      if (OB_FAIL(update_complete_sstable_job_status(unused_tablet_id, snapshot_version_, old_execution_id, old_ret_code, unused_addition_info))) {
-        LOG_INFO("succ to wait and complete old task finished!", K(ret));
+        table_schema->get_schema_version(), snapshot_version_, need_exec_new_inner_sql))) {
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("failed to check and wait old complement task", K(ret));
       }
-    } else {
-      ret = OB_ENTRY_NOT_EXIST;
+    } else if (!need_exec_new_inner_sql) {
+      if (OB_FAIL(update_complete_sstable_job_status(unused_tablet_id, snapshot_version_, old_execution_id, old_ret_code, unused_addition_info))) {
+        LOG_WARN("failed to wait and complete old task finished!", K(ret));
+      }
     }
   }
   return ret;

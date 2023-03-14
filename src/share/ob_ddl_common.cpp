@@ -1178,7 +1178,7 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("fail to get sql proxy, root service is null.!");
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || trace_id.is_invalid() || !inner_sql_exec_addr.is_valid())) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || trace_id.is_invalid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(trace_id), K(inner_sql_exec_addr));
   } else {
@@ -1240,8 +1240,6 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
         while (OB_SUCC(ret)) {
           if (OB_FAIL(result->next())) {
             if (OB_ITER_END == ret) {
-              LOG_INFO("success to get result, and no inner sql task", K(ret), K(sql_string.ptr()),
-                K(ip_str), K(trace_id_str), K(tenant_id), K(sql_string));
               ret = OB_SUCCESS;
               break;
             } else {
@@ -1250,8 +1248,6 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
           } else {
             is_old_task_session_exist =  true;
             EXTRACT_UINT_FIELD_MYSQL(*result, "session_id", session_id, uint64_t);
-            LOG_INFO("succ to match inner sql session in trace id", K(ret), K(sql_string.ptr()),
-              K(session_id), K(tenant_id), K(ip_str), K(trace_id_str), K(sql_string));
           }
         }
       }
@@ -1659,8 +1655,8 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
       if (report_checksum_cnt == tablet_count) {
         is_checksums_all_report = true;
       } else {
-        ret = OB_EAGAIN;
-        LOG_INFO("not all tablet has update checksum, will re-check",
+        is_checksums_all_report = false;
+        LOG_INFO("not all tablet has update checksum",
           K(ret), K(tablet_idx), K(tablet_count), K(is_checksums_all_report));
       }
     }
@@ -1728,7 +1724,7 @@ int ObCheckTabletDataComplementOp::check_finish_report_checksum(
   } else if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, index_table_id, ddl_task_id, execution_id, dest_tablet_ids, is_checksums_all_report))) {
     LOG_WARN("fail to check tablet checksum update status, maybe EAGAIN", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
   } else if (!is_checksums_all_report) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_EAGAIN;
     LOG_WARN("tablets checksum not all report!", K(is_checksums_all_report), K(ret));
   }
   return ret;
@@ -1761,15 +1757,12 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to check and wait complement task", K(ret), K(tenant_id), K(table_id));
   } else {
-    LOG_INFO("start to check and wait complement task", K(tenant_id), K(table_id), K(inner_sql_exec_addr), K(trace_id));
-    while (OB_SUCC(ret) && is_old_task_session_exist) {
-      if (OB_FAIL(check_task_inner_sql_session_status(inner_sql_exec_addr, trace_id, tenant_id, execution_id, scn, is_old_task_session_exist))) {
-        LOG_WARN("fail check task inner sql session status", K(ret), K(trace_id), K(inner_sql_exec_addr));
-      } else if (!is_old_task_session_exist) {
-        LOG_WARN("old inner sql session is not exist.", K(ret));
-      } else {
-        usleep(10 * 1000); // sleep 10ms
-      }
+    if (OB_FAIL(check_task_inner_sql_session_status(inner_sql_exec_addr, trace_id, tenant_id, execution_id, scn, is_old_task_session_exist))) {
+      LOG_WARN("fail check task inner sql session status", K(ret), K(trace_id), K(inner_sql_exec_addr));
+    } else if (is_old_task_session_exist) {
+      ret = OB_EAGAIN;
+    } else {
+      LOG_INFO("old inner sql session is not exist.", K(ret));
     }
 
     // After old session exits, the rule of retry is specified as follows
@@ -1787,6 +1780,8 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
 
     ObArray<ObTabletID> dest_tablet_ids;
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, table_id, dest_tablet_ids))) {
+      LOG_WARN("fail to get tablets", K(ret), K(tenant_id), K(table_id));
     } else if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, table_id, ddl_task_id, execution_id, dest_tablet_ids, is_dst_checksums_all_report))) {
       LOG_WARN("fail to check tablet checksum update status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
     } else if (is_dst_checksums_all_report) {
@@ -1794,8 +1789,9 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
       LOG_INFO("no need execute because all tablet sstable has build finished", K(need_exec_new_inner_sql));
     }
   }
-  LOG_INFO("end to check and wait complement task", K(ret),
-    K(table_id), K(is_old_task_session_exist), K(is_dst_checksums_all_report), K(need_exec_new_inner_sql));
-
+  if (OB_EAGAIN != ret) {
+    LOG_INFO("end to check and wait complement task", K(ret),
+      K(table_id), K(is_old_task_session_exist), K(is_dst_checksums_all_report), K(need_exec_new_inner_sql));
+  }
   return ret;
 }
