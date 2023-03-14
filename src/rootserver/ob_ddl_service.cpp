@@ -5059,8 +5059,12 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                                       is_exist)) {
 
           } else if (!is_exist) {
-            ret = OB_ERR_UNEXPECTED;
+            ret = OB_ERR_KEY_DOES_NOT_EXISTS;
+            const ObString &index_name = alter_index_parallel_arg->index_name_;
+            const ObString &data_table_name = origin_table_schema.get_table_name_str();
             LOG_WARN("the index is not exist", K(ret), K(alter_index_parallel_arg));
+            LOG_USER_ERROR(OB_ERR_KEY_DOES_NOT_EXISTS, index_name.length(), index_name.ptr(),
+                           data_table_name.length(), data_table_name.ptr());
           } else if (OB_FAIL(ddl_operator.alter_index_table_parallel(
                      origin_table_schema.get_tenant_id(),
                      origin_table_schema.get_table_id(),
