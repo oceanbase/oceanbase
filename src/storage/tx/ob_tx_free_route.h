@@ -40,28 +40,29 @@ union ObTxnFreeRouteAuditRecord
     bool tx_term_: 1;    // 5
     bool free_route_: 1; // 6
     bool fallback_: 1;   // 7
-    bool upd_static_: 1; // 8
-    bool upd_parts_: 1;  // 9
-    bool upd_dyn_: 1;    // 10
-    bool upd_extra_: 1;  // 11
-    bool upd_term_: 1;   // 12
-    bool upd_fallback_: 1; // 13
-    bool upd_clean_tx_: 1; // 14
-    bool upd_reset_snapshot_: 1; // 15
-    bool chg_static_: 1; // 16
-    bool chg_dyn_: 1;    // 17
-    bool chg_parts_: 1;  // 18
-    bool chg_extra_: 1;  // 19
-    bool start_node_: 1; // 20
-    bool push_state_: 1; // 21
-    bool ret_fallback_: 1; // 22
-    bool ret_term_: 1;   // 23
-    bool xa_: 1;        // 24
-    bool xa_tightly_couple_: 1; // 25
-    bool assoc_xa_orig_ :1; // 26
-    bool alloc_tx_ :1; // 27
-    bool reuse_tx_ :1; // 28
-    bool replace_tx_ :1; // 29
+    bool tx_switch_: 1;  // 8
+    bool upd_static_: 1; // 9
+    bool upd_parts_: 1;  // 10
+    bool upd_dyn_: 1;    // 11
+    bool upd_extra_: 1;  // 12
+    bool upd_term_: 1;   // 13
+    bool upd_fallback_: 1; // 14
+    bool upd_clean_tx_: 1; // 15
+    bool upd_reset_snapshot_: 1; // 16
+    bool chg_static_: 1; // 17
+    bool chg_dyn_: 1;    // 18
+    bool chg_parts_: 1;  // 19
+    bool chg_extra_: 1;  // 20
+    bool start_node_: 1; // 21
+    bool push_state_: 1; // 22
+    bool ret_fallback_: 1; // 23
+    bool ret_term_: 1;   // 24
+    bool xa_: 1;        // 25
+    bool xa_tightly_couple_: 1; // 26
+    bool assoc_xa_orig_ :1; // 27
+    bool alloc_tx_ :1; // 28
+    bool reuse_tx_ :1; // 29
+    bool replace_tx_ :1; // 30
   };
 };
 
@@ -76,6 +77,7 @@ struct ObTxnFreeRouteCtx {
     is_txn_switch_ = false;
     txn_addr_.reset();
     tx_id_.reset();
+    prev_tx_id_.reset();
     is_proxy_support_ = false;
     in_txn_before_handle_request_ = false;
     can_free_route_ = false;
@@ -126,7 +128,15 @@ private:
   // updated when receive request
   // if no txn alive, set to 0.0.0.0
   common::ObAddr txn_addr_;
+  // current tx_id which setup before handle request
+  // and updated after handle request
+  // if `switch txn` happended, prev_tx_id_ is used to
+  // save the before one
   ObTransID tx_id_;
+  // the tx_id of previouse txn which implicit committed
+  // by current request/stmt/command and create a new txn
+  // also names with `switch txn` (prev_tx_id_ -> tx_id_)
+  ObTransID prev_tx_id_;
   // proxy's hint of support future free route
   // used to fallback on txn start node
   // used to decide free route when txn start
