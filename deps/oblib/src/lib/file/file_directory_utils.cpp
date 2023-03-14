@@ -410,7 +410,7 @@ int FileDirectoryUtils::get_disk_space(
 int FileDirectoryUtils::delete_directory_rec(const char *path)
 {
   int ret = OB_SUCCESS;
-  DIR *dir;
+  DIR *dir = NULL;
   struct dirent *entry;
   if (NULL == (dir = opendir(path))) {
     ret = OB_ERR_SYS;
@@ -450,9 +450,8 @@ int FileDirectoryUtils::delete_directory_rec(const char *path)
 int FileDirectoryUtils::delete_tmp_file_or_directory_at(const char *path)
 {
   int ret = OB_SUCCESS;
-  DIR *dir;
+  DIR *dir = NULL;
   struct dirent *entry;
-  dir = opendir(path);
   if (NULL == (dir = opendir(path))) {
     ret = OB_ERR_SYS;
     LIB_LOG(WARN, "opendir failed", K(path));

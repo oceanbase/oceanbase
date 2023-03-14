@@ -211,7 +211,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, restart_and_clear_tmp_files)
       int64_t leader_idx1 = 0;
       EXPECT_EQ(OB_SUCCESS, get_leader(id, leader1, leader_idx1));
       std::string palf_log_dir = leader1.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.log_dir_;
-      ObISimpleLogServer *i_server = get_cluster()[0];
+      ObISimpleLogServer *i_server = get_cluster()[leader_idx1];
       ObSimpleLogServer *server = dynamic_cast<ObSimpleLogServer*>(i_server);
       std::string log_pool = server->log_block_pool_.log_pool_path_;
       const block_id_t min_block_id = server->log_block_pool_.min_block_id_;

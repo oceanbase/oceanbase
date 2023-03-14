@@ -101,7 +101,10 @@ void LogBlockMgr::destroy()
   is_inited_ = false;
   align_size_ = -1;
   align_buf_size_ = -1;
-  dir_fd_ = -1;
+  if (-1 != dir_fd_) {
+    close_with_ret(dir_fd_);
+    dir_fd_ = -1;
+  }
   log_block_pool_ = NULL;
   curr_writable_handler_.destroy();
   curr_writable_block_id_ = LOG_INVALID_BLOCK_ID;
@@ -404,8 +407,8 @@ int LogBlockMgr::check_after_truncate_(const char *block_path, const offset_t of
     PALF_LOG(INFO, "check_after_truncate_ success", KPC(this), K(block_path), K(offset));
   }
 
-  if (-1 != fd && OB_FAIL(close_with_retry(fd))) {
-    PALF_LOG(ERROR, "close_with_retry failed", KPC(this), K(block_path));
+  if (-1 != fd && OB_FAIL(close_with_ret(fd))) {
+    PALF_LOG(ERROR, "close_with_ret failed", KPC(this), K(block_path));
   }
   if (NULL != buf) {
     ob_free_align(buf);

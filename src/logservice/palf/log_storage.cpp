@@ -757,7 +757,7 @@ int LogStorage::read_block_header_(const block_id_t block_id,
       PALF_LOG(WARN, "this block has been deleted", K(ret), K(block_id));
     } else {
       ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(ERROR, "unexpected error, maybe deleted by human!!!", K(ret), K(block_id));
+      PALF_LOG(WARN, "unexpected error, maybe deleted by human or flashabck!!!", K(ret), K(block_id), KPC(this));
     }
   }
   return ret;
