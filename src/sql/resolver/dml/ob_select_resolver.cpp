@@ -2012,6 +2012,25 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           } else {
             //invalid name, do nothing
           }
+        } else if (is_oracle_mode()
+                    && T_QUESTIONMARK == sel_expr->get_expr_type()
+                    && T_OBJ_ACCESS_REF == project_node->type_) {
+          while (OB_SUCC(ret) && NULL != project_node->children_[1]) {
+            project_node = project_node->children_[1];
+          }
+          if (OB_FAIL(ret)) {
+          } else if (T_OBJ_ACCESS_REF != project_node->type_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected select item type", K(select_item), K(project_node->type_), K(ret));
+          } else {
+            alias_node = project_node->children_[0];
+            select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
+                                                static_cast<int32_t>(alias_node->str_len_));
+            if (OB_UNLIKELY(alias_node->str_len_ > OB_MAX_COLUMN_NAME_LENGTH)) {
+              ret = OB_ERR_TOO_LONG_IDENT;
+              LOG_WARN("alias name too long", K(ret), K(select_item.alias_name_));
+            }
+          }
         } else {
           if (params_.is_prepare_protocol_
               || !session_info_->get_local_ob_enable_plan_cache()
