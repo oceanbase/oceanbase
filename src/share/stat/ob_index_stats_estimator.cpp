@@ -31,7 +31,7 @@ int ObIndexStatsEstimator::estimate(const ObTableStatParam &param,
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObColumnStatParam> &column_params = param.column_params_;
-  ObString no_rewrite("NO_REWRITE");
+  ObString hint_str("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS");
   ObString calc_part_id_str;
   ObOptTableStat tab_stat;
   ObOptStat src_opt_stat;
@@ -53,8 +53,8 @@ int ObIndexStatsEstimator::estimate(const ObTableStatParam &param,
                                                       column_params.count(),
                                                       src_col_stats))) {
     LOG_WARN("failed init col stats", K(ret));
-  } else if (OB_FAIL(add_hint(no_rewrite, ctx_.get_allocator()))) {
-    LOG_WARN("failed to add no_rewrite", K(ret));
+  } else if (OB_FAIL(add_hint(hint_str, ctx_.get_allocator()))) {
+    LOG_WARN("failed to add hint_str", K(ret));
   } else if (OB_FAIL(add_from_table(param.db_name_, param.data_table_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_index_info(ctx_.get_allocator(),

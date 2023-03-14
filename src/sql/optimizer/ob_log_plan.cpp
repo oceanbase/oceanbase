@@ -7744,6 +7744,8 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate group by operator", K(ret));
   } else {
+    const ObGlobalHint &global_hint = get_optimizer_context().get_global_hint();
+    bool has_dbms_stats = global_hint.has_dbms_stats_hint();
     group_by->set_child(ObLogicalOperator::first_child, top);
     group_by->set_algo_type(algo);
     group_by->set_from_pivot(from_pivot);
@@ -7753,7 +7755,7 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
     group_by->set_origin_child_card(origin_child_card);
     group_by->set_rollup_status(rollup_status);
     group_by->set_is_partition_wise(is_partition_wise);
-    group_by->set_force_push_down(FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings());
+    group_by->set_force_push_down((FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings()) || has_dbms_stats);
     if (OB_FAIL(group_by->set_group_by_exprs(group_by_exprs))) {
       LOG_WARN("failed to set group by columns", K(ret));
     } else if (OB_FAIL(group_by->set_rollup_exprs(rollup_exprs))) {

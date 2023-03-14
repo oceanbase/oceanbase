@@ -283,6 +283,7 @@ void ObGlobalHint::reset()
   disable_cost_based_transform_ = false;
   opt_params_.reset();
   ob_ddl_schema_versions_.reuse();
+  has_dbms_stats_hint_ = false;
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -305,6 +306,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_opt_features_version_hint(other.opt_features_version_);
   disable_transform_ |= other.disable_transform_;
   disable_cost_based_transform_ |= other.disable_cost_based_transform_;
+  has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -457,6 +459,9 @@ int ObGlobalHint::print_global_hint(planText &plan_text) const
   }
   if (OB_SUCC(ret) && OB_FAIL(opt_params_.print_opt_param_hint(plan_text))) {
     LOG_WARN("failed to print opt param hint", K(ret));
+  }
+  if (OB_SUCC(ret) && has_dbms_stats_hint()) {
+    PRINT_GLOBAL_HINT_STR("DBMS_STATS");
   }
   return ret;
 }

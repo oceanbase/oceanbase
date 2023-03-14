@@ -1184,6 +1184,7 @@ typedef enum ObItemType
   T_TRACING,
   T_DOP,
   T_STAT,
+  T_DBMS_STATS,
 
   T_KILL,
   T_HELP,

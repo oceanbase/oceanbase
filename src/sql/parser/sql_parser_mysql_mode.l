@@ -912,6 +912,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
     }
   }
 }
+<hint>DBMS_STATS  { return DBMS_STATS; }
 <hint>LOG_LEVEL  { return LOG_LEVEL; }
 <hint>LEADING  { return LEADING_HINT; }
 <hint>ORDERED  { return ORDERED; }
