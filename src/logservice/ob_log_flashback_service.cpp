@@ -169,6 +169,22 @@ int ObLogFlashbackService::wait_all_ls_replicas_log_sync_(
         CLOG_LOG(WARN, "wait_all_ls_replicas_log_sync_ fail", COMMON_LOG_INFO, K(check_log_op_array));
       }
     }
+    // returns user-friendly error code
+    if (OB_TIMEOUT == ret) {
+      ret = OB_OP_NOT_ALLOW;
+      CheckLogOpArray failed_ls_ops;
+      for (int64_t i = 0; i < check_log_op_array.count(); i++) {
+        CheckLSLogSyncOperator &op = check_log_op_array.at(i);
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS == op.ret_) {
+        } else if (OB_SUCCESS != (tmp_ret = failed_ls_ops.push_back(op))) {
+          CLOG_LOG(WARN, "push_back failed", K(ret), K_(self), K(ls_id));
+        }
+      }
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "logs of some replicas may be not sync, check these replicas");
+      CLOG_LOG(WARN, "logs of some replicas may be not sync, check these replicas", K(ret),
+          K_(self), K(ls_id), K(failed_ls_ops));
+    }
   }
   #undef COMMON_LOG_INFO
   return ret;
@@ -245,6 +261,22 @@ int ObLogFlashbackService::do_flashback_(
       } else {
         CLOG_LOG(INFO, "do_flashback_ fail", COMMON_LOG_INFO, K_(flashback_op_array));
       }
+    }
+    // returns user-friendly error code
+    if (OB_TIMEOUT == ret) {
+      ret = OB_OP_NOT_ALLOW;
+      FlashbackOpArray failed_ls_ops;
+      for (int64_t i = 0; i < flashback_op_array_.count(); i++) {
+        ExecuteFlashbackOperator &op = flashback_op_array_.at(i);
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS == op.ret_) {
+        } else if (OB_SUCCESS != (tmp_ret = failed_ls_ops.push_back(op))) {
+          CLOG_LOG(WARN, "push_back failed", K(ret), K_(self), K(ls_id));
+        }
+      }
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "logs of some replicas may have not been flashbacked, check these replicas");
+      CLOG_LOG(WARN, "logs of some replicas may have not been flashbacked, check these replicas",
+          K(ret), K_(self), K(ls_id), K(failed_ls_ops));
     }
   }
   #undef COMMON_LOG_INFO
@@ -433,6 +465,7 @@ int ObLogFlashbackService::CheckLSLogSyncOperator::switch_state()
       CLOG_LOG(WARN, "check_ls_log_sync eagain", K(ret), KPC(this));
     }
   }
+  ret_ = ret;
   return ret;
 }
 
@@ -475,6 +508,7 @@ int ObLogFlashbackService::ChangeAccessModeOperator::switch_state()
       CLOG_LOG(WARN, "change_access_mode eagain", K(ret), KPC(this));
     }
   }
+  ret_ = ret;
   return ret;
 }
 
@@ -516,6 +550,7 @@ int ObLogFlashbackService::ExecuteFlashbackOperator::switch_state()
       CLOG_LOG(WARN, "do_flashback eagain", K(ret), KPC(this));
     }
   }
+  ret_ = ret;
   return ret;
 }
 
