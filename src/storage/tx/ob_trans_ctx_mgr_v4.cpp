@@ -1151,6 +1151,8 @@ int ObLSTxCtxMgr::iterate_tx_ctx_stat(ObTxStatIterator &tx_stat_iter)
   } else {
     IterateTxStatFunctor fn(tx_stat_iter);
     if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+      // rewrite eagain to real ret
+      ret = fn.get_ret();
       TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
     }
   }
@@ -1878,6 +1880,8 @@ int ObTxCtxMgr::iterate_all_observer_tx_stat(ObTxStatIterator &tx_stat_iter)
   } else {
     IterateAllLSTxStatFunctor fn(tx_stat_iter);
     if (OB_FAIL(foreach_ls_(fn))) {
+      // rewrite eagain to real ret code
+      ret = fn.get_ret();
       TRANS_LOG(WARN, "foreach_ls_ tx_stat error", KR(ret));
     } else {
       // do nothing

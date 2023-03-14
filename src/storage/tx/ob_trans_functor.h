@@ -691,31 +691,37 @@ private:
 class IterateAllLSTxStatFunctor
 {
 public:
-  explicit IterateAllLSTxStatFunctor(ObTxStatIterator &tx_stat_iter): tx_stat_iter_(tx_stat_iter) {}
+  explicit IterateAllLSTxStatFunctor(ObTxStatIterator &tx_stat_iter): tx_stat_iter_(tx_stat_iter),
+                                                                      ret_(OB_SUCCESS) {}
   bool operator()(ObLSTxCtxMgr *ls_tx_ctx_mgr)
   {
-    int tmp_ret = common::OB_SUCCESS;
+    int ret = common::OB_SUCCESS;
     bool bool_ret = false;
 
     if (OB_ISNULL(ls_tx_ctx_mgr)) {
-      tmp_ret = OB_INVALID_ARGUMENT;
-      TRANS_LOG_RET(WARN, tmp_ret, "invalid argument", KP(ls_tx_ctx_mgr));
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG_RET(WARN, ret, "invalid argument", KP(ls_tx_ctx_mgr));
     } else {
       const share::ObLSID &ls_id = ls_tx_ctx_mgr->get_ls_id();
 
       if (!ls_id.is_valid()) {
-        tmp_ret = OB_INVALID_ARGUMENT;
-        TRANS_LOG_RET(WARN, tmp_ret, "invalid ls id", K(ls_id), KP(ls_tx_ctx_mgr));
-      } else if (OB_TMP_FAIL(ls_tx_ctx_mgr->iterate_tx_ctx_stat(tx_stat_iter_))) {
-        TRANS_LOG_RET(WARN, tmp_ret, "iterate_tx_ctx_stat error", K(tmp_ret), K(ls_id));
+        ret = OB_INVALID_ARGUMENT;
+        TRANS_LOG_RET(WARN, ret, "invalid ls id", K(ls_id), KP(ls_tx_ctx_mgr));
+      } else if (OB_FAIL(ls_tx_ctx_mgr->iterate_tx_ctx_stat(tx_stat_iter_))) {
+        TRANS_LOG_RET(WARN, ret, "iterate_tx_ctx_stat error", K(ret), K(ls_id));
       } else {
         bool_ret = true;
       }
     }
+    if (OB_FAIL(ret)) {
+      ret_ = ret;
+    }
     return bool_ret;
   }
+  int get_ret() const { return ret_; }
 private:
   ObTxStatIterator &tx_stat_iter_;
+  int ret_;
 };
 
 class IteratorTxIDFunctor
@@ -749,15 +755,16 @@ private:
 class IterateTxStatFunctor
 {
 public:
-  explicit IterateTxStatFunctor(ObTxStatIterator &tx_stat_iter) : tx_stat_iter_(tx_stat_iter) {}
+  explicit IterateTxStatFunctor(ObTxStatIterator &tx_stat_iter) : tx_stat_iter_(tx_stat_iter),
+                                                                  ret_(OB_SUCCESS){}
   OPERATOR_V4(IterateTxStatFunctor)
   {
-    int tmp_ret = common::OB_SUCCESS;
+    int ret = common::OB_SUCCESS;
     bool bool_ret = false;
 
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
-      tmp_ret = OB_INVALID_ARGUMENT;
-      TRANS_LOG_RET(WARN, tmp_ret, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG_RET(WARN, ret, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
       // If you encounter a situation where tx_ctx has not been init yet,
       // skip it directly, there will be a background thread retry
     } else if (!tx_ctx->is_inited()) {
@@ -773,11 +780,11 @@ public:
         // If the transaction has not completed in 600 seconds, print its trace log
         tx_ctx->print_trace_log();
       }
-      if (OB_SUCCESS == tmp_ret) {
+      if (OB_SUCC(ret)) {
         share::ObLSArray participants_arr;
-        if (OB_TMP_FAIL(tx_ctx->get_2pc_participants_copy(participants_arr))) {
-          TRANS_LOG_RET(WARN, tmp_ret, "ObTxStat get participants copy error", K(tmp_ret));
-        } else if (OB_TMP_FAIL(tx_stat.init(tx_ctx->addr_,
+        if (OB_FAIL(tx_ctx->get_2pc_participants_copy(participants_arr))) {
+          TRANS_LOG_RET(WARN, ret, "ObTxStat get participants copy error", K(ret));
+        } else if (OB_FAIL(tx_stat.init(tx_ctx->addr_,
                                             tx_id,
                                             tx_ctx->tenant_id_,
                                             has_decided,
@@ -801,22 +808,26 @@ public:
                                             tx_ctx->exec_info_.xid_,
                                             tx_ctx->exec_info_.upstream_,
                                             tx_ctx->last_request_ts_))) {
-          TRANS_LOG_RET(WARN, tmp_ret, "ObTxStat init error", K(tmp_ret), KPC(tx_ctx));
-        } else if (OB_TMP_FAIL(tx_stat_iter_.push(tx_stat))) {
-          TRANS_LOG_RET(WARN, tmp_ret, "ObTxStatIterator push trans stat error", K(tmp_ret));
+          TRANS_LOG_RET(WARN, ret, "ObTxStat init error", K(ret), KPC(tx_ctx));
+        } else if (OB_FAIL(tx_stat_iter_.push(tx_stat))) {
+          TRANS_LOG_RET(WARN, ret, "ObTxStatIterator push trans stat error", K(ret));
         } else {
           // do nothing
         }
       }
     }
-    if (OB_SUCCESS == tmp_ret) {
+    if (OB_SUCC(ret)) {
       bool_ret = true;
+    } else {
+      ret_ = ret;
     }
 
     return bool_ret;
   }
+  int get_ret() const { return ret_; }
 private:
   ObTxStatIterator &tx_stat_iter_;
+  int ret_;
 };
 
 class GetRecLogTSFunctor
