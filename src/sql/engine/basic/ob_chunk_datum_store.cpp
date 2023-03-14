@@ -1846,7 +1846,7 @@ void ObChunkDatumStore::ChunkIterator::try_free_cached_blocks()
     const int64_t age = *((int64_t *)((char *)b + b->blk_size_ - sizeof(int64_t)));
     if (age < read_age) {
       b = cached_.remove_first();
-      if (b->blk_size_ == default_block_size_) {
+      if (b->blk_size_ == default_block_size_ && 0 == free_list_.get_size()) {
 #ifndef NDEBUG
         memset((char *)b + sizeof(*b), 0xAA, b->blk_size_ - sizeof(*b));
 #endif
