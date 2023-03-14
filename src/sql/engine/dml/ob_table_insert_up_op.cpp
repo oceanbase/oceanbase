@@ -819,7 +819,7 @@ int ObTableInsertUpOp::do_insert_up()
       LOG_WARN("fail to load all row", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task(dml_rtctx_, false))) {
       LOG_WARN("fail to post all das task", K(ret));
-    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing_batch(&dml_modify_rows_))) {
+    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
       LOG_WARN("try insert is not duplicated, failed to process foreign key handle", K(ret));
     } else if (!check_is_duplicated()) {
       insert_rows_ += insert_rows;
@@ -843,7 +843,7 @@ int ObTableInsertUpOp::do_insert_up()
       LOG_WARN("do insert rows post process failed", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task(dml_rtctx_, false))) {
       LOG_WARN("do insert rows post process failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::handle_after_row_processing_batch(&dml_modify_rows_))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
 
