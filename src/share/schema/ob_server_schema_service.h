@@ -1110,6 +1110,12 @@ private:
                                       const int64_t schema_version,
                                       bool &core_schema_change,
                                       bool &sys_schema_change);
+  int check_core_schema_change_(
+      ObISQLClient &sql_client,
+      const ObRefreshSchemaStatus &schema_status,
+      const int64_t core_schema_version,
+      bool &core_schema_change);
+
   virtual int check_sys_schema_change(common::ObISQLClient &sql_client,
                                       const ObRefreshSchemaStatus &schema_status,
                                       const int64_t schema_version,
