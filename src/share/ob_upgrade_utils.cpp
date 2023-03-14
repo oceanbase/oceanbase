@@ -787,6 +787,8 @@ int ObUpgradeFor4100Processor::post_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_srs())) {
     LOG_WARN("post upgrade for srs failed", K(ret));
+  } else if (OB_FAIL(post_upgrade_for_backup())) {
+    LOG_WARN("post upgrade for backup failed", K(ret));
   } else if (OB_FAIL(init_rewrite_rule_version(tenant_id))) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(recompile_all_views_and_synonyms(tenant_id))) {
@@ -839,6 +841,25 @@ int ObUpgradeFor4100Processor::post_upgrade_for_srs()
 
   LOG_INFO("add tenant srs finish", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
     return ret;
+}
+int ObUpgradeFor4100Processor::post_upgrade_for_backup()
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t start = ObTimeUtility::current_time();
+  int64_t affected_rows = 0;
+  if (is_meta_tenant(tenant_id_)) {
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET CLUSTER_VERSION = '4.0.0.0' WHERE CLUSTER_VERSION = ''", OB_ALL_BACKUP_SET_FILES_TNAME))) {
+      LOG_WARN("sql assign failed", K(ret));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed", K(ret), K(sql));
+    } else {
+      LOG_TRACE("execute sql", KR(ret), K(tenant_id_), K(sql), K(affected_rows));
+    }
+
+    LOG_INFO("update backup cluster version finish", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
+  }
+  return ret;
 }
 
 int ObUpgradeFor4100Processor::recompile_all_views_and_synonyms(const uint64_t tenant_id)
