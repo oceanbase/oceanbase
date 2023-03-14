@@ -228,10 +228,10 @@ int ObMPConnect::process()
   } else {
     if (OB_FAIL(conn->ret_)) {
       LOG_WARN("connection fail at obsm_handle process", K(conn->ret_));
-    } else if (SS_INIT == GCTX.status_
+    } else if ((SS_INIT == GCTX.status_ || SS_STARTING == GCTX.status_)
                && !tenant_name_.empty()
                && 0 != tenant_name_.compare(OB_SYS_TENANT_NAME)) {
-      // accept system tenant for bootstrap
+      // accept system tenant for bootstrap, do not let other users login before observer start service
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server is initializing", K(ret));
     } else if (SS_STOPPING == GCTX.status_) {
