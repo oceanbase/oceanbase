@@ -88,16 +88,21 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
+  const int CR_SERVER_LOST = 2013;
   if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || OB_ISNULL(sql_str_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid mysql stmt", K_(conn), KP_(stmt), KP_(sql_str), K(ret));
+  } else if (OB_UNLIKELY(!conn_->usable())) {
+    ret = -CR_SERVER_LOST;
+    conn_->set_last_error(ret);
+    LOG_WARN("conn already failed, should not execute query again!", K(conn_));
   } else {
-    if (OB_UNLIKELY(!conn_->get_exec_succ())) {
-      LOG_ERROR("conn already failed, should not execute query again!", K(conn_));
-    }
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
     if (0 != (tmp_ret = mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_)))) {
       ret = -mysql_errno(stmt_);
+      if (is_need_disconnect_error(ret)) {
+        conn_->set_usable(false);
+      }
       LOG_WARN("fail to query server","server", stmt_->host, "port", stmt_->port,
                "err_msg", mysql_error(stmt_), K(tmp_ret), K(ret), K(sql_str_));
       if (OB_NOT_MASTER == tmp_ret) {
@@ -118,16 +123,21 @@ ObMySQLResult *ObMySQLStatement::execute_query()
 {
   ObMySQLResult *result = NULL;
   int ret = OB_SUCCESS;
+  const int CR_SERVER_LOST = 2013;
   if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || OB_ISNULL(sql_str_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid mysql stmt", K_(conn), K_(stmt), KP_(sql_str), K(ret));
+  } else if (OB_UNLIKELY(!conn_->usable())) {
+    ret = -CR_SERVER_LOST;
+    conn_->set_last_error(ret);
+    LOG_WARN("conn already failed, should not execute query again", K(conn_));
   } else {
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
-    if (OB_UNLIKELY(!conn_->get_exec_succ())) {
-      LOG_ERROR("conn already failed, should not execute query again!", K(conn_));
-    }
     if (0 != mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_))) {
       ret = -mysql_errno(stmt_);
+      if (is_need_disconnect_error(ret)) {
+        conn_->set_usable(false);
+      }
       const int ER_LOCK_WAIT_TIMEOUT = -1205;
       if (ER_LOCK_WAIT_TIMEOUT == ret) {
         LOG_INFO("fail to query server", "host", stmt_->host, "port", stmt_->port,
@@ -151,6 +161,16 @@ ObMySQLResult *ObMySQLStatement::execute_query()
   }
   return result;
 }
+
+bool ObMySQLStatement::is_need_disconnect_error(int ret)
+{
+  const int CLIENT_MIN_ERROR_CODE = 2000;
+  const int CLIENT_MAX_ERROR_CODE = 2099;
+  // need close connection when there is a client error
+  ret = abs(ret);
+  return ret >= CLIENT_MIN_ERROR_CODE && ret <= CLIENT_MAX_ERROR_CODE;
+}
+
 } // end namespace sqlclient
 } // end namespace common
 } // end namespace oceanbase

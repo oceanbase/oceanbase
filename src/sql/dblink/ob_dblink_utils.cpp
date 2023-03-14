@@ -444,7 +444,7 @@ int ObDblinkCtxInSession::set_dblink_conn(common::sqlclient::ObISQLConnection *d
   return ret;
 }
 
-int ObDblinkCtxInSession::clean_dblink_conn()
+int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
 {
   int ret = OB_SUCCESS;
   common::sqlclient::ObISQLConnection *dblink_conn =NULL;
@@ -464,7 +464,8 @@ int ObDblinkCtxInSession::clean_dblink_conn()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("server_conn_pool of dblink connection is NULL", K(this), K(dblink_conn), K(i), K(ret));
       } else {
-        if (OB_FAIL(server_conn_pool->release(dblink_conn, true, session_info_->get_sessid()))) {
+        const bool need_disconnect = force_disconnect || !dblink_conn->usable();
+        if (OB_FAIL(server_conn_pool->release(dblink_conn, !need_disconnect, session_info_->get_sessid()))) {
           LOG_WARN("session failed to release dblink connection", K(session_info_->get_sessid()), K(this), KP(dblink_conn), K(i), K(ret));
         } else {
           LOG_TRACE("session succ to release dblink connection", K(session_info_->get_sessid()), K(this), KP(dblink_conn), K(i), K(ret));

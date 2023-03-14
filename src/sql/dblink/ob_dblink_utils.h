@@ -121,16 +121,16 @@ public:
   inline void reset()
   {
     arena_alloc_.reset();
-    clean_dblink_conn();
+    const bool force_disconnect = true;
+    clean_dblink_conn(force_disconnect);
     free_dblink_conn_pool();
-    session_info_ = NULL;
     reverse_dblink_ = NULL;
   }
   int register_dblink_conn_pool(common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool);
   int free_dblink_conn_pool();
   int get_dblink_conn(uint64_t dblink_id, common::sqlclient::ObISQLConnection *&dblink_conn);
   int set_dblink_conn(common::sqlclient::ObISQLConnection *dblink_conn);
-  int clean_dblink_conn();
+  int clean_dblink_conn(const bool force_disconnect);
   inline bool is_dblink_xa_tras() { return !dblink_conn_holder_array_.empty(); }
   int get_reverse_link(ObReverseLink *&reverse_dblink);
 private:

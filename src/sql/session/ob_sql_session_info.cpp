@@ -346,6 +346,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     expect_group_id_ = OB_INVALID_ID;
     group_id_not_expected_ = false;
     //call at last time
+    dblink_context_.reset(); // need reset before ObBasicSessionInfo::reset(skip_sys_var);
     ObBasicSessionInfo::reset(skip_sys_var);
     txn_free_route_ctx_.reset();
   }

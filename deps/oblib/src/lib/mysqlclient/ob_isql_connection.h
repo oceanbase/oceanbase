@@ -78,7 +78,7 @@ public:
        dblink_id_(OB_INVALID_ID),
        dblink_driver_proto_(-1),
        has_reverse_link_credentials_(false),
-       exec_succ_(true)
+       usable_(true)
   {}
   virtual ~ObISQLConnection() {}
 
@@ -134,15 +134,15 @@ public:
   bool get_init_remote_env() const { return is_init_remote_env_; }
   void set_reverse_link_creadentials(bool flag) { has_reverse_link_credentials_ = flag; }
   bool get_reverse_link_creadentials() { return has_reverse_link_credentials_; }
-  void set_exec_succ(bool flag) { exec_succ_ = flag; }
-  bool get_exec_succ() { return exec_succ_; }
+  void set_usable(bool flag) { usable_ = flag; }
+  bool usable() { return usable_; }
 protected:
   bool oracle_mode_;
   bool is_init_remote_env_; // for dblink, we have to init remote env with some sql
   uint64_t dblink_id_; // for dblink, record dblink_id of a connection used by dblink
   int64_t dblink_driver_proto_; //for dblink, record DblinkDriverProto of a connection used by dblink
   bool has_reverse_link_credentials_; // for dblink, mark if this link has credentials set
-  bool exec_succ_;
+  bool usable_;  // usable_ = false: connection is unusable, should not execute query again.
 };
 
 } // end namespace sqlclient

@@ -172,6 +172,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
       my_bool reconnect = 0; // in OB, do manual reconnect. xiaochu.yh
       mysql_options(&mysql_, MYSQL_OPT_RECONNECT, &reconnect);
       closed_ = false;
+      set_usable(true);
       tenant_id_ = OB_SYS_TENANT_ID;
       read_consistency_ = -1;
     }
@@ -241,6 +242,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
       my_bool reconnect = 0; // in OB, do manual reconnect. xiaochu.yh
       mysql_options(&mysql_, MYSQL_OPT_RECONNECT, &reconnect);
       closed_ = false;
+      set_usable(true);
       db_name_ = db;
       tenant_id_ = OB_SYS_TENANT_ID;
       read_consistency_ = -1;
