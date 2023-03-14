@@ -30,13 +30,14 @@ using namespace oceanbase::common::sqlclient;
 // update status of all rows
 int ObTabletMetaTableCompactionOperator::set_info_status(
     const ObTabletCompactionScnInfo &input_info,
-    ObTabletCompactionScnInfo &ret_info)
+    ObTabletCompactionScnInfo &ret_info,
+    int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObSqlString sql;
   ObDMLSqlSplicer dml;
-  int64_t affected_rows = 0;
+  affected_rows = 0;
   if (OB_UNLIKELY(!input_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(input_info));
@@ -46,6 +47,8 @@ int ObTabletMetaTableCompactionOperator::set_info_status(
       LOG_WARN("fail to start transaction", KR(ret), K(input_info), K(meta_tenant_id));
     } else if (OB_FAIL(do_select(trans, true/*select_with_update*/, input_info, ret_info))) {
       LOG_WARN("failed to do select", K(ret), K(input_info));
+    } else if (ObTabletReplica::ScnStatus::SCN_STATUS_ERROR == ret_info.status_) {
+      // do nothing
     } else if (OB_FAIL(dml.add_pk_column("tenant_id", input_info.tenant_id_))
         || OB_FAIL(dml.add_pk_column("ls_id", input_info.ls_id_))
         || OB_FAIL(dml.add_pk_column("tablet_id", input_info.tablet_id_))
@@ -58,7 +61,7 @@ int ObTabletMetaTableCompactionOperator::set_info_status(
     } else if (OB_UNLIKELY(0 == affected_rows)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("affected rows is invalid", K(ret), K(input_info), K(affected_rows));
-    } else{
+    } else {
       FLOG_INFO("success to set info status", K(ret), K(input_info), K(ret_info));
     }
     handle_trans_stat(trans, ret);
@@ -82,38 +85,6 @@ int ObTabletMetaTableCompactionOperator::get_status(
   } else if (OB_FAIL(do_select(*sql_client, false/*select_for_update*/, input_info, ret_info))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to select from tablet compaction scn tablet", KR(ret), K(input_info));
-    }
-  }
-  return ret;
-}
-
-int ObTabletMetaTableCompactionOperator::diagnose_compaction_scn(
-    const int64_t tenant_id,
-    int64_t &error_tablet_cnt)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy is unexpected null", K(ret));
-  }
-  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-    ObZone zone;
-    ObMySQLResult *result = nullptr;
-    ObSqlString sql;
-    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-    if (OB_FAIL(sql.append_fmt(
-            "SELECT count(1) as c FROM %s WHERE tenant_id = '%ld' AND status = '%ld'",
-            OB_ALL_TABLET_META_TABLE_TNAME,
-            tenant_id,
-            (int64_t )ObTabletReplica::SCN_STATUS_ERROR))) {
-      LOG_WARN("failed to append fmt", K(ret), K(tenant_id));
-    } else if (OB_FAIL(GCTX.sql_proxy_->read(res, meta_tenant_id, sql.ptr()))) {
-      LOG_WARN("fail to do read", KR(ret), K(meta_tenant_id), K(sql.ptr()));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get result", KR(ret), K(meta_tenant_id), K(sql.ptr()));
-    } else if (OB_FAIL(result->get_int("c", error_tablet_cnt))) {
-      LOG_WARN("failed to get int", KR(ret));
     }
   }
   return ret;

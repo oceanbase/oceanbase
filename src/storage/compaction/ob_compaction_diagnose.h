@@ -92,7 +92,9 @@ struct ObCompactionDiagnoseInfo
     DIA_STATUS_NOT_SCHEDULE = 0,
     DIA_STATUS_RUNNING = 1,
     DIA_STATUS_FAILED = 2,
-    DIA_STATUS_UNCOMPACTED = 3,
+    DIA_STATUS_FINISH = 3,
+    DIA_STATUS_RS_UNCOMPACTED = 4, // RS diagnose
+    DIA_STATUS_DIA_FAILED = 5,
     DIA_STATUS_MAX
   };
   const static char *ObDiagnoseStatusStr[DIA_STATUS_MAX];
@@ -137,7 +139,8 @@ private:
   int diagnose_tablet_major_merge(
       const int64_t compaction_scn,
       const ObLSID &ls_id,
-      ObTablet &tablet);
+      ObTablet &tablet,
+      bool &tablet_major_finish);
   int diagnose_tablet_merge(
       ObTabletMergeDag &dag,
       const ObMergeType type,
@@ -170,6 +173,7 @@ private:
 private:
   static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 120L; // 120 seconds
   static const int64_t SUSPECT_INFO_WARNING_THRESHOLD = 1000L * 1000L * 60L * 5; // 5 mins
+  static const int64_t MAX_LS_TABLET_CNT = 10 * 10000; // TODO(@jingshui): tmp solution
   bool is_inited_;
   ObCompactionDiagnoseInfo *info_array_;
   int64_t max_cnt_;

@@ -88,13 +88,11 @@ class ObTabletMetaTableCompactionOperator
 public:
   static int set_info_status(
       const ObTabletCompactionScnInfo &input_info,
-      ObTabletCompactionScnInfo &ret_info);
+      ObTabletCompactionScnInfo &ret_info,
+      int64_t &affected_rows);
   static int get_status(
       const ObTabletCompactionScnInfo &input_info,
       ObTabletCompactionScnInfo &ret_info);
-  static int diagnose_compaction_scn(
-      const int64_t tenant_id,
-      int64_t &error_tablet_cnt);
   // update report_scn of all tablets which belong to @tablet_pairs
   static int batch_update_report_scn(
       const uint64_t tenant_id,
