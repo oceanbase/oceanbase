@@ -184,7 +184,7 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
         LOG_WARN("fail to write tablet checksum at table level", KR(ret), K_(tenant_id), K(pairs));
       } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
                    tenant_id_, global_broadcast_scn.get_val_for_tx(),
-                   pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
+                   pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR, expected_epoch))) {
         LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(pairs));
       }
     }

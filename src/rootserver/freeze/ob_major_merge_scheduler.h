@@ -114,7 +114,8 @@ private:
   bool is_primary_service() const { return is_primary_service_; }
 
   // including tablets about can_not_read index and permanent offline server
-  int update_all_tablets_report_scn(const uint64_t global_broadcast_scn_val);
+  int update_all_tablets_report_scn(const uint64_t global_broadcast_scn_val,
+                                    const int64_t expected_epoch);
 
   void check_merge_interval_time(const bool is_merging);
 

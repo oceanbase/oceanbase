@@ -701,7 +701,7 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
             LOG_WARN("fail to handle table with first tablet in sys ls", KR(ret), K_(tenant_id),
                      "global_broadcast_scn", global_info.global_broadcast_scn(), K(expected_epoch));
           } else if (FALSE_IT(global_broadcast_scn_val = global_info.global_broadcast_scn_.get_scn_val())) {
-          } else if (OB_FAIL(update_all_tablets_report_scn(global_broadcast_scn_val))) {
+          } else if (OB_FAIL(update_all_tablets_report_scn(global_broadcast_scn_val, expected_epoch))) {
             LOG_WARN("fail to update all tablets report_scn", KR(ret), K(expected_epoch),
                      K(global_broadcast_scn_val));
           } else if (OB_FAIL(zone_merge_mgr_->try_update_global_last_merged_scn(expected_epoch))) {
@@ -897,14 +897,17 @@ int ObMajorMergeScheduler::do_update_and_reload(const int64_t epoch)
 }
 
 int ObMajorMergeScheduler::update_all_tablets_report_scn(
-    const uint64_t global_braodcast_scn_val)
+    const uint64_t global_braodcast_scn_val,
+    const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   FREEZE_TIME_GUARD;
   if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
           tenant_id_,
           global_braodcast_scn_val,
-          ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
+          ObTabletReplica::ScnStatus::SCN_STATUS_ERROR,
+          stop_,
+          expected_epoch))) {
     LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(global_braodcast_scn_val));
   }
   return ret;

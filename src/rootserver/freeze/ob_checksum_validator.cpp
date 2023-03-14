@@ -863,7 +863,7 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
               const int64_t update_start_time_us = ObTimeUtil::current_time();
               if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
                             tenant_id_, frozen_scn.get_val_for_tx(),
-                            pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
+                            pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR, expected_epoch))) {
                 LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(pairs));
               }
               const int64_t update_cost_time_us = ObTimeUtil::current_time() - update_start_time_us;
