@@ -752,18 +752,9 @@ int ObBackupCleanTaskMgr::delete_data_info_turn_files_(const ObBackupPath &infos
 int ObBackupCleanTaskMgr::delete_backup_dir_(const share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator(ObModIds::BACKUP);
-  ObArray<common::ObString> file_names;
-  ObBackupIoAdapter util;
-  ObFileListArrayOp file_name_op(file_names, allocator);
-  if (OB_FAIL(util.list_files(path.get_ptr(), backup_dest_.get_storage_info(), file_name_op))) {
-    LOG_WARN("failed to list files", K(ret), K(path));
-  } else if (0 != file_names.count()) {
-    // do nothing
-  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir(path, backup_dest_.get_storage_info()))) {
+  if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to delete info turn files", K(ret), K(path));
   }
-
   return ret;
 }
 
