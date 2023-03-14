@@ -645,16 +645,29 @@ int PartTransDispatcher::get_dispatch_progress(int64_t &dispatch_progress,
   }
   // Get PartTransDispatcher member values without locking
   else {
+    // NOTICE: get dispatch_progress in task_queue in case of dispatch_progress rollback in such case(if get last_dispatch_progress_ first):
+    // 1. round 1:
+    // 1.1. get last_dispatch_progress_ as dispatch_progress, e.g. 100.
+    // 2. round 2:
+    // 2.1. get last_dispatch_progress_ as dispatch_progress, e.g. 100.
+    // 2.2. get dispatch_progress in queue, which contains task ready to dispatch, and update
+    // dispatch_progress to 120;
+    // 3. round 3:
+    // 3.1. get last_dispatch_progress_ as dispatch_progress, e.g. 100.
+    // 3.2. before get dispatch_progress in queue, the task with progress 120 just dispatched and no
+    // more task in queue;
+    // 3.3. get dispatch_progress in queue, which won't change dispatch_progress 100.
+    // 3.4. dispatch_progress rollbacked.
+
+    // Update dispatch progress based on the task being dispatched
+    task_queue_.update_dispatch_progress_by_task_queue(dispatch_progress, dispatch_info);
     // The default is to take the progress of the last issue
-    dispatch_progress = ATOMIC_LOAD(&last_dispatch_progress_);
+    dispatch_progress = std::max(dispatch_progress, ATOMIC_LOAD(&last_dispatch_progress_));
     dispatch_info.last_dispatch_log_id_ = ATOMIC_LOAD(&last_dispatch_log_id_);
     dispatch_info.current_checkpoint_ = ATOMIC_LOAD(&checkpoint_);
 
     // Access is not atomic and may be biased
     dispatch_info.pending_task_count_ = get_total_task_count_();
-
-    // Update dispatch progress based on the task being dispatched
-    task_queue_.update_dispatch_progress_by_task_queue(dispatch_progress, dispatch_info);
   }
 
   return ret;

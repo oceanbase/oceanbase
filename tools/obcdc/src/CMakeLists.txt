@@ -133,8 +133,6 @@ else()
   target_link_libraries(obcdc
     PUBLIC obcdc_base
     PRIVATE
-    -Wl,--no-undefined
-    -Wl,--no-allow-shlib-undefined
     -Wl,--whole-archive
     $<TARGET_OBJECTS:obcdc_objects>
     -Wl,--no-whole-archive
