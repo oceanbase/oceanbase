@@ -887,9 +887,8 @@ int ObDDLScheduler::abort_redef_table(const int64_t task_id)
     LOG_WARN("abort redef table task failed", K(ret), K(task_id));
     if (OB_ENTRY_NOT_EXIST == ret) {
       bool exist = false;
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
-        LOG_WARN("check task id exist fail", K(tmp_ret), K(task_id));
+      if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
+        LOG_WARN("check task id exist fail", K(ret), K(task_id));
       } else {
         if (exist) {
           ret = OB_EAGAIN;
@@ -992,9 +991,8 @@ int ObDDLScheduler::copy_table_dependents(const int64_t task_id,
                                                                     is_ignore_errors))) {
                 if (OB_ENTRY_NOT_EXIST == ret) {
                   bool exist = false;
-                  int tmp_ret = OB_SUCCESS;
-                  if (OB_TMP_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
-                    LOG_WARN("check task id exist fail", K(tmp_ret), K(task_id));
+                  if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
+                    LOG_WARN("check task id exist fail", K(ret), K(task_id));
                   } else {
                     if (exist) {
                       ret = OB_EAGAIN;
@@ -1088,9 +1086,8 @@ int ObDDLScheduler::finish_redef_table(const int64_t task_id, const uint64_t ten
               if (OB_FAIL(task_queue_.update_task_process_schedulable(task_id))) {
                 if (OB_ENTRY_NOT_EXIST == ret) {
                   bool exist = false;
-                  int tmp_ret = OB_SUCCESS;
-                  if (OB_TMP_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
-                    LOG_WARN("check task id exist fail", K(tmp_ret), K(task_id));
+                  if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
+                    LOG_WARN("check task id exist fail", K(ret), K(task_id));
                   } else {
                     if (exist) {
                       ret = OB_EAGAIN;
