@@ -1399,8 +1399,28 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
   if (OB_FAIL(get_tx_ctx_(ls, tx_id, ctx))) {
     if (OB_NOT_MASTER == ret) {
     } else if (OB_TRANS_CTX_NOT_EXIST == ret && verify_epoch <= 0) {
-      if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx))) {
-        TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
+      int tx_state = ObTxData::RUNNING;
+      share::SCN commit_version;
+      if (OB_FAIL(get_tx_state_from_tx_table_(ls, tx_id, tx_state, commit_version))) {
+        TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(ls), K(tx_id));
+        if (OB_TRANS_CTX_NOT_EXIST == ret) {
+          if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx))) {
+            TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
+          }
+        }
+      } else {
+        switch (tx_state) {
+        case ObTxData::COMMIT:
+          ret = OB_TRANS_COMMITED;
+          break;
+        case ObTxData::ABORT:
+          ret = OB_TRANS_KILLED;
+          break;
+        case ObTxData::RUNNING:
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "tx in-progress but ctx miss", K(ret), K(tx_state), K(tx_id), K(ls));
+        }
       }
     } else {
       TRANS_LOG(WARN, "get transaction context error", K(ret), K(tx_id), K(ls));
@@ -1633,6 +1653,15 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
   }
   // statistic
   if (tx.is_tx_end()) {
+    int64_t trans_used_time_us = 0;
+    if (tx.active_ts_ > 0) { // skip txn has not active
+      if (tx.finish_ts_ <= 0) {
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx finish ts is unset", K(tx));
+      } else if (tx.finish_ts_ > tx.active_ts_) {
+        trans_used_time_us = tx.finish_ts_ - tx.active_ts_;
+        TX_STAT_TIME_USED(trans_used_time_us);
+      }
+    }
     if (tx.is_committed()) {
       TX_STAT_COMMIT_INC;
       TX_STAT_COMMIT_TIME_USED(tx.finish_ts_ - tx.commit_ts_);
@@ -1648,15 +1677,13 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
     }
     switch(tx.parts_.count()) {
     case 0:  TX_STAT_READONLY_INC break;
-    case 1:  TX_STAT_LOCAL_INC break;
-    default: TX_STAT_DIST_INC;
-    }
-    if (tx.active_ts_ > 0) { // skip txn has not active
-      if (tx.finish_ts_ <= 0) {
-        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx finish ts is unset", K(tx));
-      } else if (tx.finish_ts_ > tx.active_ts_) {
-        TX_STAT_TIME_USED(tx.finish_ts_ - tx.active_ts_);
-      }
+    case 1:
+      TX_STAT_LOCAL_INC;
+      TX_STAT_LOCAL_TOTAL_TIME_USED(trans_used_time_us);
+      break;
+    default:
+      TX_STAT_DIST_INC;
+      TX_STAT_DIST_TOTAL_TIME_USED(trans_used_time_us);
     }
   }
   // release all savepoints

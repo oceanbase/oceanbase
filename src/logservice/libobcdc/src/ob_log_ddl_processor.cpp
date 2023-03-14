@@ -1449,9 +1449,10 @@ int ObLogDDLProcessor::handle_ddl_stmt_add_tenant_(
   ObLogSchemaGuard schema_guard;
   const char *tenant_name = NULL;
   int64_t valid_schema_version = new_schema_version;
+
   if (OB_ISNULL(tenant_mgr)) {
-    LOG_ERROR("invalid tenant mgr", K(tenant_mgr));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid tenant mgr", KR(ret), K(tenant_mgr));
   } else if (OB_FAIL(parse_tenant_ddl_stmt_for_restore_(ddl_stmt, valid_schema_version, start_serve_tstamp, is_new_tenant_by_restore))) {
     LOG_ERROR("parse_tenant_ddl_stmt_for_restore_ failed", KR(ret), K(ddl_stmt), K(valid_schema_version), K(start_serve_tstamp), K(is_new_tenant_by_restore));
   } else {
@@ -1466,8 +1467,8 @@ int ObLogDDLProcessor::handle_ddl_stmt_add_tenant_(
         DATA_OP_TIMEOUT,
         tenant_is_chosen);
 
-  // If the schema error is encountered, it means that the tenant may be deleted in the future, so the schema of table,
-  // database, tenant or table group cannot be obtained, in this case, the DDL will be ignored.
+    // If the schema error is encountered, it means that the tenant may be deleted in the future, so the schema of table,
+    // database, tenant or table group cannot be obtained, in this case, the DDL will be ignored.
     IGNORE_SCHEMA_ERROR(ret, K(valid_schema_version), K(start_serve_tstamp),
         K(target_tenant_id), K(ddl_stmt));
 
@@ -1735,12 +1736,13 @@ int ObLogDDLProcessor::parse_tenant_ddl_stmt_for_restore_(
     } else {
       is_create_tenant_by_restore_ddl = true;
       schema_version = tenant_schema_version_from_ddl > schema_version ? tenant_schema_version_from_ddl : schema_version;
-      tenant_gts_value = tenant_gts_from_ddl;
+      tenant_gts_value = std::max(tenant_gts_from_ddl, tenant_gts_value);
     }
+
     if (OB_SUCC(ret)) {
       mark_stmt_binlog_record_invalid_(ddl_stmt);
-      LOG_INFO("mark create_tenant_end_ddl invalid for restore tenant", KR(ret), K(is_create_tenant_by_restore_ddl),
-        K(schema_version), K(tenant_gts_value), K(ddl_stmt));
+      LOG_INFO("mark create_tenant_end_ddl invalid for restore tenant", K(is_create_tenant_by_restore_ddl),
+        K(schema_version), K(tenant_gts_value), K(tenant_gts_from_ddl), K(ddl_stmt));
     } else if (skip_dirty_data) {
       LOG_WARN("parse_tenant_ddl_stmt_for_restore_ fail!", KR(ret), K(is_create_tenant_by_restore_ddl), K(schema_version), K(tenant_gts_value),
           K(value_gts), K(value_version), K(ddl_stmt), K(kv_c));

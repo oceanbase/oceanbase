@@ -1235,7 +1235,7 @@ int ob_atoll(const char *str, int64_t &res);
 int ob_strtoll(const char *str, char *&endptr, int64_t &res);
 int ob_strtoull(const char *str, char *&endptr, uint64_t &res);
 
-/* 功能：根据localtime计算公式实现快速计算的方法, 替代系统函数localtime_r. 参考https://www.cnblogs.com/westfly/p/5139645.html , 调整计算逻辑, 加上时区偏移的考虑.
+/* 功能：根据localtime计算公式实现快速计算的方法, 替代系统函数localtime_r.
    参数：
      in: const time_t *unix_sec, 当前的时间戳(单位秒), 输入值
      out: struct tm *result, 当前时间戳对应的可读时间localtime, 输出值

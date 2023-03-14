@@ -1449,6 +1449,8 @@ int ObSubPlanFilterOp::fill_cur_row_das_batch_param(ObEvalCtx& eval_ctx, uint64_
       ObExpr *dst = rescan_param.dst_;
       ObDatum &param_datum = dst->locate_datum_for_write(eval_ctx);
       const ObSqlArrayObj &arr = das_batch_params_.at(i);
+      dst->get_eval_info(eval_ctx).clear_evaluated_flag();
+      ObDynamicParamSetter::clear_parent_evaluated_flag(eval_ctx, *dst);
       if (OB_FAIL(param_datum.from_obj(arr.data_[current_group], dst->obj_datum_map_))) {
         LOG_WARN("fail to cast datum", K(ret));
       } else {

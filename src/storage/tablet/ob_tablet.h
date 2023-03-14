@@ -484,6 +484,7 @@ private:
       const bool is_callback = false);
   int set_tx_data_in_tablet_pointer(const ObTabletTxMultiSourceDataUnit &tx_data);
   int check_max_sync_schema_version() const;
+  int check_medium_list() const;
   int check_sstable_column_checksum() const;
 
   template<class T>

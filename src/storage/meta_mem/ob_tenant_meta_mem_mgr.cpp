@@ -378,7 +378,8 @@ void ObTenantMetaMemMgr::gc_sstable(ObSSTable *sstable)
     }
     const int64_t end_time = ObTimeUtility::current_time();
     if (end_time - start_time > SSTABLE_GC_MAX_TIME) {
-      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "sstable gc costs too much time", K(start_time), K(end_time), K(block_cnt));
+      int ret = OB_ERR_TOO_MUCH_TIME;
+      LOG_DEBUG("sstable gc costs too much time", K(ret), K(start_time), K(end_time), K(block_cnt));
     }
   }
 }

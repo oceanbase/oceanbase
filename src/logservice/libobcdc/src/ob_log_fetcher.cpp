@@ -909,7 +909,7 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
         min_progress_tls_id = TenantLSID(ddl_min_progress_tenant_id, share::SYS_LS);
       }
 
-      _LOG_INFO("[STAT] [FETCHER] [HEARTBEAT] DELAY=[%.3lf, %.3lf](sec) PART_COUNT=%ld "
+      _LOG_INFO("[STAT] [FETCHER] [HEARTBEAT] DELAY=[%.3lf, %.3lf](sec) LS_COUNT=%ld "
           "MIN_DELAY=%s(%ld) MAX_DELAY=%s(%ld) DATA_PROGRESS=%s(%ld) "
           "DDL_PROGRESS=%s(%ld) DDL_TENANT=%lu DDL_LOG_LSN=%s",
           get_delay_sec(max_progress),

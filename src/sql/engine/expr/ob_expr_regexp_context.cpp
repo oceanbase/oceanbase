@@ -19,6 +19,7 @@
 #include "lib/charset/ob_charset.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
 namespace oceanbase
 {
@@ -845,24 +846,16 @@ int ObExprRegexContext::check_need_utf8(ObRawExpr *expr, bool &need_utf8)
 {
   int ret = OB_SUCCESS;
   need_utf8 = false;
-  if (OB_ISNULL(expr)) {
+  const ObRawExpr * real_expr = NULL;
+  if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(expr, real_expr))) {
+    LOG_WARN("fail to get real expr without cast", K(ret));
+  } else if (OB_ISNULL(real_expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null expr", K(ret));
-  } else if (T_FUN_SYS_CAST == expr->get_expr_type() &&
-    expr->has_flag(IS_INNER_ADDED_EXPR)) {
-    ObRawExpr * real_expr = expr->get_param_expr(0);
-    if (OB_ISNULL(real_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null pattern", K(ret));
-    } else {
-      need_utf8 = real_expr->get_result_type().is_nchar() ||
-                  real_expr->get_result_type().is_nvarchar2() ||
-                  real_expr->get_result_type().is_blob();
-    }
+    LOG_WARN("real expr is invalid", K(ret), K(real_expr));
   } else {
-    need_utf8 = expr->get_result_type().is_nchar() ||
-                expr->get_result_type().is_nvarchar2() ||
-                expr->get_result_type().is_blob();
+    need_utf8 = real_expr->get_result_type().is_nchar() ||
+                real_expr->get_result_type().is_nvarchar2() ||
+                real_expr->get_result_type().is_blob();
   }
   return ret;
 }

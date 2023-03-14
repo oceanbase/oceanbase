@@ -252,6 +252,8 @@ int ObTablet::init(
   } else if (OB_FAIL(check_max_sync_schema_version())) {
     LOG_WARN("unexpected max sync schema version", K(ret), K(param), K(old_tablet),
         K(max_sync_schema_version), K(storage_schema_));
+  } else if (OB_FAIL(check_medium_list())) {
+    LOG_WARN("failed to check medium list", K(ret), K(param), K(old_tablet), K(medium_info_list_));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else {
@@ -323,6 +325,8 @@ int ObTablet::init(
     LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
   } else if (OB_FAIL(check_max_sync_schema_version())) {
     LOG_WARN("unexpected max sync schema version", K(ret), K(param), K(is_update), K(storage_schema_));
+  } else if (OB_FAIL(check_medium_list())) {
+    LOG_WARN("failed to check medium list", K(ret), K(param), K(medium_info_list_));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else {
@@ -440,6 +444,8 @@ int ObTablet::init(
     LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
   } else if (OB_FAIL(check_max_sync_schema_version())) {
     LOG_WARN("unexpected max sync schema version", K(ret), K(param), K(old_tablet), K(storage_schema_));
+  } else if (OB_FAIL(check_medium_list())) {
+    LOG_WARN("failed to check medium list", K(ret), K(param), K(old_tablet), K(medium_info_list_));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else {
@@ -3281,6 +3287,21 @@ int ObTablet::check_max_sync_schema_version() const
   return ret;
 }
 
+int ObTablet::check_medium_list() const
+{
+  int ret = OB_SUCCESS;
+  ObITable *last_major = nullptr;
+  if (tablet_meta_.ha_status_.is_none()
+    && nullptr != (last_major = table_store_.get_major_sstables().get_boundary_table(true/*last*/))
+    && get_medium_compaction_info_list().get_last_compaction_scn() > 0) { // for compat
+    if (OB_UNLIKELY(get_medium_compaction_info_list().get_last_compaction_scn() != last_major->get_snapshot_version())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("medium list is invalid for last major sstable", K(ret), "medium_list", get_medium_compaction_info_list(),
+        KPC(last_major));
+    }
+  }
+  return ret;
+}
 int ObTablet::set_memtable_clog_checkpoint_scn(
     const ObMigrationTabletParam *tablet_meta)
 {

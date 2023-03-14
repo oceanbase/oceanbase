@@ -1,0 +1,258 @@
+#!/usr/bin/python
+# coding=utf8
+# author wenxingsen.wxs
+
+import os
+import sys
+import uuid
+import threading
+import time
+import datetime
+import subprocess
+import getopt
+
+# 统计开始时间
+GLOBAL_START_TIME = datetime.datetime.now()
+
+def get_cost_time():
+    '''
+    获取当前运行时间
+    '''
+    cost_time_sec = (datetime.datetime.now() - GLOBAL_START_TIME).seconds
+    return "%dm%.2ds" % (cost_time_sec / 60, cost_time_sec % 60)
+
+def print_log(log_str):
+    '''
+    打印日志函数
+    '''
+    print("[%s %s] %s" % (time.strftime("%H:%M:%S", time.localtime()), get_cost_time(), log_str))
+    sys.stdout.flush()
+
+class GlobalConf():
+    '''
+    编译配置类
+    '''
+    def __init__(self):
+        # 输入静态库路径
+        self.origin_static_abs_path = ""
+        # 输出静态库路径
+        self.target_static_abs_path = ""
+        # 链接器路径
+        self.ld_bin_abs_path = ""
+        self.workspace = "bitcode_to_elfobj_dir_%s" % str(uuid.uuid1())
+
+GLOBAL_CONF = GlobalConf()
+
+class ERROR_CODE():
+    '''
+    错误码
+    '''
+    # 通用成功和失败
+    COMMON_SUCCESS = 0
+    COMMON_ERROR = 1
+
+def shell_run_command(command_str, need_print_all=True, need_print_output=True, no_time=False):
+    '''
+    运行shell命令
+    '''
+    if need_print_all:
+        print_log("[运行命令]: %s" % command_str)
+        if not need_print_output:
+            print_log("[运行输出]: 日志过多已经忽略输出")
+    result = dict()
+    result["return_code"] = 1
+    result["return_message"] = []
+    result["cmd"] = command_str
+    is_frist = False
+    ps = subprocess.Popen(command_str,
+                          stdin=subprocess.PIPE,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT,
+                          shell=True,
+                          close_fds=True)
+    while True:
+        data = ps.stdout.readline()
+        if data == b'':
+            if ps.poll() is not None:
+                break
+        result["return_message"].append(data)
+
+        if not need_print_all:
+            continue
+
+        if need_print_output and len(data.strip()) > 1:
+            if not is_frist:
+                print_log("[运行输出]: %s" % data.replace("\n", ""))
+                is_frist = True
+            else:
+                data_str = "            %s" % data.replace("\n", "")
+                if no_time:
+                    print(data_str)
+                else:
+                    print_log("            %s" % data.replace("\n", ""))
+
+    result["return_code"] = ps.returncode
+    return result
+
+def print_help():
+    '''
+    打印帮助信息
+    '''
+    print("使用说明:")
+    print("./bitcode_to_elfobj --ld=/usr/bin/ld --input=/xxx/absolude_path/demo.a --output=/xxx/absolude_path/demo.a")
+
+def parse_arg():
+    '''
+    解析命令行参数
+    '''
+    global GLOBAL_CONF
+
+    try:
+        # sys.argv[1:] 过滤掉第一个参数(它是脚本名称，不是参数的一部分)
+        opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "input=", "output=","ld="])
+
+        if args:
+            print_log("不符合预期输入，请重试\n")
+            print_help()
+            exit(ERROR_CODE.COMMON_ERROR)
+
+        for cmd, arg in opts:
+            if cmd in ("-h", "--help"):
+                print_help()
+                exit(ERROR_CODE.COMMON_SUCCESS)
+            elif cmd in ("--input",):
+               if not arg.startswith("/") or not os.path.exists(arg):
+                    print("[ERROR] 输入路径[%s]不是绝对路径或者不存在" % arg)
+                    exit(ERROR_CODE.COMMON_ERROR)
+               GLOBAL_CONF.origin_static_abs_path = arg
+            elif cmd in ("--output",):
+                if not arg.startswith("/"):
+                    print("[ERROR] 输入路径[%s]不是绝对路径" % arg)
+                    exit(ERROR_CODE.COMMON_ERROR)
+                GLOBAL_CONF.target_static_abs_path = arg
+            elif cmd in ("--ld",):
+                if not arg.startswith("/") or not os.path.exists(arg):
+                    print("[ERROR] 输入路径[%s]不是绝对路径或者不存在" % arg)
+                    exit(ERROR_CODE.COMMON_ERROR)
+                GLOBAL_CONF.ld_bin_abs_path = arg
+
+    except getopt.GetoptError as ex:
+        print_log("[ERROR] getopt.GetoptError 解析参数失败，请合法输入, %s" % ex)
+        exit(ERROR_CODE.COMMON_ERROR)
+    except ValueError as ex:
+        print_log("[ERROR] ValueError 解析参数失败，请合法输入, %s" % ex)
+        exit(ERROR_CODE.COMMON_ERROR)
+
+    if not GLOBAL_CONF.origin_static_abs_path or not GLOBAL_CONF.target_static_abs_path or not GLOBAL_CONF.ld_bin_abs_path:
+        print("[ERROR]输入参数不完整")
+        print_help()
+        exit(ERROR_CODE.COMMON_ERROR)
+
+def trigger_one_cmd(cmd):
+    '''
+    多线程调用命令函数
+    '''
+    result = shell_run_command(cmd)
+
+def main():
+    '''
+    main函数入口
+    '''
+    # 解析参数
+    parse_arg()
+
+    # 问题背景：
+    # 将一个静态库中的bitcode obj转成 elf obj的难点解决静态库中重名问题
+    # 例如hello.a 由 a.o b.o b.o三个目标组成，按照普通解压 ar -x hello.a，只会保留 a.o b.o，目标文件将丢失，而且顺序也丢失
+    # 在OB联合编译之后，存在大量的重复 0_cxx.cxx，1_cxx.cxx等，其外此转化工具自身也要要求解决重复目标文件等能力
+    # 解决方案：
+    # 利用ar的解压count指定特定目标文件能力，主要是N参数
+    #   ar -xN 1 hello.a a.o 并放到 0/a.o下面去
+    #   ar -xN 1 hello.a b.o 并放到 1/b.o下面去
+    #   ar -xN 2 hello.a b.o 并放到 2/b.o下面去
+    # 依次调用 ld.lld -r a.o -o a.o 将bitcode转成elf
+    # 最后再按照原有顺序拼接静态库:
+    #   ar -qc hello.a 0/a.o 1/b.o 2/b.o
+
+    static_lib_name = os.path.basename(GLOBAL_CONF.origin_static_abs_path)
+    print_log("开始使用链接器(%s)将bitcode obj(%s)转换为elf obj(%s)" % (GLOBAL_CONF.ld_bin_abs_path, GLOBAL_CONF.origin_static_abs_path, GLOBAL_CONF.target_static_abs_path))
+    time.sleep(0.1)
+
+    # 提取 目标文件
+    print_log("开始分析静态库%s..." % static_lib_name)
+
+    result = shell_run_command("ar -t %s" % (GLOBAL_CONF.origin_static_abs_path))
+    if result['return_code'] != ERROR_CODE.COMMON_SUCCESS:
+        print(result['return_message'])
+        print_log("[ERROR]获取目标文件列表失败，运行命令为: %s" % result['cmd'])
+        exit(ERROR_CODE.COMMON_ERROR)
+
+    # 用于统计同名目标文件出现的次数
+    object_count_dict = {}
+    # 按照顺序的全部目标文件
+    all_object_list = []
+
+    for one_object in result['return_message']:
+        one_object = one_object.strip()
+        # 消除不同的机器空行
+        if not one_object:
+            continue
+        if one_object not in object_count_dict:
+            object_count_dict[one_object] = 1
+        else:
+            object_count_dict[one_object] += 1
+
+        all_object_list.append({"id":len(all_object_list), "object": one_object, "count": object_count_dict[one_object]})
+
+    # 创建工作目录
+    result = shell_run_command("rm -rf %s && mkdir -p %s" % (GLOBAL_CONF.workspace, GLOBAL_CONF.workspace), need_print_all=False)
+    if result['return_code'] != ERROR_CODE.COMMON_SUCCESS:
+        print_log("[ERROR]创建文件夹失败")
+        exit(ERROR_CODE.COMMON_ERROR)
+
+    # 开始解压文件
+    print_log("开始提取静态库%s..." % static_lib_name)
+    ar_after_object_list = []
+    for one_object in all_object_list:
+        result = shell_run_command("cd %s && rm -rf %s && mkdir -p %s && cd %s && ar -xN %s %s %s" % (GLOBAL_CONF.workspace, one_object['id'], one_object['id'], one_object['id'], one_object['count'], GLOBAL_CONF.origin_static_abs_path, one_object['object']))
+        if result['return_code'] != ERROR_CODE.COMMON_SUCCESS:
+            print(result['return_message'])
+            print_log("[ERROR]解压静态库失败, 运行命令为: %s" % result['cmd'])
+            exit(ERROR_CODE.COMMON_ERROR)
+        ar_after_object_list.append(os.path.join(GLOBAL_CONF.workspace, str(one_object['id']), one_object['object']))
+
+    print_log("开始转换%s的目标文件..." % static_lib_name)
+    thread_list = list()
+    # 开始bitcode转elfobj过程
+    for one_object in ar_after_object_list:
+        cmd = "%s -r %s -o %s" % (GLOBAL_CONF.ld_bin_abs_path, one_object, one_object)
+        t = threading.Thread(target=trigger_one_cmd, args=(cmd, ))
+        thread_list.append(t)
+        t.start()
+        # 防止内存不足，加一点时延
+        time.sleep(0.2)
+
+    # 等待所有线程结束
+    for t in thread_list:
+        t.join()
+
+    # 最后链接过程
+    print_log("开始链接静态库%s..." % static_lib_name)
+    cmd_ar_finial = "rm -rf %s && ar qc %s " % (GLOBAL_CONF.target_static_abs_path, GLOBAL_CONF.target_static_abs_path)
+    for one_object in ar_after_object_list:
+        cmd_ar_finial += "%s " % one_object
+
+    result = shell_run_command(cmd_ar_finial)
+    if result['return_code'] != ERROR_CODE.COMMON_SUCCESS:
+        print(result['return_message'])
+        print_log("[ERROR] 生成elf格式obj失败，运行命令为: %s" % result['cmd'])
+        exit(ERROR_CODE.COMMON_ERROR)
+
+    print_log("生成静态库！路径位于位于:%s" % GLOBAL_CONF.target_static_abs_path)
+    return ERROR_CODE.COMMON_SUCCESS
+
+if __name__ == '__main__':
+    '''
+    __main__入口
+    '''
+    main()

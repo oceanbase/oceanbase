@@ -849,7 +849,7 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
       if (!scheduler_called) { // should not visit inner table, wait for scheduler loop
       } else if (OB_FAIL(get_status_from_inner_table(ls_id, tablet_id, ret_info))) {
         LOG_WARN("failed to get status from inner tablet", K(ret), K(ls_id), K(tablet_id));
-      } else if (ret_info.could_schedule_next_round(last_major->get_snapshot_version())) {
+      } else if (ret_info.could_schedule_next_round(medium_list.get_last_compaction_scn())) {
         LOG_INFO("success to check RS major checksum validation finished", K(ret), K(ls_id), K(tablet_id));
         schedule_flag = true;
       }

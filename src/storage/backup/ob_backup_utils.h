@@ -198,7 +198,7 @@ public:
   int deep_copy(const ObBackupProviderItem &src, char *buf, int64_t len, int64_t &pos);
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(item_type), K_(logic_id), K_(table_key), K_(tablet_id), K_(nested_offset), K_(nested_size));
+  TO_STRING_KV(K_(item_type), K_(logic_id), K_(table_key), K_(tablet_id), K_(nested_offset), K_(nested_size), K_(timestamp));
   NEED_SERIALIZE_AND_DESERIALIZE;
 private:
   // for parallel external sort serialization restriction
@@ -214,6 +214,7 @@ private:
   common::ObTabletID tablet_id_;  // logic_id_.tablet_id_ may not equal to tablet_id_
   int64_t nested_offset_;
   int64_t nested_size_;
+  int64_t timestamp_;
 };
 
 class ObBackupProviderItemCompare {
@@ -282,7 +283,7 @@ private:
   int fetch_all_logic_macro_block_id_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, const blocksstable::ObSSTable &sstable, int64_t &total_count);
   int add_macro_block_id_item_list_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
-      const common::ObIArray<ObBackupMacroBlockId> &list);
+      const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count);
   int add_sstable_item_(const common::ObTabletID &tablet_id);
   int add_tablet_item_(const common::ObTabletID &tablet_id);
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
@@ -322,6 +323,8 @@ private:
   ObBackupMetaIndexStore meta_index_store_;
   ObBackupProviderItem prev_item_;
   bool has_prev_item_;
+  int supply_count_;
+  int consume_count_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletProvider);
 };
 

@@ -514,5 +514,16 @@ void ObTransStatistic::add_trans_log_total_size(const uint64_t tenant_id, const 
   EVENT_ADD(CLOG_TRANS_LOG_TOTAL_SIZE, value);
 }
 
+void ObTransStatistic::add_local_trans_total_used_time(const uint64_t tenant_id, const int64_t value)
+{
+  common::ObTenantStatEstGuard guard(tenant_id);
+  EVENT_ADD(TRANS_LOCAL_TOTAL_USED_TIME, value);
+}
+void ObTransStatistic::add_dist_trans_total_used_time(const uint64_t tenant_id, const int64_t value)
+{
+  common::ObTenantStatEstGuard guard(tenant_id);
+  EVENT_ADD(TRANS_DIST_TOTAL_USED_TIME, value);
+}
+
 } // transaction
 } // oceanbase

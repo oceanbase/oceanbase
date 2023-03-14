@@ -1840,7 +1840,6 @@ int ob_atoll(const char *str, int64_t &res)
   return ret;
 }
 
-//ref: https://www.cnblogs.com/westfly/p/5139645.html
 struct tm *ob_localtime(const time_t *unix_sec, struct tm *result)
 {
   static const int HOURS_IN_DAY = 24;

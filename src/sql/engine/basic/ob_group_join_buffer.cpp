@@ -248,6 +248,8 @@ int ObGroupJoinBufffer::fill_cur_row_group_param()
       ObExpr *dst = rescan_param.dst_;
       ObDatum &param_datum = dst->locate_datum_for_write(*eval_ctx_);
       ObSqlArrayObj &arr = group_params_.at(i);
+      dst->get_eval_info(*eval_ctx_).clear_evaluated_flag();
+      ObDynamicParamSetter::clear_parent_evaluated_flag(*eval_ctx_, *dst);
       if (OB_FAIL(param_datum.from_obj(arr.data_[cur_group_idx_], dst->obj_datum_map_))) {
         LOG_WARN("fail to cast datum", K(ret));
       } else {
@@ -269,6 +271,8 @@ int ObGroupJoinBufffer::fill_cur_row_group_param()
         ObExpr *dst = rescan_param.dst_;
         ObDatum &param_datum = dst->locate_datum_for_write(*eval_ctx_);
         ObSqlArrayObj *arr = above_right_group_params_.at(i);
+        dst->get_eval_info(*eval_ctx_).clear_evaluated_flag();
+        ObDynamicParamSetter::clear_parent_evaluated_flag(*eval_ctx_, *dst);
         if (OB_UNLIKELY(above_group_idx_for_read_ >= arr->count_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected group idx", KR(ret), K(above_group_idx_for_read_), K(arr->count_));

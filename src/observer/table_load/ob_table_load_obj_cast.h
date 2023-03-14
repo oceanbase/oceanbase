@@ -102,13 +102,12 @@ private:
 
     d.desc_ = 0;
     d.sign_ = number::ObNumber::POSITIVE;
-    d.exp_ = 0x7f & (uint8_t)(number::ObNumber::EXP_ZERO);
+    d.exp_ = (uint8_t)(number::ObNumber::EXP_ZERO);
     if (*s == '+') {
       s++;
     } else if (*s == '-') {
       s++;
       d.sign_ = number::ObNumber::NEGATIVE;
-      d.exp_ = (0x7f & ~d.exp_) + 1;
     }
 
     uint32_t n1 = 0;
@@ -162,7 +161,11 @@ private:
       if (digits[0] == 0) {
         d.len_ = 1;
         digits[0] = digits[1];
-        d.exp_ -= 1;
+        if (d.sign_ == number::ObNumber::POSITIVE) {
+          d.exp_ -= 1;
+        } else {
+          d.exp_ += 1;
+        }
       } else if (digits[1] == 0) {
         d.len_ = 1;
       }
