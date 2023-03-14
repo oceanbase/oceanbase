@@ -177,9 +177,9 @@ vector<ElectionImpl *> create_election_group(const int election_num, const vecto
       }
     );
     index++;
-    assert(ret == OB_SUCCESS);
+    OB_ASSERT(ret == OB_SUCCESS);
     ret = election->set_memberlist(member_list);
-    assert(ret == OB_SUCCESS);
+    OB_ASSERT(ret == OB_SUCCESS);
   }
   port += election_num;
   return v;
@@ -422,10 +422,10 @@ TEST_F(TestElection, config_vresion_not_same_and_wont_split_vote) {
 
   for (int i = 0; i < 3; ++i) {
     palf::LogConfigVersion version;
-    assert(OB_SUCCESS == version.generate(2, i));
+    OB_ASSERT(OB_SUCCESS == version.generate(2, i));
     member_list.set_new_member_list(addr_list, version, 3);
     int ret = election_list[i]->set_memberlist(member_list);
-    assert(OB_SUCCESS == ret);
+    OB_ASSERT(OB_SUCCESS == ret);
   }
 
   this_thread::sleep_for(chrono::seconds(10));
@@ -506,10 +506,10 @@ TEST_F(TestElection, inner_priority_seed_not_valid_when_membership_version_not_e
 
   for (int i = 0; i < 3; ++i) {
     palf::LogConfigVersion version;
-    assert(OB_SUCCESS == version.generate(2, i));
+    OB_ASSERT(OB_SUCCESS == version.generate(2, i));
     member_list.set_new_member_list(addr_list, version, 3);
     int ret = election_list[i]->set_memberlist(member_list);
-    assert(OB_SUCCESS == ret);
+    OB_ASSERT(OB_SUCCESS == ret);
   }
   for (auto &election_1 : election_list) {
     for (auto &election_2 : election_list) {

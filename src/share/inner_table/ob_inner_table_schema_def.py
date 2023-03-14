@@ -11412,6 +11412,8 @@ def_table_schema(
 # 12371: __all_virtual_external_table_file
 # 12372: __all_virtual_io_tracer
 # 12373: __all_virtual_mds_node_stat
+# 12374: __all_virtual_mds_event_history
+# 12375: __all_virtual_time_guard_slow_history
 
 #
 # 余留位置
