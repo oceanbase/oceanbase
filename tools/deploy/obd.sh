@@ -27,11 +27,19 @@ function variables_parpare {
   HOST=$(hostname -i)
   DATA_PATH="/data/$(whoami)"
   IPADDRESS="127.0.0.1"
+  export IS_CE=1
   COMPONENT="oceanbase-ce"
-  DEP_PATH=$BASE_DIR/deps/3rd
+
+  if grep 'dep_create.sh' $BASE_DIR/build.sh 2>&1 >/dev/null
+  then
+    DEP_PATH=$BASE_DIR/deps/3rd
+  else
+    DEP_PATH=$BASE_DIR/rpm/.dep_create/var
+  fi
+
   OBCLIENT_BIN=$DEP_PATH/u01/obclient/bin/obclient
   MYSQLTEST_BIN=$DEP_PATH/u01/obclient/bin/mysqltest
-  
+
   DEFAULT_DEPLOY_NAME_FILE=$OBD_HOME/.obd/.default_deploy
 }
 
@@ -53,11 +61,16 @@ function mirror_create {
   fi
 
   # observer mirror create
-  obs_version=$($OBSERVER_BIN -V 2>&1 | grep -E "observer \(OceanBase( CE)? ([.0-9]+)\)" | grep -Eo '([.0-9]+)')
+  obs_version=$($OBSERVER_BIN -V 2>&1 | grep -E "observer \(OceanBase([ \_]CE)? ([.0-9]+)\)" | grep -Eo '([.0-9]+)')
   if [[ "$obs_version" == "" ]]
   then
     echo "$OBSERVER_BIN not found"
     return 1
+  fi
+  if [ "x$IS_CE" == "x" ]
+  then
+    export IS_CE="0"
+    [[ $($OBSERVER_BIN -V 2>&1 | grep -E 'OceanBase[_ ]CE') ]] && COMPONENT="oceanbase-ce" && export IS_CE="1"
   fi
   [[ -f "$BASE_DIR/tools/deploy/obd/.observer_obd_plugin_version" ]] && obs_version=$(cat $BASE_DIR/tools/deploy/obd/.observer_obd_plugin_version)
   obs_mirror_info=$(obd_exec mirror create -n $COMPONENT -p "$DEPLOY_PATH" -V "$obs_version"  -t $tag -f) && success=1
@@ -264,7 +277,6 @@ function get_obproxy {
 }
 
 function deploy_cluster {
-  [[ "$YAML_CONF" == "" ]] || yaml_config_args="-c $YAML_CONF"
   get_deploy_name
   if [[ "$YAML_CONF" != "" ]] 
   then
@@ -286,7 +298,18 @@ function deploy_cluster {
   else
     obd cluster destroy "$deploy_name" -f
   fi
-  obd cluster deploy "$deploy_name" $yaml_config_args -C || exit 1
+  if [ "x$IS_CE" == "x" ]; then
+    [[ "$YAML_CONF" == "" ]] || yaml_config_args="-c $YAML_CONF"
+  else
+    yaml_config_args=""
+    if [ $IS_CE == '0' ]; then
+      sed 's/oceanbase-ce\(:\?\)$/oceanbase\1/g' $config_yaml | obd cluster edit-config "$deploy_name"
+    fi
+    if [ $IS_CE == '1' ]; then
+      sed 's/oceanbase\(:\?\)$/oceanbase-ce\1/g' $config_yaml | obd cluster edit-config "$deploy_name"
+    fi
+  fi
+  obd cluster deploy "$deploy_name" -C $yaml_config_args || exit 1
   if ! obd cluster start "$deploy_name" -f;
   then
     while [[ "$NO_CONFIRM" != "1" && "$(grep 'config_status: NEED_REDEPLOY' $OBD_CLUSTER_PATH/$deploy_name/.data)" != "" ]] 
@@ -308,11 +331,22 @@ function deploy_cluster {
       esac
     done
   fi
-  init_sql
+  get_init_sql
+  if [[ "$NEED_FAST_REBOOT" == "1" ]]
+  then
+  obd test mysqltest "$deploy_name" $INIT_FLIES --init-only $CLIENT_BIN_ARGS --fast-reboot
+  else
+  obd test mysqltest "$deploy_name" $INIT_FLIES --init-only $CLIENT_BIN_ARGS
+  fi
 }
 
-function init_sql {
-  obd test mysqltest "$deploy_name" "$INIT_FLIES" --init-only $CLIENT_BIN_ARGS
+function get_init_sql {
+  [[ "$INIT_FLIES" != "" ]] && return
+  if [[ "$MINI" == "1" && -f $BASE_DIR/tools/deploy/init.sql ]]
+  then
+    INIT_FLIES="--init-sql-files=init.sql,init_user.sql|root@mysql|test"
+    [ -f init_user_oracle.sql ] && INIT_FLIES="${INIT_FLIES},init_user_oracle.sql|SYS@oracle|SYS"
+  fi
 }
 
 function start_cluster {
@@ -377,8 +411,9 @@ function mysqltest {
   if [[ "$NEED_REBOOT" == "1" || "$YAML_CONF" != "" ]]
   then
   mirror_create || return 1
-  deploy_cluster || return 2
+  deploy_cluster
   fi
+  get_init_sql
   obd test mysqltest "$deploy_name" $CLIENT_BIN_ARGS $extra_args $INIT_FLIES
 }
 
@@ -453,6 +488,11 @@ function tpcds {
   obd test tpcds $deploy_name $OBCLIENT_BIN_ARGS $extra_args
 }
 
+function graph {
+  get_deploy_name
+  obd tool graph $deploy_name $extra_args
+}
+
 
 function help_info {
   echo """
@@ -486,6 +526,7 @@ sql [-n DEPLOY_NAME]                     Connect to target server by root@sys, u
 sys [-n DEPLOY_NAME]                     Connect to target server by root@sys, use '--help' for more details.
 mysql [-n DEPLOY_NAME]                   Connect to target server by root@mysql, use '--help' for more details.
 oracle [-n DEPLOY_NAME]                  Connect to target server by SYS@oracle, use '--help' for more details.
+graph [-n DEPLOY_NAME]
 
 Options:
 -V, --version                            Show version of obd.
@@ -515,42 +556,32 @@ function main() {
     case "$1" in
       -v ) VERBOSE_FLAG='-v'; set -x; shift ;;
       --with-local-obproxy) WITH_LOCAL_PROXY="1";SKIP_COPY="1"; shift ;;
-      -c | --config ) 
-      if [[ "$commond" == "deploy" || "$commond" == "redeploy" ||  "$commond" == "mysqltest" ]]
-      then
-      YAML_CONF="$2"
-      shift 2 
-      else
-      extra_args="$extra_args $1"
-      shift
-      fi
-      ;;
+      -c | --config ) YAML_CONF="$2"; shift 2 ;;
       -n | --deploy-name ) DEPLOY_NAME="$2"; shift 2 ;;
-      -p | --data-path ) 
-      if [[ "$commond" == "prepare" ]]
-      then
-        DATA_PATH="$2";
-        shift 2 
-      else
-        extra_args="$extra_args $1"
-        shift
-      fi
-      ;;
+      -p | --data-path ) DATA_PATH="$2"; shift 2 ;;
       -N ) NO_CONFIRM="1"; shift ;;
       --ip ) IPADDRESS="$2"; shift 2 ;;
-      # --disable-reboot ) DISABLE_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
+      --disable-reboot ) DISABLE_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
       --reboot ) NEED_REBOOT="1"; shift ;;
+      --fast-reboot ) NEED_FAST_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
       --cp ) EXEC_CP="1"; shift ;;
       --skip-copy ) SKIP_COPY="1"; shift ;;
+      --mini) MINI="1"; shift ;;
       --port ) export port_gen="$2"; extra_args="$extra_args $1"; shift ;;
       -- ) shift ;;
       "" ) break ;;
       * ) extra_args="$extra_args $1"; [[ "$1" == "--help" || "$1" == "-h" ]] && HELP="1" ; shift ;;
     esac
   done
+  if [[ "$MINI" == "1" && "$DISABLE_REBOOT" != "1" ]]
+  then
+    NEED_REBOOT="1"
+  fi
+  export OBD_FORCE_UPDATE_PLUGINS=1
   if [[ ! -f $OBD_HOME/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $OBD_HOME/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)
+  obd env set OBD_LOCK_MODE 1
   fi
   if [[  "$(grep '"OBD_DEPLOY_BASE_DIR":' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
   then
@@ -646,6 +677,9 @@ function main() {
     ;;
     tpcds)
     tpcds
+    ;;
+    graph)
+    graph
     ;;
     *)
     help_info
