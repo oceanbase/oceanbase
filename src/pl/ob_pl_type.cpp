@@ -573,10 +573,14 @@ int ObPLDataType::free_session_var(const ObPLResolveCtx &resolve_ctx, ObIAllocat
       obj.set_null();
     }
   } else if (is_cursor_type()) {
-    ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext());
-    if (OB_NOT_NULL(cursor)) {
-      cursor->~ObPLCursorInfo();
-      cursor = NULL;
+    if (is_cursor_var()) {
+      ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext());
+      if (OB_NOT_NULL(cursor)) {
+        cursor->~ObPLCursorInfo();
+        cursor = NULL;
+      }
+    } else {
+      // do nothing .. package ref cursor only use for cursor parameters, it will close by geneteror.
     }
   } else {
     ObPL *pl_engine = NULL;
