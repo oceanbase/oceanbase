@@ -4720,7 +4720,8 @@ int ObPLResolver::resolve_using(const ObStmtNodeTree *using_node,
           CK (OB_NOT_NULL(user_type));
           OX (legal_extend = user_type->is_udt_type()
                           || user_type->is_package_type()
-                          || user_type->is_sys_refcursor_type());
+                          || user_type->is_sys_refcursor_type()
+                          || user_type->is_rowtype_type());
         }
         if (OB_SUCC(ret)
             && (T_NULL == using_param->children_[0]->type_
