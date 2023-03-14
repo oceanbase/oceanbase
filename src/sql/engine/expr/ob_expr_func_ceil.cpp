@@ -249,8 +249,8 @@ int do_eval_batch_ceil_floor(const ObExpr &expr,
           res_datums[i].set_double(ceil(arg_datums.at(i)->get_double()));
         }
       }
+      eval_flag.set(i);
     }
-    eval_flag.set(i);
   }
   return ret;
 }
