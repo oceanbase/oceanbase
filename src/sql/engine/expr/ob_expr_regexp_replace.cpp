@@ -20,6 +20,7 @@
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_regexp_count.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase::common;
 
@@ -45,11 +46,18 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
   CK(NULL != type_ctx.get_raw_expr());
+  const ObRawExpr *real_expr = NULL;
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(param_num < 2 || param_num > 6)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("param number of regexp_replace at least 2 and at most 6", K(ret), K(param_num));
+  } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(type_ctx.get_raw_expr()->get_param_expr(0), real_expr))) {
+    LOG_WARN("fail to get real expr without cast", K(ret));
+  } else if (OB_ISNULL(real_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real expr is invalid", K(ret), K(real_expr));
   } else {
+    const ObExprResType &text = real_expr->get_result_type();
     for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
       if (!types[i].is_null() && !is_type_valid(types[i].get_type())) {
         ret = OB_INVALID_ARGUMENT;
@@ -58,14 +66,13 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
     }
     if (lib::is_oracle_mode()) {
       //deduce length
-      ObExprResType &text = types[0];
       int64_t to_len = types[2].get_length();
       common::ObLength len = text.get_length();
       int64_t offset = len * to_len;
       len = static_cast<common::ObLength>(len + offset);
       CK(len <= INT32_MAX);
       type.set_length(static_cast<common::ObLength>(len));
-      auto input_params = make_const_carray(&types[0]);
+      auto input_params = make_const_carray(const_cast<ObExprResType*>(&text));
       OZ(aggregate_string_type_and_charset_oracle(
               *type_ctx.get_session(), input_params, type, PREFER_VAR_LEN_CHAR));
       OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, input_params));
@@ -74,15 +81,15 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
       const common::ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
               ? type_ctx.get_session()->get_actual_nls_length_semantics()
               : common::LS_BYTE);
-      if (types[0].is_lob()) {
-        type.set_type(types[0].get_type());
+      if (text.is_lob()) {
+        type.set_type(text.get_type());
       } else {
         type.set_varchar();
-        type.set_length_semantics(types[0].is_varchar_or_char() ? types[0].get_length_semantics() : default_length_semantics);
-      }
+        type.set_length_semantics(text.is_varchar_or_char() ? text.get_length_semantics() : default_length_semantics);
       //建表列的最大长度
       type.set_length(OB_MAX_COLUMN_NAMES_LENGTH);
-      ret = aggregate_charsets_for_string_result(type, types, 1, type_ctx.get_coll_type());
+      ret = aggregate_charsets_for_string_result(type, &text, 1, type_ctx.get_coll_type());
+      }
     }
     if (OB_SUCC(ret)) {
       switch (param_num) {//because of regexp engine need utf8 code, here need reset calc collation type and can implicit cast.

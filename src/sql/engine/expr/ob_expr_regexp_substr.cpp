@@ -19,6 +19,7 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_regexp_count.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase::common;
 
@@ -43,12 +44,19 @@ int ObExprRegexpSubstr::calc_result_typeN(ObExprResType &type,
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
+  const ObRawExpr * real_expr = NULL;
   CK(NULL != type_ctx.get_raw_expr());
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(param_num < 2 || param_num > 6)) {//由于引入的正则表达式库引擎有utf8限制，因此需要重设相关参数类型，隐式转换一下
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("param number of regexp_substr at least 2 and at most 6", K(ret), K(param_num));
+  } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(type_ctx.get_raw_expr()->get_param_expr(0), real_expr))) {
+    LOG_WARN("fail to get real expr without cast", K(ret));
+  } else if (OB_ISNULL(real_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real expr is invalid", K(ret), K(real_expr));
   } else {
+    const ObExprResType &text = real_expr->get_result_type();
     for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
       if (!types[i].is_null() && !is_type_valid(types[i].get_type())) {
         ret = OB_INVALID_ARGUMENT;
@@ -57,8 +65,8 @@ int ObExprRegexpSubstr::calc_result_typeN(ObExprResType &type,
     }
     if (lib::is_oracle_mode()) {
       // set max length.
-      type.set_length(static_cast<common::ObLength>(types[0].get_length()));
-      auto str_params = make_const_carray(&types[0]);
+      type.set_length(static_cast<common::ObLength>(text.get_length()));
+      auto str_params = make_const_carray(const_cast<ObExprResType*>(&text));
       OZ(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(),
                                                   str_params,
                                                   type,
@@ -70,9 +78,9 @@ int ObExprRegexpSubstr::calc_result_typeN(ObExprResType &type,
               ? type_ctx.get_session()->get_actual_nls_length_semantics()
               : common::LS_BYTE);
       type.set_varchar();
-      type.set_length(types[0].get_length());
-      type.set_length_semantics(types[0].is_varchar_or_char() ? types[0].get_length_semantics() : default_length_semantics);
-      ret = aggregate_charsets_for_string_result(type, types, 1, type_ctx.get_coll_type());
+      type.set_length(text.get_length());
+      type.set_length_semantics(text.is_varchar_or_char() ? text.get_length_semantics() : default_length_semantics);
+      ret = aggregate_charsets_for_string_result(type, &text, 1, type_ctx.get_coll_type());
     }
     if (OB_SUCC(ret)) {//because of regexp engine need utf8 code, here need reset calc collation type and can implicit cast.
       switch (param_num) {
