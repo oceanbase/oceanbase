@@ -4337,6 +4337,16 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   } else if (OB_FAIL(set_app_trace_id_(commit_info_log.get_app_trace_id()))) {
     TRANS_LOG(WARN, "set app trace id error", K(ret), K(commit_info_log), K(*this));
   } else {
+    if (exec_info_.participants_.count() > 1) {
+      exec_info_.trans_type_ = TransType::DIST_TRANS;
+    } else if (exec_info_.upstream_.is_valid()) {
+      exec_info_.trans_type_ = TransType::DIST_TRANS;
+    } else if (is_sub2pc()) {
+      exec_info_.trans_type_ = TransType::DIST_TRANS;
+    } else {
+      exec_info_.trans_type_ = TransType::SP_TRANS;
+    }
+
     if (!is_local_tx_() && !commit_info_log.get_upstream().is_valid()) {
       set_2pc_upstream_(ls_id_);
       TRANS_LOG(INFO, "set upstream to self", K(*this), K(commit_info_log));
@@ -4348,18 +4358,6 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
     can_elr_ = commit_info_log.is_elr();
     cluster_version_ = commit_info_log.get_cluster_version();
     sub_state_.set_info_log_submitted();
-    // if (0 == redo_log_no_) {
-    //   tx_data_->end_scn_ = redo_log_no_;
-    // }
-    if (exec_info_.participants_.count() > 1) {
-      exec_info_.trans_type_ = TransType::DIST_TRANS;
-    } else if (exec_info_.upstream_.is_valid()) {
-      exec_info_.trans_type_ = TransType::DIST_TRANS;
-    } else if (is_sub2pc()) {
-      exec_info_.trans_type_ = TransType::DIST_TRANS;
-    } else {
-      exec_info_.trans_type_ = TransType::SP_TRANS;
-    }
     if (commit_info_log.is_dup_tx()) {
       set_dup_table_tx();
       mt_ctx_.before_prepare(timestamp);
