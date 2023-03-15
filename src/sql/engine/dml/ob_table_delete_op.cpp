@@ -140,6 +140,9 @@ int ObTableDeleteOp::check_need_exec_single_row()
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.del_ctdefs_.count() && !execute_single_row_; ++i) {
     const ObTableDeleteSpec::DelCtDefArray &ctdefs = MY_SPEC.del_ctdefs_.at(i);
     const ObDelCtDef &del_ctdef = *ctdefs.at(0);
+    if (has_before_row_trigger(del_ctdef) || has_after_row_trigger(del_ctdef)) {
+      execute_single_row_ = true;
+    }
     const ObForeignKeyArgArray &fk_args = del_ctdef.fk_args_;
     for (int j = 0; OB_SUCC(ret) && j < fk_args.count() && !execute_single_row_; j++) {
       if (fk_args.at(j).is_self_ref_ && fk_args.at(j).ref_action_ == ACTION_CASCADE) {

@@ -109,6 +109,9 @@ int ObTableInsertAllOp::check_need_exec_single_row()
     const ObInsCtDef &ins_ctdef = *(ctdefs.at(0));
     const uint64_t table_id = ins_ctdef.das_base_ctdef_.index_tid_;
     const ObForeignKeyArgArray &fk_args = ins_ctdef.fk_args_;
+    if (has_before_row_trigger(ins_ctdef) || has_after_row_trigger(ins_ctdef)) {
+      execute_single_row_ = true;
+    }
     for (int j = 0; OB_SUCC(ret) && j < fk_args.count() && !execute_single_row_; j++) {
       const ObForeignKeyArg &fk_arg = fk_args.at(j);
       const uint64_t parent_table_id = fk_arg.table_id_;

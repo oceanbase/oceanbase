@@ -116,6 +116,7 @@ protected:
   int close_table_for_each();
   virtual int write_row_to_das_buffer() override;
   virtual int write_rows_post_proc(int last_errno) override;
+  virtual int check_need_exec_single_row() override;
 
 protected:
   int64_t affected_rows_;
