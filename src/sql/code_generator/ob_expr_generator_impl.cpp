@@ -676,7 +676,7 @@ inline int ObExprGeneratorImpl::visit_regex_expr(ObOpRawExpr &expr, ObExprRegexp
   ObIArray<ObRawExpr*> &param_exprs = expr.get_param_exprs();
   if (OB_ISNULL(regexp_op)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("regexpr_op is NULL");
+    LOG_WARN("regexp_op is NULL");
   } else if (OB_UNLIKELY(2 != param_exprs.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("regex op should have 2 arguments", K(param_exprs.count()));
@@ -779,7 +779,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
         }
       }
       //for row_type in left_param of EXPR IN
-      //if min_cluster_version < 3.1, do not check params can use hash optimizition
+      //if min_cluster_version < 3.1, do not check params can use hash optimization
       bool param_all_const = true;
       bool param_all_same_type = true;
       bool param_all_same_cs_type = true;
@@ -875,7 +875,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
                                         ? param_all_same_cs_type
                                         : (param_all_same_cs_type &= param_all_same_cs_level));
       in_op->set_param_is_ext_type_oracle(param_all_is_ext);
-      //now only support c1 in (1,2,3,4,5...) to vecotrized
+      //now only support c1 in (1,2,3,4,5...) to vectorized
       if (param_all_can_vectorize && expr.get_param_expr(0)->is_vectorize_result()) {
         in_op->set_param_can_vectorized();
       }
@@ -893,7 +893,7 @@ int ObExprGeneratorImpl::visit_decode_expr(ObNonTerminalRawExpr &expr, ObExprOra
   } else {
     // decode(col, cond1, val1, cond2, val2, ......, condN, valN, def_val)
     // cmp type of decode is always equal to cond1, or varchar if cond1 is const null.
-    // res type of decode is always euqal to val1, or varchar if val1 is const null.
+    // res type of decode is always equal to val1, or varchar if val1 is const null.
     bool cond_all_same_meta = true;
     bool val_all_same_meta = true;
     int64_t param_count = expr.get_param_count();
@@ -1454,7 +1454,7 @@ int ObExprGeneratorImpl::visit_pl_integer_checker_expr(ObOpRawExpr &expr,
   ObPLIntegerCheckerRawExpr &pl_expr = static_cast<ObPLIntegerCheckerRawExpr&>(expr);
   if (OB_ISNULL(checker)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("pl interger checker operator is null", K(ret));
+    LOG_ERROR("pl integer checker operator is null", K(ret));
   } else {
     checker->set_pl_integer_type(pl_expr.get_pl_integer_type());
     checker->set_range(pl_expr.get_lower(), pl_expr.get_upper());
