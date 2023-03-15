@@ -96,11 +96,6 @@ public:
   virtual void wait();
   void destroy();
 
-  pid_t get_tid() const
-  {
-    OB_ASSERT(n_threads_ > 0);
-    return threads_[0]->get_tid();
-  }
 public:
   template <class Functor>
   int submit(const Functor &func)

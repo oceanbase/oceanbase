@@ -255,9 +255,8 @@ void ObPxPool::run1()
   ObCgroupCtrl *cgroup_ctrl = GCTX.cgroup_ctrl_;
   LOG_INFO("run px pool", K(group_id_), K(tenant_id_), K_(active_threads));
   if (nullptr != cgroup_ctrl && OB_LIKELY(cgroup_ctrl->is_valid())) {
-    pid_t pid = static_cast<pid_t>(syscall(__NR_gettid));
-    cgroup_ctrl->add_thread_to_cgroup(pid, tenant_id_, group_id_);
-    LOG_INFO("set pid to group succ", K(tenant_id_), K(group_id_), K(pid));
+    cgroup_ctrl->add_self_to_cgroup(tenant_id_, group_id_);
+    LOG_INFO("add thread to group succ", K(tenant_id_), K(group_id_));
   }
 
 	if (!is_inited_) {
@@ -409,7 +408,7 @@ void ObResourceGroup::check_worker_count(ObThWorker &w)
       ATOMIC_INC(&token_cnt_);
       ATOMIC_STORE(&token_change_ts_, now);
       if (cgroup_ctrl_->is_valid()
-          && OB_FAIL(cgroup_ctrl_->remove_thread_from_cgroup(w.get_tid(), tenant_->id()))) {
+          && OB_FAIL(cgroup_ctrl_->remove_self_from_cgroup(tenant_->id()))) {
         LOG_WARN("remove thread from cgroup failed", K(ret), "tenant:", tenant_->id(), K_(group_id));
       }
     }
@@ -1369,7 +1368,7 @@ void ObTenant::check_worker_count(ObThWorker &w)
       w.stop();
       ATOMIC_INC(&token_cnt_);
       ATOMIC_STORE(&token_change_ts_, now);
-      if (cgroup_ctrl_.is_valid() && OB_FAIL(cgroup_ctrl_.remove_thread_from_cgroup(w.get_tid(), id_))) {
+      if (cgroup_ctrl_.is_valid() && OB_FAIL(cgroup_ctrl_.remove_self_from_cgroup(id_))) {
         LOG_WARN("remove thread from cgroup failed", K(ret), K_(id));
       }
     }
@@ -1441,7 +1440,7 @@ void ObTenant::lq_end(ObThWorker &w)
 {
   int ret = OB_SUCCESS;
   if (w.is_lq_yield()) {
-    if (OB_FAIL(cgroup_ctrl_.add_thread_to_cgroup(w.get_tid(), id_, w.get_group_id()))) {
+    if (OB_FAIL(cgroup_ctrl_.add_self_to_cgroup(id_, w.get_group_id()))) {
       LOG_WARN("move thread from lq group failed", K(ret), K(id_));
     } else {
       w.set_lq_yield(false);
@@ -1475,7 +1474,7 @@ int ObTenant::lq_yield(ObThWorker &w)
     }
   } else if (w.is_lq_yield()) {
     // avoid duplicate change group
-  } else if (OB_FAIL(cgroup_ctrl_.add_thread_to_cgroup(w.get_tid(), id_, OBCG_LQ))) {
+  } else if (OB_FAIL(cgroup_ctrl_.add_self_to_cgroup(id_, OBCG_LQ))) {
     LOG_WARN("move thread to lq group failed", K(ret), K(id_));
   } else {
     w.set_lq_yield();

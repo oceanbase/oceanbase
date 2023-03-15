@@ -38,9 +38,6 @@ public:
   void destroy();
   void dump_pth();
 
-  pid_t get_pid() const;
-  pid_t get_tid() const;
-
   /// \brief Get current thread object.
   ///
   /// \warning It would encounter segment fault if current thread
@@ -72,8 +69,6 @@ private:
   static int64_t total_thread_count_;
 private:
   pthread_t pth_;
-  pid_t pid_;
-  pid_t tid_;
   Runnable runnable_;
 #ifndef OB_USE_ASAN
   void *stack_addr_;
@@ -84,16 +79,6 @@ private:
   pid_t pid_before_stop_;
   pid_t tid_before_stop_;
 };
-
-OB_INLINE pid_t Thread::get_pid() const
-{
-  return pid_;
-}
-
-OB_INLINE pid_t Thread::get_tid() const
-{
-  return tid_;
-}
 
 OB_INLINE bool Thread::has_set_stop() const
 {

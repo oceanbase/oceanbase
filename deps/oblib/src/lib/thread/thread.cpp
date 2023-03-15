@@ -50,8 +50,6 @@ Thread::Thread(int64_t stack_size)
 
 Thread::Thread(Runnable runnable, int64_t stack_size)
     : pth_(0),
-      pid_(0),
-      tid_(0),
       runnable_(runnable),
 #ifndef OB_USE_ASAN
       stack_addr_(nullptr),
@@ -152,8 +150,8 @@ void Thread::dump_pth() // for debug pthread join faileds
   ssize_t size = 0;
   char path[PATH_SIZE];
   len = (char*)stack_addr_ + stack_size_ - (char*)pth_;
-  snprintf(path, PATH_SIZE, "log/dump_pth.%p.%d", (char*)pth_, (int)tid_);
-  LOG_WARN("dump pth start", K(path), K(pth_), K(tid_), K(len), K(stack_addr_), K(stack_size_));
+  snprintf(path, PATH_SIZE, "log/dump_pth.%p.%d", (char*)pth_, static_cast<pid_t>(syscall(__NR_gettid)));
+  LOG_WARN("dump pth start", K(path), K(pth_), K(len), K(stack_addr_), K(stack_size_));
   if (NULL == (char*)pth_ || len >= stack_size_ || len <= 0) {
     LOG_WARN("invalid member", K(pth_), K(stack_addr_), K(stack_size_));
   } else if ((fd = ::open(path, O_WRONLY | O_CREAT | O_TRUNC,
@@ -176,7 +174,7 @@ void Thread::dump_pth() // for debug pthread join faileds
     ret = OB_IO_ERROR;
     LOG_WARN("fail to close file fd", K(fd), KERRMSG, K(ret));
   } else {
-    LOG_WARN("dump pth done", K(path), K(pth_), K(tid_), K(size));
+    LOG_WARN("dump pth done", K(path), K(pth_), K(size));
   }
 #endif
 }
@@ -197,8 +195,6 @@ void Thread::wait()
     }
     destroy_stack();
     pth_ = 0;
-    pid_ = 0;
-    tid_ = 0;
     runnable_ = nullptr;
     if (1 <= ATOMIC_AAF(&join_concurrency_, -1)) {
       abort();
@@ -284,8 +280,6 @@ void* Thread::__th_start(void *arg)
                                        .set_label("ThreadRoot")))) {
         LOG_ERROR("create memory context failed", K(ret));
       } else {
-        th->pid_ = getpid();
-        th->tid_ = static_cast<pid_t>(syscall(__NR_gettid));
         WITH_CONTEXT(*mem_context) {
           try {
             in_try_stmt = true;
