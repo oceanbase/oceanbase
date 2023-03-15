@@ -58,7 +58,9 @@ Thread::Thread(Runnable runnable, int64_t stack_size)
 #endif
       stack_size_(stack_size),
       stop_(true),
-      join_concurrency_(0)
+      join_concurrency_(0),
+      pid_before_stop_(0),
+      tid_before_stop_(0)
 {}
 
 Thread::~Thread()
@@ -127,6 +129,17 @@ int Thread::start(Runnable runnable)
 
 void Thread::stop()
 {
+#ifndef OB_USE_ASAN
+  if (!stop_ && stack_addr_ != NULL) {
+    int tid_offset = 720;
+    int pid_offset = 724;
+    int len = (char*)stack_addr_ + stack_size_ - (char*)pth_;
+    if (len >= (max(tid_offset, pid_offset) + sizeof(pid_t))) {
+      tid_before_stop_ = *(pid_t*)((char*)pth_ + tid_offset);
+      pid_before_stop_ = *(pid_t*)((char*)pth_ + pid_offset);
+    }
+  }
+#endif
   stop_ = true;
 }
 

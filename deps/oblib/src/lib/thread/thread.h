@@ -81,6 +81,8 @@ private:
   int64_t stack_size_;
   bool stop_;
   int64_t join_concurrency_;
+  pid_t pid_before_stop_;
+  pid_t tid_before_stop_;
 };
 
 OB_INLINE pid_t Thread::get_pid() const
