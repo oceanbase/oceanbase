@@ -84,9 +84,8 @@ int ObDblinkService::get_length_from_type_text(ObString &type_text, int32_t &len
   return ret;
 }
 
-ObReverseLink::ObReverseLink(common::ObIAllocator &alloc)
-  : allocator_(alloc),
-    user_(),
+ObReverseLink::ObReverseLink()
+  : user_(),
     tenant_(),
     cluster_(),
     passwd_(),
@@ -100,6 +99,7 @@ ObReverseLink::ObReverseLink(common::ObIAllocator &alloc)
 
 ObReverseLink::~ObReverseLink()
 {
+  allocator_.reset();
 }
 
 OB_DEF_SERIALIZE(ObReverseLink)
@@ -381,7 +381,7 @@ int ObDblinkCtxInSession::register_dblink_conn_pool(common::sqlclient::ObCommonS
   return ret;
 }
 
-// When the session is about to be destroyed, the session will release all connections
+// When the session is about to be reset, the session will release all connections
 // from ObServerConnectionPool through this interface
 int ObDblinkCtxInSession::free_dblink_conn_pool()
 {
@@ -400,9 +400,7 @@ int ObDblinkCtxInSession::free_dblink_conn_pool()
       LOG_TRACE("free and close dblink connection in session", KP(this), K(session_info_->get_sessid()), K(i), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), KP(dblink_conn_pool), K(lbt()));
     }
   }
-  if (OB_SUCC(ret)) {
-    dblink_conn_pool_array_.reset();
-  }
+  dblink_conn_pool_array_.reset();
   return ret;
 }
 
@@ -424,6 +422,11 @@ int ObDblinkCtxInSession::get_dblink_conn(uint64_t dblink_id, common::sqlclient:
       dblink_conn = conn;
       break;
     }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(dblink_conn) &&
+      (OB_SUCCESS != dblink_conn->ping())) {
+    ret = OB_ERR_DBLINK_SESSION_KILLED;
+    LOG_WARN("connection is invalid", K(ret), K(dblink_conn->usable()), KP(dblink_conn));
   }
   return ret;
 }
@@ -473,9 +476,12 @@ int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    dblink_conn_holder_array_.reset();
-  }
+  dblink_conn_holder_array_.reset();
+  arena_alloc_.reset();
+  reverse_dblink_ = NULL;
+  reverse_dblink_buf_ = NULL;
+  sys_var_reverse_info_buf_ = NULL;
+  sys_var_reverse_info_buf_size_ = 0;
   return ret;
 }
 
@@ -491,19 +497,23 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
     LOG_WARN("failed to get SYS_VAR_SET_REVERSE_DBLINK_INFOS", K(value), K(ret));
   } else if (NULL == reverse_dblink_ || 0 != last_reverse_info_values_.compare(value)) {
     if (!value.empty()){ // get a new valid REVERSE_DBLINK_INFOS, need create or update ObReverseLink
-      void *ptr = NULL;
-      void *last_new_value_ptr = NULL;
-      int64_t last_new_value_length = value.length();
-      if (OB_ISNULL(ptr = arena_alloc_.alloc(sizeof(ObReverseLink)))) {
+      int64_t sys_var_length = value.length();
+      if (OB_ISNULL(reverse_dblink_buf_) &&
+                OB_ISNULL(reverse_dblink_buf_ = arena_alloc_.alloc(sizeof(ObReverseLink)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret), K(sizeof(ObReverseLink)));
-      } else if (OB_ISNULL(last_new_value_ptr = arena_alloc_.alloc(last_new_value_length))) {
+      } else if (sys_var_length > sys_var_reverse_info_buf_size_ &&
+          OB_ISNULL(sys_var_reverse_info_buf_ = arena_alloc_.alloc(2 * sys_var_length))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc memory", K(ret), K(last_new_value_length));
+        LOG_WARN("failed to alloc memory", K(ret), K(2 * sys_var_length));
       } else {
-        MEMCPY(last_new_value_ptr, value.ptr(), last_new_value_length);
-        last_reverse_info_values_.assign((char *)last_new_value_ptr, last_new_value_length);
-        reverse_dblink_ = new(ptr) ObReverseLink(arena_alloc_);
+        sys_var_reverse_info_buf_size_ = 2 * sys_var_length;
+        MEMCPY(sys_var_reverse_info_buf_, value.ptr(), sys_var_length);
+        last_reverse_info_values_.assign((char *)sys_var_reverse_info_buf_, sys_var_length);
+        if (OB_NOT_NULL(reverse_dblink_)) {
+          reverse_dblink_->~ObReverseLink();
+        }
+        reverse_dblink_ = new(reverse_dblink_buf_) ObReverseLink();
         char *new_buff = NULL;
         int64_t new_size = 0;
         int64_t pos = 0;

@@ -44,8 +44,8 @@ class ObReverseLink
 {
   OB_UNIS_VERSION_V(1);
 public:
-  explicit ObReverseLink(common::ObIAllocator &alloc);
-  ~ObReverseLink();
+  explicit ObReverseLink();
+  virtual ~ObReverseLink();
   inline void set_user(ObString name) { user_ = name; }
   inline void set_tenant(ObString name) { tenant_ = name; }
   inline void set_cluster(ObString name) { cluster_ = name; }
@@ -81,7 +81,7 @@ public:
   static const ObString SESSION_VARIABLE_STRING;
   static const int64_t LONG_QUERY_TIMEOUT;
 private:
-  common::ObIAllocator &allocator_;
+  common::ObArenaAllocator allocator_;
   ObString user_;
   ObString tenant_;
   ObString cluster_;
@@ -112,7 +112,10 @@ public:
   explicit ObDblinkCtxInSession(ObSQLSessionInfo *session_info)
     :
       session_info_(session_info),
-      reverse_dblink_(NULL)
+      reverse_dblink_(NULL),
+      reverse_dblink_buf_(NULL),
+      sys_var_reverse_info_buf_(NULL),
+      sys_var_reverse_info_buf_size_(0)
   {}
   ~ObDblinkCtxInSession()
   {
@@ -124,6 +127,7 @@ public:
     const bool force_disconnect = true;
     clean_dblink_conn(force_disconnect);
     free_dblink_conn_pool();
+    // session_info_ = NULL; // do not need reset session_info_
     reverse_dblink_ = NULL;
   }
   int register_dblink_conn_pool(common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool);
@@ -136,6 +140,9 @@ public:
 private:
   ObSQLSessionInfo *session_info_;
   ObReverseLink *reverse_dblink_;
+  void * reverse_dblink_buf_;
+  void * sys_var_reverse_info_buf_;
+  int64_t sys_var_reverse_info_buf_size_;
   common::ObArenaAllocator arena_alloc_;
   ObArray<common::sqlclient::ObCommonServerConnectionPool *> dblink_conn_pool_array_;  //for dblink read to free connection when session drop.
   ObArray<int64_t> dblink_conn_holder_array_; //for dblink write to hold connection during trasaction.

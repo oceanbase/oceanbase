@@ -85,6 +85,7 @@ int ObServerConnectionPool::acquire(ObMySQLConnection *&conn, uint32_t sessid)
   }
   if (OB_SUCC(ret)) {
     conn = connection;
+    conn->set_sessid(sessid);
     if (conn->connection_version() != connection_version_) {
       conn->set_connection_version(connection_version_);
       conn->close();

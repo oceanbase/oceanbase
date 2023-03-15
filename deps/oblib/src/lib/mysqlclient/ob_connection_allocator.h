@@ -348,6 +348,7 @@ template<typename T>
 int ObLruConnectionAllocator<T>::free_session_conn_array(uint32_t sessid, int64_t &fail_recycled_conn_count, int64_t &succ_recycled_conn_count)
 {
   int ret = OB_SUCCESS;
+  _OB_LOG(DEBUG, "free session conn array sessid=%u, ret=%d", sessid, ret);
   ObSpinLockGuard guard(ObIConnectionAllocator<T>::lock_);
   ObArray<T *> *conn_array = NULL;
   fail_recycled_conn_count = 0;
@@ -358,7 +359,7 @@ int ObLruConnectionAllocator<T>::free_session_conn_array(uint32_t sessid, int64_
     T *conn = NULL;
     int64_t array_size = conn_array->size();
     int64_t succ_count = 0;
-    _OB_LOG(DEBUG, "try to free conn_array, sessid=%u, count=%ld", sessid, array_size);
+    _OB_LOG(DEBUG, "try to free conn_array, conn_array=%p, count=%ld", conn_array, array_size);
     while (OB_SUCC(ret) && OB_SUCCESS == conn_array->pop_back(conn)) {
       conn->close(); //close immedately
       if (OB_FAIL(free_conn_array_.push_back(conn))) {
@@ -369,10 +370,12 @@ int ObLruConnectionAllocator<T>::free_session_conn_array(uint32_t sessid, int64_
         ++succ_count;
       }
     }
+    _OB_LOG(DEBUG, "free session conn array succ_count=%ld, ret=%d", succ_count, ret);
     succ_recycled_conn_count = succ_count;
     if (OB_FAIL(ret)) {
       fail_recycled_conn_count = array_size - succ_count;
       while (OB_SUCCESS == conn_array->pop_back(conn)) {
+        conn->close(); //close immedately
         ObLruConnectionAllocator<T>::free(conn);
       }
       if (OB_SUCCESS != sessionid_to_conns_map_.erase_refactored(sessid)) {

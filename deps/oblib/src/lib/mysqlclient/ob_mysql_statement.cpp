@@ -103,7 +103,7 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
       if (is_need_disconnect_error(ret)) {
         conn_->set_usable(false);
       }
-      LOG_WARN("fail to query server","server", stmt_->host, "port", stmt_->port,
+      LOG_WARN("fail to query server", "sessid",  conn_->get_sessid(), "server", stmt_->host, "port", stmt_->port,
                "err_msg", mysql_error(stmt_), K(tmp_ret), K(ret), K(sql_str_));
       if (OB_NOT_MASTER == tmp_ret) {
         // conn -> server pool -> connection pool
@@ -140,10 +140,10 @@ ObMySQLResult *ObMySQLStatement::execute_query()
       }
       const int ER_LOCK_WAIT_TIMEOUT = -1205;
       if (ER_LOCK_WAIT_TIMEOUT == ret) {
-        LOG_INFO("fail to query server", "host", stmt_->host, "port", stmt_->port,
+        LOG_INFO("fail to query server", "sessid", conn_->get_sessid(), "host", stmt_->host, "port", stmt_->port,
                "err_msg", mysql_error(stmt_), K(ret), K(sql_str_));
       } else {
-        LOG_WARN("fail to query server", "host", stmt_->host, "port", stmt_->port,
+        LOG_WARN("fail to query server", "host", stmt_->host, "port", stmt_->port, K(conn_->get_sessid()),
                "err_msg", mysql_error(stmt_), K(ret), K(STRLEN(sql_str_)), K(sql_str_));
       }
       if (OB_SUCCESS == ret) {
