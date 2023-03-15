@@ -298,6 +298,8 @@ int ObRDWFPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
 void ObRDWFPieceMsgCtx::reset_resource()
 {
   received_ = 0;
+  infos_.reset();
+  arena_alloc_.reset();
 }
 
 int ObRDWFWholeMsg::assign(const ObRDWFWholeMsg &msg)
