@@ -165,6 +165,7 @@ private:
   ObSpinLock spin_lock_;
   int64_t parallel_session_count_;
   ObPxTargetCond target_cond_;
+  bool print_debug_log_;
 };
 
 }

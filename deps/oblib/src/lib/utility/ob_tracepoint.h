@@ -605,6 +605,7 @@ class EventTable
       EN_PX_SQC_EXECUTE_FAILED = 600,
       EN_PX_SQC_INIT_FAILED = 601,
       EN_PX_SQC_INIT_PROCESS_FAILED = 602,
+      EN_PX_PRINT_TARGET_MONITOR_LOG = 603,
       // please add new trace point after 700 or before 600
 
       // Compaction Related 700-750
