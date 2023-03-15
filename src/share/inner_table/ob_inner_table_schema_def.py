@@ -11414,7 +11414,10 @@ def_table_schema(
 # 12373: __all_virtual_mds_node_stat
 # 12374: __all_virtual_mds_event_history
 # 12375: __all_virtual_time_guard_slow_history
-
+# 12376: __all_virtual_dup_ls_lease_mgr
+# 12377: __all_virtual_dup_ls_follower_lease_info
+# 12378: __all_virtual_dup_ls_tablet_set
+# 12379: __all_virtual_dup_ls_tablets
 #
 # 余留位置
 #
