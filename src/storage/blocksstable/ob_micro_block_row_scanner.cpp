@@ -976,6 +976,7 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_directly(
       row = &row_;
     } else {
       tmp_row_.count_ = tmp_row_.get_capacity();
+      tmp_row_.trans_id_.reset();
       row = &tmp_row_;
     }
     if (OB_FAIL(reader_->get_row(current_, *row))) {
