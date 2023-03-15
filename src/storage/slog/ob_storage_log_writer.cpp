@@ -30,7 +30,6 @@
 #include <limits.h>
 #include <string.h>
 #include "share/rc/ob_tenant_base.h"
-#include "share/ob_thread_mgr.h"
 
 namespace oceanbase
 {
@@ -663,7 +662,7 @@ int ObStorageLogWriter::ObSLogWriteRunner::start()
     ret = OB_NOT_INIT;
     STORAGE_REDO_LOG(WARN, "ObSLogWriteRunner hasn't been inited.", K(ret), K(is_inited_));
   } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(tg_id_, *this))) {
-    STORAGE_REDO_LOG(WARN, "Fail to start log writer thread.", K(tg_id_));
+    STORAGE_REDO_LOG(WARN, "Fail to start log writer thread.", K(ret), K(tg_id_));
   }
   return ret;
 }
