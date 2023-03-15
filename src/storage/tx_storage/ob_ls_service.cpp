@@ -689,6 +689,7 @@ int ObLSService::enable_replay()
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
   share::ObLSRestoreStatus restore_status;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else {
@@ -702,6 +703,10 @@ int ObLSService::enable_replay()
         LOG_ERROR("ls is null", K(ret));
       } else if (ls->is_need_gc()) {
         // this ls will be gc later, should not enable replay
+      } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+        LOG_WARN("failed to get ls migration status", K(ret));
+      } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status) {
+        // ls will online in rebuild process
       } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
         LOG_WARN("fail to get ls restore status", K(ret));
       } else if (!restore_status.can_replay_log()) {

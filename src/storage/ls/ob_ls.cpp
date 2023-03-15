@@ -1230,6 +1230,10 @@ int ObLS::finish_slog_replay()
     // so skip the following steps, otherwise load_ls_inner_tablet maybe encounter error.
   } else if (OB_FAIL(start())) {
     LOG_WARN("ls can not start to work", K(ret));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == new_migration_status) {
+    if (OB_FAIL(offline_())) {
+      LOG_WARN("failed to offline", K(ret), KPC(this));
+    }
   } else if (is_enable_for_restore()) {
     if (OB_FAIL(offline_())) {
       LOG_WARN("failed to offline", K(ret), KPC(this));
