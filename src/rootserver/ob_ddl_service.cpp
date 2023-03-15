@@ -10890,7 +10890,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_conflict_ddl(sql_proxy_, tenant_id, orig_table_schema->get_table_id(), 0, ddl_type, has_conflict_ddl))) {
           LOG_WARN("failed to check ddl conflict", K(ret));
         } else if (has_conflict_ddl) {
-          ret = OB_SCHEMA_EAGAIN;
+          ret = OB_EAGAIN;
           LOG_WARN("failed to alter table that has conflict ddl", K(ret), K(orig_table_schema->get_table_id()));
         } else if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
           LOG_WARN("submit ddl task failed", K(ret));
@@ -19376,7 +19376,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
                       has_conflict_ddl))) {
                 LOG_WARN("failed to check has conflict ddl", K(ret));
               } else if (has_conflict_ddl) {
-                ret = OB_SCHEMA_EAGAIN;
+                ret = OB_EAGAIN;
                 LOG_WARN("failed to drop table that has conflict ddl", K(ret), K(table_schema->get_table_id()));
               } else if (OB_FAIL(drop_table_in_trans(schema_guard,
                           tmp_table_schema,
