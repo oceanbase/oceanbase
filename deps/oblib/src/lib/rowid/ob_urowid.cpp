@@ -249,7 +249,7 @@ DEF_GET_OTIME_PK_VALUE(ObTimestampNanoType, timestamp_nano, uint16_t);
 ObURowIDData::get_pk_val_func ObURowIDData::inner_get_funcs_[ObMaxType] = {
     LST_DO(DEF_GET_PK_FUNC, (, ), ALL_TYPES_USED_IN_INNER_FUNC)};
 
-inline int ObURowIDData::get_pk_value(ObObjType obj_type, int64_t& pos, ObObj& pk_val) const
+int ObURowIDData::get_pk_value(ObObjType obj_type, int64_t& pos, ObObj& pk_val) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(obj_type >= ObMaxType) || OB_UNLIKELY(NULL == inner_get_funcs_[obj_type])) {
