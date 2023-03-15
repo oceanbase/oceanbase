@@ -141,7 +141,7 @@ int test(int &i, int once_invoke_hold)
       ret = OB_SUCCESS;
     } else {
       char buf[once_invoke_hold];
-      MEMSET(buf, 0, once_invoke_hold);
+      memset(buf, reinterpret_cast<std::uintptr_t>(&buf[0]) & 0xFF, once_invoke_hold); // disable compiler optimize out
       ret = SMART_CALL(test(--i, once_invoke_hold));
       void *stack_addr_after = nullptr;
       size_t stack_size_after = 0;
