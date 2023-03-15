@@ -4038,7 +4038,7 @@ int ObPartTransCtx::replace_tx_data_with_backup_(const ObTxDataBackup &backup, S
   share::SCN tmp_log_ts = log_ts;
   if (backup.get_start_log_ts().is_valid()) {
     tmp_log_ts = backup.get_start_log_ts();
-  } else if (exec_info_.next_log_entry_no_ > 1 || exec_info_.max_applied_log_ts_.is_valid()) {
+  } else if (exec_info_.next_log_entry_no_ > 1) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid start log ts with a applied log_entry", K(ret), K(backup), K(log_ts),
               KPC(this));
