@@ -5836,27 +5836,22 @@ int ObTransService::leader_takeover(
     // } else if (OB_FAIL(part_trans_ctx_mgr_.clear_trans_after_restore(partition))) {
     //   TRANS_LOG(WARN, "clear trans after restore log error", K(ret), K(partition));
   } else if (OB_FAIL(coord_trans_ctx_mgr_.leader_takeover(partition, checkpoint))) {
-    if (OB_PARTITION_NOT_EXIST == ret) {
-      TRANS_LOG(WARN, "coordinator partition leader takeover error", KR(ret), K(partition));
-      ret = OB_SUCCESS;
-    } else {
-      TRANS_LOG(ERROR, "coordinator partition leader takeover error", KR(ret), K(partition));
-    }
+    TRANS_LOG(WARN, "coordinator partition leader takeover error", KR(ret), K(partition));
   } else if (OB_FAIL(part_trans_ctx_mgr_.leader_takeover(partition, checkpoint))) {
-    if (OB_PARTITION_NOT_EXIST == ret) {
-      TRANS_LOG(WARN, "participant partition leader takeover error", KR(ret), K(partition));
-      ret = OB_SUCCESS;
-    } else {
-      TRANS_LOG(ERROR, "participant partition leader takeover error", KR(ret), K(partition));
-    }
+    TRANS_LOG(WARN, "participant partition leader takeover error", KR(ret), K(partition));
   // leader implicitly commits a transaction
   } else if (OB_FAIL(update_publish_version(partition, ObClockGenerator::getRealClock(), true))) {
-    TRANS_LOG(ERROR, "update publish version error", KR(ret), K(partition));
+    TRANS_LOG(WARN, "update publish version error", KR(ret), K(partition));
   } else {
     TRANS_LOG(INFO, "leader takeover success", K(partition), K(arg));
   }
   if (OB_FAIL(ret)) {
-    TRANS_LOG(ERROR, "leader takeover error", KR(ret), K(partition), K(arg));
+    if (OB_PARTITION_NOT_EXIST == ret) {
+      TRANS_LOG(WARN, "leader takeover error", KR(ret), K(partition), K(arg));
+      ret = OB_SUCCESS;
+    } else {
+      TRANS_LOG(ERROR, "leader takeover error", KR(ret), K(partition), K(arg));
+    }
   }
 
   return ret;
