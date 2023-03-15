@@ -2937,7 +2937,6 @@ int ObPartTransCtx::submit_commit_log_()
           return_log_cb_(log_cb);
           log_cb = NULL;
           release_ctx_ref_();
-          TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
         } else if (OB_FAIL(after_submit_log_(log_block, log_cb, &helper))) {
         } else {
           redo_log_submitted = true;
