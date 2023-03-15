@@ -110,6 +110,7 @@ int ObAllVirtualTableMgr::get_next_tablet()
 {
   int ret = OB_SUCCESS;
 
+  tablet_handle_.reset();
   tablet_allocator_.reuse();
   if (nullptr == tablet_iter_) {
     tablet_allocator_.set_tenant_id(MTL_ID());
