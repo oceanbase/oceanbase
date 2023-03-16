@@ -86,10 +86,10 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
       } else {
         type.set_varchar();
         type.set_length_semantics(text.is_varchar_or_char() ? text.get_length_semantics() : default_length_semantics);
+      }
       //建表列的最大长度
       type.set_length(OB_MAX_COLUMN_NAMES_LENGTH);
       ret = aggregate_charsets_for_string_result(type, &text, 1, type_ctx.get_coll_type());
-      }
     }
     if (OB_SUCC(ret)) {
       switch (param_num) {//because of regexp engine need utf8 code, here need reset calc collation type and can implicit cast.
