@@ -220,7 +220,7 @@ int ObLinkScanOp::inner_open()
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (sql::DblinkGetConnType::DBLINK_POOL == conn_type_ &&
-             OB_FAIL(init_dblink(MY_SPEC.dblink_id_, GCTX.dblink_proxy_))) {
+             OB_FAIL(init_dblink(MY_SPEC.dblink_id_, GCTX.dblink_proxy_, MY_SPEC.has_for_update_))) {
     LOG_WARN("failed to init dblink", K(ret), K(MY_SPEC.dblink_id_), K(MY_SPEC.is_reverse_link_));
   } else if (OB_FAIL(init_tz_info(TZ_INFO(session)))) {
     LOG_WARN("failed to tz info", K(ret), KP(session));
