@@ -55,13 +55,15 @@ public:
   // @param [out] padding_len: padding部分的总长度
   //
   int alloc_lsn_ts(const int64_t base_ts,
-                          const int64_t size,
-                          LSN &lsn,
-                          int64_t &log_id,
-                          int64_t &log_ts,
-                          bool &is_new_log,
-                          bool &need_gen_padding_entry,
-                          int64_t &padding_len);
+                   const int64_t size,
+                   const int64_t log_id_upper_bound,
+                   const LSN &lsn_upper_bound,
+                   LSN &lsn,
+                   int64_t &log_id,
+                   int64_t &log_ts,
+                   bool &is_new_log,
+                   bool &need_gen_padding_entry,
+                   int64_t &padding_len);
   // 更新last_lsn和log_timestamp
   // receive_log/append_disk_log 时调用
   int inc_update_last_log_info(const LSN &lsn, const int64_t log_id, const int64_t log_ts);

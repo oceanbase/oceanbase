@@ -230,7 +230,7 @@ bool LogSlidingWindow::leader_can_submit_larger_log_(const int64_t log_id) const
   return bool_ret;
 }
 
-bool LogSlidingWindow::leader_can_submit_new_log_(const int64_t valid_log_size)
+bool LogSlidingWindow::leader_can_submit_new_log_(const int64_t valid_log_size, LSN &lsn_upper_bound)
 {
   // Check whether leader can submit new log.
   // The valid_log_size does not consider group_header for generating new group log case.
@@ -239,6 +239,13 @@ bool LogSlidingWindow::leader_can_submit_new_log_(const int64_t valid_log_size)
   LSN curr_end_lsn;
   LSN curr_committed_end_lsn;
   get_committed_end_lsn_(curr_committed_end_lsn);
+  // calculate lsn_upper_bound
+  LSN buffer_reuse_lsn;
+  (void) group_buffer_.get_reuse_lsn(buffer_reuse_lsn);
+  const int64_t group_buffer_size = group_buffer_.get_available_buffer_size();
+  LSN reuse_base_lsn = MIN(curr_committed_end_lsn, buffer_reuse_lsn);
+  lsn_upper_bound = reuse_base_lsn + group_buffer_size;
+
   if (OB_SUCCESS != (tmp_ret = lsn_allocator_.get_curr_end_lsn(curr_end_lsn))) {
     PALF_LOG(WARN, "get_curr_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self), K(valid_log_size));
   // NB: 采用committed_lsn作为可复用起点的下界，避免写盘立即复用group_buffer导致follower的
@@ -317,19 +324,21 @@ int LogSlidingWindow::submit_log(const char *buf,
   int64_t padding_size = 0;
   // group log valid size (without padding part)
   const int64_t valid_log_size = LogEntryHeader::HEADER_SER_SIZE + buf_len;
-  LSN tmp_lsn;
+  const int64_t start_log_id = get_start_id();
+  const int64_t log_id_upper_bound = start_log_id + PALF_MAX_LEADER_SUBMIT_LOG_COUNT - 1;
+  LSN tmp_lsn, lsn_upper_bound;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (NULL == buf || buf_len <= 0 || buf_len > MAX_LOG_BODY_SIZE || ref_ts_ns < 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid arguments", K(ret), K_(palf_id), K_(self), K(buf_len), KP(buf));
-  } else if (!leader_can_submit_new_log_(valid_log_size)
+  } else if (!leader_can_submit_new_log_(valid_log_size, lsn_upper_bound)
              || !leader_can_submit_larger_log_(get_max_log_id() + 1)) {
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "cannot submit new log now, try again", K(ret), K_(palf_id), K_(self),
         K(valid_log_size), K(buf_len), "start_id", get_start_id(), "max_log_id", get_max_log_id());
     // sw_ cannot submit larger log
-  } else if (OB_FAIL(lsn_allocator_.alloc_lsn_ts(ref_ts_ns, valid_log_size,
+  } else if (OB_FAIL(lsn_allocator_.alloc_lsn_ts(ref_ts_ns, valid_log_size, log_id_upper_bound, lsn_upper_bound,
             tmp_lsn, log_id, log_ts, is_new_log, need_gen_padding_entry, padding_size))) {
     PALF_LOG(WARN, "alloc_lsn_ts failed", K(ret), K_(palf_id), K_(self));
   } else if (OB_FAIL(leader_wait_sw_slot_ready_(log_id))) {
@@ -555,7 +564,7 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
     PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(lsn), K(log_ts), K(log_id), K(log_body_size),
         K(log_type), KP(log_data), K(data_len));
   } else if (OB_FAIL(guard.get_log_task(log_id, log_task))) {
-    PALF_LOG(WARN, "get_log_task_ failed", K(ret), K(log_id), K_(palf_id), K_(self));
+    PALF_LOG(ERROR, "get_log_task_ failed", K(ret), K(log_id), K_(palf_id), K_(self), "start_log_id", get_start_id(), "max_log_id", get_max_log_id());
   } else {
     LogEntryHeader log_entry_header;
     LogGroupEntryHeader header;

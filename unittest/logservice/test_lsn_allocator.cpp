@@ -181,14 +181,16 @@ TEST_F(TestLSNAllocator, test_lsn_allocator_alloc_lsn_ts)
   bool need_gen_padding_entry = false;
   int64_t padding_len = 0;
 
-  EXPECT_EQ(OB_NOT_INIT, lsn_allocator_.alloc_lsn_ts(base_ts, size, lsn, log_id, log_ts,
+  int64_t log_id_upper_bound = 99999;
+  LSN lsn_upper_bound(9999999999);
+  EXPECT_EQ(OB_NOT_INIT, lsn_allocator_.alloc_lsn_ts(base_ts, size, log_id_upper_bound, lsn_upper_bound, lsn, log_id, log_ts,
             is_new_log, need_gen_padding_entry, padding_len));
   EXPECT_EQ(OB_SUCCESS, lsn_allocator_.init(initial_log_id, initial_log_ts, start_lsn));
   int64_t invalid_size = 0;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, lsn_allocator_.alloc_lsn_ts(base_ts, invalid_size, lsn, log_id, log_ts,
+  EXPECT_EQ(OB_INVALID_ARGUMENT, lsn_allocator_.alloc_lsn_ts(base_ts, invalid_size, log_id_upper_bound, lsn_upper_bound, lsn, log_id, log_ts,
             is_new_log, need_gen_padding_entry, padding_len));
   // test alloc_lsn_ts()
-  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, lsn, log_id, log_ts,
+  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, log_id_upper_bound, lsn_upper_bound, lsn, log_id, log_ts,
             is_new_log, need_gen_padding_entry, padding_len));
   EXPECT_EQ(initial_log_id + 1, log_id);
 }
@@ -228,7 +230,9 @@ TEST_F(TestLSNAllocator, test_lsn_allocator_truncate)
   EXPECT_EQ(OB_INVALID_ARGUMENT, lsn_allocator_.truncate(tmp_lsn, truncate_log_id, 10));
   tmp_lsn.val_ = 100;
   EXPECT_EQ(OB_SUCCESS, lsn_allocator_.truncate(tmp_lsn, truncate_log_id, 10));
-  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, lsn, log_id, log_ts,
+  int64_t log_id_upper_bound = 99999;
+  LSN lsn_upper_bound(9999999999);
+  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, log_id_upper_bound, lsn_upper_bound, lsn, log_id, log_ts,
             is_new_log, need_gen_padding_entry, padding_len));
   EXPECT_EQ(truncate_log_id + 1, log_id);
   // test truncate()
@@ -236,14 +240,14 @@ TEST_F(TestLSNAllocator, test_lsn_allocator_truncate)
   EXPECT_EQ(OB_INVALID_ARGUMENT, lsn_allocator_.inc_update_last_log_info(tmp_lsn, tmp_log_id, tmp_log_ts));
   tmp_lsn.val_ = 10;  // no need update
   EXPECT_EQ(OB_SUCCESS, lsn_allocator_.inc_update_last_log_info(tmp_lsn, tmp_log_id, tmp_log_ts));
-  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, lsn, log_id, log_ts,
+  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, log_id_upper_bound, lsn_upper_bound, lsn, log_id, log_ts,
             is_new_log, need_gen_padding_entry, padding_len));
   EXPECT_EQ(truncate_log_id + 1, log_id);  // 聚合到上一条日志中
   // update success
   tmp_lsn.val_ = 10000000;
   EXPECT_EQ(OB_SUCCESS, lsn_allocator_.inc_update_last_log_info(tmp_lsn, tmp_log_id, tmp_log_ts));
   size = 2 * 1024 * 1024;
-  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, lsn, log_id, log_ts,
+  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, log_id_upper_bound, lsn_upper_bound, lsn, log_id, log_ts,
             is_new_log, need_gen_padding_entry, padding_len));
   EXPECT_EQ(tmp_log_id + 1, log_id);
 
@@ -251,7 +255,7 @@ TEST_F(TestLSNAllocator, test_lsn_allocator_truncate)
   EXPECT_EQ(OB_STATE_NOT_MATCH, lsn_allocator_.try_freeze_by_time(end_lsn, end_log_id));
   // 生成一条新的小日志，预期is_need_cut会为false
   size = 10;
-  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, lsn, log_id, log_ts,
+  EXPECT_EQ(OB_SUCCESS, lsn_allocator_.alloc_lsn_ts(base_ts, size, log_id_upper_bound, lsn_upper_bound, lsn, log_id, log_ts,
             is_new_log, need_gen_padding_entry, padding_len));
 
   EXPECT_EQ(log_id, lsn_allocator_.get_max_log_id());
@@ -273,10 +277,13 @@ TEST_F(TestLSNAllocator, test_alloc_offset_single_thread)
 
   int64_t avg_cost = 0;
   int64_t ROUND = 1;
+  int64_t count = 1000000;
+  int64_t log_id_upper_bound = 999999999;
+  LSN lsn_upper_bound(ROUND * count * MAX_LOG_BUFFER_SIZE);
   for (int64_t j = 0; j < ROUND; j++) {
       int64_t idx = rand() % LOG_LOG_CNT;
     const int64_t begin_ts = ObTimeUtility::current_time_ns();
-    for (int i = 0; i < 1000000; i++) {
+    for (int i = 0; i < count; i++) {
       int64_t base_ts = 1;
       int64_t size = log_size_array[idx];
       LSN ret_offset;
@@ -286,7 +293,7 @@ TEST_F(TestLSNAllocator, test_alloc_offset_single_thread)
       bool need_gen_padding_entry = false;
       int64_t padding_len = 0;
 
-      EXPECT_EQ(OB_SUCCESS, golbal_lsn_allocator.alloc_lsn_ts(base_ts, size, ret_offset, ret_log_id, ret_log_ts,
+      EXPECT_EQ(OB_SUCCESS, golbal_lsn_allocator.alloc_lsn_ts(base_ts, size, log_id_upper_bound, lsn_upper_bound, ret_offset, ret_log_id, ret_log_ts,
             is_new_log, need_gen_padding_entry, padding_len));
     }
     int64_t cost = ObTimeUtility::current_time_ns() - begin_ts;
@@ -331,12 +338,14 @@ public:
     bool is_new_log = false;
     bool need_gen_padding_entry = false;
     int64_t padding_len = 0;
+    int64_t log_id_upper_bound = 9999999;
+    LSN lsn_upper_bound(999999 * MAX_LOG_BUFFER_SIZE);
 
     for (int j = 0; j < 1; j++) {
     const int64_t begin_ts = ObTimeUtility::current_time_ns();
     for (int i = 0; i < 1000; i++) {
 //      size = log_size_array[i % LOG_LOG_CNT];
-      EXPECT_EQ(OB_SUCCESS, golbal_lsn_allocator.alloc_lsn_ts(base_ts, size, ret_offset, ret_log_id, ret_log_ts,
+      EXPECT_EQ(OB_SUCCESS, golbal_lsn_allocator.alloc_lsn_ts(base_ts, size, log_id_upper_bound, lsn_upper_bound, ret_offset, ret_log_id, ret_log_ts,
             is_new_log, need_gen_padding_entry, padding_len));
     }
     int64_t cost = ObTimeUtility::current_time_ns() - begin_ts;
