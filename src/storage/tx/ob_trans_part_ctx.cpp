@@ -4336,6 +4336,9 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   } else if (OB_FAIL(set_app_trace_id_(commit_info_log.get_app_trace_id()))) {
     TRANS_LOG(WARN, "set app trace id error", K(ret), K(commit_info_log), K(*this));
   } else {
+    // NOTE that set xa variables before set trans type
+    exec_info_.xid_ = commit_info_log.get_xid();
+    exec_info_.is_sub2pc_ = commit_info_log.is_sub2pc();
     if (exec_info_.participants_.count() > 1) {
       exec_info_.trans_type_ = TransType::DIST_TRANS;
     } else if (exec_info_.upstream_.is_valid()) {
@@ -4352,8 +4355,6 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
     } else {
       set_2pc_upstream_(commit_info_log.get_upstream());
     }
-    exec_info_.xid_ = commit_info_log.get_xid();
-    exec_info_.is_sub2pc_ = commit_info_log.is_sub2pc();
     can_elr_ = commit_info_log.is_elr();
     cluster_version_ = commit_info_log.get_cluster_version();
     sub_state_.set_info_log_submitted();
