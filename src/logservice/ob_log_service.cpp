@@ -103,6 +103,11 @@ int ObLogService::mtl_init(ObLogService* &logservice)
     CLOG_LOG(ERROR, "init ObLogService failed", K(ret), K(tenant_clog_dir));
   } else if (OB_FAIL(FileDirectoryUtils::fsync_dir(clog_dir))) {
     CLOG_LOG(ERROR, "fsync_dir failed", K(ret), K(clog_dir));
+  } else {
+    CLOG_LOG(INFO, "ObLogService mtl_init success");
+  }
+  if (OB_FAIL(ret) && NULL != net_keepalive_adapter) {
+    MTL_DELETE(ObNetKeepAliveAdapter, "logservice", net_keepalive_adapter);
   }
   return ret;
 }
