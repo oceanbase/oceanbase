@@ -105,7 +105,6 @@ void LogIOTaskCbThreadPool::destroy()
   wait();
   is_inited_ = false;
   if (-1 != tg_id_) {
-    MTL_UNREGISTER_THREAD_DYNAMIC(tg_id_);
     TG_DESTROY(tg_id_);
   }
   tg_id_ = -1;
