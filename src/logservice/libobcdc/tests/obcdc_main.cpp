@@ -55,6 +55,7 @@ ObLogMain::ObLogMain() : inited_(false),
                          verify_mode_(false),
                          enable_reentrant_(false),
                          output_br_detail_(false),
+                         output_br_special_detail_(false),
                          start_timestamp_usec_(0),
                          tenant_id_(OB_INVALID_TENANT_ID),
                          tg_match_pattern_(NULL),
@@ -80,9 +81,10 @@ int ObLogMain::init(int argc, char **argv)
     LOG_ERROR("check arguments fail");
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(br_printer_.init(data_file_, heartbeat_file_, print_console_, only_print_hex_, only_print_dml_tx_checksum_,
-      print_hex_, print_lob_md5_, verify_mode_, output_br_detail_))) {
+      print_hex_, print_lob_md5_, verify_mode_, output_br_detail_, output_br_special_detail_))) {
     LOG_ERROR("init binlog record printer fail", K(ret), K(data_file_), K(heartbeat_file_),
-        K(print_console_), K(only_print_hex_), K_(only_print_dml_tx_checksum), K(print_hex_), K(print_lob_md5_), K(verify_mode_), K_(output_br_detail));
+        K(print_console_), K(only_print_hex_), K_(only_print_dml_tx_checksum), K(print_hex_), K(print_lob_md5_),
+        K(verify_mode_), K_(output_br_detail), K_(output_br_special_detail));
   } else {
     stop_flag_ = true;
     inited_ = true;
@@ -125,7 +127,7 @@ int ObLogMain::parse_args_(int argc, char **argv)
 
   // option variables
   int opt = -1;
-  const char *opt_string = "ivcdD:f:hH:oVt:rR:OxmT:P";
+  const char *opt_string = "iIvcdD:f:hH:oVt:rR:OxmT:P";
   struct option long_opts[] =
   {
     {"print_dml_checksum", 0, NULL, 'c'},
@@ -147,6 +149,7 @@ int ObLogMain::parse_args_(int argc, char **argv)
     {"version", 0, NULL, 'v'},
     {"verify_begin_trans_id", 0, NULL, 'P'},
     {"output_br_detail", 0, NULL, 'i'},
+    {"output_br_special_detail", 0, NULL, 'I'},
     {0, 0, 0, 0}
   };
 
@@ -249,6 +252,13 @@ int ObLogMain::parse_args_(int argc, char **argv)
       case 'P': {
         // Verify that the begin trans_id function does not fall back and is turned on by default
         LOG_STD("verify_begin_trans_id\n");
+        break;
+      }
+
+      case 'I': {
+        // output special detail info of binlog record, default off
+        // Such as, ObTraceInfo
+        output_br_special_detail_ = true;
         break;
       }
 

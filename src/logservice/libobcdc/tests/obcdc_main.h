@@ -78,6 +78,7 @@ private:
   bool                    verify_mode_;
   bool                    enable_reentrant_;
   bool                    output_br_detail_;
+  bool                    output_br_special_detail_;
   int64_t                 start_timestamp_usec_;
   uint64_t                tenant_id_;
   const char              *tg_match_pattern_;

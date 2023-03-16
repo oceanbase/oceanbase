@@ -59,7 +59,8 @@ public:
       const bool enable_print_hex,
       const bool enable_print_lob_md5,
       const bool enable_verify_mode,
-      const bool enable_print_detail);
+      const bool enable_print_detail,
+      const bool enable_print_special_detail);
   void destroy();
   static int64_t get_precise_timestamp(IBinlogRecord &br);
 
@@ -85,6 +86,7 @@ private:
       const bool enable_print_lob_md5,
       const bool enable_verify_mode,
       const bool enable_print_detail,
+      const bool enable_print_special_detail,
       int64_t &tx_br_count,
       uint64_t &dml_data_crc,
       bool &need_rotate_file);
@@ -98,6 +100,7 @@ private:
       const bool enable_print_hex,
       const bool enable_print_lob_md5,
       const bool enable_print_detail,
+      const bool enable_print_special_detail,
       int64_t &pos);
   static int print_hex(const char *str, int64_t len, char *buf, int64_t size, int64_t &pos);
   static int write_data_file(const int fd,
@@ -124,6 +127,7 @@ private:
   bool        enable_print_lob_md5_;
   bool        enable_verify_mode_;
   bool        enable_print_detail_;
+  bool        enable_print_special_detail_;
   int64_t     dml_tx_br_count_; // br_count of dml tx.
   int64_t     total_tx_count_;  // tx count, statistics by commit br.
   int64_t     total_br_count_;  // DDL/DML br count, ignore heartbeat and begin/commit.

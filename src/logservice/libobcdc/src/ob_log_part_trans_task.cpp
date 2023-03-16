@@ -3354,19 +3354,15 @@ int PartTransTask::init_trace_info_(const ObString &trace_info)
       ret = OB_INVALID_ARGUMENT;
     } else {
       const int64_t trace_info_len = trace_info.length();
-      char *buf = static_cast<char*>(allocator_.alloc(trace_info_len));
+      char *buf = static_cast<char*>(allocator_.alloc(trace_info_len + 1));
 
       if (OB_ISNULL(buf)) {
         LOG_ERROR("allocate memory for trace id buffer fail", K(buf), K(trace_info_len));
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        trace_info_.assign_buffer(buf, static_cast<int32_t>(trace_info_len));
-        int64_t write_len = trace_info_.write(trace_info.ptr(), trace_info.length());
-
-        if (write_len != trace_info_len) {
-          LOG_ERROR("write trace id fail", K(write_len), K(trace_info_len), K(trace_info), K(trace_info_));
-          ret = OB_ERR_UNEXPECTED;
-        }
+        MEMCPY(buf, trace_info.ptr(), trace_info_len);
+        buf[trace_info_len] = '\0';
+        trace_info_.assign_ptr(buf, trace_info_len);
       }
     }
   }
