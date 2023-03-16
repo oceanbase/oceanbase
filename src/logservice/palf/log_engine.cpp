@@ -547,6 +547,9 @@ int LogEngine::read_group_entry_header(const LSN &lsn, LogGroupEntryHeader &log_
     ret = OB_NOT_INIT;
   } else if (false == lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (!read_buf.is_valid()) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "allocate memory failed", KPC(this), K(lsn));
   } else if (OB_FAIL(log_storage_.pread_without_block_header(lsn, in_read_size, read_buf, out_read_size))) {
     PALF_LOG(WARN, "LogStorage pread failed", K(ret));
   } else if (OB_FAIL(log_group_entry_header.deserialize(read_buf.buf_, in_read_size, pos))) {
@@ -1150,6 +1153,9 @@ int LogEngine::construct_log_meta_(const LSN &lsn, block_id_t &expected_next_blo
   LogMetaEntry meta_entry;
   if (false == lsn.is_valid()) {
     PALF_LOG(INFO, "there is no meta entry, maybe create palf failed", K(ret), K_(palf_id), K_(is_inited));
+  } else if (!read_buf.is_valid()) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "allocate memory failed", KPC(this), K(lsn));
   } else if (OB_FAIL(log_meta_storage_.pread(lsn, buf_len, read_buf, out_read_size))) {
     PALF_LOG(WARN, "ObLogMetaStorage pread failed", K(ret), K_(palf_id), K_(is_inited));
     // NB: when lsn is invalid, means there is no data on disk.

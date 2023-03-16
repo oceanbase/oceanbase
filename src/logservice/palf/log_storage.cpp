@@ -733,7 +733,10 @@ int LogStorage::read_block_header_(const block_id_t block_id,
   LSN log_tail = get_readable_log_tail_guarded_by_lock_();
   block_id_t max_block_id = lsn_2_block(log_tail, logical_block_size_);
   bool last_block_has_data = (0 == lsn_2_offset(log_tail, logical_block_size_) ? false : true);
-  if (block_id > max_block_id || (block_id == max_block_id && false == last_block_has_data)) {
+  if (!read_buf.is_valid()) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "allocate memory failed");
+  } else if (block_id > max_block_id || (block_id == max_block_id && false == last_block_has_data)) {
     ret = OB_ERR_OUT_OF_UPPER_BOUND;
     PALF_LOG(WARN, "block_id is large than max_block_id", K(ret), K(block_id),
              K(log_tail), K(max_block_id), K(log_block_header));

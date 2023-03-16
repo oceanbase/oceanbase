@@ -30,6 +30,11 @@ ReadBuf::ReadBuf(char *buf, const int64_t buf_len) : buf_(buf), buf_len_(buf_len
 {
 }
 
+ReadBuf::ReadBuf(const ReadBuf &rhs)
+{
+  *this = rhs;
+}
+
 ReadBuf::~ReadBuf()
 {
   reset();
@@ -51,6 +56,12 @@ bool ReadBuf::operator!=(const ReadBuf &rhs) const
   return !operator==(rhs);
 }
 
+ReadBuf &ReadBuf::operator=(const ReadBuf &rhs)
+{
+  buf_ = rhs.buf_;
+  buf_len_ = rhs.buf_len_;
+  return *this;
+}
 
 bool ReadBuf::is_valid() const
 {

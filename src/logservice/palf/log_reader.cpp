@@ -113,7 +113,6 @@ int LogReader::inner_pread_(const int read_io_fd,
   offset_t backoff = start_offset - aligned_start_offset;
   int64_t aligned_in_read_size = upper_align(in_read_size + backoff, LOG_DIO_ALIGN_SIZE);
   int64_t limited_and_aligned_in_read_size = 0;
-  ReadBufGuard read_buf_guard("LogReader", aligned_in_read_size);
   if (MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE < aligned_in_read_size) {
     ret = OB_BUF_NOT_ENOUGH;
     PALF_LOG(ERROR, "aligned_in_read_size is greater than MAX BUFFER LEN",

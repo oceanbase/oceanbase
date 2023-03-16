@@ -22,8 +22,11 @@ struct ReadBuf
 {
   ReadBuf();
   ReadBuf(char *buf, const int64_t buf_len);
+  ReadBuf(const ReadBuf &rhs);
   bool operator==(const ReadBuf &rhs) const;
   bool operator!=(const ReadBuf &rhs) const;
+
+  ReadBuf &operator=(const ReadBuf &rhs);
   ~ReadBuf();
   void reset();
   bool is_valid() const;
