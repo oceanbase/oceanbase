@@ -847,7 +847,11 @@ int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
         if (!io_config.enable_io_tracer_) {
           io_tracer_.reuse();
         }
-        LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_));
+        if (OB_FAIL(io_clock_->update_io_clocks(io_config_))) {
+          LOG_WARN("refresh io clock failed", K(ret), K(io_config_));
+        } else {
+          LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_), K(io_config));
+        }
       }
     }
   }
