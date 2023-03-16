@@ -74,7 +74,8 @@ int ObFifoArena::ObWriteThrottleInfo::check_and_calc_decay_factor(int64_t memsto
   int ret = OB_SUCCESS;
   if (memstore_threshold != memstore_threshold_
       || trigger_percentage != trigger_percentage_
-      ||  alloc_duration != alloc_duration_) {
+      || alloc_duration != alloc_duration_
+      || decay_factor_ <= 0) {
     memstore_threshold_ = memstore_threshold;
     trigger_percentage_ = trigger_percentage;
     alloc_duration_ = alloc_duration;
@@ -383,6 +384,9 @@ int64_t ObFifoArena::calc_mem_limit(const int64_t cur_mem_hold, const int64_t tr
     // there is no speed limit now
     // we can get all the memory before speed limit
     mem_can_be_assigned = trigger_mem_limit - cur_mem_hold;
+  } else if (throttle_info_.decay_factor_ <= 0) {
+    mem_can_be_assigned = 0;
+    LOG_WARN("we should limit speed, but the decay factor not calculate now", K(cur_mem_hold), K(trigger_mem_limit), K(dt));
   } else {
     init_seq = ((cur_mem_hold - trigger_mem_limit) + MEM_SLICE_SIZE - 1) / (MEM_SLICE_SIZE);
     init_page_left_size = MEM_SLICE_SIZE - (cur_mem_hold - trigger_mem_limit) % MEM_SLICE_SIZE;
