@@ -2212,7 +2212,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   } else if (pl_type.is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
     OZ (ns.init_complex_obj(allocator, pl_type, obj, false));
-  } else if (pl_type.is_package_type()) {
+  } else if (pl_type.is_package_type() || pl_type.is_rowtype_type()) {
     ObPLResolveCtx ns(allocator,
                       *session,
                       *schema_guard,
