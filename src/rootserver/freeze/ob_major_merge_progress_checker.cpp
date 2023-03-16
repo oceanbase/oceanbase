@@ -152,7 +152,7 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
+  const ObSimpleTableSchemaV2 *simple_schema = nullptr;
   ObTableCompactionInfo cur_compaction_info;
   const uint64_t special_table_id = cross_cluster_validator_.get_special_table_id();
   // only primary major_freeze_service need to handle table with frist tablet in sys ls here
@@ -162,15 +162,15 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
     LOG_WARN("invalid special table id", KR(ret), K_(tenant_id), K(special_table_id));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, special_table_id, table_schema))) {
+  } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, special_table_id, simple_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(special_table_id));
-  } else if (OB_ISNULL(table_schema)) {
+  } else if (OB_ISNULL(simple_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", KR(ret), K_(tenant_id), K(special_table_id));
   } else {
     SMART_VAR(ObArray<ObTabletLSPair>, pairs) {
       FREEZE_TIME_GUARD;
-      if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(tenant_id_, *table_schema,
+      if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(tenant_id_, *simple_schema,
                                                                        *sql_proxy_, pairs))) {
         LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(special_table_id));
       } else if (OB_UNLIKELY(pairs.count() < 1)) {

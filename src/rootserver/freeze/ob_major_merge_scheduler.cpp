@@ -171,7 +171,7 @@ int ObMajorMergeScheduler::try_idle(
   int64_t merger_check_interval = idling_.get_idle_interval_us();
   const int64_t start_time_us = ObTimeUtil::current_time();
 
-  if (OB_SUCC(work_ret)) {
+  if (OB_SUCCESS == work_ret) {
     fail_count_ = 0;
   } else {
     ++fail_count_;
@@ -189,7 +189,7 @@ int ObMajorMergeScheduler::try_idle(
   } else {
     idle_time_us = merger_check_interval;
     LOG_WARN("major merge failed more than immediate cnt, turn to idle status",
-             K_(fail_count), LITERAL_K(IMMEDIATE_RETRY_CNT));
+             K_(fail_count), LITERAL_K(IMMEDIATE_RETRY_CNT), K(idle_time_us));
   }
 
   if (is_paused()) {
@@ -197,11 +197,11 @@ int ObMajorMergeScheduler::try_idle(
       LOG_INFO("major_merge_scheduler is paused", K_(tenant_id), K(idle_time_us),
                "epoch", get_epoch());
       if (OB_FAIL(idling_.idle(idle_time_us))) {
-        LOG_WARN("fail to idle", KR(ret));
+        LOG_WARN("fail to idle", KR(ret), K(idle_time_us));
       }
     }
-    LOG_INFO("major_merge_scheduler is not paused", K_(tenant_id), K(idle_time_us),
-             "epoch", get_epoch());
+    LOG_INFO("major_merge_scheduler is not idling", KR(ret), K_(tenant_id), K(idle_time_us),
+             K_(stop), "epoch", get_epoch());
   } else if (OB_FAIL(idling_.idle(idle_time_us))) {
     LOG_WARN("fail to idle", KR(ret), K(idle_time_us));
   }
