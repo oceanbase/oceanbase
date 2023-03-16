@@ -1937,8 +1937,10 @@ int ObDDLScheduler::remove_task_from_longops_mgr(ObDDLTask *ddl_task)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(ddl_task));
   } else if (ddl_task->support_longops_monitoring()) {
-    if (OB_FAIL(longops_mgr.unregister_longops(ddl_task->get_longops_stat()))) {
-      LOG_WARN("failed to unregister longops", K(ret));
+    if (OB_NOT_NULL(ddl_task->get_longops_stat())) {
+      if (OB_FAIL(longops_mgr.unregister_longops(ddl_task->get_longops_stat()))) {
+        LOG_WARN("failed to unregister longops", K(ret));
+      }
     }
   }
   return ret;
