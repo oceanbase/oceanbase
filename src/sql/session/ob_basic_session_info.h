@@ -1324,7 +1324,8 @@ private:
   int deep_copy_sys_variable(share::ObBasicSysVar &sys_var,
                              const share::ObSysVarClassType sys_var_id,
                              const common::ObObj &src_val);
-  int defragment_sys_variable_to(common::ObStringBuf &allocator);
+  int defragment_sys_variable_from(ObArray<std::pair<int64_t, ObObj>> &tmp_value);
+  void defragment_sys_variable_to(ObArray<std::pair<int64_t, ObObj>> &tmp_value);
   int deep_copy_trace_id_var(const common::ObObj &src_val,
                              common::ObObj *dest_val_ptr);
   inline int store_query_string_(const ObString &stmt);
@@ -1903,7 +1904,12 @@ protected:
 
 private:
   common::ObStringBuf base_sys_var_alloc_; // for variables names and statement names
-  common::ObStringBuf inc_sys_var_alloc_; // for values in sys variables update
+  // Double buffer optimization
+  common::ObStringBuf *inc_sys_var_alloc_[2]; // for values in sys variables update
+  common::ObStringBuf inc_sys_var_alloc1_; // for values in sys variables update
+  common::ObStringBuf inc_sys_var_alloc2_; // for values in sys variables update
+  int32_t current_buf_index_; // for record current buf index
+  // Double buffer optimization end.
   common::ObWrapperAllocator bucket_allocator_wrapper_;
   ObSessionValMap user_var_val_map_; // user variables
   share::ObBasicSysVar *sys_vars_[share::ObSysVarFactory::ALL_SYS_VARS_COUNT]; // system variables
