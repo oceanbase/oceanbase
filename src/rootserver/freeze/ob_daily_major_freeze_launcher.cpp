@@ -101,10 +101,6 @@ void ObDailyMajorFreezeLauncher::run3()
       if (OB_FAIL(try_gc_freeze_info())) {
         LOG_WARN("fail to try_gc_freeze_info", KR(ret), K_(tenant_id));
       }
-      // ignore ret
-      if (OB_FAIL(try_gc_tablet_checksum())) {
-        LOG_WARN("fail to try_gc_tablet_checksum", KR(ret), K_(tenant_id));
-      }
 
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(try_idle(LAUNCHER_INTERVAL_US, ret))) {
@@ -188,50 +184,6 @@ int ObDailyMajorFreezeLauncher::try_gc_freeze_info()
     LOG_WARN("fail to gc_freeze_info", KR(ret), K_(tenant_id));
   } else {
     gc_freeze_info_last_timestamp_ = now;
-  }
-  return ret;
-}
-
-int ObDailyMajorFreezeLauncher::try_gc_tablet_checksum()
-{
-  int ret = OB_SUCCESS;
-  const int64_t MIN_RESERVED_COUNT = 8;
-  int64_t now = ObTimeUtility::current_time();
-  
-  if (OB_UNLIKELY(IS_NOT_INIT || OB_ISNULL(sql_proxy_))) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(is_inited));
-  } else if ((now - gc_tablet_ckm_last_timestamp_) < MODIFY_GC_INTERVAL) {
-    // nothing
-  } else {
-    ObMySQLTransaction trans;
-    SMART_VAR(ObArray<int64_t>, all_snapshot_version) {
-      if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
-        LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id));
-      } else if (OB_FAIL(ObTabletChecksumOperator::load_all_snapshot_versions(trans, 
-                tenant_id_, all_snapshot_version))) {
-        LOG_WARN("fail to load all snapshot version", KR(ret), K_(tenant_id));
-      } else if (all_snapshot_version.count() > MIN_RESERVED_COUNT) {
-        const int64_t snapshot_ver_cnt = all_snapshot_version.count();
-        const int64_t gc_snapshot_version = all_snapshot_version.at(snapshot_ver_cnt - MIN_RESERVED_COUNT - 1);
-
-        if (OB_FAIL(ObTabletChecksumOperator::delete_tablet_checksum_items(trans, tenant_id_, gc_snapshot_version))) {
-          LOG_WARN("fail to delete tablet checksum items", KR(ret), K_(tenant_id), K(gc_snapshot_version));
-        }
-      }
-    }
-
-    if (trans.is_started()) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-        ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-        LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      gc_tablet_ckm_last_timestamp_ = now;
-    }
   }
   return ret;
 }

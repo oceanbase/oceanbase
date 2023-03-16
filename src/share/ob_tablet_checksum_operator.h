@@ -97,19 +97,6 @@ public:
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
       common::ObIArray<ObTabletChecksumItem> &items);
-  // delete all records whose 'snapshot_version' <= min_snapshot_version
-  static int delete_tablet_checksum_items(
-      common::ObISQLClient &sql_client, 
-      const uint64_t tenant_id,
-      const int64_t min_snapshot_version);
-  static int delete_tablet_checksum_items(
-      common::ObISQLClient &sql_client, 
-      const uint64_t tenant_id,
-      common::ObIArray<ObTabletChecksumItem> &items);
-  static int load_all_snapshot_versions(
-      common::ObISQLClient &sql_client, 
-      const uint64_t tenant_id,
-      common::ObIArray<int64_t> &snapshot_versions);
 
 private:
   static int construct_load_sql_str_(

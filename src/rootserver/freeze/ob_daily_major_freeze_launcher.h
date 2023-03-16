@@ -51,7 +51,6 @@ public:
 private:
   int try_launch_major_freeze();
   int try_gc_freeze_info();
-  int try_gc_tablet_checksum();
 
 private:
   static const int64_t MAJOR_FREEZE_RETRY_LIMIT = 300;
