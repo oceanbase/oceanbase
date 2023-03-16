@@ -706,6 +706,8 @@ int ObTransService::get_ls_read_snapshot_version(const share::ObLSID &local_ls_i
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_WEAK_READ_SNAPSHOT_DELAY_US);
+
 int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_time,
                                                    SCN &snapshot)
 {
@@ -724,7 +726,8 @@ int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_
     // do nothing
   }
   if (OB_SUCC(ret)) {
-    const int64_t snapshot_barrier = ObTimeUtility::current_time() - max_read_stale_time;
+    const int64_t snapshot_barrier = ObTimeUtility::current_time() - max_read_stale_time
+                                      + abs(ERRSIM_WEAK_READ_SNAPSHOT_DELAY_US);
     if (snapshot.convert_to_ts() < snapshot_barrier) {
       TRANS_LOG(WARN, "weak read snapshot too stale", K(snapshot),
                 K(snapshot_barrier), "delta", (snapshot_barrier - snapshot.convert_to_ts()));
