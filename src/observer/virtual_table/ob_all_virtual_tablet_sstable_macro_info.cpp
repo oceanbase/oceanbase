@@ -67,6 +67,7 @@ ObAllVirtualTabletSSTableMacroInfo::ObAllVirtualTabletSSTableMacroInfo()
   : ObVirtualTableScannerIterator(),
     addr_(),
     tablet_iter_(nullptr),
+    tablet_allocator_("VTTable"),
     tablet_handle_(),
     ls_id_(share::ObLSID::INVALID_LS_ID),
     all_tables_(),
@@ -111,6 +112,7 @@ void ObAllVirtualTabletSSTableMacroInfo::reset()
   memset(objs_, 0, sizeof(objs_));
   iter_allocator_.reset();
   rowkey_allocator_.reset();
+  tablet_allocator_.reset();
 
   ObVirtualTableScannerIterator::reset();
 }
@@ -234,6 +236,7 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
     MacroInfo &info)
 {
   int ret = OB_SUCCESS;
+  rowkey_allocator_.reuse();
   const ObTableReadInfo &read_info = tablet_handle_.get_obj()->get_index_read_info();
   if (OB_UNLIKELY(!macro_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -500,10 +503,12 @@ int ObAllVirtualTabletSSTableMacroInfo::process_curr_tenant(common::ObNewRow *&r
 int ObAllVirtualTabletSSTableMacroInfo::get_next_tablet()
 {
   int ret = OB_SUCCESS;
+  tablet_handle_.reset();
+  tablet_allocator_.reuse();
   if (nullptr == tablet_iter_) {
+    tablet_allocator_.set_tenant_id(MTL_ID());
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m, *allocator_);
-    if (OB_ISNULL(tablet_iter_)) {
+    if (OB_ISNULL(tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m, tablet_allocator_))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "fail to new tablet_iter_", K(ret));
     }
