@@ -112,6 +112,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
                                           obj_print_params,
                                           param_store,
                                           true);
+  select_stmt_printer.set_is_root(true);  // print hint as root stmt
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed");
