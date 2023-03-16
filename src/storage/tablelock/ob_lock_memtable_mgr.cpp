@@ -183,7 +183,7 @@ int ObLockMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  LOG_INFO("lock memtable mgr release head memtable", KP(imemtable));
+  LOG_INFO("lock memtable mgr release head memtable", KP(imemtable), K(force));
   ObLockMemtable *memtable = static_cast<ObLockMemtable *>(imemtable);
   if (get_memtable_count_() > 0 && force) {
     // for force
@@ -194,7 +194,8 @@ int ObLockMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
         LOG_WARN("unregister from common checkpoint failed", K(tmp_ret), K_(ls_id), K(memtable));
       }
       release_head_memtable();
-      FLOG_INFO("succeed to release head lock table memtable", K(ret), K_(ls_id), KP(imemtable));
+      FLOG_INFO("succeed to release head lock table memtable", K(ret),
+                K_(ls_id), KP(imemtable), K(memtable_head_), K(memtable_tail_));
     }
   } else if (!force) {
     // just for flush
