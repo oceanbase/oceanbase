@@ -1075,7 +1075,7 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
   } else {
     buffer = node->buf_;
     databuff_printf(buffer, CStringBufMgr::BUF_SIZE, pos, "vectorized_rows(%ld)=", index);
-    pos += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + pos, CStringBufMgr::BUF_SIZE -1);
+    pos += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + pos, CStringBufMgr::BUF_SIZE - pos - 1);
     if (pos >= 0 && pos < CStringBufMgr::BUF_SIZE) {
       buffer[pos] = '\0';
     } else {
