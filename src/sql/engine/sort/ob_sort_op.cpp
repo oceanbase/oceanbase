@@ -131,6 +131,8 @@ int ObSortOp::get_int_value(const ObExpr *in_val, int64_t &out_val)
     } else if (OB_ISNULL(datum)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected status: datum is null", K(ret));
+    } else if (datum->is_null()) {
+      out_val = 0;
     } else {
       out_val = *datum->int_;
     }
