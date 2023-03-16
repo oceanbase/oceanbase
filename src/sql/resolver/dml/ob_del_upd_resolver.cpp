@@ -2795,7 +2795,11 @@ int ObDelUpdResolver::get_value_row_size(uint64_t& value_row_size)
   } else if (del_upd_stmt->is_insert_stmt()) {
     ObInsertStmt *insert_stmt = static_cast<ObInsertStmt*>(del_upd_stmt);
     if (!insert_stmt->value_from_select()) {
-      value_row_size = insert_stmt->get_insert_row_count();
+      if (params_.is_batch_stmt_) {
+        value_row_size = params_.batch_stmt_num_;
+      } else {
+        value_row_size = insert_stmt->get_insert_row_count();
+      }
     }
   }
   return ret;

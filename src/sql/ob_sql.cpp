@@ -2513,6 +2513,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     resolver_ctx.is_ddl_from_primary_ = context.is_ddl_from_primary_;
     resolver_ctx.is_cursor_ = context.is_cursor_;
     resolver_ctx.is_batch_stmt_ = context.multi_stmt_item_.is_batched_multi_stmt();
+    resolver_ctx.batch_stmt_num_ = context.multi_stmt_item_.get_batched_stmt_cnt();
     if (NULL != pc_ctx && pc_ctx->is_remote_executor_) {
       resolver_ctx.need_check_col_dup_
         = !(context.is_prepare_protocol_ && parse_result.question_mark_ctx_.by_ordinal_ && pc_ctx->is_original_ps_mode_);
