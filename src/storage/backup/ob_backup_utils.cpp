@@ -1733,7 +1733,6 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
       ObLSHandle ls_handle;
       ObLSService *ls_svr = NULL;
       const int64_t timeout_us = ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
-      ObTabletTxMultiSourceDataUnit tx_data;
       if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLSService is null", K(ret), K(tenant_id));
@@ -1746,12 +1745,9 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
         LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, timeout_us))) {
         LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
-        LOG_WARN("failed to get tx data", K(ret), K(tablet_handle));
-      } else if (ObTabletStatus::CREATING == tx_data.tablet_status_) {
+      } else if (ObTabletStatus::MAX == tablet_handle.get_obj()->get_tablet_meta().tx_data_.tablet_status_) {
         ret = OB_EAGAIN;
-        // TODO(chongrong.th): open this later when fix support restore creating tablet
-        LOG_WARN("tablet still creating, try later", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(tx_data));
+        LOG_WARN("tablet meta still MAX, try later", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
       } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
         LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       }
