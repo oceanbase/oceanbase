@@ -1056,7 +1056,7 @@ int ObReplayStatus::push_log_replay_task(ObLogReplayTask &task)
       if (OB_UNLIKELY(NULL == (task_buf = rp_sv_->alloc_replay_task(task_size)))) {
         ret = OB_EAGAIN;
         if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-          CLOG_LOG(WARN, "failed to alloc replay task buf when broadcast pre barrier", K(ret));
+          CLOG_LOG(WARN, "failed to alloc replay task buf when broadcast pre barrier", K(i), K(ret));
         }
       } else {
         ObLogReplayTask *replay_task = new (task_buf) ObLogReplayTask();
@@ -1086,7 +1086,7 @@ int ObReplayStatus::push_log_replay_task(ObLogReplayTask &task)
         }
       }
     } else {
-      for (int64_t i = 1; OB_SUCC(ret) && i < broadcast_task_array.count(); ++i) {
+      for (int64_t i = 1; i < broadcast_task_array.count(); ++i) {
         free_replay_task(broadcast_task_array[i]);
       }
     }
