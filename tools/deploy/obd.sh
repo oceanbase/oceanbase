@@ -488,6 +488,11 @@ function tpcds {
   obd test tpcds $deploy_name $OBCLIENT_BIN_ARGS $extra_args
 }
 
+function graph {
+  get_deploy_name
+  obd tool graph $deploy_name $extra_args
+}
+
 
 function help_info {
   echo """
@@ -521,6 +526,7 @@ sql [-n DEPLOY_NAME]                     Connect to target server by root@sys, u
 sys [-n DEPLOY_NAME]                     Connect to target server by root@sys, use '--help' for more details.
 mysql [-n DEPLOY_NAME]                   Connect to target server by root@mysql, use '--help' for more details.
 oracle [-n DEPLOY_NAME]                  Connect to target server by SYS@oracle, use '--help' for more details.
+graph [-n DEPLOY_NAME]
 
 Options:
 -V, --version                            Show version of obd.
@@ -571,6 +577,7 @@ function main() {
   then 
     NEED_REBOOT="1"
   fi
+  export OBD_FORCE_UPDATE_PLUGINS=1
   if [[ ! -f $OBD_HOME/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $OBD_HOME/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)
@@ -670,6 +677,9 @@ function main() {
     ;;
     tpcds)
     tpcds
+    ;;
+    graph)
+    graph
     ;;
     *)
     help_info
