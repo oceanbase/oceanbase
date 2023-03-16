@@ -719,6 +719,7 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
                                                buf + offset_len, res_len - offset_len, result_len))) {
               LOG_WARN("Lob: convert string charset failed", K(ret));
             } else {
+              lob.assign_buffer(buf, offset_len + result_len, lob.has_lob_header());
               // refresh payload size
               if (lob.has_extern()) {
                 ObMemLobExternHeader *ex_header = nullptr;
