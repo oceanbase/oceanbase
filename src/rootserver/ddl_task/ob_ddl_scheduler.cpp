@@ -689,6 +689,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_CONVERT_TO_CHARACTER:
       case DDL_TABLE_REDEFINITION:
       case DDL_DIRECT_LOAD:
+      case DDL_DIRECT_LOAD_INSERT:
         if (OB_FAIL(create_table_redefinition_task(proxy,
                                                    param.type_,
                                                    param.src_table_schema_,
@@ -1647,6 +1648,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_CONVERT_TO_CHARACTER:
       case DDL_TABLE_REDEFINITION:
       case DDL_DIRECT_LOAD:
+      case DDL_DIRECT_LOAD_INSERT:
         ret = schedule_table_redefinition_task(record);
         break;
       case DDL_DROP_COLUMN:
@@ -1757,7 +1759,8 @@ int ObDDLScheduler::schedule_table_redefinition_task(const ObDDLTaskRecord &task
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*redefinition_task));
     }
-  } else if (ObDDLType::DDL_DIRECT_LOAD == task_record.ddl_type_
+  } else if ((ObDDLType::DDL_DIRECT_LOAD == task_record.ddl_type_
+              || ObDDLType::DDL_DIRECT_LOAD_INSERT == task_record.ddl_type_)
             && OB_FAIL(manager_reg_heart_beat_task_.update_task_active_time(task_record.task_id_))) {
     LOG_WARN("register_task_time recover fail", K(ret));
   }
@@ -2062,6 +2065,7 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
           case ObDDLType::DDL_CONVERT_TO_CHARACTER:
           case ObDDLType::DDL_TABLE_REDEFINITION:
           case ObDDLType::DDL_DIRECT_LOAD:
+          case ObDDLType::DDL_DIRECT_LOAD_INSERT:
             if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }
@@ -2136,6 +2140,7 @@ int ObDDLScheduler::notify_update_autoinc_end(const ObDDLTaskKey &task_key,
           case ObDDLType::DDL_ALTER_PARTITION_BY:
           case ObDDLType::DDL_TABLE_REDEFINITION:
           case ObDDLType::DDL_DIRECT_LOAD:
+          case ObDDLType::DDL_DIRECT_LOAD_INSERT:
             if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->notify_update_autoinc_finish(autoinc_val, ret_code))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }

@@ -1419,7 +1419,9 @@ int ObDDLRedefinitionTask::sync_stats_info()
   if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (has_synced_stats_info_) {
+  } else if (has_synced_stats_info_ || task_type_ == DDL_DIRECT_LOAD) {
+    // bugfix: https://work.aone.alibaba-inc.com/issue/48313634
+    // shouldn't sync stats if the ddl task is from load data's direct_load
   } else {
     ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
     ObMySQLTransaction trans;

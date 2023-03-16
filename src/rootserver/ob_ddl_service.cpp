@@ -9128,6 +9128,8 @@ const char* ObDDLService::ddl_type_str(const ObDDLType ddl_type)
     str = "table redefinition";
   } else if (DDL_DIRECT_LOAD == ddl_type) {
     str = "direct load";
+  } else if (DDL_DIRECT_LOAD_INSERT == ddl_type) {
+    str = "direct load insert";
   } else if (DDL_MODIFY_AUTO_INCREMENT == ddl_type) {
     str = "modify auto_increment";
   } else if (DDL_CONVERT_TO_CHARACTER == ddl_type) {

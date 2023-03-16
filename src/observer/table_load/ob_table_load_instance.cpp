@@ -105,6 +105,7 @@ int ObTableLoadInstance::create_table_ctx(ObTableLoadParam &param,
   start_arg.tenant_id_ = param.tenant_id_;
   start_arg.table_id_ = param.table_id_;
   start_arg.parallelism_ = param.session_count_;
+  start_arg.is_load_data_ = !param.px_mode_;
   if (OB_FAIL(GET_MIN_DATA_VERSION(param.tenant_id_, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *session_info_))) {

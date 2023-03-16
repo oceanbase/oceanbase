@@ -77,7 +77,8 @@ enum ObDDLType
   DDL_ADD_COLUMN_OFFLINE = 1008, // only add columns
   DDL_COLUMN_REDEFINITION = 1009, // only add/drop columns
   DDL_TABLE_REDEFINITION = 1010,
-  DDL_DIRECT_LOAD = 1011,
+  DDL_DIRECT_LOAD = 1011, // load data
+  DDL_DIRECT_LOAD_INSERT = 1012, // insert into select
 
 
   // @note new normal ddl type to be defined here !!!
