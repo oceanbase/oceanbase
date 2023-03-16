@@ -7747,7 +7747,9 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
   CK(OB_NOT_NULL(params_.session_info_));
   CK(OB_NOT_NULL(params_.schema_checker_));
   CK(OB_NOT_NULL(params_.schema_checker_->get_schema_guard()));
-  CK(OB_NOT_NULL(params_.sql_proxy_));
+  if (OB_SUCC(ret) && OB_ISNULL(params_.sql_proxy_)) {
+    CK (OB_NOT_NULL(params_.sql_proxy_ = GCTX.sql_proxy_));
+  }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObResolverUtils::resolve_external_symbol(*params_.allocator_,
