@@ -252,7 +252,7 @@ int ObTenantDutyTask::update_tenant_rpc_percentage(uint64_t tenant_id)
   if (!tenant_config.is_valid()) {
     // do nothing
   } else {
-    int64_t rpc_pct_lmt = tenant_config->tenant_rpc_memory_limit_percentage;
+    int64_t rpc_pct_lmt = tenant_config->rpc_memory_limit_percentage;
     if (0 == rpc_pct_lmt) {
       rpc_pct_lmt = 100;
     }
