@@ -40,6 +40,7 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt, int64_t row_cnt,
       state_ = STATE_ANALYZE;
     }
   } else if (STATE_ANALYZE == state_) {
+    probe_cnt_ += probe_cnt;
     double ratio = MIN_RATIO_FOR_L3;
     if (static_cast<double> (exists_cnt_) / probe_cnt_ >=
                       std::max(ratio, 1 - (1 / static_cast<double> (cut_ratio_)))) {

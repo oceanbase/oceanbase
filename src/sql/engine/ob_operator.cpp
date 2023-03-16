@@ -1085,6 +1085,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
           // if no data in batch, end iterate immediately, otherwise wait for next iterate
           brs_.end_ = !brs_.size_;
         }
+        skipped_rows_count = brs_.skip_->accumulate_bit_cnt(brs_.size_);
         op_monitor_info_.output_row_count_ += brs_.size_ - skipped_rows_count;
         op_monitor_info_.skipped_rows_count_ += skipped_rows_count; // for batch
         ++op_monitor_info_.output_batches_; // for batch
