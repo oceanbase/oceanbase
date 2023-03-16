@@ -1247,6 +1247,24 @@ int ObArchiveStore::get_piece_paths_in_range(const int64_t start_scn, const int6
       }
 
       if (cur.start_scn_ >= end_scn) {
+        // this piece may be required for restore, consider the following case.
+        // Piece#1 : <2022-06-01 06:00:00, 2022-06-02 05:00:00, 2022-06-02 06:00:00>
+        // Piece#2 : <2022-06-02 06:00:00, 2022-06-03 05:00:00, 2022-06-03 06:00:00>
+        // Piece#3 : <2022-06-03 06:00:00, 2022-06-03 10:00:00, 2022-06-04 06:00:00>
+        // If 'end_scn' is indicated to ' 2022-06-03 05:30:00', Piece#3 is required.
+        if (!pieces.empty()) {
+          const ObTenantArchivePieceAttr &prev = piece_whole_info.his_frozen_pieces_.at(last_piece_idx);
+          // If pieces are not enough, and current piece is continous with previous one.
+          if (prev.end_scn_ == cur.start_scn_ && prev.checkpoint_scn_ < end_scn) {
+            if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
+              LOG_WARN("failed to get piece path", K(ret), K(dest), K(cur));
+            } else if (OB_FAIL(pieces.push_back(piece_path))) {
+              LOG_WARN("fail to push back path", K(ret), K(piece_path));
+            } else {
+              last_piece_idx = i;
+            }
+          }
+        }
         break;
       }
 
