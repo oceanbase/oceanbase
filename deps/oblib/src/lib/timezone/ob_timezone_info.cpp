@@ -39013,7 +39013,7 @@ ObTZNameKey::ObTZNameKey(const ObString &tz_key_str)
 {
   int64_t len = tz_key_str.length();
   if (OB_UNLIKELY(len + 1 > OB_MAX_TZ_NAME_LEN)) {
-    LOG_ERROR("invalid tz_key_str", K(tz_key_str));
+    LOG_WARN("invalid tz_key_str", K(tz_key_str));
   } else {
     for (int64_t i = 0; i < len; ++i) {
       tz_name_[i] = static_cast<char>(tolower(tz_key_str[i]));
