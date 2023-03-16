@@ -4626,7 +4626,6 @@ const ObTenantSchema *ObSchemaGetterGuard::get_tenant_info(const ObString &tenan
     int ret = OB_SUCCESS;                                                          \
     const ObSchemaMgr *mgr = NULL;                                                 \
     schema_array.reset();                                                          \
-    ObArray<const SIMPLE_SCHEMA_TYPE *> simple_schemas;                            \
     if (!check_inner_stat()) {                                                     \
       ret = OB_INNER_STAT_ERROR;                                                   \
       LOG_WARN("inner stat error", KR(ret));                                        \
@@ -4638,7 +4637,7 @@ const ObTenantSchema *ObSchemaGetterGuard::get_tenant_info(const ObString &tenan
     } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) { \
       LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id)); \
     } else if (OB_FAIL(mgr->get_##SCHEMA##_schemas_in_tenant(tenant_id,          \
-                                                              simple_schemas))) {  \
+                                                              schema_array))) {  \
       LOG_WARN("get "#SCHEMA" schemas in tenant failed", KR(ret), K(tenant_id));    \
     }                                                                             \
     return ret;                                                                   \
