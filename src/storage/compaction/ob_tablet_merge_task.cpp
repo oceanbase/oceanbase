@@ -73,7 +73,8 @@ ObMergeParameter::ObMergeParameter()
     version_range_(),
     scn_range_(),
     full_read_info_(nullptr),
-    is_full_merge_(false)
+    is_full_merge_(false),
+    trans_state_mgr_(nullptr)
 {
 }
 
@@ -102,6 +103,7 @@ void ObMergeParameter::reset()
   version_range_.reset();
   scn_range_.reset();
   is_full_merge_ = false;
+  trans_state_mgr_ = nullptr;
 }
 
 int ObMergeParameter::init(compaction::ObTabletMergeCtx &merge_ctx, const int64_t idx)

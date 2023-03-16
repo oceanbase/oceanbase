@@ -72,7 +72,8 @@ ObTableAccessContext::ObTableAccessContext()
     lob_locator_helper_(nullptr),
     iter_pool_(nullptr),
     block_row_store_(nullptr),
-    io_callback_(nullptr)
+    io_callback_(nullptr),
+    trans_state_mgr_(nullptr)
 {
   merge_scn_.set_max();
 }

@@ -127,6 +127,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
                                      merge_param.version_range_))) {
       LOG_WARN("Failed to init table access context", K(ret), K(query_flag));
     } else {
+      access_context_.trans_state_mgr_ = merge_param.trans_state_mgr_;
       // always use end_scn for safety
       access_context_.merge_scn_ = merge_param.scn_range_.end_scn_;
     }
