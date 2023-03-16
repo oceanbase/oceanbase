@@ -217,6 +217,7 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
     }
     if (need_retry) {
       if ((need_wait = node->need_wait())) {
+        TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = true;
         // FIXME(xuwang.txw):create detector in check_timeout process
         // below code must keep current order to fix concurrency bug
         // more info see https://yuque.antfin.com/ob/transaction/arlswh
@@ -591,7 +592,6 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                 tx_id,
                 holder_tx_id);
         node->set_need_wait();
-        TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = true;
       }
     }
   }

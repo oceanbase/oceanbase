@@ -642,28 +642,28 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
     DETECT_LOG(ERROR, "session is NULL", PRINT_WRAPPER);
   } else if (++step && session->is_inner()) {
     DETECT_LOG(INFO, "inner session no need register to deadlock", PRINT_WRAPPER);
-  } else if (++step && memtable::TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR) {
-    DETECT_LOG(INFO, "thread local flag marked local execution, no need register to deadlock here", PRINT_WRAPPER);
   } else if (++step && OB_ISNULL(desc = session->get_tx_desc())) {
     ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(ERROR, "desc in session is NULL", PRINT_WRAPPER);
+  } else if (++step && OB_FAIL(desc->fetch_conflict_txs(conflict_txs))) {
+    DETECT_LOG(WARN, "fail to get conflict txs from desc", PRINT_WRAPPER);
   } else if (++step && !desc->is_valid()) {
     DETECT_LOG(INFO, "invalid tx desc no need register to deadlock", PRINT_WRAPPER);
   } else if (++step && is_rollback) {// statment is failed, maybe will try again, check if need register to deadlock detector
     if (++step && session->get_query_timeout_ts() < ObClockGenerator::getCurrentTime()) {
       unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_TIMEOUT);
       DETECT_LOG(INFO, "query timeout, no need register to deadlock", PRINT_WRAPPER);
-    } else if (++step && OB_FAIL(desc->fetch_conflict_txs(conflict_txs))) {
-      DETECT_LOG(WARN, "fail to get conflict txs from desc", PRINT_WRAPPER);
     } else if (++step && conflict_txs.empty()) {
       unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_NO_CONFLICT);
       DETECT_LOG(INFO, "try unregister deadlock detecotr cause conflict array is empty", PRINT_WRAPPER);
     } else if (++step && exec_ctx.get_errcode() != OB_TRY_LOCK_ROW_CONFLICT) {
       unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_OTHER_ERR);
       DETECT_LOG(INFO, "try unregister deadlock detecotr cause meet non-lock error", PRINT_WRAPPER);
+    } else if (++step && memtable::TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR) {
+      DETECT_LOG(INFO, "thread local flag marked local execution, no need register to deadlock here", PRINT_WRAPPER);
     } else if (++step && OB_FAIL(register_remote_execution_or_replace_conflict_trans_ids(desc->tid(),
-                                                                               session->get_sessid(),
-                                                                               conflict_txs))) {
+                                                                                         session->get_sessid(),
+                                                                                         conflict_txs))) {
       DETECT_LOG(WARN, "register or replace list failed", PRINT_WRAPPER);
     } else {
       // do nothing, register success or keep retrying
