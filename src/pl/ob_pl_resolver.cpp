@@ -6680,15 +6680,16 @@ int ObPLResolver::convert_cursor_actual_params(
 {
   int ret = OB_SUCCESS;
   ObDataType *data_type = pl_data_type.get_data_type();
-  if (OB_NOT_NULL(data_type)) {
-    ObRawExpr *convert_expr = expr;
-    if (T_SP_CPARAM == expr->get_expr_type()) {
-      ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(expr);
-      CK (OB_NOT_NULL(call_expr));
-      CK (OB_NOT_NULL(call_expr->get_expr()));
-      OX (convert_expr = call_expr->get_expr());
-    }
-    CK (OB_NOT_NULL(convert_expr));
+  ObRawExpr *convert_expr = expr;
+  if (T_SP_CPARAM == expr->get_expr_type()) {
+    ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(expr);
+    CK (OB_NOT_NULL(call_expr));
+    CK (OB_NOT_NULL(call_expr->get_expr()));
+    OX (convert_expr = call_expr->get_expr());
+  }
+  CK (OB_NOT_NULL(convert_expr));
+  if (OB_FAIL(ret)) {
+  } else if (OB_NOT_NULL(data_type)) {
     OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
                                                expr_factory_,
                                                data_type->get_obj_type(),
@@ -6700,6 +6701,21 @@ int ObPLResolver::convert_cursor_actual_params(
                                                convert_expr));
     OZ (func.add_expr(convert_expr));
     OX (idx = func.get_exprs().count() - 1);
+  } else if (pl_data_type.get_user_type_id() != convert_expr->get_result_type().get_udt_id()) {
+    bool is_compatible = false;
+    CK (OB_NOT_NULL(current_block_));
+    OZ (check_composite_compatible(current_block_->get_namespace(),
+                                   pl_data_type.get_user_type_id(),
+                                   convert_expr->get_result_type().get_udt_id(),
+                                   is_compatible));
+    if (OB_SUCC(ret) && !is_compatible) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("PLS-00382: expression is of wrong type",
+                  K(ret), K(pl_data_type.is_obj_type()), KPC(convert_expr),
+                  K(convert_expr->get_result_type().get_obj_meta().get_type()),
+                  K(pl_data_type.get_user_type_id()),
+                  K(convert_expr->get_result_type().get_udt_id()));
+    }
   }
   return ret;
 }
