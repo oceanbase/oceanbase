@@ -28,7 +28,7 @@ namespace oceanbase
 namespace storage
 {
 
-int ObDDLServerClient::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res, sql::ObSQLSessionInfo &session)
+int ObDDLServerClient::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res, int64_t &snapshot_version, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
@@ -44,7 +44,7 @@ int ObDDLServerClient::create_hidden_table(const obrpc::ObCreateHiddenTableArg &
     LOG_WARN("failed to set register task id", K(ret), K(res));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
+    if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, snapshot_version, *GCTX.sql_proxy_, session))) {
       LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     }
 #ifdef ERRSIM
@@ -71,6 +71,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
 {
   int ret = OB_SUCCESS;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
+  int64_t unused_snapshot_version = OB_INVALID_VERSION;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
@@ -81,7 +82,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
     LOG_WARN("failed to start redef table", KR(ret), K(arg));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
+  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, unused_snapshot_version, *GCTX.sql_proxy_, session))) {
     LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     int tmp_ret = OB_SUCCESS;
     obrpc::ObAbortRedefTableArg abort_redef_table_arg;
@@ -254,7 +255,7 @@ int ObDDLServerClient::build_ddl_single_replica_response(const obrpc::ObDDLBuild
   return ret;
 }
 
-int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const int64_t task_id, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session)
+int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const int64_t task_id, int64_t &snapshot_version, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   const int64_t retry_interval = 100 * 1000;
@@ -267,7 +268,7 @@ int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const i
       LOG_WARN("invalid argument", K(ret), K(task_id), K(tenant_id));
     } else {
       while (OB_SUCC(ret)) {
-        if (OB_FAIL(sql_string.assign_fmt("SELECT status FROM %s WHERE task_id = %lu", share::OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
+        if (OB_FAIL(sql_string.assign_fmt("SELECT status, snapshot_version FROM %s WHERE task_id = %lu", share::OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
           LOG_WARN("assign sql string failed", K(ret), K(task_id));
         } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql_string.ptr()))) {
           LOG_WARN("fail to execute sql", K(ret), K(sql_string));
@@ -283,6 +284,7 @@ int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const i
         } else {
           int task_status = 0;
           EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int);
+          EXTRACT_UINT_FIELD_MYSQL(*result, "snapshot_version", snapshot_version, uint64_t);
           share::ObDDLTaskStatus task_cur_status = static_cast<share::ObDDLTaskStatus>(task_status);
           if (rootserver::ObTableRedefinitionTask::check_task_status_before_pending(task_cur_status)) {
             LOG_INFO("task status not equal REPENDING, Please Keep Waiting", K(task_status));

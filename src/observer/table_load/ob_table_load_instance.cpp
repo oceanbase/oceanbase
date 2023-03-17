@@ -114,6 +114,7 @@ int ObTableLoadInstance::create_table_ctx(ObTableLoadParam &param,
     ddl_param.dest_table_id_ = start_res.dest_table_id_;
     ddl_param.task_id_ = start_res.task_id_;
     ddl_param.schema_version_ = start_res.schema_version_;
+    ddl_param.snapshot_version_ = start_res.snapshot_version_;
     ddl_param.data_version_ = data_version;
   }
   if (OB_SUCC(ret)) {

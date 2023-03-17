@@ -2048,7 +2048,6 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.sql_mode_ = execute_param_.sql_mode_;
   load_param.px_mode_ = false;
   load_param.online_opt_stat_gather_ = execute_param_.online_opt_stat_gather_;
-  load_param.snapshot_version_ = ObTimeUtil::current_time_ns();
   if (OB_FAIL(direct_loader_.init(load_param,
       execute_param_.store_column_idxs_, &execute_ctx_))) {
     LOG_WARN("fail to init direct loader", KR(ret));
