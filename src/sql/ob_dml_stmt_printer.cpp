@@ -1112,7 +1112,7 @@ int ObDMLStmtPrinter::print_where()
       } else if (condition_exprs_size > 0 && stmt_->get_semi_info_size() > 0) {
         DATA_PRINTF(" and ");
       }
-      if (OB_FAIL(print_semi_info_to_subquery())) {
+      if (OB_SUCC(ret) && OB_FAIL(print_semi_info_to_subquery())) {
         LOG_WARN("failed to print semi info to subquery", K(ret));
       }
     }

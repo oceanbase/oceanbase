@@ -431,6 +431,16 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     }
     if (func.contain_link_table_) {
       disable_list |= (~ObTransformRule::ALL_HEURISTICS_RULES);
+
+      // Below rules might generate filter which contains constant values which has implicit types,
+      // which can not be printed in the link sql.
+      // example：
+      // create table t (c1 varchar(10), c2 char(10))
+      // select * from t where c1 = 'a' and c2 = c1;
+      // => select * from t where c1 = 'a' and c2 = implicit cast('a' as varchar);
+      ObTransformRule::add_trans_type(disable_list, PREDICATE_MOVE_AROUND);
+      ObTransformRule::add_trans_type(disable_list, CONST_PROPAGATE);
+      ObTransformRule::add_trans_type(disable_list, SIMPLIFY_EXPR);
     }
     need_types = ObTransformRule::ALL_TRANSFORM_RULES & (~disable_list);
   }

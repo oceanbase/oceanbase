@@ -1059,6 +1059,11 @@ public:
                                   ObColumnRefRawExpr *&spk_expr);
   static int check_contain_case_when_exprs(const ObRawExpr *raw_expr, bool &contain);
 
+  static int create_type_expr(ObRawExprFactory &expr_factory,
+                              ObConstRawExpr *&type_expr,
+                              const ObExprResType &dst_type,
+                              bool avoid_zero_len = false);
+
 private :
 
   static int create_real_cast_expr(ObRawExprFactory &expr_factory,
