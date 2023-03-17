@@ -3369,5 +3369,22 @@ int ObTablet::remove_memtables_from_data_checkpoint()
 
   return ret;
 }
+
+int ObTablet::check_valid() const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(check_max_sync_schema_version())) {
+    LOG_WARN("fialed to check max sync schema version", K(ret), KPC(this));
+  } else if (OB_FAIL(check_medium_list())) {
+    LOG_WARN("failed to check medium list", K(ret), KPC(this));
+  } else if (OB_FAIL(check_sstable_column_checksum())) {
+    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

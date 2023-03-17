@@ -107,6 +107,11 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("last major sstable should not be null", K(ret), K(tablet_handle));
       }
+    } else if (tablet_handle.get_obj()->get_medium_compaction_info_list().get_last_compaction_scn() > 0
+        && tablet_handle.get_obj()->get_medium_compaction_info_list().get_last_compaction_scn() != last_major_sstable_ptr->get_snapshot_version()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("medium list is invalid for last major sstable", K(ret), "medium_list", tablet_handle.get_obj()->get_medium_compaction_info_list(),
+          KPC(last_major_sstable_ptr), K(tablet_handle));
     } else if (OB_FAIL(sstable_array.push_back(last_major_sstable_ptr))) {
       LOG_WARN("failed to push back", K(ret), KPC(last_major_sstable_ptr));
     }
@@ -1864,7 +1869,7 @@ int ObBackupTabletProvider::hold_tablet_handle_(
 }
 
 int ObBackupTabletProvider::fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id,
-    storage::ObTabletHandle &tablet_handle, const share::ObBackupDataType &backup_data_type,
+    const storage::ObTabletHandle &tablet_handle, const share::ObBackupDataType &backup_data_type,
     common::ObIArray<storage::ObITable *> &sstable_array)
 {
   int ret = OB_SUCCESS;

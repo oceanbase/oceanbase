@@ -275,7 +275,7 @@ private:
       const common::ObTabletID &tablet_id, share::ObBackupSkippedType &skipped_type);
   int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type);
   int hold_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
-  int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle,
+  int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const share::ObBackupDataType &backup_data_type, common::ObIArray<storage::ObITable *> &sstable_array);
   int prepare_tablet_logic_id_reader_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, const blocksstable::ObSSTable &sstable,
