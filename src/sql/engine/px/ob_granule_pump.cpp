@@ -1374,16 +1374,20 @@ int ObPWAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
   ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
     const ObTableScanSpec *tsc = scan_ops.at(idx);
     const ObGranuleIteratorSpec *gi = static_cast<const ObGranuleIteratorSpec *>(tsc->get_parent());
+    const ObOpSpec *gi_spec = tsc->get_parent();
+    while (OB_NOT_NULL(gi_spec) && PHY_GRANULE_ITERATOR != gi_spec->get_type()) {
+      gi_spec = gi_spec->get_parent();
+    }
     ObGITaskSet total_task_set;
     uint64_t op_id = OB_INVALID_ID;
     uint64_t scan_key_id = OB_INVALID_ID;
     bool asc_gi_task_order = true;
     ObGITaskArray &taskset_array = gi_task_array_result.at(idx + task_idx).taskset_array_;
-    if (OB_ISNULL(tsc) || OB_ISNULL(gi)) {
+    if (OB_ISNULL(tsc) || OB_ISNULL(gi_spec)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get a null tsc/gi ptr", K(ret));
+      LOG_WARN("get a null tsc/gi ptr", K(ret), K(tsc), K(gi_spec));
     } else if (FALSE_IT(op_id = tsc->get_id())) {
-    } else if (FALSE_IT(asc_gi_task_order = !ObGranuleUtil::desc_order(gi->gi_attri_flag_))) {
+    } else if (FALSE_IT(asc_gi_task_order = !ObGranuleUtil::desc_order(static_cast<const ObGranuleIteratorSpec *>(gi_spec)->gi_attri_flag_))) {
     } else if (FALSE_IT(scan_key_id = tsc->get_scan_key_id())) {
     } else if (OB_FAIL(taskset_array.prepare_allocate(args.parallelism_))) {
       LOG_WARN("failed to prepare allocate", K(ret));
