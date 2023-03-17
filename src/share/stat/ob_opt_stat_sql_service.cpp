@@ -1138,7 +1138,9 @@ int ObOptStatSqlService::get_obj_str(const ObObj &obj,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else if (obj.is_string_type()) {
-    if (OB_FAIL(obj.print_varchar_literal(buf, buf_len, pos, print_params))) {
+    ObObjPrintParams copy_print_params = print_params;
+    copy_print_params.cs_type_ = obj.get_collation_type();
+    if (OB_FAIL(obj.print_varchar_literal(buf, buf_len, pos, copy_print_params))) {
       LOG_WARN("failed to print sql literal", K(ret));
     } else { /*do nothing*/ }
   } else if (obj.is_valid_type()) {
