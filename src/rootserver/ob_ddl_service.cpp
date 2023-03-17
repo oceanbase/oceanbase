@@ -3367,8 +3367,13 @@ int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table
     alter_table_schema.set_collation_type(collation_type);
     alter_table_schema.set_charset_type(charset_type);
   } else if (!ObCharset::is_valid_collation(charset_type, collation_type)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid charset", K(ret), K(charset_type), K(collation_type));
+    ret = OB_ERR_COLLATION_MISMATCH;
+    const char *cs_name = ObCharset::charset_name(charset_type);
+    const char *coll_name = ObCharset::collation_name(collation_type);
+    ObString charset = ObString::make_string(cs_name);
+    ObString collation = ObString::make_string(coll_name);
+    LOG_USER_ERROR(OB_ERR_COLLATION_MISMATCH, collation.length(), collation.ptr(),
+                      charset.length(), charset.ptr());
   }
   // This is to do a performance optimization. If the collation_type of the original table is
   // equivalent to the new collation_type, do nothing
