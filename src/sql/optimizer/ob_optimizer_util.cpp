@@ -3302,7 +3302,8 @@ int ObOptimizerUtil::try_add_fd_item(const ObDMLStmt *stmt,
       || OB_ISNULL(table = stmt->get_table_item_by_id(table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(index_schema));
-  } else if (is_virtual_table(table->ref_id_)) {
+  } else if (OB_ALL_VIRTUAL_TENANT_INFO_TID != table->ref_id_ &&
+             is_virtual_table(table->ref_id_)) {
     /*虚拟表不产生 fd 及 not null 信息*/
   } else if (!index_schema->get_rowkey_info().is_valid()) {
     // do nothing
