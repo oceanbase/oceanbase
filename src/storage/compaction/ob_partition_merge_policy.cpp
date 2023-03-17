@@ -1125,9 +1125,10 @@ int ObPartitionMergePolicy::generate_parallel_minor_interval(
    * 1. If compact_trigger is small, minor merge should be easier to schedule, we should lower the threshold;
    * 2. If compact_trigger is big, we should upper the threshold to prevent the creation of dag frequently.
    */
-  int64_t table_count_threshold = minor_range_mgr.exe_range_array_.empty()
+  int64_t exist_dag_cnt = minor_range_mgr.exe_range_array_.count();
+  int64_t table_count_threshold = (0 == exist_dag_cnt)
                                 ? minor_compact_trigger
-                                : MIN(OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG / 2, minor_compact_trigger * 2);
+                                : OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG + (OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG / 2) * (exist_dag_cnt - 1);
   for (int64_t i = 0; OB_SUCC(ret) && i < input_result_array.count(); ++i) {
     if (OB_FAIL(split_parallel_minor_range(table_count_threshold, input_result_array.at(i), parallel_result))) {
       LOG_WARN("failed to split parallel minor range", K(ret), K(input_result_array.at(i)));

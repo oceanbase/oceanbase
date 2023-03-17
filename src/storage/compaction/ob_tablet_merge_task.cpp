@@ -253,7 +253,7 @@ int ObBasicTabletMergeDag::get_tablet_and_compat_mode()
     if (OB_SUCC(ret) && inc_sstable_cnt >= MAX_SSTABLE_CNT_IN_STORAGE) {
       ret = OB_EAGAIN;
       LOG_WARN("Too many sstables in tablet, cannot schdule mini compaction, retry later",
-          K(ret), K(inc_sstable_cnt), K(tmp_tablet_handle.get_obj()));
+          K(ret), K_(ls_id), K_(tablet_id), K(inc_sstable_cnt), K(tmp_tablet_handle.get_obj()));
     }
   }
 

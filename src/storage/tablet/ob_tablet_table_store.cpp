@@ -425,21 +425,26 @@ int ObTabletTableStore::update_memtables()
 {
   int ret = OB_SUCCESS;
   ObTableHandleArray inc_memtables;
+  ObTimeGuard time_guard("ObTabletTableStore::update_memtables", 5 * 1000);
 
   if (OB_ISNULL(tablet_ptr_) || OB_ISNULL(tablet_ptr_->get_memtable_mgr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected tablet_ptr or memtable_mgr", K(ret), KP(tablet_ptr_));
   } else if (!tablet_ptr_->get_memtable_mgr()->has_memtable()) {
     LOG_INFO("no memtable in memtable mgr", K(ret));
+  } else if (FALSE_IT(time_guard.click("has_memtable"))) {
   } else if (OB_FAIL(tablet_ptr_->get_memtable_mgr()->get_all_memtables(inc_memtables))) {
     LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
+  } else if (FALSE_IT(time_guard.click("get_all_memtable"))) {
   } else if (OB_FAIL(memtables_.rebuild(inc_memtables))) {
     LOG_ERROR("failed to rebuild table store memtables", K(ret), K(inc_memtables), KPC(this));
+  } else if (FALSE_IT(time_guard.click("memtables_.rebuild"))) {
   } else {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
       LOG_WARN("failed to rebuild read cache", K(tmp_ret));
     }
+    time_guard.click("init_read_cache");
   }
   return ret;
 }

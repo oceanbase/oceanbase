@@ -35,13 +35,12 @@ public:
 
   void SetUp()
   {
-    ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, 500);
-    tenant_base_.set(t3m);
+     ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, 500);
+     ASSERT_EQ(OB_SUCCESS, t3m->init());
 
-    ObTenantEnv::set_tenant(&tenant_base_);
-    ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
-
-    ASSERT_EQ(OB_SUCCESS, t3m->init());
+     tenant_base_.set(t3m);
+     ObTenantEnv::set_tenant(&tenant_base_);
+     ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
   }
 
   share::SCN get_start_log_ts(const int64_t idx);
@@ -226,54 +225,54 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   ObArray<ObGetMergeTablesResult> result_array;
   ObMinorExecuteRangeMgr minor_range_mgr;
 
-  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(11, 21));
-  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(31, 41));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(16, 21));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(37, 41));
 
   ASSERT_EQ(OB_SUCCESS, prepare_merge_result(sstable_cnt, result));
   ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
   ASSERT_EQ(result_array.count(), 2);
 
   ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 1);
-  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 11);
+  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 16);
 
   ASSERT_EQ(result_array.at(1).scn_range_.start_scn_.get_val_for_tx(), 21);
-  ASSERT_EQ(result_array.at(1).scn_range_.end_scn_.get_val_for_tx(), 31);
+  ASSERT_EQ(result_array.at(1).scn_range_.end_scn_.get_val_for_tx(), 37);
 
 
   result_array.reset();
   minor_range_mgr.reset();
-  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(15, 19));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(13, 19));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(37, 39));
 
   ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
   COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
-  ASSERT_EQ(result_array.count(), 2);
+  ASSERT_EQ(result_array.count(), 1);
 
-  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 1);
-  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 15);
+  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 19);
+  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 37);
 
-  ASSERT_EQ(result_array.at(1).scn_range_.start_scn_.get_val_for_tx(), 19);
-  ASSERT_EQ(result_array.at(1).scn_range_.end_scn_.get_val_for_tx(), 37);
 
   result_array.reset();
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 17));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(18, 34));
   ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
-  ASSERT_EQ(result_array.count(), 1);
-
-  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 34);
-  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 41);
+  ASSERT_EQ(result_array.count(), 0);
 
 
   result_array.reset();
   minor_range_mgr.reset();
-  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 17));
-  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(17, 37));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 5));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(26, 37));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(39, 40));
   ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
-  ASSERT_EQ(result_array.count(), 1);
-  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 37);
-  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 41);
+  ASSERT_EQ(result_array.count(), 2);
+
+  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 5);
+  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 15);
+
+  ASSERT_EQ(result_array.at(1).scn_range_.start_scn_.get_val_for_tx(), 15);
+  ASSERT_EQ(result_array.at(1).scn_range_.end_scn_.get_val_for_tx(), 26);
 
 
   result_array.reset();
@@ -281,19 +280,25 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 34));
   ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
   COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
+  ASSERT_EQ(result_array.count(), 0);
+
+  result_array.reset();
+  minor_range_mgr.reset();
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 30));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
+  COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
   ASSERT_EQ(result_array.count(), 1);
-  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 34);
+
+  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 30);
   ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 41);
 
 
   result_array.reset();
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(5, 25));
-  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(31, 41));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(35, 41));
   ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(4, result, minor_range_mgr, result_array));
-  ASSERT_EQ(result_array.count(), 1);
-  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 25);
-  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 31);
+  ASSERT_EQ(result_array.count(), 0);
 
 
   result_array.reset();
