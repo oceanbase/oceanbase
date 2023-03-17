@@ -40,6 +40,7 @@
 #include "storage/ob_storage_rpc.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_backup_data_table_operator.h"
 #include <algorithm>
 
 using namespace oceanbase::blocksstable;
@@ -2693,8 +2694,7 @@ int ObLSBackupDataTask::do_backup_macro_block_data_()
       } else if (OB_FAIL(ls_backup_ctx_->stat_mgr_.add_bytes(backup_data_type_, macro_index.length_))) {
         LOG_WARN("failed to add bytes", K(ret));
       } else {
-        backup_stat_.input_bytes_ += buffer_reader.capacity();
-        backup_stat_.output_bytes_ += buffer_reader.capacity();
+        backup_stat_.input_bytes_ += OB_DEFAULT_MACRO_BLOCK_SIZE;
         backup_stat_.finish_macro_block_count_ += 1;
       }
     }
@@ -2743,7 +2743,6 @@ int ObLSBackupDataTask::do_backup_meta_data_()
         LOG_WARN("failed to mark backup item finished", K(ret), K(item), K(physical_id));
       } else {
         backup_stat_.input_bytes_ += buffer_reader.capacity();
-        backup_stat_.output_bytes_ += buffer_reader.capacity();
         if (PROVIDER_ITEM_TABLET_META == item.get_item_type()) {
           backup_stat_.finish_tablet_count_ += 1;
           ls_backup_ctx_->stat_mgr_.add_tablet_meta(backup_data_type_, item.get_tablet_id());
@@ -2801,6 +2800,7 @@ int ObLSBackupDataTask::finish_task_in_order_()
     LOG_WARN("failed to wait task", K(ret), K_(task_id));
   } else if (OB_FAIL(backup_data_ctx_.close())) {
     LOG_WARN("failed to close backup data ctx", K(ret), K_(param));
+  } else if (OB_FALSE_IT(backup_stat_.output_bytes_ = backup_data_ctx_.get_file_size())) {
   } else if (OB_FAIL(report_ls_backup_task_info_(backup_stat_))) {
     LOG_WARN("failed to report ls backup task info", K(ret));
   } else if (OB_FAIL(ls_backup_ctx_->finish_task(task_id_))) {
@@ -2823,7 +2823,12 @@ int ObLSBackupDataTask::report_ls_backup_task_info_(const ObLSBackupStat &stat)
     LOG_WARN("failed to start transaction", K(ret), K(param_));
   } else {
     ObLSBackupStat new_stat;
-    if (OB_FAIL(ObLSBackupOperator::get_backup_ls_task_info(param_.tenant_id_,
+    share::ObBackupStats new_task_stat;
+    share::ObBackupLSTaskAttr ls_task_attr;
+    if (OB_FAIL(share::ObBackupLSTaskOperator::get_ls_task(trans, for_update,
+              param_.job_desc_.task_id_, param_.tenant_id_, param_.ls_id_, ls_task_attr))) {
+        LOG_WARN("failed to get ls task", K(ret), K_(param));
+    } else if (OB_FAIL(ObLSBackupOperator::get_backup_ls_task_info(param_.tenant_id_,
             param_.job_desc_.task_id_,
             param_.ls_id_,
             param_.turn_id_,
@@ -2837,8 +2842,13 @@ int ObLSBackupDataTask::report_ls_backup_task_info_(const ObLSBackupStat &stat)
       LOG_INFO("can not update if final", K(ls_task_info), K(stat));
     } else if (ls_task_info.max_file_id_ + 1 != stat.file_id_) {
       LOG_INFO("can not update if file id is not consecutive", K(ls_task_info), K(stat));
+    } else if (OB_FAIL(update_task_stat_(ls_task_attr.stats_, stat, new_task_stat))) {
+      LOG_WARN("failed to update task stat", K(ret), K(ls_task_attr));
     } else if (OB_FAIL(update_task_info_stat_(ls_task_info, stat, new_stat))) {
       LOG_WARN("failed to update task info stat", K(ret), K(ls_task_info), K(stat));
+    } else if (OB_FAIL(share::ObBackupLSTaskOperator::update_stats_(trans, param_.job_desc_.task_id_,
+        param_.tenant_id_, param_.ls_id_, new_task_stat))) {
+      LOG_WARN("failed to update stat", K(ret), K(param_));
     } else if (OB_FAIL(ObLSBackupOperator::report_ls_backup_task_info(param_.tenant_id_,
                    param_.job_desc_.task_id_,
                    param_.turn_id_,
@@ -2857,6 +2867,25 @@ int ObLSBackupDataTask::report_ls_backup_task_info_(const ObLSBackupStat &stat)
         LOG_WARN("failed to rollback trans", K(tmp_ret));
       }
     }
+  }
+  return ret;
+}
+
+// TODO(yangyi.yyy): make tablet count accurate
+int ObLSBackupDataTask::update_task_stat_(const share::ObBackupStats &old_backup_stat, const ObLSBackupStat &ls_stat,
+    share::ObBackupStats &new_backup_stat)
+{
+  int ret = OB_SUCCESS;
+  new_backup_stat.input_bytes_ = old_backup_stat.input_bytes_ + ls_stat.input_bytes_;
+  new_backup_stat.output_bytes_ = old_backup_stat.output_bytes_ + ls_stat.output_bytes_;
+  new_backup_stat.macro_block_count_ = old_backup_stat.macro_block_count_ + ls_stat.finish_macro_block_count_;
+  new_backup_stat.finish_macro_block_count_ = old_backup_stat.finish_macro_block_count_ + ls_stat.finish_macro_block_count_;
+  if (backup_data_type_.is_minor_backup() || backup_data_type_.is_sys_backup()) {
+    new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_ + ls_stat.finish_tablet_count_;
+    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_ + ls_stat.finish_tablet_count_;
+  } else {
+    new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_;
+    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_;
   }
   return ret;
 }

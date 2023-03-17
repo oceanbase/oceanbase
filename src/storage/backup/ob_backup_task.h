@@ -538,6 +538,8 @@ private:
       const ObBackupProviderItem &item, ObTabletMetaReaderType &reader_type, ObBackupMetaType &meta_type);
   int finish_task_in_order_();
   int report_ls_backup_task_info_(const ObLSBackupStat &stat);
+  int update_task_stat_(const share::ObBackupStats &old_backup_stat, const ObLSBackupStat &ls_stat,
+      share::ObBackupStats &new_backup_stat);
   int update_task_info_stat_(const ObBackupLSTaskInfo &task_info, const ObLSBackupStat &stat, ObLSBackupStat &new_stat);
   int do_generate_next_task_();
   int check_disk_space_();

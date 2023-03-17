@@ -423,55 +423,24 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
   return ret;
 }
 
-int ObBackupDataLSTaskMgr::statistic_info(
+int ObBackupDataLSTaskMgr::mark_ls_task_info_final(
     ObBackupLeaseService &lease_service,
     common::ObISQLClient &sql_proxy,
     const ObBackupLSTaskAttr &ls_attr)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObBackupLSTaskInfoAttr> stats_array;
-  ObBackupStats stats;
-  stats.assign(ls_attr.stats_);
+  share::ObBackupDataType backup_data_type;
   if (ObBackupDataTaskType::Type::BACKUP_PLUS_ARCHIVE_LOG == ls_attr.task_type_.type_
       || ObBackupDataTaskType::Type::BACKUP_BUILD_INDEX == ls_attr.task_type_.type_) { // do nothing
-  } else if (OB_FAIL(ObBackupLSTaskInfoOperator::get_statistics_info(sql_proxy, ls_attr.task_id_, ls_attr.tenant_id_,
-      ls_attr.ls_id_, ls_attr.turn_id_, ls_attr.retry_id_, stats_array))) {
-    LOG_WARN("[DATA_BACKUP]failed to get stats array", K(ret), K(ls_attr));
-  } else {
-    for (int i = 0; OB_SUCC(ret) && i < stats_array.count(); ++i) {
-      const ObBackupLSTaskInfoAttr &tmp_stats = stats_array.at(i);
-      if (!tmp_stats.is_valid()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("[DATA_BACKUP]invalid ls task info stats", K(tmp_stats));
-      } else {
-        stats.input_bytes_ += tmp_stats.input_bytes_;
-        stats.output_bytes_ += tmp_stats.output_bytes_;
-        stats.macro_block_count_ += tmp_stats.macro_block_count_;
-        stats.finish_macro_block_count_ += tmp_stats.finish_macro_block_count_;
-        stats.extra_bytes_ += tmp_stats.extra_bytes_;
-        stats.finish_file_count_ += tmp_stats.file_count_;
-        if (share::ObBackupDataType::BackupDataType::BACKUP_MINOR == tmp_stats.backup_data_type_
-            || share::ObBackupDataType::BackupDataType::BACKUP_SYS == tmp_stats.backup_data_type_) {
-          stats.tablet_count_ += tmp_stats.tablet_count_;
-          stats.finish_tablet_count_ += tmp_stats.finish_tablet_count_;
-        }
-      }
-    }
-    share::ObBackupDataType backup_data_type;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(lease_service.check_lease())) {
-      LOG_WARN("[DATA_BACKUP]failed to check lease", K(ret));
-    } else if (!stats_array.empty() && OB_FAIL(ObBackupLSTaskOperator::update_stats_(
-        sql_proxy, ls_attr.task_id_, ls_attr.tenant_id_, ls_attr.ls_id_, stats))) {
-      LOG_WARN("[DATA_BACKUP]failed to update stats", K(ret));
-    } else if (!ls_attr.task_type_.is_backup_data()) {
-      // do nothing
-    } else if (OB_FAIL(ls_attr.task_type_.get_backup_data_type(backup_data_type))) {
-      LOG_WARN("failed to get backup data type", K(ret), K(ls_attr));
-    } else if (OB_FAIL(backup::ObLSBackupOperator::mark_ls_task_info_final(ls_attr.task_id_, ls_attr.tenant_id_, ls_attr.ls_id_,
-        ls_attr.turn_id_, ls_attr.retry_id_, backup_data_type, sql_proxy))) {
-      LOG_WARN("[DATA_BACKUP]failed to update ls task info final to True", K(ret), K(ls_attr));
-    }
+  } else if (OB_FAIL(lease_service.check_lease())) {
+    LOG_WARN("[DATA_BACKUP]failed to check lease", K(ret));
+  } else if (!ls_attr.task_type_.is_backup_data()) {
+    // do nothing
+  } else if (OB_FAIL(ls_attr.task_type_.get_backup_data_type(backup_data_type))) {
+    LOG_WARN("failed to get backup data type", K(ret), K(ls_attr));
+  } else if (OB_FAIL(backup::ObLSBackupOperator::mark_ls_task_info_final(ls_attr.task_id_, ls_attr.tenant_id_, ls_attr.ls_id_,
+      ls_attr.turn_id_, ls_attr.retry_id_, backup_data_type, sql_proxy))) {
+    LOG_WARN("[DATA_BACKUP]failed to update ls task info final to True", K(ret), K(ls_attr));
   }
   return ret;
 }
