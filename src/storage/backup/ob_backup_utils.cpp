@@ -1389,7 +1389,9 @@ ObBackupTabletProvider::ObBackupTabletProvider()
       backup_item_cmp_(sort_ret_),
       meta_index_store_(),
       prev_item_(),
-      has_prev_item_(false)
+      has_prev_item_(false),
+      supply_count_(0),
+      consume_count_(0)
 {}
 
 ObBackupTabletProvider::~ObBackupTabletProvider()
@@ -1530,9 +1532,14 @@ int ObBackupTabletProvider::inner_get_batch_items_(
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
         external_sort_.clean_up();
-        if (OB_FAIL(external_sort_.init(
+        if (supply_count_ != consume_count_) {
+          ret = OB_ERR_SYS;
+          LOG_WARN("reinit external sort before all consume", K(ret), K_(meet_end), K_(param), K(supply_count_), K(consume_count_), K_(has_prev_item), K_(prev_item));
+        } else if (OB_FAIL(external_sort_.init(
                 BUF_MEM_LIMIT, FILE_BUF_SIZE, EXPIRE_TIMESTAMP, OB_SYS_TENANT_ID, &backup_item_cmp_))) {
           LOG_WARN("failed to init external sort", K(ret));
+        } else {
+          LOG_INFO("reinit external sort", K(consume_count_), K(supply_count_));
         }
         break;
       } else {
@@ -1548,7 +1555,7 @@ int ObBackupTabletProvider::inner_get_batch_items_(
     } else {
       has_prev_item_ = true;
       prev_item_ = *next_item;
-
+      consume_count_++;
     }
   }
   LOG_INFO("inner get batch item", K(items), K_(backup_data_type));
@@ -1559,33 +1566,41 @@ int ObBackupTabletProvider::prepare_batch_tablet_(const uint64_t tenant_id, cons
 {
   int ret = OB_SUCCESS;
   int64_t total_count = 0;
-  while (OB_SUCC(ret) && total_count < BATCH_SIZE) {
-    ObTabletID tablet_id;
-    int64_t count = 0;
-    if (OB_ISNULL(ls_backup_ctx_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("log stream backup ctx should not be null", K(ret));
-    } else if (OB_FAIL(ls_backup_ctx_->next(tablet_id))) {
-      if (OB_ITER_END == ret) {
-        meet_end_ = true;
-        LOG_INFO("tablet meet end", K(ret), K(tenant_id), K(ls_id), K_(backup_data_type));
-        ret = OB_SUCCESS;
-        break;
+  const bool need_prepare = (consume_count_ == supply_count_);
+  if (need_prepare) {
+    while (OB_SUCC(ret) && total_count < BATCH_SIZE) {
+      ObTabletID tablet_id;
+      int64_t count = 0;
+      if (OB_ISNULL(ls_backup_ctx_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("log stream backup ctx should not be null", K(ret));
+      } else if (OB_FAIL(ls_backup_ctx_->next(tablet_id))) {
+        if (OB_ITER_END == ret) {
+          meet_end_ = true;
+          LOG_INFO("tablet meet end", K(ret), K(tenant_id), K(ls_id), K_(backup_data_type));
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get next tablet", K(ret));
+        }
+      } else if (OB_FAIL(prepare_tablet_(tenant_id, ls_id, tablet_id, backup_data_type_, count))) {
+        LOG_WARN("failed to prepare tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, ls_backup_ctx_->rebuild_seq_))) {
+        LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id));
       } else {
-        LOG_WARN("failed to get next tablet", K(ret));
+        supply_count_ += count;
+        total_count += count;
       }
-    } else if (OB_FAIL(prepare_tablet_(tenant_id, ls_id, tablet_id, backup_data_type_, count))) {
-      LOG_WARN("failed to prepare tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, ls_backup_ctx_->rebuild_seq_))) {
-      LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id));
-    } else {
-      total_count += count;
     }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(external_sort_.do_sort(true /*final_merge*/))) {
-      LOG_WARN("failed to do external sort", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(external_sort_.do_sort(true /*final_merge*/))) {
+        LOG_WARN("failed to do external sort", K(ret));
+      } else {
+        LOG_INFO("do sort", K(consume_count_), K(supply_count_));
+      }
     }
+  } else {
+    LOG_INFO("no need prepare now", K(tenant_id), K(ls_id), K(consume_count_), K(supply_count_));
   }
   return ret;
 }
@@ -1843,10 +1858,11 @@ int ObBackupTabletProvider::fetch_all_logic_macro_block_id_(const common::ObTabl
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(add_macro_block_id_item_list_(tablet_id, table_key, id_array))) {
+        int64_t added_count = 0;
+        if (OB_FAIL(add_macro_block_id_item_list_(tablet_id, table_key, id_array, added_count))) {
           LOG_WARN("failed to add macro block id list", K(ret), K(tablet_id), K(table_key), K(id_array));
         } else if (id_array.count() > 0) {
-          total_count += id_array.count();
+          total_count += added_count;
         } else {
           break;
         }
@@ -1860,9 +1876,10 @@ int ObBackupTabletProvider::fetch_all_logic_macro_block_id_(const common::ObTabl
 }
 
 int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTabletID &tablet_id,
-    const ObITable::TableKey &table_key, const common::ObIArray<ObBackupMacroBlockId> &list)
+    const ObITable::TableKey &table_key, const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count)
 {
   int ret = OB_SUCCESS;
+  added_count = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < list.count(); ++i) {
     const ObBackupMacroBlockId &macro_id = list.at(i);
     ObBackupProviderItem item;
@@ -1879,6 +1896,7 @@ int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTablet
     } else if (OB_FAIL(external_sort_.add_item(item))) {
       LOG_WARN("failed to add item", KR(ret), K(item));
     } else {
+      added_count += 1;
       LOG_INFO("add macro block id", K(tablet_id), K(table_key), K(macro_id));
     }
   }
