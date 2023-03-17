@@ -1997,7 +1997,7 @@ TEST_F(TestJsonBase, test_seek_filter)
   hit.reset();
   ASSERT_EQ(OB_SUCCESS, j_tree->seek(j_path0, j_path0.path_node_cnt(), true, false, hit));
   ASSERT_EQ(hit.size(), 1);
-  ASSERT_EQ(true, hit[0]->get_boolean());
+  ASSERT_NE(false, hit[0]->get_boolean());
   // bin
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree,
       ObJsonInType::JSON_BIN, j_bin));
