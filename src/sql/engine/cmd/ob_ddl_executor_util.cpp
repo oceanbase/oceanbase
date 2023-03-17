@@ -73,30 +73,37 @@ int ObDDLExecutorUtil::wait_ddl_finish(
           FORWARD_USER_ERROR(ret, error_message.user_message_);
         }
         break;
-      } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
-                               tenant_id, is_tenant_dropped))) {
-        LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
-      } else if (is_tenant_dropped) {
-        ret = OB_TENANT_HAS_BEEN_DROPPED;
-        LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
-        break;
-      } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
-        LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
-      } else if (is_tenant_standby) {
-        ret = OB_STANDBY_READ_ONLY;
-        FORWARD_USER_ERROR(ret, "DDL not finish, need check");
-        LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
-        break;
-      } else if (OB_FAIL(handle_session_exception(session))) {
-        LOG_WARN("session exeception happened", K(ret), K(is_support_cancel));
-        if (is_support_cancel && OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
-          LOG_WARN("cancel ddl task failed", K(tmp_ret));
-          ret = OB_SUCCESS;
-        } else {
-          break;
-        }
       } else {
-        ob_usleep(retry_interval);
+        if (OB_FAIL(ret)) {
+        } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
+                               tenant_id, is_tenant_dropped))) {
+          LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
+        } else if (is_tenant_dropped) {
+          ret = OB_TENANT_HAS_BEEN_DROPPED;
+          LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
+          LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
+        } else if (is_tenant_standby) {
+          ret = OB_STANDBY_READ_ONLY;
+          FORWARD_USER_ERROR(ret, "DDL not finish, need check");
+          LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(handle_session_exception(session))) {
+          LOG_WARN("session exeception happened", K(ret), K(is_support_cancel));
+          if (is_support_cancel && OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
+            LOG_WARN("cancel ddl task failed", K(tmp_ret));
+            ret = OB_SUCCESS;
+          } else {
+            break;
+          }
+        } else {
+          ob_usleep(retry_interval);
+        }
       }
     }
   }
@@ -125,18 +132,24 @@ int ObDDLExecutorUtil::wait_build_index_finish(const uint64_t tenant_id, const i
       FORWARD_USER_ERROR(ret, error_message.user_message_);
     }
     is_finish = true;
-  } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
-                 tenant_id, is_tenant_dropped))) {
-    LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
-  } else if (is_tenant_dropped) {
-    ret = OB_TENANT_HAS_BEEN_DROPPED;
-    LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
-  } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
-    LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
-  } else if (is_tenant_standby) {
-    ret = OB_STANDBY_READ_ONLY;
-    FORWARD_USER_ERROR(ret, "DDL not finish, need check");
-    LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
+  } else {
+    if (OB_FAIL(ret)) {
+    } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
+                  tenant_id, is_tenant_dropped))) {
+      LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
+    } else if (is_tenant_dropped) {
+      ret = OB_TENANT_HAS_BEEN_DROPPED;
+      LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
+      LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
+    } else if (is_tenant_standby) {
+      ret = OB_STANDBY_READ_ONLY;
+      FORWARD_USER_ERROR(ret, "DDL not finish, need check");
+      LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
+    }
   }
   return ret;
 }
@@ -198,30 +211,37 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
           }
         }
         break;
-      } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
-                    tenant_id, is_tenant_dropped))) {
-        LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
-      } else if (is_tenant_dropped) {
-        ret = OB_TENANT_HAS_BEEN_DROPPED;
-        LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
-        break;
-      } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
-        LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
-      } else if (is_tenant_standby) {
-        ret = OB_STANDBY_READ_ONLY;
-        FORWARD_USER_ERROR(ret, "DDL not finish, need check");
-        LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
-        break;
-      } else if (OB_FAIL(handle_session_exception(session))) {
-        LOG_WARN("session exeception happened", K(ret));
-        if (OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
-          LOG_WARN("cancel ddl task failed", K(tmp_ret));
-          ret = OB_SUCCESS;
-        } else {
+      } else {
+        if (OB_FAIL(ret)) {
+        } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
+                      tenant_id, is_tenant_dropped))) {
+          LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
+        } else if (is_tenant_dropped) {
+          ret = OB_TENANT_HAS_BEEN_DROPPED;
+          LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
+          LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
+        } else if (is_tenant_standby) {
+          ret = OB_STANDBY_READ_ONLY;
+          FORWARD_USER_ERROR(ret, "DDL not finish, need check");
+          LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
           break;
         }
-      } else {
-        ob_usleep(retry_interval);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(handle_session_exception(session))) {
+          LOG_WARN("session exeception happened", K(ret));
+          if (OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
+            LOG_WARN("cancel ddl task failed", K(tmp_ret));
+            ret = OB_SUCCESS;
+          } else {
+            break;
+          }
+        } else {
+          ob_usleep(retry_interval);
+        }
       }
     }
     affected_rows = error_message.affected_rows_;
