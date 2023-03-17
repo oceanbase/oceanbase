@@ -829,9 +829,8 @@ int ObBackupDataScheduler::handle_execute_over(
     } else {
       if (OB_FAIL(ObBackupLSTaskOperator::get_ls_task(trans, true/*for update*/, task->get_task_id(), task->get_tenant_id(), ls_id, ls_attr))) {
         LOG_WARN("[DATA_BACKUP]failed to get log stream task", K(ret), KPC(task));
-      } else if (OB_FAIL(ObBackupDataLSTaskMgr::statistic_info(*lease_service_, trans, ls_attr))) { 
-  // TODO: delete this when observer support the function that backup progress statistics
-        LOG_WARN("[DATA_BACKUP]failed to update statistic infomation of ls task", K(ret), K(ls_attr));
+      } else if (OB_FAIL(ObBackupDataLSTaskMgr::mark_ls_task_info_final(*lease_service_, trans, ls_attr))) {
+        LOG_WARN("[DATA_BACKUP]failed to update ls task info final", K(ret), K(ls_attr));
       } else if (OB_FALSE_IT(ls_attr.end_ts_ = ObTimeUtility::current_time())) {
       } else if (ObBackupTaskStatus::Status::DOING == ls_attr.status_.status_) {
         ObBackupTaskStatus next_status(ObBackupTaskStatus::Status::FINISH);
