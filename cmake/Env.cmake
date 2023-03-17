@@ -69,6 +69,11 @@ endif()
 
 set(OB_OBJCOPY_BIN "${DEVTOOLS_DIR}/bin/objcopy")
 
+# NO RELERO: -Wl,-znorelro
+# Partial RELRO: -Wl,-z,relro
+# Full RELRO: -Wl,-z,relro,-z,now
+ob_define(OB_RELRO_FLAG "-Wl,-z,relro,-z,now")
+
 if (OB_USE_CLANG)
   find_program(OB_CC clang
   "${DEVTOOLS_DIR}/bin"
