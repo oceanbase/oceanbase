@@ -60,65 +60,65 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
   {
     // 2F, degrade 1, allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, &net_keepalive);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
     const int64_t palf_id = 1;
     const int64_t replica_num = 2;
     paxos_list.add_server(addr1);
     paxos_list.add_server(addr2);
-    palf::LogMemberAckInfoList dead_servers;
+    LogMemberStatusList dead_servers;
     common::GlobalLearnerList degraded_servers;
-    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberAckInfo(ObMember(addr1, 1), 1, LSN(1000))));
+    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr1, 1), 1, LSN(1000)))));
     EXPECT_TRUE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
   }
   {
     // 4F, degrade 3, not allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, &net_keepalive);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
     const int64_t palf_id = 1;
     paxos_list.add_server(addr3);
     paxos_list.add_server(addr4);
     const int64_t replica_num = 4;
-    palf::LogMemberAckInfoList dead_servers;
+    LogMemberStatusList dead_servers;
     common::GlobalLearnerList degraded_servers;
-    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberAckInfo(ObMember(addr1, 1), 1, LSN(1000))));
-    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberAckInfo(ObMember(addr2, 1), 1, LSN(1000))));
-    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000))));
+    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr1, 1), 1, LSN(1000)))));
+    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr2, 1), 1, LSN(1000)))));
+    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000)))));
     EXPECT_FALSE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
   }
   {
     // 4F, degrade 1, not allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, &net_keepalive);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
     const int64_t palf_id = 1;
     const int64_t replica_num = 4;
-    palf::LogMemberAckInfoList dead_servers;
+    LogMemberStatusList dead_servers;
     common::GlobalLearnerList degraded_servers;
-    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberAckInfo(ObMember(addr1, 1), 1, LSN(1000))));
+    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr1, 1), 1, LSN(1000)))));
     EXPECT_FALSE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
   }
   {
     // 3F1A, degrade 1, not allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, &net_keepalive);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
     const int64_t palf_id = 1;
     paxos_list.remove_server(addr4);
     const int64_t replica_num = 3;
-    palf::LogMemberAckInfoList dead_servers;
+    LogMemberStatusList dead_servers;
     common::GlobalLearnerList degraded_servers;
-    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000))));
+    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000)))));
     EXPECT_FALSE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
   }
   {
     // 4F1A, degrade 2(addr2, addr3), allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, &net_keepalive);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
     const int64_t palf_id = 1;
     paxos_list.add_server(addr4);
     const int64_t replica_num = 4;
-    palf::LogMemberAckInfoList dead_servers;
+    LogMemberStatusList dead_servers;
     common::GlobalLearnerList degraded_servers;
-    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberAckInfo(ObMember(addr2, 1), 1, LSN(1000))));
-    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000))));
+    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr2, 1), 1, LSN(1000)))));
+    EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000)))));
     EXPECT_TRUE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
   }
 }

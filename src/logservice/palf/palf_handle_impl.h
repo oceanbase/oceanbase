@@ -558,6 +558,11 @@ public:
                             const int64_t prev_log_id,
                             const int64_t &prev_log_proposal_id,
                             const LSN &committed_end_lsn) = 0;
+
+  // @brief: check whether the palf instance is allowed to vote for logs
+  // By default, return true;
+  // After calling disable_vote(), return false.
+  virtual bool is_vote_enabled() const = 0;
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
@@ -695,6 +700,7 @@ public:
   int advance_base_info(const PalfBaseInfo &palf_base_info, const bool is_rebuild) override final;
   int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn) override final;
   int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn) override final;
+  bool is_vote_enabled() const override final;
   int disable_vote() override final;
   int enable_vote() override final;
 public:

@@ -1207,6 +1207,16 @@ int PalfHandleImpl::disable_sync()
   return ret;
 }
 
+bool PalfHandleImpl::is_vote_enabled() const
+{
+  bool bool_ret = false;
+  if (IS_NOT_INIT) {
+  } else {
+    bool_ret = state_mgr_.is_allow_vote();
+  }
+  return bool_ret;
+}
+
 int PalfHandleImpl::disable_vote()
 {
   int ret = OB_SUCCESS;

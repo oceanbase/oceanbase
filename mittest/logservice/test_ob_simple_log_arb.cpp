@@ -42,6 +42,34 @@ class TestObSimpleLogClusterArbService : public ObSimpleLogClusterTestEnv
 public:
   TestObSimpleLogClusterArbService() :  ObSimpleLogClusterTestEnv()
   {}
+  bool is_degraded(const PalfHandleImplGuard &leader,
+                  const int64_t degraded_server_idx)
+  {
+    bool has_degraded = false;
+    while (!has_degraded) {
+      common::GlobalLearnerList degraded_learner_list;
+      leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
+      has_degraded = degraded_learner_list.contains(get_cluster()[degraded_server_idx]->get_addr());
+      sleep(1);
+      PALF_LOG(INFO, "wait degrade");
+    }
+    return has_degraded;
+  }
+
+  bool is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id)
+  {
+    bool has_upgraded = false;
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, palf_id));
+    while (!has_upgraded) {
+      EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, palf_id));
+      common::GlobalLearnerList degraded_learner_list;
+      leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
+      has_upgraded = (0 == degraded_learner_list.get_member_number());
+      sleep(1);
+      PALF_LOG(INFO, "wait upgrade");
+    }
+    return has_upgraded;
+  }
 };
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
@@ -68,37 +96,49 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   const int64_t another_f_idx = (leader_idx+1)%3;
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
-  sleep(2);
   // 为备副本设置location cb，用于备副本找leader
   palf_list[another_f_idx]->get_palf_handle_impl()->set_location_cache_cb(&loc_cb);
   block_net(leader_idx, another_f_idx);
   // do not check OB_SUCCESS, may return OB_NOT_MASTER during degrading member
   submit_log(leader, 100, id);
 
-  bool has_degraded = false;
-  while (!has_degraded) {
-    common::GlobalLearnerList degraded_learner_list;
-    leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-    has_degraded = degraded_learner_list.contains(palf_list[another_f_idx]->palf_handle_impl_->self_);
-    sleep(1);
-    PALF_LOG(INFO, "wait degrade");
-  }
-  EXPECT_TRUE(has_degraded);
-  // 等待lease过期，验证location cb是否可以找到leader
-  sleep(5);
+  EXPECT_TRUE(is_degraded(leader, another_f_idx));
+
   loc_cb.leader_ = leader.palf_handle_impl_->self_;
   unblock_net(leader_idx, another_f_idx);
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
+
+  EXPECT_TRUE(is_upgraded(leader, id));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
+
+  // set clog disk error
+  ObTenantEnv::set_tenant(get_cluster()[leader_idx+1]->get_tenant_base());
+  logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
+  if (NULL != detector) {
+    detector->has_add_clog_full_event_ = true;
+  }
+
+  EXPECT_TRUE(is_degraded(leader, another_f_idx));
+
+  if (NULL != detector) {
+    detector->has_add_clog_full_event_ = false;
+  }
+
+  EXPECT_TRUE(is_upgraded(leader, id));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id));
 
-  bool has_upgraded = false;
-  while (!has_upgraded) {
-    common::GlobalLearnerList degraded_learner_list;
-    leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-    has_upgraded = (0 == degraded_learner_list.get_member_number());
-    sleep(1);
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id));
-    PALF_LOG(INFO, "wait upgrade");
-  }
+  // test disable sync
+  palf_list[another_f_idx]->palf_handle_impl_->disable_sync();
+  EXPECT_TRUE(is_degraded(leader, another_f_idx));
+  palf_list[another_f_idx]->palf_handle_impl_->enable_sync();
+  EXPECT_TRUE(is_upgraded(leader, id));
+
+  // test disbale vote
+  palf_list[another_f_idx]->palf_handle_impl_->disable_vote();
+  EXPECT_TRUE(is_degraded(leader, another_f_idx));
+  palf_list[another_f_idx]->palf_handle_impl_->enable_vote();
+  EXPECT_TRUE(is_upgraded(leader, id));
+
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();
   delete_paxos_group(id);
@@ -133,30 +173,19 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_degrade_upgrade)
   block_all_net(another_f1_idx);
   block_all_net(another_f2_idx);
 
-  bool has_degraded = false;
-  while (!has_degraded) {
-    common::GlobalLearnerList degraded_learner_list;
-    leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-    has_degraded = degraded_learner_list.contains(get_cluster()[another_f1_idx]->get_addr());
-    has_degraded = has_degraded && degraded_learner_list.contains(get_cluster()[another_f2_idx]->get_addr());
-    sleep(1);
-  }
-  EXPECT_TRUE(has_degraded);
+
+  EXPECT_TRUE(is_degraded(leader, another_f1_idx));
+  EXPECT_TRUE(is_degraded(leader, another_f2_idx));
+
   // 确保lease过期，验证loc_cb是否可以找到leader拉日志
   sleep(5);
   unblock_all_net(another_f1_idx);
   unblock_all_net(another_f2_idx);
   loc_cb.leader_ = leader.palf_handle_impl_->self_;
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
 
-  bool has_upgraded = false;
-  while (!has_upgraded) {
-    common::GlobalLearnerList degraded_learner_list;
-    leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-    has_upgraded = (0 == degraded_learner_list.get_member_number());
-    sleep(1);
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id));
-  }
+  EXPECT_TRUE(is_upgraded(leader, id));
+
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();
   delete_paxos_group(id);
@@ -191,16 +220,8 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_reconfirm_degrade_upgrade)
   submit_log(leader, 20, id);
   // submit some logs which will be truncated
 
-  bool has_degraded = false;
-  while (!has_degraded) {
-    common::GlobalLearnerList degraded_learner_list;
-    palf_list[another_f_idx]->palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-    ObAddr old_leader_addr = palf_list[leader_idx]->palf_handle_impl_->self_;
-    has_degraded = degraded_learner_list.contains(old_leader_addr);
-    PALF_LOG(INFO, "check has_degraded", K(has_degraded), K(degraded_learner_list), K(old_leader_addr));
-    sleep(1);
-  }
-  EXPECT_TRUE(has_degraded);
+  EXPECT_TRUE(is_degraded(*palf_list[another_f_idx], leader_idx));
+
   int64_t new_leader_idx = -1;
   PalfHandleImplGuard new_leader;
   EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
@@ -210,15 +231,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_reconfirm_degrade_upgrade)
   unblock_net(leader_idx, arb_replica_idx);
   EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, id));
 
-  bool has_upgraded = false;
-  while (!has_upgraded) {
-    common::GlobalLearnerList degraded_learner_list;
-    new_leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-    has_upgraded = (0 == degraded_learner_list.get_member_number());
-    PALF_LOG(INFO, "wait upgrade", K(degraded_learner_list));
-    EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 1, id));
-    sleep(1);
-  }
+  EXPECT_TRUE(is_upgraded(new_leader, id));
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();
   new_leader.reset();
@@ -267,16 +280,8 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_reconfirm_degrade_upgrade)
     EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
   }
 
-  bool has_degraded = false;
-  while (!has_degraded) {
-    common::GlobalLearnerList degraded_learner_list;
-    new_leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-    has_degraded = degraded_learner_list.contains(cluster[another_f1_idx]->get_addr());
-    has_degraded = has_degraded && degraded_learner_list.contains(cluster[leader_idx]->get_addr());
-    sleep(1);
-    EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 1, id));
-  }
-  EXPECT_TRUE(has_degraded);
+  EXPECT_TRUE(is_degraded(new_leader, another_f1_idx));
+  EXPECT_TRUE(is_degraded(new_leader, leader_idx));
 
   sleep(5);
   loc_cb.leader_ = new_leader.palf_handle_impl_->self_;
@@ -286,15 +291,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_reconfirm_degrade_upgrade)
 
   EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, id));
 
-  bool has_upgraded = false;
-  while (!has_upgraded) {
-    common::GlobalLearnerList degraded_learner_list;
-    new_leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-    has_upgraded = (0 == degraded_learner_list.get_member_number());
-    PALF_LOG(INFO, "wait upgrade", K(ret), K(degraded_learner_list));
-    EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 1, id));
-    sleep(1);
-  }
+  EXPECT_TRUE(is_upgraded(new_leader, id));
   leader.reset();
   new_leader.reset();
   revert_cluster_palf_handle_guard(palf_list);
@@ -479,6 +476,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_defensive)
   int64_t mode_version;
   EXPECT_EQ(OB_SUCCESS, get_middle_scn(50, leader, flashback_scn, header_origin));
   switch_append_to_flashback(leader, mode_version);
+  sleep(1);
   EXPECT_EQ(OB_SUCCESS, palf_list[another_f_idx]->palf_handle_impl_->flashback(mode_version, flashback_scn, CONFIG_CHANGE_TIMEOUT));
 
   // remove another follower

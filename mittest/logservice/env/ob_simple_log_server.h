@@ -45,6 +45,7 @@
 #include "share/ob_occam_timer.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "logservice/ob_net_keepalive_adapter.h"
+#include "logservice/leader_coordinator/ob_failure_detector.h"
 #include <memory>
 #include <map>
 
@@ -283,6 +284,7 @@ private:
   common::ObMySQLProxy sql_proxy_;
   MockNetKeepAliveAdapter *net_keepalive_;
   ObSrvRpcProxy srv_proxy_;
+  logservice::coordinator::ObFailureDetector detector_;
 };
 
 } // end unittest
