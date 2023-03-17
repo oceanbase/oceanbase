@@ -225,19 +225,6 @@ int ObPxSQCProxy::get_dh_msg(
         SQL_LOG(WARN, "fail push data to channel", K(ret));
       } else if (OB_FAIL(ch->flush())) {
         SQL_LOG(WARN, "fail flush dtl data", K(ret));
-      } else {
-        // The whole message should be reset in next rescan, we reset it after last piece msg
-        // send in sending piece msg and receiving whole msg scenario (need send && wait whole msg).
-        if (need_wait_whole_msg) {
-          const int64_t task_cnt = get_task_count();
-          if (provider->send_msg_cnt_ % task_cnt == 0) {
-            provider->msg_set_ = false;
-          }
-          provider->send_msg_cnt_ += 1;
-          if (provider->send_msg_cnt_ % task_cnt == 0) {
-            provider->reset(); // reset whole message
-          }
-        }
       }
     }
 
