@@ -465,6 +465,15 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
     bool has_extern = (!is_simple) && (lib::is_oracle_mode() || !is_dst_inrow);
     ObMemLobExternFlags extern_flags(has_extern);
 
+    bool padding_char_size = false;
+    if (!lob_common->in_row_ && is_dst_inrow &&
+        out_payload_len == ObLobManager::LOB_WITH_OUTROW_CTX_SIZE) {
+      // for 4.0 lob, outrow disk lob locator do force inrow
+      // not have char len, should do padding
+      out_payload_len += sizeof(uint64_t);
+      padding_char_size = true;
+    }
+
     if (!is_src_inrow && is_dst_inrow) {
       // read outrow lobs but output as inrow lobs, need to calc the output payload lens
       // get byte size of out row lob, and calc total disk lob handle size if it is inrow
@@ -533,16 +542,24 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
           }
         } else if ((!is_src_inrow) && is_dst_inrow) { //src outrow, load to inrow result
           OB_ASSERT(payload.length() >= sizeof(ObLobCommon));
+          storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
           ObString disk_loc_str;
           if (OB_FAIL(locator.get_disk_locator(disk_loc_str))) {
             STORAGE_LOG(WARN, "Lob: get disk locator failed", K(ret), K(column_id));
+          } else if (OB_ISNULL(lob_mngr)) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "Lob: get ObLobManager null", K(ret));
           } else {
             char *buffer = disk_loc_str.ptr();
             MEMCPY(buffer, lob_common, payload.length());
             int64_t offset = payload.length();
+            uint64_t *char_len_ptr = nullptr;
+            if (padding_char_size) {
+              char_len_ptr = reinterpret_cast<uint64_t*>(buffer + offset);
+              offset += sizeof(uint64_t);
+            }
 
             // read full data to new locator
-            storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
             ObLobAccessParam param;
             param.tx_desc_ = NULL;
             param.snapshot_.core_.tx_id_ = tx_id_;
@@ -568,11 +585,18 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             output_data.assign_buffer(buffer + offset, param.len_);
             if (OB_FAIL(lob_mngr->query(param, output_data))) {
               COMMON_LOG(WARN,"Lob: falied to query lob tablets.", K(ret), K(param));
-            } else { // Debug only
+            } else if (padding_char_size) {
               ObString data_str;
-              locator.get_inrow_data(data_str);
-              STORAGE_LOG(DEBUG, "Lob: read lob data",
-                K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+              if (OB_FAIL(locator.get_inrow_data(data_str))) {
+                STORAGE_LOG(WARN, "Lob: read lob data failed",
+                  K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+              } else if (OB_ISNULL(char_len_ptr)) {
+                ret = OB_ERR_UNEXPECTED;
+                STORAGE_LOG(WARN, "Lob: get null char len ptr when need padding char len",
+                  K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+              } else {
+                *char_len_ptr = ObCharset::strlen_char(param.coll_type_, data_str.ptr(), data_str.length());
+              }
             }
           }
         } else if (is_src_inrow && (!is_dst_inrow)){
