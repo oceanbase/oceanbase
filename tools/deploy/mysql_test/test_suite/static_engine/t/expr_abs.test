@@ -92,7 +92,7 @@ while ($cnt <= 29)
   inc $cnt;
 }
 
-#verify bugfix of https://work.aone.alibaba-inc.com/issue/29519901
+#verify bugfix of
 --disable_warnings
 drop table if exists t1;
 --enable_warnings

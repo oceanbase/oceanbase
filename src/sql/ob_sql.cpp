@@ -4185,7 +4185,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
 
       // the purpose of adding condition (!session.get_is_in_retry()) is
       // send the plan instead of continue sending sqlinfo when retrying remotely.
-      // bug: https://work.aone.alibaba-inc.com/issue/33487009
+      // bug:
       if (OB_SUCC(ret) && phy_plan->is_remote_plan()
           && !phy_plan->contains_temp_table()
           && !enable_send_plan) {

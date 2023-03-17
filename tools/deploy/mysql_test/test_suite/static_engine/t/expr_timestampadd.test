@@ -37,7 +37,7 @@ alter system flush plan cache global;
 set @@ob_enable_plan_cache = 0;
 let $cnt=22;
 let $left=1;
-## bug: https://work.aone.alibaba-inc.com/issue/31722560
+## bug:
 ##  timestampadd(second, c14/c16, c19/c20)四种情况结果有误
 while ($left <= $cnt)
 {

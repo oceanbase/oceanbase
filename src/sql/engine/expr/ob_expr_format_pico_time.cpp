@@ -4,7 +4,7 @@
 // version 2 as published by the Free Software Foundation.
 // Version: $Id$
 //  Authors:
-//    yaojing <jingfeng.jf@oceanbase.com>
+//    yaojing <>
 // This file is for implementation of func expr_format_pico_time
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_format_pico_time.h"

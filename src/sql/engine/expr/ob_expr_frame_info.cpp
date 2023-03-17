@@ -284,7 +284,7 @@ int ObExprFrameInfo::alloc_frame(ObIAllocator &exec_allocator,
     int64_t begin_idx = frame_idx;
     const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
     ALLOC_FRAME_MEM(dynamic_frame_);
-    //for subquery core https://work.aone.alibaba-inc.com/issue/31403714
+    //for subquery core
     //提前将frame中的datum置为null
     for (int64_t i = 0; OB_SUCC(ret) && i < dynamic_frame_.count(); ++i) {
       char *cur_frame = frames[begin_idx + i];

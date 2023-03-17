@@ -443,7 +443,7 @@ int ObSchemaPrinter::print_generated_column_definition(const ObColumnSchemaV2 &g
       SHARE_SCHEMA_LOG(WARN, "fail to init session", K(ret));
     } else if (OB_FAIL(session.load_default_sys_variable(false, false))) {
       SHARE_SCHEMA_LOG(WARN, "session load default system variable failed", K(ret));
-      /* bug: https://work.aone.alibaba-inc.com/issue/29573244
+      /* bug:
         构建ObRawExpr对象,当 expr_str = "CONCAT(first_name,' ',last_name)"
         避免错误的打印成： CONCAT(first_name,\' \',last_name) */
     } else if(OB_FAIL(sql::ObRawExprUtils::build_generated_column_expr(NULL,

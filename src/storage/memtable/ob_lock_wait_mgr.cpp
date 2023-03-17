@@ -220,7 +220,7 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
         TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = true;
         // FIXME(xuwang.txw):create detector in check_timeout process
         // below code must keep current order to fix concurrency bug
-        // more info see https://yuque.antfin.com/ob/transaction/arlswh
+        // more info see
         int tmp_ret = OB_SUCCESS;
         if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled())) {
           ObTransID self_tx_id(node->tx_id_);
@@ -428,7 +428,7 @@ ObLink* ObLockWaitMgr::check_timeout()
   const int64_t MAX_WAIT_TIME_US = 10 * 1000 * 1000;
   DeadlockedSessionArray *deadlocked_session = NULL;
   fetch_deadlocked_sessions_(deadlocked_session);
-  // FIX: https://work.aone.alibaba-inc.com/issue/29526553,
+  // FIX:
   // lower down session idle check frequency to 10s
   int64_t curr_ts = ObClockGenerator::getClock();
   if (curr_ts - last_check_session_idle_ts > MAX_WAIT_TIME_US) {

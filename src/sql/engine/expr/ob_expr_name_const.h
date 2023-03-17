@@ -4,9 +4,9 @@
 // version 2 as published by the Free Software Foundation.
 // Version: $Id$
 //  Authors:
-//    yebangyu <bangyu.yby@alibaba-inc.com>
+//    yebangyu <>
 //  Normalizer:
-//    yebangyu <bangyu.yby@alipay.com>
+//    yebangyu <>
 // This file is for declaration of func get_user_var
 
 #ifndef _OCEANBASE_SQL_OB_EXPR_NAME_CONST_H_

@@ -312,7 +312,7 @@ int ObExprLike::set_instr_info(ObIAllocator *exec_allocator,
 {
   //If you feel tough to understand this func,
   //please feel free to refer here for more details :
-  //https://gw.alicdn.com/tfscom/TB1XAvqMpXXXXaVXpXXXXXXXXXX.jpg
+  //
   int ret = OB_SUCCESS;
   like_ctx.instr_info_.reuse();
   const ObCharsetInfo *cs = NULL;

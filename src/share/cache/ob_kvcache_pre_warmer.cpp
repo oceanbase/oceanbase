@@ -1,6 +1,6 @@
 // Copyright 2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//     lvling <zhaoruizhe.zrz@alibaba-inc.com>
+//     lvling <>
 
 
 #include "ob_kvcache_pre_warmer.h"

@@ -136,7 +136,7 @@ public:
 
   /**
    * @brief fetch the state of txn DATA_TRANS_ID when replaying to LOG_TS the requirement can be seen from
-   * https://yuque.antfin-inc.com/ob/storage/adk6yx
+   *
    *
    * @param[in] data_trans_id
    * @param[in] scn
@@ -231,7 +231,7 @@ public:
    * situation)
    *
    * This scn can be simply interpreted as the end_scn of the oldest transaction in tx data sstables. For more details,
-   * see https://yuque.antfin-inc.com/ob/transaction/qrg628
+   * see
    *
    * @param[out] start_tx_scn
    */

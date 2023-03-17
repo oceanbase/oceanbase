@@ -17297,7 +17297,7 @@ ACCESS
 ;
 
 /*注释掉的关键字有规约冲突暂时注释了,都是一些sql中常用的关键字,后面按需打开,增加这块代码逻辑是为了支持在mysql中允许以
-  表名+列名的方式使用关键字，比如"select key.key from test.key"(https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/4069885)
+  表名+列名的方式使用关键字，比如"select key.key from test.key"(
 */
 mysql_reserved_keyword:
 ACCESSIBLE

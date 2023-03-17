@@ -140,7 +140,7 @@ int ObWhereSubQueryPullup::transform_one_expr(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL pointer error", K(ret));
-  //bug:https://work.aone.alibaba-inc.com/issue/25356955 暂时禁掉含有rownum的condition
+  //bug:
   } else if (expr->has_flag(CNT_ROWNUM)) {
     /*do nothing */
   } else if (OB_FAIL(gather_transform_params(stmt, expr, trans_param))) {

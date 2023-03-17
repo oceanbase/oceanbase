@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   yuya.yu <yuya.yu@oceanbase.com>
+//   yuya.yu <>
 
 #define USING_LOG_PREFIX SERVER
 

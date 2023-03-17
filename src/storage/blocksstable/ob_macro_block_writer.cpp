@@ -466,7 +466,7 @@ int ObMacroBlockWriter::open(
     } else if (OB_FAIL(reader_helper_.init(allocator_))) {
       STORAGE_LOG(WARN, "Failed to init reader helper", K(ret));
     } else {
-      //TODO huronghui.hrh@oceanbase.com use 4.1.0.0 for version judgment
+      //TODO  use 4.1.0.0 for version judgment
       const bool is_use_adaptive = !data_store_desc_->is_major_merge()
        || data_store_desc_->major_working_cluster_version_ >= DATA_VERSION_4_1_0_0;
       if (OB_FAIL(micro_block_adaptive_splitter_.init(data_store_desc.macro_store_size_, is_use_adaptive))) {

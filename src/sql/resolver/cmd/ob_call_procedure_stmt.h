@@ -13,7 +13,7 @@
  *
  * Authors:
  *   Author Name <email address>
- *     RuDian<ryan.ly@alibaba-inc.com>
+ *     RuDian<>
  */
 
 #ifndef OCEANBASE_SRC_SQL_RESOLVER_DDL_OB_CALL_PROCEDURE_STMT_H_

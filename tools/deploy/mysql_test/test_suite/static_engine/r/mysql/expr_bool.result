@@ -23167,7 +23167,7 @@ select case when 'a' = 'a' then 'branch1' when 'b' then c1 else c2 end from t1;
 +-----------------------------------------------------------------+
 // 结果应该为2，且when expr上面都应该 有bool expr
 // TODO: 没有出现预期的warning
-// cast的bug: https://work.aone.alibaba-inc.com/issue/24092131
+// cast的bug:
 EXPLAIN select case when 'a' then 'str' when 'b' then c1 else c2 end from t1;
 Query Plan
 ==========================================

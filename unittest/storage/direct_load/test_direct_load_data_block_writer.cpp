@@ -1,6 +1,6 @@
 // Copyright 2014-2014 Alibaba Inc. All Rights Reserved.
 // Author:
-//     yiren.ly <yiren.ly@oceanbase.com>
+//     yiren.ly <>
 //
 // This file defines test_direct_load_data_block_writer.cpp
 #include <gtest/gtest.h>

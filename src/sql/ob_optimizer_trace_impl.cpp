@@ -1,6 +1,6 @@
 // (C) Copyright 2019 Alibaba Inc. All Rights Reserved.
 //  Authors:
-//    zhenling.zzg <zhenling.zzg@antfin.com>
+//    zhenling.zzg <>
 //  Normalizer:
 //
 //

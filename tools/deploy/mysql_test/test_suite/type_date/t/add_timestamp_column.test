@@ -6,7 +6,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 ##tags: ddl, datatype
 # description:
 #
-#bug:http://k3.alibaba-inc.com/issue/6218603?stat=1.5.10&toPage=1&projectId=50518
+#bug:
 --disable_warnings
 drop table if exists stu;
 --enable_warnings

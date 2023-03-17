@@ -73,7 +73,7 @@ while ($left <= $cnt)
 --sleep 2
 --explain_protocol 0
 set timestamp = 1600000000;
---echo ##bugfix: https://work.aone.alibaba-inc.com/issue/37931049
+--echo ##bugfix:
 select ifnull(null, utc_time(4));
 
 --disable_warnings

@@ -49,7 +49,7 @@ struct TxDataReadSchema
 //
 // All operatitons related to tx_data are implemented by ObTxDataTable.
 // See details ::
-// https://yuque.antfin-inc.com/ob/transaction/skxugn
+//
 class ObTxDataTable
 {
 public:

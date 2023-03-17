@@ -195,7 +195,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
 {
   // combine link_stmt_fmt and parameter strings to final link stmt.
   int ret = OB_SUCCESS;
-  // reserve head_comment_length_ byte length for head comment https://yuque.antfin.com/ob/sql/hcdi1o
+  // reserve head_comment_length_ byte length for head comment
   int64_t link_stmt_pos = head_comment_length_;
   int64_t reserve_proxy_route_space = 0;
   int64_t next_param = 0;

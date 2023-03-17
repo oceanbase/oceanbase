@@ -847,7 +847,7 @@ int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table
                                                                      gen_col_expr,
                                                                      schema_checker_))) {
         LOG_WARN("build generated column expr failed", K(ret));
-      } /*  https://work.aone.alibaba-inc.com/issue/29796289
+      } /*
         if gc column is partition key, then this is no restriction
         else {
         //check Expr Function for generated column whether allowed.

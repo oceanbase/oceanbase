@@ -123,7 +123,7 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_unverified)
         // verified. Otherwise, major compaction cannot finish forever due to uncompacted tables.
         // Moreover, if uncompacted tables are index tables, data_tables can not start to verify
         // checksum with these uncompacted index_tables.
-        // https://work.aone.alibaba-inc.com/issue/47565111
+        //
         if (OB_FAIL(mark_uncompacted_tables_as_verified(uncompacted_tables))) {
           LOG_WARN("fail to mark uncompacted tables as verified", KR(ret), K(uncompacted_tables));
         }

@@ -67,12 +67,12 @@ using std::isnan;
     LOG_WARN("invalid arguments", a, b);        \
   }
 
-// Reference document: https://yuque.antfin-inc.com/ob/sql/mlikp0
+// Reference document:
 // Check every argument and stop to print if anyone of them is false
 #define CK(...)                                                         \
   if (OB_SUCC(ret)) { CONCAT(CK_, ARGS_NUM(__VA_ARGS__))(__VA_ARGS__) }
 
-// Reference document: https://yuque.antfin-inc.com/ob/sql/mlikp0
+// Reference document:
 // execute an instruction
 #define OX(statement)                           \
   if (OB_SUCC(ret)) {                           \
@@ -82,7 +82,7 @@ using std::isnan;
 
 /*
 
-  参考文档：https://yuque.antfin-inc.com/ob/sql/mlikp0
+  参考文档：
 
   This better be the last macro we ever need to define in the
   O-series, hence 'Z'.

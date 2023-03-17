@@ -609,7 +609,7 @@ public:
   //   而 producer id 则延迟到后面的算子去生成（后面一定能遇到一个有能力生成这个表达式的算子）
   //
   // 表达式生成的过程非常绕，这里有一篇文档帮助你入门：
-  //  - https://yuque.antfin-inc.com/ob/sql/xest97
+  //  -
   // 如果看完还不明白，请直接 @溪峰
   uint64_t consumer_id_;
   uint64_t producer_id_;

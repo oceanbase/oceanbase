@@ -984,7 +984,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
 }
 
 /**
- * 算法文档：https://yuque.antfin-inc.com/ob/sql/pbaedu
+ * 算法文档：
  * 大致思路：
  * n为总线程数，p为涉及总的partition数，ni为第i个sqc被计算分的线程数，pi为第i个sqc的partition数量。
  * a. 一个adjust函数，递归的调整sqc的线程数。求得ni ＝ n*pi/p的值，保证每个都是大于等于1。

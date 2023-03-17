@@ -915,7 +915,7 @@ typedef ObToStringDatum DATUM2STR;
 // 因为实现的eval_func中, 打印日志时, 如果调用ObToStringExpr(ctx, expr),
 // 该函数又会调用eval_func计算, 不断循环调用, 且一直没走到设置evaluated_
 // 标记为true的逻辑, 最终会导致爆栈;
-// bug:https://work.aone.alibaba-inc.com/issue/29459333
+// bug:
 struct ObToStringExpr
 {
   ObToStringExpr(ObEvalCtx &ctx, const ObExpr &e) : c_(ctx), e_(e) {}

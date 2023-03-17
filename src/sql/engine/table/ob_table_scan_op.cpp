@@ -694,7 +694,7 @@ int ObTableScanOp::prepare_pushdown_limit_param()
 
   } else if (tsc_rtdef_.has_lookup_limit() || das_ref_.get_das_task_cnt() > 1) {
     //for index back, need to final limit output rows in TableScan operator,
-    //please see me for the reason: https://work.aone.alibaba-inc.com/issue/43232745
+    //please see me for the reason:
     /* for multi-partition scanning, */
     /* the limit operation pushed down to the partition TSC needs to be adjusted */
     /* its rule: */

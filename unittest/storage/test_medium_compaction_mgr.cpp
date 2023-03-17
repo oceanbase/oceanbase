@@ -1,6 +1,6 @@
 // Copyright 2019-2021 Alibaba Inc. All Rights Reserved.
 // Author:
-//     lixia.yq@antgroup.com
+//
 // This file defines test_medium_compaction_mgr.cpp
 //
 

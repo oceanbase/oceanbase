@@ -117,7 +117,7 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
                    index_table_schema->get_data_table_id(), data_table_schema))) {
           LOG_WARN("fail to get data table schema", K(ret), K(index_name));
         } else {
-          ObString table_name; // related issue : https://work.aone.alibaba-inc.com/issue/44979368
+          ObString table_name; // related issue :
           if (OB_FAIL(deep_copy_str(data_table_schema->get_table_name_str(), table_name))) {
             LOG_WARN("failed to deep copy new_db_name", K(ret));
           } else {

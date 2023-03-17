@@ -52,10 +52,10 @@ create table t6 (pk int primary key, a int, b int, c int, d int, e int,
   index idx_b_a_c(b, a, c),
   index idx_b_e_d_c_a(b, e, d, c, a));
 
-##https://aone.alibaba-inc.com/issue/11882687
+##
 create table t7(a int, b int, c int, d int, e int, f int, key k1(a,c,b), key k2(a,b,c,d,e));
 
-##https://workitem.aone.alibaba-inc.com/project/81079/issue/12046883?akProjectId=81079&
+##
 create table t8(a int primary key, b int, c int, d int, e int, f int, index k1(b,c,e), index k2(c,d,e,f));
 
 create table tmp (pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int,
@@ -63,7 +63,7 @@ create table tmp (pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int,
   index idx_c1_c2_c3(c1, c2 ,c3),
   index idx_c1_c2_c3_c4(c1, c2, c3, c4));
 
-## https://aone.alibaba-inc.com/issue/14579791
+##
 create table t9 (c1 int primary key, c2 int, c3 int, c4 varchar(100), c5 int,
            index idx_c2_c5    (c2, c5),
            index idx_c2_c3_c5 (c2, c3, c5),
@@ -329,16 +329,16 @@ explain select  /*+index(t6 idx_b_e_d_c_a)*/ b, d, a from t6 where e = 1 and c =
 
 explain select c from t6 where b = 1 and a > 2 union select pk from tmp;
 
-##https://aone.alibaba-inc.com/issue/11882687
+##
 explain select * from t7 where a >= 0 and a <= 5 and b = 1;
 
-##https://workitem.aone.alibaba-inc.com/project/81079/issue/12046883?akProjectId=81079&
+##
 explain select * from t8 where e = 1 order by b;
 explain select * from t8 where e = 1 or f = 1 order by b;
 explain select * from t8 where d = 1 order by b;
 
 
-## https://aone.alibaba-inc.com/issue/14579791
+##
 
 ## part expr 决定路径
 explain select avg(c1) over (partition by c2) from t9 order by c1;

@@ -550,7 +550,7 @@ desc t1;
 +----------------------------------+--------------+------+-----+---------+-------+
 drop table t1;
 
-## bugfix#https://work.aone.alibaba-inc.com/issue/36895309
+## bugfix#
 drop table if exists T_36895309;
 CREATE TABLE T_36895309(A_0 INT,A_1 INT,A_2 VARCHAR(20),A_3 FLOAT,A_4 DATE);
 INSERT INTO T_36895309 VALUES(1,1,'A',1.23,'1999-09-09'),(2,-1,'nb',3.21,'1111-11-11'),(3,0,'#',6666.6666,'11-11-11'),(4,NULL,NULL,NULL,NULL);

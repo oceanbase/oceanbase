@@ -1763,7 +1763,7 @@ int ObTenantSchema::set_zone_replica_attr_array(
   } else {
     zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
     // call construct func in advance to avoid core status
-    // https://work.aone.alibaba-inc.com/issue/43662004
+    //
     ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
     for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
       const SchemaZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
@@ -1809,7 +1809,7 @@ int ObTenantSchema::set_zone_replica_attr_array(
   } else {
     zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
     // call construct func in advance to avoid core status
-    // https://work.aone.alibaba-inc.com/issue/43662004
+    //
     ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
     for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
       const share::ObZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
@@ -2613,7 +2613,7 @@ int ObLocality::set_zone_replica_attr_array(const common::ObIArray<SchemaZoneRep
     } else {
       zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
       // call construct func in advance to avoid core status
-      // https://work.aone.alibaba-inc.com/issue/43662004
+      //
       ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
       for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
         const SchemaZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
@@ -2664,7 +2664,7 @@ int ObLocality::set_zone_replica_attr_array(const common::ObIArray<share::ObZone
     } else {
       zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
       // call construct func in advance to avoid core status
-      // https://work.aone.alibaba-inc.com/issue/43662004
+      //
       ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
       for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
         const share::ObZoneReplicaAttrSet &src_replica_attr_set = src.at(i);

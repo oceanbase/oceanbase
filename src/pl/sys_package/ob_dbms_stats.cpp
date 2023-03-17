@@ -2592,7 +2592,7 @@ int ObDbmsStats::alter_stats_history_retention(sql::ObExecContext &ctx,
   UNUSED(result);
   number::ObNumber num_retention;
   int64_t new_retention = OPT_DEFAULT_STATS_RETENTION;//default value
-  double retention_tmp = 0.0; // bugfix:https://work.aone.alibaba-inc.com/issue/37980239 retention shouldn't between -1 and 0;
+  double retention_tmp = 0.0; // bugfix:
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_number(num_retention))) {

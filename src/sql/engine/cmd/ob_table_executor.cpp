@@ -563,7 +563,7 @@ int ObAlterTableExecutor::refresh_schema_for_table(
 
 /* 从 3100 开始的版本 alter table 逻辑是将建索引和其他操作放到同一个 rpc 里发到 rs，返回后对每个创建的索引进行同步等，如果一个索引创建失败，则回滚全部索引
    mysql 模式下支持 alter table 同时做建索引操作和其他操作，需要保证 rs 在处理 drop index 之后再处理 add index
-   否则前缀索引会有问题：https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/1907077
+   否则前缀索引会有问题：
 */
 int ObAlterTableExecutor::alter_table_rpc_v2(
     obrpc::ObAlterTableArg &alter_table_arg,

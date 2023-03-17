@@ -85,7 +85,7 @@ private:
 
 private:
   bool inited_;
-  bool init_config_load_; // https://work.aone.alibaba-inc.com/issue/28094065
+  bool init_config_load_; //
   UpdateTask update_task_; // Update local config from internal table
   ObAddr self_;
   ObMySQLProxy *sql_proxy_;

@@ -10,7 +10,7 @@
  * ob_table_filters.cpp
  *
  * Authors:
- *    xuanchao.xc <xuanchao.xc@antgroup.com>
+ *    xuanchao.xc <>
  *
  */
 #define USING_LOG_PREFIX SERVER

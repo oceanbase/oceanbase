@@ -75,7 +75,7 @@ private:
   // 考虑到容错重试，同一个 addr 上可能有多个 sqc 存在，通过 sqc_id_ 来区分 task 归属为哪个 sqc
   int64_t sqc_id_;
   // 记录 Task 是 SQC 中的第几个任务，用于 partial partition wise join 场景
-  // ref: https://lark.alipay.com/xiaochu.yh/doc/cnvh8g
+  // ref:
   int64_t task_id_;
   // slave map group id
   int64_t sm_group_id_;

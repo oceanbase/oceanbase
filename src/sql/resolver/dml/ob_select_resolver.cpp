@@ -1097,7 +1097,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   }
   OZ( resolve_hints(parse_tree.children_[PARSE_SELECT_HINTS]) );
 
-  //bug:https://work.aone.alibaba-inc.com/issue/28716121
+  //bug:
   //由于支持mysql模式下的name window,需要提前解析name window保存下来，然后再解析引用的win expr的表达式,当前实现
   //方式是保存在select stmt中,但是在全部解析完之后没有把那些name window的对应win_expr去除掉,导致生成的计划有问题
   //因此，这里在全部解析完stmt各个部分之后需要根据之前记录的name winexpr个数去除stmt中无用的name win expr
@@ -2480,7 +2480,7 @@ int ObSelectResolver::resolve_all_generated_table_columns(
     /* 这里进行一次重复列名检测是原因是oracle支持generated table含有重复列名的不引用重复列名的查询，比如：
     *  select 1 from (select c1,c1 from t1)；因此在oracle模式resolve generated table时会跳过检查重复列
     *  但是对于select * from(select c1,c1 from t1)；这样的查询肯定引用了，因此必须在展开*对应的查询时进行一次
-    *  检查，如果存在重复列是不允许的；https://work.aone.alibaba-inc.com/issue/29799516
+    *  检查，如果存在重复列是不允许的；
      */
     // if the select item is a duplicable column in generated table, skip the check.
     // else we should set the skip_join_dup parameter to true. 
@@ -4184,7 +4184,7 @@ int ObSelectResolver::check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&exp
   int ret = OB_SUCCESS;
   bool find = false;
   /*
-   * bugfix: https://work.aone.alibaba-inc.com/issue/38935701
+   * bugfix:
    * for grouping/grouping_id:
    * select grouping(1+1) from t1 group by rollup(1+1). 
    */

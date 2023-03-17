@@ -1,6 +1,6 @@
 // Copyright (c) 2022 OceanBase
 //  Authors:
-//    lvling <zhaoruizhe.zrz@oceanbase.com>
+//    lvling <>
 // OceanBase is licensed under Mulan PubL v2.
 // You can use this software according to the terms and conditions of the Mulan PubL v2.
 // You may obtain a copy of Mulan PubL v2 at:

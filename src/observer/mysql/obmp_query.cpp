@@ -92,7 +92,7 @@ int ObMPQuery::process()
   int ret = OB_SUCCESS;
   #ifdef PERF_MODE
   // use for ob layer benchmark
-  // https://yuque.antfin-inc.com/ob/transaction/lqwppx
+  //
   bool layer_perf_hit = false;
   ObLayerPerf layer_perf(this);
   ret = layer_perf.process(layer_perf_hit);
@@ -348,7 +348,7 @@ int ObMPQuery::process()
                 // 进入本分支，说明在multi_query中的某条query parse失败，如果不是语法错，则进入该分支
                 // 如果当前query_count 为1， 则不断连接;如果大于1，
                 // 则需要在发错误包之后断连接，防止客户端一直在等接下来的回包
-                // 这个改动是为了解决https://aone.alibaba-inc.com/project/81079/issue/8834973
+                // 这个改动是为了解决
                 ret = parse_stat.fail_ret_;
                 need_response_error = true;
                 break;
@@ -439,7 +439,7 @@ int ObMPQuery::process()
     need_retry_ = true;
   }
 
-  // bugfix: https://aone.alibaba-inc.com/project/81079/issue/16798408
+  // bugfix:
   // 必须总是将 THIS_WORKER 里的指针设置为 null
   THIS_WORKER.set_session(NULL); // clear session
 
@@ -452,7 +452,7 @@ int ObMPQuery::process()
 
 /*
  * Try to evaluate multiple update queries as a single query to optimize rpc cost
- * for details, please ref to https://work.aone.alibaba-inc.com/issue/23453607
+ * for details, please ref to
  */
 int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &session,
                                                    common::ObIArray<ObString> &queries,

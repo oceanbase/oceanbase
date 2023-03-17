@@ -110,7 +110,7 @@ int ObInitSqcP::process()
     arg_.sqc_handler_ = nullptr;
   }
 
-  // https://work.aone.alibaba-inc.com/issue/37723456
+  //
   if (OB_SUCCESS != ret && is_schema_error(ret)) {
     if (OB_NOT_NULL(sqc_handler)
         && GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
@@ -411,7 +411,7 @@ int ObInitFastSqcP::process()
     }
   }
 
-  // https://work.aone.alibaba-inc.com/issue/37723456
+  //
   if (OB_SUCCESS != ret && is_schema_error(ret)) {
     if (OB_NOT_NULL(sqc_handler)
         && GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
@@ -474,7 +474,7 @@ void ObFastInitSqcCB::on_timeout()
 
 int ObFastInitSqcCB::process()
 {
-  // https://work.aone.alibaba-inc.com/issue/26171617
+  //
   int ret = rcode_.rcode_;
   if (OB_FAIL(ret)) {
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();

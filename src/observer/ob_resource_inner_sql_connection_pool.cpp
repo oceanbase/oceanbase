@@ -123,7 +123,7 @@ int ObResourceInnerSQLConnectionPool::acquire(
       LOG_WARN("conn is null", K(ret), K(conn_id));
     } else if (!inner_conn->is_idle()) {
       if (kill_using_conn) {
-        /* related issue : https://work.aone.alibaba-inc.com/issue/43912619
+        /* related issue :
          * Why we need to set need_trans_rollback flag to inner_conn ?
          * Consider this situation:
          * Local obs inner sql rpc is timeout or gets some errors, and then will transmit a rollback inner sql to remote obs.

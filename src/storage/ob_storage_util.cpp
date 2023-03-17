@@ -309,7 +309,7 @@ int cast_obj(const common::ObObjMeta &src_meta,
     //not support data alteration
     ObObj ori_obj = obj;
     int64_t cm_mode = CM_NONE;
-    //int to uint not check range bug:http://k3.alibaba-inc.com/issue/6656635?versionId=1043693
+    //int to uint not check range bug:
     if(ObIntTC == ori_obj.get_type_class() && ObUIntTC == type_class) {
       obj.set_uint(src_meta.get_type(), static_cast<uint64_t>(ori_obj.get_int()));
     } else if (ObIntTC == ori_obj.get_type_class() && ObBitTC == type_class) {

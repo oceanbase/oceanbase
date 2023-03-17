@@ -130,7 +130,7 @@ int ObExprSubstringIndex::eval_substring_index(
     expr_datum.set_null();
   } else if (0 == str.len_ || 0 == delim.len_) {
     // return empty string if %str or %delim is empty.
-    //重置null flag 防止丢失空串信息 https://work.aone.alibaba-inc.com/issue/30873161
+    //重置null flag 防止丢失空串信息
     expr_datum.null_ = 0;
     expr_datum.len_ = 0;
   } else {
@@ -189,7 +189,7 @@ int ObExprSubstringIndex::eval_substring_index_batch(const ObExpr &expr,
       } else if (0 == text.len_ || 0 == delim.len_ ||
                  0 == (count_val = static_cast<int32_t>(count.get_int()))) {
         // return empty string if %str or %delim is empty.
-        //重置null flag 防止丢失空串信息 https://work.aone.alibaba-inc.com/issue/30873161
+        //重置null flag 防止丢失空串信息
         res[i].null_ = 0;
         res[i].len_ = 0;
       } else if (OB_FAIL(kmp_ctx->init(delim.get_string(),

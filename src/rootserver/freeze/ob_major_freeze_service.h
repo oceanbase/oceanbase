@@ -110,7 +110,7 @@ private:
   common::ObRecursiveMutex lock_;
   // rw_lock_: used for switch_role, not use lock_ in switch_role. Otherwise, if major_freeze
   // hang, switch_role may also hang
-  // https://work.aone.alibaba-inc.com/issue/44368193
+  //
   common::SpinRWLock rw_lock_;
   // switch_lock_: used for avoiding switch_to_leader, switch_to_follower concurrently execute. 
   common::ObRecursiveMutex switch_lock_;

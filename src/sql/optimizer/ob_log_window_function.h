@@ -121,7 +121,7 @@ namespace sql
     // 3. Only the following functions supported: rank,dense_rank,sum,count,min,max
     bool range_dist_parallel_;
 
-    // https://yuque.antfin.com/ob/sql/wf_adaptive_parallel_execution#69270e6f
+    //
     WindowFunctionRoleType role_type_;
 
     // sort keys needed for window function

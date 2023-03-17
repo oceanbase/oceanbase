@@ -1,8 +1,8 @@
 // Copyright 2010-2016 Alibaba Inc. All Rights Reserved.
 // Author:
-//   juehui.lgy@alibaba-inc.com
+//
 // Normalizer:
-//   juehui.lgy@alibaba-inc.com
+//
 // this file defines implementation of full link trace span manager
 
 

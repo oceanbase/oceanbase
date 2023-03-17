@@ -624,7 +624,7 @@ int ObStorageDatumUtils::init(const ObIArray<share::schema::ObColDesc> &col_desc
       STORAGE_LOG(WARN, "Failed to reserve hash func array", K(ret));
     } else {
       // support column order index until next task done
-      // https://aone.alibaba-inc.com/task/39441116
+      //
       // we could use the cmp funcs in the basic funcs directlly
       bool is_null_last = is_oracle_mode_;
       ObCmpFunc cmp_func;

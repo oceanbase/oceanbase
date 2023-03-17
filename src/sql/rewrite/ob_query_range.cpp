@@ -5155,7 +5155,7 @@ int ObQueryRange::definite_key_part(ObKeyPart *&key_part, ObExecContext &exec_ct
       } else if (cur->is_always_false()) { // set key_part false
         key_part->normal_keypart_ = cur->normal_keypart_;
         key_part->key_type_ = T_NORMAL_KEY;
-        // key_part = cur; cause bug -> https://aone.alibaba-inc.com/issue/9827308?spm=0.0.0.0.PlJXuW
+        // key_part = cur; cause bug ->
         break;
       } else if (cur->is_always_true()) {
         // do nothing

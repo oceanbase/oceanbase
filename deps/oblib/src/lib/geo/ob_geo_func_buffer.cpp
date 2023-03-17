@@ -669,7 +669,7 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBufferImpl, ObWkbGeogPoint, ObGeometry *)
           // input should be ObWkbGeogInnerPoint
           bg::buffer(geo_tree->data(), *geo_res, distance_s, side_s, join_round_s, end_round_s, point_circle_s);
           if (geo_res->is_empty()) {
-            // https://aone.alibaba-inc.com/v2/project/81079/bug/42488732
+            //
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("error buffer result for geographic point", K(ret), KP(geo_tree), KP(geo_res),
               K(strategy->distance_val_), K(strategy->has_point_s_),

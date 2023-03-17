@@ -189,7 +189,7 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     // 如果tenant schema变化了, 但table schema没有过期, 则更新tenant schema
     // plan必须不为NULL，因为下层可能会有覆盖错误码的行为，即使计划没有匹配上，
     // ret仍然为success，此时tenant schema version又会被推高，可能有正确性问题
-    // bug link：https://aone.alibaba-inc.com/issue/19829168
+    // bug link：
     if (OB_SUCC(ret) && NULL != matched_pcv && NULL != plan) {
       if (OB_FAIL(matched_pcv->lift_tenant_schema_version(new_tenant_schema_version))) {
         LOG_WARN("failed to lift pcv's tenant schema version", K(ret));

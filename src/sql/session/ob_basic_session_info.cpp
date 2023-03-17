@@ -1760,9 +1760,9 @@ int ObBasicSessionInfo::deep_copy_sys_variable(ObBasicSysVar &sys_var,
     }
 
     // defragment.
-    // https://work.aone.alibaba-inc.com/issue/39958139
+    //
     // Double buffer optimization
-    // https://work.aone.alibaba-inc.com/issue/47795403
+    //
     // Double buffer optimization uses two buffers to cyclically store
     // system variable values. If the currently used buffer reaches the
     // upper limit, the variable value will be defragmented and stored
@@ -3441,7 +3441,7 @@ int ObBasicSessionInfo::get_user_variable(const ObString &var, ObSessionVariable
 {
   int ret = OB_SUCCESS;
   if (var.empty()) {
-   /* bugfix:https://work.aone.alibaba-inc.com/issue/37171897
+   /* bugfix:
     * select @; return NULL;
     * select @""; select @''; select @``; return NULL;
     */

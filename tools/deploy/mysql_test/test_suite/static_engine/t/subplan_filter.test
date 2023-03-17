@@ -273,7 +273,7 @@ insert into t2 (c1, c2, c3, c4) values (29, 12, null, 'a');
 
 --explain_protocol 3
 select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) as x from t1;
-#https://work.aone.alibaba-inc.com/issue/47201028
+#
 select c1, (select c1 from t2 where t2.c1 >= t1.c1 and t2.c2 > t1.c3 limit 1) as x from t1;
 select c1,c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
 select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) and c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;

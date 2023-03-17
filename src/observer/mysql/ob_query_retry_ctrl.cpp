@@ -272,7 +272,7 @@ public:
   virtual void test(ObRetryParam &v) const override
   {
     int ret = OB_SUCCESS;
-    // 设计讨论参考：http://k3.alibaba-inc.com/issue/6601362
+    // 设计讨论参考：
     if (NULL == GCTX.schema_service_) {
       v.client_ret_ = OB_INVALID_ARGUMENT;
       v.retry_type_ = RETRY_TYPE_NONE;
@@ -401,8 +401,8 @@ public:
       // issue#43741246, plan not generated, won't be a remote trans
       // safe to continue with other retry test
     } else if (ObStmt::is_dml_write_stmt(v.result_.get_stmt_type())) {
-      // bugfix: https://aone.alibaba-inc.com/issue/16625449
-      // bugfix: https://work.aone.alibaba-inc.com/issue/22734058
+      // bugfix:
+      // bugfix:
       bool autocommit = v.session_.get_local_autocommit();
       ObPhyPlanType plan_type = v.result_.get_physical_plan()->get_plan_type();
       bool in_transaction = v.session_.is_in_transaction();
@@ -698,7 +698,7 @@ void ObQueryRetryCtrl::schema_error_proc(ObRetryParam &v)
 void ObQueryRetryCtrl::snapshot_discard_proc(ObRetryParam &v)
 {
   if (ObQueryRetryCtrl::is_isolation_RR_or_SE(v.session_.get_tx_isolation())) {
-    // see: https://aone.alibaba-inc.com/req/21981135
+    // see:
     v.client_ret_ = v.err_;
     v.retry_type_ = RETRY_TYPE_NONE;
     LOG_WARN_RET(v.client_ret_, "snapshot discarded in serializable isolation should not retry", K(v));

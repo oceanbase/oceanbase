@@ -257,7 +257,7 @@ ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResol
       if (select_resolver->can_produce_aggr()) {
         final_resolver = select_resolver;
       } else if (lib::is_mysql_mode() && min_level_resolver == NULL) {
-        /* bugfix: https://work.aone.alibaba-inc.com/issue/36773892
+        /* bugfix:
         * in mysql, a const aggr_expr(e.g., count(const_expr)), belongs to the nearest legal level.
         * 
         * select 1 from t1 where  (select 1 from t1 group by pk having  (select 1 from t1 where count(1)));

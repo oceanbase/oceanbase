@@ -273,7 +273,7 @@ int ObPxMSCoordOp::free_allocator()
 {
   int ret = OB_SUCCESS;
   last_pop_row_ = nullptr;
-  //https://work.aone.alibaba-inc.com/issue/32934102
+  //
   //the heap shoud be empty before store_rows_.reset();
   while(OB_SUCC(ret) && row_heap_.count() > 0) {
      const ObChunkDatumStore::LastStoredRow *pop_row = nullptr;

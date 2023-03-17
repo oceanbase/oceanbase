@@ -357,7 +357,7 @@ void ObTimer::run1()
         } else {
           wakeup_time_ = tokens_[0].scheduled_time;
           {
-            // clock safty check. @see http://k3.alibaba-inc.com/issue/5068683
+            // clock safty check. @see
             const int64_t rt1 = ObTimeUtility::current_time();
             const int64_t rt2 = ObTimeUtility::current_time_coarse();
             const int64_t delta = rt1 > rt2 ? (rt1 - rt2) : (rt2 - rt1);

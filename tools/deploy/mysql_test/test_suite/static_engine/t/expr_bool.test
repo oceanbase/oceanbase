@@ -168,7 +168,7 @@ while ($left <= $cnt)
 select case when 'a' = 'a' then 'branch1' when 'b' then c1 else c2 end from t1;
 --echo // 结果应该为2，且when expr上面都应该 有bool expr
 --echo // TODO: 没有出现预期的warning
---echo // cast的bug: https://work.aone.alibaba-inc.com/issue/24092131
+--echo // cast的bug:
 select case when 'a' then 'str' when 'b' then c1 else c2 end from t1;
 --echo // 结果应该为'branch2'，且if表达式会被转为case表达式，但是不应该有bool expr,因为判断本身就带有布尔语义
 select if ('a' = 'b', c1, 'branch2') from t1;

@@ -140,7 +140,7 @@ select concat('[', trim(both c2 from c1), ']') x from t1;
 
 drop table if exists t1;
 drop view if exists v1;
-// bug: https://work.aone.alibaba-inc.com/issue/29127375
+// bug:
 create view v1 as select nullif(trim(repeat('abc', 1+1)), 'a');
 desc v1;
 +---------------------------------------+----------+------+-----+---------+-------+

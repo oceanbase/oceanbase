@@ -650,7 +650,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/43230270"
+    "ref_url": "
   },
   "query_cache_type": {
     "id": 45,
@@ -667,7 +667,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/43230270"
+    "ref_url": "
   },
   "sql_quote_show_create": {
     "id": 46,
@@ -916,7 +916,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/41848210"
+    "ref_url": "
   },
   "ssl_ca": {
     "id": 66,
@@ -1110,7 +1110,7 @@
     "publish_version": "312",
     "info_cn": "控制返回的ok包中是否包含schema变更的信息",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/pw3wd2"
+    "ref_url": "
   },
   "session_track_system_variables": {
     "id": 82,
@@ -1122,7 +1122,7 @@
     "publish_version": "312",
     "info_cn": "控制返回的ok包中是否包含系统变量变更的信息",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/pw3wd2"
+    "ref_url": "
   },
   "session_track_state_change": {
     "id": 83,
@@ -1134,7 +1134,7 @@
     "publish_version": "312",
     "info_cn": "控制返回的ok包中是否包含session状态变更的信息",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/pw3wd2"
+    "ref_url": "
   },
   "have_query_cache": {
     "id": 84,
@@ -1146,7 +1146,7 @@
     "publish_version": "323",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/43230270"
+    "ref_url": "
   },
   "query_cache_limit": {
     "id": 85,
@@ -1160,7 +1160,7 @@
     "publish_version": "323",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/43230270"
+    "ref_url": "
   },
   "query_cache_min_res_unit": {
     "id": 86,
@@ -1174,7 +1174,7 @@
     "publish_version": "323",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/43230270"
+    "ref_url": "
   },
   "query_cache_wlock_invalidate": {
     "id": 87,
@@ -1186,7 +1186,7 @@
     "publish_version": "323",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/43230270"
+    "ref_url": "
   },
   "binlog_format": {
     "id": 88,
@@ -1203,7 +1203,7 @@
     "publish_version": "324",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/41848210"
+    "ref_url": "
   },
   "binlog_checksum": {
     "id": 89,
@@ -1215,7 +1215,7 @@
     "publish_version": "324",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/41848210"
+    "ref_url": "
   },
   "binlog_rows_query_log_events": {
     "id": 90,
@@ -1227,7 +1227,7 @@
     "publish_version": "324",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/41848210"
+    "ref_url": "
   },
   "log_bin": {
     "id": 91,
@@ -1239,7 +1239,7 @@
     "publish_version": "324",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/41848210"
+    "ref_url": "
   },
   "server_uuid": {
     "id": 92,
@@ -1251,7 +1251,7 @@
     "publish_version": "324",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/req/41848210"
+    "ref_url": "
   },
   "default_storage_engine": {
     "id": 93,
@@ -1277,7 +1277,7 @@
     "publish_version": "400",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://aone.alibaba-inc.com/task/45803397"
+    "ref_url": "
   },
   "regexp_stack_limit": {
     "id": 95,
@@ -2494,7 +2494,7 @@
     "publish_version": "226",
     "info_cn": "限制导入导出功能访问的路径",
     "background_cn": "导入导出功能未限制文件访问可能存在漏洞",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/sxwpug"
+    "ref_url": "
   },
   "plsql_warnings": {
     "id": 10103,
@@ -2507,7 +2507,7 @@
     "publish_version": "3.1.0",
     "info_cn": "控制pl/sql编译器的报错行为，可以指定某类型或某个warning码的状态为：enable，disable，error",
     "background_cn": "pl/sql编译器的警告信息分成了几个分类，这个系统参数可以控制这些警告信息的行为",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/xxibln"
+    "ref_url": "
   },
   "_enable_parallel_query": {
     "id": 10104,
@@ -2519,7 +2519,7 @@
     "publish_version": "227",
     "info_cn": "在session上打开parallel query配置项，查询默认情况下才可以被并行执行（parallel>=2)",
     "background_cn": "px上控制parallel的方式有很多，session上有对应的parallel的控制开关，这个开关用于控制session级别的默认并行度是否可以大于等于2",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/tblezn"
+    "ref_url": "
   },
   "_force_parallel_query_dop": {
     "id": 10105,
@@ -2531,7 +2531,7 @@
     "publish_version": "310",
     "info_cn": "在session上打开parallel query配置项，并指定默认并行度",
     "background_cn": "px上控制parallel的方式有很多，session上有对应的parallel的控制开关，这个变量用于设置session级别的 query 默认并行度大小",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/bpv992"
+    "ref_url": "
   },
   "_force_parallel_dml_dop": {
     "id": 10106,
@@ -2543,7 +2543,7 @@
     "publish_version": "310",
     "info_cn": "在session上打开parallel dml配置项，并指定默认并行度。当未通过 hint 指定 dml 并行度时，会使用本变量值作为默认并行度",
     "background_cn": "px上控制parallel的方式有很多，session上有对应的parallel的控制开关，这个变量用于设置session级别的 dml 默认并行度大小",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/bpv992"
+    "ref_url": "
   },
   "ob_pl_block_timeout": {
     "id": 10107,
@@ -2558,7 +2558,7 @@
     "publish_version": "227",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/gry0a1"
+    "ref_url": "
   },
   "transaction_read_only": {
     "id": 10108,
@@ -2574,7 +2574,7 @@
     "publish_version": "320",
     "info_cn": "控制是否只允许开启只读事务",
     "background_cn": "用户可以通过这两个变量访问或者设置事务的访问模式，当transaction_read_only设置为true时，不允许执行dml语句",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/qcneoc"
+    "ref_url": "
   },
   "resource_manager_plan": {
     "id": 10109,
@@ -2587,7 +2587,7 @@
     "publish_version": "320",
     "info_cn": "指定租户的资源隔离计划",
     "background_cn": "租户内的普通线程和并行执行线程会相互抢占CPU资源，通过给租户指定资源隔离计划，可以控制资源抢占策略，隔离资源使用量",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/do11tp"
+    "ref_url": "
   },
   "performance_schema": {
     "id": 10110,
@@ -2599,7 +2599,7 @@
     "publish_version": "227",
     "info_cn": "向客户端声明是否支持 performance 信息查询",
     "background_cn": "纯兼容性变量。不支持 performance_schema 系统变量，导致 8.0 JDBC 驱动在连接认证后初始化系统变量阶段执行 select @performance_schema 抛出异常",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/mg0sbv"
+    "ref_url": "
   },
   "nls_currency": {
     "id": 10111,
@@ -2612,7 +2612,7 @@
     "publish_version": "320",
     "info_cn": "L数字格式元素的本地货币符号",
     "background_cn": "兼容 oracle number format model L 数字格式元素",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/efqk1r"
+    "ref_url": "
   },
   "nls_iso_currency": {
     "id": 10112,
@@ -2625,7 +2625,7 @@
     "publish_version": "320",
     "info_cn": "C数字格式元素的国际货币符号",
     "background_cn": "兼容 oracle number format model C 数字格式元素",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/efqk1r"
+    "ref_url": "
   },
   "nls_dual_currency": {
     "id": 10113,
@@ -2638,7 +2638,7 @@
     "publish_version": "320",
     "info_cn": "U数字格式元素的双货币符号",
     "background_cn": "兼容 oracle number format model U 数字格式元素",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/efqk1r"
+    "ref_url": "
   },
   "plsql_ccflags" : {
     "id": 10115,
@@ -2651,7 +2651,7 @@
     "publish_version": "330",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/encpoc"
+    "ref_url": "
   },
   "_ob_proxy_session_temporary_table_used": {
     "id": 10116,
@@ -2663,7 +2663,7 @@
     "publish_version": "310",
     "info_cn": "标记当前Session是否使用过Session级别临时表，用于告知proxy并修改路由决策",
     "background_cn": "为了解决Session临时表断链接时可能导致的问题，当Session临时表第一次使用后，后续请求Proxy只会路由到同一个Session",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/hinq1e"
+    "ref_url": "
   },
   "_enable_parallel_ddl": {
     "id": 10117,
@@ -2675,7 +2675,7 @@
     "publish_version": "330",
     "info_cn": "标记Session上并行DDL是否被打开",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin.com/ob/product_functionality_review/qfilyl"
+    "ref_url": "
   },
   "_force_parallel_ddl_dop": {
     "id": 10118,
@@ -2687,7 +2687,7 @@
     "publish_version": "330",
     "info_cn": "在session上打开parallel ddl配置项，并指定默认并行度。当未通过 hint 指定 ddl 并行度时，会使用本变量值作为默认并行度",
     "background_cn": "ddl上控制parallel的方式有很多，session上有对应的parallel的控制开关，这个变量用于设置session级别的 ddl 默认并行度大小",
-    "ref_url": "https://yuque.antfin.com/ob/product_functionality_review/qfilyl"
+    "ref_url": "
   },
   "cursor_sharing": {
     "id": 10119,
@@ -2703,7 +2703,7 @@
     "publish_version": "330",
     "info_cn": "在session上打开控制是否参数化的配置项。当处于exact模式时,不进行参数化;处于Force模式时,进行参数化。默认进行参数化。",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin.com/ob/product_functionality_review/owadoa"
+    "ref_url": "
   },
   "_optimizer_null_aware_antijoin": {
     "id": 10120,
@@ -2715,7 +2715,7 @@
     "publish_version": "330",
     "info_cn": "控制优化器能否生成null aware anti join 的计划",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/gq07x2"
+    "ref_url": "
   },
   "_px_partial_rollup_pushdown": {
     "id": 10121,
@@ -2759,7 +2759,7 @@
     "publish_version": "330",
     "info_cn": "创建mysql模式的审计日志定期清理任务",
     "background_cn": "示例: create_audit_purge_job='trail_type:interval:jobname:use_last_archive_timestamp'",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/spmuw5"
+    "ref_url": "
   },
   "_drop_audit_purge_job": {
     "id": 10124,
@@ -2771,7 +2771,7 @@
     "publish_version": "330",
     "info_cn": "删除mysql模式的审计日志定期清理任务",
     "background_cn": "示例: drop_audit_purge_job='jobname'",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/spmuw5"
+    "ref_url": "
   },
   "_set_purge_job_interval": {
     "id": 10125,
@@ -2783,7 +2783,7 @@
     "publish_version": "330",
     "info_cn": "更新purge job的interval时间",
     "background_cn": "示例: set_purge_job_interval='jobname:interval'",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/spmuw5"
+    "ref_url": "
   },
   "_set_purge_job_status": {
     "id": 10126,
@@ -2795,7 +2795,7 @@
     "publish_version": "330",
     "info_cn": "更新purge job的状态，控制job是否生效",
     "background_cn": "示例: set_purge_job_status='jobname:status'",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/spmuw5"
+    "ref_url": "
   },
   "_set_last_archive_timestamp": {
     "id": 10127,
@@ -2807,7 +2807,7 @@
     "publish_version": "330",
     "info_cn": "设置删除的时间点信息，需要使用从1970开始的utc时间，微妙为单位",
     "background_cn": "示例: set_last_archive_timestamp='trail_type:timestamp'",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/spmuw5"
+    "ref_url": "
   },
   "_clear_last_archive_timestamp": {
     "id": 10128,
@@ -2819,7 +2819,7 @@
     "publish_version": "330",
     "info_cn": "清除删除的时间点信息",
     "background_cn": "示例: clear_last_archive_timestamp='trail_type'",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/spmuw5"
+    "ref_url": "
   },
   "_aggregation_optimization_settings": {
     "id": 10129,
@@ -2831,7 +2831,7 @@
     "publish_version": "330",
     "info_cn": "",
     "background_cn": "用于调优group by 和distinct的执行行为",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/aqu2w9"
+    "ref_url": "
   },
   "_px_shared_hash_join": {
     "id": 10130,
@@ -2855,7 +2855,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/clz1a5"
+    "ref_url": "
   },
   "innodb_strict_mode": {
     "id": 10132,
@@ -2867,7 +2867,7 @@
     "publish_version": "400",
     "info_cn": "特定场合下，警告会当成错误返回",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/oa7dzn"
+    "ref_url": "
   },
   "_windowfunc_optimization_settings": {
     "id": 10133,
@@ -2881,7 +2881,7 @@
     "publish_version": "400",
     "info_cn": "window function优化设置",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/vlnzlh"
+    "ref_url": "
   },
   "ob_enable_rich_error_msg": {
     "id": 10134,
@@ -2893,7 +2893,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/zst4cy"
+    "ref_url": "
   },
   "log_row_value_options": {
     "id": 10136,
@@ -2906,7 +2906,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/wan7iw4mox8vgkfm"
+    "ref_url": "
   },
   "ob_max_read_stale_time": {
     "id": 10137,
@@ -2919,7 +2919,7 @@
     "publish_version": "410",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin.com/ob/product_functionality_review/ns7okery0azyvlnp"
+    "ref_url": "
   },
   "_optimizer_gather_stats_on_load": {
     "id": 10138,
@@ -2931,7 +2931,7 @@
     "publish_version": "400",
     "info_cn": "控制在insert into select下是否默认收集统计信息",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/bgfhtiie1m39aawn"
+    "ref_url": "
   },
   "_set_reverse_dblink_infos": {
     "id": 10139,
@@ -2943,6 +2943,6 @@
     "publish_version": "410",
     "info_cn": "用于dblink写事务中, TM端通过设置系统变量的方式告知RM端关于建立反向dblink的必要信息",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/giztpw"
+    "ref_url": "
   }
 }

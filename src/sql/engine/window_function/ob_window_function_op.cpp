@@ -654,7 +654,7 @@ int ObWindowFunctionOp::NonAggrCellLeadOrLag::eval(RowsReader &row_reader,
           lead_lag_params[VALUE_EXPR] = *tmp_result;
           if (wf_info_.is_ignore_null_
               && tmp_result->is_null()) {
-            //bug: https://work.aone.alibaba-inc.com/issue/24124629
+            //bug:
             //row_idx为null的时候，非ignore nulls下漏掉step++;
             step = (j == row_idx) ? step+1 : step;
           } else if (step++ == offset) {

@@ -212,7 +212,7 @@ int ObForeignKeyConstraintValidationTask::check_fk_by_send_sql() const
   ObSchemaGetterGuard schema_guard;
   // notice that data_table_id_ may be parent_table_id or child_table_id,
   // for example: data_table_id will be parent_table_id when altering non-ref column type of parent table.
-  // https://work.aone.alibaba-inc.com/issue/38544828
+  //
   const ObTableSchema *data_table_schema = nullptr;
   const ObDatabaseSchema *data_database_schema = nullptr;
   const ObTableSchema *child_table_schema = nullptr;

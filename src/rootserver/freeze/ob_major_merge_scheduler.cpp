@@ -317,7 +317,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
       // Place is_last_merge_complete() to the head of this while loop.
       // So as to break this loop at once, when the last merge is complete.
       // Otherwise, may run one extra loop that should not run, and thus incur error.
-      // https://work.aone.alibaba-inc.com/issue/45954449
+      //
       if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
         LOG_WARN("fail to get zone global merge info", KR(ret));
       } else if (global_info.is_last_merge_complete()) {
@@ -554,7 +554,7 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
           // since merge_info can be reload at any time.
           // 1) Larger:  e.g., broadcast_scn (that has increased) of zones is reload in one
           // new epoch, while global_broadcast_scn is the one generated in one old epoch.
-          // https://work.aone.alibaba-inc.com/issue/46027393
+          //
           // 2) Smaller: broadcast_scn of new added zones may be smaller than global_broadcast_scn.
           // 3) Equal:   the common case.
 
@@ -603,7 +603,7 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
             // cur_all_merged_scn >= cur_merged_scn
             // 1. Equal: snapshot_version of all tablets change to frozen_scn after major compaction
             // 2. Greater: In backup-restore situation, tablets may have higher snapshot_version, which
-            // is larger than current frozen_scn. https://work.aone.alibaba-inc.com/issue/45933591
+            // is larger than current frozen_scn.
             //
             // cur_all_merged_scn >= ori_all_merged_scn
             // 1. Greater: all_merged_scn will increase like last_merged_scn after major compaction
@@ -749,7 +749,7 @@ int ObMajorMergeScheduler::try_update_epoch_and_reload()
         // Here, we do not know if freeze_service_epoch in __all_service_epoch has been updated to
         // latest_epoch. If it has been updated to latest_epoch, freeze_service_epoch in memory
         // must also be updated to latest_epoch. So as to keep freeze_service_epoch consistent in
-        // memory and table. https://work.aone.alibaba-inc.com/issue/47854487
+        // memory and table.
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(update_epoch_in_memory_and_reload())) {
           if (OB_EAGAIN == tmp_ret) {

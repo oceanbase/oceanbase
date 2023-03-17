@@ -3039,7 +3039,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         // func_name
         if (T_FUN_SYS_ORA_DECODE == expr->get_expr_type()) {
           //同一个函数 在Oracle下名为decode， 在MySQL下名为ora_decode
-          // for https://work.aone.alibaba-inc.com/issue/31150999
+          // for
           // 保证SQL反拼不会出错
           if (lib::is_oracle_mode()) {
             func_name = "decode";

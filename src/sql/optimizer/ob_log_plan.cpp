@@ -8299,7 +8299,7 @@ int ObLogPlan::allocate_sort_as_top(ObLogicalOperator *&top,
 
 /*
  * Limit clause will trigger a cost re-estimation phase based on a uniform distribution assumption.
- * For certain plans, this assumption may result in bad plans (https://aone.alibaba-inc.com/issue/18668063).
+ * For certain plans, this assumption may result in bad plans (
  * instead of choosing minimal-cost plans, we prefer more reliable plans.
  */
 int ObLogPlan::candi_allocate_limit(const ObIArray<OrderItem> &order_items)

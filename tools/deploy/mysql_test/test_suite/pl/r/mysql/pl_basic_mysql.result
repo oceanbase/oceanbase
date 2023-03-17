@@ -1958,7 +1958,7 @@ ERROR 02000: Unhandled user-defined not found condition
 drop function f;
 
 ### need has return in mysql function
-### https://work.aone.alibaba-inc.com/issue/34977232
+###
 DROP FUNCTION IF EXISTS `fun6`//
 
 CREATE FUNCTION fun6 ( p1 INT) RETURNS VARCHAR(20)
@@ -1996,7 +1996,7 @@ SELECT @num//
 DROP FUNCTION IF EXISTS `fun6`//
 
 ### label dup
-### https://work.aone.alibaba-inc.com/issue/34954831
+###
 DROP TABLE IF EXISTS result1//
 CREATE TABLE result1(
 id INT,
@@ -2058,7 +2058,7 @@ DROP PROCEDURE IF EXISTS `pro_2`//
 DROP PROCEDURE IF EXISTS `pro_3`//
 
 ###   ### varchar
-###   ### https://work.aone.alibaba-inc.com/issue/35400448
+###   ###
 ###   DROP TABLE IF EXISTS t2//
 ###   --error 1074
 ###   CREATE TABLE t2 (
@@ -2084,7 +2084,7 @@ DROP PROCEDURE IF EXISTS `pro_3`//
 ###   --error 1305
 ###   SELECT fun_l()//
 ### char
-### https://work.aone.alibaba-inc.com/issue/35399998
+###
 DROP TABLE IF EXISTS t1//
 DROP TABLE IF EXISTS t2//
 CREATE TABLE t1 (
@@ -2093,7 +2093,7 @@ CREATE TABLE t1 (
    d1 CHAR(255)
  )//
 ### --error 1074
-### TODO: https://work.aone.alibaba-inc.com/issue/35400448
+### TODO:
 ### CREATE TABLE t2 (
 ###   id INT,
 ###   res1 VARCHAR(128),
@@ -2123,7 +2123,7 @@ SELECT * FROM t1//
 +------+------+------+
 
 ### varbinary
-### https://work.aone.alibaba-inc.com/issue/35614023
+###
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (
   d1 VARBINARY(65536)
@@ -2147,7 +2147,7 @@ SELECT fun_l()//
 ERROR 42000: FUNCTION fun_l does not exist
 
 ### number
-### https://work.aone.alibaba-inc.com/issue/35302277
+###
 DROP FUNCTION IF EXISTS `fun_l`//
 CREATE FUNCTION fun_l() RETURNS DEC(65,30)
 BEGIN
@@ -2170,7 +2170,7 @@ SELECT fun_2()//
 ERROR 42000: FUNCTION fun_2 does not exist
 
 ### datetime
-### https://work.aone.alibaba-inc.com/issue/35346065
+###
 DROP TABLE IF EXISTS t2//
 CREATE TABLE t2 (
   id INT,
@@ -2189,7 +2189,7 @@ SELECT fun_l()//
 ERROR 42000: FUNCTION fun_l does not exist
 
 ### datetime max value insert fail
-### https://work.aone.alibaba-inc.com/issue/35345945
+###
 DROP TABLE IF EXISTS t2//
 CREATE TABLE t2 (
   id INT,
@@ -2219,7 +2219,7 @@ SELECT * FROM t2//
 +------+----------------------------------------+---------------------+---------------------+----------------------------+
 
 ### int
-### https://work.aone.alibaba-inc.com/issue/35302003
+###
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (
   id INT,
@@ -2244,7 +2244,7 @@ SELECT * FROM t1//
 
 ### commit
 ### rollback
-### https://work.aone.alibaba-inc.com/issue/34756672
+###
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1
 ( a INT
@@ -2341,7 +2341,7 @@ END//
 ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
 
 ### BIT
-### https://work.aone.alibaba-inc.com/issue/35280082
+###
 DROP TABLE IF EXISTS t1;//
 DROP PROCEDURE IF EXISTS `pro_2`;//
 CREATE PROCEDURE pro_2()
@@ -2353,7 +2353,7 @@ END;
 ERROR 42000: Display width out of range for column 'CREATE TABLE t1 (id INT,a BIT(65))' (max = 64)
 
 ### load data
-### https://work.aone.alibaba-inc.com/issue/34756578
+###
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (a INT)//
 INSERT INTO t1 VALUES (1),(2),(3)//
@@ -2366,7 +2366,7 @@ END//
 ERROR HY000: 'LOAD DATA' is not allowed in stored procedure.
 
 ### lock
-### https://work.aone.alibaba-inc.com/issue/34756555
+###
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (a INT)//
 INSERT INTO t1 VALUES (1),(2),(3)//

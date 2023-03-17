@@ -1783,7 +1783,7 @@ int ObTransformSimplifyGroupby::do_prune_rollup(ObSelectStmt *stmt, const int64_
   return ret;
 }
 
-//bug:https://work.aone.alibaba-inc.com/issue/43889458
+//bug:
 // create table t1(c1 int, c2 int);
 // select sum(c1) from t1 group by c1,c2 with rollup having sum(c1) > 1 ==> can't prune
 int ObTransformSimplifyGroupby::get_valid_having_exprs_contain_aggr(

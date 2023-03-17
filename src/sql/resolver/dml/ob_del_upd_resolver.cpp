@@ -3207,7 +3207,7 @@ int ObDelUpdResolver::build_row_for_empty_brackets(ObArray<ObRawExpr*> &value_ro
         }
       } else if (item->is_auto_increment()) {
         // insert into t (..) values (); 场景下不可以自动生成 nextval 表达式，而应该生成 null
-        // 否则会出现问题：https://work.aone.alibaba-inc.com/issue/27172629
+        // 否则会出现问题：
         if (OB_FAIL(ObRawExprUtils::build_null_expr(*params_.expr_factory_, expr))) {
           LOG_WARN("failed to build next_val expr as null", K(ret));
         } else if (OB_FAIL(value_row.push_back(expr))) {

@@ -3018,7 +3018,7 @@ int ObSchemaMgr::rebuild_schema_meta_if_not_consistent()
 
   if (!check_schema_meta_consistent()) {
     LOG_WARN("schema meta is not consistent, need rebuild", K(ret));
-    // https://aone.alibaba-inc.com/issue/8217776
+    //
     if (OB_FAIL(rebuild_table_hashmap(fk_cnt, cst_cnt))) {
       LOG_WARN("rebuild table hashmap failed", K(ret));
     } else if (OB_FAIL(rebuild_db_hashmap())) {

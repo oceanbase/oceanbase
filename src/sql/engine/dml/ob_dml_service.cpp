@@ -243,7 +243,7 @@ int ObDMLService::create_rowkey_check_hashset(int64_t estimate_row,
       rowkey_dist_ctx = new (buf) SeRowkeyDistCtx();
       int64_t match_rows = estimate_row > ObDMLBaseCtDef::MIN_ROWKEY_DISTINCT_BUCKET_NUM ?
                             estimate_row : ObDMLBaseCtDef::MIN_ROWKEY_DISTINCT_BUCKET_NUM;
-      // https://work.aone.alibaba-inc.com/issue/23348769
+      //
       // match_rows是优化器估行的结果，如果这个值很大，
       // 直接创建有这么多bucket的hashmap会申请
       // 不到内存，这里做了限制为64k，防止报内存不足的错误
@@ -1009,7 +1009,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
       }
     }
     if (OB_SUCC(ret)) {
-      //because of this bug: https://work.aone.alibaba-inc.com/issue/31915604
+      //because of this bug:
       //if the updated row is moved across partitions, we must delete old row at first
       //and then store new row to a temporary buffer,
       //only when all old rows have been deleted, new rows can be inserted

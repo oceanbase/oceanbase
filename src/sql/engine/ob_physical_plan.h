@@ -530,7 +530,7 @@ private:
   int16_t regexp_op_count_;
   // for like expression's optimization
   int16_t like_op_count_;
-  // for px fast path https://yuque.antfin-inc.com/ob/sql/xzrw9m
+  // for px fast path
   int16_t px_exchange_out_op_count_;
   bool is_sfu_;
   //if the stmt  contains user variable assignment

@@ -3674,7 +3674,7 @@ select /*+no_rewrite, use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzq
 | A100013208 | A100013208 | 20605     | NULL    | NULL    |
 +------------+------------+-----------+---------+---------+
 
-## bug: https://work.aone.alibaba-inc.com/issue/32926523
+## bug:
 drop table if exists t1, t2;
 create table t1 (c1 int, c2 int, primary key(c1));
 create table t2 (c1 int, c2 int, primary key(c2));

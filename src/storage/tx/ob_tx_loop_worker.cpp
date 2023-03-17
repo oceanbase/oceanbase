@@ -162,7 +162,7 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
       // tx gc, interval = 15s
       if (can_tx_gc) {
         // TODO shanyan.g close ctx gc temporarily because of logical bug
-        // https://work.aone.alibaba-inc.com/issue/42892101
+        //
         do_tx_gc_(cur_ls_ptr, min_start_scn, status);
       }
 

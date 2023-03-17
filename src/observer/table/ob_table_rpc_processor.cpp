@@ -294,7 +294,7 @@ int ObTableApiProcessorBase::init_session()
 
   // ensure allocator is constructed before session to
   // avoid coredump at observer exit
-  // https://work.aone.alibaba-inc.com/issue/38530967
+  //
   ObArenaAllocator *allocator = &session_alloc();
   oceanbase::sql::ObSQLSessionInfo &sess = session();
 
@@ -743,7 +743,7 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
       ret = try_process();
       did_local_retry = false;
       // is_partition_change_error(ret) || is_master_changed_error(ret) retry in client
-      // OB_SCHEMA_EAGAIN: https://aone.alibaba-inc.com/task/35541305
+      // OB_SCHEMA_EAGAIN:
       if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret || OB_SCHEMA_EAGAIN == ret)
           && retry_policy_.allow_retry()) {
         int64_t now = ObTimeUtility::current_time();

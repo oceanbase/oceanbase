@@ -7529,7 +7529,7 @@ int ObPLCodeGenerator::final_expression(ObPLCompileUnit &pl_func)
           LOG_WARN("Invalid arguments", K(i), K(raw_expr), K(expression), K(ret));
         } else {
           // TODO bin.lb: No need to generate expression if static engine enabled
-          // https://aone.alibaba-inc.com/project/81079/task/34963274
+          //
           if (OB_FAIL(expr_generator.generate(*raw_expr, *expression))) {
             SQL_LOG(WARN, "Generate post_expr error", K(ret), KPC(raw_expr));
           } else {

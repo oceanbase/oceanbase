@@ -1,6 +1,6 @@
 // Copyright 2010-2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//   ailing.lcq@alibaba-inc.com
+//
 
 #define USING_LOG_PREFIX SQL_ENG
 
