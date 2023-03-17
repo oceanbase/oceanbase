@@ -421,8 +421,6 @@ int ObLogRestoreHandler::try_retire_task(ObFetchLogTask &task, bool &done)
     CLOG_LOG(ERROR, "error unexpected, log restored to_end, just skip it", K(task), KPC(this), K(parent_));
     done = true;
     context_.issue_task_num_--;
-  } else if (context_.max_fetch_lsn_ >= task.start_lsn_) {
-    task.cur_lsn_ = context_.max_fetch_lsn_;
   }
   return ret;
 }
