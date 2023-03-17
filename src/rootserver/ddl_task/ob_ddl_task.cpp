@@ -2032,7 +2032,6 @@ int ObDDLWaitColumnChecksumCtx::init(
 void ObDDLWaitColumnChecksumCtx::reset()
 {
   is_inited_ = false;
-  is_calc_done_ = false;
   source_table_id_ = OB_INVALID_ID;
   target_table_id_ = OB_INVALID_ID;
   schema_version_ = 0;
@@ -2051,12 +2050,11 @@ int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
   int64_t success_count = 0;
   int64_t send_succ_count = 0;
   int ret = OB_SUCCESS;
+  bool is_calc_done = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (is_calc_done_) {
-    // do nothing
-  } else {
+  } else if (!is_calc_done) {
     SpinRLockGuard guard(lock_);
     const int64_t check_count = stat_array_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < check_count; ++i) {
@@ -2067,7 +2065,7 @@ int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
       } else if (item.snapshot_ <= 0) {
         // calc rpc not send, by pass
       } else if (CCS_FAILED == item.col_checksum_stat_) {
-        is_calc_done_ = true;
+        is_calc_done = true;
         ret = item.ret_code_;
         LOG_WARN("current column checksum status failed", K(ret), K(item));
       } else if (item.col_checksum_stat_ == ColChecksumStat::CCS_SUCCEED) {
@@ -2075,10 +2073,11 @@ int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
       }
     }
     if (check_count == success_count) {
-      is_calc_done_ = true;
+      is_calc_done = true;
+      is_column_checksum_ready = true;
     }
   }
-  if (OB_SUCC(ret) && !is_calc_done_) {
+  if (OB_SUCC(ret) && !is_calc_done) {
     if (0 != last_drive_ts_  && last_drive_ts_ + timeout_us_ < ObTimeUtility::current_time()) {
       // wait too long, refresh to retry send rpc
       if (OB_FAIL(refresh_zombie_task())) {
@@ -2092,7 +2091,6 @@ int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
       last_drive_ts_ = ObTimeUtility::current_time();
     }
   }
-  is_column_checksum_ready = is_calc_done_;
   if (REACH_TIME_INTERVAL(1000L * 1000L)) {
     LOG_INFO("try wait checksum", K(ret), K(stat_array_.count()), K(success_count), K(send_succ_count));
   }
@@ -2217,8 +2215,6 @@ int ObDDLWaitColumnChecksumCtx::send_calc_rpc(int64_t &send_succ_count)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (is_calc_done_) {
-    // do nothing
   } else if (OB_ISNULL(root_service = GCTX.root_service_)
       || OB_ISNULL(location_service = GCTX.location_service_)) {
     ret = OB_ERR_SYS;
