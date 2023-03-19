@@ -77,7 +77,7 @@ enum TX_CTX_SSTABLE_COL_IDX : int64_t
  * └────────────┴──────────────┴─────────────┴────────────┴──────────────────────────────────┘
  *
  * This iterator will execute twice sorting and once reading from old tx data sstable.
- * For more details, see https://yuque.antfin-inc.com/ob/transaction/lurtok
+ * For more details, see 
  *
  */
 

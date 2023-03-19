@@ -304,7 +304,7 @@ int ObKeyPart::intersect(ObKeyPart *other, bool contain_row)
     ret = OB_INVALID_ARGUMENT;
     SQL_REWRITE_LOG(WARN, "ObKeyPart not equal", K(*this), K(*other));
   } else {
-    //bug:https://work.aone.alibaba-inc.com/issue/41147694
+    //bug:
     ObObj &s1 = normal_keypart_->start_;
     ObObj &e1 = normal_keypart_->end_;
     ObObj &s2 = other->normal_keypart_->start_;

@@ -17303,7 +17303,7 @@ int ObDDLService::create_table_like(const ObCreateTableLikeArg &arg)
       } else if (is_inner_table(orig_table_schema->get_table_id())) {
         // tablegroup of system table is oceanbase,
         // Including the user table in it may cause some unexpected problems, please ban it here
-        // https://work.aone.alibaba-inc.com/issue/22213436
+        // 
         ret = OB_ERR_WRONG_OBJECT;
         LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(arg.origin_db_name_), to_cstring(arg.origin_table_name_),
                        "BASE TABLE");
@@ -17507,7 +17507,7 @@ int ObDDLService::drop_table_in_trans(
       for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count(); i++) {
         const ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
         if (foreign_key_info.is_parent_table_mock_) {
-          // TODO:@xiaofeng.lby, delete this restriction, https://yuque.antfin-inc.com/ob/product_functionality_review/si89mc
+          // TODO:@xiaofeng.lby, delete this restriction, 
           if (OB_NOT_NULL(drop_table_set)) {
             if (drop_table_set->count() > 1) {
               ret = OB_NOT_SUPPORTED;
@@ -19945,7 +19945,7 @@ int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_sch
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, table_id, table))) {
     LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(table)) {
-    // bugfix: https://work.aone.alibaba-inc.com/issue/45050614
+    // bugfix: 
     // virtual table index may be dropped with virtual table, so here we ignore OB_TABLE_NOT_EXIST failure.
     LOG_INFO("table has already been dropped, just ignore",
              K(tenant_id), K(table_id), "table_name", table_schema.get_table_name());
@@ -21265,7 +21265,7 @@ int ObDDLService::create_tenant_end(const uint64_t tenant_id)
       int64_t new_schema_version = OB_INVALID_VERSION;
       ObSchemaService *schema_service_impl = schema_service_->get_schema_service();
       // Ensure that the schema_version monotonically increases among tenants' cross-tenant transactions
-      // https://aone.alibaba-inc.com/issue/20970156
+      // 
       if (OB_ISNULL(schema_service_impl)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema_service_impl is null", K(ret));
@@ -31075,7 +31075,7 @@ int ObDDLService::do_keystore_ddl(const obrpc::ObKeystoreDDLArg &arg)
   return ret;
 }
 
-// bugfix: https://work.aone.alibaba-inc.com/issue/29886344
+// bugfix: 
 // In order to avoid the problem that log_id and schema_version cannot maintain the partial order relationship
 // caused by concurrent submission of DDL transactions of different sessions of inner_sql.
 // Before the DDL transaction is submitted, lock the same row of __all_ddl_operation (non-partitioned table)

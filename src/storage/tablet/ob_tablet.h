@@ -529,7 +529,7 @@ private:
 
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
-  // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
+  // yuque : 
 
   bool is_inited_;
 };

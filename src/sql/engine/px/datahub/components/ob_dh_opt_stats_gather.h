@@ -1,6 +1,6 @@
 // Copyright 1999-2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//   liuqifan.lqf@oceanbase.com
+//   
 //
 
 #ifndef __OB_SQL_ENG_PX_DH_OPT_STATS_GATHER_H__

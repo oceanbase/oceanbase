@@ -3158,7 +3158,7 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
     }
     else {
       /* 处理mysql的date，datetime数据类型。
-          https://work.aone.alibaba-inc.com/issue/31486056
+          
           create table t1_date(c1 date,c2 int) partition by range columns(c1) (partition p0 values less than (date '2020-10-10'));
           create table t1_date(c1 datetime,c2 int) partition by range columns(c1) (partition p0 values less than (time '10:10:00'));
           create table t1_date(c1 datetime,c2 int) partition by range columns(c1) (partition p0 values less than (date '2020-10-10'));
@@ -4285,7 +4285,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       // generated_column是用户定义的生成列，其长度以及长度语义(按照字符计算长度还是字节计算长度)依赖于SQL语句的定义
       // expr是用于生成generated_column数据的表达式。expr计算结果的长度不能大于generated_column定义的长度
       // 需要注意的是在进行长度比较时要考虑二者的长度语义，这里统一使用LS_BYTE语义来进行长度的比较
-      // https://work.aone.alibaba-inc.com/issue/21094876
+      // 
       int64_t generated_column_length_in_byte = 0;
       int64_t expr_length_in_byte = 0;
       common::ObCollationType cs_type = generated_column.get_collation_type();
@@ -5268,7 +5268,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         LOG_DEBUG("check data type after resolve", K(ret), K(data_type));
       } else if (!is_oracle_mode && ObCharType == data_type.get_obj_type()
                                  && OB_MAX_CHAR_LENGTH < length) {
-        // varchar length check , TODO: https://work.aone.alibaba-inc.com/issue/35400448
+        // varchar length check , TODO: 
         ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
         LOG_WARN("column data length is invalid", K(ret), K(length), K(data_type));
         LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, ident_name.ptr(),
@@ -7022,7 +7022,7 @@ int ObResolverUtils::check_duplicated_column(ObSelectStmt &select_stmt,
    /*oracle模式允许sel/upd/del stmt中的generated table含有重复列，只要外层没有引用到重复列就行，同时对于外层引用
   * 到的列是否为重复列会在检查column时进行检测，eg: select 1 from (select c1,c1 from t1);
   * 因此对于oracle模式下sel/upd/del stmt进行检测时，检测到重复列时只需skip，但是仍然需要添加相关plan cache约束
-  * https://work.aone.alibaba-inc.com/issue/29799516
+  * 
    */
   if (!can_skip) {
     for (int64_t i = 1; OB_SUCC(ret) && i < select_stmt.get_select_item_size(); i++) {
@@ -7039,7 +7039,7 @@ int ObResolverUtils::check_duplicated_column(ObSelectStmt &select_stmt,
                   static_cast<ObColumnRefRawExpr *>(select_stmt.get_select_item(j).expr_)
                                                       ->is_joined_dup_column())){
              } else if (select_stmt.get_select_item(i).expr_->is_aggr_expr()) {
-               // bugfix: https://work.aone.alibaba-inc.com/issue/38961987
+               // bugfix: 
                // aggr_expr in cte shouldn't raise error.
              } else {
                ret = OB_NON_UNIQ_ERROR;
@@ -7327,7 +7327,7 @@ int ObResolverUtils::check_whether_assigned(const ObDMLStmt *stmt,
   return ret;
 }
 
-// relevant issue : https://work.aone.alibaba-inc.com/issue/38234909
+// relevant issue : 
 int ObResolverUtils::prune_check_constraints(const ObIArray<ObAssignment> &assignments,
                                              ObIArray<ObRawExpr*> &check_exprs)
 {

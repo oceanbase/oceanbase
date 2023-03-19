@@ -400,7 +400,7 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
                                     const ObSQLSessionInfo &session,
                                     bool &is_use_pdml)
 {
-  // https://yuque.antfin-inc.com/xiaochu.yh/doc/ii6elo
+  // 
   // 1. pdml: force parallel dml & no DISABLE_PARALLEL_DML hint
   // 2. enable parallel query: parallel hint | sess enable_parallel_query
   //    pdml: enable parallel dml + enable parallel query
@@ -521,7 +521,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt &stmt,
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_NESTED_SQL);
   } else if (stmt::T_DELETE == stmt.get_stmt_type()) {
-    // https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/5345309
+    // 
     // if no trigger, no foreign key, delete can do pdml, even if with local unique index
     is_use_pdml = true;
   } else if (!ctx_.is_online_ddl()) {

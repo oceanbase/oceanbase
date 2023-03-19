@@ -1,6 +1,6 @@
 // Copyright 2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//  dachuan.sdc@antgroup.com
+//  
 // This file is for resource mapping rule cache module.
 
 

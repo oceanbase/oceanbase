@@ -338,7 +338,7 @@ void ObPlanCacheManager::ObPlanCacheEliminationTask::run_plan_cache_task()
       MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
 
       // 由于 tenat_id_array的tenant移除 与 drop tenant存在一定时延。因此，在这里需要检查一下tenant是否存在。
-      // bug fix: https://work.aone.alibaba-inc.com/issue/31275377
+      // bug fix: 
       if (!GCTX.omt_->is_available_tenant(tenant_id)) {
         // do nothing
       } else if (OB_FAIL(guard.switch_to(tenant_id))) {

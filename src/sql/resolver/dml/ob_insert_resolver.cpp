@@ -753,7 +753,7 @@ int ObInsertResolver::resolve_column_ref_expr(const ObQualifiedName &q_name, ObR
       //In insert into select stmt, insert clause and select clause belong to the same namespace
       //the on duplicate key update clause will see the column in select clause,
       //so need to add table reference to insert resolve column namespace checker
-      //eg:https://aone.alibaba-inc.com/issue/20923332
+      //eg:
       int64_t idx = -1;
       ObString dummy_name;
       TableItem *view = NULL;
@@ -806,7 +806,7 @@ int ObInsertResolver::resolve_column_ref_expr(const ObQualifiedName &q_name, ObR
     } else {
       // don't print this log as WARN,
       // as it takes lots of CPU cycles when inserting many rows
-      // related issue: https://work.aone.alibaba-inc.com/issue/39479211
+      // related issue: 
       LOG_TRACE("resolve basic column ref failed", K(ret), K(q_name));
     }
   }

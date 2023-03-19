@@ -7,7 +7,7 @@
  * ob_expr_format_pico_time.h is for what ...
  *
  * Authors:
- *   Author yaojing <jingfeng.jf@oceanbase.com>
+ *   Author yaojing <>
  *
  */
 #ifndef _OB_SQL_EXPR_FORMAT_PICO_TIME_H

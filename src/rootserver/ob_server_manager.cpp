@@ -1878,7 +1878,7 @@ int ObServerManager::load_server_statuses(const ObServerStatusArray &server_stat
     LOG_WARN("server_statuses is empty", K(server_statuses), K(ret));
   } else {
     // to protect from executing concurrently with add_server(),
-    // see https://aone.alibaba-inc.com/issue/9191143?stat=1.5.0&toPage=1&companyId=0
+    // see 
     SpinWLockGuard guard2(server_status_rwlock_);
     for (int64_t idx = server_statuses_.count() - 1; OB_SUCC(ret) && idx >= 0; --idx) {
       bool found = false;

@@ -518,7 +518,7 @@ void ObTransCallbackMgr::acquire_callback_list()
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "Unexpected status", K(this), K(tid_), K(ref_cnt_), K(tid));
     }
   } else {
-    // https://yuque.antfin.com/ob/transaction/xzwarh
+    // 
     ATOMIC_STORE(&parallel_stat_, PARALLEL_STMT);
   }
 }
@@ -531,7 +531,7 @@ void ObTransCallbackMgr::revert_callback_list()
   int64_t cnt = 0;
   if (0 == stat) {
     WRLockGuard guard(rwlock_);
-    // https://yuque.antfin.com/ob/transaction/xzwarh
+    // 
     if (OB_NOT_NULL(callback_lists_)) {
       cnt = callback_list_.concat_callbacks(callback_lists_[slot]);
       add_slave_list_merge_cnt(cnt);

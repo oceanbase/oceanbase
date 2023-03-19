@@ -304,7 +304,7 @@ do {                                                                            
       yyerror(NULL, result, "node or result is NULL\n");           \
       YYABORT_UNEXPECTED;                                        \
     } else if (OB_UNLIKELY(!result->pl_parse_info_.is_pl_parse_ && 0 != result->question_mark_ctx_.count_)) {  \
-       /* 如果是PL过来的sql语句，不要检查：https://work.aone.alibaba-inc.com/issue/22935971*/ \
+       /* 如果是PL过来的sql语句，不要检查：*/ \
       yyerror(NULL, result, "Unknown column '?'\n");               \
       YYABORT_UNEXPECTED;                                        \
     } else {                                                     \
@@ -971,7 +971,7 @@ int STORE_PARAM_NODE_NEED_PARAMETERIZE(ParamList *param,
     }                                                                       \
   } while (0);
 
-// bugfix: https://work.aone.alibaba-inc.com/issue/39093490
+// bugfix: 
 // convert '%' to '%%' for printf's format string.
 #define ESCAPE_PERCENT(result, src, dst)\
 do {\
@@ -992,7 +992,7 @@ do {\
   }\
 } while (0)\
 
-// bugfix:https://work.aone.alibaba-inc.com/issue/41048982
+// bugfix:
 // avoid '\0' in the middle of a str.
 #define CHECK_STR_LEN_MATCH(src_str, str_len)                                   \
   do {                                                                          \

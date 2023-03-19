@@ -205,7 +205,7 @@ int ObSchemaServiceSQLImpl::retrieve_schema_version(T &result, int64_t &schema_v
   } else {
     EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "version", schema_version, uint64_t);
     // for debug purpose:
-    // https://aone.alibaba-inc.com/issue/11260176?from=ak&
+    // 
     int32_t myport = 0;
     char svr_ip[OB_IP_STR_BUFF] = "";
     int64_t tmp_real_str_len = 0;

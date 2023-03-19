@@ -73,7 +73,7 @@ int ObExprSubstrb::calc_result_length_in_byte(const ObExprResType &type,
     // create table substrb_test_tbl(c1 varchar2(64 char), c2 varchar2(7 byte)
     // GENERATED ALWAYS AS (substrb(c1, -1, 8)) VIRTUAL);
     // 使用如上建表语句时，substrb的参数是负数时，pos_obj是null
-    // https://work.aone.alibaba-inc.com/issue/21786489
+    // 
     if (pos_obj.is_null_oracle()) {
       pos_val = 1;
     } else {
@@ -193,7 +193,7 @@ int ObExprSubstrb::calc(ObString &res_str, const ObString &text,
     LOG_WARN("text.ptr() is null", K(ret));
   } else {
     if (0 == start) {
-      start = 1;// https://aone.alibaba-inc.com/req/18055469 , oracle起始位置参数0和1等价
+      start = 1;// 
     }
     start = (start > 0) ? (start - 1) : (start + text_len);
     if (OB_UNLIKELY(start < 0 || start >= text_len)) {
@@ -419,7 +419,7 @@ int ObExprSubstrb::calc_substrb_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       }
     } else { // text tc
       if (0 == start_int) {
-        // https://aone.alibaba-inc.com/req/18055469 , start from 0 or 1 result the same in oracle model
+        // 
         start_int = 1;
       }
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);

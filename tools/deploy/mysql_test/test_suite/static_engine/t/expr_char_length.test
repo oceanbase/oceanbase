@@ -29,7 +29,7 @@ select char_length(c2) from t1;
 select char_length(c3) from t1;
 select char_length(c4) from t1;
 select char_length(c5) from t1;
-# bug here: https://work.aone.alibaba-inc.com/issue/26106226
+# bug here: 
 # select char_length(c6) from t1;
 
 

@@ -223,7 +223,7 @@ select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2 
 
 drop table t1, t2, t3, t4, t5;
 
-## https://work.aone.alibaba-inc.com/issue/35012791
+## 
 --disable_warnings
 drop table if exists t1, t2;
 drop table if exists `rpup_list_mcs_asoc_b`, `bidprcu_mcs_regcert_b`, `rpup_mcs_list_info_b`;

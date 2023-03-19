@@ -1,6 +1,6 @@
 // Copyright 1999-2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//   liuqifan.lqf@oceanbase.com
+//   
 //
 
 #define USING_LOG_PREFIX SQL_ENG

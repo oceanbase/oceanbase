@@ -2411,7 +2411,7 @@ int ObPLExecState::final(int ret)
   // reset physical plan context
   if (need_reset_physical_plan_) {
     if (func_.get_expr_op_size() > 0) {
-      //Memory leak https://work.aone.alibaba-inc.com/issue/33582334
+      //Memory leak 
       //Must be reset before free expr_op_ctx!
       ctx_.exec_ctx_->reset_expr_op();
       ctx_.exec_ctx_->get_allocator().free(ctx_.exec_ctx_->get_expr_op_ctx_store());
@@ -2781,7 +2781,7 @@ do {                                                                  \
               LOG_WARN("failed to apply tmp to params",
                        K(ret), K(tmp), K(i), K(params->count()));
             } else {
-              // https://work.aone.alibaba-inc.com/issue/31131417
+              // 
               // 由存储层传入的数据未设置collation_level, 这里设置下
               if (get_params().at(i).is_string_type()) {
                 get_params().at(i).set_collation_level(result_type.get_collation_level());
@@ -2880,7 +2880,7 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
 
   if (OB_SUCC(ret)) {
     // TODO bin.lb: how about the memory?
-    // https://aone.alibaba-inc.com/project/81079/task/34962640
+    // 
     OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, ctx_.allocator_));
   }
 

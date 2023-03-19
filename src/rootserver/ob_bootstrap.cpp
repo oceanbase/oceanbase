@@ -945,7 +945,7 @@ int ObBootstrap::create_all_schema(ObDDLService &ddl_service,
         while (OB_SUCC(ret)) {
           if (OB_FAIL(batch_create_schema(ddl_service, table_schemas, begin, i + 1))) {
             LOG_WARN("batch create schema failed", K(ret), "table count", i + 1 - begin);
-            // bugfix:https://work.aone.alibaba-inc.com/issue/34030283
+            // bugfix:
             if ((OB_SCHEMA_EAGAIN == ret
                  || OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret)
                 && retry_times <= MAX_RETRY_TIMES) {

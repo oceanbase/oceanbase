@@ -378,7 +378,7 @@ bool ObSqlParameterization::is_execute_mode(SQL_EXECUTION_MODE mode)
   return (PS_EXECUTE_MODE == mode || PL_EXECUTE_MODE == mode);
 }
 
-/* fix: https://aone.alibaba-inc.com/v2/project/81079/bug/42222037
+/* fix: 
 * decide if a number param can ignore scale check when choosing plancache.
 * if current node type is expr list or number,
 * and parent node is point, st_point, json array, or ctx.ignore_scale_check_ is true, return true,

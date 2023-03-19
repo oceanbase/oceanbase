@@ -313,7 +313,7 @@ private:
   int last_query_retry_err_;
   // this value include local retry & packet retry
   int64_t retry_cnt_;
-  // for fast fail, https://yuque.antfin-inc.com/ob/product_functionality_review/xdiwhw
+  // for fast fail, 
   int64_t query_switch_leader_retry_timeout_ts_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRetryInfo);
@@ -452,7 +452,7 @@ public:
     return reroute_info_;
   }
   // release dynamic allocated memory
-  // https://aone.alibaba-inc.com/issue/19749534
+  // 
   void clear();
 public:
   ObMultiStmtItem multi_stmt_item_;

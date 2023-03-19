@@ -142,7 +142,7 @@ int ObPxTransmit::inner_open(ObExecContext &exec_ctx) const
              OB_ISNULL(trans_input = GET_PHY_OP_INPUT(ObPxTransmitInput, exec_ctx, get_id()))) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    // https://aone.alibaba-inc.com/code/D704097
+    // 
     // 这个拿第一行需要保留.
     if (child_op_->is_dml_operator() && !child_op_->is_pdml_operator()) {
       //如果下游是dml操作，dml操作不向上层算子迭代行，直接返回iter end

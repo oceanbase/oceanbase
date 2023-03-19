@@ -371,7 +371,7 @@ select * from t_not_exist
 --error 5207
 select c1 a, C2 A from t1 order by a
 
-## bug http://k3.alibaba-inc.com/issue/6347332?stat=1.5.2&toPage=1&versionId=1043693
+## bug 
 select * from (t1);
 select * from (t1,t2);
 select * from (t1,(t2));
@@ -383,11 +383,11 @@ select * from (t1 join t2) join t3;
 #select * from (t1,t2) join (t3,t4);
 #select * from (t1 join t2) join (t3,t4);
 
-# http://k3.alibaba-inc.com/issue/6328022?versionId=1043693
+# 
 select * from t1 join t2 on t1.c1=t2.c1, t3 join t4 on t3.c3=t4.c3;
 select * from t1 join t2 using(c1), t3 join t4 using(c3);
 
-#http://k3.alibaba-inc.com/issue/6492617?stat=1.5.0&toPage=1&versionId=1043693
+#
 SELECT t1.c1 FROM t2 LEFT JOIN t1 ON t2.c2 = t1.c1 ORDER BY c1;
 select default(c1) from t2;
 --error 5217

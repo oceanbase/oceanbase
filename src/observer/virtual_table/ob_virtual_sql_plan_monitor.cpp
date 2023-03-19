@@ -732,7 +732,7 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
         break;
       }
       case DB_TIME: {
-        // concept: https://yuque.antfin.com/xiaochu.yh/doc/lt4toe/
+        // concept: 
         cells[cell_idx].set_int(node.db_time_);
         break;
       }

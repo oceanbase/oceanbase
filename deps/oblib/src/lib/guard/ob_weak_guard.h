@@ -88,7 +88,7 @@
  *        when the last ObSharedGuard destructed, but the protected object will be physical 
  *        deleted(free it's memory) when the last ObWeakGuard destructed.
  *
- *  - Contact xuwang.txw@antgroup.com for help.
+ *  - Contact  for help.
  */
 
 #ifndef OCEANBASE_LIB_GUARD_OB_WEAK_GUARD_H

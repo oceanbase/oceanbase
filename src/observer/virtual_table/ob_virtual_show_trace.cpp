@@ -10,7 +10,7 @@
  * See the Mulan PubL v1 for more details.
  * ---------------------------------------------------------------------------------------
  * Authors:
- *   Juehui <guoyun.lgy@alipay.com>
+ *   Juehui <>
  * ---------------------------------------------------------------------------------------
  */
 #define USING_LOG_PREFIX SERVER

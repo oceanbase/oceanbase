@@ -1327,7 +1327,7 @@ int LogEngine::update_config_meta_guarded_by_lock_(const LogConfigMeta &config_m
   return ret;
 }
 
-// Background: https://yuque.antfin-inc.com/ob/log/vu9hqg/edit
+// Background: 
 int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
     const LSN &last_entry_begin_lsn, const LogGroupEntryHeader &last_group_entry_header,
     const block_id_t &expected_next_block_id)

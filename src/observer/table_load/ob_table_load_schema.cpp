@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #define USING_LOG_PREFIX SERVER
 

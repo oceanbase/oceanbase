@@ -6,7 +6,7 @@
  * ob_das_group_scan_op.h is for …
  *
  * Authors:
- *     xiaoyi.xy<xiaoyi.xy@alibaba-inc.com>
+ *     xiaoyi.xy<>
  */
 #ifndef OBDEV_SRC_SQL_DAS_OB_DAS_SPATIAL_INDEX_LOOKUP_OP_H_
 #define OBDEV_SRC_SQL_DAS_OB_DAS_SPATIAL_INDEX_LOOKUP_OP_H_

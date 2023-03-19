@@ -7001,7 +7001,7 @@ CALL p1(1);
 ERROR HY000: The target table t1 of the INSERT is not insertable-into
 CREATE TEMPORARY TABLE t1 (f1 INT);
 # t1 still refers to the view since it was inlined
-# https://work.aone.alibaba-inc.com/issue/32172786
+# 
 CALL p1(2);
 DROP VIEW t1;
 # t1 now refers to the temporary table

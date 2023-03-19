@@ -144,7 +144,7 @@ select /*+no_use_px*/ t1.c1 from t1 left join t2 t on t1.c1=t.c1,t2 left join t3
 
 # case 39 const predicates
 select * from t1 where true;
-# TODO shengle bug:https://work.aone.alibaba-inc.com/issue/37559700
+# TODO shengle bug:
 # select * from t1 where 1=2;
 # select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
 select * from t1 left join t2 t on t1.c1=t.c1 where false;
@@ -617,7 +617,7 @@ select count(*) from t1 left outer join t2 using(c1) group by (t1.c1) having cou
 ## EXPR_SYS coverage
 select now() from t1 left outer join t2 using(c1);
 
-##bug:http://k3.alibaba-inc.com/issue/6621523?versionId=1043693
+##bug:
 select a1.c2 from t1 left join t2 a1 on (a1.c1= t1.c1) where least(t1.c2, a1.c2) > 1;
 select a1.c2 from t1 left join t2 a1 on (a1.c1= t1.c1) where length(t1.c2) > 1;
 select a2.c2, t1.c2, a1.c2 from t1  left join t2 a1 on (a1.c1 = t1.c1), t2 a2 where least(t1.c2, a1.c2) =a2.c2;
@@ -977,7 +977,7 @@ select (select 'a') as c1;
 select avg(c1) as a from t1 union select sum(c1) as b from t1;
 select * from t1 group by 1>(select count(*) from t2);
 
-##bug: https://k3.alibaba-inc.com/issue/8137483?versionId=1043693
+##bug: 
 (select count(*) from t1) UNION (select count(*) from t1);
 select min(1) from t1;
 select max(1) from t1;
@@ -1126,7 +1126,7 @@ select /*+ index(y_t1 y_t1_i2) */ * from y_t1 where c3=10 order by c1;
 select /*+ index(y_t1 y_t1_i2) */ * from y_t1 where c3='10' order by c1;
 select /*+ index(y_t1 y_t1_i2) */ * from y_t1 where c3=c1 order by c1;
 select a from y_t3 where a = 'A' collate utf8mb4_general_ci order by a;
-#bug:https://k3.alibaba-inc.com/issue/8405924?stat=1.5.6&toPage=1&versionId=1043693
+#bug:
 select * from hint.t1 group by b having (select b from hint.t2 limit 1);
 select * from hint.t1 group by b having (select b from hint.t2 limit 1) = 1;
 select * from hint.t1 group by b having (select b from hint.t2 limit 1) = 1 or sum(b) = 1;
@@ -1265,7 +1265,7 @@ select * from tg where c1 = 'bcde';
 select * from tg where c1 = 'baaaa';
 select * from tg where c1 = 'bcde' and (c2 = 'cde' or c2 = 'baaaa');
 
-#bug:https://aone.alibaba-inc.com/project/81079/issue/10487045
+#bug:
 select z1.a, z2.a from z1 full outer join z2 on z1.a = z2.a order by z1.a, z2.a;
 
 ### test for distributing column expr to relations
@@ -1287,7 +1287,7 @@ select c2 from (select c1, c2 from t1 order by 1) a;
 select c2 from (select c1 + c2, c2 from t1 order by 1) a;
 
 #refine query range after extract exec params from subplan
-#https://aone.alibaba-inc.com/issue/11807103
+#
 select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 = t2.c1);
 select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 > t2.c1);
 select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 < t2.c1);

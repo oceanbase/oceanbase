@@ -388,9 +388,9 @@ int ObSequenceDMLProxy::init_sequence_value_table(
                                      affected_rows))) {
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
           // 有重复列是可能的，对刚刚创建的 sequence 两个 nextval 并发读取时候出现
-          // https://work.aone.alibaba-inc.com/issue/24797547
+          // 
           ret = OB_SUCCESS;
-          // https://work.aone.alibaba-inc.com/issue/27222857
+          // 
           trans.reset_last_error();
           LOG_INFO("Concurrent call sequence nextval() over a newly created sequence",
                    K(tname), K(sequence_id), K(option));

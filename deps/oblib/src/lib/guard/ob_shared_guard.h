@@ -90,7 +90,7 @@
  *        method will be called immediately, but it's memory will be delay-freed after the last 
  *        associated ObWeakGuard destructed.
  *
- *  - Contact xuwang.txw@antgroup.com for help.
+ *  - Contact  for help.
  */
 
 #ifndef OCEANBASE_LIB_GUARD_OB_SHARED_GUARD_H

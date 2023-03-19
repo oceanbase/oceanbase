@@ -218,7 +218,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
         pos += db_len;
       }
       int64_t timestamp = common::ObTimeUtility::current_time();
-      //for find bug http://k3.alibaba-inc.com/issue/5689896?stat=1.5.1&toPage=1&versionId=1043200
+      //for find bug 
       // only print this log if enable_perf_event is enable,
       // for `receive_ts_` might be invalid if `enable_perf_event` is false
       if (lib::is_diagnose_info_enabled()

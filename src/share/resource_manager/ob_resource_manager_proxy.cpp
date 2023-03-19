@@ -1211,7 +1211,7 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
   uint64_t user_id = 0;
   if (OB_SUCC(ret)) {
     // if user not exists, do nothing, do not throw error
-    // https://work.aone.alibaba-inc.com/issue/34248669
+    // 
     if (OB_FAIL(check_if_user_exist(tenant_id,
                                     value,
                                     user_exist))) {

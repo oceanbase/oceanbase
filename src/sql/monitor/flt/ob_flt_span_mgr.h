@@ -10,7 +10,7 @@
  * Date: 05/12/2022
  *
  * Authors:
- *   guoyun.lgy<guoyun.lgy@alibaba-inc.com>
+ *   guoyun.lgy<>
  */
 #ifndef OCEANBASE_SQL_OB_FLT_SPAN_MGR_H_
 #define OCEANBASE_SQL_OB_FLT_SPAN_MGR_H_

@@ -403,7 +403,7 @@ class ObNoRetry : public ObIRetryPolicy
 {};
 
 /// consistency levels
-/// @see https://www.atatech.org/articles/102030
+/// @see 
 enum class ObTableConsistencyLevel
 {
   STRONG = 0,

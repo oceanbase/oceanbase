@@ -919,7 +919,7 @@ int ObOperator::submit_op_monitor_node()
   if (GCONF.enable_sql_audit) {
     // Record monitor info in sql_plan_monitor
     // Some records that meets the conditions needs to be archived
-    // Reference document: https://yuque.antfin.com/baixian.zr/brtfzn/ppx26a
+    // Reference document: 
     op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
     if (list && spec_.plan_) {

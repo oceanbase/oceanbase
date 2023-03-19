@@ -59,7 +59,7 @@ public:
 };
 
 // C/S feedback protocol:
-// https://lark.alipay.com/quanwei.wqw/aap9pg/ltdure#server%E5%92%8Cclient%E4%B9%8B%E9%97%B4%E7%9A%84%E5%8F%8D%E9%A6%88%E5%8D%8F%E8%AE%AE
+// 
 class ObFeedbackManager
 {
 public:

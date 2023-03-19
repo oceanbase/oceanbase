@@ -709,7 +709,7 @@ int ObUpdateResolver::generate_batched_stmt_info()
 {
   int ret = OB_SUCCESS;
   //extract all predicate column from condition exprs
-  //see the issue: https://work.aone.alibaba-inc.com/issue/38055217
+  //see the issue: 
   ObSEArray<ObRawExpr*, 4> predicate_columns;
   ObUpdateStmt *update_stmt = get_update_stmt();
   if (OB_ISNULL(update_stmt)) {

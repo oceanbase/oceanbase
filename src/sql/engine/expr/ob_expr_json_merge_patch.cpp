@@ -214,7 +214,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
 
   // some constraint check
   ObObjType dst_type;
-  int32_t dst_len; // bugfix: https://work.aone.alibaba-inc.com/issue/47046350
+  int32_t dst_len; // bugfix: 
   if (OB_FAIL(ret)) {
   } else if (return_type == 0) {
     dst_type = expr.args_[0]->datum_meta_.type_;
@@ -323,7 +323,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
                                                           tmp_val.length(), dst_len, char_len);
 
               tmp_val.assign_ptr(tmp_val.ptr(), real_dst_len);
-              // compact with oracle: https://work.aone.alibaba-inc.com/issue/46640577
+              // compact with oracle: 
               if (real_dst_len != dst_len && real_dst_len > 0) {
                 // get last char
                 // must be utf8

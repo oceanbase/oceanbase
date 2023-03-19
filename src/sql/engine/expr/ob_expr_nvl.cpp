@@ -257,7 +257,7 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
       type.set_scale(0);
     }
     /*
-     * https://aone.alibaba-inc.com/issue/18763797
+     * 
      * select nvl(0, 'hello') from dual;
      * the sql above will return error: ORA-01722: invalid number.
      * we must execute necessary cast operation before we determine which obj should be returned,

@@ -23,11 +23,11 @@
   https://github.com/mcmilk/zstdmt
   http://www.xxhash.com
   http://www.example.com*
-  https://yuque.antfin-inc.com*
-  https://yuque.antfin.com*
-  https://work.aone.alibaba-inc.com*
-  https://aone.alibaba-inc.com*
-  https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/*
+  
+  
+  
+  
+  
   http://www.python.org/*
   https://oracle.github.io/*
   https://en.wikipedia.org/wiki/*
@@ -36,7 +36,7 @@
   https://github.com/akopytov/sysbench*
   http://foo.bar.com*
   https://github.com/google/*
-  https://workitem.aone.alibaba-inc.com/issue*
+  issue*
   http://llvm.org/bugs*
   https://bugs.llvm.org/*
   http://www.apache.org/licenses/*
@@ -67,7 +67,7 @@
   https://connect.microsoft.com/VisualStudio*
   https://dev.mysql.com/doc/*
   http://www.openssl.org/docs*
-  https://lark.alipay.com*
+  
   https://docs.oracle.com/*
   https://bugzilla.redhat.com/*
   https://hbase.apache.org/*
@@ -145,8 +145,8 @@
   http://stackoverflow.com/*
   https://stackoverflow.com/*
   https://cloud.tencent.com/*
-  http://k3.alibaba-inc.com/*
-  https://k3.alibaba-inc.com/*
+  
+  
   libecb@schmorp.de
   http://software.schmorp.de/*
   http://www-01.ibm.com/*
@@ -173,13 +173,13 @@
   https://www.techonthenet.com/oracle/*
   http://www.techonthenet.com/oracle/*
   http://review.alibaba-inc.com/*
-  https://gw.alicdn.com/*
+  
   http://docs.oracle.com/*
   https://oracle-base.com/*
   https://www.kernel.org/doc/*
-  https://www.atatech.org/*
-  http://www.atatech.org/*
-  http://oceanbase.alibaba-inc.com/*
+  
+  
+  
   https://community.oracle.com/tech/*
   https://docs.docker.com/*
   http://helloworld.com/*
@@ -214,9 +214,9 @@
   https://www.mathjax.org
   https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/.
   https://issues.apache.org/*
-  https://www.atatech.org/*
+  
 **/*.result
-  https://workitem.aone.alibaba-inc.com/*
+  *
   http://oracle.chinaitlab.com*
   http://bugfree.corp.taobao.com*
   https://www.baidu.com/*
@@ -226,7 +226,7 @@
   https://dev.mysql.com*
   https://docs.cts.t.taobao.com*
   http://www.cmd5.com/*
-  https://code.aone.alibaba-inc.com*
+  
   https://127.0.0.1*
   www.360.com
   www.wangyi.com
@@ -291,7 +291,7 @@
   14844887@sina.com
 **/*.test
   http://trade.taobao.com/trade/*
-  https://workitem.aone.alibaba-inc.com/*
+  *
   http://oracle.chinaitlab.com*
   http://bugfree.corp.taobao.com*
   https://www.baidu.com/*
@@ -301,7 +301,7 @@
   https://dev.mysql.com*
   https://docs.cts.t.taobao.com*
   http://www.cmd5.com/*
-  https://code.aone.alibaba-inc.com*
+  
   https://127.0.0.1*
   www.360.com
   www.wangyi.com
@@ -366,7 +366,7 @@
   14844887@sina.com
 **/*.inc
   http://trade.taobao.com/trade/*
-  https://workitem.aone.alibaba-inc.com/*
+  *
   http://oracle.chinaitlab.com*
   http://bugfree.corp.taobao.com*
   https://www.baidu.com/*
@@ -376,7 +376,7 @@
   https://dev.mysql.com*
   https://docs.cts.t.taobao.com*
   http://www.cmd5.com/*
-  https://code.aone.alibaba-inc.com*
+  
   https://127.0.0.1*
   www.360.com
   www.wangyi.com

@@ -23,12 +23,12 @@
 #    Virtual table started with '__tenant_virtual' is used for special cmd(such as show cmd), which can't be queried by SQL.
 # 5. System view's table_name should be referred from MySQL/Oracle.
 # 6. Definition of Oracle Virtual Table/Oracle System View can be referred from document:
-#    https://yuque.antfin-inc.com/ob/qpw1rt/sys_table_under_oracle_tenant
+#    
 # 7. Difference between REAL_AGENT and SYS_AGENT:
 #     sys_agent access tables belong to sys tenant only
 #     real_agent access tables belong to current tenant
 # 8. Virtual table system design summary:
-#    https://yuque.antfin.com/docs/share/876fb26e-7466-476f-bd67-b3c4860fbdb8?#
+#    
 # 9. For compatibility, when add new column for system table, new column's definition should be "not null + default value" or "nullable".
 #    Specially, when column types are as follows:
 #    1. double、number：default value is not supported, so new column definition should be "nullable".
@@ -3368,7 +3368,7 @@ def_table_schema(
 # the table id from 337 to 341 have been used for new backup validation system table,
 # the table id from 342 to 345 have been used for new log stream table,
 # relation code will patch from 32x later, please use new table id from 345, thanks!
-# (https://yuque.antfin-inc.com/ob/product_functionality_review/po42xy)
+# (
 
 # __all_ls_meta_table
 def_table_schema(
@@ -38207,7 +38207,7 @@ def_table_schema(
 )
 
 # This view shows audits caused by not exists/exsits error.
-# bugfix: https://work.aone.alibaba-inc.com/issue/23896721
+# bugfix: 
 # return code refers from: select dbms_metadata.get_ddl('VIEW','DBA_AUDIT_EXISTS') from dual;
 def_table_schema(
   owner = 'xinqi.zlm',

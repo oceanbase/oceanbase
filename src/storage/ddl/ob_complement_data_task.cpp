@@ -479,7 +479,7 @@ bool ObComplementDataDag::operator==(const ObIDag &other) const
 }
 
 // build reponse here rather deconstruction of DAG, to avoid temporary dead lock of RS RPC queue.
-// https://work.aone.alibaba-inc.com/issue/34104399.
+// 
 int ObComplementDataDag::report_replica_build_status()
 {
   int ret = OB_SUCCESS;

@@ -444,7 +444,7 @@ int ObMPBase::check_and_refresh_schema(uint64_t login_tenant_id,
 
   if (login_tenant_id != effective_tenant_id) {
     // do nothing
-    // https://aone.alibaba-inc.com/issue/18698167
+    // 
   } else if (OB_ISNULL(gctx_.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null schema service", K(ret), K(gctx_));

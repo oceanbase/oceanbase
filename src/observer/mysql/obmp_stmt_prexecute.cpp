@@ -285,7 +285,7 @@ int ObMPStmtPrexecute::before_process()
               LOG_WARN("prepare-execute protocol get params request failed", K(ret));
             } else {
               ObMySQLUtil::get_uint4(pos, exec_mode_);
-              // https://yuque.antfin.com/docs/share/a5705d97-1d74-4b90-8be2-6e500249345f?#
+              // 
               // is_commit_on_success_ is not use yet
               // other exec_mode set use ==
               is_commit_on_success_ = exec_mode_ & OB_OCI_COMMIT_ON_SUCCESS;

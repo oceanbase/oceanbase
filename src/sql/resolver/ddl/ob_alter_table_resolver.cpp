@@ -502,7 +502,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
       } else if (index_table_schema->is_materialized_view()) {
-        // bug: https://aone.alibaba-inc.com/project/851168/issue/20958982
+        // bug: 
         // index_tid_array: 包含index和mv, 这里只需要处理索引即可
         // so do-nothing for mv
       } else if (OB_FAIL(index_table_schema->get_index_name(index_name))) {

@@ -451,7 +451,7 @@ int ObRawExprInfoExtractor::visit(ObAggFunRawExpr &expr)
 int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  //bug:https://work.aone.alibaba-inc.com/issue/25110897
+  //bug:
   const bool is_inner_added = expr.has_flag(IS_INNER_ADDED_EXPR);
   if (OB_FAIL(clear_info(expr))) {
     LOG_WARN("fail to clear info", K(ret));

@@ -176,7 +176,7 @@ void ObTenantConfigMgr::refresh_config_version_map(const ObIArray<uint64_t> &ten
 
 // 背景：每个 server 上需要保存所有租户的 config 信息
 // 当新建租户/删除租户时需要对应维护 config 状态。
-// https://yuque.antfin-inc.com/xiaochu.yh/doc/zf2eqy/
+// 
 // IN: 当前活跃租户
 // ACTION: 根据 tenants 信息，决定要添加/删除哪些租户配置项
 int ObTenantConfigMgr::refresh_tenants(const ObIArray<uint64_t> &tenants)

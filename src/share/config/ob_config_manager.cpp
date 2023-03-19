@@ -145,7 +145,7 @@ int ObConfigManager::load_config(const char *path)
     buf = NULL;
   }
 
-  // https://work.aone.alibaba-inc.com/issue/28094065
+  // 
   // 为了避免和 got_version 有并发问题，
   // 必须等到 load_config 调用后， got_version 才工作
   init_config_load_ = true;

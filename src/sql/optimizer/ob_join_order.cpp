@@ -2568,7 +2568,7 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
  * @interest_column_ids 匹配索引前缀的列id
  * @const_column_info   interest_column_ids对应的每一个column是否为const
  * 具体的匹配规则可以看
- * https://aone.alibaba-inc.com/code/D170675
+ * 
  * */
 int ObJoinOrder::check_all_interesting_order(const ObIArray<OrderItem> &ordering,
                                              const ObDMLStmt *stmt,
@@ -12533,7 +12533,7 @@ int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
         LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
       } else if (T_OP_LIKE == expr->get_expr_type()) {
         /*
-        https://work.aone.alibaba-inc.com/issue/33030027
+        
         err1: should add const expr for expr2
         err2: if expr2 is 'a%d' deduce is error
               c1 like 'a%d' DOESN'T MEAN:

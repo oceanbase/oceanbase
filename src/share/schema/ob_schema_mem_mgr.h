@@ -63,7 +63,7 @@ public:
   ObSchemaMemMgr();
   virtual ~ObSchemaMemMgr();
   // TODO: Subsequent need to do 500 tenant memory split, schema_mgr memory usage needs to be split to tenants
-  //       https://yuque.antfin-inc.com/ob/qa/ruy4ao
+  //       
   int init(const char *label,
            const uint64_t tenant_id);
   int alloc(const int size, void *&ptr,

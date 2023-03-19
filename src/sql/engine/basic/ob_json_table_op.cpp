@@ -428,7 +428,7 @@ int JtFuncHelpler::cast_to_string(JtColNode* node,
                || j_base->json_type() == ObJsonNodeType::J_DECIMAL)) {
             ret = OB_ERR_VALUE_EXCEEDED_MAX;
           } else {
-            // bugfix: https://work.aone.alibaba-inc.com/issue/46640577
+            // bugfix: 
             // Q1:SELECT c1 ,jt.ww b_c1 FROM t1, json_table ( c2 columns( ww varchar2(2 char) truncate  path '$.a')) jt ;
             // Q2:SELECT c1 ,jt.ww b_c1 FROM t1, json_table ( c2 columns( ww varchar2(2 byte) truncate path '$.a')) jt;
             // should not split in the middle of char

@@ -485,7 +485,7 @@ int ObTxDataMemtable::merge_cur_and_past_commit_verisons_(const SCN recycle_scn,
 
   // here we merge the past commit versions and current commit versions. To keep merged array correct, the node in past
   // array whose start_scn is larger than the minimum start_scn in current array will be dropped. The reason is in this
-  // issue: https://work.aone.alibaba-inc.com/issue/43389863
+  // issue: 
   SCN cur_min_start_scn = cur_arr.count() > 0 ? cur_arr.at(0).start_scn_ : SCN::max_scn();
   SCN max_commit_version = SCN::min_scn();
   if (OB_FAIL(merge_pre_process_node_(

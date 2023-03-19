@@ -606,7 +606,7 @@ int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
       LOG_WARN("failed to create hash set", K(ret));
     //to do
     //fix can not get all server bug
-    // https://work.aone.alibaba-inc.com/issue/47360408
+    // 
     } else if (OB_ISNULL(alive_server_list)) {
       if (OB_FAIL(get_server_set(tenant_id, table_id, server_set, true))) {
         SHARE_LOG(WARN, "failed to get table partitions server set", K(ret));
@@ -801,7 +801,7 @@ int ObAutoincrementService::get_schema(share::schema::ObSchemaGetterGuard &schem
    } else if (OB_FAIL(get_schema_func(tenant_id, schema_id, schema))) {
      LOG_WARN("get table schema failed", K(tenant_id), K(schema_id), K(ret));
    } else if (OB_ISNULL(schema)) {
-     // https://work.aone.alibaba-inc.com/issue/21709886
+     // 
      // Why returns OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH/OB_ERR_REMOTE_SCHEMA_NOT_FULL:
      //  1. since we can reach here, it means that this table can be seen in our executor
      //  2. schema is null imply schema can't be seen in this server. we may see it later. retry!
@@ -1437,7 +1437,7 @@ int ObAutoincrementService::calc_next_value(const uint64_t last_next_value,
 // https://dev.mysql.com/doc/refman/5.6/en/replication-options-master.html#sysvar_auto_increment_increment
 //
 // The doc does not mention one case: when offset > max_value, the formulator is not right.
-// a bug is recorded here: https://work.aone.alibaba-inc.com/issue/28626165
+// a bug is recorded here: 
 int ObAutoincrementService::calc_prev_value(const uint64_t max_value,
                                             const uint64_t offset,
                                             const uint64_t increment,

@@ -35,7 +35,7 @@ SELECT (SELECT 1) a, (select A);
 SELECT 1 as a,(SELECT a+a) b,(SELECT b);
 
 
-# http://k3.alibaba-inc.com/issue/6407267?stat=1.5.0&toPage=1&versionId=1043693
+# 
 select 1 in (1, (1));
 select 1 in (1, (select 1));
 select 1 in ((select 1), (select 1));
@@ -43,7 +43,7 @@ select 1 in ((select 1), (select 1), (select 1));
 select 1 in (1, (select 1), (select c1 from t1));
 
 
-#http://k3.alibaba-inc.com/issue/6213707?stat=1.5.9&toPage=1&versionId=1043693
+#
 select MAX(c1) c from t1 having (select c) > 0;
 --error 5225
 select MAX(c1) c from t1 group by (select c);

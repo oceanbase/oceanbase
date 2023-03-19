@@ -399,7 +399,7 @@ explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2);
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2) and (t1.a, t1.b) in (select t3.a, t3.b from t3);
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2 where (t2.a, t2.b) in (select t3.a, t3.b from t3));
 
-##bug https://aone.alibaba-inc.com/issue/14360360?from=ak&spm=a2o8d.projectdomain.0.0.549d2a00jnjFhQ
+##bug 
 --disable_warnings
 drop table if exists t1, t2, t3;
 --enable_warnings 
@@ -529,7 +529,7 @@ explain select * from (select 1 a except select a from t1 except select b from t
 explain select * from (select a from t1 except select a from t2 except select 1 a) as t3, t1 as t4 where t3.a = t4.a;
 explain select * from (select t2.a from t1, t2 where t1.a = t2.a except select a from t1 as t3) as t4, t2 as t5 where t4.a = t5.a;
 
-###https://aone.alibaba-inc.com/project/81079/issue/15439492
+###
 explain select * from (select 1 c1, 1 c2) t2 inner join t1 on t2.c1 = t1.a;
 explain select * from (select 1 c1, 1 c2) t2 left join t1 on t2.c1 = t1.a;
 explain select * from (select 1 c1, 1 c2) t2 right join t1 on t2.c1 = t1.a;

@@ -5363,7 +5363,7 @@ int ObTimeConverter::set_ob_time_part_may_conflict(ObTime &ob_time, int64_t &con
 }
 
 // DT_YEAR的赋值没有用上面的接口，原因是year的冲突检查具有特殊性。
-// 具体原因：https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/3826268
+// 具体原因：
 int ObTimeConverter::set_ob_time_year_may_conflict(ObTime &ob_time, int32_t &julian_year_value,
                                                   int32_t check_year, int32_t set_year,
                                                   bool overwrite)

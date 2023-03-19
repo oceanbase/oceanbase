@@ -329,7 +329,7 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       //do nothing
     } else if (OB_FAIL(sub_stmt->has_rand(has_rand))) {
       LOG_WARN("failed to check stmt has rand func", K(ret));
-      //stmt不能包含rand函数 https://work.aone.alibaba-inc.com/issue/35875561
+      //stmt不能包含rand函数 
     } else if (!(can_pullup = !has_rand)) {
       // do nothing
       OPT_TRACE("view has rand expr, can not transform");

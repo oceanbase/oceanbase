@@ -243,7 +243,7 @@ int ObLogTableMatcher::tenant_match(const char* tenant_name,
 
   // Tenant matching is only considered for whitelisting, as tenants may be duplicated
   // The tenant blacklist matching mechanism is supported
-  // Aone: https://work.aone.alibaba-inc.com/issue/25590976
+  // Aone: 
   if (OB_FAIL(tenant_match_pattern_(false, tenant_name, white_matched, fnmatch_flags))) {
     OBLOG_LOG(ERROR, "match white pattern fail", KR(ret), K(tenant_name), K(white_matched),
         K(fnmatch_flags));

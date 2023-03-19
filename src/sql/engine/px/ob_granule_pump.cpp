@@ -138,7 +138,7 @@ int ObGITaskSet::set_pw_affi_partition_order(bool asc)
   if (gi_task_set_.count() <= 1) {
     // 两种情况下不需要进行排序：
     // 1. partition keys 是empty
-    // 增加empty的判断条件，aone：https://work.aone.alibaba-inc.com/issue/25234998
+    // 增加empty的判断条件，aone：
     // 由于在affinitize情况下，任务是按照partition的粒度划分，
     // 如果parallel的值可能大于表的partition个数，就会出现task set为”空“，
     // 如果task set是”空“就跳过`set_pw_affi_partition_order`过程

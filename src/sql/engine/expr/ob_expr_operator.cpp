@@ -1362,7 +1362,7 @@ int ObExprOperator::aggregate_numeric_accuracy_for_merge(ObExprResType &type,
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected error. wrong type", K(ret), K(types[i]));
       } else if (ob_is_real_type(types[i].get_type())) {
-        /*https://k3.alibaba-inc.com/issue/8306249
+        /*
           create table sb(a float);
           create table sc(c year);
           insert sb values (1.5);
@@ -4948,7 +4948,7 @@ int ObMinMaxExprOperator::calc_with_cast(ObObj &result,
       cast_ctx.dest_collation_ = expr_ctx.my_session_->get_nls_collation_nation();
     } else if (lib::is_mysql_mode() && ob_is_json(result_type.get_calc_type())) {
       cast_ctx.dest_collation_ = CS_TYPE_UTF8MB4_BIN;
-    } //for https://work.aone.alibaba-inc.com/issue/30742303 类型不一致导致挂住
+    } //for 
       else if (lib::is_mysql_mode() && CS_TYPE_INVALID != result_type.get_collation_type()) {
       cast_ctx.dest_collation_ = result_type.get_collation_type();
     }
@@ -5309,7 +5309,7 @@ int ObLocationExprOperator::calc_(const ObExpr &expr, const ObExpr &sub_arg,
       has_result = true;
     } else {
       // TODO: 验证MySQL下uint64超过int64值域范围，隐式cast的结果
-      // https://aone.alibaba-inc.com/req/25068696
+      // 
       pos_int = pos->get_int();
     }
   }

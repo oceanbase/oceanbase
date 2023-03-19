@@ -1944,7 +1944,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       int64_t total_count = is_instead_of ? expectd_col_cnt : table_schema->get_column_count();
       for (i = 0; OB_SUCC(ret) && i < total_count; i++) {
         // how to calc cell_idx and proj_idx ?
-        // see https://work.aone.alibaba-inc.com/issue/22572027
+        // see 
         ObExpr *new_expr = nullptr;
         ObExpr *old_expr = nullptr;
         bool need_add = false;
@@ -2566,7 +2566,7 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
     } else if (fk_arg.is_self_ref_
         && !var_exist_in_array(column_ids, name_column_ids.at(i), fk_column.name_idx_)) {
       /**
-       * https://workitem.aone.alibaba-inc.com/issue/18132630
+       * issue/18132630
        * fk_column.name_idx_ is used only for self ref row, that is to say name table and
        * value table is same table.
        * otherwise name_column_ids.at(i) will indicate columns in name table, not value table,

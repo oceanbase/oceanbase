@@ -988,7 +988,7 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
       && dst_column_schema->is_autoincrement()) {
         // Worker timeout ts here is default value, i.e., INT64_MAX,
         // which leads to RPC-receiver worker timeout due to overflow when select val from __ALL_AUTO_INCREMENT.
-        // More details, refer to comments in https://work.aone.alibaba-inc.com/issue/42761282.
+        // More details, refer to comments in 
         const int64_t save_timeout_ts = THIS_WORKER.get_timeout_ts();
         THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + max(GCONF.rpc_timeout, 1000 * 1000 * 20L));
         ObAutoincrementService &auto_inc_service = ObAutoincrementService::get_instance();

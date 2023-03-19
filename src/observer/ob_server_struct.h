@@ -273,7 +273,7 @@ struct ObGlobalContext
   void init();
   bool is_inited() const { return inited_; }
   // Refer to the high availability zone design document
-  // https://lark.alipay.com/ob/1.x/read_zone_v2
+  // 
   bool is_observer() const;
   bool is_standby_cluster_and_started() { return is_observer() && is_standby_cluster() && has_start_service(); }
   bool is_started_and_can_weak_read() { return is_observer() && has_start_service(); }

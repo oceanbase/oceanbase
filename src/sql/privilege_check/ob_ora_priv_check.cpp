@@ -2630,7 +2630,7 @@ int ObOraSysChecker::check_ora_grant_role_priv(
           if (!user_info->role_exists(role_granted_id_array.at(i), ADMIN_OPTION)) {
             const ObUserInfo *user_info = NULL;            
             OZ (guard.get_user_info(tenant_id, role_granted_id_array.at(i), user_info));
-            /* https://work.aone.alibaba-inc.com/issue/29301710 
+            /* 
             对于dba角色，报错为：ORA-01031: insufficient privileges
                      . 其余角色报错 ORA-01932  ADMIN option not granted for role  */
             if (OB_SUCC(ret) && user_info != NULL) {

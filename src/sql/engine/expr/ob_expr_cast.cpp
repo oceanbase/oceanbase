@@ -443,7 +443,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     CK(OB_NOT_NULL(type_ctx.get_session()));
     if (OB_SUCC(ret)) {
       // interval expr need NOT_NULL_FLAG
-      // bug: https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/2961005
+      // bug: 
       calc_result_flag2(type, type1, type2);
     }
   }

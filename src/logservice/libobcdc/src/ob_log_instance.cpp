@@ -828,7 +828,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  // init ObClockGenerator  https://work.aone.alibaba-inc.com/issue/31189414
+  // init ObClockGenerator  
   if (OB_SUCC(ret)) {
     if (OB_FAIL(common::ObClockGenerator::init())) {
       LOG_ERROR("failed to init ob clock generator", KR(ret));

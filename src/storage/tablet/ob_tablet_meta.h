@@ -179,7 +179,7 @@ public:
   share::SCN ddl_commit_scn_;
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
-  // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
+  // yuque : 
 
 private:
   int inner_check_(

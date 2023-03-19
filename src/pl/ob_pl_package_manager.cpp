@@ -1193,7 +1193,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
       OZ (resolve_ctx.session_info_.add_package_state(package_id, package_state));
       if (OB_SUCC(ret)) {
         // TODO bin.lb: how about the memory?
-        // https://aone.alibaba-inc.com/project/81079/task/34962640
+        // 
         OZ(package.get_frame_info().pre_alloc_exec_memory(exec_ctx));
       }
       if (OB_SUCC(ret)
@@ -1214,7 +1214,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
         }
       }
       if (package.get_expr_op_size() > 0) {
-        //Memory leak https://work.aone.alibaba-inc.com/issue/33582334
+        //Memory leak 
         //Must be reset before free expr_op_ctx!
         exec_ctx.reset_expr_op();
         exec_ctx.get_allocator().free(exec_ctx.get_expr_op_ctx_store());

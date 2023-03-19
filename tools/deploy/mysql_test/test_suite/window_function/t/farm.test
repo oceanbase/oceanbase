@@ -104,7 +104,7 @@ select * from
          where rn = 1;
 
 # mysql 8.0 window_function bug:
-# aone: https://aone.alibaba-inc.com/project/81079/issue/15336343
+# aone: 
 #                select  c_birth_month, c_birth_year, c_customer_sk, c_first_name,
 #first_value(c_first_name) over (partition by c_birth_month order by c_birth_year, c_customer_sk),
 #                        last_value(c_first_name) over (partition by c_birth_month order by c_birth_year, c_customer_sk) ,

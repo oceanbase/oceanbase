@@ -85,7 +85,7 @@
  *        behavior is just call ptr's destuction method and call allocator's free method, WILL NOT 
  *        CALL destory() method even if ptr has one.
  *
- *  - Contact xuwang.txw@antgroup.com for help.
+ *  - Contact  for help.
  */
 
 #ifndef OCEANBASE_LIB_GUARD_OB_UNIQUE_GUARD_H

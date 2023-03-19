@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   xiaotao.ht <xiaotao.ht@oceanbase.com>
+//   xiaotao.ht <>
 
 #pragma once
 

@@ -614,7 +614,7 @@ int ObMySQLConnection::set_session_variable(const ObString &name, const ObString
 
 // When the main database is in the switching state, the external SQL will be affected by the ob_read_consistency set by the user, and the standby database may weakly read the internal table, but an error is reported because multiple versions do not exist.
 // In fact, the current code does not require external SQL to weaken consistent reads. For the implementation of ObMySqlConnection, it is restricted to use strong consistent reads.
-// bug: https://work.aone.alibaba-inc.com/issue/23188074
+// bug: 
 int ObMySQLConnection::reset_read_consistency()
 {
   int ret = OB_SUCCESS;

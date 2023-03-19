@@ -1198,7 +1198,7 @@ private:
   ObExecContext *cur_exec_ctx_;
   bool restore_auto_commit_; // for dblink xa transaction to restore the value of auto_commit
   oceanbase::sql::ObDblinkCtxInSession dblink_context_;
-  int64_t sql_req_level_; // for sql request between cluster avoid dead lock, such as dblink dead lock https://yuque.antfin.com/ob/sql/gum62i
+  int64_t sql_req_level_; // for sql request between cluster avoid dead lock, such as dblink dead lock 
   int64_t expect_group_id_;
   // When try packet retry failed, set this flag true and retry at current thread.
   // This situation is unexpected and will report a warning to user.

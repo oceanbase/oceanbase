@@ -1090,7 +1090,7 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
         } else if (!is_match) {
           // Do not compare column checksum in case of OB_FREEZE_SERVICE_EPOCH_MISMATCH, since
           // tablet replica checksum items may be incomplete now.
-          // https://work.aone.alibaba-inc.com/issue/46876280
+          // 
           ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
           LOG_WARN("no need to compare column checksum, cuz freeze_service_epoch mismatch",
                     KR(ret), K(tenant_id), K(compaction_scn), K(expected_epoch));

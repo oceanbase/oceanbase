@@ -28,8 +28,8 @@ namespace dtl {
  * 之前的make_channel是在PX(coord)端创建好，然后分别发送sqc,即给transmit和receive端，
  * transmit和receive端直接根据创建好的channel信息来new channel实例。但这种方式存在性能问题
  * 之前方式实现算法复杂度是：transmit_dfo_task_cnt * receive_dfo_task_cnt，假设dop=512，则至少512*512
- * 随着dop增大耗时更长。见bug https://work.aone.alibaba-inc.com/issue/28181382
- * 新方案：https://yuque.antfin-inc.com/docs/share/fd7b13c8-9e42-4950-a642-5627db3abb2c?# 《DTL channel map优化设计》
+ * 随着dop增大耗时更长。见bug 
+ * 新方案：
  *        新方案从PX端不再构建所有channel具体信息，
  *        而是PX构建channel的总体信息，将channel总体信息发给所有的dfo的sqc，
  *        然后每个(task)worker根据channel总体信息各自构建自己的信息,

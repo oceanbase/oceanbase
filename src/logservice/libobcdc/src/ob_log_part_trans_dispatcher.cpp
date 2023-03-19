@@ -590,7 +590,7 @@ int PartTransDispatcher::get_task(const PartTransID &trans_id, PartTransTask *&t
   return ret;
 }
 
-// To eliminate loop dependency issues, bug logging https://work.aone.alibaba-inc.com/issue/21684127
+// To eliminate loop dependency issues, bug logging 
 // dispatch_progress information does not use dispatch locks, uses task_queue_ locks, risky when getting dispatch_info
 //
 // 1. get progress based on last dispatch progress

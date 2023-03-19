@@ -1437,7 +1437,7 @@ int ObDelUpdLogPlan::prune_virtual_column(IndexDMLInfo &index_dml_info)
       const ObColumnRefRawExpr *col_expr = index_dml_info.column_exprs_.at(i);
       if (lib::is_oracle_mode() && col_expr->is_virtual_generated_column() && !optimizer_context_.has_trigger()) {
         //why need to exclude trigger here?
-        //see the issue: https://work.aone.alibaba-inc.com/issue/41910344
+        //see the issue: 
         //key column means it is the rowkey column or part key column or index column
         //outside these scenarios with Oracle mode,
         //DML operator will not touch the virtual column

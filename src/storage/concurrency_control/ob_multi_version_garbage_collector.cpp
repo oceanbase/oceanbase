@@ -262,7 +262,7 @@ void ObMultiVersionGarbageCollector::repeat_reclaim()
 }
 
 // According to the requirement of the multi-version garbage collector and the
-// document https://yuque.antfin-inc.com/ob/transaction/pqhlx4. We need collect
+// document 
 // four timestamp from each OceanBase node:
 // 1. The timestamp of the minimum unallocation GTS
 // 2. The timestamp of the minimum unallocation WRS

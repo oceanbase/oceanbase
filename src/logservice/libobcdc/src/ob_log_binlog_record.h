@@ -90,7 +90,7 @@ public:
   uint64_t get_row_index() const { return row_index_; }
   int64_t get_part_trans_task_count() const { return part_trans_task_count_; }
 
-  // Aone: https://aone.alibaba-inc.com/issue/19411533
+  // Aone: 
   // for put operation of HBASE: store data type as update, new value use full-column mode, old value is empty
   // special treatment for libobcdc:
   // TODO:observer add new dml operation type to represend PUT operation

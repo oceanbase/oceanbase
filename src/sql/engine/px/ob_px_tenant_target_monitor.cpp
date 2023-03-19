@@ -388,7 +388,7 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
   bool need_wait = false;
   if (OB_SUCC(ret)) {
     ObLockGuard<ObSpinLock> lock_guard(spin_lock_); // Just for avoid multiple SQL applications at the same time
-    // for pmas https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/4804361
+    // for pmas 
     int64_t target = session_target != INT64_MAX ? session_target : parallel_servers_target_;
     uint64_t version = version_;
     bool is_first_query = true;

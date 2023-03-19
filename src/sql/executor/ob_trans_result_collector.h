@@ -23,7 +23,7 @@ namespace oceanbase
 namespace sql
 {
 
-// https://yuque.antfin-inc.com/ob/sql/tqaqnu
+// 
 
 /*
  *      /-->-- FORBIDDEN

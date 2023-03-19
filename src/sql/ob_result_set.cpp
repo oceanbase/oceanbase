@@ -444,7 +444,7 @@ bool ObResultSet::transaction_set_violation_and_retry(int &err, int64_t &retry_t
       LOG_WARN("failed to close plan", K(err), K(ret));
     } else {
       // OB_SNAPSHOT_DISCARDED should not retry now, see:
-      // https://aone.alibaba-inc.com/req/21981135
+      // 
       // so we remove this condition: OB_TRANSACTION_SET_VIOLATION == err
       if (/*OB_TRANSACTION_SET_VIOLATION == err &&*/ is_isolation_RR_or_SE) {
         // rewrite err in ObQueryRetryCtrl::test_and_save_retry_state().

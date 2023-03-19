@@ -1051,7 +1051,7 @@ int ObMultiVersionSchemaService::get_cluster_schema_guard(
           } else if (FALSE_IT(tenant_snapshot_version = schema_store->get_refreshed_version())) {
           } else {
             // switchover/failover not clear schema_status, Cannot trust schema_status content unconditionally
-            // bugfix:https://work.aone.alibaba-inc.com/issue/31102068
+            // bugfix:
             if (guard.is_standby_cluster() || (*tenant)->is_restore()) {
               if (OB_FAIL(get_schema_status(schema_status_array, tenant_id, schema_status))) {
                 LOG_WARN("fail to get schema status", K(ret), KPC(*tenant));
@@ -2270,7 +2270,7 @@ int ObMultiVersionSchemaService::refresh_and_add_schema(const ObIArray<uint64_t>
       } else if (check_bootstrap) {
         // The schema refresh triggered by the heartbeat is forbidden in the bootstrap phase,
         // and it needs to be judged in the schema_refresh_mutex_lock
-        // https://aone.alibaba-inc.com/issue/19285432
+        // 
         int64_t baseline_schema_version = OB_INVALID_VERSION;
         if (OB_FAIL(get_baseline_schema_version(OB_SYS_TENANT_ID, true/*auto_update*/, baseline_schema_version))) {
           LOG_WARN("fail to get baseline_schema_version", K(ret));
@@ -2379,7 +2379,7 @@ int ObMultiVersionSchemaService::get_schema_version_by_timestamp(
 // Unlike the startup time, liboblog assumes that the Partition set of the tenant's initial user table is empty.
 // In order to ensure that the ddl is not output and the Partition is not obtained,
 // the schema_version needs to be as small as possible.
-// https://aone.alibaba-inc.com/issue/20970390
+// 
 // Discuss several situations:
 // 1. OB_DDL_ADD_TENANT: Indicates a tenant created in a non-split mode,
 //  and the schema_version can be the schema_version corresponding to OB_DDL_ADD_TENANT;

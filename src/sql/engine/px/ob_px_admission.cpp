@@ -100,7 +100,7 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   // 对于只有dop=1 的场景跳过检查，因为这种场景走 RPC 线程，不消耗 PX 线程
-  // https://yuque.antfin-inc.com/ob/sql/xzrw9m
+  // 
   if (stmt::T_EXPLAIN != stmt_type
       && plan.is_use_px()
       && 1 != plan.get_px_dop()

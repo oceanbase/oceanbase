@@ -2021,7 +2021,7 @@ int ObTransformPreProcess::create_connect_by_view(ObSelectStmt &stmt)
     LOG_WARN("failed to adjust statement id", K(ret));
   } else {
     view_stmt->set_stmt_type(stmt::T_SELECT);
-    /*in: https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/7518289 
+    /*in: 
     ObDMLStmt::assign won't assign has_prior/order_siblings/is_hierarchical_query. 
     So we need to set it manually.
     */

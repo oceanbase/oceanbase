@@ -3827,7 +3827,7 @@ int ObDMLResolver::do_resolve_generate_table(const ParseNode &table_node,
    /*oracle模式允许sel/upd/del stmt中的generated table含有重复列，只要外层没有引用到重复列就行，同时对于外层引用
   * 到的列是否为重复列会在检查column时进行检测，eg: select 1 from (select c1,c1 from t1);
   * 因此对于oracle模式下sel/upd/del stmt进行检测时，检测到重复列时只需skip，但是仍然需要添加相关plan cache约束
-  * https://work.aone.alibaba-inc.com/issue/29799516
+  * 
    */
   bool can_skip = (lib::is_oracle_mode() && get_stmt()->is_sel_del_upd());
   if (OB_FAIL(child_resolver.resolve_child_stmt(table_node))) {
@@ -4138,7 +4138,7 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
   }
   OZ (stmt->add_table_item(session_info_, item));
   if (OB_SUCC(ret)) {
-    // https://work.aone.alibaba-inc.com/issue/31120239
+    // 
     // ObFunctionTable填充行数据时依赖row前面的列是udf的输出列, 这里强制将udf的输出列加到ObFunctionTable
     ObSEArray<ColumnItem, 16> col_items;
     CK (OB_NOT_NULL(item));
@@ -6842,7 +6842,7 @@ int ObDMLResolver::deduce_generated_exprs(ObIArray<ObRawExpr*> &exprs)
           LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
         } else if (T_OP_LIKE == expr->get_expr_type()) {
           /*
-          https://work.aone.alibaba-inc.com/issue/33030027
+          
           err1: should add const expr for expr2
           err2: if expr2 is 'a%d' deduce is error
                 c1 like 'a%d' DOESN'T MEAN:
@@ -7368,7 +7368,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     ObStmt *stmt = get_basic_stmt();
     // 一般的对synonym操作的dml语句stmt不会是NULL，但是类似于desc synonym_name的语句，运行到这里
     // stmt还未生成，因为还未生成从虚拟表select的语句，所以stmt为NULL
-    // https://work.aone.alibaba-inc.com/issue/21978477
+    // 
     if (OB_NOT_NULL(stmt)) {
       if (OB_FAIL(add_synonym_obj_id(synonym_checker, false/* error_with_exist */))) {
         LOG_WARN("add_synonym_obj_id failed", K(ret));
@@ -8529,7 +8529,7 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
   return ret;
 }
 
-// https://work.aone.alibaba-inc.com/issue/47046607
+// 
 // columns with is json constraint should set_strict_json_column > 00
 bool ObDMLResolver::check_generated_column_has_json_constraint(const ObSelectStmt *stmt, const ObColumnRefRawExpr *col_expr)
 {
@@ -8581,7 +8581,7 @@ bool ObDMLResolver::check_generated_column_has_json_constraint(const ObSelectStm
   @param select_item_offset:
     the argument select_item_offset is used to tell the function to traverse select_items from the select_item_offset-th select item.
   @param skip_check:
-    bugfix: https://work.aone.alibaba-inc.com/issue/36334616
+    bugfix: 
     if the all the three conditions are true, we can skip the check and directly copy the select_item to column_item:
     1. the function is called directly or indirectly from reslove_star. (e.g., in select * from xxxx)
     2. is oracle mode
@@ -11126,7 +11126,7 @@ int ObDMLResolver::get_all_column_ref(ObRawExpr *expr, ObIArray<ObColumnRefRawEx
  * 以上才能真正重新解析出来part expr, 否则会误解析为函数，本质上这里表示的为普通列性质,目前已知的有如下关键字：
  * SYSTIMESTAMP、CURRENT_DATE、LOCALTIMESTAMP、CURRENT_TIMESTAMP、SESSIONTIMEZONE、DBTIMEZONE、
  * CONNECT_BY_ISCYCLE、CONNECT_BY_ISLEAF
- * bug:https://work.aone.alibaba-inc.com/issue/32136817
+ * bug:
  */
 
 #define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')

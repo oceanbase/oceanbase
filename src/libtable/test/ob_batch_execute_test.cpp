@@ -7781,7 +7781,7 @@ TEST_F(TestBatchExecute, complex_batch_execute)
           ASSERT_EQ(400+i, value.get_int());
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
           // verify the semantic of PUT
-          // https://aone.alibaba-inc.com/project/81079/issue/14554345
+          // 
           ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
           ASSERT_TRUE(str == c3_value);
           break;

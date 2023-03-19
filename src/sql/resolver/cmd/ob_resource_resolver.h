@@ -368,7 +368,7 @@ int ObResourceUnitOptionResolver<T>::resolve_varchar_(ParseNode *child, const Ob
     SQL_RESV_LOG(WARN, "fail to assign child str", KR(ret), K(child->str_value_), K(child->str_len_));
   } else {
     //
-    // bugfix: https://aone.alibaba-inc.com/req/23558382
+    // bugfix: 
     //
     // create resource unit unit_test4 max_cpu '1', max_iops '128'
     // 等价于

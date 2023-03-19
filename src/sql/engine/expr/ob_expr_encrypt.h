@@ -1,6 +1,6 @@
 // Copyright 2015-2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//    xuxinlan.xxl@oceanbase.com
+//    
 
 #ifndef SRC_SQL_ENGINE_EXPR_OB_EXPR_ENCRYPT_H_
 #define SRC_SQL_ENGINE_EXPR_OB_EXPR_ENCRYPT_H_

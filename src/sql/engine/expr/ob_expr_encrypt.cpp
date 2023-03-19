@@ -1,6 +1,6 @@
 // Copyright 2015-2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//    xuxinlan.xxl@oceanbase.com
+//    
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_encrypt.h"

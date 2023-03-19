@@ -109,7 +109,7 @@ private:
     #name, oceanbase::common::EventTable::global_item_list());
 #define ERRSIM_POINT_CALL(name) name?:
 
-// doc: https://yuque.antfin-inc.com/ob/sql/ssc2x0
+// doc: 
 
 // to check if a certain tracepoint is set
 // example: if (E(50) OB_SUCCESS) {...}

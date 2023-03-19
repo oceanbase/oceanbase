@@ -157,7 +157,7 @@ OB_INLINE int ObTableInsertOp::open_table_for_each()
         //this table is being accessed by dml operator, mark its table location as writing
         //but single value insert in oracle allow the nested sql modify its insert table
         //clear the writing flag in table location before the trigger execution
-        //see it:https://yuque.antfin-inc.com/docs/share/40291dac-859c-48de-8a31-79bb7ca7c571
+        //see it:
         primary_ins_rtdef.das_rtdef_.table_loc_->is_writing_ =
             !(primary_ins_ctdef.is_single_value_ && lib::is_oracle_mode());
       }

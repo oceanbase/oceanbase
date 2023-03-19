@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2022 Alipay Inc. All Rights Reserved.
  * Authors:
- *     Danling <fengjingkun.fjk@antgroup.com>
+ *     Danling <>
  */
 #define USING_LOG_PREFIX STORAGE
 

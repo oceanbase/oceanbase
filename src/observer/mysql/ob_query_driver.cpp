@@ -804,7 +804,7 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
 /*@brief:is_com_filed_list_match_wildcard_str 用于匹配client发过来的COM_FIELD_LIST中包含的参数中有匹配符
 * 情形,eg:COM_FIELD_LIST(t1, c*) , t1 中有c1,c2,pk 三列 ==> 仅返回c1, c2，不返回 pk，因为他和 c* 不匹配;
 * 其规则类似于like情形；详细参考链接：
-* https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/3397651
+* 
 */
 int ObQueryDriver::is_com_filed_list_match_wildcard_str(ObResultSet &result,
                                                         const ObCollationType &from_collation,

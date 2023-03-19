@@ -79,7 +79,7 @@
  *      + MAKE SURE you visit the result with holding a ObFuture object, ObFuture is a life time
  *        guard of the result.
  *
- *  - Contact xuwang.txw@antgroup.com for help.
+ *  - Contact  for help.
  */
 #ifndef OCEANBASE_LIB_FUTURE_OB_FUTURE_H
 #define OCEANBASE_LIB_FUTURE_OB_FUTURE_H

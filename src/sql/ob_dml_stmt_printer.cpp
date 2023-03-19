@@ -209,7 +209,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
     case TableItem::ALIAS_TABLE: {
         if (OB_FAIL(print_base_table(table_item))) {
           LOG_WARN("failed to print base table", K(ret), K(*table_item));
-        //table in insert all can't print alias(bug:https://work.aone.alibaba-inc.com/issue/31941210)
+        //table in insert all can't print alias(bug:
         } else if (!no_print_alias) {
           PRINT_QUOT_WITH_SPACE;
           DATA_PRINTF("%.*s", LEN_AND_PTR(table_item->alias_name_));

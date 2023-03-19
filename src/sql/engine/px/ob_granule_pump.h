@@ -322,7 +322,7 @@ class ObGranulePump
 private:
   static const int64_t OB_GRANULE_SHARED_POOL_POS = 0;
 
-  // https://yuque.antfin-inc.com/docs/share/9b5fea38-dab7-46ee-bf02-98851def2de1?#
+  // 
   // 《PX的GI详细实现》
   enum ObGranuleSplitterType
   {

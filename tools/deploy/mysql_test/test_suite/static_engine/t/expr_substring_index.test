@@ -46,7 +46,7 @@ select substring_index(1.414, 1, 2);
 --disable_warnings
 select c1, substring_index("a,b,c,d", ",", c1), c2, substring_index("a,b,c,d", ",", c2), c3, substring_index("a,b,c,d", ",", c3), c4, substring_index("a,b,c,d", ",", c4) from t1;
 
---echo //for https://work.aone.alibaba-inc.com/issue/30871483 https://work.aone.alibaba-inc.com/issue/30873161 null_标记覆盖问题
+--echo //for 
 drop table if exists t2, t3;
 create table t2(c1 varchar(20));
 create table t3(c1 varchar(20));

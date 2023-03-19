@@ -1238,7 +1238,7 @@ int ObDDLOperator::drop_tablegroup(const ObTablegroupSchema &tablegroup_schema,
       // When tablegroup is dropped, there must not be table in tablegroup, otherwise it is failed to get tablegroup
       // schema when getting derived relation property by table. As locality and primary_zone is add in tablegroup
       // after 2.0
-      // https://aone.alibaba-inc.com/issue/15377513
+      // 
       not_empty = true;
     }
     // check databases' default_tablegroup_id
@@ -4306,7 +4306,7 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
   return ret;
 }
 
-// ref https://aone.alibaba-inc.com/issue/21209472
+// ref 
 // When tables with auto-increment columns are frequently created or deleted, if the auto-increment column cache is not cleared, the memory will grow slowly.
 // so every time when you drop table, if you bring auto-increment columns, clean up the corresponding cache.
 int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema &table_schema,
@@ -4319,7 +4319,7 @@ int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema &table_schema,
   if (OB_FAIL(schema_service_.check_tenant_is_restore(NULL, tenant_id, is_restore))) {
     LOG_WARN("fail to check if tenant is restore", KR(ret), K(tenant_id));
   } else if (is_restore) {
-    // bugfix:https://work.aone.alibaba-inc.com/issue/33571720
+    // bugfix:
     // skip
   } else if (0 != table_schema.get_autoinc_column_id()) {
     uint64_t table_id = table_schema.get_table_id();

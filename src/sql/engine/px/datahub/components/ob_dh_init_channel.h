@@ -1,6 +1,6 @@
 // Copyright 1999-2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//   peihan.dph@alibaba-inc.com
+//   
 //
 #ifndef __OB_SQL_ENG_PX_DH_INIT_CHANNEL_H__
 #define __OB_SQL_ENG_PX_DH_INIT_CHANNEL_H__

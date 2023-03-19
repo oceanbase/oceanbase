@@ -488,7 +488,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret) && has_synonym) {
     ObString tmp_new_db_name;
     ObString tmp_new_tbl_name;
-    // related issue : https://work.aone.alibaba-inc.com/issue/41062639
+    // related issue : 
     if (OB_FAIL(deep_copy_str(new_db_name, tmp_new_db_name))) {
       LOG_WARN("failed to deep copy new_db_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(new_tbl_name, tmp_new_tbl_name))) {

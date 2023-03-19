@@ -1067,7 +1067,7 @@ int ObTransformConstPropagate::recursive_replace_expr(ObRawExpr *&cur_expr,
   } else if (found || cur_expr->has_flag(IS_ROWID)) {
     // do nothing
     //because the column expr in rowid will be used to extract query range. So, we can't replace.
-    //see the issue: https://work.aone.alibaba-inc.com/issue/44134346
+    //see the issue: 
   } else if (OB_FAIL(const_ctx.shared_expr_checker_.is_shared_expr(cur_expr, is_shared))) {
     LOG_WARN("failed to check is shared expr", K(ret));
   } else if (is_shared) {

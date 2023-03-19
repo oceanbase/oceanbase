@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -48,7 +48,7 @@ int ObTableLoadPartitionCalc::init_session()
 
   // ensure allocator is constructed before session to
   // avoid coredump at observer exit
-  // https://work.aone.alibaba-inc.com/issue/38530967
+  // 
   ObArenaAllocator *allocator = &session_alloc();
   ObSQLSessionInfo &sess = session();
 

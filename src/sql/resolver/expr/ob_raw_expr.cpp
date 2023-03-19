@@ -822,7 +822,7 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_ROW_COUNT == type_
           || T_FUN_SYS_FOUND_ROWS == type_
           || T_FUN_SYS_REGEXP_INSTR == type_
-          // TODO:@sean.yyj#273971, will sort out exprs not deterministic in mysql mode later, https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/4961352
+          // TODO:@sean.yyj#273971, will sort out exprs not deterministic in mysql mode later, 
           // || T_FUN_SYS_REGEXP_LIKE == type_ // create table t1(c1 int, c2 int generated always as(regexp_like(1, 2))); success in mysql
           || T_FUN_SYS_REGEXP_REPLACE == type_
           || T_FUN_SYS_REGEXP_SUBSTR == type_

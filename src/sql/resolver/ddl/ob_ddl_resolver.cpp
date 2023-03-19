@@ -2328,7 +2328,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       } else {
         ObString expr_str(expr_node->str_len_, expr_node->str_value_);
         ObObj default_value;
-        /* bugfix: https://work.aone.alibaba-inc.com/issue/37449198
+        /* bugfix: 
          * in NO_BACKSLAH_ESCAPES sql_mode, mysql will convert '\\' to '\\\\';
          */
         bool is_no_backslash_escapes = false;

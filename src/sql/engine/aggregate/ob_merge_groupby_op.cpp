@@ -364,7 +364,7 @@ int ObMergeGroupByOp::rewrite_rollup_column(ObExpr *&diff_expr)
       : MY_SPEC.rollup_exprs_[cur_output_group_id_ - MY_SPEC.group_exprs_.count()]);
   LOG_DEBUG("debug write rollup column 1", KP(diff_expr), K(cur_output_group_id_));
   //for SELECT GROUPING(z0_test0) FROM Z0CASE GROUP BY z0_test0, ROLLUP(z0_test0);
-  //issue:https://work.aone.alibaba-inc.com/issue/33780805
+  //issue:
   if (cur_output_group_id_ >= MY_SPEC.group_exprs_.count()) {
     for (int64_t i = 0; diff_expr != NULL && i < MY_SPEC.group_exprs_.count(); ++i) {
       if (MY_SPEC.group_exprs_[i] == diff_expr) {

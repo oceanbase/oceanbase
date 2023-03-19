@@ -394,7 +394,7 @@ int ObTxDataTable::insert(ObTxData *&tx_data)
 
 // In order to support the commit log without undo actions, the tx data related to a single
 // transaction may be inserted multiple times. For more details, see
-// https://yuque.antfin.com/ob/transaction/cdn5ez
+// 
 int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write_guard)
 {
   int ret = OB_SUCCESS;
@@ -836,7 +836,7 @@ int ObTxDataTable::self_freeze_task()
 }
 
 // The main steps in calculating upper_trans_version. For more details, see :
-// https://yuque.antfin-inc.com/ob/transaction/lurtok
+// 
 int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_version)
 {
   int ret = OB_SUCCESS;

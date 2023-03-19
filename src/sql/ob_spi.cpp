@@ -2424,7 +2424,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             need_execute_sql = false;
         } else if (ObStmt::is_dml_write_stmt(stmt_type) && inner_into_cnt > 0 && 0 == into_count) {
           /*
-          * 处理https://work.aone.alibaba-inc.com/issue/28206174这种特殊的用法。
+          * 处理
           * 仅当dml语句含returning变量，并且外部没有INTO变量时才允许使用USING OUT接收参数
           */
           CK (param_count >= inner_into_cnt);
@@ -5575,7 +5575,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
          * 2、如果into的数目比select item少，那么into的数目必须是1（一定是单个record的情况）；
          * 3、如果into的数目和select item一样多，并且是1，那么是单个record还是单个变量不确定，但是同样是合法的；
          * 还有一种特殊情况，是动态DML语句带RETURNING通过USING OUT传递参数的情况，详见：
-         *  https://work.aone.alibaba-inc.com/issue/28206174
+         *  
          *  这种情况仅支持SQL基础类型。
          *  另外，DBMS_SQL没有输出参数，只需要返回current_row即可
          */

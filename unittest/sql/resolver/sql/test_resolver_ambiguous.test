@@ -2,7 +2,7 @@ drop database if exists ambiguous;
 create database ambiguous;
 use ambiguous;
 
-# http://k3.alibaba-inc.com/issue/6300608?stat=1.5.7&toPage=1&versionId=1043693
+# 
 drop table if exists t1, t2, t3;
 create table t1(c1 int primary key, c2 int);
 create table t2(c1 int primary key, c2 int);
@@ -10,15 +10,15 @@ create table t3(c1 int primary key, c2 int);
 --error 5206
 select c1, sum(c2) from t1 group by 2;
 
-# http://k3.alibaba-inc.com/issue/6307368?stat=1.5.2&toPage=1&versionId=1043693
+# 
 --error 5207
 select * from t1 join t2 using(c1) join t3 using(c2);
 
-# http://k3.alibaba-inc.com/issue/6311307?versionId=1043693
+# 
 --error 5208
 select * from t1 join t2 using(c1) join t1 using(c2);
 
-# http://k3.alibaba-inc.com/issue/6258378?stat=1.5.9&toPage=1&versionId=1043693
+# 
 --error 5207
 select c2 from t1 join t2 using(c1) join t3 using(c1);
 
@@ -30,7 +30,7 @@ select X.c1 from t1 AS X group by X.c2 having (X.c2 = 1);
 select * from (select * from t1) t join t2 using(c1)
 SELECT * FROM t1 LEFT JOIN t2 USING (c1) WHERE c1 IS NULL;
 
-# http://k3.alibaba-inc.com/issue/6345854?stat=1.5.10&toPage=1&versionId=1043693
+# 
 select c2 from t1 left join t2 using(c2);
 
 drop database ambiguous;

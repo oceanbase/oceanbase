@@ -3475,7 +3475,7 @@ int ObLSTabletService::need_check_old_row_legitimacy(ObDMLRunningCtx &run_ctx,
     need_check = true;
     ret = OB_E(EventTable::EN_INS_MULTI_VALUES_BATCH_OPT) OB_SUCCESS;
     // no need to check old row, just for bmsql performance optimization
-    // TODO yuchen.ywc https://aone.alibaba-inc.com/project/81079/task/45910845
+    // TODO yuchen.ywc 
     if (OB_SUCCESS != ret) {
       LOG_INFO("error sim when current statement is batch update", K(ret), K(is_udf));
       need_check = false;

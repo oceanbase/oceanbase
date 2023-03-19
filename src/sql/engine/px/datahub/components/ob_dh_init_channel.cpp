@@ -1,6 +1,6 @@
 	// Copyright 1999-2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//   peihan.dph@alibaba-inc.com
+//   
 //
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/datahub/components/ob_dh_barrier.h"
@@ -80,7 +80,7 @@ int ObInitChannelPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sq
   int ret = OB_SUCCESS;
   // get child transmit op's id.
   // in current impl. the paired transmit op id = receive op id + 1
-  //TODO : https://aone.alibaba-inc.com/task/43312101
+  //TODO : 
   whole_msg_.op_id_ = op_id_ + 1;
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
     dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();

@@ -4845,7 +4845,7 @@ int common_string_unsigned_integer(const ObCastMode &cast_mode,
   return ret;
 }
 
-// 与MySQL有不兼容行为: https://work.aone.alibaba-inc.com/issue/24594885
+// 与MySQL有不兼容行为: 
 int common_string_integer(const ObCastMode &cast_mode,
                                  const ObObjType &in_type,
                                  const ObCollationType &in_cs_type,
@@ -12490,7 +12490,7 @@ int ObObjCaster::to_type(const ObObjType expect_type,
   const ObObjTypeClass out_tc = ob_obj_type_class(expect_type);
   cast_ctx.warning_ = OB_SUCCESS;
   /* expect_cs_type has higer priority than cast_ctx.dest_collation_
-     https://work.aone.alibaba-inc.com/issue/32927086 */
+      */
   if (CS_TYPE_INVALID != expect_cs_type) {
     cast_ctx.dest_collation_ = expect_cs_type;
   } else {
@@ -12794,7 +12794,7 @@ int ObObjCaster::is_const_consistent(const ObObjMeta &const_mt,
 
 /* make sure that you have read the doc before you call these functions !
  *
- * doc:  http://www.atatech.org/articles/56575
+ * doc:  
  */
 
 int ObObjCaster::is_order_consistent(const ObObjMeta &from,
@@ -12842,7 +12842,7 @@ int ObObjCaster::is_order_consistent(const ObObjMeta &from,
 
 /* make sure that you have read the doc before you call these functions !
  *
- * doc:  http://www.atatech.org/articles/56575
+ * doc:  
  */
 
 int ObObjCaster::is_injection(const ObObjMeta &from,
