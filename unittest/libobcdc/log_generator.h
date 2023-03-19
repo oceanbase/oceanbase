@@ -199,7 +199,7 @@ private:
 int ObTxLogBlockBuilder::next_log_block()
 {
   int ret = OB_SUCCESS;
-  ObTxLogBlockHeader block_header(cluster_id_, log_entry_no_, tx_id_);
+  ObTxLogBlockHeader block_header(cluster_id_, log_entry_no_, tx_id_, common::ObAddr());
   tx_log_block_.reset();
 
   if (OB_FAIL(tx_log_block_.init(tx_id_, block_header))) {

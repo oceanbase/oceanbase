@@ -45,7 +45,7 @@ struct TxDataReadSchema
 
 // In Ob4.0, transaction state table is divided into tx data table and tx
 // context table. See details :
-// https://yuque.antfin.com/docs/share/127d0836-8931-4c9e-8e68-64b900ba91f4?#
+//
 //
 // All operatitons related to tx_data are implemented by ObTxDataTable.
 // See details ::

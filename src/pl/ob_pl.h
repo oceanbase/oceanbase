@@ -591,7 +591,7 @@ public:
   * some package subprogram has special invoker right, though the package may have definer privs
   * for example: dbms_utility package is definer privs, but some function such as
   * name_resolve must be run as current_user, oracle do it in interface functions
-  * see: https://yuque.antfin.com/docs/share/990f729a-d21b-47f1-94ec-6b4b5cda950f?# 《oracle如何实现一个包中同时控制多个权限（sys， current_user)》
+  * see:
   * we hacked it using name compared, for the interface funtion can't get the origin db name and id
   * test -> oceanbase, we see oceanbase in interface but can't see test.
   */

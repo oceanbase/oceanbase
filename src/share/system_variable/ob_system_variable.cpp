@@ -393,7 +393,7 @@ int ObBasicSysVar::session_update(ObExecContext &ctx,
     }
   } else if (set_var.var_name_ == OB_SV__ENABLE_PARALLEL_QUERY) {
       should_update_extra_var = true;
-    // https://yuque.antfin-inc.com/xiaochu.yh/doc/exgk9g/
+    //
     // 实现 Oracle 兼容行为方式如下：有变量 enable 和 parallel
     //  alter session enable parallel query 时 enable = true, parallel = 1   => 走 manual table dop 规则
     //  alter session disable parallel query 时 enable = false, parallel = 1  => 走 no parallel 规则

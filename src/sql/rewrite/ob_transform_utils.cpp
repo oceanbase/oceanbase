@@ -4406,7 +4406,7 @@ int ObTransformUtils::compute_table_property(const ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   const JoinedTable *joined_table = NULL;
-  if (OB_ISNULL(table)) {
+  if (OB_ISNULL(table) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected stmt", K(ret));
   } else if (table->is_basic_table()
@@ -4418,7 +4418,12 @@ int ObTransformUtils::compute_table_property(const ObDMLStmt *stmt,
                                                                    cond_exprs, res_info)))) {
     LOG_WARN("failed to compute generate table property", K(ret));
   } else if (!table->is_joined_table()) {
-    /*do nothing*/
+    ObSqlBitSet<> rel_ids;
+    if (OB_FAIL(stmt->get_table_rel_ids(*table, rel_ids))) {
+      LOG_WARN("failed to get table ids", K(ret));
+    } else if (OB_FAIL(res_info.table_set_.add_members(rel_ids))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
   } else if (FALSE_IT(joined_table = static_cast<const JoinedTable *>(table))) {
   } else if (joined_table->is_inner_join()) {
     ret = SMART_CALL(compute_inner_join_property(stmt, check_helper, joined_table,

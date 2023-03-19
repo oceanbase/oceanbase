@@ -1496,6 +1496,7 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
   bool leader = false;
   SCN snapshot0;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+  const bool can_elr = MTL_IS_PRIMARY_TENANT() ? true : false;
   if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
     TRANS_LOG(WARN, "get ls_tx_ctx_mgr fail", K(ret), K(ls_id));
   } else if (!ls_tx_ctx_mgr->in_leader_serving_state()) {
@@ -1507,7 +1508,7 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
     TRANS_LOG(WARN, "get replica role fail", K(ret), K(ls_id));
   } else if (!leader) {
     ret = OB_NOT_MASTER;
-  } else if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(true))) {
+  } else if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(can_elr))) {
   } else if (!snapshot0.is_valid_and_not_min()) {
     ret = OB_EAGAIN;
   } else {

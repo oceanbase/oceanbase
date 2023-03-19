@@ -34,6 +34,7 @@ class ObDirectLoadTabletMergeCtx;
 class ObIDirectLoadPartitionTable;
 class ObDirectLoadSSTable;
 class ObDirectLoadMultipleSSTable;
+class ObDirectLoadMultipleHeapTable;
 class ObDirectLoadMultipleMergeRangeSplitter;
 
 struct ObDirectLoadMergeParam
@@ -99,6 +100,8 @@ public:
     const common::ObIArray<ObDirectLoadMultipleSSTable *> &multiple_sstable_array,
     ObDirectLoadMultipleMergeRangeSplitter &range_splitter,
     int64_t max_parallel_degree);
+  int build_aggregate_merge_task_for_multiple_heap_table(
+    const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
   int inc_finish_count(bool &is_ready);
   int collect_sql_statistics(
     const common::ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array, table::ObTableLoadSqlStatistics &sql_statistics);
@@ -111,6 +114,11 @@ public:
   }
   TO_STRING_KV(K_(param), K_(target_partition_id), K_(tablet_id), K_(target_tablet_id));
 private:
+  int init_sstable_array(const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
+  int init_multiple_sstable_array(
+    const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
+  int init_multiple_heap_table_array(
+    const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
   int build_empty_data_merge_task(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                                   int64_t max_parallel_degree);
   int build_pk_table_merge_task(const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
@@ -138,6 +146,7 @@ private:
   ObDirectLoadOriginTable origin_table_;
   common::ObSEArray<ObDirectLoadSSTable *, 64> sstable_array_;
   common::ObSEArray<ObDirectLoadMultipleSSTable *, 64> multiple_sstable_array_;
+  common::ObSEArray<ObDirectLoadMultipleHeapTable *, 64> multiple_heap_table_array_;
   common::ObSEArray<blocksstable::ObDatumRange, 64> range_array_;
   common::ObSEArray<ObDirectLoadPartitionMergeTask *, 64> task_array_;
   int64_t task_finish_count_ CACHE_ALIGNED;

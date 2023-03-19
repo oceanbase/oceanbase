@@ -39,6 +39,9 @@ void ObRetryPolicy::try_packet_retry(ObRetryParam &v) const
   const ObMultiStmtItem &multi_stmt_item = v.ctx_.multi_stmt_item_;
   if (v.force_local_retry_) {
     v.retry_type_ = RETRY_TYPE_LOCAL;
+  } else if (multi_stmt_item.is_batched_multi_stmt()) {
+    // in batch optimization, can't do packet retry
+    v.retry_type_ = RETRY_TYPE_LOCAL;
   } else if (multi_stmt_item.is_part_of_multi_stmt() && multi_stmt_item.get_seq_num() > 0) {
     // muti stmt，并且不是第一句，不能扔回队列重试，因为前面的无法回滚
     v.retry_type_ = RETRY_TYPE_LOCAL;

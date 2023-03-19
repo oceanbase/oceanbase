@@ -55,7 +55,7 @@ create table t6 (pk int primary key, a int, b int, c int, d int, e int,
 ##
 create table t7(a int, b int, c int, d int, e int, f int, key k1(a,c,b), key k2(a,b,c,d,e));
 
-##
+##project/81079/issue/12046883?akProjectId=81079&
 create table t8(a int primary key, b int, c int, d int, e int, f int, index k1(b,c,e), index k2(c,d,e,f));
 
 create table tmp (pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int,
@@ -332,7 +332,7 @@ explain select c from t6 where b = 1 and a > 2 union select pk from tmp;
 ##
 explain select * from t7 where a >= 0 and a <= 5 and b = 1;
 
-##
+##project/81079/issue/12046883?akProjectId=81079&
 explain select * from t8 where e = 1 order by b;
 explain select * from t8 where e = 1 or f = 1 order by b;
 explain select * from t8 where d = 1 order by b;

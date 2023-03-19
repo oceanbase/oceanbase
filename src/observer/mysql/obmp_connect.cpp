@@ -2057,7 +2057,7 @@ int ObMPConnect::update_charset_sys_vars(ObSMConnection &conn, ObSQLSessionInfo 
   //            default charset for mysqltest
   //TODO: after obclient&mysqltest support default charset = utf8
   //      login for cs_type != LATIN1_CS would be deleted
-  if (cs_type != LATIN1_CS && ObCharset::is_valid_collation(cs_type)) {
+  if (ObCharset::is_valid_collation(cs_type)) {
     if (OB_FAIL(sess_info.update_sys_variable(SYS_VAR_CHARACTER_SET_CLIENT, cs_type))) {
       SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
     } else if (OB_FAIL(sess_info.update_sys_variable(SYS_VAR_CHARACTER_SET_RESULTS, cs_type))) {

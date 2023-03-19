@@ -59,7 +59,7 @@ void ObTxLSLogLimit::decide_log_buf_size()
   LOG_BUF_SIZE = 0;
   ObLogBaseHeader base_header;
   ObTxLogHeader tx_header;
-  ObTxLogBlockHeader block_header(UINT64_MAX, INT64_MAX, INT64_MAX);
+  ObTxLogBlockHeader block_header(UINT64_MAX, INT64_MAX, INT64_MAX, common::ObAddr());
   ObTxStartWorkingLog sw_log(INT_MAX64);
 
   // block_header.before_serialize();

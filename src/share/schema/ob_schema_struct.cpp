@@ -7212,7 +7212,7 @@ int ObPartitionUtils::calc_hash_part_idx(const uint64_t val,
   const static int64_t max_part_num_log2 = 64;
   // This function is used by SQL. Should ensure SQL runs in MySQL mode when query sys table.
   if (lib::is_oracle_mode()) {
-    // https://yuque.antfin-inc.com/ob-public/sql/sfaedg
+    //
     // It will not be a negative number, so use forced conversion instead of floor
     N = static_cast<int64_t>(std::log(part_num) / std::log(2));
     if (N >= max_part_num_log2) {

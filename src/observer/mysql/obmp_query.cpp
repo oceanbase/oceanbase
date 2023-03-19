@@ -480,17 +480,16 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
                                          force_sync_resp,
                                          async_resp_used,
                                          need_disconnect))) {
-    if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
-      ret = OB_SUCCESS;
-      LOG_TRACE("batched multi_stmt needs rollback", K(ret));
-    } else {
-      LOG_WARN("failed to process single stmt", K(ret));
-    }
+    int tmp_ret = ret;
+    ret = OB_SUCCESS;
+    LOG_WARN("failed to process batch stmt, cover the error code and reset retry flag",
+        K(tmp_ret), K(ret), K(THIS_WORKER.need_retry()));
   } else {
     optimization_done = true;
   }
-  LOG_TRACE("succeed to try batched multi-stmt optimization", K(optimization_done),
-            K(ret), K(queries.count()), K(enable_batch_opt));
+
+  LOG_TRACE("after to try batched multi-stmt optimization", K(optimization_done),
+      K(queries), K(enable_batch_opt), K(ret), K(THIS_WORKER.need_retry()), K(retry_ctrl_.need_retry()), K(retry_ctrl_.get_retry_type()));
   return ret;
 }
 
@@ -795,6 +794,9 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
             // 所以此时可以同步回包，设置need_response_error
             // 向客户端返回一个error包，表示需要二次路由
             need_response_error = true;
+          } else if (ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
+            // batch execute with error,should not response error packet
+            need_response_error = false;
           } else if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
             need_response_error = false;
           }

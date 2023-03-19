@@ -223,6 +223,7 @@ int ObTableLoadMerger::build_merge_ctx()
       table_array = &empty_table_array;
     }
     if (!merge_param.is_heap_table_ && !table_array->empty()) {
+      // for optimize split range is too slow
       ObArray<ObDirectLoadMultipleSSTable *> multiple_sstable_array;
       ObDirectLoadMultipleMergeRangeSplitter range_splitter;
       for (int64_t i = 0; OB_SUCC(ret) && i < table_array->count(); ++i) {
@@ -245,6 +246,16 @@ int ObTableLoadMerger::build_merge_ctx()
         if (OB_FAIL(tablet_merge_ctx->build_merge_task_for_multiple_pk_table(
               multiple_sstable_array, range_splitter, param_.session_count_))) {
           LOG_WARN("fail to build merge task for multiple pk table", KR(ret));
+        }
+      }
+   } else if (merge_param.is_heap_table_ && !table_array->empty() &&
+               tablet_merge_ctxs.count() > param_.session_count_ * 2) {
+      // for optimize the super multi-partition heap table space serious enlargement
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_merge_ctxs.count(); ++i) {
+        ObDirectLoadTabletMergeCtx *tablet_merge_ctx = tablet_merge_ctxs.at(i);
+        if (OB_FAIL(
+              tablet_merge_ctx->build_aggregate_merge_task_for_multiple_heap_table(*table_array))) {
+          LOG_WARN("fail to build aggregate merge task for multiple heap table", KR(ret));
         }
       }
     } else {

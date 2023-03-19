@@ -319,7 +319,7 @@ bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)
  *  PARTITION: Gather partition-level
  *  SUBPARTITION: Gather subpartition-level
  *  Oracle granularity actual behavior survey:
- *    https://yuque.antfin-inc.com/docs/share/3eeffde1-7182-4b2a-8f01-e7a3045d4d1e?#
+ *
  * @return
  */
 int ObDbmsStatsUtils::parse_granularity(const ObString &granularity,

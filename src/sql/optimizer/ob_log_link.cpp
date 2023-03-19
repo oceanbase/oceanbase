@@ -47,6 +47,14 @@ int ObLogLink::compute_sharding_info()
   return ret;
 }
 
+int ObLogLink::compute_op_parallel_and_server_info()
+{
+  int ret = OB_SUCCESS;
+  set_parallel(1);
+  set_server_cnt(1);
+  return ret;
+}
+
 int ObLogLink::est_cost()
 {
   int ret = OB_SUCCESS;

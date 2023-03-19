@@ -239,10 +239,15 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       !admission_fail_and_need_retry
       && OB_BATCHED_MULTI_STMT_ROLLBACK != ret) {
     //OB_BATCHED_MULTI_STMT_ROLLBACK如果是batch stmt rollback错误，不要返回给客户端，退回到mpquery上重试
-    int sret = OB_SUCCESS;
-    bool is_partition_hit = session_.get_err_final_partition_hit(ret);
-    if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
-      LOG_WARN("send error packet fail", K(sret), K(ret));
+    if (ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
+      // The error of batch optimization execution does not need to send error packet here,
+      // because the upper layer will force a fallback to a single line execution retry
+    } else {
+      int sret = OB_SUCCESS;
+      bool is_partition_hit = session_.get_err_final_partition_hit(ret);
+      if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
+        LOG_WARN("send error packet fail", K(sret), K(ret));
+      }
     }
   }
   ObActiveSessionGuard::get_stat().in_sql_execution_ = false;

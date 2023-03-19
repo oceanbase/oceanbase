@@ -2566,7 +2566,7 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
     } else if (fk_arg.is_self_ref_
         && !var_exist_in_array(column_ids, name_column_ids.at(i), fk_column.name_idx_)) {
       /**
-       *
+       * issue/18132630
        * fk_column.name_idx_ is used only for self ref row, that is to say name table and
        * value table is same table.
        * otherwise name_column_ids.at(i) will indicate columns in name table, not value table,

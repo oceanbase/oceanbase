@@ -974,7 +974,12 @@ int ObTxAbortLog::init_tx_data_backup(const share::SCN &start_scn)
 
 // ============================== Tx Log Blcok =============================
 
-OB_TX_SERIALIZE_MEMBER(ObTxLogBlockHeader, compat_bytes_, org_cluster_id_, log_entry_no_, tx_id_);
+OB_TX_SERIALIZE_MEMBER(ObTxLogBlockHeader,
+                       compat_bytes_,
+                       org_cluster_id_,
+                       log_entry_no_,
+                       tx_id_,
+                       scheduler_);
 
 int ObTxLogBlockHeader::before_serialize()
 {
@@ -985,7 +990,7 @@ int ObTxLogBlockHeader::before_serialize()
       TRANS_LOG(WARN, "reset all compat_bytes_ valid failed", K(ret));
     }
   } else {
-    if (OB_FAIL(compat_bytes_.init(3))) {
+    if (OB_FAIL(compat_bytes_.init(4))) {
       TRANS_LOG(WARN, "init compat_bytes_ failed", K(ret));
     }
   }

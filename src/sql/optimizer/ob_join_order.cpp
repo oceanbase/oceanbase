@@ -1270,6 +1270,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     bool hint_force_no_das = false;
     force_das_tsc = get_plan()->get_optimizer_context().in_nested_sql() ||
                     get_plan()->get_optimizer_context().has_pl_udf() ||
+                    get_plan()->get_optimizer_context().has_dblink() ||
                     get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
                     is_batch_update_table;
     //this sql force to use DAS TSC:

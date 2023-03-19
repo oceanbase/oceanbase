@@ -585,9 +585,7 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
                                                    snapshot.uncertain_bound_))) {
     TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
   } else {
-    if (tx.is_can_elr() && MTL_IS_PRIMARY_TENANT()) {
-      snapshot.core_.version_ = std::max(snapshot.core_.version_, tx_version_mgr_.get_max_commit_ts(true));
-    }
+    // do nothing
   }
   if (OB_SUCC(ret)) {
     snapshot.source_ = ObTxReadSnapshot::SRC::GLOBAL;

@@ -170,7 +170,7 @@ OB_INLINE int ObTableInsertOp::open_table_for_each()
         //this table is being accessed by dml operator, mark its table location as writing
         //but single value insert in oracle allow the nested sql modify its insert table
         //clear the writing flag in table location before the trigger execution
-        //see it:https://yuque.antfin-inc.com/docs/share/40291dac-859c-48de-8a31-79bb7ca7c571
+        //see it:
         primary_ins_rtdef.das_rtdef_.table_loc_->is_writing_ =
             !(primary_ins_ctdef.is_single_value_ && lib::is_oracle_mode());
       }
@@ -339,15 +339,6 @@ int ObTableInsertOp::write_rows_post_proc(int last_errno)
       if (OB_FAIL(check_insert_affected_row())) {
         LOG_WARN("check index insert consistency failed", K(ret));
       }
-    }
-  }
-  // all error, we must rollback with single execute when batch executed
-  if (OB_SUCCESS != ret && OB_ITER_END != ret) {
-    ObMultiStmtItem &multi_stmt_item = ctx_.get_sql_ctx()->multi_stmt_item_;
-    if (MY_SPEC.ins_ctdefs_.at(0).at(0)->das_ctdef_.is_batch_stmt_ && !multi_stmt_item.is_ins_multi_val_opt()) {
-      int tmp_ret = ret;
-      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-      LOG_TRACE("batch exec with some exception, rollback with single execute", K(ret), K(tmp_ret));
     }
   }
   return ret;

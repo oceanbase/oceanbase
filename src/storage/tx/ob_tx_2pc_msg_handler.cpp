@@ -686,6 +686,13 @@ int ObPartTransCtx::handle_tx_2pc_prepare_redo_req(const Ob2pcPrepareRedoReqMsg 
     msg_2pc_cache_ = &msg;
     if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
       TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
+    } else if (sub_state_.is_force_abort()) {
+      if (OB_FAIL(compensate_abort_log_())) {
+        TRANS_LOG(WARN, "compensate abort log failed", K(ret), K(ls_id_), K(trans_id_),
+                  K(get_downstream_state()), K(get_upstream_state()), K(sub_state_));
+      } else {
+        ret = OB_TRANS_KILLED;
+      }
     } else if (OB_FAIL(handle_2pc_req(msg_type))) {
       TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));
     }

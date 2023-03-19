@@ -28,7 +28,7 @@
 #     sys_agent access tables belong to sys tenant only
 #     real_agent access tables belong to current tenant
 # 8. Virtual table system design summary:
-#    https://yuque.antfin.com/docs/share/876fb26e-7466-476f-bd67-b3c4860fbdb8?#
+#
 # 9. For compatibility, when add new column for system table, new column's definition should be "not null + default value" or "nullable".
 #    Specially, when column types are as follows:
 #    1. double、number：default value is not supported, so new column definition should be "nullable".

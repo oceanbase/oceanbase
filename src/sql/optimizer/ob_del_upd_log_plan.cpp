@@ -112,7 +112,7 @@ int ObDelUpdLogPlan::generate_dblink_raw_plan()
   } else {
     set_plan_root(top);
     bool has_reverse_link = false;
-    if (OB_FAIL(ObDblinkUtils::has_reverse_link(stmt, has_reverse_link))) {
+    if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(stmt, has_reverse_link))) {
       LOG_WARN("failed to exec has_reverse_link", K(ret));
     } else {
       uint64_t dblink_id = stmt->get_dblink_id();

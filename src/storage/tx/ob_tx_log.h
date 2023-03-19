@@ -901,6 +901,7 @@ public:
     org_cluster_id_ = 0;
     log_entry_no_ = 0;
     tx_id_ = 0;
+    scheduler_.reset();
   }
   ObTxLogBlockHeader()
   {
@@ -909,8 +910,10 @@ public:
   };
   ObTxLogBlockHeader(const uint64_t org_cluster_id,
                      const int64_t log_entry_no,
-                     const ObTransID &tx_id)
-      : org_cluster_id_(org_cluster_id), log_entry_no_(log_entry_no), tx_id_(tx_id)
+                     const ObTransID &tx_id,
+                     const common::ObAddr &scheduler)
+      : org_cluster_id_(org_cluster_id), log_entry_no_(log_entry_no), tx_id_(tx_id),
+        scheduler_(scheduler)
   {
     before_serialize();
   }
@@ -918,10 +921,11 @@ public:
   uint64_t get_org_cluster_id() const { return org_cluster_id_; }
   int64_t get_log_entry_no() const { return log_entry_no_; }
   const ObTransID &get_tx_id() const { return tx_id_; }
+  const common::ObAddr &get_scheduler() const { return scheduler_; }
 
   bool is_valid() const { return org_cluster_id_ >= 0; }
 
-  TO_STRING_KV(K_(org_cluster_id), K_(log_entry_no), K_(tx_id));
+  TO_STRING_KV(K_(org_cluster_id), K_(log_entry_no), K_(tx_id), K_(scheduler));
 
 public:
   int before_serialize();
@@ -931,6 +935,7 @@ private:
   uint64_t org_cluster_id_;
   int64_t log_entry_no_;
   ObTransID tx_id_;
+  common::ObAddr scheduler_;
 };
 
 class ObTxAdaptiveLogBuf

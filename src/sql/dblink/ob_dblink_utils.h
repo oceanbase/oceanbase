@@ -101,7 +101,7 @@ class ObDblinkUtils
 public:
   static int process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, common::sqlclient::ObISQLConnection *dblink_conn, int &ob_errno);
   static int process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, int &ob_errno);
-  static int has_reverse_link(const ObDMLStmt *stmt, bool &has);
+  static int has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &has, bool has_any_dblink = false);
 };
 
 class ObSQLSessionInfo;

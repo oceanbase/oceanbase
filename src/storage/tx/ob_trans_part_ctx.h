@@ -253,6 +253,12 @@ private:
   int init_memtable_ctx_(const uint64_t tenant_id, const share::ObLSID &ls_id);
   bool is_in_2pc_() const;
   bool is_logging_() const;
+
+  // force abort but not submit abort log
+  bool need_force_abort_() const;
+  // force abort but wait abort log_cb
+  bool is_force_abort_logging_() const;
+
   bool need_record_log_() const;
   void reset_redo_lsns_();
   void set_prev_record_lsn_(const LogOffSet &prev_record_lsn);

@@ -518,7 +518,7 @@ protected:
   // for ObServerBalancer
   IdPoolMap& get_id_pool_map() { return id_pool_map_; }
   TenantPoolsMap& get_tenant_pools_map() { return tenant_pools_map_; }
-  // bug#11873101
+  // bug#11873101 issue/11873101
   // Before attempting to migrate the unit,
   // check whether the target unit space is sufficient,
   // if it is insufficient, do not migrate,
