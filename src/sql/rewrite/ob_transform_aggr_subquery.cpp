@@ -682,6 +682,7 @@ int ObTransformAggrSubquery::check_join_first_condition_for_limit_1(ObQueryRefRa
     is_valid = false;
     OPT_TRACE("subquery does not have euqal correlation condition");
   }
+  equal_sets.reuse();
   return ret;
 }
 
