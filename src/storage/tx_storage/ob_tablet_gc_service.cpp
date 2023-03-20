@@ -24,6 +24,8 @@
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/log_define.h"
 #include "storage/tablet/ob_tablet.h" // ObTablet
+#include "rootserver/ob_tenant_info_loader.h"
+#include "share/ob_tenant_info_proxy.h"
 
 namespace oceanbase
 {
@@ -173,12 +175,12 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
               K(freezer->get_ls_id()), K(checkpoint_scn), KPC(ls), K(ls->get_ls_meta()));
           }
           // 2. get gc tablet. tablet_change_ts cannot update when gc tablet failed.
-          else if (OB_FAIL(tablet_gc_handler->gc_tablets(is_gc))) {
+          else if (OB_FAIL(tablet_gc_handler->gc_tablets(is_gc, need_retry))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to gc tablet", KR(ret));
           }
           // 3. get unpersist_tablet_ids
-          else if (OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(unpersist_tablet_ids, !only_deleted))) {
+          else if (OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(unpersist_tablet_ids, need_retry, !only_deleted))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls), KR(ret));
           }
@@ -257,7 +259,7 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
           const bool only_deleted = true;
           bool is_gc = false;
 
-          if (OB_FAIL(tablet_gc_handler->gc_tablets(is_gc))) {
+          if (OB_FAIL(tablet_gc_handler->gc_tablets(is_gc, need_retry))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to gc tablet", KR(ret));
           } else if (is_gc) {
@@ -339,6 +341,47 @@ uint8_t ObTabletGCHandler::get_tablet_persist_trigger_and_reset()
   return old_v;
 }
 
+int ObTabletGCHandler::check_tablet_gc_for_standby_(bool &cannot_gc, ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  cannot_gc = false;
+  SCN readable_scn;
+  ObTablet *tablet = NULL;
+  rootserver::ObTenantInfoLoader *info = MTL(rootserver::ObTenantInfoLoader*);
+  ObTabletTxMultiSourceDataUnit tx_data;
+  share::ObAllTenantInfo tenant_info;
+  if (OB_ISNULL(info)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "mtl ObTenantRecoveryReportor should not be null", KR(ret));
+  } else if (OB_FAIL(info->get_tenant_info(tenant_info))) {
+    LOG_WARN("fail to get_tennat_info", KPC(info));
+  } else if (tenant_info.is_primary()) {
+  } else if (FALSE_IT(readable_scn = tenant_info.get_standby_scn())) {
+  } else if (!readable_scn.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "readable scn is invalid", KR(ret), KPC(this->ls_), K(tenant_info));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tablet is NULL", KR(ret), KPC(this->ls_), K(tablet_handle));
+  } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
+    LOG_WARN("failed to get tx data", K(ret), KPC(this->ls_), KPC(tablet));
+  } else if (tx_data.tx_scn_ >= readable_scn) {
+    LOG_INFO("[tabletgc] tablet cannot gc for standby", K(ret), KPC(this->ls_), KPC(tablet), K(tx_data), K(readable_scn));
+    cannot_gc = true;
+  }
+  return ret;
+}
+
+int ObTabletGCHandler::check_tablet_gc_(bool &cannot_gc, ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  cannot_gc = false;
+  if (OB_FAIL(check_tablet_gc_for_standby_(cannot_gc, tablet_handle))) {
+    LOG_WARN("failed to check_tablet_gc_for_standby", K(ret), KPC(this->ls_));
+  }
+  return ret;
+}
+
 bool ObTabletGCHandler::is_tablet_gc_trigger_and_reset()
 {
   uint8_t old_v = 0;
@@ -354,6 +397,7 @@ bool ObTabletGCHandler::is_tablet_gc_trigger_and_reset()
 }
 
 int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_tablet_ids,
+                                                bool &need_retry,
                                                 bool only_deleted /* = false */)
 {
   int64_t ret = OB_SUCCESS;
@@ -390,7 +434,12 @@ int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObTabletIDArray &unpersi
         if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
           LOG_WARN("failed to get tx data", K(ret), K(tablet_id));
         } else if (only_deleted) {
-          if (ObTabletStatus::DELETED == tx_data.tablet_status_) {
+          bool cannot_gc = false;
+          if (OB_FAIL(check_tablet_gc_(cannot_gc, tablet_handle))) {
+            LOG_WARN("failed to check tablet gc", KR(ret), KPC(tablet_handle.get_obj()));
+          } else if (cannot_gc) {
+            need_retry = true;
+          } else if (ObTabletStatus::DELETED == tx_data.tablet_status_) {
             STORAGE_LOG(INFO, "[tabletgc] get tx_data for gc", K(tx_data), K(tablet_meta));
             if (OB_FAIL(unpersist_tablet_ids.push_back(tablet_id))) {
               STORAGE_LOG(WARN, "failed to push_back deleted tablet", KR(ret));
@@ -504,7 +553,7 @@ int ObTabletGCHandler::wait_unpersist_tablet_ids_flushed(const common::ObTabletI
   return ret;
 }
 
-int ObTabletGCHandler::gc_tablets(bool &is_gc)
+int ObTabletGCHandler::gc_tablets(bool &is_gc, bool &need_retry)
 {
   int ret = OB_SUCCESS;
   obsys::ObWLockGuard lock(gc_lock_);
@@ -517,7 +566,7 @@ int ObTabletGCHandler::gc_tablets(bool &is_gc)
   } else if (check_stop()) {
     ret = OB_EAGAIN;
     STORAGE_LOG(INFO, "tablet gc handler stop", KR(ret), KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
-  } else if (OB_FAIL(get_unpersist_tablet_ids(deleted_tablet_ids, only_deleted))) {
+  } else if (OB_FAIL(get_unpersist_tablet_ids(deleted_tablet_ids, need_retry, only_deleted))) {
     STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls_), KR(ret));
   } else if (!deleted_tablet_ids.empty() && OB_FAIL(ls_->get_tablet_svr()->remove_tablets(deleted_tablet_ids))) {
     STORAGE_LOG(WARN, "failed to remove tablets", K(ret), K(deleted_tablet_ids));
