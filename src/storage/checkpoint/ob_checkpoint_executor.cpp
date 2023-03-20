@@ -218,10 +218,6 @@ int ObCheckpointExecutor::advance_checkpoint_by_flush(SCN recycle_scn) {
                       K(calcu_recycle_lsn), K(ls_->get_ls_id()));
         }
       }
-      // the log of end_log_lsn and the log of clog_checkpoint_lsn may be in a block
-    if (recycle_scn < ls_->get_clog_checkpoint_scn()) {
-      recycle_scn.set_max();
-      }
     }
 
     if (OB_SUCC(ret)) {
