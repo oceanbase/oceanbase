@@ -122,12 +122,12 @@ int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(
     LOG_WARN("failed to set abs timeout", K(ret));
   } else {
     ObSchemaGetterGuard schema_guard;
-    ObSchemaGetterGuard meta_tenant_scheam_guard;
+    ObSchemaGetterGuard meta_tenant_schema_guard;
     uint64_t user_tenant_id = 0;
     uint64_t meta_tenant_id = 0;
     while (OB_SUCC(ret)) {
       schema_guard.reset();
-      meta_tenant_scheam_guard.reset();
+      meta_tenant_schema_guard.reset();
       const ObTenantSchema *tenant_info = nullptr;
       if (ObTimeUtility::current_time() > abs_timeout) {
         ret = OB_TIMEOUT;
@@ -142,9 +142,9 @@ int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid user tenant id", K(ret), K(user_tenant_id));
       } else if (OB_FALSE_IT(meta_tenant_id = gen_meta_tenant_id(user_tenant_id))) {
-      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(meta_tenant_id, meta_tenant_scheam_guard))) {
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(meta_tenant_id, meta_tenant_schema_guard))) {
         LOG_WARN("failed to get tenant schema guard", K(ret), K(meta_tenant_id));
-      } else if (OB_FAIL(meta_tenant_scheam_guard.get_tenant_info(meta_tenant_id, tenant_info))) {
+      } else if (OB_FAIL(meta_tenant_schema_guard.get_tenant_info(meta_tenant_id, tenant_info))) {
         LOG_WARN("failed to get meta tenant schema guard", K(ret), K(meta_tenant_id));
       } else if (OB_ISNULL(tenant_info)) {
         ret = OB_ERR_UNEXPECTED;
