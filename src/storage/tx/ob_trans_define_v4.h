@@ -261,6 +261,7 @@ private:
     and the session id is required to distinguish the
     savepoint for the multi-branch scenario of xa */
   uint32_t session_id_;
+  bool user_create_;
   union {
     ObTxReadSnapshot *snapshot_;
     common::ObFixedLengthString<128> name_;
@@ -270,14 +271,20 @@ public:
   ~ObTxSavePoint();
   ObTxSavePoint(const ObTxSavePoint &s);
   ObTxSavePoint &operator=(const ObTxSavePoint &a);
+  bool operator==(const ObTxSavePoint &a) const;
   void release();
   void rollback();
-  int init(const int64_t scn, const ObString &name, const uint32_t session_id, const bool stash = false);
+  int init(const int64_t scn,
+           const ObString &name,
+           const uint32_t session_id,
+           const bool user_create,
+           const bool stash = false);
   void init(ObTxReadSnapshot *snapshot);
   bool is_savepoint() const { return type_ == T::SAVEPOINT || type_ == T::STASH; }
   bool is_snapshot() const { return type_ == T::SNAPSHOT; }
   bool is_stash() const { return type_ == T::STASH; }
   DECLARE_TO_STRING;
+  OB_UNIS_VERSION(1);
 };
 
 typedef ObSEArray<ObTxSavePoint, 4> ObTxSavePointList;
@@ -741,6 +748,7 @@ private:
 class ObTxInfo
 {
   friend class ObTransService;
+  friend class ObXACtx;
   OB_UNIS_VERSION(1);
 protected:
   uint64_t tenant_id_;
@@ -761,6 +769,7 @@ protected:
   int64_t active_scn_;
   ObTxPartList parts_;
   uint32_t session_id_ = 0;
+  ObTxSavePointList savepoints_;
 public:
   TO_STRING_KV(K_(tenant_id),
                K_(session_id),
@@ -776,7 +785,8 @@ public:
                K_(expire_ts),
                K_(parts),
                K_(cluster_id),
-               K_(cluster_version));
+               K_(cluster_version),
+               K_(savepoints));
   // TODO xa
   bool is_valid() const { return tx_id_.is_valid(); }
   const ObTransID &tid() const { return tx_id_; }
@@ -785,17 +795,20 @@ public:
 class ObTxStmtInfo
 {
   friend class ObTransService;
+  friend class ObXACtx;
   OB_UNIS_VERSION(1);
 protected:
   ObTransID tx_id_;
   uint64_t op_sn_;
   ObTxPartList parts_;
   ObTxDesc::State state_;
+  ObTxSavePointList savepoints_;
 public:
   TO_STRING_KV(K_(tx_id),
                K_(op_sn),
                K_(parts),
-               K_(state));
+               K_(state),
+               K_(savepoints));
   // TODO xa
   bool is_valid() const { return tx_id_.is_valid(); }
   const ObTransID &tid() const { return tx_id_; }

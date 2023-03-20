@@ -730,9 +730,9 @@ int ObXACtx::process_xa_start_tightly_(const obrpc::ObXAStartRPCRequest &req)
     } else if (is_new_branch) {
       ++xa_branch_count_;
     }
-    if (OB_SUCC(ret) && req.need_response()) {
+    if (OB_SUCC(ret)) {
       SMART_VAR(ObXAStartRPCResponse, response) {
-        if (OB_FAIL(response.init(trans_id_, *tx_desc_))) {
+        if (OB_FAIL(response.init(trans_id_, *tx_desc_, req.is_first_branch()))) {
           TRANS_LOG(WARN, "init xa start response failed", K(ret));
         } else if (OB_FAIL(xa_rpc_->xa_start_response(tenant_id_, sender, response, NULL))) {
           TRANS_LOG(WARN, "xa start response failed", K(ret));
@@ -773,7 +773,7 @@ int ObXACtx::process_xa_start_loosely_(const obrpc::ObXAStartRPCRequest &req)
     TRANS_LOG(WARN, "register xa trans timeout task failed", K(ret), K(xid), K(*this));
   } else {
     SMART_VAR(ObXAStartRPCResponse, response) {
-      if (OB_FAIL(response.init(trans_id_, *tx_desc_))) {
+      if (OB_FAIL(response.init(trans_id_, *tx_desc_, req.is_first_branch()))) {
         TRANS_LOG(WARN, "init xa start response failed", K(ret));
       } else if (OB_FAIL(xa_rpc_->xa_start_response(tenant_id_, sender, response, NULL))) {
         TRANS_LOG(WARN, "xa start response failed", K(ret));
@@ -790,9 +790,13 @@ int ObXACtx::process_xa_start_response(const obrpc::ObXAStartRPCResponse &resp)
   int ret = OB_SUCCESS;
   const ObTxInfo &tx_info = resp.get_tx_info();
   // no need guard
-  if (NULL != tx_desc_) {
+  if (resp.is_first_branch() && NULL != tx_desc_) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "trans desc is NULL", K(ret));
+  } else if (!resp.is_first_branch()) {
+    if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint(*tx_desc_, tx_info.savepoints_))) {
+      TRANS_LOG(WARN, "update user sp fail", K(ret), K(*this), K(tx_info));
+    }
   } else if (OB_FAIL(MTL(ObTransService *)->recover_tx(tx_info, tx_desc_))) {
     TRANS_LOG(WARN, "recover tx failed", K(ret), K(*this), K(tx_info));
   } else {
@@ -847,6 +851,11 @@ int ObXACtx::process_xa_end(const obrpc::ObXAEndRPCRequest &req)
       // if loosely coupled, need to update tx desc
       if (OB_FAIL(MTL(ObTransService*)->update_tx_with_stmt_info(stmt_info, tx_desc_))) {
         TRANS_LOG(WARN, "update tx desc with stmt info failed", K(ret), K(req), K(*this));
+      }
+    } else {
+      // if tightly coupled, need to update user savepoint
+      if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint(*tx_desc_, stmt_info.savepoints_))) {
+        TRANS_LOG(WARN, "update user sp fail", K(ret), K(*this), K(req));
       }
     }
   }
@@ -1357,6 +1366,7 @@ int ObXACtx::xa_start_remote_first(const ObXATransID &xid,
   } else {
     // set global trans type to xa trans
     tx_desc->set_global_tx_type(ObGlobalTxType::XA_TRANS);
+    TRANS_LOG(WARN, "xa start remote success", K(ret), K(xid), K(flags), K(*tx_desc), K(*this));
   }
   TRANS_LOG(INFO, "xa start remote first", K(ret), K(xid), K(flags), K(*this));
   return ret;
@@ -1486,7 +1496,7 @@ int ObXACtx::xa_start_remote_first_(const ObXATransID &xid,
   int tmp_ret = OB_SUCCESS;
   int result = OB_SUCCESS;
   const int64_t now = ObTimeUtility::current_time();
-  const bool need_response = true;  // need tx desc
+  const bool is_first_branch = true;  // need tx desc
   ObXAStartRPCRequest xa_start_request;
   obrpc::ObXARPCCB<obrpc::OB_XA_START_REQ> cb;
   ObTransCond cond;
@@ -1503,7 +1513,7 @@ int ObXACtx::xa_start_remote_first_(const ObXATransID &xid,
                                            is_tightly_coupled_,
                                            timeout_seconds,
                                            flags,
-                                           need_response))) {
+                                           is_first_branch))) {
     TRANS_LOG(WARN, "init sync request failed", K(ret), K(*this));
   } else if (OB_FAIL(cb.init(&cond))) {
     TRANS_LOG(WARN, "init cb failed", K(ret), K(xid), K(*this));
@@ -1565,12 +1575,12 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
   int tmp_ret = OB_SUCCESS;
   int result = OB_SUCCESS;
   const int64_t now = ObTimeUtility::current_time();
-  const bool need_response = false;  // no need tx desc
+  const bool is_first_branch = false;  // no need tx desc
   ObXAStartRPCRequest xa_start_request;
   obrpc::ObXARPCCB<obrpc::OB_XA_START_REQ> cb;
   ObTransCond cond;
   const int64_t wait_time = (INT64_MAX / 2 ) - now;
-  // xa_sync_status_cond_.reset();
+  xa_sync_status_cond_.reset();
 
   if (OB_ISNULL(xa_rpc_) || OB_ISNULL(xa_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1588,7 +1598,7 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
                                            is_tightly_coupled_,
                                            timeout_seconds,
                                            flags,
-                                           need_response))) {
+                                           is_first_branch))) {
     TRANS_LOG(WARN, "init sync request failed", K(ret), K(*this));
   } else if (OB_FAIL(cb.init(&cond))) {
     TRANS_LOG(WARN, "init cb failed", K(ret), K(xid), K(*this));
@@ -1606,6 +1616,10 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
       } else {
         TRANS_LOG(WARN, "wait cond failed", K(ret), K(xid), K(result));
       }
+    } else if (OB_FAIL(wait_xa_sync_status_(wait_time))) {
+      TRANS_LOG(WARN, "wait xa sync status failed", K(ret), K(xid));
+    } else {
+      // do nothing
     }
   }
 
@@ -1819,7 +1833,7 @@ int ObXACtx::create_xa_savepoint_if_need_(const ObXATransID &xid, const uint32_t
         found = true;
         TRANS_LOG(INFO, "find info", K(ret), K(xid), K(info));
         if (info.is_first_stmt_) {
-          if (OB_FAIL(MTL(transaction::ObTransService *)->create_explicit_savepoint(*tx_desc_, PL_XA_IMPLICIT_SAVEPOINT, session_id))) {
+          if (OB_FAIL(MTL(transaction::ObTransService *)->create_explicit_savepoint(*tx_desc_, PL_XA_IMPLICIT_SAVEPOINT, session_id, false))) {
             TRANS_LOG(WARN, "create xa savepoint fail", K(ret), K(xid), K(session_id), K(*this));
           } else {
             TRANS_LOG(INFO, "create pl xa savepoint success", K(ret), K(xid), K(session_id), K(*this));
@@ -2670,10 +2684,12 @@ int ObXACtx::xa_prepare(const ObXATransID &xid, const int64_t timeout_us)
   } else if (OB_FAIL(xa_prepare_(xid, timeout_us, need_exit))) {
     TRANS_LOG(WARN, "xa prepare failed", K(ret), K(xid), K(need_exit), K(*this));
     if (need_exit) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc_,
-              ObTxAbortCause::IMPLICIT_ROLLBACK))) {
-        TRANS_LOG(WARN, "fail to stop transaction", K(tmp_ret), K(*this));
+      if (OB_ERR_READ_ONLY_TRANSACTION != ret) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc_,
+                ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+          TRANS_LOG(WARN, "fail to stop transaction", K(tmp_ret), K(*this));
+        }
       }
       set_terminated_();
       set_exiting_();

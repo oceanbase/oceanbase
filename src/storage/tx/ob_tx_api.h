@@ -334,7 +334,10 @@ int create_implicit_savepoint(ObTxDesc &tx,
  * OB_ERR_TOO_LONG_IDENT     - if savepoint was longer than 128 characters
  * OB_ERR_TOO_MANY_SAVEPOINT - alive savepoint count out of limit (default 255)
  */
-int create_explicit_savepoint(ObTxDesc &tx, const ObString &savepoint, const uint32_t session_id);
+int create_explicit_savepoint(ObTxDesc &tx,
+                              const ObString &savepoint,
+                              const uint32_t session_id,
+                              const bool user_create);
 
 /**
  * rollback_to_implicit_savepoint - rollback to a implicit savepoint
