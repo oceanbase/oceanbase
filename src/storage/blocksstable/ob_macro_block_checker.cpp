@@ -38,6 +38,8 @@ int ObSSTableMacroBlockChecker::check(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(macro_block_buf), K(macro_block_buf_size),
         K(check_level));
+  } else if (ObMacroBlockCheckLevel::CHECK_LEVEL_NONE == check_level) {
+    //do nothing
   } else if (OB_FAIL(common_header.deserialize(macro_block_buf, macro_block_buf_size, pos))) {
     STORAGE_LOG(ERROR, "fail to deserialize common header", K(ret), KP(macro_block_buf),
         K(macro_block_buf_size), K(pos), K(common_header));

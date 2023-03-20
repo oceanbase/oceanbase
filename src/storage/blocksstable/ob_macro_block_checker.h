@@ -26,8 +26,9 @@ namespace blocksstable
 {
 enum ObMacroBlockCheckLevel
 {
-  CHECK_LEVEL_PHYSICAL = 0, // verify data checksum
-  CHECK_LEVEL_LOGICAL  = 1, // verify column checksum
+  CHECK_LEVEL_NONE = 0,  // no check
+  CHECK_LEVEL_PHYSICAL = 1, // verify data checksum
+  CHECK_LEVEL_LOGICAL  = 2, // verify column checksum
   CHECK_LEVEL_MAX,
 };
 

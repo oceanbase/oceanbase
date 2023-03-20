@@ -69,10 +69,15 @@ int ObStorageHAMacroBlockWriter::check_macro_block_(
     ObMacroBlockCheckLevel check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_MAX;
     switch (migrate_verify_level) {
       case 0:
-        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
+        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_NONE;
         break;
       case 1:
-        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_LOGICAL;
+        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
+        break;
+      case 2:
+        //check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_LOGICAL;
+        //Here using logical has a bug.
+        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
         break;
       default:
         check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_MAX;
@@ -80,10 +85,9 @@ int ObStorageHAMacroBlockWriter::check_macro_block_(
         STORAGE_LOG(WARN, "invalid check level", K(ret), K(migrate_verify_level));
         break;
     }
-    //Here using logical has a bug.
-    check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
 
-    if (OB_FAIL(macro_checker_.check(data.data(), data.length(), check_level))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(macro_checker_.check(data.data(), data.length(), check_level))) {
       STORAGE_LOG(ERROR, "failed to check macro block", K(ret), K(data), K(check_level));
     }
   }

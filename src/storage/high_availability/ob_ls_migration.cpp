@@ -2915,7 +2915,6 @@ int ObDataTabletsMigrationTask::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  bool is_ls_online_success = false;
   LOG_INFO("start do data tablets migration task", K(ret), KPC(ctx_));
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("storage_ha", "before_data_tablets_migration_task",
@@ -2935,7 +2934,6 @@ int ObDataTabletsMigrationTask::process()
     LOG_WARN("failed to try remove unneeded tablets", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ls_online_())) {
     LOG_WARN("failed to start realy log", K(ret), K(*ctx_));
-  } else if (FALSE_IT(is_ls_online_success = true)) {
   } else if (OB_FAIL(build_tablet_group_info_())) {
     LOG_WARN("failed to build tablet group info", K(ret), KPC(ctx_));
   } else {
@@ -2966,7 +2964,12 @@ int ObDataTabletsMigrationTask::process()
 
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
-    const bool allow_retry = !is_ls_online_success;
+    bool allow_retry = true;
+    if (OB_SUCCESS != (tmp_ret = try_offline_ls_())) {
+      LOG_WARN("failed to try offline ls", K(tmp_ret));
+    } else if (FALSE_IT(allow_retry = OB_SUCCESS == tmp_ret)) {
+    }
+
     if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag(), allow_retry))) {
       LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), K(*ctx_));
     }
@@ -3303,6 +3306,25 @@ int ObDataTabletsMigrationTask::try_remove_unneeded_tablets_()
   return ret;
 }
 
+int ObDataTabletsMigrationTask::try_offline_ls_()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("start migration task do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(ls->offline())) {
+    LOG_WARN("failed to offline ls", K(ret), KPC(ctx_));
+  }
+  return ret;
+}
 
 int ObDataTabletsMigrationTask::record_server_event_()
 {

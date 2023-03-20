@@ -418,6 +418,7 @@ private:
   int build_tablet_group_info_();
   int generate_tablet_group_dag_();
   int try_remove_unneeded_tablets_();
+  int try_offline_ls_();
   int record_server_event_();
 
 private:
