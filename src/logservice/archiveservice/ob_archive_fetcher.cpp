@@ -367,7 +367,9 @@ int ObArchiveFetcher::handle_log_fetch_task_(ObArchiveLogFetchTask &task)
 
   DEBUG_SYNC(BEFORE_ARCHIVE_FETCH_LOG);
 
-  if (! in_normal_status_(key)) {
+  // Only handle task in archive doing status
+  // Status includes: doing / suspend / interrupt / stop
+  if (! in_doing_status_(key)) {
     // skip
   } else if (OB_UNLIKELY(! task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -898,6 +900,11 @@ bool ObArchiveFetcher::is_retry_ret_(const int ret_code) const
 }
 
 bool ObArchiveFetcher::in_normal_status_(const ArchiveKey &key) const
+{
+  return round_mgr_->is_in_archive_status(key) || round_mgr_->is_in_suspend_status(key);
+}
+
+bool ObArchiveFetcher::in_doing_status_(const ArchiveKey &key) const
 {
   return round_mgr_->is_in_archive_status(key);
 }

@@ -59,6 +59,7 @@ public:
   int get_archive_start_scn(const ArchiveKey &key, share::SCN &scn);
   void get_archive_round_compatible(ArchiveKey &key, bool &compatible);
   bool is_in_archive_status(const ArchiveKey &key) const;
+  bool is_in_suspend_status(const ArchiveKey &key) const;
   bool is_in_archive_stopping_status(const ArchiveKey &key) const;
   bool is_in_archive_stop_status(const ArchiveKey &key) const;
   void update_log_archive_status(const ObArchiveRoundState::Status status);

@@ -421,7 +421,7 @@ int ObArchiveSender::do_free_send_task_()
 
 bool ObArchiveSender::in_normal_status_(const ArchiveKey &key) const
 {
-  return round_mgr_->is_in_archive_status(key);
+  return round_mgr_->is_in_archive_status(key) || round_mgr_->is_in_suspend_status(key);
 }
 
 // 仅有需要重试的任务返回错误码
@@ -436,6 +436,8 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(task));
   } else if (OB_UNLIKELY(! in_normal_status_(station.get_round()))) {
     // not in normal status, just skip
+    // normal status include DOING / SUSPEND
+    // other status include INTERRUPT / STOP
     consume_status = TaskConsumeStatus::STALE_TASK;
   } else if (OB_FAIL(round_mgr_->get_backup_dest(station.get_round(), backup_dest))) {
     ARCHIVE_LOG(WARN, "get backup dest failed", K(ret), K(task));
