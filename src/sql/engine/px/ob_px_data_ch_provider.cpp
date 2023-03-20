@@ -14,7 +14,6 @@
 
 #include "ob_px_data_ch_provider.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "share/ob_server_blacklist.h"
 
 
 using namespace oceanbase::common;
@@ -426,9 +425,7 @@ int ObPxChProviderUtil::check_status(int64_t timeout_ts, const ObAddr &qc_addr,
   } else if (timeout_ts <= ObTimeUtility::current_time()) {
     ret = OB_TIMEOUT;
     LOG_WARN("timeout and abort", K(timeout_ts), K(ret));
-  } else if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
-                    share::ObCascadMember(qc_addr, GCONF.cluster_id), true,
-                    query_start_time))) {
+  } else if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(qc_addr, query_start_time))) {
     ret = OB_RPC_CONNECT_ERROR;
     LOG_WARN("peer no in communication, maybe crashed", K(ret), K(qc_addr),
               K(static_cast<int64_t>(GCONF.cluster_id)));

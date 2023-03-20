@@ -15,9 +15,9 @@
 #include "share/interrupt/ob_global_interrupt_call.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/diagnosis/ob_sql_monitor_statname.h"
-#include "share/ob_server_blacklist.h"
 #include "observer/omt/ob_th_worker.h"
 #include "share/ob_occam_time_guard.h"
+#include "sql/engine/px/ob_px_util.h"
 
 using namespace oceanbase::common;
 
@@ -359,9 +359,7 @@ int ObDtlChannelLoop::process_channels(ObIDltChannelLoopPred *pred, int64_t &nth
       LOG_WARN("unexpect next idx", K(next_idx_), K(chan_cnt), K(ret));
     } else {
       chan = chans_[next_idx_];
-      if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
-            share::ObCascadMember(chan->get_peer(), GCONF.cluster_id), true,
-            get_process_query_time()))) {
+      if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(chan->get_peer(), get_process_query_time()))) {
         ret = OB_RPC_CONNECT_ERROR;
         LOG_WARN("peer no in communication, maybe crashed", K(ret), K(chan->get_peer()),
                   K(static_cast<int64_t>(GCONF.cluster_id)));
@@ -415,8 +413,7 @@ int ObDtlChannelLoop::process_channel(int64_t &nth_channel)
   }
   ObDtlChannel *ch = sentinel_node_.next_link_;
   while (OB_EAGAIN == ret && ch != &sentinel_node_) {
-    if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
-          share::ObCascadMember(ch->get_peer(), GCONF.cluster_id), true,
+    if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(ch->get_peer(),
           get_process_query_time()))) {
       ret = OB_RPC_CONNECT_ERROR;
       LOG_WARN("peer no in communication, maybe crashed", K(ret), K(ch->get_peer()),

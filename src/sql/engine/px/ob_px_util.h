@@ -548,6 +548,12 @@ public:
   static bool should_ignore_vtable_error(int error_code);
 };
 
+class ObPxCheckAlive
+{
+public:
+  static bool is_in_blacklist(const common::ObAddr &addr, int64_t server_start_time);
+};
+
 }
 }
 

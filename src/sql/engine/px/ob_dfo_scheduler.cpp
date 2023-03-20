@@ -21,7 +21,6 @@
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/engine/px/ob_px_rpc_processor.h"
 #include "sql/engine/px/ob_px_sqc_async_proxy.h"
-#include "share/ob_server_blacklist.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -489,9 +488,7 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
     ObPxSqcMeta &sqc = *sqcs.at(idx);
     const ObAddr &addr = sqc.get_exec_addr();
     auto proxy = coord_info_.rpc_proxy_.to(addr);
-    if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
-                        share::ObCascadMember(addr, cluster_id), true /* add_server */,
-                        session->get_process_query_time()))) {
+    if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(addr, session->get_process_query_time()))) {
       if (!ignore_vtable_error) {
         ret = OB_RPC_CONNECT_ERROR;
         LOG_WARN("peer no in communication, maybe crashed", K(ret), K(sqc), K(cluster_id),
