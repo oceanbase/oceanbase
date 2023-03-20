@@ -42,17 +42,26 @@ int ObDDLServerClient::create_hidden_table(const obrpc::ObCreateHiddenTableArg &
     LOG_WARN("failed to create hidden table", KR(ret), K(arg));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  } else if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
-    LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
-    int tmp_ret = OB_SUCCESS;
-    obrpc::ObAbortRedefTableArg abort_redef_table_arg;
-    abort_redef_table_arg.task_id_ = res.task_id_;
-    abort_redef_table_arg.tenant_id_ = arg.tenant_id_;
-    if (OB_TMP_FAIL(abort_redef_table(abort_redef_table_arg, session))) {
-      LOG_WARN("failed to abort redef table", K(tmp_ret), K(abort_redef_table_arg));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, *GCTX.sql_proxy_, session))) {
+      LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     }
-    if (OB_TMP_FAIL(heart_beat_clear(res.task_id_))) {
-      LOG_WARN("heart beat clear failed", K(tmp_ret), K(res.task_id_));
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(common::EventTable::EN_DDL_DIRECT_LOAD_WAIT_TABLE_LOCK_FAIL) OB_SUCCESS;
+      LOG_INFO("wait table lock failed errsim", K(ret));
+    }
+#endif
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      obrpc::ObAbortRedefTableArg abort_redef_table_arg;
+      abort_redef_table_arg.task_id_ = res.task_id_;
+      abort_redef_table_arg.tenant_id_ = arg.tenant_id_;
+      if (OB_TMP_FAIL(abort_redef_table(abort_redef_table_arg, session))) {
+        LOG_WARN("failed to abort redef table", K(tmp_ret), K(abort_redef_table_arg));
+      }
+      // abort_redef_table() function last step must remove heart_beat task, so there is no need to call heart_beat_clear()
     }
   }
   return ret;
@@ -81,9 +90,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
     if (OB_TMP_FAIL(abort_redef_table(abort_redef_table_arg, session))) {
       LOG_WARN("failed to abort redef table", K(tmp_ret), K(abort_redef_table_arg));
     }
-    if (OB_TMP_FAIL(heart_beat_clear(res.task_id_))) {
-      LOG_WARN("heart beat clear failed", K(tmp_ret), K(res.task_id_));
-    }
+    // abort_redef_table() function last step must remove heart_beat task, so there is no need to call heart_beat_clear()
   }
   return ret;
 }
@@ -163,9 +170,15 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(arg.tenant_id_, arg.task_id_, session, common_rpc_proxy))) {
-      LOG_WARN("wait ddl finish failed", K(ret), K(arg.tenant_id_), K(arg.task_id_));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(arg.tenant_id_, arg.task_id_, session, common_rpc_proxy))) {
+        if (OB_CANCELED == ret) {
+          ret = OB_SUCCESS;
+          LOG_INFO("ddl abort success", K_(arg.task_id));
+        } else {
+          LOG_WARN("wait ddl finish failed", K(ret), K(arg.tenant_id_), K(arg.task_id_));
+        }
+      }
     }
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(heart_beat_clear(arg.task_id_))) {

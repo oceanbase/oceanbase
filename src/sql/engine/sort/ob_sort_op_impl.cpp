@@ -608,7 +608,7 @@ int ObSortOpImpl::init(
     LOG_WARN("invalid argument: argument is null", K(ret),
               K(tenant_id), K(sort_collations), K(sort_cmp_funs), K(eval_ctx));
   } else if (OB_FAIL(comp_.init(sort_collations, sort_cmp_funs,
-                      exec_ctx, enable_encode_sortkey))) {
+                      exec_ctx, enable_encode_sortkey && !(part_cnt > 0)))) {
     LOG_WARN("failed to init compare functions", K(ret));
   } else {
     local_merge_sort_ = in_local_order;
@@ -974,7 +974,8 @@ int ObSortOpImpl::before_add_row()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(!got_first_row_)) {
-    if (!comp_.is_inited() && OB_FAIL(comp_.init(sort_collations_, sort_cmp_funs_, exec_ctx_, enable_encode_sortkey_))) {
+    if (!comp_.is_inited() && OB_FAIL(comp_.init(sort_collations_, sort_cmp_funs_,
+                              exec_ctx_, enable_encode_sortkey_ && !(part_cnt_ > 0)))) {
       LOG_WARN("init compare failed", K(ret));
     } else {
       got_first_row_ = true;
@@ -2564,7 +2565,8 @@ int ObPrefixSortImpl::add_immediate_prefix(const common::ObIArray<ObExpr *> &all
               immediate_prefix_rows_ + pos))) {
     LOG_WARN("add batch failed", K(ret));
   } else if (!comp_.is_inited()
-             && OB_FAIL(comp_.init(sort_collations_, sort_cmp_funs_, exec_ctx_, enable_encode_sortkey_))) {
+             && OB_FAIL(comp_.init(sort_collations_, sort_cmp_funs_,
+                 exec_ctx_, enable_encode_sortkey_ && !(part_cnt_ > 0)))) {
     LOG_WARN("init compare failed", K(ret));
   } else {
     std::sort(immediate_prefix_rows_ + pos, immediate_prefix_rows_ + pos + selector_size_,

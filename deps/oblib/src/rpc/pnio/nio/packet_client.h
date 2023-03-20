@@ -15,11 +15,11 @@ struct pktc_cb_t {
 
 struct pktc_req_t {
   struct pktc_sk_t* sk; // for debug
-  int16_t categ_id;
   PNIO_DELAY_WARN(int64_t ctime_us);
   pktc_flush_cb_func_t flush_cb;
   pktc_cb_t* resp_cb;
   addr_t dest;
+  int64_t categ_id;
   link_t link;
   str_t msg;
 };

@@ -977,7 +977,7 @@ int ObILSRestoreState::reload_tablet_()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls_tablet_svr is nullptr", K(ret));
   } else {
-    ObLSTabletIterator iterator(ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US);
+    ObLSTabletIterator iterator(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
     if (OB_FAIL(ls_tablet_svr->build_tablet_iter(iterator))) {
       LOG_WARN("fail to build tablet iterator", K(ret), KPC(ls_));
     }
@@ -1069,7 +1069,7 @@ int ObILSRestoreState::upload_wait_restore_tablet_()
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObLSTabletService *ls_tablet_svr = nullptr;
-  ObLSTabletIterator iterator(ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US); // restore only needs to see the created tabelts
+  ObLSTabletIterator iterator(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
   ObTablet *tablet = nullptr;
   ObSArray<ObTabletID> tablet_ids;
 

@@ -68,7 +68,7 @@ int ObLinkDmlOp::send_reverse_link_info(transaction::ObTransID &tx_id)
       LOG_WARN("reverse link has invalid credentials", K(ret), K(user_name), K(tenant_name), K(passwd.empty()), K(addr));
       LOG_USER_ERROR(OB_ERR_UNEXPECTED, "check if the database link was created with local credentials");
     } else {
-      ObReverseLink reverse_link_info(MY_SPEC.allocator_);
+      ObReverseLink reverse_link_info;
       reverse_link_info.set_user(user_name);
       reverse_link_info.set_tenant(tenant_name);
       reverse_link_info.set_cluster(cluster_name);

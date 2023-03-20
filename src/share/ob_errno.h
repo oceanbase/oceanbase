@@ -536,6 +536,7 @@ constexpr int OB_SQL_OPT_JOIN_ORDER_FAILED = -5121;
 constexpr int OB_SQL_OPT_ERROR = -5122;
 constexpr int OB_ERR_OCI_INIT_TIMEZONE = -5123;
 constexpr int OB_ERR_ZLIB_DATA = -5124;
+constexpr int OB_ERR_DBLINK_SESSION_KILLED = -5125;
 constexpr int OB_SQL_RESOLVER_NO_MEMORY = -5130;
 constexpr int OB_SQL_DML_ONLY = -5131;
 constexpr int OB_ERR_NO_GRANT = -5133;
@@ -2349,6 +2350,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SQL_OPT_ERROR__USER_ERROR_MSG "optimizer general error"
 #define OB_ERR_OCI_INIT_TIMEZONE__USER_ERROR_MSG "failure to initialize timezone information"
 #define OB_ERR_ZLIB_DATA__USER_ERROR_MSG "ZLIB: Input data corrupted"
+#define OB_ERR_DBLINK_SESSION_KILLED__USER_ERROR_MSG "your session has been killed"
 #define OB_SQL_RESOLVER_NO_MEMORY__USER_ERROR_MSG "sql resolver no memory"
 #define OB_SQL_DML_ONLY__USER_ERROR_MSG "plan cache support dml only"
 #define OB_ERR_NO_GRANT__USER_ERROR_MSG "No such grant defined"
@@ -4380,6 +4382,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SQL_OPT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5122, optimizer general error"
 #define OB_ERR_OCI_INIT_TIMEZONE__ORA_USER_ERROR_MSG "ORA-01804: failure to initialize timezone information"
 #define OB_ERR_ZLIB_DATA__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5124, ZLIB: Input data corrupted"
+#define OB_ERR_DBLINK_SESSION_KILLED__ORA_USER_ERROR_MSG "ORA-00028: your session has been killed"
 #define OB_SQL_RESOLVER_NO_MEMORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5130, sql resolver no memory"
 #define OB_SQL_DML_ONLY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5131, plan cache support dml only"
 #define OB_ERR_NO_GRANT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5133, No such grant defined"
@@ -5760,7 +5763,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2027];
+extern int g_all_ob_errnos[2028];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

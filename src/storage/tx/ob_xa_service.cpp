@@ -1111,6 +1111,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       TRANS_LOG(WARN, "rollback lock record failed", K(tmp_ret), K(xid));
     }
     if (is_first_xa_start) {
+      if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+        ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+        TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(trans_id), K(xid));
+      }
       MTL(ObTransService *)->release_tx(*tx_desc);
       tx_desc = NULL;
     }
@@ -1143,6 +1147,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
         if (OB_FAIL(trans.end(true))) {
           TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
           const bool need_decrease_ref = true;
+          if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+            ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+            TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(trans_id), K(xid));
+          }
           xa_ctx->try_exit(need_decrease_ref);
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
           tx_desc = NULL;
@@ -1157,6 +1165,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
         }
         // since tx_desc is not set into xa ctx, release tx desc explicitly
+        if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+          ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+          TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(trans_id), K(xid));
+        }
         MTL(ObTransService *)->release_tx(*tx_desc);
         tx_desc = NULL;
       }
@@ -1245,6 +1257,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       // xa_start on new session, adjust tx_desc.sess_id_
       if (OB_SUCC(ret)) {
         tx_desc->set_sessid(session_id);
+        tx_desc->set_assoc_sessid(session_id);
       }
     }
   }
@@ -1361,6 +1374,7 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
   // xa_join/resume on new session, adjust tx_desc.sess_id_
   if (OB_SUCC(ret)) {
     tx_desc->set_sessid(session_id);
+    tx_desc->set_assoc_sessid(session_id);
   }
   return ret;
 }

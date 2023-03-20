@@ -334,10 +334,3 @@ void ObRemoteLogIterator<LogEntryType>::mark_source_error_(const int ret_code)
     source->mark_error(*ObCurTraceId::get_trace_id(), ret_code);
   }
 }
-
-template<class LogEntryType>
-bool ObRemoteLogIterator<LogEntryType>::is_retry_ret_(const bool ret_code) const
-{
-  return OB_ALLOCATE_MEMORY_FAILED == ret_code
-    || is_io_error(ret_code);
-}

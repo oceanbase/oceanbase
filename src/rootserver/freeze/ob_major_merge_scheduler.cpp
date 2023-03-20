@@ -171,7 +171,7 @@ int ObMajorMergeScheduler::try_idle(
   int64_t merger_check_interval = idling_.get_idle_interval_us();
   const int64_t start_time_us = ObTimeUtil::current_time();
 
-  if (OB_SUCC(work_ret)) {
+  if (OB_SUCCESS == work_ret) {
     fail_count_ = 0;
   } else {
     ++fail_count_;
@@ -189,7 +189,7 @@ int ObMajorMergeScheduler::try_idle(
   } else {
     idle_time_us = merger_check_interval;
     LOG_WARN("major merge failed more than immediate cnt, turn to idle status",
-             K_(fail_count), LITERAL_K(IMMEDIATE_RETRY_CNT));
+             K_(fail_count), LITERAL_K(IMMEDIATE_RETRY_CNT), K(idle_time_us));
   }
 
   if (is_paused()) {
@@ -197,11 +197,11 @@ int ObMajorMergeScheduler::try_idle(
       LOG_INFO("major_merge_scheduler is paused", K_(tenant_id), K(idle_time_us),
                "epoch", get_epoch());
       if (OB_FAIL(idling_.idle(idle_time_us))) {
-        LOG_WARN("fail to idle", KR(ret));
+        LOG_WARN("fail to idle", KR(ret), K(idle_time_us));
       }
     }
-    LOG_INFO("major_merge_scheduler is not paused", K_(tenant_id), K(idle_time_us),
-             "epoch", get_epoch());
+    LOG_INFO("major_merge_scheduler is not idling", KR(ret), K_(tenant_id), K(idle_time_us),
+             K_(stop), "epoch", get_epoch());
   } else if (OB_FAIL(idling_.idle(idle_time_us))) {
     LOG_WARN("fail to idle", KR(ret), K(idle_time_us));
   }
@@ -701,7 +701,7 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
             LOG_WARN("fail to handle table with first tablet in sys ls", KR(ret), K_(tenant_id),
                      "global_broadcast_scn", global_info.global_broadcast_scn(), K(expected_epoch));
           } else if (FALSE_IT(global_broadcast_scn_val = global_info.global_broadcast_scn_.get_scn_val())) {
-          } else if (OB_FAIL(update_all_tablets_report_scn(global_broadcast_scn_val))) {
+          } else if (OB_FAIL(update_all_tablets_report_scn(global_broadcast_scn_val, expected_epoch))) {
             LOG_WARN("fail to update all tablets report_scn", KR(ret), K(expected_epoch),
                      K(global_broadcast_scn_val));
           } else if (OB_FAIL(zone_merge_mgr_->try_update_global_last_merged_scn(expected_epoch))) {
@@ -897,14 +897,17 @@ int ObMajorMergeScheduler::do_update_and_reload(const int64_t epoch)
 }
 
 int ObMajorMergeScheduler::update_all_tablets_report_scn(
-    const uint64_t global_braodcast_scn_val)
+    const uint64_t global_braodcast_scn_val,
+    const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   FREEZE_TIME_GUARD;
   if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
           tenant_id_,
           global_braodcast_scn_val,
-          ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
+          ObTabletReplica::ScnStatus::SCN_STATUS_ERROR,
+          stop_,
+          expected_epoch))) {
     LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(global_braodcast_scn_val));
   }
   return ret;

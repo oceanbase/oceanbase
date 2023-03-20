@@ -52,13 +52,14 @@ const char *ObRemoteLogParent::get_source_type_str(const ObLogRestoreSourceType 
   return share::ObLogRestoreSourceItem::get_source_type_str(type);
 }
 
-void ObRemoteLogParent::set_to_end(const SCN &scn)
+bool ObRemoteLogParent::set_to_end(const SCN &scn)
 {
   if (scn >= upper_limit_scn_) {
     to_end_ = true;
     end_fetch_scn_ = scn;
     CLOG_LOG(INFO, "set_to_end succ", KPC(this));
   }
+  return to_end_;
 }
 
 void ObRemoteLogParent::base_copy_to_(ObRemoteLogParent &other)

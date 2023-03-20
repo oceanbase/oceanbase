@@ -53,33 +53,29 @@ int ObEliminateTask::check_config_mem_limit(bool &is_change)
   int ret = OB_SUCCESS;
   is_change = false;
   int64_t mem_limit = config_mem_limit_;
+  int64_t tenant_id = OB_INVALID_TENANT_ID;
   if (OB_ISNULL(request_manager_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(request_manager_), K(ret));
-  } else if (request_manager_->get_tenant_id() > OB_SYS_TENANT_ID &&
-             request_manager_->get_tenant_id() <= OB_MAX_RESERVED_TENANT_ID) {
+  } else if (FALSE_IT(tenant_id = request_manager_->get_tenant_id())) {
+  } else if (tenant_id > OB_SYS_TENANT_ID && tenant_id <= OB_MAX_RESERVED_TENANT_ID) {
     // 50x租户在没有对应的tenant schema，查询配置一定失败
     // do nothing
-  } else if (OB_FAIL(ObMySQLRequestManager::get_mem_limit(request_manager_->get_tenant_id(),
-                                                          mem_limit))) {
-    LOG_WARN("failed to get mem limit", K(ret));
-
+  } else if (OB_FAIL(ObMySQLRequestManager::get_mem_limit(tenant_id, mem_limit))) {
     // if memory limit is not retrivable
-    // overwrite error code, set mem config to default value
-    // so that total memory use of sql audit can be limited
+    // overwrite error code, not change the size of config_mem_limit_
+    LOG_WARN("failed to get mem limit", K(ret), K(tenant_id), K(mem_limit), K(config_mem_limit_));
     ret = OB_SUCCESS;
-    mem_limit = MAXIMUM_LIMIT;
   } else {
-    // do nothing
-  }
-  if (config_mem_limit_ != mem_limit) {
-    LOG_INFO("before change config mem", K(config_mem_limit_));
-    config_mem_limit_ = mem_limit;
-    if (mem_limit < MINIMUM_LIMIT && !lib::is_mini_mode()) {
-      config_mem_limit_ = MINIMUM_LIMIT;
+    if (config_mem_limit_ != mem_limit) {
+      LOG_INFO("change config mem limit", K(config_mem_limit_), K(mem_limit), K(tenant_id));
+      bool use_mini_mem = lib::is_mini_mode() || MTL_IS_MINI_MODE() || is_meta_tenant(tenant_id);
+      config_mem_limit_ = mem_limit;
+      if (mem_limit < MINIMUM_LIMIT && !use_mini_mem) {
+        config_mem_limit_ = MINIMUM_LIMIT;
+      }
+      is_change = true;
     }
-    is_change = true;
-    LOG_INFO("after change config mem", K(config_mem_limit_));
   }
   return ret;
 }
@@ -151,7 +147,14 @@ void ObEliminateTask::runTimerTask()
       ret = OB_NOT_INIT;
       LOG_WARN("fail to get sql audit evict memory level", K(ret));
     }
+    if (OB_SUCC(ret) && REACH_TIME_INTERVAL(30 * 1000 * 1000)) { // 30s delay
+      LOG_INFO("Eliminate task evict sql audit",
+          K(request_manager_->get_tenant_id()), K(queue_size),
+          K(request_manager_->get_size_used()), K(evict_high_size_level), K(evict_low_size_level),
+          K(allocator->allocated()), K(evict_high_mem_level), K(evict_low_mem_level));
+    }
   }
+
   if (OB_SUCC(ret)) {
     int64_t start_time = ObTimeUtility::current_time();
     int64_t evict_batch_count = 0;

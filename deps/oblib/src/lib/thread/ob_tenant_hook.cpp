@@ -128,8 +128,7 @@ int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
 
 int futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespec* timeout)
 {
-  static long int (*real_syscall)(long int __sysno, ...) =
-      (typeof(real_syscall))dlsym(RTLD_NEXT, "syscall");
+  static long int (*real_syscall)(long int __sysno, ...) = syscall;
   int ret = 0;
   if (futex_op == FUTEX_WAIT_PRIVATE) {
     ret = (int)SYS_HOOK(syscall, SYS_futex, uaddr, futex_op, val, timeout, nullptr, 0u);

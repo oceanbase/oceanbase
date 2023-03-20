@@ -51,7 +51,7 @@ struct ObLobCompareParams {
   }
 
   TO_STRING_KV(K(collation_left_),
-               KP(collation_right_),
+               K(collation_right_),
                K(offset_left_),
                K(offset_right_),
                K(compare_len_),

@@ -33,11 +33,9 @@ using namespace common::serialization;
 int64_t MAX_STATE_SIZE = 4 * 1024; // 4KB
 #endif
 #define TX_START_OR_RESUME_ADDR(tx) ((tx)->is_xa_trans() ? (tx)->xa_start_addr_ : (tx)->addr_)
-#define TX_START_OR_RESUME_LOCAL(tx) (TX_START_OR_RESUME_ADDR(tx) == GCONF.self_addr_)
 
 bool ObTxnFreeRouteCtx::is_temp(const ObTxDesc &tx) const
 {
-  //return !TX_START_OR_RESUME_LOCAL(&tx);
   UNUSED(tx);
   return txn_addr_.is_valid() && txn_addr_ != GCONF.self_addr_;
 }
@@ -68,6 +66,7 @@ void ObTxnFreeRouteCtx::init_before_handle_request(ObTxDesc *tx)
     txn_addr_.reset();
     tx_id_.reset();
   }
+  prev_tx_id_.reset();
   reset_changed_();
   ++local_version_;
 #ifndef NDEBUG
@@ -75,7 +74,7 @@ void ObTxnFreeRouteCtx::init_before_handle_request(ObTxDesc *tx)
 #endif
 }
 
-int ObTransService::clean_txn_state_(ObTxDesc *&tx, const ObTransID &tx_id)
+int ObTransService::clean_txn_state_(ObTxDesc *&tx, ObTxnFreeRouteCtx &ctx, const ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
   // sanity : the tx not started on this session
@@ -87,7 +86,7 @@ int ObTransService::clean_txn_state_(ObTxDesc *&tx, const ObTransID &tx_id)
   bool release_ref = false, release = false;
   {
     ObSpinLockGuard guard(tx->lock_);
-    if (TX_START_OR_RESUME_LOCAL(tx)) {
+    if (ctx.txn_addr_ == self_) {
       if (tx->tx_id_ == tx_id) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "try to clean txn state on txn start node", K(ret), KPC(tx));
@@ -184,12 +183,13 @@ inline int ObTransService::txn_state_update_verify_by_version_(const ObTxnFreeRo
 
 
 #define ENCODE_HEADER()                                                 \
+  auto tx_id = ctx.prev_tx_id_.is_valid() ? ctx.prev_tx_id_ : ctx.tx_id_; \
   if (OB_FAIL(OB_E(EventTable::EN_TX_FREE_ROUTE_ENCODE_STATE_ERROR, session_id) OB_SUCCESS)) { \
     TRANS_LOG(ERROR, "inject failure", K(ret), KPC(tx), K(session_id)); \
   } else if (!ctx.tx_id_.is_valid()) {                                  \
     ret = OB_ERR_UNEXPECTED;                                            \
     TRANS_LOG(ERROR, "tx_id is invalid", K(ret), K(ctx));               \
-  } else if (OB_FAIL(encode_i64(buf, len, pos, ctx.tx_id_.get_id()))) { \
+  } else if (OB_FAIL(encode_i64(buf, len, pos, tx_id.get_id()))) {      \
     TRANS_LOG(WARN, "encode tx_id fail", K(ret));                       \
   } else if (OB_FAIL(encode_i64(buf, len, pos, ctx.global_version_))) { \
     TRANS_LOG(WARN, "encode global_version fail", K(ret));              \
@@ -283,7 +283,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
   } else if (flag.is_tx_terminated_) {
     audit_record.upd_term_ = true;
     audit_record.upd_clean_tx_ = OB_NOT_NULL(tx);
-    if (OB_NOT_NULL(tx) && OB_FAIL(clean_txn_state_(tx, tx_id))) {
+    if (OB_NOT_NULL(tx) && OB_FAIL(clean_txn_state_(tx, ctx, tx_id))) {
       TRANS_LOG(WARN, "cleanup prev txn state fail", K(ret), K(tx_id), K(tx));
     }
   } else if (flag.is_fallback_) {
@@ -735,17 +735,14 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
   bool is_tx_start = !prev_in_txn && in_txn;      // IDLE => ACTIVE
   bool is_tx_terminated = prev_in_txn && !in_txn; // ACTIVE => ROLLBACK/COMMIT/IDLE
   bool is_tx_active_to_active = prev_in_txn && in_txn; // ACTIVE => ACTIVE
-  bool support_free_route = false;
+  bool is_tx_switch = is_tx_active_to_active && ctx.tx_id_ != tx->tx_id_; // TXN1 -> TXN2
+  bool support_free_route = false, fallback_happened = false;
 
   bool return_normal_state = false, return_terminated_state = false, return_fallback_state = false;
   int64_t state_size = 0;
 
-  if (is_tx_start) {
-    audit_record.tx_start_ = true;
-    ctx.can_free_route_ = false;
-    ctx.is_fallbacked_ = false;
-    ctx.tx_id_ = tx->tx_id_;
-    ctx.txn_addr_ = self_;
+  // decide free-route flag for newly started txn
+  if (is_tx_start || is_tx_switch) {
     if (proxy_support) {
       if (!is_xa_tightly_couple) {
         omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
@@ -756,10 +753,8 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
               TRANS_LOG(DEBUG, "observer not upgrade to 4_1_0_0");
             } else  if (!need_fallback_(*tx, state_size)) {
               support_free_route = true;
-              ctx.can_free_route_ = true;
-              return_normal_state = true;
             } else {
-              ctx.is_fallbacked_ = true;
+              fallback_happened = true;
               TRANS_LOG(TRACE, "txn free route is enabled but need fallback", K(state_size));
             }
           } else {
@@ -769,6 +764,33 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
       }
     }
   }
+
+  if (is_tx_start) {
+    ctx.can_free_route_ = support_free_route;
+    ctx.is_fallbacked_ = fallback_happened;
+    ctx.tx_id_ = tx->tx_id_;
+    ctx.txn_addr_ = self_;
+    if (support_free_route) {
+      return_normal_state = true;
+    }
+  }
+
+  if (is_tx_switch) {
+    // if previouse tx is free-routed, need to terminated it
+    if (!support_free_route && ctx.can_free_route_) {
+      ctx.prev_tx_id_ = ctx.tx_id_;
+      audit_record.tx_term_ = true; // terminated prev
+      return_terminated_state = true;
+    }
+    ctx.can_free_route_ = support_free_route;
+    ctx.is_fallbacked_ = fallback_happened;
+    ctx.tx_id_ = tx->tx_id_;
+    ctx.txn_addr_ = self_;
+    if (support_free_route) {
+      return_normal_state = true;
+    }
+  }
+
   if (is_tx_terminated) {
     audit_record.tx_term_ = true;
     // current node should be the txn's start node
@@ -786,15 +808,11 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
       return_terminated_state = true;
     }
   }
-  bool fallback_happened = false, fallback_state_synced = false;
-  if (is_tx_active_to_active) {
+  bool fallback_state_synced = false;
+  if (is_tx_active_to_active && !is_tx_switch) {
     // if on txn start node, and if free_route is open,
     // refer proxy switch to do fallback
     if (self_ == ctx.txn_addr_) {
-      if (ctx.tx_id_ != tx->tx_id_) {
-        // implicit commit and start new tx
-        ctx.tx_id_ = tx->tx_id_;
-      }
       if (ctx.can_free_route_ && !ctx.is_fallbacked_) {
         if (!proxy_support || need_fallback_(*tx, state_size)) {
           ctx.is_fallbacked_ = true;
@@ -884,6 +902,8 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
   ctx.set_calculated();
   // audit record
   audit_record.calculated_ = true;
+  audit_record.tx_start_ = is_tx_start;
+  audit_record.tx_switch_ = is_tx_switch;
   audit_record.free_route_ = ctx.can_free_route_;
   audit_record.fallback_ = ctx.is_fallbacked_;
   audit_record.chg_static_ = ctx.static_changed_;
@@ -896,7 +916,7 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
 #ifndef NDEBUG
   ObTransID tx_id = tx ? tx->tx_id_ : ObTransID();
   TRANS_LOG(INFO, "[tx free route] calc tx free route properities done", K(ret),
-            K(is_tx_start), K(is_tx_terminated), K(is_tx_active_to_active),
+            K(is_tx_start), K(is_tx_switch), K(is_tx_terminated), K(is_tx_active_to_active),
             K(prev_in_txn), K(is_xa), K(is_xa_tightly_couple), K(proxy_support),
             K(support_free_route),
             K(fallback_happened), K(fallback_state_synced),

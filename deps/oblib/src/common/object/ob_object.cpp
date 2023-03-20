@@ -449,8 +449,14 @@ int ObLobLocatorV2::fill(ObMemLobType type,
             K(ret), K(type), K(disk_lob_full_size), K(sizeof(ObLobCommon)));
         } else {
           uint32_t disk_loc_header_size = sizeof(ObLobCommon);
-          if (disk_loc->is_init_) {
-            disk_loc_header_size += sizeof(ObLobData);
+          if (disk_loc->in_row_) {
+            if (disk_loc->is_init_) {
+              disk_loc_header_size += sizeof(ObLobData);
+            }
+          } else {
+            int64_t tbz = disk_loc->get_byte_size(disk_lob_full_size);
+            int64_t thz = disk_loc->get_handle_size(tbz);
+            disk_loc_header_size = thz;
           }
           if (offset + disk_loc_header_size > size_ || disk_lob_full_size < disk_loc_header_size) {
             ret = OB_INVALID_ARGUMENT;
@@ -564,7 +570,11 @@ int ObLobLocatorV2::get_disk_locator(ObString &disc_loc_buff) const
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get invalid handle size", K(ret), K(size_), K(disk_loc), K(ptr_));
     } else {
-      handle_size = size_ - handle_size;
+      if (disk_loc->in_row_) {
+        handle_size = size_ - handle_size;
+      } else {
+        handle_size = disk_loc->get_handle_size(0);
+      }
       disc_loc_buff.assign_ptr(reinterpret_cast<const char *>(disk_loc), handle_size);
     }
   }
@@ -744,9 +754,13 @@ int ObLobLocatorV2::get_real_locator_len(int64_t &real_len) const
     COMMON_LOG(WARN, "Lob: get disk locator failed", K(ret), K(*this));
   } else {
     real_len = (uintptr_t)disk_loc - (uintptr_t)ptr_;
-    real_len += sizeof(ObLobCommon);
-    if (disk_loc->is_init_) {
-      real_len += sizeof(ObLobData);
+    if (disk_loc->in_row_) {
+      real_len += sizeof(ObLobCommon);
+      if (disk_loc->is_init_) {
+        real_len += sizeof(ObLobData);
+      }
+    } else {
+      real_len += disk_loc->get_handle_size(0);
     }
   }
   return ret;
@@ -772,8 +786,9 @@ int ObLobLocatorV2::set_payload_data(const ObString& payload)
     } else {
       ObString disk_loc_buff;
       if (OB_SUCC(get_disk_locator(disk_loc_buff))) {
-        OB_ASSERT(payload.length() == disk_loc_buff.length());
-        MEMCPY(disk_loc_buff.ptr(), payload.ptr(), disk_loc_buff.length());
+        buf_len = size_ - (disk_loc_buff.ptr() - ptr_);
+        OB_ASSERT(payload.length() == buf_len);
+        MEMCPY(disk_loc_buff.ptr(), payload.ptr(), payload.length());
       }
     }
   }
@@ -804,7 +819,7 @@ int ObLobLocatorV2::set_payload_data(const ObLobCommon *lob_comm, const ObString
     if (loc->has_extern()) {
       if (OB_SUCC(get_disk_locator(disk_loc_buff))) {
         buf = disk_loc_buff.ptr();
-        buf_len = disk_loc_buff.length();
+        buf_len = (size_ - (disk_loc_buff.ptr() - ptr_));
       }
     } else if (!loc->has_extern()) {
       buf = loc->data_;
@@ -812,7 +827,11 @@ int ObLobLocatorV2::set_payload_data(const ObLobCommon *lob_comm, const ObString
     }
     if (OB_SUCC(ret)) {
       uint32 disk_lob_header_len = sizeof(ObLobCommon);
-      disk_lob_header_len += lob_comm->is_init_ ? sizeof(ObLobData) : 0;
+      if (lob_comm->in_row_) {
+        disk_lob_header_len += lob_comm->is_init_ ? sizeof(ObLobData) : 0;
+      } else {
+        disk_lob_header_len = lob_comm->get_handle_size(0);
+      }
       OB_ASSERT(payload.length() + disk_lob_header_len <= buf_len);
       MEMCPY(buf, lob_comm, disk_lob_header_len);
       if (payload.length() > 0) {

@@ -615,7 +615,9 @@ int ObPxTenantTargetMonitorP::process()
       if (OB_FAIL(ret)) {
         int tem_ret = OB_SUCCESS;
         if ((tem_ret = OB_PX_TARGET_MGR.reset_statistics(tenant_id, leader_version + 1)) != OB_SUCCESS) {
-          LOG_WARN("reset statistics failed", K(tem_ret));
+          LOG_WARN("reset statistics failed", K(tem_ret), K(tenant_id), K(leader_version));
+        } else {
+          LOG_INFO("reset statistics succeed", K(tenant_id), K(leader_version));
         }
       } else {
         const hash::ObHashMap<ObAddr, ServerTargetUsage> *global_target_usage = NULL;

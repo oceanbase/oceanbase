@@ -8502,72 +8502,110 @@ int ObSchemaServiceSQLImpl::fetch_link_table_info(uint64_t tenant_id,
       // dblink will convert the result to AL32UTF8 when pulling schema meta
       LOG_WARN("failed to set expected charset id", K(ret));
     } else {
-      T tmp_table_schema;
-      table_schema = NULL;
-      ObObjMeta type;
-      int64_t column_count = result->get_column_count();
-      tmp_table_schema.set_tenant_id(tenant_id);
-      tmp_table_schema.set_table_id(1); //no use
-      tmp_table_schema.set_dblink_id(dblink_id);
-      tmp_table_schema.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-      tmp_table_schema.set_charset_type(ObCharset::charset_type_by_coll(tmp_table_schema.get_collation_type()));
-      if (OB_FAIL(tmp_table_schema.set_table_name(table_name))) {
-        LOG_WARN("set table name failed", K(ret), K(table_name));
-      } else if (OB_FAIL(tmp_table_schema.set_link_database_name(database_name))) {
-        LOG_WARN("set database name failed", K(ret), K(database_name));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
-        ObColumnSchemaV2 column_schema;
-        int16_t precision = 0;
-        int16_t scale = 0;
-        int32_t length = 0;
-        ObString column_name;
-        bool old_max_length = false;
-        if (OB_FAIL(result->get_col_meta(i, old_max_length, column_name, type, precision, scale, length))) {
-          LOG_WARN("failed to get column meta", K(i), K(old_max_length), K(ret));
-        } else if (OB_FAIL(column_schema.set_column_name(column_name))) {
-          LOG_WARN("failed to set column name", K(i), K(column_name), K(ret));
-        } else {
-          column_schema.set_table_id(tmp_table_schema.get_table_id());
-          column_schema.set_tenant_id(tenant_id);
-          column_schema.set_column_id(i + OB_END_RESERVED_COLUMN_ID_NUM);
-          column_schema.set_meta_type(type);
-          column_schema.set_charset_type(ObCharset::charset_type_by_coll(column_schema.get_collation_type()));
-          column_schema.set_data_precision(precision);
-          column_schema.set_data_scale(scale);
-          column_schema.set_data_length(length);
-          if (OB_SUCC(ret) &&
-              next_sql_req_level == 1 &&
-              (ObNCharType == column_schema.get_data_type() || ObNVarchar2Type == column_schema.get_data_type())) {
-            if (DBLINK_DRV_OB == link_type &&
-                sql::DblinkGetConnType::TEMP_CONN != conn_type &&
-                OB_FAIL(fetch_desc_table(dblink_id,
-                                        link_type,
-                                        database_name,
-                                        table_name,
-                                        param_ctx,
-                                        session_info,
-                                        alloctor,
-                                        i,
-                                        length))) {
-              LOG_WARN("failed to fetch desc table", K(ret));
-            } else {
-              column_schema.set_data_length(length);
+      const char * desc_sql_str_fmt = "/*$BEFPARSEdblink_req_level=1*/ desc \"%.*s\".\"%.*s\"";
+      ObSqlString desc_sql;
+      ObMySQLResult *desc_result = NULL;
+      bool need_desc = (next_sql_req_level == 1) && DBLINK_DRV_OB == link_type && sql::DblinkGetConnType::TEMP_CONN != conn_type;
+      int64_t desc_res_row_idx = -1;
+      SMART_VAR(ObMySQLProxy::MySQLResult, desc_res) {
+  T     tmp_table_schema;
+        table_schema = NULL;
+        ObObjMeta type;
+        int64_t column_count = result->get_column_count();
+        tmp_table_schema.set_tenant_id(tenant_id);
+        tmp_table_schema.set_table_id(1); //no use
+        tmp_table_schema.set_dblink_id(dblink_id);
+        tmp_table_schema.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        tmp_table_schema.set_charset_type(ObCharset::charset_type_by_coll(tmp_table_schema.get_collation_type()));
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_FAIL(tmp_table_schema.set_table_name(table_name))) {
+          LOG_WARN("set table name failed", K(ret), K(table_name));
+        } else if (OB_FAIL(tmp_table_schema.set_link_database_name(database_name))) {
+          LOG_WARN("set database name failed", K(ret), K(database_name));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
+          ObColumnSchemaV2 column_schema;
+          int16_t precision = 0;
+          int16_t scale = 0;
+          int32_t length = 0;
+          ObString column_name;
+          bool old_max_length = false;
+          if (OB_FAIL(result->get_col_meta(i, old_max_length, column_name, type, precision, scale, length))) {
+            LOG_WARN("failed to get column meta", K(i), K(old_max_length), K(ret));
+          } else if (OB_FAIL(column_schema.set_column_name(column_name))) {
+            LOG_WARN("failed to set column name", K(i), K(column_name), K(ret));
+          } else {
+            column_schema.set_table_id(tmp_table_schema.get_table_id());
+            column_schema.set_tenant_id(tenant_id);
+            column_schema.set_column_id(i + OB_END_RESERVED_COLUMN_ID_NUM);
+            column_schema.set_meta_type(type);
+            column_schema.set_charset_type(ObCharset::charset_type_by_coll(column_schema.get_collation_type()));
+            column_schema.set_data_precision(precision);
+            column_schema.set_data_scale(scale);
+            if (need_desc && OB_ISNULL(desc_result) &&
+                (ObNCharType == column_schema.get_data_type() || ObNVarchar2Type == column_schema.get_data_type())) {
+              if (OB_FAIL(desc_sql.append_fmt(desc_sql_str_fmt, database_name.length(), database_name.ptr(),
+                                          table_name.length(), table_name.ptr()))) {
+                LOG_WARN("append desc sql failed", K(ret));
+              } else if (OB_FAIL(dblink_proxy_->dblink_read(dblink_conn, desc_res, desc_sql.ptr()))) {
+                ObDblinkUtils::process_dblink_errno(link_type, dblink_conn, ret);
+                LOG_WARN("read link failed", K(ret), K(dblink_id), K(desc_sql.ptr()));
+              } else if (OB_ISNULL(desc_result = desc_res.get_result())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("fail to get result", K(ret));
+              } else if (OB_FAIL(desc_result->set_expected_charset_id(static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID),
+                                                                      static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID)))) {
+                // dblink will convert the result to AL32UTF8 when pulling schema meta
+                LOG_WARN("failed to set expected charset id", K(ret));
+              }
             }
+            if (OB_SUCC(ret) && OB_NOT_NULL(desc_result) && (ObNCharType == column_schema.get_data_type() || ObNVarchar2Type == column_schema.get_data_type())) {
+              while (OB_SUCC(ret) && desc_res_row_idx < i) {
+                if (OB_FAIL(desc_result->next())) {
+                  LOG_WARN("failed to get next row", K(ret));
+                }
+                ++desc_res_row_idx;
+              }
+              if (desc_res_row_idx == i && OB_SUCC(ret)) {
+                const ObTimeZoneInfo *tz_info = TZ_INFO(session_info);
+                ObObj value;
+                ObString string_value;
+                if (OB_ISNULL(tz_info)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("tz info is NULL", K(ret));
+                } else if (OB_FAIL(desc_result->get_obj(1, value, tz_info, &alloctor))) {
+                  LOG_WARN("failed to get obj", K(ret));
+                } else if (ObVarcharType != value.get_type()) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("type is invalid", K(value.get_type()), K(ret));
+                } else if (OB_FAIL(value.get_varchar(string_value))) {
+                  LOG_WARN("failed to get varchar value", K(ret));
+                } else if (OB_FAIL(ObDblinkService::get_length_from_type_text(string_value, length))) {
+                  LOG_WARN("failed to get length", K(ret));
+                } else {
+                  LOG_DEBUG("desc table type string", K(string_value), K(length));
+                }
+              }
+            }
+            column_schema.set_data_length(length);
+          }
+          LOG_DEBUG("dblink column schema", K(i), K(column_schema.get_data_precision()),
+                                              K(column_schema.get_data_scale()),
+                                              K(column_schema.get_data_length()),
+                                              K(column_schema.get_data_type()));
+          if (OB_SUCC(ret) && OB_FAIL(tmp_table_schema.add_column(column_schema))) {
+            LOG_WARN("fail to add link column schema. ", K(i), K(column_schema), K(ret));
           }
         }
-        LOG_DEBUG("dblink column schema", K(i), K(column_schema.get_data_precision()),
-                                            K(column_schema.get_data_scale()),
-                                            K(column_schema.get_data_length()),
-                                            K(column_schema.get_data_type()));
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(tmp_table_schema.add_column(column_schema))) {
-          LOG_WARN("fail to add link column schema. ", K(i), K(column_schema), K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObSchemaUtils::alloc_schema(alloctor, tmp_table_schema, table_schema))) {
+        if (OB_SUCC(ret) && OB_FAIL(ObSchemaUtils::alloc_schema(alloctor, tmp_table_schema, table_schema))) {
           LOG_WARN("failed to alloc table_schema", K(ret));
+        }
+        int tmp_ret = OB_SUCCESS;
+        if (OB_NOT_NULL(desc_result) && OB_SUCCESS != (tmp_ret = desc_result->close())) {
+          LOG_WARN("failed to close desc result", K(tmp_ret));
+        } else {
+          desc_result = NULL;
         }
       }
     }

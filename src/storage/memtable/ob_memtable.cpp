@@ -218,11 +218,15 @@ void ObMemtable::destroy()
   ObTimeGuard time_guard("ObMemtable::destroy()", 100 * 1000);
   int ret = OB_SUCCESS;
   if (is_inited_) {
+    const common::ObTabletID tablet_id = key_.tablet_id_;
+    const int64_t cost_time = ObTimeUtility::current_time() - mt_stat_.release_time_;
+    if (cost_time > 1 * 1000 * 1000) {
+      STORAGE_LOG(WARN, "it costs too much time from release to destroy", K(cost_time), K(tablet_id), KP(this));
+    }
     STORAGE_LOG(INFO, "memtable destroyed", K(*this));
     time_guard.click();
     ObMemtableStat::get_instance().unregister_memtable(this);
     time_guard.click();
-    const common::ObTabletID tablet_id = key_.tablet_id_;
     ObTenantFreezer *freezer = nullptr;
     freezer = MTL(ObTenantFreezer *);
     if (OB_SUCCESS != freezer->unset_tenant_slow_freeze(tablet_id)) {

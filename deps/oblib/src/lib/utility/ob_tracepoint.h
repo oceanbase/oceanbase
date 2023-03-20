@@ -599,11 +599,13 @@ class EventTable
       EN_DDL_RELEASE_DDL_KV_FAIL = 514,
       EN_DDL_REPORT_CHECKSUM_FAIL = 515,
       EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL = 516,
+      EN_DDL_DIRECT_LOAD_WAIT_TABLE_LOCK_FAIL = 517,
 
       // 600-700 For PX use
       EN_PX_SQC_EXECUTE_FAILED = 600,
       EN_PX_SQC_INIT_FAILED = 601,
       EN_PX_SQC_INIT_PROCESS_FAILED = 602,
+      EN_PX_PRINT_TARGET_MONITOR_LOG = 603,
       // please add new trace point after 700 or before 600
 
       // Compaction Related 700-750
@@ -670,10 +672,13 @@ class EventTable
       EN_FETCH_TABLE_INFO_RPC = 1112,
       // END OF STORAGE HA - 1101 - 2000
 
+      // Transaction // 2001 - 2100
       // Transaction free route
-      EN_TX_FREE_ROUTE_UPDATE_STATE_ERROR = 1150,
-      EN_TX_FREE_ROUTE_ENCODE_STATE_ERROR = 1151,
-      EN_TX_FREE_ROUTE_STATE_SIZE = 1152,
+      EN_TX_FREE_ROUTE_UPDATE_STATE_ERROR = 2001,
+      EN_TX_FREE_ROUTE_ENCODE_STATE_ERROR = 2002,
+      EN_TX_FREE_ROUTE_STATE_SIZE = 2003,
+      // Transaction common
+      EN_TX_RESULT_INCOMPLETE = 2011,
 
       EVENT_TABLE_MAX = SIZE_OF_EVENT_TABLE
     };

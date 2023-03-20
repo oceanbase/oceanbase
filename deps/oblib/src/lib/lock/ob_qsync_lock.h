@@ -34,6 +34,8 @@ public:
   void wrunlock();
   int try_rdlock();
 private:
+  static const int64_t TRY_SYNC_COUNT = 16;
+private:
   int64_t write_flag_ CACHE_ALIGNED;
   common::ObDynamicQSync qsync_;
 };

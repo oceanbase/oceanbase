@@ -368,7 +368,7 @@ int ObCgroupCtrl::create_user_tenant_group_dir(
   return ret;
 }
 
-int ObCgroupCtrl::add_thread_to_cgroup(const pid_t tid, const uint64_t tenant_id, int64_t group_id)
+int ObCgroupCtrl::add_self_to_cgroup(const uint64_t tenant_id, int64_t group_id)
 {
   int ret = OB_SUCCESS;
   char group_path[PATH_BUFSIZE];
@@ -383,7 +383,7 @@ int ObCgroupCtrl::add_thread_to_cgroup(const pid_t tid, const uint64_t tenant_id
   } else {
     char task_path[PATH_BUFSIZE];
     char tid_value[VALUE_BUFSIZE];
-    snprintf(tid_value, VALUE_BUFSIZE, "%d", tid);
+    snprintf(tid_value, VALUE_BUFSIZE, "%ld", syscall(__NR_gettid));
     snprintf(task_path, PATH_BUFSIZE, "%s/tasks", group_path);
     if(OB_FAIL(write_string_to_file_(task_path, tid_value))) {
       LOG_WARN("add tid to cgroup failed", K(ret), K(task_path), K(tid_value), K(tenant_id));
@@ -409,14 +409,14 @@ int ObCgroupCtrl::get_group_info_by_group_id(const uint64_t tenant_id,
   return ret;
 }
 
-int ObCgroupCtrl::remove_thread_from_cgroup(const pid_t tid, const uint64_t tenant_id)
+int ObCgroupCtrl::remove_self_from_cgroup(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   char task_path[PATH_BUFSIZE];
   char tid_value[VALUE_BUFSIZE];
   // 把该tid加入other_cgroup目录的tasks文件中就会从其它tasks中删除
   snprintf(task_path, PATH_BUFSIZE, "%s/tasks", other_cgroup_);
-  snprintf(tid_value, VALUE_BUFSIZE, "%d", tid);
+  snprintf(tid_value, VALUE_BUFSIZE, "%ld", syscall(__NR_gettid));
   if(OB_FAIL(write_string_to_file_(task_path, tid_value))) {
     LOG_WARN("remove tid from cgroup failed", K(ret), K(task_path), K(tid_value), K(tenant_id));
   } else {
@@ -425,18 +425,17 @@ int ObCgroupCtrl::remove_thread_from_cgroup(const pid_t tid, const uint64_t tena
   return ret;
 }
 
-int ObCgroupCtrl::add_thread_to_group(const pid_t tid,
-                                      const uint64_t tenant_id,
+int ObCgroupCtrl::add_self_to_group(const uint64_t tenant_id,
                                       const uint64_t group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("invalid config", K(ret), K(tenant_id));
-  } else if (OB_FAIL(add_thread_to_cgroup(tid, tenant_id, group_id))) {
-    LOG_WARN("fail to add thread to group", K(ret), K(tid), K(group_id), K(tenant_id));
+  } else if (OB_FAIL(add_self_to_cgroup(tenant_id, group_id))) {
+    LOG_WARN("fail to add thread to group", K(ret), K(group_id), K(tenant_id));
   } else {
-    LOG_INFO("set backup pid to group success", K(tenant_id), K(group_id), K(tid));
+    LOG_INFO("set backup pid to group success", K(tenant_id), K(group_id));
   }
   return ret;
 }

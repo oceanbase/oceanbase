@@ -707,7 +707,11 @@ public:
   }
   OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_BOOLEAN; }
   OB_INLINE void set_value(bool value) { value_ = value; }
-  OB_INLINE bool value() const { return value_; }
+  OB_INLINE bool value() const
+  {
+    bool bool_ret = (value_ != 0);
+    return bool_ret;
+  }
   OB_INLINE uint64_t get_serialize_size() { return sizeof(char); }
   ObJsonNode *clone(ObIAllocator* allocator) const;
 private:

@@ -273,7 +273,7 @@ private:
   int leader_wait_sw_slot_ready_(const int64_t log_id);
   bool can_receive_larger_log_(const int64_t log_id) const;
   bool leader_can_submit_larger_log_(const int64_t log_id) const;
-  bool leader_can_submit_new_log_(const int64_t valid_log_size);
+  bool leader_can_submit_new_log_(const int64_t valid_log_size, LSN &lsn_upper_bound);
   bool leader_can_submit_group_log_(const LSN &lsn, const int64_t group_log_size);
   void get_committed_end_lsn_(LSN &out_lsn) const;
   int get_max_flushed_log_info_(LSN &lsn,

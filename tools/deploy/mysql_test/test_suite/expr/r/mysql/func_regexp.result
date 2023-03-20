@@ -6328,3 +6328,49 @@ select * from t1 where c1 regexp '^U';
 c1
 UNPRESS123
 UNPRESS456
+set names gbk;
+select 'a' collate gbk_bin regexp 'A';
+'a' collate gbk_bin regexp 'A'
+0
+select 'a' collate gbk_chinese_ci regexp 'A';
+'a' collate gbk_chinese_ci regexp 'A'
+1
+select 'a' regexp 'A' collate gbk_chinese_ci;
+'a' regexp 'A' collate gbk_chinese_ci
+1
+select 'a' regexp 'A' collate gbk_bin;
+'a' regexp 'A' collate gbk_bin
+0
+select 'a' collate gbk_bin regexp 'A' collate gbk_bin;
+'a' collate gbk_bin regexp 'A' collate gbk_bin
+0
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_chinese_ci;
+'a' collate gbk_chinese_ci regexp 'A' collate gbk_chinese_ci
+1
+select 'a' collate gbk_bin regexp 'A' collate gbk_chinese_ci;
+ERROR HY000: Illegal mix of collations
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_bin;
+ERROR HY000: Illegal mix of collations
+set names latin1;
+select 'a' collate latin1_bin regexp 'A';
+'a' collate latin1_bin regexp 'A'
+0
+select 'a' collate latin1_swedish_ci regexp 'A';
+'a' collate latin1_swedish_ci regexp 'A'
+1
+select 'a' regexp 'A' collate latin1_swedish_ci;
+'a' regexp 'A' collate latin1_swedish_ci
+1
+select 'a' regexp 'A' collate latin1_bin;
+'a' regexp 'A' collate latin1_bin
+0
+select 'a' collate latin1_bin regexp 'A' collate latin1_bin;
+'a' collate latin1_bin regexp 'A' collate latin1_bin
+0
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci;
+'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci
+1
+select 'a' collate latin1_bin regexp 'A' collate latin1_swedish_ci;
+ERROR HY000: Illegal mix of collations
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_bin;
+ERROR HY000: Illegal mix of collations

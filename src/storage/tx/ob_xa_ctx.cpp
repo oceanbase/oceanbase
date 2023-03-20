@@ -1540,6 +1540,7 @@ int ObXACtx::xa_start_remote_first_(const ObXATransID &xid,
     TRANS_LOG(WARN, "update xa stmt info failed", K(ret), K(xid), K(*this));
   } else {
     // xa_ref_count_ is added only when success is returned
+    xa_trans_state_ = ObXATransState::ACTIVE;
     ++xa_ref_count_;
     tx_desc_->set_xid(xid);
     tx_desc_->set_xa_ctx(this);

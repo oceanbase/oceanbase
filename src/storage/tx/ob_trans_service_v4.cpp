@@ -557,6 +557,10 @@ int ObTransService::abort_tx_(ObTxDesc &tx, const int cause, const bool cleanup)
     TRANS_LOG(WARN, "try abort tx which has decided",
               K(ret), K(tx), K(cause));
   } else {
+    // TODO: refactor state switch and put this to there
+    if (ObTxDesc::State::IDLE == tx.state_) {
+      tx.state_change_flags_.STATIC_CHANGED_ = 1;
+    }
     tx.state_ = ObTxDesc::State::IN_TERMINATE;
     tx.abort_cause_ = cause;
     abort_participants_(tx);
@@ -851,11 +855,12 @@ int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransR
     TRANS_LOG(WARN, "get tx fail", K(ret), K(tx_id), K(msg));
   } else if (OB_ISNULL(tx)) {
     ret = OB_TRANS_CTX_NOT_EXIST;
+  } else if (tx->is_committed() && tx_id == tx->tx_id_) {
+    ret = OB_TRANS_COMMITED;
+  } else if (tx->is_rollbacked() && tx_id == tx->tx_id_) {
+    ret = OB_TRANS_ROLLBACKED;
   } else if (OB_SUCCESS != msg.status_) {
-    TRANS_LOG(WARN, "tx participant in failed, abort tx", KPC(tx), K(msg));
-    if (OB_FAIL(abort_tx(*tx, msg.status_))) {
-      TRANS_LOG(WARN, "do abort tx fail", K(ret), KPC(tx));
-    }
+    TRANS_LOG(WARN, "tx participant in failed status", K(msg));
   }
   ObTxKeepaliveRespMsg resp;
   resp.cluster_version_ = GET_MIN_CLUSTER_VERSION();
@@ -3097,7 +3102,6 @@ int ObTransService::check_and_fill_state_info(const ObTransID &tx_id, ObStateInf
   int tx_state = ObTxData::RUNNING;
   SCN version;
   if (OB_FAIL(get_tx_state_from_tx_table_(state_info.ls_id_, tx_id, tx_state, version))) {
-    TRANS_LOG(INFO, "get tx state from tx table fail", K(ret), K(state_info.ls_id_), K(tx_id));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       ObLSService *ls_svr =  MTL(ObLSService *);
       ObLSHandle handle;
@@ -3117,6 +3121,7 @@ int ObTransService::check_and_fill_state_info(const ObTransID &tx_id, ObStateInf
       } else {
         ret = OB_TRANS_CTX_NOT_EXIST;
       }
+      TRANS_LOG(INFO, "get tx state from tx table fail", K(ret), K(state_info), K(tx_id), K(version));
     }
   } else {
     switch (tx_state) {

@@ -3943,10 +3943,13 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
   };
 
   last_log_buf = NULL;
-  if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, log_engine_.get_log_storage()))) {
+  ReadBufGuard read_buf_guard("Palf", MAX_LOG_BUFFER_SIZE);
+  if (!read_buf_guard.read_buf_.is_valid()) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "allocate memory failed", KPC(this));
+  } else if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, log_engine_.get_log_storage()))) {
     PALF_LOG(WARN, "iterator init failed", K(ret), KPC(this), K(start_lsn), K(flashback_scn));
   } else {
-    ReadBufGuard read_buf_guard("Palf", MAX_LOG_BUFFER_SIZE);
     const int64_t read_buf_len = read_buf_guard.read_buf_.buf_len_;
     char *&read_buf = read_buf_guard.read_buf_.buf_;
     const char *buffer = NULL;

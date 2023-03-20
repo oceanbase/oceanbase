@@ -689,6 +689,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_CONVERT_TO_CHARACTER:
       case DDL_TABLE_REDEFINITION:
       case DDL_DIRECT_LOAD:
+      case DDL_DIRECT_LOAD_INSERT:
         if (OB_FAIL(create_table_redefinition_task(proxy,
                                                    param.type_,
                                                    param.src_table_schema_,
@@ -887,9 +888,8 @@ int ObDDLScheduler::abort_redef_table(const int64_t task_id)
     LOG_WARN("abort redef table task failed", K(ret), K(task_id));
     if (OB_ENTRY_NOT_EXIST == ret) {
       bool exist = false;
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
-        LOG_WARN("check task id exist fail", K(tmp_ret), K(task_id));
+      if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
+        LOG_WARN("check task id exist fail", K(ret), K(task_id));
       } else {
         if (exist) {
           ret = OB_EAGAIN;
@@ -992,9 +992,8 @@ int ObDDLScheduler::copy_table_dependents(const int64_t task_id,
                                                                     is_ignore_errors))) {
                 if (OB_ENTRY_NOT_EXIST == ret) {
                   bool exist = false;
-                  int tmp_ret = OB_SUCCESS;
-                  if (OB_TMP_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
-                    LOG_WARN("check task id exist fail", K(tmp_ret), K(task_id));
+                  if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
+                    LOG_WARN("check task id exist fail", K(ret), K(task_id));
                   } else {
                     if (exist) {
                       ret = OB_EAGAIN;
@@ -1088,9 +1087,8 @@ int ObDDLScheduler::finish_redef_table(const int64_t task_id, const uint64_t ten
               if (OB_FAIL(task_queue_.update_task_process_schedulable(task_id))) {
                 if (OB_ENTRY_NOT_EXIST == ret) {
                   bool exist = false;
-                  int tmp_ret = OB_SUCCESS;
-                  if (OB_TMP_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
-                    LOG_WARN("check task id exist fail", K(tmp_ret), K(task_id));
+                  if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id, exist))) {
+                    LOG_WARN("check task id exist fail", K(ret), K(task_id));
                   } else {
                     if (exist) {
                       ret = OB_EAGAIN;
@@ -1650,6 +1648,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_CONVERT_TO_CHARACTER:
       case DDL_TABLE_REDEFINITION:
       case DDL_DIRECT_LOAD:
+      case DDL_DIRECT_LOAD_INSERT:
         ret = schedule_table_redefinition_task(record);
         break;
       case DDL_DROP_COLUMN:
@@ -1760,7 +1759,8 @@ int ObDDLScheduler::schedule_table_redefinition_task(const ObDDLTaskRecord &task
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*redefinition_task));
     }
-  } else if (ObDDLType::DDL_DIRECT_LOAD == task_record.ddl_type_
+  } else if ((ObDDLType::DDL_DIRECT_LOAD == task_record.ddl_type_
+              || ObDDLType::DDL_DIRECT_LOAD_INSERT == task_record.ddl_type_)
             && OB_FAIL(manager_reg_heart_beat_task_.update_task_active_time(task_record.task_id_))) {
     LOG_WARN("register_task_time recover fail", K(ret));
   }
@@ -1932,6 +1932,23 @@ int ObDDLScheduler::add_task_to_longops_mgr(ObDDLTask *ddl_task)
   return ret;
 }
 
+int ObDDLScheduler::remove_task_from_longops_mgr(ObDDLTask *ddl_task)
+{
+  int ret = OB_SUCCESS;
+  ObLongopsMgr &longops_mgr = ObLongopsMgr::get_instance();
+  if (OB_ISNULL(ddl_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(ddl_task));
+  } else if (ddl_task->support_longops_monitoring()) {
+    if (OB_NOT_NULL(ddl_task->get_longops_stat())) {
+      if (OB_FAIL(longops_mgr.unregister_longops(ddl_task->get_longops_stat()))) {
+        LOG_WARN("failed to unregister longops", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLScheduler::remove_ddl_task(ObDDLTask *ddl_task)
 {
   int ret = OB_SUCCESS;
@@ -1942,9 +1959,8 @@ int ObDDLScheduler::remove_ddl_task(ObDDLTask *ddl_task)
   } else if (OB_FAIL(task_queue_.remove_task(ddl_task))) {
     LOG_WARN("fail to remove task, which should not happen", K(ret), KPC(ddl_task));
   } else {
-    int tmp_ret = OB_SUCCESS;
-    if (ddl_task->support_longops_monitoring() && OB_TMP_FAIL(longops_mgr.unregister_longops(ddl_task->get_longops_stat()))) {
-      LOG_WARN("failed to unregister longops", K(tmp_ret));
+    if (OB_FAIL(remove_task_from_longops_mgr(ddl_task))) {
+      LOG_WARN("failed to unregister longops", K(ret));
     }
     remove_sys_task(ddl_task);
     free_ddl_task(ddl_task);
@@ -1958,18 +1974,29 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task)
   if (OB_ISNULL(ddl_task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(ddl_task));
-  } else if (OB_FAIL(task_queue_.push_task(ddl_task))) {
-    if (OB_ENTRY_EXIST != ret) {
-      LOG_WARN("push back task to task queue failed", K(ret));
-    }
   } else {
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(add_sys_task(ddl_task))) {
-      LOG_WARN("add sys task failed", K(tmp_ret));
-    } else if (OB_TMP_FAIL(add_task_to_longops_mgr(ddl_task))) {
+    bool longops_added = true;
+    if (OB_TMP_FAIL(add_task_to_longops_mgr(ddl_task))) {
+      longops_added = false;
       LOG_WARN("add task to longops mgr failed", K(tmp_ret));
     }
-    idler_.wakeup();
+    if (OB_FAIL(task_queue_.push_task(ddl_task))) {
+      if (OB_ENTRY_EXIST != ret) {
+        LOG_WARN("push back task to task queue failed", K(ret));
+      }
+      if (longops_added) {
+        LOG_WARN("try to unregister longop because push ddl task failed", K(ret));
+        if (OB_FAIL(remove_task_from_longops_mgr(ddl_task))) {
+          LOG_WARN("failed to unregister longops", K(tmp_ret));
+        }
+      }
+    } else {
+      if (OB_TMP_FAIL(add_sys_task(ddl_task))) {
+        LOG_WARN("add sys task failed", K(tmp_ret));
+      }
+      idler_.wakeup();
+    }
   }
   return ret;
 }
@@ -2038,6 +2065,7 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
           case ObDDLType::DDL_CONVERT_TO_CHARACTER:
           case ObDDLType::DDL_TABLE_REDEFINITION:
           case ObDDLType::DDL_DIRECT_LOAD:
+          case ObDDLType::DDL_DIRECT_LOAD_INSERT:
             if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }
@@ -2112,6 +2140,7 @@ int ObDDLScheduler::notify_update_autoinc_end(const ObDDLTaskKey &task_key,
           case ObDDLType::DDL_ALTER_PARTITION_BY:
           case ObDDLType::DDL_TABLE_REDEFINITION:
           case ObDDLType::DDL_DIRECT_LOAD:
+          case ObDDLType::DDL_DIRECT_LOAD_INSERT:
             if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->notify_update_autoinc_finish(autoinc_val, ret_code))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }

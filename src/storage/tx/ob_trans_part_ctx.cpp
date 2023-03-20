@@ -2937,7 +2937,6 @@ int ObPartTransCtx::submit_commit_log_()
           return_log_cb_(log_cb);
           log_cb = NULL;
           release_ctx_ref_();
-          TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
         } else if (OB_FAIL(after_submit_log_(log_block, log_cb, &helper))) {
         } else {
           redo_log_submitted = true;
@@ -4038,7 +4037,7 @@ int ObPartTransCtx::replace_tx_data_with_backup_(const ObTxDataBackup &backup, S
   share::SCN tmp_log_ts = log_ts;
   if (backup.get_start_log_ts().is_valid()) {
     tmp_log_ts = backup.get_start_log_ts();
-  } else if (exec_info_.next_log_entry_no_ > 1 || exec_info_.max_applied_log_ts_.is_valid()) {
+  } else if (exec_info_.next_log_entry_no_ > 1) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid start log ts with a applied log_entry", K(ret), K(backup), K(log_ts),
               KPC(this));
@@ -4337,20 +4336,9 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   } else if (OB_FAIL(set_app_trace_id_(commit_info_log.get_app_trace_id()))) {
     TRANS_LOG(WARN, "set app trace id error", K(ret), K(commit_info_log), K(*this));
   } else {
-    if (!is_local_tx_() && !commit_info_log.get_upstream().is_valid()) {
-      set_2pc_upstream_(ls_id_);
-      TRANS_LOG(INFO, "set upstream to self", K(*this), K(commit_info_log));
-    } else {
-      set_2pc_upstream_(commit_info_log.get_upstream());
-    }
+    // NOTE that set xa variables before set trans type
     exec_info_.xid_ = commit_info_log.get_xid();
     exec_info_.is_sub2pc_ = commit_info_log.is_sub2pc();
-    can_elr_ = commit_info_log.is_elr();
-    cluster_version_ = commit_info_log.get_cluster_version();
-    sub_state_.set_info_log_submitted();
-    // if (0 == redo_log_no_) {
-    //   tx_data_->end_scn_ = redo_log_no_;
-    // }
     if (exec_info_.participants_.count() > 1) {
       exec_info_.trans_type_ = TransType::DIST_TRANS;
     } else if (exec_info_.upstream_.is_valid()) {
@@ -4360,6 +4348,16 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
     } else {
       exec_info_.trans_type_ = TransType::SP_TRANS;
     }
+
+    if (!is_local_tx_() && !commit_info_log.get_upstream().is_valid()) {
+      set_2pc_upstream_(ls_id_);
+      TRANS_LOG(INFO, "set upstream to self", K(*this), K(commit_info_log));
+    } else {
+      set_2pc_upstream_(commit_info_log.get_upstream());
+    }
+    can_elr_ = commit_info_log.is_elr();
+    cluster_version_ = commit_info_log.get_cluster_version();
+    sub_state_.set_info_log_submitted();
     if (commit_info_log.is_dup_tx()) {
       set_dup_table_tx();
       mt_ctx_.before_prepare(timestamp);
@@ -6318,7 +6316,7 @@ int ObPartTransCtx::tx_keepalive_response_(const int64_t status)
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
 
-  if (OB_TRANS_CTX_NOT_EXIST == status && can_be_recycled_()) {
+  if ((OB_TRANS_CTX_NOT_EXIST == status || OB_TRANS_ROLLBACKED == status) && can_be_recycled_()) {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       TRANS_LOG(WARN, "[TRANS GC] tx has quit, local tx will be aborted",
                 K(status), KPC(this));
@@ -6326,6 +6324,9 @@ int ObPartTransCtx::tx_keepalive_response_(const int64_t status)
     if (OB_FAIL(gc_ctx_())) {
       TRANS_LOG(WARN, "force kill part_ctx error", KR(ret), KPC(this));
     }
+  } else if (OB_TRANS_COMMITED == status && can_be_recycled_() && first_scn_ >= last_scn_ /*all changes were rollbacked*/) {
+    TRANS_LOG(WARN, "txn has comitted on scheduler, but this particiapnt can be recycled", KPC(this));
+    FORCE_PRINT_TRACE(tlog_, "[participant leaky] ");
   } else if (OB_SUCCESS != status) {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       TRANS_LOG(WARN, "[TRANS GC] tx keepalive fail", K(status), KPC(this));
@@ -6645,6 +6646,7 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
                 ret = OB_SUCCESS;
               }
             }
+            TRANS_LOG(INFO, "check for standby for unknown", K(ret), K(snapshot), K(can_read), K(trans_version), K(is_determined_state), K(tmp_state_info), K(readable_scn));
           }
           break;
         }
@@ -6792,7 +6794,7 @@ void ObPartTransCtx::handle_trans_ask_state_(const SCN &snapshot)
 {
   if (snapshot > lastest_snapshot_) {
     build_and_post_collect_state_msg_(snapshot);
-  } else if (snapshot <= lastest_snapshot_ && standby_part_collected_.num_members() != state_info_array_.count()-1) {
+  } else if (snapshot <= lastest_snapshot_ && standby_part_collected_.num_members() != state_info_array_.count()) {
     if (refresh_state_info_interval_.reach()) {
       build_and_post_collect_state_msg_(snapshot);
     }

@@ -238,6 +238,8 @@ int ObRemoteFetchLogImpl::get_fetch_log_base_lsn_(ObLS &ls,
     || last_fetch_ts < ObTimeUtility::current_time() - 5 * 1000 * 1000L;
   if (OB_FAIL(get_palf_base_lsn_scn_(ls, end_lsn, heuristic_scn))) {
     LOG_WARN("get palf base lsn failed", K(ret), K(ls));
+  } else if (! max_fetch_lsn.is_valid()) {
+    lsn = end_lsn;
   } else {
     lsn = ignore_restore ? end_lsn : max_fetch_lsn;
   }

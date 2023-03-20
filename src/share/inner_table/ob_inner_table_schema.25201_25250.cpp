@@ -1125,6 +1125,156 @@ int ObInnerTableSchema::dba_ob_rsrc_io_directives_ora_schema(ObTableSchema &tabl
   return ret;
 }
 
+int ObInnerTableSchema::all_db_links_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_ALL_DB_LINKS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_DB_LINKS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT             B.USER_NAME AS OWNER,            A.DBLINK_NAME AS DB_LINK,            A.USER_NAME AS USERNAME,            CAST('' AS VARCHAR2(128)) AS CREDENTIAL_NAME,            CAST('' AS VARCHAR2(128)) AS CREDENTIAL_OWNER,            CAST(CASE DRIVER_PROTO WHEN 1 THEN A.CONN_STRING ELSE A.HOST_IP END AS VARCHAR2(2000))AS HOST,            CAST(A.GMT_CREATE AS DATE) AS CREATED,            CAST('' AS VARCHAR2(3)) AS HIDDEN,            CAST('' AS VARCHAR2(3)) AS SHARD_INTERNAL,            CAST('YES' AS VARCHAR2(3)) AS VALID,            CAST('' AS VARCHAR2(3)) AS INTRA_CDB,            A.TENANT_NAME AS TENANT_NAME,            A.REVERSE_TENANT_NAME AS REVERSE_TENANT_NAME,            A.CLUSTER_NAME AS CLUSTER_NAME,            A.REVERSE_CLUSTER_NAME AS REVERSE_CLUSTER_NAME,            A.REVERSE_HOST_IP AS REVERSE_HOST,            A.REVERSE_HOST_PORT AS REVERSE_PORT,            A.REVERSE_USER_NAME AS REVERSE_USERNAME     FROM SYS.ALL_VIRTUAL_DBLINK_REAL_AGENT A,           SYS.ALL_VIRTUAL_USER_REAL_AGENT B,          SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB     WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID() AND            A.OWNER_ID = B.USER_ID AND B.USER_NAME = DB.DATABASE_NAME AND           (DB.DATABASE_ID = USERENV('SCHEMAID') OR USER_CAN_ACCESS_OBJ(1, A.DBLINK_ID, DB.DATABASE_ID) = 1) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_db_links_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_DB_LINKS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_DB_LINKS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT             B.USER_NAME AS OWNER,            A.DBLINK_NAME AS DB_LINK,            A.USER_NAME AS USERNAME,            CAST('' AS VARCHAR2(128)) AS CREDENTIAL_NAME,            CAST('' AS VARCHAR2(128)) AS CREDENTIAL_OWNER,            CAST(CASE DRIVER_PROTO WHEN 1 THEN A.CONN_STRING ELSE A.HOST_IP END AS VARCHAR2(2000))AS HOST,            CAST(A.GMT_CREATE AS DATE) AS CREATED,            CAST('' AS VARCHAR2(3)) AS HIDDEN,            CAST('' AS VARCHAR2(3)) AS SHARD_INTERNAL,            CAST('YES' AS VARCHAR2(3)) AS VALID,            CAST('' AS VARCHAR2(3)) AS INTRA_CDB,            A.TENANT_NAME AS TENANT_NAME,            A.REVERSE_TENANT_NAME AS REVERSE_TENANT_NAME,            A.CLUSTER_NAME AS CLUSTER_NAME,            A.REVERSE_CLUSTER_NAME AS REVERSE_CLUSTER_NAME,            A.REVERSE_HOST_IP AS REVERSE_HOST,            A.REVERSE_HOST_PORT AS REVERSE_PORT,            A.REVERSE_USER_NAME AS REVERSE_USERNAME     FROM SYS.ALL_VIRTUAL_DBLINK_REAL_AGENT A,          SYS.ALL_VIRTUAL_USER_REAL_AGENT B     WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID() AND A.OWNER_ID = B.USER_ID; )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_db_links_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_DB_LINKS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_DB_LINKS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT             A.DBLINK_NAME AS DB_LINK,            A.USER_NAME AS USERNAME,            CAST('' AS VARCHAR2(30)) AS PASSWORD,            CAST('' AS VARCHAR2(128)) AS CREDENTIAL_NAME,            CAST('' AS VARCHAR2(128)) AS CREDENTIAL_OWNER,            CAST(CASE DRIVER_PROTO WHEN 1 THEN A.CONN_STRING ELSE A.HOST_IP END AS VARCHAR2(2000))AS HOST,            CAST(A.GMT_CREATE AS DATE) AS CREATED,            CAST('' AS VARCHAR2(3)) AS HIDDEN,            CAST('' AS VARCHAR2(3)) AS SHARD_INTERNAL,            CAST('YES' AS VARCHAR2(3)) AS VALID,            CAST('' AS VARCHAR2(3)) AS INTRA_CDB,            A.TENANT_NAME AS TENANT_NAME,            A.REVERSE_TENANT_NAME AS REVERSE_TENANT_NAME,            A.CLUSTER_NAME AS CLUSTER_NAME,            A.REVERSE_CLUSTER_NAME AS REVERSE_CLUSTER_NAME,            A.REVERSE_HOST_IP AS REVERSE_HOST,            A.REVERSE_HOST_PORT AS REVERSE_PORT,            A.REVERSE_USER_NAME AS REVERSE_USERNAME     FROM SYS.ALL_VIRTUAL_DBLINK_REAL_AGENT A,          SYS.ALL_VIRTUAL_USER_REAL_AGENT B     WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID() AND            A.OWNER_ID = B.USER_ID AND            B.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER'); )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

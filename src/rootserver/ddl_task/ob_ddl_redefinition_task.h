@@ -126,7 +126,7 @@ public:
   virtual void flt_set_task_span_tag() const = 0;
   virtual void flt_set_status_span_tag() const = 0;
   virtual int cleanup_impl() override;
-  int try_reap_old_replica_build_task();
+  int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask,
       K(wait_trans_ctx_), K(sync_tablet_autoinc_seq_ctx_), K(build_replica_request_time_),
       K(complete_sstable_job_ret_code_), K(snapshot_held_), K(has_synced_autoincrement_),

@@ -1779,7 +1779,9 @@ int ObBasicSessionInfo::deep_copy_sys_variable(ObBasicSysVar &sys_var,
           int32_t next_index = (current_buf_index_ == 0 ? 1 : 0);
           LOG_INFO("Too much memory used for system variable values. do defragment",
                     "before", inc_sys_var_alloc_[current_buf_index_]->used(),
-                    "after", inc_sys_var_alloc_[next_index]->used());
+                    "after", inc_sys_var_alloc_[next_index]->used(),
+                    "ids", sys_var_inc_info_.get_all_sys_var_ids(),
+                    K(sessid_), K(proxy_sessid_));
           defragment_sys_variable_to(tmp_value);
           inc_sys_var_alloc_[current_buf_index_]->reset();
           current_buf_index_ = next_index;
@@ -3743,6 +3745,9 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         }
       } else if (OB_FAIL(create_sys_var(sys_var_id, store_idx, sys_var))) {
         LOG_WARN("fail to create sys var", K(sys_var_id), K(ret));
+      } else if (!sys_var_inc_info_.all_has_sys_var_id(sys_var_id) &&
+                OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
+        LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       } else if (OB_ISNULL(sys_var)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("create sys var is NULL", K(ret));
@@ -3756,13 +3761,6 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
       } else {
         LOG_TRACE("deserialize sync sys var", K(sys_var_id), K(*sys_var),
                    K(sessid_), K(proxy_sessid_));
-      }
-
-      // update the current session's array if there is no updated deserialization sys_var.
-      if (!sys_var_inc_info_.all_has_sys_var_id(sys_var_id)) {
-        if (OB_SUCC(ret) && OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
-          LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
-        }
       }
       // add all deserialize sys_var id.
       if (OB_SUCC(ret) && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {

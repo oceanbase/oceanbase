@@ -94,6 +94,23 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
   return len;
 }
 
+int ObTableReplaceOp::check_need_exec_single_row()
+{
+  int ret = OB_SUCCESS;
+  ObReplaceCtDef *replace_ctdef = MY_SPEC.replace_ctdefs_.at(0);
+  const ObInsCtDef *ins_ctdef = replace_ctdef->ins_ctdef_;
+  const ObDelCtDef *del_ctdef = replace_ctdef->del_ctdef_;
+  if (OB_NOT_NULL(ins_ctdef) || OB_NOT_NULL(del_ctdef)) {
+    if (has_before_row_trigger(*ins_ctdef) || has_after_row_trigger(*ins_ctdef)
+        || has_before_row_trigger(*del_ctdef) || has_after_row_trigger(*del_ctdef)) {
+      execute_single_row_ = true;
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ins_ctdef or del_ctdef of primary table is nullptr", K(ret));
+  }
+  return ret;
+}
 
 int ObTableReplaceOp::inner_open()
 {
@@ -439,7 +456,7 @@ int ObTableReplaceOp::do_replace_into()
       LOG_WARN("fail to load all row", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task())) {
       LOG_WARN("fail to post all das task", K(ret));
-    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing_batch(&dml_modify_rows_))) {
+    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
       LOG_WARN("try insert is not duplicated, failed to process foreign key handle", K(ret));
     } else if (!check_is_duplicated()) {
       LOG_DEBUG("try insert is not duplicated", K(ret));
@@ -460,7 +477,7 @@ int ObTableReplaceOp::do_replace_into()
       LOG_WARN("fail to prepare final das task", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task())) {
       LOG_WARN("do insert rows post process failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::handle_after_row_processing_batch(&dml_modify_rows_))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
 

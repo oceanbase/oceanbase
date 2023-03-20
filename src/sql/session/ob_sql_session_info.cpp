@@ -346,6 +346,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     expect_group_id_ = OB_INVALID_ID;
     group_id_not_expected_ = false;
     //call at last time
+    dblink_context_.reset(); // need reset before ObBasicSessionInfo::reset(skip_sys_var);
     ObBasicSessionInfo::reset(skip_sys_var);
     txn_free_route_ctx_.reset();
   }
@@ -757,7 +758,7 @@ ObMySQLRequestManager* ObSQLSessionInfo::get_request_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == request_manager_) {
-    MTL_SWITCH(get_priv_tenant_id()) {
+    MTL_SWITCH(get_effective_tenant_id()) {
       request_manager_ = MTL(obmysql::ObMySQLRequestManager*);
     }
   }

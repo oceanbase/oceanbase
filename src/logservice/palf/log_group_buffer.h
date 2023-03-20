@@ -63,6 +63,7 @@ public:
   int inc_update_reuse_lsn(const LSN &new_reuse_lsn);
   // set reuse_lsn, used for truncate case(trucate/rebuild)
   int set_reuse_lsn(const LSN &new_reuse_lsn);
+  void get_reuse_lsn(LSN &reuse_lsn) const { return get_reuse_lsn_(reuse_lsn); }
   TO_STRING_KV("log_group_buffer: start_lsn", start_lsn_, "reuse_lsn", reuse_lsn_, "reserved_buffer_size",
       reserved_buffer_size_, "available_buffer_size", available_buffer_size_);
 private:

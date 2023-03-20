@@ -753,6 +753,7 @@ DEFINE_ERROR(OB_SQL_OPT_JOIN_ORDER_FAILED, -5121, -1,  "HY000", "fail to generat
 DEFINE_ERROR(OB_SQL_OPT_ERROR, -5122, -1,  "HY000", "optimizer general error");
 DEFINE_ORACLE_ERROR(OB_ERR_OCI_INIT_TIMEZONE, -5123, -1, "HY000", "failure to initialize timezone information", 1804, "failure to initialize timezone information");
 DEFINE_ERROR(OB_ERR_ZLIB_DATA, -5124, ER_ZLIB_Z_DATA_ERROR, "HY000", "ZLIB: Input data corrupted");
+DEFINE_ORACLE_ERROR(OB_ERR_DBLINK_SESSION_KILLED, -5125, -1, "HY000", "your session has been killed", 28, "your session has been killed");
 DEFINE_ERROR(OB_SQL_RESOLVER_NO_MEMORY, -5130, -1, "HY000", "sql resolver no memory");
 DEFINE_ERROR(OB_SQL_DML_ONLY, -5131, -1, "HY000", "plan cache support dml only");
 DEFINE_ERROR(OB_ERR_NO_GRANT, -5133, -1, "42000", "No such grant defined");

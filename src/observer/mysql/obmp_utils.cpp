@@ -72,8 +72,14 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
         } else if (OB_FAIL(ok_pkt.add_system_var(str_kv))) {
           LOG_WARN("failed to add system variable", K(str_kv), K(ret));
         } else {
+#ifndef NDEBUG
           LOG_TRACE("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
                K(session.get_sessid()), K(session.get_proxy_sessid()));
+#else
+          // for autocommit change record.
+          LOG_INFO("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
+               K(session.get_sessid()), K(session.get_proxy_sessid()), K(change_var.id_));
+#endif
         }
       } else {
         LOG_TRACE("sys var not actully changed", K(changed), K(change_var), K(new_val),

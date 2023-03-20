@@ -92,7 +92,7 @@ public:
   virtual int set_session_variable(const ObString &name, int64_t val) override;
   int set_session_variable(const ObString &name, const ObString &val);
 
-  int ping();
+  virtual int ping() override;
   int set_trace_id();
   void set_timeout(const int64_t timeout);
   virtual int set_timeout_variable(const int64_t query_timeout, const int64_t trx_timeout);

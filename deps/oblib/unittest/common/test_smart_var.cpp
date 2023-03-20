@@ -312,7 +312,7 @@ void do_alloc()
 {
   int ret = OB_SUCCESS;
   char b[N];
-  cout << b[0] << endl;
+  memset(b, reinterpret_cast<std::uintptr_t>(&b[0]) & 0xFF, N); // disable compiler optimize out
   has_malloc = false;
   SMART_VAR(char[(8L<<10)+1], buf) {
     UNUSEDx(buf);

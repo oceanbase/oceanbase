@@ -457,6 +457,7 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_medium_compaction_info.cpp
   compaction/ob_compaction_diagnose.cpp
   compaction/ob_compaction_suggestion.cpp
+  compaction/ob_compaction_trans_cache.cpp
   compaction/ob_sstable_merge_info_mgr.cpp
   compaction/ob_tenant_compaction_progress.cpp
   compaction/ob_server_compaction_event_history.cpp

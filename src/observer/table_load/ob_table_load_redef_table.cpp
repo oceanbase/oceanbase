@@ -36,7 +36,7 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     create_table_arg.table_id_ = arg.table_id_;
     create_table_arg.dest_tenant_id_ = arg.tenant_id_;
     create_table_arg.parallelism_ = arg.parallelism_;
-    create_table_arg.ddl_type_ = share::DDL_DIRECT_LOAD;
+    create_table_arg.ddl_type_ = arg.is_load_data_ ? share::DDL_DIRECT_LOAD : share::DDL_DIRECT_LOAD_INSERT;
     create_table_arg.session_id_ = session_info.get_sessid_for_table();
     create_table_arg.sql_mode_ = session_info.get_sql_mode();
     create_table_arg.tz_info_ = session_info.get_tz_info_wrap().get_tz_info_offset();

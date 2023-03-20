@@ -86,7 +86,7 @@ int ObTextStringIter::init(uint32_t buffer_len,
     } else if (!locator.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN,"Lob: invalid lob", K(ret));
-    } else if (FALSE_IT(is_outrow_ = !locator.is_inrow())) {
+    } else if (FALSE_IT(is_outrow_ = !locator.has_inrow_data())) {
     } else if (!is_outrow_) { // inrow lob always get full data, no need ctx_
     } else if (OB_ISNULL(allocator)) {
       ret = OB_INVALID_ARGUMENT;

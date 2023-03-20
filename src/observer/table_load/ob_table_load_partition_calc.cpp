@@ -137,10 +137,7 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
   for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColumnSchemaV2 *column_schema =
       table_schema->get_column_schema(column_descs.at(i).col_id_);
-    // pos是从1开始
-    int64_t part_key_pos = column_schema->get_part_key_pos();
-    int64_t sub_part_key_pos = column_schema->get_subpart_key_pos();
-    if (part_key_pos > 0 || sub_part_key_pos > 0) {
+    if (column_schema->is_tbl_part_key_column()) {
       part_key_num ++;
     }
   }
@@ -153,10 +150,7 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
   for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColumnSchemaV2 *column_schema =
       table_schema->get_column_schema(column_descs.at(i).col_id_);
-    // pos是从1开始
-    int64_t part_key_pos = column_schema->get_part_key_pos();
-    int64_t sub_part_key_pos = column_schema->get_subpart_key_pos();
-    if (part_key_pos > 0 || sub_part_key_pos > 0) {
+    if (column_schema->is_tbl_part_key_column()) {
       pos ++;
       if (OB_UNLIKELY(pos > part_key_obj_index_.count())) {
         ret = OB_ERR_UNEXPECTED;
@@ -167,11 +161,10 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
           part_key_obj_index_[pos - 1].index_ = i - 1;
         } else {
           part_key_obj_index_[pos - 1].index_ = i;
-          if (column_schema->is_tbl_part_key_column() &&
-              (column_schema->is_identity_column() || column_schema->is_autoincrement())) {
-            is_partition_with_autoinc_ = true;
-            partition_with_autoinc_idx_ = pos - 1;
-          }
+        }
+        if (column_schema->is_identity_column() || column_schema->is_autoincrement()) {
+          is_partition_with_autoinc_ = true;
+          partition_with_autoinc_idx_ = pos - 1;
         }
         part_key_obj_index_[pos - 1].column_schema_ = column_schema;
       }

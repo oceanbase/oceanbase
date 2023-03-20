@@ -131,6 +131,8 @@ private:
 
   int get_from_item_idx(ObDMLStmt *stmt, ObRawExpr *expr, ObIArray<int64_t> &idxs);
 
+  int check_can_pushdown(ObDMLStmt *stmt, const LinkTableHelper &helper, bool &can_push);
+
   int collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<LinkTableHelper> &helpers);
 
   int has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs,

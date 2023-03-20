@@ -161,7 +161,7 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
     } else {
       dblink_conn_ = dblink_conn;
       in_xa_trascaction_ = true; //to tell link scan op don't release dblink_conn_
-      LOG_INFO("link op get connection from xa trasaction", KP(dblink_conn_), K(lbt()));
+      LOG_TRACE("link op get connection from xa trasaction", K(dblink_id), KP(dblink_conn_));
     }
     if (OB_SUCC(ret)) {
       dblink_id_ = dblink_id;

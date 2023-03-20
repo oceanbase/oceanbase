@@ -93,7 +93,8 @@ const int64_t PALF_LEADER_RECONFIRM_SYNC_TIMEOUT_US = 10 * 1000 * 1000L;     // 
 const int64_t PREPARE_LOG_BUFFER_SIZE = 2048;
 const int64_t PALF_LEADER_ACTIVE_SYNC_TIMEOUT_US = 10 * 1000 * 1000L;        // 10s
 const int32_t PALF_MAX_REPLAY_TIMEOUT = 500 * 1000;
-const int32_t PALF_LOG_LOOP_INTERVAL_US = 1 * 1000;                                 // 1ms
+const int32_t DEFAULT_PALF_LOG_LOOP_INTERVAL_US = 1 * 1000;                                 // 1ms
+const int32_t PALF_LOG_LOOP_INTERVAL_US_UPPER_BOUND = 100 * 1000;                           // 100ms
 const int64_t PALF_SLIDING_WINDOW_SIZE = 1 << 11;                                   // must be 2^n(n>0), default 2^11 = 2048
 const int64_t PALF_MAX_LEADER_SUBMIT_LOG_COUNT = PALF_SLIDING_WINDOW_SIZE / 2;      // max number of concurrent submitting group log in leader
 const int64_t PALF_RESEND_MSLOG_INTERVAL_US = 500 * 1000L;                   // 500 ms

@@ -167,7 +167,8 @@ ObTenantTabletScheduler::ObTenantTabletScheduler()
    medium_loop_task_(),
    sstable_gc_task_(),
    fast_freeze_checker_(),
-   enable_adaptive_compaction_(false)
+   enable_adaptive_compaction_(false),
+   error_tablet_cnt_(0)
 {
   STATIC_ASSERT(static_cast<int64_t>(NO_MAJOR_MERGE_TYPE_CNT) == ARRAYSIZEOF(MERGE_TYPES), "merge type array len is mismatch");
 }
@@ -520,6 +521,7 @@ int ObTenantTabletScheduler::schedule_merge(const int64_t broadcast_version)
     if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->add_progress(broadcast_version))) {
       LOG_WARN("failed to add progress", K(tmp_ret), K(broadcast_version));
     }
+    clear_error_tablet_cnt();
 
     schedule_stats_.start_merge(); // set all statistics
     ADD_COMPACTION_EVENT(

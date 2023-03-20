@@ -186,9 +186,9 @@ int ObXAService::xa_start_for_tm_promotion_(const int64_t flags,
     if (OB_SUCC(ret)) {
       //commit record
       if (OB_FAIL(trans.end(true))) {
+        // NOTE that if fail, do not release tx desc
         TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
-        const bool need_decrease_ref = true;
-        xa_ctx->try_exit(need_decrease_ref);
+        xa_ctx_mgr_.erase_xa_ctx(tx_id);
         xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
       }
     } else {
@@ -197,7 +197,7 @@ int ObXAService::xa_start_for_tm_promotion_(const int64_t flags,
         TRANS_LOG(WARN, "rollback inner table trans failed", K(tmp_ret), K(xid));
       }
       if (OB_NOT_NULL(xa_ctx)) {
-        xa_ctx_mgr_.erase_xa_ctx(trans_id);
+        xa_ctx_mgr_.erase_xa_ctx(tx_id);
         xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
       }
     }
@@ -318,6 +318,10 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
     }
     if (OB_FAIL(ret)) {
       TRANS_LOG(WARN, "start trans failed", K(ret), K(tx_id), K(xid));
+      if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+        ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+        TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(tx_id), K(xid));
+      }
       MTL(ObTransService *)->release_tx(*tx_desc);
       tx_desc = NULL;
     } else if (OB_FAIL(insert_xa_record(trans, tenant_id, xid, tx_id, sche_addr, flags))) {
@@ -331,6 +335,10 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
         TRANS_LOG(WARN, "rollback lock record failed", K(tmp_ret), K(xid));
       }
       // txs_->remove_tx(*tx_desc);
+      if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+        ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+        TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(tx_id), K(xid));
+      }
       MTL(ObTransService *)->release_tx(*tx_desc);
       tx_desc = NULL;
     } else {
@@ -362,6 +370,10 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
         if (OB_FAIL(trans.end(true))) {
           TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
           const bool need_decrease_ref = true;
+          if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+            ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+            TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(tx_id), K(xid));
+          }
           xa_ctx->try_exit(need_decrease_ref);
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
           tx_desc = NULL;
@@ -372,10 +384,14 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
           TRANS_LOG(WARN, "rollback inner table trans failed", K(tmp_ret), K(xid));
         }
         if (OB_NOT_NULL(xa_ctx)) {
-          xa_ctx_mgr_.erase_xa_ctx(trans_id);
+          xa_ctx_mgr_.erase_xa_ctx(tx_id);
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
         }
         // since tx_desc is not set into xa ctx, release tx desc explicitly
+        if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+          ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+          TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(tx_id), K(xid));
+        }
         MTL(ObTransService *)->release_tx(*tx_desc);
         tx_desc = NULL;
       }

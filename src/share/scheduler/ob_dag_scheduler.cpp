@@ -1380,7 +1380,7 @@ int ObTenantDagWorker::set_dag_resource()
     LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(group_id));
   } else if (group_id == group_id_) {
     // group not change, do nothing
-  } else if (OB_FAIL(GCTX.cgroup_ctrl_->add_thread_to_group(static_cast<pid_t>(GETTID()), MTL_ID(), group_id))) {
+  } else if (OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), group_id))) {
     LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
   } else {
     ATOMIC_SET(&group_id_, group_id);

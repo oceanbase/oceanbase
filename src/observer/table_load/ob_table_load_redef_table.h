@@ -20,7 +20,8 @@ struct ObTableLoadRedefTableStartArg
 {
 public:
   ObTableLoadRedefTableStartArg()
-    : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID), parallelism_(0)
+    : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID), parallelism_(0),
+      is_load_data_(false)
   {
   }
   ~ObTableLoadRedefTableStartArg() = default;
@@ -29,17 +30,19 @@ public:
     tenant_id_ = common::OB_INVALID_ID;
     table_id_ = common::OB_INVALID_ID;
     parallelism_ = 0;
+    is_load_data_ = false;
   }
   bool is_valid() const
   {
     return common::OB_INVALID_ID != tenant_id_ && common::OB_INVALID_ID != table_id_ &&
            0 != parallelism_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallelism));
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallelism), K_(is_load_data));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
   uint64_t parallelism_;
+  bool is_load_data_;
 };
 
 struct ObTableLoadRedefTableStartRes

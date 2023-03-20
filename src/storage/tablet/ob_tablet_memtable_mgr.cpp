@@ -64,6 +64,7 @@ void ObTabletMemtableMgr::destroy()
     } else if (imemtable->is_data_memtable()) {
       memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
       memtable->remove_from_data_checkpoint();
+      memtable->set_frozen();
     }
   }
   reset_tables();
@@ -644,9 +645,7 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       memtable->remove_from_data_checkpoint();
       memtable->set_is_flushed();
       memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
-      if (force) {
-        memtable->set_frozen();
-      }
+      memtable->set_frozen();
       release_head_memtable();
       FLOG_INFO("succeed to release head data memtable", K(ret), K(ls_id), K(tablet_id_));
     }
@@ -754,7 +753,15 @@ int64_t ObTabletMemtableMgr::get_unmerged_memtable_count_() const
 
 void ObTabletMemtableMgr::clean_tail_memtable_()
 {
-  ObIMemtableMgr::release_tail_memtable();
+  if (memtable_tail_ > memtable_head_) {
+    ObMemtable *memtable = get_memtable_(memtable_tail_ - 1);
+    if (OB_NOT_NULL(memtable)) {
+      memtable->set_frozen();
+    } else {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "memtable is null when clean_tail_memtable_", KPC(this));
+    }
+    ObIMemtableMgr::release_tail_memtable();
+  }
 }
 
 int ObTabletMemtableMgr::get_memtables_(ObTableHdlArray &handle, const int64_t start_point,

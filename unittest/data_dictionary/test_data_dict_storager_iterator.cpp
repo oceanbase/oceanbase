@@ -251,15 +251,23 @@ TEST(ObDataDictStorage, test_schema_storage)
   ObSEArray<const ObTenantSchema*, 8> tenant_schemas;
   ObSEArray<const ObDatabaseSchema*, 8> database_schemas;
   ObSEArray<const ObTableSchema*, 8> table_schemas;
+  ObTenantSchema *tenant_schema = NULL;
   for (int i = 0; i < expected_tenant_cnt; i++) {
-    ObTenantSchema tenant_schema;
-    EXPECT_EQ(OB_SUCCESS, schema_builder.build_tenant_schema(tenant_schema));
-    EXPECT_EQ(OB_SUCCESS, tenant_schemas.push_back(&tenant_schema));
+    tenant_schema = static_cast<ObTenantSchema*>(allocator.alloc(sizeof(ObTableSchema)));
+    EXPECT_TRUE(NULL != tenant_schema);
+    new(tenant_schema) ObTableSchema();
+    tenant_schema->reset();
+    EXPECT_EQ(OB_SUCCESS, schema_builder.build_tenant_schema(*tenant_schema));
+    EXPECT_EQ(OB_SUCCESS, tenant_schemas.push_back(tenant_schema));
   }
+  ObDatabaseSchema *database_schema = NULL;
   for (int i = 0; i < expected_db_cnt; i++) {
-    ObDatabaseSchema database_schema;
-    EXPECT_EQ(OB_SUCCESS, schema_builder.build_database_schema(database_schema));
-    EXPECT_EQ(OB_SUCCESS, database_schemas.push_back(&database_schema));
+    database_schema = static_cast<ObDatabaseSchema*>(allocator.alloc(sizeof(ObDatabaseSchema)));
+    EXPECT_TRUE(NULL != database_schema);
+    new(database_schema) ObDatabaseSchema();
+    database_schema->reset();
+    EXPECT_EQ(OB_SUCCESS, schema_builder.build_database_schema(*database_schema));
+    EXPECT_EQ(OB_SUCCESS, database_schemas.push_back(database_schema));
   }
   //for (int i = 0; i < expected_tb_cnt; i++) {
   //ObTableSchema table_schema;

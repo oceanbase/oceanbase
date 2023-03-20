@@ -971,6 +971,10 @@ int ObServer::stop()
     TG_STOP(lib::TGDefIDs::Blacklist);
     FLOG_INFO("server blacklist stopped");
 
+    FLOG_INFO("begin to stop ObNetKeepAlive");
+    ObNetKeepAlive::get_instance().stop();
+    FLOG_INFO("ObNetKeepAlive stopped");
+
     FLOG_INFO("begin to stop GDS");
     GDS.stop();
     FLOG_INFO("GDS stopped");

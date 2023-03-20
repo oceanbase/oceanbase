@@ -1548,6 +1548,10 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
     if (OB_ISNULL(select_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid select stmt", K(select_stmt));
+    } else if (OB_FAIL(params_.query_ctx_->query_hint_.init_query_hint(allocator_,
+                                                                       session_info_,
+                                                                       select_stmt))) {
+      LOG_WARN("failed to init query hint.", K(ret));
     } else {
       ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
       ObColumnSchemaV2 column;

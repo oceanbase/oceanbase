@@ -4619,6 +4619,32 @@ const ObTenantSchema *ObSchemaGetterGuard::get_tenant_info(const ObString &tenan
   return OB_SUCC(ret) ? tenant_info : NULL;
 }
 
+#define GET_SIMPLE_SCHEMAS_IN_TENANT_FUNC_DEFINE(SCHEMA, SIMPLE_SCHEMA_TYPE) \
+  int ObSchemaGetterGuard::get_##SCHEMA##_schemas_in_tenant(                       \
+      const uint64_t tenant_id, ObIArray<const SIMPLE_SCHEMA_TYPE*> &schema_array)       \
+  {                                                                                \
+    int ret = OB_SUCCESS;                                                          \
+    const ObSchemaMgr *mgr = NULL;                                                 \
+    schema_array.reset();                                                          \
+    if (!check_inner_stat()) {                                                     \
+      ret = OB_INNER_STAT_ERROR;                                                   \
+      LOG_WARN("inner stat error", KR(ret));                                        \
+    } else if (OB_INVALID_ID == tenant_id) {                                       \
+      ret = OB_INVALID_ARGUMENT;                                                   \
+      LOG_WARN("invalid argument", KR(ret), K(tenant_id));                          \
+    } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) { \
+      LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id)); \
+    } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) { \
+      LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id)); \
+    } else if (OB_FAIL(mgr->get_##SCHEMA##_schemas_in_tenant(tenant_id,          \
+                                                              schema_array))) {  \
+      LOG_WARN("get "#SCHEMA" schemas in tenant failed", KR(ret), K(tenant_id));    \
+    }                                                                             \
+    return ret;                                                                   \
+  }
+GET_SIMPLE_SCHEMAS_IN_TENANT_FUNC_DEFINE(database, ObSimpleDatabaseSchema);
+#undef GET_SIMPLE_SCHEMAS_IN_TENANT_FUNC_DEFINE
+
 #define GET_SCHEMAS_IN_TENANT_FUNC_DEFINE(SCHEMA, SCHEMA_TYPE, SIMPLE_SCHEMA_TYPE, SCHEMA_TYPE_ENUM) \
   int ObSchemaGetterGuard::get_##SCHEMA##_schemas_in_tenant(                       \
       const uint64_t tenant_id, ObIArray<const SCHEMA_TYPE *> &schema_array)       \

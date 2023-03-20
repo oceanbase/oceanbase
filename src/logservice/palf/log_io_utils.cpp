@@ -41,23 +41,16 @@ int openat_with_retry(const int dir_fd,
   }
   return ret;
 }
-int close_with_retry(const int fd)
+int close_with_ret(const int fd)
 {
   int ret = OB_SUCCESS;
   if (-1 == fd) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid argument", K(fd));
+  } else if (-1 == (::close(fd))) {
+    ret = convert_sys_errno();
+    PALF_LOG(ERROR, "close block failed", K(ret), K(errno), K(fd));
   } else {
-    do {
-      if (-1 == (::close(fd))) {
-        ret = convert_sys_errno();
-        PALF_LOG(ERROR, "open block failed", K(ret), K(errno), K(fd));
-        ob_usleep(RETRY_INTERVAL);
-      } else {
-        ret = OB_SUCCESS;
-        break;
-      }
-    } while (OB_FAIL(ret));
   }
   return ret;
 }

@@ -207,14 +207,17 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
   } else if (print_params_.for_dblink_ && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
     bool is_bool_expr = false;
+    bool is_null_type = ob_is_null(expr->get_result_type().get_type());
     if (expr->is_exec_param_expr()) {
       ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr*>(expr);
       if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(exec_expr->get_ref_expr(), is_bool_expr))) {
         LOG_WARN("failed to check is bool expr", K(ret));
       }
     }
+
+    /** To preserve the type information of questionmark when it is NULL, print a cast*/
     if (OB_FAIL(ret)) {
-    } else if (is_bool_expr) {
+    } else if (is_bool_expr && OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "1 = "))) {
       /**
        * For SQL like "select * from T1 where C1 = 1 and C1 = 2",
        * because the where clause is always false,
@@ -223,19 +226,18 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
        * by rewriting startup_filter as "0 = 1" or "1 = 1".
        *
        */
-      if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "1 = "))) {
-        LOG_WARN("fail to print startup filter", K(ret));
-      } else if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
-        OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
-      } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, expr->get_value().get_unknown()))) {
-        LOG_WARN("fail to write param to buf", K(ret));
-      }
-    } else {
-      if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
-        OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
-      } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, expr->get_value().get_unknown()))) {
-        LOG_WARN("fail to write param to buf", K(ret));
-      }
+      LOG_WARN("fail to print 1 =", K(ret));
+    } else if (!is_null_type && OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "cast("))) {
+      LOG_WARN("fail to print cast(", K(ret));
+    } else if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
+      OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
+    } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, expr->get_value().get_unknown()))) {
+      LOG_WARN("fail to write param to buf", K(ret));
+    }
+    if (OB_SUCC(ret) && !is_null_type) {
+      DATA_PRINTF(" as ");
+      OZ(print_type(expr->get_result_type()));
+      DATA_PRINTF(")");
     }
   } else if (OB_NOT_NULL(param_store_) && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
@@ -2505,7 +2507,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
           if (OB_SUCC(ret)) {
             PRINT_EXPR(expr->get_param_expr(0));
             DATA_PRINTF(" as ");
-            if (OB_FAIL(print_cast_type(expr->get_param_expr(1)))) {
+            if (OB_SUCC(ret) && OB_FAIL(print_cast_type(expr->get_param_expr(1)))) {
               LOG_WARN("fail to print cast_type", K(ret));
             }
           }
@@ -3914,6 +3916,23 @@ int ObRawExprPrinter::pre_check_treat_opt(ObRawExpr *expr, bool &is_treat)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_type(const ObExprResType &dst_type)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *type_expr = NULL;
+  ObArenaAllocator allocator("PrintType");
+  ObRawExprFactory expr_factory(allocator);
+
+
+  if (OB_FAIL(ObRawExprUtils::create_type_expr(expr_factory, type_expr,
+                                               dst_type, /*avoid_zero_len*/true))) {
+    LOG_WARN("create type expr failed", K(ret));
+  } else if (OB_FAIL(print_cast_type(type_expr))) {
+    LOG_WARN("failed to print cast type", K(ret));
   }
   return ret;
 }

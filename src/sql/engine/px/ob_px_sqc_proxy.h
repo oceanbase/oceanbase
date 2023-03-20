@@ -217,7 +217,6 @@ int ObPxSQCProxy::get_dh_msg(
   } else {
     if (send_piece) {
       ObLockGuard<ObSpinLock> lock_guard(dtl_lock_);
-      // TODO: LOCK sqc channel
       dtl::ObDtlChannel *ch = sqc_arg_.sqc_.get_sqc_channel();
       if (OB_ISNULL(ch)) {
         ret = common::OB_ERR_UNEXPECTED;

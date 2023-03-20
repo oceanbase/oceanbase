@@ -695,7 +695,7 @@ DEF_BOOL(_enable_pkt_nio, OB_CLUSTER_PARAMETER, "False",
          "enable pkt-nio, the new RPC framework"
          "Value:  True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(tenant_rpc_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
+DEF_INT(rpc_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
          "maximum memory for rpc in a tenant, as a percentage of total tenant memory, "
          "and 0 means no limit to rpc memory",
         ObParameterAttr(Section::RPC, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

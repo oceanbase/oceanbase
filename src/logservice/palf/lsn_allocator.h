@@ -57,6 +57,8 @@ public:
   //
   int alloc_lsn_scn(const share::SCN &base_scn,
                     const int64_t size,
+                    const int64_t log_id_upper_bound,
+                    const LSN &lsn_upper_bound,
                     LSN &lsn,
                     int64_t &log_id,
                     share::SCN &scn,

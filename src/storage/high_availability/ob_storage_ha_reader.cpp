@@ -1420,13 +1420,13 @@ int ObCopySSTableInfoRestoreReader::get_tablet_meta_(
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id));
   } else if (OB_FAIL(tablet->build_migration_tablet_param(tablet_meta))) {
     LOG_WARN("failed to build migration tablet param", K(ret), K(tablet_id));
-  } else if (OB_FAIL(may_update_tablet_meta_(tablet_id, tablet_handle, tablet_meta))) {
+  } else if (OB_FAIL(update_tablet_meta_if_restore_major_(tablet_id, tablet_handle, tablet_meta))) {
     LOG_WARN("may update tablet meta failed", K(ret), K(tablet_id));
   }
   return ret;
 }
 
-int ObCopySSTableInfoRestoreReader::may_update_tablet_meta_(
+int ObCopySSTableInfoRestoreReader::update_tablet_meta_if_restore_major_(
     const common::ObTabletID &tablet_id,
     ObTabletHandle &tablet_handle,
     ObMigrationTabletParam &tablet_meta)
@@ -1437,14 +1437,8 @@ int ObCopySSTableInfoRestoreReader::may_update_tablet_meta_(
     backup::ObBackupTabletMeta backup_tablet_meta;
     if (OB_FAIL(get_backup_major_tablet_meta_(tablet_id, backup_tablet_meta))) {
       LOG_WARN("failed to get major tablet storage schema", K(ret), K(tablet_id));
-    } else if (OB_FAIL(compare_storage_schema_(tablet_id, tablet_handle, backup_tablet_meta, need_update_storage_schema))) {
-      LOG_WARN("failed to compare storage schema", K(ret), K(tablet_id));
-    } else if (need_update_storage_schema) {
-      tablet_meta.storage_schema_.reset();
-      if (OB_FAIL(tablet_meta.storage_schema_.init(tablet_meta.allocator_,
-          backup_tablet_meta.tablet_meta_.storage_schema_))) {
-        LOG_WARN("failed to init storage schema", K(ret), K(tablet_meta), K(backup_tablet_meta));
-      }
+    } else if (OB_FAIL(tablet_meta.assign(backup_tablet_meta.tablet_meta_))) {
+      LOG_WARN("failed to assign tablet meta", K(ret), K(backup_tablet_meta));
     }
   }
   return ret;

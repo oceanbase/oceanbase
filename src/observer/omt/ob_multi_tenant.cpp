@@ -2142,8 +2142,7 @@ int obmysql::sql_nio_add_cgroup(const uint64_t tenant_id)
   if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
       nullptr != GCTX.cgroup_ctrl_ &&
       OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
-    ret = GCTX.cgroup_ctrl_->add_thread_to_cgroup(syscall(__NR_gettid),
-                                                  tenant_id, OBCG_SQL_NIO);
+    ret = GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id, OBCG_SQL_NIO);
   }
   return ret;
 }

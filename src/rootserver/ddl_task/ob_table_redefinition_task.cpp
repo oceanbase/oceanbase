@@ -146,7 +146,8 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
     check_table_empty_job_ret_code_ = ret_code;
   } else {
     switch(task_type_) {
-      case ObDDLType::DDL_DIRECT_LOAD: {
+      case ObDDLType::DDL_DIRECT_LOAD:
+      case ObDDLType::DDL_DIRECT_LOAD_INSERT: {
         complete_sstable_job_ret_code_ = ret_code;
         LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_));
         break;
@@ -174,7 +175,8 @@ int ObTableRedefinitionTask::send_build_replica_request()
 {
   int ret = OB_SUCCESS;
   switch (task_type_) {
-    case DDL_DIRECT_LOAD: {
+    case DDL_DIRECT_LOAD:
+    case DDL_DIRECT_LOAD_INSERT: {
       // do nothing
       break;
     }
@@ -323,7 +325,14 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   }
 
   if (OB_SUCC(ret) && !is_build_replica_end && 0 == build_replica_request_time_) {
-    if (OB_SUCCESS == try_reap_old_replica_build_task()) {
+    bool need_exec_new_inner_sql = false;
+    if (OB_FAIL(reap_old_replica_build_task(need_exec_new_inner_sql))) {
+      if (OB_EAGAIN == ret) {
+        ret = OB_SUCCESS; // retry
+      } else {
+        LOG_WARN("failed to reap old task", K(ret));
+      }
+    } else if (!need_exec_new_inner_sql) {
       is_build_replica_end = true;
     } else if (OB_FAIL(send_build_replica_request())) {
       LOG_WARN("fail to send build replica request", K(ret));
@@ -362,7 +371,8 @@ int ObTableRedefinitionTask::replica_end_check(const int ret_code)
 {
   int ret = OB_SUCCESS;
   switch(task_type_) {
-    case DDL_DIRECT_LOAD : {
+    case DDL_DIRECT_LOAD :
+    case DDL_DIRECT_LOAD_INSERT : {
       break;
     }
     default : {
@@ -792,6 +802,7 @@ int ObTableRedefinitionTask::repending(const share::ObDDLTaskStatus next_task_st
   } else {
     switch (task_type_) {
       case DDL_DIRECT_LOAD:
+      case DDL_DIRECT_LOAD_INSERT:
         if (get_is_do_finish()) {
           if (OB_FAIL(switch_status(next_task_status, true, ret))) {
             LOG_WARN("fail to switch status", K(ret));
@@ -1175,7 +1186,9 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
   }
 
   // append direct load information to the message
-  if (OB_SUCC(ret) && (ObDDLType::DDL_DIRECT_LOAD == get_task_type())) {
+  if (OB_SUCC(ret)
+     && (ObDDLType::DDL_DIRECT_LOAD == get_task_type()
+         || ObDDLType::DDL_DIRECT_LOAD_INSERT == get_task_type())) {
     common::ObArenaAllocator allocator(lib::ObLabel("RedefTask"));
     sql::ObLoadDataStat job_stat;
     if (OB_FAIL(get_direct_load_job_stat(allocator, job_stat))) {

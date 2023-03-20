@@ -1083,10 +1083,8 @@ int ObTableModifyOp::submit_all_dml_task()
       LOG_WARN("execute all dml das task failed", K(ret));
     } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
       LOG_WARN("close all das task failed", K(ret));
-    } else if (!execute_single_row_ && OB_FAIL(ObDMLService::handle_after_row_processing_batch(&get_dml_modify_row_list()))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &get_dml_modify_row_list()))) {
       LOG_WARN("perform batch foreign key constraints and after row trigger failed", K(ret));
-    } else if (execute_single_row_ && OB_FAIL(ObDMLService::handle_after_row_processing(&get_dml_modify_row_list()))) {
-      LOG_WARN("perform single row foreign key constraints and after row trigger failed", K(ret));
     } else {
       dml_modify_rows_.clear();
       dml_rtctx_.reuse();

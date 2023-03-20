@@ -327,6 +327,7 @@ struct ObResolverParams
        have_same_table_name_(false),
        is_default_param_(false),
        is_batch_stmt_(false),
+       batch_stmt_num_(0),
        new_gen_did_(common::OB_INVALID_ID - 1),
        new_gen_cid_(common::OB_MAX_TMP_COLUMN_ID),
        new_gen_qid_(1),
@@ -388,6 +389,7 @@ public:
   bool have_same_table_name_;
   bool is_default_param_;
   bool is_batch_stmt_;
+  int64_t batch_stmt_num_;
 private:
   uint64_t new_gen_did_;
   uint64_t new_gen_cid_;

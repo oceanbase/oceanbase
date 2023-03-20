@@ -775,10 +775,13 @@ int ObMediumCompactionScheduleFunc::check_medium_checksum_table(
           tablet_id,
           ObTabletReplica::SCN_STATUS_ERROR);
       ObTabletCompactionScnInfo unused_ret_info;
+      int64_t affected_rows = 0;
       // TODO(@lixia.yq) delete status when data_checksum_error is a inner_table
       if (OB_TMP_FAIL(ObTabletMetaTableCompactionOperator::set_info_status(
-          medium_snapshot_info, unused_ret_info))) {
+          medium_snapshot_info, unused_ret_info, affected_rows))) {
         LOG_WARN("failed to set info status", K(tmp_ret), K(medium_snapshot_info));
+      } else {
+        MTL(ObTenantTabletScheduler*)->update_error_tablet_cnt(affected_rows);
       }
     }
   }

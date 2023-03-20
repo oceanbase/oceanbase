@@ -1064,6 +1064,26 @@ int ObTransformDBlink::get_from_item_idx(ObDMLStmt *stmt,
   return ret;
 }
 
+int ObTransformDBlink::check_can_pushdown(ObDMLStmt *stmt, const LinkTableHelper &helper, bool &can_push)
+{
+  int ret = OB_SUCCESS;
+  bool is_on_null_side = false;
+  JoinedTable *joined_table = helper.parent_table_;
+  TableItem *table = NULL;
+  if (NULL != joined_table) {
+    if (OB_UNLIKELY(1 != helper.table_items_.count()) ||
+        OB_ISNULL(table = helper.table_items_.at(0)) ||
+        OB_UNLIKELY(table != joined_table->left_table_ && table != joined_table->right_table_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected push down tables", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table->table_id_, is_on_null_side))) {
+      LOG_WARN("failed to check table on null side", K(ret));
+    }
+  }
+  can_push = !is_on_null_side;
+  return ret;
+}
+
 int ObTransformDBlink::collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<LinkTableHelper> &helpers)
 {
   int ret = OB_SUCCESS;
@@ -1074,27 +1094,33 @@ int ObTransformDBlink::collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<Lin
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < helpers.count(); ++i) {
     table_ids.reuse();
-    if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
-                                                          helpers.at(i).table_items_,
-                                                          table_ids))) {
+    bool can_push = false;
+    if (OB_FAIL(check_can_pushdown(stmt, helpers.at(i), can_push))) {
+      LOG_WARN("failed to check if conditions can be push", K(ret));
+    } else if (!can_push) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
+                                                                 helpers.at(i).table_items_,
+                                                                 table_ids))) {
       LOG_WARN("failed to get rel ids", K(ret));
-    }
-    bool has_special_expr = false;
-    for (int64_t j = 0; OB_SUCC(ret) && j < stmt->get_condition_size(); ++j) {
-      ObRawExpr *expr = stmt->get_condition_expr(j);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null expr", K(ret));
-      } else if (!expr->get_relation_ids().is_subset(table_ids)) {
-        //do nothing
-      }  else if (OB_FAIL(has_none_pushdown_expr(expr,
-                                                 helpers.at(i).dblink_id_,
-                                                 has_special_expr))) {
-        LOG_WARN("failed to check has none push down expr", K(ret));
-      } else if (has_special_expr) {
-        //do nothing
-      } else if (OB_FAIL(helpers.at(i).conditions_.push_back(expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
+    } else {
+      bool has_special_expr = false;
+      for (int64_t j = 0; OB_SUCC(ret) && j < stmt->get_condition_size(); ++j) {
+        ObRawExpr *expr = stmt->get_condition_expr(j);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null expr", K(ret));
+        } else if (!expr->get_relation_ids().is_subset(table_ids)) {
+          //do nothing
+        } else if (OB_FAIL(has_none_pushdown_expr(expr,
+                                                  helpers.at(i).dblink_id_,
+                                                  has_special_expr))) {
+          LOG_WARN("failed to check has none push down expr", K(ret));
+        } else if (has_special_expr) {
+          //do nothing
+        } else if (OB_FAIL(helpers.at(i).conditions_.push_back(expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
       }
     }
   }

@@ -22,7 +22,7 @@ int openat_with_retry(const int dir_fd,
                       const int flag,
                       const int mode,
                       int &fd);
-int close_with_retry(const int fd);
+int close_with_ret(const int fd);
 
 } // end namespace palf
 } // end namespace oceanbase

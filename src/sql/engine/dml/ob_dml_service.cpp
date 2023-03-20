@@ -974,7 +974,6 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
     LOG_WARN("check update new row tablet validity failed", K(ret));
   } else if (OB_UNLIKELY(!upd_rtdef.is_row_changed_)) {
     //old row is equal to new row, only need to lock row
-    ObChunkDatumStore::StoredRow* stored_row = nullptr;
     if (OB_ISNULL(upd_rtdef.dlock_rtdef_)) {
       ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
       if (OB_FAIL(init_das_lock_rtdef_for_update(dml_rtctx, upd_ctdef, upd_rtdef))) {
@@ -990,8 +989,10 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                          old_tablet_loc,
                                                          dml_rtctx,
                                                          upd_ctdef.old_row_,
-                                                         stored_row))) {
+                                                         old_row))) {
         LOG_WARN("write row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
+      } else {
+        new_row = old_row;
       }
     }
   } else if (OB_UNLIKELY(old_tablet_loc != new_tablet_loc)) {
@@ -2012,16 +2013,23 @@ int ObDMLService::get_nested_dup_table_ctx(const uint64_t table_id,  DASDelCtxLi
 int ObDMLService::handle_after_row_processing_batch(ObDMLModifyRowsList *dml_modify_rows)
 {
   int ret = OB_SUCCESS;
+  const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
+  const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
+  const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
   ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
   for (; OB_SUCC(ret) && row_iter != dml_modify_rows->end(); row_iter++) {
     ObDMLModifyRowNode &modify_row = *row_iter;
-    if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
+    if (OB_ISNULL(modify_row.full_row_) && OB_ISNULL(modify_row.new_row_) && OB_ISNULL(modify_row.old_row_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parameter for batch post row processing", K(ret));
+    } else if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parameter for batch post row processing", K(ret));
     } else {
       ObTableModifyOp &op = *modify_row.dml_op_;
       const ObDMLBaseCtDef &dml_ctdef = *modify_row.dml_ctdef_;
       ObDMLBaseRtDef &dml_rtdef = *modify_row.dml_rtdef_;
+      const ObDmlEventType dml_event = modify_row.dml_event_;
       // process foreign key
       if (OB_NOT_NULL(modify_row.full_row_) && OB_FAIL(modify_row.full_row_->to_expr(modify_row.dml_ctdef_->full_row_, op.get_eval_ctx()))) {
         LOG_WARN("failed to covert stored full row to expr", K(ret));
@@ -2029,15 +2037,18 @@ int ObDMLService::handle_after_row_processing_batch(ObDMLModifyRowsList *dml_mod
         LOG_WARN("failed to covert stored old row to expr", K(ret));
       } else if (OB_NOT_NULL(modify_row.new_row_) && OB_FAIL(modify_row.new_row_->to_expr(dml_ctdef.new_row_, op.get_eval_ctx()))) {
         LOG_WARN("failed to covert stored new row to expr", K(ret));
-      } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
-        LOG_WARN("failed to handle foreign key constraints", K(ret));
+      } else {
+        if (t_update == dml_event) {
+          // for update op, Foreign key checks need to be performed only if the value has changed
+          if (reinterpret_cast<ObUpdRtDef &>(dml_rtdef).is_row_changed_ && OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
+            LOG_WARN("failed to handle foreign key constraints", K(ret));
+          }
+        } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
+          LOG_WARN("failed to handle foreign key constraints", K(ret));
+        }
       }
       // process after row trigger
-      const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
-      const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
-      const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
-      const ObDmlEventType dml_event = modify_row.dml_event_;
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && dml_ctdef.trig_ctdef_.all_tm_points_.has_after_row()) {
         ObEvalCtx &eval_ctx = op.get_eval_ctx();
         if (dml_event != t_insert && dml_event != t_update && dml_event != t_delete) {
           ret = OB_ERR_UNEXPECTED;
@@ -2060,18 +2071,20 @@ int ObDMLService::handle_after_row_processing_batch(ObDMLModifyRowsList *dml_mod
   return ret;
 }
 
-int ObDMLService::handle_after_row_processing(ObDMLModifyRowsList *dml_modify_rows)
+int ObDMLService::handle_after_row_processing_single(ObDMLModifyRowsList *dml_modify_rows)
 {
   int ret = OB_SUCCESS;
-  if (1 < dml_modify_rows->size()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the number of rows in the list is more than 1", K(ret), K(dml_modify_rows->size()));
-  } else if (1 == dml_modify_rows->size()) {
-    // for single-row processing, the expr defined in ctdef and trig parameters haven't been refreshed
-    // Therefore, there is no need to re-convert the rows to be modified into an expression and init trig parameters
-    ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
+  // for single-row processing, the expr defined in ctdef and trig parameters haven't been refreshed
+  // case1: only one row added to the list of dml_modify_rows;
+  // case2: for multi table dml stmt, each table adds a row to the list;
+  // In these cases, there is no need to re-convert the rows to be modified into an expression and init trig parameters;
+  ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
+  for (; OB_SUCC(ret) && row_iter != dml_modify_rows->end(); row_iter++) {
     ObDMLModifyRowNode &modify_row = *row_iter;
-    if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
+    if (OB_ISNULL(modify_row.full_row_) && OB_ISNULL(modify_row.new_row_) && OB_ISNULL(modify_row.old_row_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parameter for batch post row processing", K(ret));
+    } else if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parameter for batch post row processing", K(ret));
     } else {
@@ -2085,12 +2098,36 @@ int ObDMLService::handle_after_row_processing(ObDMLModifyRowsList *dml_modify_ro
       if (dml_event != t_insert && dml_event != t_update && dml_event != t_delete) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid trigger event", K(ret));
-      } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
-        LOG_WARN("failed to handle foreign key constraints", K(ret));
-      } else if (OB_FAIL(TriggerHandle::do_handle_after_row(op, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_, dml_event))) {
+      } else {
+        if (t_update == dml_event) {
+          // for update op, Foreign key checks need to be performed only if the value has changed
+          if (reinterpret_cast<ObUpdRtDef &>(dml_rtdef).is_row_changed_ && OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
+            LOG_WARN("failed to handle foreign key constraints", K(ret));
+          }
+        } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
+          LOG_WARN("failed to handle foreign key constraints", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(TriggerHandle::do_handle_after_row(op, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_, dml_event))) {
         LOG_WARN("failed to handle after trigger", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObDMLService::handle_after_row_processing(bool execute_single_row, ObDMLModifyRowsList *dml_modify_rows)
+{
+  int ret = OB_SUCCESS;
+  if (1 > dml_modify_rows->size()) {
+    // after row processing list is empty, nothing to do
+    #ifndef NDEBUG
+      LOG_INFO("No row need to perform foreign key check or after row trigger");
+    #endif
+  } else if (execute_single_row) {
+    ret = handle_after_row_processing_single(dml_modify_rows);
+  } else {
+    ret = handle_after_row_processing_batch(dml_modify_rows);
   }
   return ret;
 }

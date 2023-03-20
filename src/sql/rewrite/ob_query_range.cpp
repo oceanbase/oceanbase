@@ -1926,7 +1926,6 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
   } else {
     bool row_is_precise = true;
     if (T_OP_EQ != cmp_type) {
-      contain_row_ = true;
       row_is_precise = false;
     }
     ObKeyPartList key_part_list;
@@ -1960,6 +1959,7 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
     ObArenaAllocator alloc;
     ObExprResType res_type(alloc);
     ObKeyPart *tmp_key_part = NULL;
+    int64_t normal_key_cnt = 0;
     for (int i = 0; OB_SUCC(ret) && !b_flag && i < num; ++i) {
       res_type.set_calc_meta(result_type.get_row_calc_cmp_types().at(i));
       tmp_key_part = NULL;
@@ -2004,6 +2004,7 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
           out_key_part = tmp_key_part;
         }
         row_tail = tmp_key_part;
+        normal_key_cnt += (tmp_key_part->is_always_true() ? 0 : 1);
       }
     }
     if (OB_SUCC(ret)) {
@@ -2011,12 +2012,17 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
         GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
       }
       if (OB_FAIL(ret)) {
-      } else if (out_key_part->is_always_true() || out_key_part->is_always_false()) {
-        contain_row_ = false;
+      } else if (out_key_part->is_always_true() || out_key_part->is_always_false() ||
+                 (normal_key_cnt <= 1 && T_OP_EQ != cmp_type)) {
         query_range_ctx_->cur_expr_is_precise_ = false;
       } else {
+        if (!contain_row_ && T_OP_EQ != cmp_type) {
+          contain_row_ = true;
+        }
         query_range_ctx_->cur_expr_is_precise_ = row_is_precise;
       }
+      LOG_TRACE("succeed to get row key part",
+          K(contain_row_), K(b_flag), K(row_is_precise), K(normal_key_cnt), K(*out_key_part));
     }
   }
   return ret;
@@ -4275,6 +4281,10 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
     res_gt = r_gt;
   } else if (NULL == r_gt) {
     res_gt = l_gt;
+  } else if (l_gt->is_in_key() && r_gt->is_in_key()) {
+    res_gt = l_gt->in_keypart_->get_min_offset() <= r_gt->in_keypart_->get_min_offset() ? l_gt : r_gt;
+    // if in key do and with normal key here,
+    // the result is in key
   } else if (l_gt->pos_.offset_ < r_gt->pos_.offset_) {
     res_gt = l_gt; //两个向量做and，右边向量前缀缺失，直接用左边向量的结果
   } else if (r_gt->pos_.offset_ < l_gt->pos_.offset_) {

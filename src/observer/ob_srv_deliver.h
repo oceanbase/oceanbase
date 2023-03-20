@@ -73,8 +73,7 @@ public:
       if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
           tenant_id_ != common::OB_INVALID_ID && nullptr != GCTX.cgroup_ctrl_ &&
           OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
-        GCTX.cgroup_ctrl_->add_thread_to_cgroup(
-            static_cast<pid_t>(syscall(__NR_gettid)), tenant_id_,
+        GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id_,
             share::OBCG_MYSQL_LOGIN);
       }
       queue_.loop();

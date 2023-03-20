@@ -46,6 +46,7 @@ ObPartitionMerger::ObPartitionMerger()
     macro_writer_(nullptr),
     minimum_iters_(DEFAULT_ITER_ARRAY_SIZE, ModulePageAllocator(allocator_)),
     base_iter_(nullptr),
+    trans_state_mgr_(allocator_),
     task_idx_(0),
     check_macro_need_merge_(false),
     is_inited_(false)
@@ -78,6 +79,7 @@ void ObPartitionMerger::reset()
     allocator_.free(macro_writer_);
     macro_writer_ = nullptr;
   }
+  trans_state_mgr_.destroy();
   allocator_.reset();
 }
 
@@ -362,6 +364,7 @@ int ObPartitionMerger::prepare_merge_partition(ObMergeParameter &merge_param,
                                                ObPartitionMergeHelper &merge_helper)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObPartitionMerger is not inited", K(ret));
@@ -374,10 +377,14 @@ int ObPartitionMerger::prepare_merge_partition(ObMergeParameter &merge_param,
     STORAGE_LOG(WARN, "Failed to open macro writer", K(ret), K(merge_param));
   } else if (OB_FAIL(init_partition_fuser(merge_param))) {
     STORAGE_LOG(WARN, "Failed to init partition merge fuser", K(merge_param), K(ret));
-  } else if (OB_FAIL(merge_helper.init(*partition_fuser_, merge_param, data_store_desc_.row_store_type_))) {
+  } else if (OB_TMP_FAIL(trans_state_mgr_.init(CACHED_TRANS_STATE_MAX_CNT))) {
+    STORAGE_LOG(WARN, "failed to init merge trans state mgr", K(tmp_ret));
+  } else {
+    merge_param.trans_state_mgr_ = &trans_state_mgr_;
+  }
+  if (OB_SUCC(ret) && OB_FAIL(merge_helper.init(*partition_fuser_, merge_param, data_store_desc_.row_store_type_))) {
     STORAGE_LOG(WARN, "Failed to init merge helper", K(ret));
   }
-
   return ret;
 }
 

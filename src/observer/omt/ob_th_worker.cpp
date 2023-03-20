@@ -355,7 +355,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
         LOG_ERROR("invalid status, unexpected", K(tenant_));
       } else {
         if (nullptr != GCTX.cgroup_ctrl_ && nullptr != tenant_ && OB_LIKELY(GCTX.cgroup_ctrl_->is_valid()) && !has_add_to_cgroup_) {
-          if (OB_SUCC(GCTX.cgroup_ctrl_->add_thread_to_cgroup(gettid(), tenant_->id(), get_group_id()))) {
+          if (OB_SUCC(GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_->id(), get_group_id()))) {
             has_add_to_cgroup_ = true;
           }
         }

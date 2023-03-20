@@ -270,7 +270,7 @@ int ObTenantBase::pre_run(lib::Threads *th)
   ObTenantEnv::set_tenant(this);
   ObCgroupCtrl *cgroup_ctrl = get_cgroup(th->get_cgroup());
   if (cgroup_ctrl != nullptr) {
-    ret = cgroup_ctrl->add_thread_to_cgroup(static_cast<pid_t>(syscall(__NR_gettid)), id_);
+    ret = cgroup_ctrl->add_self_to_cgroup(id_);
   }
   ATOMIC_INC(&thread_count_);
   LOG_INFO("tenant thread pre_run", K(MTL_ID()), K(ret), K(thread_count_), KP(th));
@@ -283,7 +283,7 @@ int ObTenantBase::end_run(lib::Threads *th)
   ObTenantEnv::set_tenant(nullptr);
   ObCgroupCtrl *cgroup_ctrl = get_cgroup(th->get_cgroup());
   if (cgroup_ctrl != nullptr) {
-    ret = cgroup_ctrl->remove_thread_from_cgroup(static_cast<pid_t>(syscall(__NR_gettid)), id_);
+    ret = cgroup_ctrl->remove_self_from_cgroup(id_);
   }
   ATOMIC_DEC(&thread_count_);
   LOG_INFO("tenant thread end_run", K(id_), K(ret), K(thread_count_));

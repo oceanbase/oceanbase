@@ -455,3 +455,30 @@ create table t1(c1 blob);
 insert into t1 values('UNPRESS123');
 insert into t1 values('UNPRESS456');
 select * from t1 where c1 regexp '^U';
+
+
+
+##bug48378677
+set names gbk;
+select 'a' collate gbk_bin regexp 'A';
+select 'a' collate gbk_chinese_ci regexp 'A';
+select 'a' regexp 'A' collate gbk_chinese_ci;
+select 'a' regexp 'A' collate gbk_bin;
+select 'a' collate gbk_bin regexp 'A' collate gbk_bin;
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_chinese_ci;
+--error 1267
+select 'a' collate gbk_bin regexp 'A' collate gbk_chinese_ci;
+--error 1267
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_bin;
+
+set names latin1;
+select 'a' collate latin1_bin regexp 'A';
+select 'a' collate latin1_swedish_ci regexp 'A';
+select 'a' regexp 'A' collate latin1_swedish_ci;
+select 'a' regexp 'A' collate latin1_bin;
+select 'a' collate latin1_bin regexp 'A' collate latin1_bin;
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci;
+--error 1267
+select 'a' collate latin1_bin regexp 'A' collate latin1_swedish_ci;
+--error 1267
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_bin;

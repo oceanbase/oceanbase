@@ -176,6 +176,7 @@ rootservice_list
 rootservice_memory_limit
 rootservice_ready_check_interval
 row_compaction_update_limit
+rpc_memory_limit_percentage
 rpc_port
 rpc_timeout
 schema_history_expire_time
@@ -210,7 +211,6 @@ tcp_keepidle
 tcp_keepintvl
 tde_method
 tenant_cpu_variation_per_server
-tenant_rpc_memory_limit_percentage
 tenant_sql_login_thread_count
 tenant_sql_net_thread_count
 tenant_task_queue_size

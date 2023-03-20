@@ -351,6 +351,7 @@ private:
   int add_sys_task(ObDDLTask *task);
   int remove_sys_task(ObDDLTask *task);
   int add_task_to_longops_mgr(ObDDLTask *ddl_task);
+  int remove_task_from_longops_mgr(ObDDLTask *ddl_task);
   int remove_ddl_task(ObDDLTask *ddl_task);
 
 private:

@@ -155,7 +155,7 @@ public:
 
   static int get_tablet_ls_pairs(
       const uint64_t tenant_id,
-      const schema::ObTableSchema &table_schema,
+      const schema::ObSimpleTableSchemaV2 &simple_schema,
       common::ObMySQLProxy &sql_proxy,
       common::ObIArray<ObTabletLSPair> &tablet_ls_pairs);
 
@@ -174,8 +174,8 @@ public:
 
   static int check_column_checksum(
       const uint64_t tenant_id,
-      const schema::ObTableSchema &data_table_schema,
-      const schema::ObTableSchema &index_table_schema,
+      const schema::ObSimpleTableSchemaV2 &data_simple_schema,
+      const schema::ObSimpleTableSchemaV2 &index_simple_schema,
       const SCN &compaction_scn,
       common::ObMySQLProxy &sql_proxy,
       const int64_t expected_epoch);
@@ -253,6 +253,14 @@ private:
   static int innner_verify_tablet_replica_checksum(
       const common::ObIArray<ObTabletReplicaChecksumItem> &ckm_items);
 
+  static int get_index_and_data_table_schema(
+      schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const uint64_t data_table_id,
+      const schema::ObTableSchema *&index_table_schema,
+      const schema::ObTableSchema *&data_table_schema);
+
   static int check_global_index_column_checksum(
       const uint64_t tenant_id,
       const schema::ObTableSchema &data_table_schema,
@@ -288,13 +296,13 @@ private:
   static int get_tablet_replica_checksum_items_(
       const uint64_t tenant_id,
       common::ObMySQLProxy &mysql_proxy,
-      const schema::ObTableSchema &table_schema,
+      const schema::ObSimpleTableSchemaV2 &simple_schema,
       const SCN &compaction_scn,
       common::ObIArray<ObTabletLSPair> &tablet_pairs,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
 
   static int get_table_all_tablet_ids_(
-      const schema::ObTableSchema &table_schema,
+      const schema::ObSimpleTableSchemaV2 &simple_schema,
       common::ObIArray<common::ObTabletID> &schema_tablet_ids);
 
   static int find_checksum_item_(
@@ -310,7 +318,7 @@ private:
 
   static int need_verify_checksum_(
       const SCN &compaction_scn,
-      const schema::ObTableSchema &table_schema,
+      const schema::ObSimpleTableSchemaV2 &simple_schema,
       const common::ObIArray<ObTabletReplicaChecksumItem> &items,
       bool &need_verify,
       int64_t &ckm_tablet_cnt);

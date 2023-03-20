@@ -182,7 +182,7 @@ private:
   lib::ObMutex blocks_mutex_; // protect block_used_size_
   ObLinearHashMap<MacroBlockId, int32_t> block_used_size_;
   ObBlockDefragmentationTask defragmentation_task_;
-  common::ObTimer timer_;
+  int tg_id_;
   bool is_inited_;
 };
 
