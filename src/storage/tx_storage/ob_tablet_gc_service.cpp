@@ -137,7 +137,7 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
   } else {
     ObLS *ls = NULL;
     int ls_cnt = 0;
-    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+    for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObTabletGCHandler *tablet_gc_handler = NULL;
       if (OB_ISNULL(ls)) {
         ret = OB_ERR_UNEXPECTED;
@@ -240,7 +240,7 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
   } else {
     ObLS *ls = NULL;
     int ls_cnt = 0;
-    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+    for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObTabletGCHandler *tablet_gc_handler = NULL;
       if (OB_ISNULL(ls)) {
         ret = OB_ERR_UNEXPECTED;
