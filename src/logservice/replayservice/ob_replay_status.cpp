@@ -1380,8 +1380,10 @@ int ObReplayStatus::diagnose(ReplayDiagnoseInfo &diagnose_info)
   } else if (0 < retry_cost || 0 < replay_cost) {
     replay_ret = OB_EAGAIN;
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(diagnose_info.diagnose_str_.append_fmt("ret:%d; "
+  if (OB_SUCC(ret) || OB_STATE_NOT_MATCH == ret) {
+    ret = OB_SUCCESS;
+    if (OB_FAIL(diagnose_info.diagnose_str_.append_fmt("is_enabled:%s"
+                                                       "ret:%d; "
                                                        "min_unreplayed_lsn:%ld; "
                                                        "min_unreplayed_scn:%lu; "
                                                        "replay_hint:%ld; "
@@ -1389,6 +1391,7 @@ int ObReplayStatus::diagnose(ReplayDiagnoseInfo &diagnose_info)
                                                        "replay_cost:%ld; "
                                                        "retry_cost:%ld; "
                                                        "first_handle_time:%ld;" ,
+                                                       is_enabled_? "true" : "false",
                                                        replay_ret, min_unreplayed_lsn.val_,
                                                        min_unreplayed_scn.get_val_for_inner_table_field(), replay_hint,
                                                        is_submit_err ? "REPLAY_SUBMIT" : log_type_str,
