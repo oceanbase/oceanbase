@@ -413,14 +413,12 @@ int ObXAService::xa_start_for_dblink_client(const DblinkDriverProto dblink_type,
     ret =  OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid dblink connection", K(ret), KP(dblink_conn), K(dblink_type));
   } else {
-    ObXACtx *xa_ctx = NULL;
+    ObXACtx *xa_ctx = tx_desc->get_xa_ctx();
     ObDBLinkClient *client = NULL;
     bool alloc = false;
     const ObTransID tx_id = tx_desc->get_tx_id();
     const ObXATransID xid = tx_desc->get_xid();
-    if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(tx_id, alloc, xa_ctx))) {
-      TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(xid), K(tx_id));
-    } else if (NULL == xa_ctx) {
+    if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected xa context", K(ret), K(xid), K(tx_id));
     } else if (OB_FAIL(xa_ctx->get_dblink_client(dblink_type, dblink_conn, client))) {
