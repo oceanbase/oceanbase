@@ -38,7 +38,8 @@ ObMajorMergeProgressChecker::ObMajorMergeProgressChecker()
     schema_service_(nullptr), zone_merge_mgr_(nullptr), lst_operator_(nullptr),
     server_trace_(nullptr), tablet_compaction_map_(), table_count_(0), table_ids_(),
     table_compaction_map_(), tablet_validator_(), index_validator_(), cross_cluster_validator_(),
-    uncompacted_tablets_(), diagnose_rw_lock_(ObLatchIds::MAJOR_FREEZE_DIAGNOSE_LOCK)
+    uncompacted_tablets_(), diagnose_rw_lock_(ObLatchIds::MAJOR_FREEZE_DIAGNOSE_LOCK),
+    ls_infos_map_()
 {}
 
 int ObMajorMergeProgressChecker::init(
@@ -60,6 +61,8 @@ int ObMajorMergeProgressChecker::init(
     LOG_WARN("fail to create tablet compaction status map", KR(ret), K(tenant_id), K(DEFAULT_MAP_BUCKET_CNT));
   } else if (OB_FAIL(table_compaction_map_.create(DEFAULT_MAP_BUCKET_CNT, "MFTbCompMap", "MFTbCompMap", tenant_id))) {
     LOG_WARN("fail to create table compaction status map", KR(ret), K(tenant_id), K(DEFAULT_MAP_BUCKET_CNT));
+  } else if (OB_FAIL(ls_infos_map_.create(300, "MFLsInfoMap", "MFLsInfoMap", tenant_id))) {
+    LOG_WARN("fail to create table compaction status map", KR(ret), K(tenant_id));
   } else if (OB_FAIL(tablet_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
     LOG_WARN("fail to init tablet validator", KR(ret), K(tenant_id));
   } else if (OB_FAIL(index_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
@@ -253,6 +256,8 @@ int ObMajorMergeProgressChecker::check_merge_progress(
           LOG_WARN("fail to generate tablet table map", K_(tenant_id), KR(ret));
         } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id_, table_ids_))) {
           LOG_WARN("fail to get table ids in tenant", KR(ret), K_(tenant_id));
+        } else if (OB_FAIL(refresh_ls_infos())) {
+          LOG_WARN("fail to refresh ls infos", KR(ret), K_(tenant_id));
         } else {
           ObTabletInfo tablet_info;
           while (!stop && OB_SUCC(ret)) {
@@ -371,15 +376,18 @@ int ObMajorMergeProgressChecker::check_tablet(
     ObLSInfo ls_info;
     int64_t cluster_id = GCONF.cluster_id;
     const ObLSID &ls_id = tablet_info.get_ls_id();
-    {
-      FREEZE_TIME_GUARD;
-      if (OB_FAIL(lst_operator_->get(cluster_id, tenant_id_,
-          ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
-        LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K(ls_id));
+    if (OB_FAIL(ls_infos_map_.get_refactored(ls_id, ls_info))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        // ls_info does not exist, ignore this tablet
+        ret = OB_SUCCESS;
+        if (TC_REACH_TIME_INTERVAL(30 * 1000 * 1000)) { // 30s
+          LOG_WARN("ls_info does not exist", K_(tenant_id), K(ls_id), K(tablet_info));
+        }
+      } else {
+        LOG_WARN("fail to get ls_info from ls_info_map", KR(ret), K(ls_id), K_(tenant_id));
       }
-    }
-    if (FAILEDx(check_tablet_compaction_scn(all_progress, global_broadcast_scn, tablet_info, ls_info))) {
-      LOG_WARN("fail to check data version", KR(ret), K(tablet_info), K(ls_info));
+    } else if (OB_FAIL(check_tablet_compaction_scn(all_progress, global_broadcast_scn, tablet_info, ls_info))) {
+      LOG_WARN("fail to check tablet compaction_scn", KR(ret), K(tablet_info), K(ls_info));
     }
   }
 
@@ -542,6 +550,41 @@ void ObMajorMergeProgressChecker::reset_uncompacted_tablets()
 {
   SpinWLockGuard w_guard(diagnose_rw_lock_);
   uncompacted_tablets_.reset();
+}
+
+int ObMajorMergeProgressChecker::refresh_ls_infos()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else {
+    FREEZE_TIME_GUARD;
+    // 1. clear ls_infos cached in memory
+    ls_infos_map_.reuse();
+    SMART_VAR(ObArray<ObLSInfo>, ls_infos) {
+      // 2. load ls_infos from __all_ls_meta_table
+      const bool inner_table_only = false;
+      if (OB_ISNULL(lst_operator_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("lst_operator is null", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(lst_operator_->get_by_tenant(tenant_id_, inner_table_only, ls_infos))) {
+        LOG_WARN("fail to get ls infos", KR(ret), K_(tenant_id));
+      } else {
+        // 3. update ls_infos cached in memory
+        const int64_t ls_infos_cnt = ls_infos.count();
+        for (int64_t i = 0; (i < ls_infos_cnt) && OB_SUCC(ret); ++i) {
+          const ObLSID &ls_id = ls_infos.at(i).get_ls_id();
+          const ObLSInfo &ls_info = ls_infos.at(i);
+          if (OB_FAIL(ls_infos_map_.set_refactored(ls_id, ls_info, true/*overwrite*/))) {
+            LOG_WARN("fail to set refactored", KR(ret), K(ls_id), K(ls_info));
+          }
+        }
+      }
+      LOG_INFO("finish to refresh ls infos", KR(ret), K(ls_infos));
+    }
+  }
+  return ret;
 }
 
 } // namespace rootserver

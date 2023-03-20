@@ -492,23 +492,23 @@ int ObZoneMergeTableOperator::check_scn_revert(
             if (it->need_update_ && it->is_scn_) {
               if (0 == STRCMP(it->name_, "frozen_scn")) {
                 if (it->get_scn() < zone_merge_info.frozen_scn_.get_scn()) {
-                  LOG_ERROR("frozen_scn revert", K(tenant_id), "origin_frozen_scn", it->get_scn(),
-                    "new_frozen_scn", zone_merge_info.frozen_scn_.get_scn());
+                  LOG_WARN("frozen_scn revert", K(tenant_id), "new_frozen_scn", it->get_scn(),
+                    "origin_frozen_scn", zone_merge_info.frozen_scn_.get_scn());
                 }
               } else if (0 == STRCMP(it->name_, "broadcast_scn")) {
                 if (it->get_scn() < zone_merge_info.broadcast_scn_.get_scn()) {
-                  LOG_ERROR("broadcast_scn revert", K(tenant_id), "origin_broadcast_scn",
-                    it->get_scn(), "new_broadcast_scn", zone_merge_info.broadcast_scn_.get_scn());
+                  LOG_WARN("broadcast_scn revert", K(tenant_id), "new_broadcast_scn",
+                    it->get_scn(), "origin_broadcast_scn", zone_merge_info.broadcast_scn_.get_scn());
                 }
               } else if (0 == STRCMP(it->name_, "last_merged_scn")) {
                 if (it->get_scn() < zone_merge_info.last_merged_scn_.get_scn()) {
-                  LOG_ERROR("last_merged_scn revert", K(tenant_id), "origin_last_merged_scn",
-                    it->get_scn(), "new_last_merged_scn", zone_merge_info.last_merged_scn_.get_scn());
+                  LOG_WARN("last_merged_scn revert", K(tenant_id), "new_last_merged_scn",
+                    it->get_scn(), "origin_last_merged_scn", zone_merge_info.last_merged_scn_.get_scn());
                 }
               } else if (0 == STRCMP(it->name_, "all_merged_scn")) {
                 if (it->get_scn() < zone_merge_info.all_merged_scn_.get_scn()) {
-                  LOG_ERROR("all_merged_scn revert", K(tenant_id), "origin_all_merged_scn",
-                    it->get_scn(), "new_all_merged_scn", zone_merge_info.all_merged_scn_.get_scn());
+                  LOG_WARN("all_merged_scn revert", K(tenant_id), "new_all_merged_scn",
+                    it->get_scn(), "origin_all_merged_scn", zone_merge_info.all_merged_scn_.get_scn());
                 }
               }
             }

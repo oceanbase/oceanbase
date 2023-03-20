@@ -149,6 +149,9 @@ void ObMajorMergeScheduler::run3()
       } else if (OB_FAIL(do_work())) {
         LOG_WARN("fail to do major scheduler work", KR(ret), K_(tenant_id), "cur_epoch", get_epoch());
       }
+      // out of do_work, there must be no major merge on this server. therefore, here, clear
+      // compcation diagnose infos that stored in memory of this server.
+      progress_checker_.reset_uncompacted_tablets();
 
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(try_idle(DEFAULT_IDLE_US, ret))) {
