@@ -79,7 +79,7 @@ struct ObCSVGeneralFormat {
 
 /**
  * @brief Fast csv general parser is mysql compatible csv parser
- *        It support single-byte or multi-byte seperators
+ *        It support single-byte or multi-byte separators
  *        It support utf8, gbk and gb18030 character set
  */
 class ObCSVGeneralParser

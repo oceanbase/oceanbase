@@ -109,7 +109,7 @@ int ObKillExecutor::get_remote_session_location(const ObKillSessionArg &arg, ObE
     //execute sql
     if (OB_ISNULL(sql_proxy) || OB_ISNULL(cur_sess)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sql proxy or sesion from exec context is NULL", K(ret), K(sql_proxy), K(cur_sess));
+      LOG_WARN("sql proxy or session from exec context is NULL", K(ret), K(sql_proxy), K(cur_sess));
     } else if (OB_FAIL(generate_read_sql(arg.sess_id_, read_sql))) {
       LOG_WARN("fail to generate sql", K(ret), K(read_sql), K(*cur_sess), K(arg));
     } else if (OB_FAIL(sql_proxy->read(res, read_sql.ptr()))) {
@@ -217,7 +217,7 @@ int ObRpcKillSessionP::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session mgr from gctx is NULL", K(ret));
   } else if (OB_FAIL(kill_session(arg, *session_mgr))) {
-    LOG_WARN("fail to kill sessoin", K(ret), K(arg));
+    LOG_WARN("fail to kill session", K(ret), K(arg));
     ret = OB_ENTRY_NOT_EXIST == ret ? OB_UNKNOWN_CONNECTION : ret;
   } else {/*do nothing*/}
 
