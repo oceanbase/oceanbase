@@ -138,7 +138,8 @@ public:
 
   int check_merge_progress(const volatile bool &stop,
                            const share::SCN &global_broadcast_scn,
-                           share::ObAllZoneMergeProgress &all_progress);
+                           share::ObAllZoneMergeProgress &all_progress,
+                           const int64_t expected_epoch);
 
   int check_verification(const volatile bool &stop,
                          const bool is_primary_service,

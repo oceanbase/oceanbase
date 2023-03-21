@@ -198,7 +198,8 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
 int ObMajorMergeProgressChecker::check_merge_progress(
     const volatile bool &stop,
     const SCN &global_broadcast_scn,
-    ObAllZoneMergeProgress &all_progress)
+    ObAllZoneMergeProgress &all_progress,
+    const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();
@@ -260,6 +261,7 @@ int ObMajorMergeProgressChecker::check_merge_progress(
           LOG_WARN("fail to refresh ls infos", KR(ret), K_(tenant_id));
         } else {
           ObTabletInfo tablet_info;
+          int64_t last_epoch_check_us = ObTimeUtil::fast_current_time();
           while (!stop && OB_SUCC(ret)) {
             {
               FREEZE_TIME_GUARD;
@@ -267,6 +269,9 @@ int ObMajorMergeProgressChecker::check_merge_progress(
                 if (OB_ITER_END != ret) {
                   LOG_WARN("fail to get next tablet_info", KR(ret), K_(tenant_id), K(stop));
                 }
+              } else if (OB_FAIL(ObMajorFreezeUtil::check_epoch_periodically(*sql_proxy_, tenant_id_,
+                                 expected_epoch, last_epoch_check_us))) {
+                LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K(stop));
               }
             }
             if (OB_FAIL(ret)) {

@@ -490,8 +490,9 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
     LOG_WARN("fail to get_global_broadcast_scn", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(freeze_info_mgr_->get_freeze_info(global_broadcast_scn, frozen_status))) {
     LOG_WARN("fail to get freeze info", KR(ret), K_(tenant_id), K(global_broadcast_scn));
-  } else if (OB_FAIL(progress_checker_.check_merge_progress(stop_, global_broadcast_scn, all_progress))) {
-    LOG_WARN("fail to check merge status", KR(ret), K_(tenant_id), K(global_broadcast_scn));
+  } else if (OB_FAIL(progress_checker_.check_merge_progress(stop_, global_broadcast_scn,
+                     all_progress, expected_epoch))) {
+    LOG_WARN("fail to check merge status", KR(ret), K_(tenant_id), K(global_broadcast_scn), K(expected_epoch));
     int64_t time_interval = 10L * 60 * 1000 * 1000;  // record every 10 minutes
     if (TC_REACH_TIME_INTERVAL(time_interval)) {
       ROOTSERVICE_EVENT_ADD("daily_merge", "merge_process", K_(tenant_id),
