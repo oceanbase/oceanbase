@@ -606,8 +606,8 @@ int ObDDLRetryTask::serialize_params_to_message(char *buf, const int64_t buf_siz
   if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_size));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_size, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_size, pos))) {
+    LOG_WARN("ObDDLTask serialize failed", K(ret));
   } else if (OB_FAIL(ddl_arg_->serialize(buf, buf_size, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
   }
@@ -620,8 +620,8 @@ int ObDDLRetryTask::deserlize_params_from_message(const uint64_t tenant_id, cons
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(buf_size));
-  } else if (OB_FAIL(serialization::decode_i64(buf, buf_size, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
+  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, buf_size, pos))) {
+    LOG_WARN("fail to deserialize ObDDLTask", K(ret));
   } else if (ObDDLType::DDL_DROP_DATABASE == task_type_) {
     obrpc::ObDropDatabaseArg tmp_arg;
     if (OB_FAIL(tmp_arg.deserialize(buf, buf_size, pos))) {
@@ -667,7 +667,7 @@ int ObDDLRetryTask::deserlize_params_from_message(const uint64_t tenant_id, cons
 
 int64_t ObDDLRetryTask::get_serialize_param_size() const
 {
-  int64_t serialize_param_size = serialization::encoded_length_i64(task_version_);
+  int64_t serialize_param_size = ObDDLTask::get_serialize_param_size();
   if (OB_NOT_NULL(ddl_arg_)) {
     serialize_param_size += ddl_arg_->get_serialize_size();
   }

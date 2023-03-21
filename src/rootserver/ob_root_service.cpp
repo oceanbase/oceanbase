@@ -3910,8 +3910,8 @@ int ObRootService::update_ddl_task_active_time(const obrpc::ObUpdateDDLTaskActiv
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.update_ddl_task_active_time(task_id))) {
-    LOG_WARN("fail to set RegTaskTime map", K(ret), K(task_id));
+  } else if (OB_FAIL(ddl_scheduler_.update_ddl_task_active_time(ObDDLTaskID(tenant_id, task_id)))) {
+    LOG_WARN("fail to set RegTaskTime map", K(ret), K(tenant_id), K(task_id));
   }
   return ret;
 }
@@ -3934,8 +3934,8 @@ int ObRootService::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg)
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.abort_redef_table(task_id))) {
-    LOG_WARN("cancel task failed", K(ret), K(task_id));
+  } else if (OB_FAIL(ddl_scheduler_.abort_redef_table(ObDDLTaskID(tenant_id, task_id)))) {
+    LOG_WARN("cancel task failed", K(ret), K(tenant_id), K(task_id));
   }
   return ret;
 }
@@ -3958,7 +3958,7 @@ int ObRootService::finish_redef_table(const obrpc::ObFinishRedefTableArg &arg)
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.finish_redef_table(task_id, tenant_id))) {
+  } else if (OB_FAIL(ddl_scheduler_.finish_redef_table(ObDDLTaskID(tenant_id, task_id)))) {
     LOG_WARN("failed to finish redef table", K(ret), K(task_id), K(tenant_id));
   }
   return ret;
@@ -3987,8 +3987,7 @@ int ObRootService::copy_table_dependents(const obrpc::ObCopyTableDependentsArg &
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.copy_table_dependents(task_id,
-                                                          tenant_id,
+  } else if (OB_FAIL(ddl_scheduler_.copy_table_dependents(ObDDLTaskID(tenant_id, task_id),
                                                           is_copy_constraints,
                                                           is_copy_indexes,
                                                           is_copy_triggers,

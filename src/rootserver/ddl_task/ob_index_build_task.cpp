@@ -1356,7 +1356,8 @@ int ObIndexBuildTask::cleanup_impl()
   }
 
   if (OB_SUCC(ret) && parent_task_id_ > 0) {
-    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id_, get_task_key(), ret_code_, trace_id_);
+    const ObDDLTaskID parent_task_id(tenant_id_, parent_task_id_);
+    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id, get_task_key(), ret_code_, trace_id_);
   }
   LOG_INFO("clean task finished", K(ret), K(*this));
   return ret;
@@ -1470,13 +1471,12 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_len, pos))) {
+    LOG_WARN("ObDDLTask serialize failed", K(ret));
   } else if (OB_FAIL(create_index_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize create index arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, check_unique_snapshot_);
-    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, data_format_version_);
   }
   return ret;
 }
@@ -1488,8 +1488,8 @@ int ObIndexBuildTask::deserlize_params_from_message(const uint64_t tenant_id, co
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
+  } else if (ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos)) {
+    LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("deserialize table failed", K(ret));
   } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
@@ -1498,7 +1498,6 @@ int ObIndexBuildTask::deserlize_params_from_message(const uint64_t tenant_id, co
     LOG_WARN("deep copy create index arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_);
-    LST_DO_CODE(OB_UNIS_DECODE, parallelism_, data_format_version_);
   }
   return ret;
 }
@@ -1507,7 +1506,5 @@ int64_t ObIndexBuildTask::get_serialize_param_size() const
 {
   return create_index_arg_.get_serialize_size()
       + serialization::encoded_length_i64(check_unique_snapshot_)
-      + serialization::encoded_length_i64(task_version_)
-      + serialization::encoded_length_i64(parallelism_)
-      + serialization::encoded_length_i64(data_format_version_);
+      + ObDDLTask::get_serialize_param_size();
 }

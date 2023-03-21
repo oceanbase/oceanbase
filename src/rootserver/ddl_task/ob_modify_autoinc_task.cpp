@@ -591,8 +591,8 @@ int ObModifyAutoincTask::serialize_params_to_message(char *buf, const int64_t bu
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize ObDDLTask", K(ret));
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
   }
@@ -606,8 +606,8 @@ int ObModifyAutoincTask::deserlize_params_from_message(const uint64_t tenant_id,
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
+  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos))) {
+    LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
   } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
@@ -620,7 +620,7 @@ int ObModifyAutoincTask::deserlize_params_from_message(const uint64_t tenant_id,
 
 int64_t ObModifyAutoincTask::get_serialize_param_size() const
 {
-  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_);
+  return alter_table_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size();
 }
 
 void ObModifyAutoincTask::flt_set_task_span_tag() const

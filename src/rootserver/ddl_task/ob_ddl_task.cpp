@@ -85,6 +85,65 @@ int ObDDLTaskKey::assign(const ObDDLTaskKey &other)
   return ret;
 }
 
+ObDDLTaskID::ObDDLTaskID()
+  : tenant_id_(OB_INVALID_TENANT_ID), task_id_(0)
+{
+}
+
+ObDDLTaskID::ObDDLTaskID(const uint64_t tenant_id, const int64_t task_id)
+  : tenant_id_(tenant_id), task_id_(task_id)
+{
+}
+
+uint64_t ObDDLTaskID::hash() const
+{
+  uint64_t hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
+  hash_val = murmurhash(&task_id_, sizeof(task_id_), hash_val);
+  return hash_val;
+}
+
+bool ObDDLTaskID::operator==(const ObDDLTaskID &other) const
+{
+  return tenant_id_ == other.tenant_id_ && task_id_ == other.task_id_;
+}
+
+bool ObDDLTaskID::operator!=(const ObDDLTaskID &other) const
+{
+  return !(*this == other);
+}
+
+int ObDDLTaskID::assign(const ObDDLTaskID &other)
+{
+  int ret = OB_SUCCESS;
+  if (!other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    task_id_ = other.task_id_;
+  }
+  return ret;
+}
+
+ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version, const int64_t parallelism,
+                                  const int64_t data_format_version, const bool is_abort)
+{
+  task_version_ = task_version;
+  parallelism_ = parallelism;
+  data_format_version_ = data_format_version;
+  is_abort_ = is_abort;
+}
+
+void ObDDLTaskSerializeField::reset()
+{
+  task_version_ = 0;
+  parallelism_ = 0;
+  data_format_version_ = 0;
+  is_abort_ = false;
+}
+
+OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField, task_version_, parallelism_, data_format_version_, is_abort_);
+
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
   : tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0), parent_task_id_(0),
     type_(DDL_INVALID), src_table_schema_(nullptr), dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr)
@@ -750,6 +809,44 @@ int ObDDLTask::set_ddl_stmt_str(const ObString &ddl_stmt_str)
   return ret;
 }
 
+int ObDDLTask::serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, is_abort_);
+  if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_size));
+  } else if (OB_FAIL(serialize_field.serialize(buf, buf_size, pos))) {
+    LOG_WARN("serialize_field serialize failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObDDLTaskSerializeField serialize_field;
+  serialize_field.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || buf_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(buf), K(tenant_id), K(buf_size));
+  } else if (OB_FAIL(serialize_field.deserialize(buf, buf_size, pos))) {
+    LOG_WARN("serialize_field deserialize failed", K(ret));
+  } else {
+    task_version_ = serialize_field.task_version_;
+    parallelism_ = serialize_field.parallelism_;
+    data_format_version_ = serialize_field.data_format_version_;
+    is_abort_ = serialize_field.is_abort_;
+  }
+  return ret;
+}
+
+int64_t ObDDLTask::get_serialize_param_size() const
+{
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, is_abort_);
+  return serialize_field.get_serialize_size();
+}
+
 int ObDDLTask::convert_to_record(
     ObDDLTaskRecord &task_record,
     common::ObIAllocator &allocator)
@@ -829,8 +926,8 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   ObDDLTaskStatus real_new_status = new_status;
   const ObDDLTaskStatus old_status = task_status_;
   const bool error_need_retry = OB_SUCCESS != ret_code && is_error_need_retry(ret_code);
-  if (OB_TMP_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(trace_id_, is_cancel))) {
-    LOG_WARN("check task is canceled", K(tmp_ret), K(trace_id_));
+  if (OB_TMP_FAIL(check_ddl_task_is_cancel(trace_id_, is_cancel))) {
+    LOG_WARN("check ddl task is cancel failed", K(tmp_ret), K_(trace_id));
   }
   if (is_cancel) {
     real_ret_code = (OB_SUCCESS == ret_code || error_need_retry) ? OB_CANCELED : ret_code;
@@ -1035,6 +1132,20 @@ int ObDDLTask::report_error_code(const ObString &forward_user_message, const int
         LOG_WARN("report ddl error message failed", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLTask::check_ddl_task_is_cancel(const TraceId &trace_id, bool &is_cancel)
+{
+  int ret = OB_SUCCESS;
+  if (get_is_abort()) {
+    is_cancel = true;
+  } else if (trace_id.is_invalid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("trace id is invalid", K(ret), K(trace_id));
+  } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(trace_id, is_cancel))) {
+    LOG_WARN("failed to check task is cancel", K(ret), K(trace_id));
   }
   return ret;
 }
