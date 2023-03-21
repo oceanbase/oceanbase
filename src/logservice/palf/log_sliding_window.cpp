@@ -3222,8 +3222,7 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
       if (OB_SUCC(ret)) {
         SCN min_scn;
         if (log_task->is_valid()) {
-          if (group_entry_header.get_log_proposal_id() != log_task->get_proposal_id()
-              || lsn != log_task->get_begin_lsn()
+          if (lsn != log_task->get_begin_lsn()
               || group_entry_header.get_max_scn() != log_task->get_max_scn()
               || group_entry_header.get_accum_checksum() != log_task->get_accum_checksum()) {
             ret = OB_ERR_UNEXPECTED;

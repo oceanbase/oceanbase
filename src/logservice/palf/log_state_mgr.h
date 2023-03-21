@@ -63,7 +63,7 @@ public:
                              const int64_t &proposal_id);
   virtual int set_scan_disk_log_finished();
   virtual bool can_append(const int64_t proposal_id, const bool need_check_proposal_id) const;
-  virtual bool can_raw_write() const;
+  virtual bool can_raw_write(const int64_t proposal_id, const bool need_check_proposal_id) const;
   virtual bool can_slide_sw() const;
   virtual bool can_handle_committed_info(const int64_t &proposal_id) const;
   virtual bool can_revoke(const int64_t proposal_id) const;

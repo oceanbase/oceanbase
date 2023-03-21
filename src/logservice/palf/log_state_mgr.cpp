@@ -180,10 +180,12 @@ bool LogStateMgr::can_append(const int64_t proposal_id, const bool need_check_pr
   return bool_ret;
 }
 
-bool LogStateMgr::can_raw_write() const
+bool LogStateMgr::can_raw_write(const int64_t proposal_id, const bool need_check_proposal_id) const
 {
   bool bool_ret = false;
   if (is_leader_active_()
+      && ((need_check_proposal_id && proposal_id == get_proposal_id())
+          || false == need_check_proposal_id)
       && OB_LIKELY(mode_mgr_->can_raw_write())) {
     bool_ret = true;
   }
