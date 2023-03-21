@@ -1193,8 +1193,13 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(trans_ctx.has_valid_br(stop_flag_))) {
     if (OB_EMPTY_RESULT == ret) {
-      ret = OB_SUCCESS;
-      LOG_DEBUG("trans has no valid br to output, skip this trans", K(trans_ctx));
+      if (0 < trans_ctx.get_total_br_count()) {
+        // unexpected
+        LOG_ERROR("trans has no valid br to output, skip this trans", K(trans_ctx));
+      } else {
+        LOG_INFO("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
+        ret = OB_SUCCESS;
+      }
     } else {
       LOG_ERROR("failed to wait for valid br", KR(ret), K(trans_ctx));
     }

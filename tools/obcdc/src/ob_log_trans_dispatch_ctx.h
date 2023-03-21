@@ -28,8 +28,8 @@ struct PartTransDispatchBudget
   PartTransDispatchBudget() { reset(); }
 
   PartTransTask   *part_trans_task_;
-  int64_t         dispatch_budget_;
-  int64_t         dispatched_size_;
+  int64_t         dispatch_budget_ CACHE_ALIGNED;
+  int64_t         dispatched_size_ CACHE_ALIGNED;
   int64_t         skew_weight_;
 
   void reset()
@@ -49,8 +49,8 @@ struct PartTransDispatchBudget
 
   void reset_budget(const int64_t dispatch_budget)
   {
-    dispatch_budget_ = dispatch_budget;
-    dispatched_size_ = 0;
+    ATOMIC_SET(&dispatch_budget_, dispatch_budget);
+    ATOMIC_SET(&dispatched_size_, 0);
   }
 
   void set_weight(const int64_t weight)
@@ -60,9 +60,9 @@ struct PartTransDispatchBudget
 
   bool is_valid() const
   {
-    return NULL != part_trans_task_
-        && dispatch_budget_ >= 0
-        && dispatched_size_ >= 0;
+    return OB_NOT_NULL(part_trans_task_)
+        && ATOMIC_LOAD(&dispatch_budget_) >= 0
+        && ATOMIC_LOAD(&dispatched_size_) >= 0;
   }
 
   bool can_dispatch() const
@@ -77,7 +77,7 @@ struct PartTransDispatchBudget
 
   bool is_budget_used_up() const
   {
-    return dispatch_budget_ <= dispatched_size_;
+    return ATOMIC_LOAD(&dispatch_budget_) <= ATOMIC_LOAD(&dispatched_size_);
   }
 
   TO_STRING_KV(KP_(part_trans_task), KPC_(part_trans_task), K_(dispatch_budget), K_(dispatched_size), K_(skew_weight));

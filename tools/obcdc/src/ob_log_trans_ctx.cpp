@@ -812,9 +812,13 @@ int TransCtx::has_valid_br(volatile bool &stop_flag)
   while (OB_SUCC(ret) && !stop_flag) {
     if (total_br_count_ > 0) {
       break;
-    } else if (is_trans_sorted_ && (0 >= total_br_count_)) {
+    } else if (is_trans_sorted()) {
+      MEM_BARRIER();
       // must duble check to make sure total_br_count less than 0 in case of concurrenct scenes
-      ret = OB_EMPTY_RESULT;
+      // which may leads to data lose.
+      if (0 >= get_total_br_count()) {
+        ret = OB_EMPTY_RESULT;
+      }
     } else {
       usleep(2 * 1000); // sleep 2ms
     }
