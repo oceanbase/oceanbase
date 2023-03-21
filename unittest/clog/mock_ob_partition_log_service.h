@@ -127,9 +127,8 @@ public:
     UNUSED(memstore_version);
     return OB_SUCCESS;
   }
-  virtual int leader_keepalive(const int64_t keepalive_interval)
+  virtual int leader_keepalive()
   {
-    UNUSED(keepalive_interval);
     return OB_SUCCESS;
   }
   virtual int sync_log_archive_progress()

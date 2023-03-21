@@ -316,7 +316,7 @@ public:
   virtual int switch_state(bool& need_retry) = 0;
   virtual int check_mc_and_sliding_window_state() = 0;
   virtual int leader_send_max_log_info() = 0;
-  virtual int leader_keepalive(const int64_t keepalive_interval) = 0;
+  virtual int leader_keepalive() = 0;
   virtual int sync_log_archive_progress() = 0;
   virtual int get_log_archive_status(ObPGLogArchiveStatus& status) = 0;
   virtual int check_log_exist(const uint64_t log_id, bool& exist) = 0;
@@ -596,7 +596,7 @@ public:
   virtual int switch_state(bool& need_retry) override;
   virtual int check_mc_and_sliding_window_state() override;
   virtual int leader_send_max_log_info() override;
-  virtual int leader_keepalive(const int64_t keepalive_interval) override;
+  virtual int leader_keepalive();
   virtual int sync_log_archive_progress() override;
   virtual int get_log_archive_status(ObPGLogArchiveStatus& status) override;
   virtual int check_log_exist(const uint64_t log_id, bool& exist);

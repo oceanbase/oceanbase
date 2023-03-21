@@ -128,7 +128,7 @@ void ObLogStateDriverRunnable::state_driver_loop()
           }
           // leader keepalive
           if ((start_ts - last_check_time_for_keepalive_) > clog_keepalive_interval) {
-            (void)pls->leader_keepalive(clog_keepalive_interval);
+            (void)pls->leader_keepalive();
             update_flag_for_keepalive = true;
           }
           // check cascading state

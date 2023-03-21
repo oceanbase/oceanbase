@@ -6982,7 +6982,7 @@ int ObPartitionLogService::leader_update_next_replay_log_ts_(const int64_t new_t
   return ret;
 }
 
-int ObPartitionLogService::leader_keepalive(const int64_t keepalive_interval)
+int ObPartitionLogService::leader_keepalive()
 {
   int ret = OB_SUCCESS;
   const int64_t now = ObClockGenerator::getClock();
@@ -7013,12 +7013,10 @@ int ObPartitionLogService::leader_keepalive(const int64_t keepalive_interval)
         is_cluster_status_allow_update = true;
       }
 
-      if (sw_.is_empty() && now - last_leader_keepalive_time_ < keepalive_interval) {
-        // When the sliding window is empty, it will be sent every 100ms
-      } else if (!sw_.is_empty() &&
-                 (ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) ||
-                     !GCTX.is_in_standby_switching_state()) &&
-                 now - last_leader_keepalive_time_ < 10 * CLOG_LEADER_KEEPALIVE_INTERVAL) {
+      if (!sw_.is_empty() &&
+          (ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) ||
+              !GCTX.is_in_standby_switching_state()) &&
+          now - last_leader_keepalive_time_ < 10 * CLOG_LEADER_KEEPALIVE_INTERVAL) {
         // When the sliding window is not empty and it is private table or non-switching state,  it will be sent every
         // 1s
       } else {
