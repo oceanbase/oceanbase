@@ -158,6 +158,9 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     }
 
     is_inited_ = true;
+  } else {
+    // reset immediately
+    default_init_();
   }
 
   REC_TRANS_TRACE_EXT2(tlog_, init,
