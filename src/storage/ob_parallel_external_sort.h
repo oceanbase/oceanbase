@@ -1561,13 +1561,17 @@ int ObMemorySortRound<T, Compare>::build_fragment()
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObMemorySortRound has not been inited", K(ret));
   } else if (item_list_.size() > 0) {
+    int64_t start = common::ObTimeUtility::current_time();
+    int64_t sort_fragment_time;
 #ifndef ENABLE_AVX512F
     STORAGE_LOG(INFO, "use std::sort");
     std::sort(item_list_.begin(), item_list_.end(), *compare_);
     if (OB_FAIL(compare_->result_code_)) {
       ret = compare_->result_code_;
-      STORAGE_LOG(WARN, "fail to sort item list", K(ret));
-    }    
+    } else {
+      sort_fragment_time = common::ObTimeUtility::current_time() - start;
+      STORAGE_LOG(INFO, "ObMemorySortRound", K(sort_fragment_time));
+    }  
 #else
     if (__builtin_cpu_supports("avx512f")) {
       uint64_t* keys = NULL;
@@ -1597,8 +1601,10 @@ int ObMemorySortRound<T, Compare>::build_fragment()
             std::sort(item_list_.begin(), item_list_.end(), *compare_);
             if (OB_FAIL(compare_->result_code_)) {
               ret = compare_->result_code_;
-              STORAGE_LOG(WARN, "fail to sort item list", K(ret));
-            }
+            } else {
+              sort_fragment_time = common::ObTimeUtility::current_time() - start;
+              STORAGE_LOG(INFO, "ObMemorySortRound", K(sort_fragment_time));
+            }  
           } else {
               STORAGE_LOG(WARN, "avx512 sort failed", K(ret));
           }
@@ -1611,13 +1617,13 @@ int ObMemorySortRound<T, Compare>::build_fragment()
       std::sort(item_list_.begin(), item_list_.end(), *compare_);
       if (OB_FAIL(compare_->result_code_)) {
         ret = compare_->result_code_;
-        STORAGE_LOG(WARN, "fail to sort item list", K(ret));
+      } else {
+        sort_fragment_time = common::ObTimeUtility::current_time() - start;
+        STORAGE_LOG(INFO, "ObMemorySortRound", K(sort_fragment_time));
       }
     }
 #endif 
-    STORAGE_LOG(INFO, "ObMemorySortRound", K(item_list_.size()));
-
-    int64_t start = common::ObTimeUtility::current_time();
+    start = common::ObTimeUtility::current_time();
     for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
       if (OB_FAIL(next_round_->add_item(*item_list_.at(i)))) {
         STORAGE_LOG(WARN, "fail to add item", K(ret));
