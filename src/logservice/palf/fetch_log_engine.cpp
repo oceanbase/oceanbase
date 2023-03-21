@@ -71,7 +71,30 @@ void FetchLogTask::reset()
   prev_lsn_.reset();
   start_lsn_.reset();
   log_size_ = 0;
+  log_count_ = 0;
   accepted_mode_pid_ = INVALID_PROPOSAL_ID;
+}
+
+bool FetchLogTask::is_valid() const
+{
+  return (id_ >= 0 && server_.is_valid() && start_lsn_.is_valid());
+}
+
+FetchLogTask& FetchLogTask::operator=(const FetchLogTask &task)
+{
+  if (&task != this) {
+    this->timestamp_us_ = task.get_timestamp_us();
+    this->id_ = task.get_id();
+    this->server_ = task.get_server();
+    this->fetch_type_ = task.get_fetch_type();
+    this->proposal_id_ = task.get_proposal_id();
+    this->prev_lsn_ = task.get_prev_lsn();
+    this->start_lsn_ = task.get_start_lsn();
+    this->log_size_ = task.get_log_size();
+    this->log_count_ = task.get_log_count();
+    this->accepted_mode_pid_ = task.get_accepted_mode_pid();
+  }
+  return *this;
 }
 
 FetchLogEngine::FetchLogEngine()
@@ -79,7 +102,9 @@ FetchLogEngine::FetchLogEngine()
     is_inited_(false),
     palf_env_impl_(NULL),
     allocator_(NULL),
-    replayable_point_()
+    replayable_point_(),
+    cache_lock_(),
+    fetch_task_cache_()
 {}
 
 
@@ -164,6 +189,7 @@ void FetchLogEngine::destroy()
   tg_id_ = -1;
   palf_env_impl_ = NULL;
   allocator_ = NULL;
+  fetch_task_cache_.destroy();
   PALF_LOG(INFO, "destroy FetchLogEngine success", K(tg_id_));
 }
 
@@ -172,17 +198,65 @@ int FetchLogEngine::submit_fetch_log_task(FetchLogTask *fetch_log_task)
   int ret = OB_SUCCESS;
 
   if (!is_inited_) {
-    PALF_LOG(WARN, "FetchLogEngine not init");
     ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "FetchLogEngine not init", K(ret));
   } else if (OB_ISNULL(fetch_log_task)) {
-    PALF_LOG(WARN, "invalid argument", KP(fetch_log_task));
     ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), KP(fetch_log_task));
+  } else if (OB_FAIL(push_task_into_cache_(fetch_log_task))) {
+    PALF_LOG(WARN, "push_task_into_cache_ failed", K(ret), KPC(fetch_log_task), K_(fetch_task_cache));
   } else if (OB_FAIL(TG_PUSH_TASK(tg_id_, fetch_log_task))) {
     PALF_LOG(WARN, "push failed", K(ret), KPC(fetch_log_task));
   } else {
     //do nothing
   }
 
+  return ret;
+}
+
+int FetchLogEngine::push_task_into_cache_(FetchLogTask *fetch_log_task)
+{
+  // If this task exists in cache, it returns OB_ENTRY_EXIST.
+  // If this task destn't exist in cache, and cache is full, just ignore it
+  // and return OB_SUCCESS.
+  int ret = OB_SUCCESS;
+  SpinLockGuard lock_guard(cache_lock_);
+  int64_t count = fetch_task_cache_.count();
+  if (count >= MAX_CACHED_FETCH_TASK_NUM) {
+    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000)) {
+      PALF_LOG(INFO, "fetch_task_cache_ is full", K(ret), K_(fetch_task_cache));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      if (fetch_task_cache_[i].get_id() == fetch_log_task->get_id()
+          && fetch_task_cache_[i].get_server() == fetch_log_task->get_server()) {
+        // found existed task for this <server, id>
+        ret = OB_ENTRY_EXIST;
+        break;
+      }
+    }
+    if (OB_SUCCESS == ret) {
+      fetch_task_cache_.push_back(*fetch_log_task);
+    }
+  }
+  return ret;
+}
+
+int FetchLogEngine::try_remove_task_from_cache_(FetchLogTask *fetch_log_task)
+{
+  int ret = OB_SUCCESS;
+  SpinLockGuard lock_guard(cache_lock_);
+  int64_t count = fetch_task_cache_.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+    if (fetch_task_cache_[i].get_id() == fetch_log_task->get_id()
+        && fetch_task_cache_[i].get_server() == fetch_log_task->get_server()) {
+      // found existed task for this <server, id>
+      if (OB_FAIL(fetch_task_cache_.remove(i))) {
+        PALF_LOG(WARN, "fetch_task_cache_.remove failed", K(ret), K(i));
+      }
+      break;
+    }
+  }
   return ret;
 }
 
@@ -230,6 +304,10 @@ void FetchLogEngine::handle(void *task)
       } else {
         // do nothing
       }
+    }
+    // remove it from cache
+    if (OB_NOT_NULL(fetch_log_task)) {
+      (void) try_remove_task_from_cache_(fetch_log_task);
     }
     int64_t handle_finish_time_us = ObTimeUtility::current_time();
     int64_t handle_cost_time_us = handle_finish_time_us - handle_start_time_us;

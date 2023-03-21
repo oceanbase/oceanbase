@@ -816,11 +816,13 @@ bool LogStateMgr::is_reconfirm_timeout_()
     bool_ret = is_sw_timeout;
     if (bool_ret) {
       if (palf_reach_time_interval(1 * 1000 * 1000, check_reconfirm_timeout_time_)) {
-        PALF_LOG_RET(ERROR, OB_TIMEOUT, "leader reconfirm timeout", K_(palf_id), K(start_id), K(is_sw_timeout));
+        PALF_LOG_RET(ERROR, OB_TIMEOUT, "leader reconfirm timeout", K_(palf_id), K(start_id),
+            K(is_sw_timeout), K_(reconfirm));
         (void) sw_->report_log_task_trace(start_id);
       }
     } else if (palf_reach_time_interval(100 * 1000, check_reconfirm_timeout_time_)) {
-      PALF_LOG(INFO, "leader reconfirm need wait", K_(palf_id), K(start_id), K(is_sw_timeout), K_(self));
+      PALF_LOG(INFO, "leader reconfirm need wait", K_(palf_id), K(start_id), K(is_sw_timeout),
+          K_(self), K_(reconfirm));
     } else {
       // do nothing
     }

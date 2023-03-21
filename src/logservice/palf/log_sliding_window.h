@@ -468,6 +468,8 @@ private:
   int64_t last_slide_log_pid_;
   int64_t last_slide_log_accum_checksum_;
   // ---------------- fetch log info begin --------------------------
+  // last_fetch_req_time_:
+  //    record the request time of the last fetch operation.
   // last_fetch_end_lsn_:
   //    记录本轮fetch的lsn终点，根据group_buffer容量算出
   // last_fetch_max_log_id_:
@@ -484,6 +486,7 @@ private:
   //    下一轮fetch的起点是(last_submit_log_id + 1).
   //
   mutable common::ObSpinLock fetch_info_lock_;
+  int64_t last_fetch_req_time_;
   LSN last_fetch_end_lsn_;
   int64_t last_fetch_max_log_id_;
   LSN last_fetch_committed_end_lsn_;

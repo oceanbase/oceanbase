@@ -36,6 +36,7 @@ public:
   ~FetchLogTask() { reset(); }
   void reset();
 public:
+  bool is_valid() const;
   int set(const int64_t id,
           const common::ObAddr &server,
           const FetchLogType fetch_type,
@@ -55,11 +56,10 @@ public:
   int64_t get_log_size() const { return log_size_; }
   int64_t get_log_count() const { return log_count_; }
   int64_t get_accepted_mode_pid() const { return accepted_mode_pid_; }
+  FetchLogTask& operator=(const FetchLogTask &task);
 
   TO_STRING_KV(K_(timestamp_us), K_(id), K_(server), K_(fetch_type), K_(proposal_id),
                K_(prev_lsn), K_(start_lsn), K_(log_size), K_(log_count), K_(accepted_mode_pid));
-private:
-  DISALLOW_COPY_AND_ASSIGN(FetchLogTask);
 private:
   int64_t timestamp_us_;
   int64_t id_;
@@ -80,6 +80,8 @@ public:
   static const int64_t FETCH_LOG_THREAD_COUNT = 1;
   static const int64_t MINI_MODE_FETCH_LOG_THREAD_COUNT = 1;
   static const int64_t FETCH_LOG_TASK_MAX_COUNT_PER_LS = 64;
+  static const int64_t DEFAULT_CACHED_FETCH_TASK_NUM = 8;
+  static const int64_t MAX_CACHED_FETCH_TASK_NUM = 1024;
 public:
   FetchLogEngine();
   ~FetchLogEngine() { destroy(); }
@@ -98,12 +100,19 @@ public:
   int update_replayable_point(const share::SCN &replayable_scn);
 private:
   bool is_task_queue_timeout_(FetchLogTask *fetch_log_task) const;
+  int try_remove_task_from_cache_(FetchLogTask *fetch_log_task);
+  int push_task_into_cache_(FetchLogTask *fetch_log_task);
+private:
+  typedef common::ObSpinLock SpinLock;
+  typedef common::ObSpinLockGuard SpinLockGuard;
 private:
   int tg_id_;
   bool is_inited_;
   IPalfEnvImpl *palf_env_impl_;
   common::ObILogAllocator *allocator_;
   share::SCN replayable_point_;
+  mutable SpinLock cache_lock_;
+  ObSEArray<FetchLogTask, DEFAULT_CACHED_FETCH_TASK_NUM> fetch_task_cache_;
   DISALLOW_COPY_AND_ASSIGN(FetchLogEngine);
 };
 } // namespace logservice
