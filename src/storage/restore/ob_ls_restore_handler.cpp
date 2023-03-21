@@ -205,9 +205,9 @@ int ObLSRestoreHandler::handle_execute_over(
       state_handler_->set_retry_flag();
       result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
       LOG_WARN("restore sys tablets dag failed, need retry", K(ret));
-    } else if (OB_TABLET_NOT_EXIST == result && status.is_quick_restore()) {
+    } else if (OB_TABLET_NOT_EXIST == result) {
   // TODO: Transfer sequence in 4.1 needs to be compared when result is OB_TABLET_NOT_EXIST
-      LOG_WARN("tablet has been deleted, no need to record err info", K(restore_failed_tablets));
+      LOG_INFO("tablet has been deleted, no need to record err info", K(restore_failed_tablets));
     } else if (common::ObRole::FOLLOWER == role && result_mgr_.can_retrieable_err(result)) {
       LOG_INFO("follower met retrieable err, no need to record", K(result));
     } else {
