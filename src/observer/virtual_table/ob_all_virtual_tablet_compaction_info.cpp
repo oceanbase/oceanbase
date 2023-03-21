@@ -93,6 +93,8 @@ void ObAllVirtualTabletCompactionInfo::release_last_tenant()
     tablet_iter_->~ObTenantTabletIterator();
     tablet_iter_ = nullptr;
   }
+  tablet_handle_.reset();
+  tablet_allocator_.reset();
 }
 
 bool ObAllVirtualTabletCompactionInfo::is_need_process(uint64_t tenant_id)
