@@ -482,7 +482,7 @@ int ObMergeGroupByOp::process_parallel_rollup_key(ObRollupNDVInfo &ndv_info)
     piece.source_dfo_id_ = proxy.get_dfo_id();
     piece.target_dfo_id_ = proxy.get_dfo_id();
     piece.rollup_ndv_ = ndv_info;
-    if (OB_FAIL(proxy.get_dh_msg(MY_SPEC.id_,
+    if (OB_FAIL(proxy.get_dh_msg_sync(MY_SPEC.id_,
         dtl::DH_ROLLUP_KEY_WHOLE_MSG,
         piece,
         temp_whole_msg,

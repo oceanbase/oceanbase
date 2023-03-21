@@ -1025,7 +1025,7 @@ int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePiec
     bool send_piece = true;
     if (OB_FAIL(proxy.make_sqc_sample_piece_msg(piece_msg, send_piece))) {
       LOG_WARN("fail to make sqc sample piece msg", K(ret));
-    } else if (OB_FAIL(proxy.get_dh_msg(op_id,
+    } else if (OB_FAIL(proxy.get_dh_msg_sync(op_id,
         DH_DYNAMIC_SAMPLE_WHOLE_MSG,
         proxy.get_piece_sample_msg(),
         temp_whole_msg,

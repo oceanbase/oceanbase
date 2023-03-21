@@ -76,7 +76,7 @@ public:
     } else if (OB_ISNULL(source_dfo) || OB_ISNULL(target_dfo)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL ptr or null session ptr", KP(source_dfo), KP(target_dfo), K(pkt), K(ret));
-    } else if (OB_FAIL(coord_info.piece_msg_ctx_mgr_.find_piece_ctx(pkt.op_id_, piece_ctx))) {
+    } else if (OB_FAIL(coord_info.piece_msg_ctx_mgr_.find_piece_ctx(pkt.op_id_, pkt.type(), piece_ctx))) {
       // 如果找不到则创建一个 ctx
       // NOTE: 这里新建一个 piece_ctx 的方式不会出现并发问题，
       // 因为 QC 是单线程消息循环，逐个处理 SQC 发来的消息
@@ -86,7 +86,7 @@ public:
             source_dfo->get_total_task_count(), piece_ctx))) {
         LOG_WARN("fail to alloc piece msg", K(ret));
       } else if (nullptr != piece_ctx) {
-        if (OB_FAIL(coord_info.piece_msg_ctx_mgr_.add_piece_ctx(piece_ctx))) {
+        if (OB_FAIL(coord_info.piece_msg_ctx_mgr_.add_piece_ctx(piece_ctx, pkt.type()))) {
           LOG_WARN("fail add barrier piece ctx", K(ret));
         }
       }
