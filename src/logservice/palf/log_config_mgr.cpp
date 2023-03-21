@@ -941,16 +941,16 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
   } else if (OB_FAIL(get_curr_member_list(curr_member_list, curr_replica_num))) {
     PALF_LOG(WARN, "get_curr_member_list failed", KR(ret), K_(palf_id), K_(self), K(args));
   } else {
-    const ObMemberList &log_sync_member_list = log_ms_meta_.curr_.log_sync_memberlist_;
-    const common::GlobalLearnerList &curr_learner_list = log_ms_meta_.curr_.learnerlist_;
-    const common::GlobalLearnerList &degraded_learnerlist = log_ms_meta_.curr_.degraded_learnerlist_;
+    const ObMemberList &log_sync_member_list = config_meta_.curr_.log_sync_memberlist_;
+    const common::GlobalLearnerList &curr_learner_list = config_meta_.curr_.learnerlist_;
+    const common::GlobalLearnerList &degraded_learnerlist = config_meta_.curr_.degraded_learnerlist_;
     const common::ObMember &member = args.server_;
     const int64_t new_replica_num = args.new_replica_num_;
     const bool is_in_log_sync_memberlist = log_sync_member_list.contains(member);
     const bool is_in_degraded_learnerlist = degraded_learnerlist.contains(member);
     const bool is_in_learnerlist = curr_learner_list.contains(member);
-    const bool is_arb_replica = (log_ms_meta_.curr_.arbitration_member_ == member);
-    const bool has_arb_replica = (log_ms_meta_.curr_.arbitration_member_.is_valid());
+    const bool is_arb_replica = (config_meta_.curr_.arbitration_member_ == member);
+    const bool has_arb_replica = (config_meta_.curr_.arbitration_member_.is_valid());
     switch (args.type_) {
       case CHANGE_REPLICA_NUM:
       {
@@ -1032,7 +1032,7 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
             PALF_LOG(INFO, "arb replica already exists, but new_replica_num not equal to curr val", KR(ret), K_(palf_id), K_(self),
                 K_(log_ms_meta), K(member), K(new_replica_num), K_(alive_paxos_replica_num));
           }
-        } else if (log_ms_meta_.curr_.arbitration_member_.is_valid()) {
+        } else if (true == has_arb_replica) {
           ret = OB_INVALID_ARGUMENT;
           PALF_LOG(WARN, "arbitration replica exists, can not add_arb_member", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member));
         }
@@ -1127,7 +1127,7 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
           }
         } else if (!is_in_degraded_learnerlist && is_in_log_sync_memberlist) {
           // degrade operation can only be done when there is arbitration replica in paxos group
-          if (args.type_ == DEGRADE_ACCEPTOR_TO_LEARNER && !log_ms_meta_.curr_.arbitration_member_.is_valid()) {
+          if (args.type_ == DEGRADE_ACCEPTOR_TO_LEARNER && false == has_arb_replica) {
             ret = OB_INVALID_ARGUMENT;
             PALF_LOG(WARN, "arb member is invalid, can't degrade", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member));
           }
@@ -1479,7 +1479,7 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
   int ret = OB_SUCCESS;
   const LogConfigChangeType cc_type = args.type_;
   const common::ObMember member = args.server_;
-  new_config_info = log_ms_meta_.curr_;
+  new_config_info = config_meta_.curr_;
   int64_t curr_replica_num = -1;
   if (INVALID_PROPOSAL_ID == proposal_id || !args.is_valid()) {
     ret = OB_INVALID_ARGUMENT;

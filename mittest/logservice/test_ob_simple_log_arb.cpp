@@ -139,6 +139,27 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
   palf_list[another_f_idx]->palf_handle_impl_->enable_vote();
   EXPECT_TRUE(is_upgraded(leader, id));
 
+  // test revoking the leader when arb service is degrading
+  block_all_net(another_f_idx);
+  const common::ObAddr follower_addr = get_cluster()[another_f_idx]->get_addr();
+  LogConfigChangeArgs args(common::ObMember(follower_addr, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
+  int64_t ele_epoch;
+  common::ObRole ele_role;
+  int64_t proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
+  leader.palf_handle_impl_->election_.get_role(ele_role, ele_epoch);
+  LogConfigVersion config_version;
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(args, proposal_id, ele_epoch, config_version));
+  EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.alive_paxos_memberlist_.contains(follower_addr));
+  EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.applied_alive_paxos_memberlist_.contains(follower_addr));
+  EXPECT_EQ(leader.palf_handle_impl_->config_mgr_.state_, 1);
+
+  // reset status supposing the lease is expried
+  block_net(leader_idx, another_f_idx);
+  leader.palf_handle_impl_->config_mgr_.reset_status();
+  EXPECT_TRUE(is_degraded(leader, another_f_idx));
+  unblock_net(leader_idx, another_f_idx);
+  unblock_all_net(another_f_idx);
+
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();
   delete_paxos_group(id);
@@ -177,8 +198,6 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_degrade_upgrade)
   EXPECT_TRUE(is_degraded(leader, another_f1_idx));
   EXPECT_TRUE(is_degraded(leader, another_f2_idx));
 
-  // 确保lease过期，验证loc_cb是否可以找到leader拉日志
-  sleep(5);
   unblock_all_net(another_f1_idx);
   unblock_all_net(another_f2_idx);
   loc_cb.leader_ = leader.palf_handle_impl_->self_;
@@ -225,7 +244,6 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_reconfirm_degrade_upgrade)
   int64_t new_leader_idx = -1;
   PalfHandleImplGuard new_leader;
   EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
-  sleep(5);
   loc_cb.leader_ = new_leader.palf_handle_impl_->self_;
   unblock_net(leader_idx, another_f_idx);
   unblock_net(leader_idx, arb_replica_idx);
@@ -283,7 +301,6 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_reconfirm_degrade_upgrade)
   EXPECT_TRUE(is_degraded(new_leader, another_f1_idx));
   EXPECT_TRUE(is_degraded(new_leader, leader_idx));
 
-  sleep(5);
   loc_cb.leader_ = new_leader.palf_handle_impl_->self_;
   // restart two servers
   unblock_all_net(leader_idx);
