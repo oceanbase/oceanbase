@@ -1452,6 +1452,11 @@ int ObHashJoinOp::get_max_memory_size(int64_t input_size)
   }
   buf_mgr_->reuse();
   buf_mgr_->set_reserve_memory_size(remain_data_memory_size_, 1.0);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sync_wait_part_count())) {
+      LOG_WARN("failed to sync part count", K(ret));
+    }
+  }
   if (OB_SUCC(ret) && is_vectorized()) {
     char *buf = NULL;
     if (part_count_ <= 0) {
@@ -1465,11 +1470,6 @@ int ObHashJoinOp::get_max_memory_size(int64_t input_size)
       part_selectors_ = reinterpret_cast<uint16_t *>(buf);
       part_selector_sizes_ = reinterpret_cast<uint16_t *>(buf +
                              sizeof(uint16_t) * (MY_SPEC.max_batch_size_ * part_count_));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(sync_wait_part_count())) {
-      LOG_WARN("failed to sync part count", K(ret));
     }
   }
 

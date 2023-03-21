@@ -299,7 +299,21 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
         }
       }
     }
-    if (ignore_interrupt_) {
+    if ((loop_times_ & (SERVER_ALIVE_CHECK_TIMES - 1)) == 0) {
+      for (int64_t i = 0; i < chans_.count(); ++i) {
+        if (nullptr != chans_.at(i)) {
+          ObDtlBasicChannel *ch = static_cast<ObDtlBasicChannel *> (chans_.at(i));
+          if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(ch->get_peer(),
+                              get_process_query_time()))) {
+            ret = OB_RPC_CONNECT_ERROR;
+            LOG_WARN("peer no in communication, maybe crashed", K(ret), K(ch->get_peer()),
+                      K(static_cast<int64_t>(GCONF.cluster_id)));
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (ignore_interrupt_) {
       // do nothing.
     } else if ((loop_times_ & (INTERRUPT_CHECK_TIMES - 1)) == 0 && OB_UNLIKELY(IS_INTERRUPTED())) {
       // 中断错误处理
@@ -413,13 +427,7 @@ int ObDtlChannelLoop::process_channel(int64_t &nth_channel)
   }
   ObDtlChannel *ch = sentinel_node_.next_link_;
   while (OB_EAGAIN == ret && ch != &sentinel_node_) {
-    if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(ch->get_peer(),
-          get_process_query_time()))) {
-      ret = OB_RPC_CONNECT_ERROR;
-      LOG_WARN("peer no in communication, maybe crashed", K(ret), K(ch->get_peer()),
-                K(static_cast<int64_t>(GCONF.cluster_id)));
-      break;
-    } else if (OB_SUCC(ch->process1(&process_func_, 0, last_row_in_buffer))) {
+    if (OB_SUCC(ch->process1(&process_func_, 0, last_row_in_buffer))) {
       nth_channel = ch->get_loop_index();
       break;
     } else if (OB_EAGAIN == ret) {
@@ -442,6 +450,12 @@ int ObDtlChannelLoop::process_channel(int64_t &nth_channel)
       ObInterruptCode &code = GET_INTERRUPT_CODE();
       ret = code.code_;
       LOG_WARN("message loop is interrupted", K(code), K(ret));
+    } else if ((loop_times_ & (SERVER_ALIVE_CHECK_TIMES - 1)) == 0
+               && OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(ch->get_peer(),
+                              get_process_query_time()))) {
+      ret = OB_RPC_CONNECT_ERROR;
+      LOG_WARN("peer no in communication, maybe crashed", K(ret), K(ch->get_peer()),
+                K(static_cast<int64_t>(GCONF.cluster_id)));
     }
     ch = sentinel_node_.next_link_;
     ++n_times;
