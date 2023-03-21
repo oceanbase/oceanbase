@@ -41,8 +41,13 @@ function variables_parpare {
     DEP_PATH=$BASE_DIR/rpm/.dep_create/var
   fi
 
+  export LD_LIBRARY_PATH=$DEP_PATH/u01/obclient/lib:$LD_LIBRARY_PATH
+
   OBCLIENT_BIN=$DEP_PATH/u01/obclient/bin/obclient
+  OBCLIENT_BIN_ARGS="--obclient-bin=$OBCLIENT_BIN"
   MYSQLTEST_BIN=$DEP_PATH/u01/obclient/bin/mysqltest
+  MYSQLTEST_BIN_ARGS="--mysqltest-bin=$MYSQLTEST_BIN"
+  CLIENT_BIN_ARGS="$OBCLIENT_BIN_ARGS $MYSQLTEST_BIN_ARGS"
 
   DEFAULT_DEPLOY_NAME_FILE=$OBD_HOME/.obd/.default_deploy
 }
