@@ -1986,8 +1986,7 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task)
         LOG_WARN("push back task to task queue failed", K(ret));
       }
       if (longops_added) {
-        LOG_WARN("try to unregister longop because push ddl task failed", K(ret));
-        if (OB_FAIL(remove_task_from_longops_mgr(ddl_task))) {
+        if (OB_TMP_FAIL(remove_task_from_longops_mgr(ddl_task))) {
           LOG_WARN("failed to unregister longops", K(tmp_ret));
         }
       }
