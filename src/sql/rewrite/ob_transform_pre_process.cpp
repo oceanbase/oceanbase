@@ -5987,27 +5987,74 @@ int ObTransformPreProcess::try_transform_generated_rownum_as_limit_offset(ObDMLS
     ObRawExpr* minus_cmp_expr = NULL;
     ObSEArray<ObRawExpr *, 4> params;
     bool is_not_neg = false;
+    bool is_null = false;
+    bool is_not_null = false;
+    ObNotNullContext not_null_ctx(*ctx_, upper_stmt);
     if (OB_FAIL(ret) || (limit_cond == NULL && offset_cond == NULL)) {
+    } else if (!lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
+                                                      ObIntType,
+                                                      0,
+                                                      zero_expr))) {
+        LOG_WARN("create zero expr failed", K(ret));
+    } else if (!lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
+                                                      ObIntType,
+                                                      1,
+                                                      one_expr))) {
+        LOG_WARN("create one expr failed", K(ret));
+    } else if (lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_number_expr(*ctx_->expr_factory_,
+                                                                                        ObNumberType,
+                                                                                        ObNumber::get_zero(),
+                                                                                        zero_expr))) {
+      LOG_WARN("create zero expr failed", K(ret));
+    } else if (lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_number_expr(*ctx_->expr_factory_,
+                                                                                        ObNumberType,
+                                                                                        ObNumber::get_positive_one(),
+                                                                                        one_expr))) {
+      LOG_WARN("create one expr failed", K(ret));
+    } else if (limit_value != NULL && OB_FAIL(ObTransformUtils::is_const_expr_not_null(not_null_ctx, limit_value, is_not_null, is_null))) {
+      LOG_WARN("check value is null failed", K(ret));
+    } else if (limit_value != NULL && !is_not_null && !is_null) {
+      //not calculable
+    } else if (offset_value != NULL && !is_null &&
+                                      OB_FAIL(ObTransformUtils::is_const_expr_not_null(not_null_ctx, offset_value, is_not_null, is_null))) {
+      LOG_WARN("check value is null failed", K(ret));
+    } else if (offset_value != NULL && !is_not_null && !is_null) {
+      //not calculable
     } else if (NULL != limit_cond && OB_FAIL(ObOptimizerUtil::remove_item(upper_conds,
                                                                           limit_cond))) {
       LOG_WARN("failed to remove expr", K(ret));
     } else if (NULL != offset_cond && OB_FAIL(ObOptimizerUtil::remove_item(upper_conds,
                                                                            offset_cond))) {
       LOG_WARN("failed to remove expr", K(ret));
+    } else if (is_null) {
+      limit_expr = zero_expr;
+      offset_expr = NULL;
+      ObRawExpr *and_expr = NULL;
+      ObRawExpr *tmp_is_not_expr = NULL;
+      ObSEArray<ObRawExpr *, 2> not_null_exprs;
+      if (limit_value != NULL && (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx_->expr_factory_,
+                                                            limit_value,
+                                                            true /*is_not_null*/,
+                                                            tmp_is_not_expr)) ||
+                                  OB_FAIL(not_null_exprs.push_back(tmp_is_not_expr)))) {
+        LOG_WARN("push back failed", K(ret));
+      } else if (offset_value != NULL && (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx_->expr_factory_,
+                                                            offset_value,
+                                                            true /*is_not_null*/,
+                                                            tmp_is_not_expr)) ||
+                                        OB_FAIL(not_null_exprs.push_back(tmp_is_not_expr)))) {
+        LOG_WARN("push back failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_, not_null_exprs, and_expr))) {
+        LOG_WARN("build and expr failed", K(ret));
+      } else if (OB_FAIL(and_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("formalize failed", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(ctx_, and_expr, false))) {
+        LOG_WARN("add cons failed", K(ret));
+      }
     } else if (is_eq_cond) {
       if (OB_FAIL(transform_generated_rownum_eq_cond(limit_value, limit_expr, offset_expr))) {
         LOG_WARN("show limit expr", K(ret), K(limit_expr), K(offset_expr));
       }
-    } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
-                                                      ObIntType,
-                                                      0,
-                                                      zero_expr))) {
-        LOG_WARN("create zero expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
-                                                      ObIntType,
-                                                      1,
-                                                      one_expr))) {
-        LOG_WARN("create zero expr failed", K(ret));
     } else if (NULL != limit_value &&
                (OB_FAIL(ObOptimizerUtil::convert_rownum_filter_as_limit(*ctx_->expr_factory_,
                                                                         ctx_->session_info_,
@@ -6016,19 +6063,18 @@ int ObTransformPreProcess::try_transform_generated_rownum_as_limit_offset(ObDMLS
                                                                         init_limit_expr)))) { //int > 0
       LOG_WARN("failed to create limit expr from rownum", K(ret));
     } else if (NULL != offset_value &&
-               (OB_FAIL(ObOptimizerUtil::convert_rownum_filter_as_offset(*ctx_->expr_factory_,
+              OB_FAIL(ObOptimizerUtil::convert_rownum_filter_as_offset(*ctx_->expr_factory_,
                                                                         ctx_->session_info_,
                                                                         offset_cmp_type,
                                                                         offset_value,
-                                                                        init_offset_expr)))) {
+                                                                        init_offset_expr,
+                                                                        zero_expr,
+                                                                        offset_is_not_neg,
+                                                                        ctx_))) {
       LOG_WARN("failed tp conver rownum as filter", K(ret));
     } else if (NULL != limit_value && OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx_, init_limit_expr,
                                                                                 T_OP_GE, 1,
                                                                                 limit_is_not_neg))) {
-      LOG_WARN("check is not neg false", K(ret));
-    } else if (NULL != offset_value && OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx_, init_offset_expr,
-                                                                                T_OP_GE, 0,
-                                                                                offset_is_not_neg))) {
       LOG_WARN("check is not neg false", K(ret));
     } else if (NULL != limit_value && OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx_->expr_factory_,
                                                                                       ctx_->session_info_,
@@ -6041,41 +6087,24 @@ int ObTransformPreProcess::try_transform_generated_rownum_as_limit_offset(ObDMLS
                                                                                       ctx_->session_info_,
                                                                                       T_OP_GE,
                                                                                       offset_cmp_expr,
-                                                                                      init_offset_expr,
+                                                                                      offset_value,
                                                                                       zero_expr))) {
       LOG_WARN("create expr failed", K(ret));
-    } else if (NULL != limit_value && OB_FAIL(params.push_back(limit_cmp_expr))) {
-      LOG_WARN("push back failed", K(ret));
-    } else if (NULL != offset_value && OB_FAIL(params.push_back(offset_cmp_expr))) {
-      LOG_WARN("check is not neg false", K(ret));
-    } else if (offset_value == NULL) {
+    } else if (offset_value == NULL && limit_value != NULL) {
       if (limit_is_not_neg) {
         limit_expr = init_limit_expr;
-        if (params.count() > 0) {
-          ObRawExpr *and_expr = NULL;
-          if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_, params, and_expr))) {
-            LOG_WARN("build and expr failed", K(ret));
-          } else if (OB_FAIL(and_expr->formalize(ctx_->session_info_))) {
-            LOG_WARN("formalize failed", K(ret));
-          } else if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(ctx_, and_expr, true))) {
-            LOG_WARN("add cons failed", K(ret));
-          }
-        }
       } else {
         limit_expr = zero_expr;
-        if (params.count() > 0) {
-          ObRawExpr *and_expr = NULL;
-          if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_, params, and_expr))) {
-            LOG_WARN("build and expr failed", K(ret));
-          } else if (OB_FAIL(and_expr->formalize(ctx_->session_info_))) {
-            LOG_WARN("formalize failed", K(ret));
-          } else if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(ctx_, and_expr, false))) {
-            LOG_WARN("add cons failed", K(ret));
-          }
-        }
       }
-    } else if (limit_value == NULL) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(ctx_, limit_cmp_expr, limit_is_not_neg))) {
+        LOG_WARN("add cons failed", K(ret));
+      }
+    } else if (limit_value == NULL && offset_value != NULL) {
       offset_expr = init_offset_expr;
+      if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(ctx_, offset_cmp_expr, offset_is_not_neg))) {
+        LOG_WARN("add cons failed", K(ret));
+      }
     } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx_->expr_factory_,
                                                              ctx_->session_info_,
                                                              T_OP_MINUS, minus_expr,
@@ -6092,13 +6121,14 @@ int ObTransformPreProcess::try_transform_generated_rownum_as_limit_offset(ObDMLS
                                                               minus_expr,
                                                               one_expr))) {
       LOG_WARN("create expr failed", K(ret));
-    } else if (OB_FAIL(params.push_back(minus_cmp_expr))) {
+    } else if (OB_FAIL(params.push_back(minus_cmp_expr)) || OB_FAIL(params.push_back(limit_cmp_expr))) {
       LOG_WARN("push back failed", K(ret));
-    } else if (!offset_is_not_neg || !minus_is_not_neg) {
+    } else if (!minus_is_not_neg || !limit_is_not_neg) {
       limit_expr = zero_expr;
       offset_expr = NULL;
-
-      if (params.count() > 0) {
+      if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(ctx_, offset_cmp_expr, offset_is_not_neg))) {
+        LOG_WARN("add cons failed", K(ret));
+      } else if (params.count() > 0) {
         ObRawExpr *and_expr = NULL;
         if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_, params, and_expr))) {
           LOG_WARN("build and expr failed", K(ret));
@@ -6111,7 +6141,9 @@ int ObTransformPreProcess::try_transform_generated_rownum_as_limit_offset(ObDMLS
     } else {
       limit_expr = minus_expr;
       offset_expr = init_offset_expr;
-      if (params.count() > 0) {
+      if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(ctx_, offset_cmp_expr, offset_is_not_neg))) {
+        LOG_WARN("add cons failed", K(ret));
+      } else if (params.count() > 0) {
         ObRawExpr *and_expr = NULL;
         if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_, params, and_expr))) {
           LOG_WARN("build and expr failed", K(ret));
