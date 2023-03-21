@@ -515,6 +515,200 @@ int ObObj::build_not_strict_default_value()
   return ret;
 }
 
+/* 
+ * make sort key:
+ * Convert ob_object data into a byte array that can be to compare ob_object.
+ * (called memcomparable format).
+ * For more information, please refer to the Memcomparable format of MyRocks.
+ *
+ * However, unlike MyRocks, our make sort key only converts part of it at a 
+ * time(from `offset` to `offset+size`).
+ * 
+ * example:
+ * ob_object's data(v_) -> (char* array)[ null-flag | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | ...]
+ *
+ * to          : buffer to store the converted byte array
+ * offset      : represents the offset of this byte array
+ * size        : represents the length of the buffer(to)
+ * extra_param : help convert multi-byte encoded data to mencomparable format
+ *
+ */
+int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size)
+{
+  int ret = OB_SUCCESS;
+  int64_t buf = 0;
+  int32_t copied = 0;
+  char* buf_ptr = reinterpret_cast<char*>(&buf);
+  char* ptr = reinterpret_cast<char*>(&v_);
+  if (offset == 0) {
+    to[0] = 1;
+    offset = 1;
+    copied = 1;
+  }
+  const ObObjType& data_type = meta_.get_type();
+  switch (data_type) {
+    case ObTinyIntType: {
+      buf_ptr[0] = (char)(ptr[0] ^ 128);
+      size = std::min(size - copied, 1 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 2) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObSmallIntType: {
+      buf_ptr[0] = (char)(ptr[1] ^ 128);
+      buf_ptr[1] = ptr[0];
+      size = std::min(size - copied, 2 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 3) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObInt32Type: {
+      buf_ptr[0] = (char)(ptr[3] ^ 128);
+      buf_ptr[1] = ptr[2];
+      buf_ptr[2] = ptr[1];
+      buf_ptr[3] = ptr[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObIntType: {
+      buf_ptr[0] = (char)(ptr[7] ^ 128);
+      buf_ptr[1] = ptr[6];
+      buf_ptr[2] = ptr[5];
+      buf_ptr[3] = ptr[4];
+      buf_ptr[4] = ptr[3];
+      buf_ptr[5] = ptr[2];
+      buf_ptr[6] = ptr[1];
+      buf_ptr[7] = ptr[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUTinyIntType: {
+      buf_ptr[0] = ptr[0];
+      size = std::min(size - copied, 1 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 2) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUSmallIntType: {
+      buf_ptr[0] = ptr[1];
+      buf_ptr[1] = ptr[0];
+      size = std::min(size - copied, 2 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 3) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUInt32Type: {
+      buf_ptr[0] = ptr[3];
+      buf_ptr[1] = ptr[2];
+      buf_ptr[2] = ptr[1];
+      buf_ptr[3] = ptr[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUInt64Type: {
+      buf_ptr[0] = ptr[7];
+      buf_ptr[1] = ptr[6];
+      buf_ptr[2] = ptr[5];
+      buf_ptr[3] = ptr[4];
+      buf_ptr[4] = ptr[3];
+      buf_ptr[5] = ptr[2];
+      buf_ptr[6] = ptr[1];
+      buf_ptr[7] = ptr[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUFloatType:
+    case ObFloatType: {
+      if (v_.float_ == 0.0f) v_.float_ = 0.0;
+      int32_t tmp;
+      memcpy(&tmp, &(v_.float_), sizeof(v_.float_));
+      tmp = (tmp ^ (tmp >> 31)) | ((~tmp) & 0x80000000);
+      char* ptr1 = reinterpret_cast<char*>(&tmp);
+      buf_ptr[0] = ptr1[3];
+      buf_ptr[1] = ptr1[2];
+      buf_ptr[2] = ptr1[1];
+      buf_ptr[3] = ptr1[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUDoubleType:
+    case ObDoubleType: {
+      if (v_.double_ == 0.0) v_.double_ = 0.0;
+      int64_t tmp;
+      memcpy(&tmp, &(v_.double_), sizeof(v_.double_));
+      tmp = (tmp ^ (tmp >> 63)) | ((~tmp) & 0x8000000000000000ULL);
+      char* ptr1 = reinterpret_cast<char*>(&tmp);
+      buf_ptr[0] = ptr1[7];
+      buf_ptr[1] = ptr1[6];
+      buf_ptr[2] = ptr1[5];
+      buf_ptr[3] = ptr1[4];
+      buf_ptr[4] = ptr1[3];
+      buf_ptr[5] = ptr1[2];
+      buf_ptr[6] = ptr1[1];
+      buf_ptr[7] = ptr1[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    default:
+      offset = 0;
+      ret = OB_NOT_SUPPORTED;
+      _OB_LOG(WARN, "unexpected data type=%u", data_type);
+  }
+  return ret;
+}
+
 int ObObj::deep_copy(const ObObj& src, char* buf, const int64_t size, int64_t& pos)
 {
   int ret = OB_SUCCESS;

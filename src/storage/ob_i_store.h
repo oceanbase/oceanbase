@@ -541,7 +541,9 @@ public:
         range_array_idx_(0),
         trans_id_ptr_(NULL),
         fast_filter_skipped_(false),
-        last_purge_ts_(0)
+        last_purge_ts_(0),
+        next_ids_(0), 
+        offset_(0)
   {}
   void reset();
   inline bool is_valid() const;
@@ -640,6 +642,43 @@ public:
     column_ids_ = NULL;
     trans_id_ptr_ = NULL;
   }
+  int get_sort_key(uint64_t* key_ptr) 
+  {
+    int ret = OB_SUCCESS;
+    if (key_ptr == NULL) {
+      ret = common::OB_INVALID_ARGUMENT;
+      STORAGE_LOG(ERROR, "failed to get sort key, key is NULL", K(ret));
+      return ret;
+    }
+    char* buf = reinterpret_cast<char*>(key_ptr);
+    char* buf_end = buf + 8;
+    int32_t size;
+    while (OB_SUCC(ret) && next_ids_ < row_val_.count_ && buf < buf_end) {
+      size = buf_end - buf;
+      ret = row_val_.cells_[next_ids_].make_sort_key(buf, offset_, size);
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(WARN, "failed to make sort key", K(ret), K(buf), K(offset_), K(size));
+        break;
+      }
+      buf += size;
+      if (offset_ == 0) {
+        next_ids_++;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      buf = reinterpret_cast<char*>(key_ptr);
+      std::swap(buf[0], buf[7]);
+      std::swap(buf[1], buf[6]);
+      std::swap(buf[2], buf[5]);
+      std::swap(buf[3], buf[4]);
+    }
+    return ret;
+  }
+
+  bool get_sort_key_end() 
+  {
+    return next_ids_ >= row_val_.count_;
+  }
 
   static const int64_t DML_BITS = 4;
   static const int8_t DML_MASK = (1 << DML_BITS) - 1;
@@ -663,6 +702,8 @@ public:
   transaction::ObTransID* trans_id_ptr_;
   bool fast_filter_skipped_;
   int64_t last_purge_ts_;
+  int16_t next_ids_;
+  int16_t offset_;  
 };
 
 struct ObMagicRowManager {

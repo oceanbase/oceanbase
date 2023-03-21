@@ -22,7 +22,10 @@
 #include "lib/string/ob_string.h"
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_srv_rpc_proxy.h"
+#include "storage/ob_store_row_comparer.h"
+#include "./blocksstable/ob_row_generate.h"
 #include "./blocksstable/ob_data_file_prepare.h"
+
 
 namespace oceanbase {
 using namespace storage;
@@ -57,13 +60,28 @@ public:
   {
     key_ = 0;
     value_.reset();
+    next_ids_ = 0;
   }
+
+  int get_sort_key(uint64_t* key_ptr) 
+  {
+    char* key_buf = reinterpret_cast<char*>(key_ptr);
+    char* ptr = reinterpret_cast<char*>(&key_);
+    memcpy(key_buf, ptr, 8);
+    next_ids_++;
+    return oceanbase::common::OB_SUCCESS;
+  }
+  bool get_sort_key_end() 
+  {
+    return next_ids_ >= 1;
+  }  
   TO_STRING_KV(K(key_), K(value_));
   NEED_SERIALIZE_AND_DESERIALIZE;
 
 private:
   int64_t key_;
   ObString value_;
+  int16_t next_ids_;  
 };
 
 class TestItemCompare {
@@ -87,6 +105,7 @@ void TestItem::set(const int64_t key, const char* buf, const int32_t length)
 {
   key_ = key;
   value_.assign_ptr(buf, length);
+  next_ids_ = 0;
 }
 
 int64_t TestItem::get_deep_copy_size() const
@@ -105,6 +124,8 @@ int TestItem::deep_copy(const TestItem& src, char* buf, int64_t len, int64_t& po
     memcpy(buf + pos, src.value_.ptr(), src.value_.length());
     value_.assign_ptr(buf + pos, src.value_.length());
     pos += src.value_.length();
+
+    next_ids_ = src.next_ids_;
   }
   return ret;
 }
@@ -166,6 +187,7 @@ public:
   void test_merge(const int64_t buf_cap, const int64_t items_count, const int64_t task_cnt);
   void test_merge_dup(const int64_t buf_cap, const int64_t items_count, const int64_t task_cnt);
   void test_sort_round(const int64_t buf_cap, const int64_t items_count, const int64_t merge_count);
+  void test_avx512_sort_type();
   void test_multi_sort_round(
       const int64_t buf_cap, const int64_t items_count, const int64_t task_cnt, const int64_t merge_count);
   void test_memory_sort_round(const int64_t buf_mem_limit, const int64_t items_count);
@@ -607,6 +629,154 @@ void TestParallelExternalSort::test_memory_sort_round(const int64_t buf_mem_limi
   ret = SLOGGER.abort();
   ASSERT_EQ(OB_SUCCESS, ret);
 }
+void TestParallelExternalSort::test_avx512_sort_type()
+{
+#ifdef ENABLE_AVX512F
+  if (!(__builtin_cpu_supports("avx512f"))) {
+    return;
+  }
+
+  int row_count = 1000;
+  int TEST_OBJ_TYPE_CNT = common::ObJsonType;
+  int TEST_ROWKEY_COLUMN_CNT = 2;
+  int64_t table_id = combine_id(1, 3001);
+  // init column
+  char name[OB_MAX_FILE_NAME_LENGTH];
+
+  memset(name, 0, sizeof(name));
+  for (int64_t type = 0; type <= TEST_OBJ_TYPE_CNT; ++type) {
+    if (type == common::ObNullType ||
+        type == common::ObExtendType || 
+        type == common::ObUnknownType || 
+        type == common::ObEnumType ||
+        type == common::ObSetType ||
+        type == common::ObEnumInnerType ||
+        type == common::ObSetInnerType ||
+        type == common::ObRawType ||
+        type == common::ObNumberFloatType ||
+        type == common::ObLobType ||
+        type == common::ObJsonType /* ||
+        type == common::ObIntType */
+        ) {
+      //these types result in error -4016 for table_schema_.add_column(column)     
+      //, which is not related to avx512 sort. So skip these types
+      continue;
+    }
+    ObRowGenerate row_generate_;
+    ObArenaAllocator allocator_;
+    ObObjType obj_type;
+    ObObjMeta meta_type;
+    ObColumnSchemaV2 column;
+
+    ObArray<int64_t> sort_column_indexes;
+    sort_column_indexes.push_back(0);
+
+    int comp_ret = OB_SUCCESS;
+    ObStoreRowComparer comparer(comp_ret, sort_column_indexes);
+
+    ObTableSchema table_schema_;
+    // init table schema
+    table_schema_.reset();
+    ASSERT_EQ(OB_SUCCESS, table_schema_.set_table_name("test_i_store"));
+    table_schema_.set_tenant_id(1);
+    table_schema_.set_tablegroup_id(1);
+    table_schema_.set_database_id(1);
+    table_schema_.set_table_id(table_id);
+    table_schema_.set_max_used_column_id(1);
+    table_schema_.set_block_size(4 * 1024);
+    table_schema_.set_compress_func_name("none");
+
+    column.reset();
+    column.set_table_id(table_id);
+    column.set_column_id(1);
+    column.set_data_length(1);
+    sprintf(name, "test%020ld", type);
+    ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
+
+    obj_type = (ObObjType)type;
+    meta_type.set_type(obj_type);
+    column.set_meta_type(meta_type);
+    if (ob_is_string_type(obj_type) && obj_type != ObHexStringType && obj_type != ObExtendType) {
+      meta_type.set_collation_level(CS_LEVEL_IMPLICIT);
+      meta_type.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      column.set_meta_type(meta_type);
+    }
+
+    column.set_rowkey_position(1);
+    ASSERT_EQ(OB_SUCCESS, table_schema_.add_column(column));
+
+    const int64_t file_buf_size = MACRO_BLOCK_SIZE;
+    const int64_t buf_mem_limit = 8 * 1024 * 1024;
+    const int64_t expire_timestamp = 0;
+
+    row_generate_.init(table_schema_, &allocator_);
+
+    int ret = OB_SUCCESS;
+
+    ObVector<ObStoreRow*> item_list_;
+    ObVector<ObStoreRow*> verify_items;
+    for (int64_t i = 0; i < row_count; i++) {
+      ObStoreRow* row = new ObStoreRow();
+      item_list_.push_back(row);
+      void *rptr = allocator_.alloc(sizeof(ObObj));
+      ObObj *cells = new (rptr) ObObj;
+      item_list_[i]->row_val_.assign(cells, 1);
+      row_generate_.get_next_row(*item_list_[i]);
+    }
+
+    for (int64_t i = row_count - 1; i >= 0; i--) {
+      ObStoreRow* item = item_list_[i];
+      ObStoreRow* verify_row = new ObStoreRow();
+      const int64_t buf_len = item->get_deep_copy_size();
+      int64_t pos = 0;
+      char* buf = static_cast<char*>(allocator_.alloc(buf_len));
+      ASSERT_EQ(OB_SUCCESS, verify_row->deep_copy(*item, buf, buf_len, pos));
+
+      verify_items.push_back(verify_row); 
+    }    
+
+    uint64_t* keys = NULL;
+    ObStoreRow** values = NULL;
+    int64_t items_size = verify_items.size();
+    if (OB_ISNULL(keys = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+    } else if (OB_ISNULL(values = static_cast<ObStoreRow**>(allocator_.alloc(sizeof(uint64_t) * (items_size))))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < verify_items.size(); ++i) {
+      values[i] = verify_items.at(i);
+    }
+
+    SortWithAvx512<ObStoreRow> sortWithAvx;
+    ret = sortWithAvx.sort(keys, values, items_size);
+
+    if (SortWithAvx512<ObStoreRow>::isSupportedByAvx512Sort(type)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < verify_items.size(); ++i) {
+        verify_items.at(i) = values[i];
+      }
+      ASSERT_EQ(OB_SUCCESS, ret);
+    } else {
+      ASSERT_EQ(OB_NOT_SUPPORTED, ret);
+      std::sort(verify_items.begin(), verify_items.end(), comparer);
+    }
+
+    std::sort(item_list_.begin(), item_list_.end(), comparer);
+
+    for (int64_t i = 0; i < verify_items.size(); ++i) {
+      ret = comparer(item_list_.at(i), verify_items.at(i));
+
+      ASSERT_EQ(ret, 0);
+    }
+
+    allocator_.free(keys);
+    allocator_.free(*values);
+  }
+#else
+  return;
+#endif 
+}
 
 void TestParallelExternalSort::test_sort(
     const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt)
@@ -969,6 +1139,11 @@ TEST_F(TestParallelExternalSort, test_memory_sort_round)
   for (int64_t i = 100; i < 1000; i *= 10) {
     test_memory_sort_round(buf_mem_limit, i);
   }
+}
+
+TEST_F(TestParallelExternalSort, test_avx512_sort_type)
+{
+  test_avx512_sort_type();
 }
 
 TEST_F(TestParallelExternalSort, test_sort)

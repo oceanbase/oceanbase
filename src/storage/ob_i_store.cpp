@@ -1293,6 +1293,9 @@ int ObStoreRow::deep_copy(const ObStoreRow& src, char* buf, const int64_t len, i
     is_sparse_row_ = src.is_sparse_row_;
     trans_id_ptr_ = src.trans_id_ptr_;
     fast_filter_skipped_ = src.fast_filter_skipped_;
+
+    next_ids_ = src.next_ids_;
+    offset_ = src.offset_;
     if (OB_FAIL(row_val_.deep_copy(src.row_val_, buf, len, pos))) {
       STORAGE_LOG(WARN, "failed to deep copy row_val", K(ret));
     } else if (is_sparse_row_) {
@@ -1326,6 +1329,9 @@ int64_t ObStoreRow::to_string(char* buffer, const int64_t length) const
     common::databuff_printf(buffer, length, pos, "row_pos_flag=%d ", row_pos_flag_.flag_);
     common::databuff_printf(buffer, length, pos, "scan_index=%ld ", scan_index_);
     common::databuff_printf(buffer, length, pos, "multi_version_row_flag=%d ", row_type_flag_.flag_);
+
+    common::databuff_printf(buffer, length, pos, "next_ids=%d ", next_ids_);
+    common::databuff_printf(buffer, length, pos, "offset=%d ", offset_);
     pos += row_type_flag_.to_string(buffer + pos, length - pos);
     common::databuff_printf(buffer, length, pos, "row_val={count=%ld,", row_val_.count_);
     common::databuff_printf(buffer, length, pos, "cells=[");
