@@ -347,7 +347,8 @@ int ObDDLErrorMessageTableOperator::build_ddl_error_message(
     const ObString index_name,
     const uint64_t index_id,
     const ObDDLType ddl_type,
-    const char *message)
+    const char *message,
+    int &report_ret_code)
 {
   int ret = OB_SUCCESS;
   int tmp_ret_code = ret_code;
@@ -363,6 +364,7 @@ int ObDDLErrorMessageTableOperator::build_ddl_error_message(
   } else {
     if (OB_ERR_PRIMARY_KEY_DUPLICATE == tmp_ret_code) {
       tmp_ret_code = OB_ERR_DUPLICATED_UNIQUE_KEY;    //error message of OB_ERR_PRIMARY_KEY_DUPLICATE is not compatiable with oracle, so use a new error code
+      report_ret_code = tmp_ret_code;
     }
     error_message.ret_code_ = tmp_ret_code;
     error_message.ddl_type_ = ddl_type;
@@ -403,7 +405,7 @@ int ObDDLErrorMessageTableOperator::build_ddl_error_message(
 
 int ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(const int ret_code,
     const ObTableSchema &index_schema, const int64_t task_id, const int64_t object_id, const ObAddr &addr,
-    ObMySQLProxy &sql_proxy, const char *index_key)
+    ObMySQLProxy &sql_proxy, const char *index_key, int &report_ret_code)
 {
   int ret = OB_SUCCESS;
   ObBuildDDLErrorMessage error_message;
@@ -421,7 +423,7 @@ int ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(const int r
   } else if (OB_FAIL(index_schema.get_index_name(index_name))) {        //get index name
     LOG_WARN("fail to get index name", K(ret), K(index_name), K(index_table_id));
   } else if (OB_FAIL(build_ddl_error_message(ret_code, index_schema.get_tenant_id(), data_table_id, error_message, index_name,
-      index_table_id, DDL_CREATE_INDEX, index_key))) {
+      index_table_id, DDL_CREATE_INDEX, index_key, report_ret_code))) {
     LOG_WARN("build ddl error message failed", K(ret), K(data_table_id), K(index_name));
   } else if (OB_FAIL(report_ddl_error_message(error_message,    //report into __all_ddl_error_message
       tenant_id, task_id, data_table_id, schema_version, object_id, addr, sql_proxy))) {

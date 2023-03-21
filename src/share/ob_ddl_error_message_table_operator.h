@@ -65,9 +65,10 @@ public:
       const common::ObAddr &addr, common::ObMySQLProxy &sql_proxy);
   static int build_ddl_error_message(const int ret_code, const uint64_t tenant_id, const uint64_t table_id,
       ObBuildDDLErrorMessage &error_message, const common::ObString index_name,
-      const uint64_t index_id, const ObDDLType ddl_type, const char *message);
+      const uint64_t index_id, const ObDDLType ddl_type, const char *message, int &report_ret_code);
   static int generate_index_ddl_error_message(const int ret_code, const share::schema::ObTableSchema &index_schema, 
-      const int64_t task_id, const int64_t object_id, const common::ObAddr &addr, common::ObMySQLProxy &sql_proxy, const char *index_key);
+      const int64_t task_id, const int64_t object_id, const common::ObAddr &addr, common::ObMySQLProxy &sql_proxy, const char *index_key,
+      int &report_ret_code);
 };
 }  // end namespace share
 }  // end namespace oceanbase
