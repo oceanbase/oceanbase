@@ -103,7 +103,7 @@ int ObPhysicalRestoreTenantExecutor::execute(
 int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(ObExecContext &ctx, const ObString &tenant_name)
 {
   int ret = OB_SUCCESS;
-  const int64_t timeout = 3 * 60 * 1000 * 1000; // 3min
+  const int64_t timeout = 10 * 60 * 1000 * 1000; // 10min
   const int64_t abs_timeout = ObTimeUtility::current_time() + timeout;
   const int64_t cur_time_us = ObTimeUtility::current_time();
   ObTimeoutCtx timeout_ctx;
