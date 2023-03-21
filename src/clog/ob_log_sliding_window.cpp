@@ -1411,9 +1411,18 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader &header
           // } else if (NULL != log_task->get_trace_profile()
           //           && OB_FAIL(log_task->get_trace_profile()->trace(partition_key_, AFTER_SUBMIT_TO_NET_AND_DISK))) {
           //  CLOG_LOG(ERROR, "trace failed", K_(partition_key), K(ret));
+        } else if (OB_FAIL(log_engine_->submit_flush_task(flush_task))) {
+          CLOG_LOG(ERROR, "log_engine_ submit_flush_task failed", K(ret), K(partition_key_), K(header));
+          if (NULL != flush_task) {
+            alloc_mgr_->free_log_flush_task(flush_task);
+            flush_task = NULL;
+          }
         } else if (OB_FAIL(log_task->set_log(header, buff, need_copy))) {
           CLOG_LOG(ERROR, "set submit log to log task failed", K(ret), K(header), K_(partition_key));
         } else {
+          EVENT_ADD(CLOG_SUBMIT_LOG_TOTAL_SIZE, out_size);
+          EVENT_ADD(CLOG_TRANS_LOG_TOTAL_SIZE, header.get_data_len());
+
           log_task->reset_log_cursor();
           log_task->set_submit_cb(cb);
           CLOG_LOG(TRACE, "set log success", K(ret), K(log_id), K_(partition_key));
@@ -1501,21 +1510,6 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader &header
                              new_log.get_header(), serialize_buff, new_log.get_serialize_size(), is_log_majority))) {
         CLOG_LOG(WARN, "submit_to_net failed", K(tmp_ret), K_(partition_key), K(header));
       }
-    }
-  }
-
-  if (NULL != flush_task) {
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(log_engine_->submit_flush_task(flush_task))) {
-        CLOG_LOG(ERROR, "log_engine submit_flush_task failed", K(ret), K(partition_key_), K(header));
-      } else {
-        EVENT_ADD(CLOG_SUBMIT_LOG_TOTAL_SIZE, out_size);
-        EVENT_ADD(CLOG_TRANS_LOG_TOTAL_SIZE, header.get_data_len());
-        CLOG_LOG(TRACE, "log_engine submit_flush_task success", K(ret), K(partition_key_), K(header));
-      }
-    } else {
-      alloc_mgr_->free_log_flush_task(flush_task);
-      flush_task = NULL;
     }
   }
 

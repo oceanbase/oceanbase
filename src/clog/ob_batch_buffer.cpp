@@ -19,7 +19,7 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
-int ObBatchBuffer::IncPos::try_freeze(IncPos& cur_pos, const int64_t seq)
+int ObBatchBuffer::IncPos::try_freeze(IncPos &cur_pos, const int64_t seq)
 {
   int ret = OB_SUCCESS;
   IncPos next_pos;
@@ -38,7 +38,8 @@ int ObBatchBuffer::IncPos::try_freeze(IncPos& cur_pos, const int64_t seq)
   return ret;
 }
 
-int ObBatchBuffer::IncPos::append(IncPos& cur_pos, const int64_t len, const int64_t entry_cnt, const int64_t limit)
+int ObBatchBuffer::IncPos::append(
+    IncPos &cur_pos, const int64_t len, const int64_t entry_cnt, const int64_t limit, ObBatchBuffer *batch_buffer)
 {
   int ret = OB_SUCCESS;
   IncPos next_pos;
@@ -56,11 +57,24 @@ int ObBatchBuffer::IncPos::append(IncPos& cur_pos, const int64_t len, const int6
       next_pos.entry_cnt_ = tmp_entry_cnt;
       ret = OB_BLOCK_SWITCHED;
     }
+    while (OB_BLOCK_SWITCHED == ret && batch_buffer->need_wait(next_pos.seq_)) {
+      if (batch_buffer->is_disk_hang()) {
+        ret = OB_IO_ERROR;
+        break;
+      } else {
+        // Sleep a while and retry when it need waiting buffer ready.
+        usleep(100);
+      }
+    }
+    if (OB_IO_ERROR == ret) {
+      // clog disk is hang, break and trigger to direct submit logic.
+      break;
+    }
   } while (!CAS128(this, cur_pos, next_pos));
   return ret;
 }
 
-ObBatchBuffer::IncPos& ObBatchBuffer::IncPos::next_block()
+ObBatchBuffer::IncPos &ObBatchBuffer::IncPos::next_block()
 {
   seq_++;
   offset_ = 0;
@@ -70,7 +84,7 @@ ObBatchBuffer::IncPos& ObBatchBuffer::IncPos::next_block()
 
 class ObBatchBuffer::Block : public ObIBatchBufferTask {
 public:
-  Block(ObBatchBuffer& host, int64_t seq, char* buf, int64_t block_count, bool auto_freeze)
+  Block(ObBatchBuffer &host, int64_t seq, char *buf, int64_t block_count, bool auto_freeze)
       : host_(host),
         seq_(seq),
         status_seq_(seq),
@@ -81,11 +95,12 @@ public:
   {}
   virtual ~Block()
   {}
-  int init(ObLogWriterWrapper* handler);
-  ObICLogItem* get_flush_task();
+  int init(ObLogWriterWrapper *handler);
+  ObICLogItem *get_flush_task();
   int64_t ref(const int64_t delta);
   int64_t wait(const int64_t seq);
-  void fill(const offset_t offset, ObIBufferTask* task);
+  bool need_wait(const int64_t block_id);
+  void fill(const offset_t offset, ObIBufferTask *task);
   void freeze(const offset_t offset);
   void set_submitted();
   void wait_submitted(const int64_t seq);
@@ -97,17 +112,17 @@ public:
   void reuse();
 
 private:
-  ObBatchBuffer& host_;
+  ObBatchBuffer &host_;
   int64_t seq_;
   int64_t status_seq_;
   int64_t ref_;
-  char* buf_;
+  char *buf_;
   int64_t block_count_;
   ObCLogItem flush_task_;
   bool auto_freeze_;
 };
 
-int ObBatchBuffer::Block::init(ObLogWriterWrapper* handler)
+int ObBatchBuffer::Block::init(ObLogWriterWrapper *handler)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(flush_task_.init(handler, this, &host_))) {
@@ -116,7 +131,7 @@ int ObBatchBuffer::Block::init(ObLogWriterWrapper* handler)
   return ret;
 }
 
-ObICLogItem* ObBatchBuffer::Block::get_flush_task()
+ObICLogItem *ObBatchBuffer::Block::get_flush_task()
 {
   return &flush_task_;
 }
@@ -152,7 +167,13 @@ int64_t ObBatchBuffer::Block::wait(const int64_t seq)
   return real_seq;
 }
 
-void ObBatchBuffer::Block::fill(const offset_t offset, ObIBufferTask* task)
+bool ObBatchBuffer::Block::need_wait(const int64_t block_id)
+{
+  // seq_ may be modified by mutil threads, so we use ATOMIC_LOAD here.
+  return ATOMIC_LOAD(&seq_) < block_id;
+}
+
+void ObBatchBuffer::Block::fill(const offset_t offset, ObIBufferTask *task)
 {
   int tmp_ret = OB_SUCCESS;
   if (NULL == task || offset < 0) {
@@ -211,20 +232,22 @@ ObBatchBuffer::~ObBatchBuffer()
   is_inited_ = false;
 }
 
-int ObBatchBuffer::init(ObIBufferArena* buffer_pool, ObIBatchBufferConsumer* handler, bool auto_freeze)
+int ObBatchBuffer::init(
+    ObIBufferArena *buffer_pool, ObIBatchBufferConsumer *handler, ObCLogWriter *log_writer, bool auto_freeze)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-  } else if (NULL == buffer_pool || NULL == handler) {
+  } else if (NULL == buffer_pool || NULL == handler || NULL == log_writer) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (NULL == (block_array_ = (Block*)ob_malloc_align(
+  } else if (NULL == (block_array_ = (Block *)ob_malloc_align(
                           16, buffer_pool->get_buffer_count() * sizeof(Block), ObModIds::OB_CLOG_MGR))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     block_count_ = buffer_pool->get_buffer_count();
     block_size_ = buffer_pool->get_buffer_size();
     handler_ = handler;
+    log_writer_ = log_writer;
     next_flush_block_id_ = 0;
     for (int64_t i = 0; i < block_count_; i++) {
       new (block_array_ + i) Block(*this, i, buffer_pool->alloc(), block_count_, auto_freeze);
@@ -235,7 +258,7 @@ int ObBatchBuffer::init(ObIBufferArena* buffer_pool, ObIBatchBufferConsumer* han
   return ret;
 }
 
-int ObBatchBuffer::submit(ObIBufferTask* task)
+int ObBatchBuffer::submit(ObIBufferTask *task)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -253,7 +276,7 @@ int ObBatchBuffer::submit(ObIBufferTask* task)
     }
   } else {
     int64_t entry_cnt = task->get_entry_cnt();
-    if (OB_BLOCK_SWITCHED == (ret = next_pos_.append(cur_pos, data_len, entry_cnt, block_size_))) {
+    if (OB_BLOCK_SWITCHED == (ret = next_pos_.append(cur_pos, data_len, entry_cnt, block_size_, this))) {
       ret = fill_buffer(cur_pos, NULL);
       cur_pos.next_block();
     }
@@ -277,6 +300,23 @@ void ObBatchBuffer::update_next_flush_block_id(int64_t block_id)
 bool ObBatchBuffer::is_all_consumed() const
 {
   return next_flush_block_id_ == next_pos_.seq_ && 0 == next_pos_.offset_;
+}
+
+bool ObBatchBuffer::need_wait(const int64_t block_id)
+{
+  Block *block = get_block(block_id);
+  return block->need_wait(block_id);
+}
+
+bool ObBatchBuffer::is_disk_hang() const
+{
+  bool bool_ret = false;
+  if (OB_ISNULL(log_writer_)) {
+    CLOG_LOG(ERROR, "log_writer_ is NULL");
+  } else {
+    bool_ret = log_writer_->is_disk_hang();
+  }
+  return bool_ret;
 }
 
 int ObBatchBuffer::try_freeze_next_block()
@@ -308,10 +348,10 @@ int ObBatchBuffer::try_freeze(const int64_t block_id)
   return ret;
 }
 
-int ObBatchBuffer::fill_buffer(const IncPos cur_pos, ObIBufferTask* task)
+int ObBatchBuffer::fill_buffer(const IncPos cur_pos, ObIBufferTask *task)
 {
   int ret = OB_SUCCESS;
-  Block* block = NULL;
+  Block *block = NULL;
   if (!is_inited_ || NULL == handler_ || NULL == block_array_) {
     ret = OB_NOT_INIT;
   } else if (NULL == (block = get_block(cur_pos.seq_))) {
@@ -346,7 +386,7 @@ int ObBatchBuffer::fill_buffer(const IncPos cur_pos, ObIBufferTask* task)
 int ObBatchBuffer::wait_block(const int64_t block_id)
 {
   int ret = OB_SUCCESS;
-  Block* block = NULL;
+  Block *block = NULL;
   if (!is_inited_ || NULL == block_array_) {
     ret = OB_NOT_INIT;
   } else if (-1 == block_id) {
@@ -359,10 +399,10 @@ int ObBatchBuffer::wait_block(const int64_t block_id)
   return ret;
 }
 
-ObBatchBuffer::Block* ObBatchBuffer::get_block(const int64_t block_id)
+ObBatchBuffer::Block *ObBatchBuffer::get_block(const int64_t block_id)
 {
   int tmp_ret = OB_SUCCESS;
-  ObBatchBuffer::Block* ptr_ret = NULL;
+  ObBatchBuffer::Block *ptr_ret = NULL;
   if (!is_inited_ || NULL == block_array_ || 0 == block_count_ || OB_INVALID_COUNT == block_count_) {
     tmp_ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "not init", K(tmp_ret), K_(block_array), K_(block_count));

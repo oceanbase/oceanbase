@@ -24,7 +24,7 @@ ObCLogItem::ObCLogItem() : host_(NULL), buffer_task_(NULL), batch_buffer_(NULL)
 ObCLogItem::~ObCLogItem()
 {}
 
-int ObCLogItem::init(ObLogWriterWrapper* host, ObIBatchBufferTask* buffer_task, ObBatchBuffer* batch_buffer)
+int ObCLogItem::init(ObLogWriterWrapper *host, ObIBatchBufferTask *buffer_task, ObBatchBuffer *batch_buffer)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(host) || OB_ISNULL(buffer_task) || OB_ISNULL(batch_buffer)) {
@@ -49,12 +49,12 @@ bool ObCLogItem::is_valid() const
   return NULL != host_ && NULL != buffer_task_ && NULL != batch_buffer_;
 }
 
-char* ObCLogItem::get_buf()
+char *ObCLogItem::get_buf()
 {
   return NULL == buffer_task_ ? NULL : buffer_task_->get_batch_buffer();
 }
 
-const char* ObCLogItem::get_buf() const
+const char *ObCLogItem::get_buf() const
 {
   return NULL == buffer_task_ ? NULL : buffer_task_->get_batch_buffer();
 }
@@ -73,7 +73,7 @@ int ObCLogItem::after_flushed(
     CLOG_LOG(WARN, "invalid argument", K(file_id), K(offset), K_(buffer_task), K_(host));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    ObIBufferTask* curr_task = buffer_task_->get_header_task();
+    ObIBufferTask *curr_task = buffer_task_->get_header_task();
     const int64_t seq = buffer_task_->get_seq();
     int64_t task_num = 0;
     if (OB_SUCCESS != (tmp_ret = buffer_task_->st_handle_callback_list(error_code, task_num))) {
@@ -89,7 +89,7 @@ int ObCLogItem::after_flushed(
     if (CLOG_WRITE_POOL == type) {
       bool curr_is_aggre_task = false;
       bool last_is_aggre_task = false;
-      ObLogWriterWrapper::CallbackTask* cb = NULL;
+      ObLogWriterWrapper::CallbackTask *cb = NULL;
       for (int64_t i = 0; i < task_num; i++) {
         curr_is_aggre_task = curr_task->is_aggre_task();
         if (i % MAX_TASK_NUM_PER_CB == 0 || curr_is_aggre_task || last_is_aggre_task) {
@@ -138,12 +138,12 @@ int ObLogWriterWrapper::CallbackTask::callback()
     CLOG_LOG(ERROR, "invalid arguments", KP_(header_task), K_(task_num));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    ObIBufferTask* curr_task = header_task_;
-    ObIBufferTask* next_task = NULL;
+    ObIBufferTask *curr_task = header_task_;
+    ObIBufferTask *next_task = NULL;
     int64_t processed_cnt = 0;
     while (processed_cnt < task_num_) {
       next_task = curr_task->next_;
-      if (OB_SUCCESS != (tmp_ret = curr_task->after_consume(error_code_, (void*)&cursor_, before_push_cb_ts_))) {
+      if (OB_SUCCESS != (tmp_ret = curr_task->after_consume(error_code_, (void *)&cursor_, before_push_cb_ts_))) {
         CLOG_LOG(WARN, "after_consume failed", K(tmp_ret), K_(error_code), K_(cursor));
       }
       curr_task = next_task;
@@ -155,7 +155,7 @@ int ObLogWriterWrapper::CallbackTask::callback()
 }
 
 int ObLogWriterWrapper::init(
-    ObCLogWriter* log_writer, ObICallbackHandler* callback_handler, ObBatchBuffer* batch_buffer)
+    ObCLogWriter *log_writer, ObICallbackHandler *callback_handler, ObBatchBuffer *batch_buffer)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(log_writer) || OB_ISNULL(callback_handler) || OB_ISNULL(batch_buffer)) {
@@ -183,7 +183,7 @@ void ObLogWriterWrapper::destroy()
   is_inited_ = false;
 }
 
-int ObLogWriterWrapper::submit(Task* task)
+int ObLogWriterWrapper::submit(Task *task)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -194,7 +194,7 @@ int ObLogWriterWrapper::submit(Task* task)
     CLOG_LOG(WARN, "flush task init failed", K(ret));
   } else {
     // const int64_t begin_ts = ObTimeUtility::current_time();
-    ObICLogItem* flush_task = task->get_flush_task();
+    ObICLogItem *flush_task = task->get_flush_task();
     if (OB_FAIL(log_writer_->append_log(*flush_task, DEFAULT_CLOG_APPEND_TIMEOUT_US))) {
       CLOG_LOG(WARN, "submit_flush_log_task failed", K(ret));
     }
@@ -208,7 +208,7 @@ int ObLogWriterWrapper::submit(Task* task)
   return ret;
 }
 
-int ObLogWriterWrapper::after_consume(ObICallback& task)
+int ObLogWriterWrapper::after_consume(ObICallback &task)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -243,7 +243,7 @@ void ObLogWriterWrapper::add_group_size(const int64_t task_num, const ObLogWrite
 #endif  // USE_HISTOGRAM
 }
 
-int ObDiskLogBuffer::submit(ObIBufferTask* task)
+int ObDiskLogBuffer::submit(ObIBufferTask *task)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(task)) {
@@ -255,7 +255,7 @@ int ObDiskLogBuffer::submit(ObIBufferTask* task)
 }
 
 int ObDiskLogBuffer::init(
-    const int64_t buffer_size, const int64_t buffer_cnt, ObCLogWriter* log_writer, ObICallbackHandler* callback_handler)
+    const int64_t buffer_size, const int64_t buffer_cnt, ObCLogWriter *log_writer, ObICallbackHandler *callback_handler)
 {
   int ret = OB_SUCCESS;
   ObLogBlockMetaV2 meta;
@@ -270,7 +270,7 @@ int ObDiskLogBuffer::init(
     CLOG_LOG(WARN, "buffer_pool init failed", K(ret), K(buffer_size), K(buffer_cnt));
   } else if (OB_SUCCESS != (ret = log_writer_.init(log_writer, callback_handler, &batch_buffer_))) {
     CLOG_LOG(WARN, "log_writer init failed", K(ret));
-  } else if (OB_SUCCESS != (ret = batch_buffer_.init(&buffer_arena_, &log_writer_))) {
+  } else if (OB_SUCCESS != (ret = batch_buffer_.init(&buffer_arena_, &log_writer_, log_writer))) {
     CLOG_LOG(WARN, "batch_buffer init failed", K(ret));
   } else {
     log_buffer_cnt_ = buffer_cnt;

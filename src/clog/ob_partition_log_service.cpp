@@ -8342,7 +8342,6 @@ bool ObPartitionLogService::is_standby_restore_state() const
 
 int ObPartitionLogService::check_and_try_leader_revoke(const ObElection::RevokeType& revoke_type)
 {
-  RLockGuard guard(lock_);
   int ret = OB_SUCCESS;
   bool need_revoke = false;
   if (IS_NOT_INIT) {

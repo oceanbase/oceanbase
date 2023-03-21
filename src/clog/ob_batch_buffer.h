@@ -15,6 +15,7 @@
 
 #include "ob_buffer_arena.h"
 #include "ob_buffer_task.h"
+#include "ob_clog_writer.h"
 
 namespace oceanbase {
 namespace clog {
@@ -23,13 +24,15 @@ class ObBatchBuffer : public ObIBufferConsumer {
 public:
   ObBatchBuffer();
   virtual ~ObBatchBuffer();
-
-  int init(ObIBufferArena* buffer_pool, ObIBatchBufferConsumer* handler, bool auto_freeze = true);
-  int submit(ObIBufferTask* task);
+  int init(
+      ObIBufferArena *buffer_pool, ObIBatchBufferConsumer *handler, ObCLogWriter *log_writer, bool auto_freeze = true);
+  int submit(ObIBufferTask *task);
   int try_freeze_next_block();
   int try_freeze(const int64_t block_id);
   void update_next_flush_block_id(const int64_t block_id);
   bool is_all_consumed() const;
+  bool need_wait(const int64_t block_id);
+  bool is_disk_hang() const;
 
 private:
   class IncPos {
@@ -42,9 +45,10 @@ private:
     {
       return seq_ == seq && offset_ != 0;
     }
-    int try_freeze(IncPos& cur_pos, const int64_t seq);
-    int append(IncPos& cur_pos, const int64_t len, const int64_t entry_cnt, const int64_t limit);
-    IncPos& next_block();
+    int try_freeze(IncPos &cur_pos, const int64_t seq);
+    int append(
+        IncPos &cur_pos, const int64_t len, const int64_t entry_cnt, const int64_t limit, ObBatchBuffer *batch_buffer);
+    IncPos &next_block();
 
     int64_t seq_;
     offset_t offset_;
@@ -56,13 +60,14 @@ private:
 
 private:
   int wait_block(const int64_t block_id);
-  Block* get_block(const int64_t block_id);
-  int fill_buffer(const IncPos cur_pos, ObIBufferTask* task);
+  Block *get_block(const int64_t block_id);
+  int fill_buffer(const IncPos cur_pos, ObIBufferTask *task);
 
 private:
   bool is_inited_;
-  ObIBatchBufferConsumer* handler_;
-  Block* block_array_;
+  ObIBatchBufferConsumer *handler_;
+  ObCLogWriter *log_writer_;
+  Block *block_array_;
   int64_t block_count_;
   int64_t block_size_;
   int64_t next_flush_block_id_;
