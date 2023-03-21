@@ -1428,7 +1428,7 @@ int ObXAService::start_stmt(const ObXATransID &xid, const uint32_t session_id, O
       TRANS_LOG(WARN, "unexpected trans descriptor", K(ret), K(tx_id), K(xid));
     } else if (OB_FAIL(xa_ctx->start_stmt(xid, session_id))) {
       TRANS_LOG(WARN, "xa trans start stmt failed", K(ret), K(tx_id), K(xid));
-    } else if (OB_FAIL(xa_ctx->wait_start_stmt())) {
+    } else if (OB_FAIL(xa_ctx->wait_start_stmt(session_id))) {
       TRANS_LOG(WARN, "fail to wait start stmt", K(ret), K(tx_id), K(xid));
     } else {
       TRANS_LOG(INFO, "xa trans start stmt", K(ret), K(tx_id), K(xid));

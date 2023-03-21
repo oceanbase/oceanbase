@@ -106,7 +106,7 @@ public:
                             ObTxDesc *&tx_desc);
   int xa_end(const ObXATransID &xid, const int64_t flags, ObTxDesc *&tx_desc);
   int start_stmt(const ObXATransID &xid, const uint32_t session_id);
-  int wait_start_stmt();
+  int wait_start_stmt(const uint32_t session_id);
   int end_stmt(const ObXATransID &xid);
   const ObXATransID &get_executing_xid() const { return executing_xid_; }
   int one_phase_end_trans(const ObXATransID &xid,
