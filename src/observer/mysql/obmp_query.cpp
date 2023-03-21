@@ -481,7 +481,11 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
                                          async_resp_used,
                                          need_disconnect))) {
     int tmp_ret = ret;
-    ret = OB_SUCCESS;
+    if (THIS_WORKER.need_retry()) {
+      // fail optimize, is a large query, just go back to large query queue and retry
+    } else {
+      ret = OB_SUCCESS;
+    }
     LOG_WARN("failed to process batch stmt, cover the error code and reset retry flag",
         K(tmp_ret), K(ret), K(THIS_WORKER.need_retry()));
   } else {
