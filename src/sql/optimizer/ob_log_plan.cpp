@@ -4471,6 +4471,7 @@ int ObLogPlan::allocate_join_path(JoinPath *join_path,
       join_op->set_slave_mapping_type(join_path->get_slave_mapping_type());
       join_op->set_is_partition_wise(join_path->is_partition_wise());
       join_op->set_can_use_batch_nlj(join_path->can_use_batch_nlj_);
+      join_op->set_inherit_sharding_index(join_path->inherit_sharding_index_);
       join_op->set_join_path(join_path);
       if (OB_FAIL(join_op->get_dup_table_pos().push_back(join_path->get_left_dup_table_pos())) ||
           OB_FAIL(join_op->get_dup_table_pos().push_back(join_path->get_right_dup_table_pos()))) {
@@ -5079,28 +5080,23 @@ int ObLogPlan::compute_repartition_distribution_info(const EqualSets &equal_sets
   return ret;
 }
 
-int ObLogPlan::find_table_scan_with_sharding_info(const ObLogicalOperator &op,
-                                                  const ObShardingInfo *sharding,
-                                                  const ObLogTableScan *&tsc)
+int ObLogPlan::find_base_sharding_table_scan(const ObLogicalOperator &op,
+                                             const ObLogTableScan *&tsc)
 {
   int ret = OB_SUCCESS;
-  tsc = NULL;
-  if (op.get_strong_sharding() != sharding) {
-    // return null tsc.
-  } else if (LOG_TABLE_SCAN == op.get_type()) {
+  if (LOG_TABLE_SCAN == op.get_type()) {
     tsc = static_cast<const ObLogTableScan*>(&op);
-  } else {
-    const bool is_subplan_scan = LOG_SUBPLAN_SCAN == op.get_type();
-    for (int64_t i = 0; i < op.get_num_of_child() && NULL == tsc && OB_SUCC(ret); i++) {
-      if (OB_ISNULL(op.get_child(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL((SMART_CALL(find_table_scan_with_sharding_info(*op.get_child(i),
-                  is_subplan_scan ? op.get_child(i)->get_strong_sharding() : sharding,
-                  tsc))))) {
-        LOG_WARN("find table scan failed", K(ret));
-      }
-    }
+  } else if (-1 == op.get_inherit_sharding_index()) {
+    // return null tsc.
+  } else if (OB_UNLIKELY(op.get_inherit_sharding_index() >= op.get_child_list().count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected sharding src index", K(op.get_inherit_sharding_index()), K(ret));
+  } else if (OB_ISNULL(op.get_child(op.get_inherit_sharding_index()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(SMART_CALL(find_base_sharding_table_scan(*op.get_child(op.get_inherit_sharding_index()),
+                                                              tsc)))) {
+    LOG_WARN("failed to find base sharding table scan", K(ret));
   }
   return ret;
 }
@@ -5113,7 +5109,7 @@ int ObLogPlan::get_repartition_table_info(const ObLogicalOperator &op,
   int ret = OB_SUCCESS;
   const ObLogicalOperator *cur_op = &op;
   const ObLogTableScan *table_scan = NULL;
-  if (OB_FAIL(find_table_scan_with_sharding_info(op, op.get_strong_sharding(), table_scan))) {
+  if (OB_FAIL(find_base_sharding_table_scan(op, table_scan))) {
     LOG_WARN("find table scan failed", K(ret));
   } else if (OB_ISNULL(table_scan)) {
     ret = OB_ERR_UNEXPECTED;
@@ -5361,6 +5357,7 @@ int ObLogPlan::allocate_subquery_path(SubQueryPath *subpath,
   } else {
     subplan_scan->set_subquery_id(subpath->subquery_id_);
     subplan_scan->set_child(ObLogicalOperator::first_child, root);
+    subplan_scan->set_inherit_sharding_index(0);
     subplan_scan->get_subquery_name().assign_ptr(table_item->table_name_.ptr(),
                                                  table_item->table_name_.length());
     if (OB_FAIL(append(subplan_scan->get_filter_exprs(), subpath->filter_))) {

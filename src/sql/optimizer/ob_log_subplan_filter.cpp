@@ -403,7 +403,9 @@ int ObLogSubPlanFilter::compute_sharding_info()
                                     dup_table_pos_,
                                     strong_sharding_))) {
       LOG_WARN("failed to compute basic sharding info", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      inherit_sharding_index_ = ObLogicalOperator::first_child;
+    }
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
   } else if (DistAlgo::DIST_NONE_ALL == dist_algo_) {
@@ -416,6 +418,7 @@ int ObLogSubPlanFilter::compute_sharding_info()
       LOG_WARN("failed to assign weak sharding", K(ret));
     } else {
       strong_sharding_ = get_child(0)->get_strong_sharding();
+      inherit_sharding_index_ = 0;
     }
   } else if (DistAlgo::DIST_PARTITION_WISE == dist_algo_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
@@ -429,6 +432,7 @@ int ObLogSubPlanFilter::compute_sharding_info()
           LOG_WARN("failed to assign weak sharding", K(ret));
         } else {
           strong_sharding_ = get_child(i)->get_strong_sharding();
+          inherit_sharding_index_ = i;
           break;
         }
       } else { /*do nothing*/}
@@ -442,10 +446,12 @@ int ObLogSubPlanFilter::compute_sharding_info()
         OB_ISNULL(sharding = get_child(1)->get_sharding())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(sharding), K(ret));
-    } else if (OB_FAIL(weak_sharding_.assign(get_child(1)->get_weak_sharding()))) {
-      LOG_WARN("failed to assign weak sharding", K(ret));
+    } else if (OB_FAIL(get_repart_sharding_info(get_child(1),
+                                                strong_sharding_,
+                                                weak_sharding_))) {
+      LOG_WARN("failed to rebuild sharding info", K(ret));
     } else {
-      strong_sharding_ = get_child(1)->get_strong_sharding();
+      inherit_sharding_index_ = 1;
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -616,112 +622,6 @@ int ObLogSubPlanFilter::replace_nested_subquery_exprs(
   return ret;
 }
 
-int ObLogSubPlanFilter::get_equal_set_conditions(ObIArray<ObRawExpr*> &equal_conds)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *right_child = NULL;
-  ObRawExprFactory *expr_factory = NULL;
-  ObSQLSessionInfo *session_info = NULL;
-  ObSEArray<ObRawExpr*, 4> left_keys;
-  ObSEArray<ObRawExpr*, 4> right_keys;
-  ObSEArray<bool, 4> null_safe_info;
-
-  if (OB_ISNULL(get_plan()) ||
-      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
-      OB_ISNULL(expr_factory = &get_plan()->get_optimizer_context().get_expr_factory())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_plan()), K(session_info), K(ret));
-  } else {
-    for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-      left_keys.reuse();
-      right_keys.reuse();
-      null_safe_info.reuse();
-      if (OB_ISNULL(right_child = get_child(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("child is null", K(ret), K(right_child));
-      } else if (OB_FAIL(get_plan()->get_subplan_filter_equal_keys(right_child,
-                                                                   exec_params_,
-                                                                   left_keys,
-                                                                   right_keys,
-                                                                   null_safe_info))) {
-        LOG_WARN("failed to get equal set conditions", K(ret));
-      } else if (OB_UNLIKELY(left_keys.count() != right_keys.count()) ||
-                 OB_UNLIKELY(left_keys.count() != null_safe_info.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("left keys should equal right keys", K(ret));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < left_keys.count(); ++j) {
-          ObRawExpr* lexpr;
-          ObRawExpr* rexpr;
-          ObRawExpr* equal_expr = NULL;
-          if (OB_ISNULL(lexpr = left_keys.at(j)) ||
-              OB_ISNULL(rexpr = right_keys.at(j))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::create_equal_expr(*expr_factory,
-                                                              session_info,
-                                                              lexpr,
-                                                              rexpr,
-                                                              equal_expr))) {
-            LOG_WARN("failed to create equal expr", K(ret));
-          } else if (OB_FAIL(equal_conds.push_back(equal_expr))) {
-            LOG_WARN("failed to push back equal conds", K(ret));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogSubPlanFilter::compute_equal_set()
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *child = NULL;
-  EqualSets *ordering_esets = NULL;
-  EqualSets input_equal_sets;
-  ObSEArray<ObRawExpr*, 8> equal_set_conditions;
-  if (OB_ISNULL(my_plan_) || OB_UNLIKELY(get_num_of_child() < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("operator is invalid", K(ret), K(get_num_of_child()), K(my_plan_));
-  } else if (OB_UNLIKELY(get_num_of_child() == 0)) {
-    // do nothing
-  } else if (OB_ISNULL(child = get_child(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child is null", K(ret), K(child));
-  } else if (OB_FAIL(get_equal_set_conditions(equal_set_conditions))) {
-    LOG_WARN("failed to get equal set conditions", K(ret));
-  } else if (append(equal_set_conditions, filter_exprs_)) {
-    LOG_WARN("failed to append", K(ret));
-  } else if (equal_set_conditions.empty()) {
-    // inherit equal sets from the first child directly
-    set_output_equal_sets(&child->get_output_equal_sets());
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("child is null", K(ret), K(child));
-      } else if (append(input_equal_sets, child->get_output_equal_sets())) {
-        LOG_WARN("failed to init input equal sets", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(ordering_esets = get_plan()->create_equal_sets())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to create equal sets", K(ret));
-    } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(
-                       &my_plan_->get_allocator(),
-                       equal_set_conditions,
-                       input_equal_sets,
-                       *ordering_esets))) {
-      LOG_WARN("failed to compute ordering output equal set", K(ret));
-    } else {
-      set_output_equal_sets(ordering_esets);
-    }
-  }
-  return ret;
-}
-
 int ObLogSubPlanFilter::allocate_startup_expr_post(int64_t child_idx)
 {
   int ret = OB_SUCCESS;
@@ -768,6 +668,120 @@ int ObLogSubPlanFilter::allocate_startup_expr_post(int64_t child_idx)
       } else if (OB_FAIL(child->get_startup_exprs().assign(non_startup_exprs))) {
         LOG_WARN("failed to assign exprs", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::get_repart_sharding_info(ObLogicalOperator* child_op,
+                                                 ObShardingInfo *&strong_sharding,
+                                                 ObIArray<ObShardingInfo*> &weak_sharding)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  ObSEArray<ObRawExpr*, 4> src_keys;
+  ObSEArray<ObRawExpr*, 4> target_keys;
+  ObSEArray<bool, 4> null_safe_info;
+  EqualSets input_esets;
+
+  for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); i++) {
+    if (OB_ISNULL(child = get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(append(input_esets, child->get_output_equal_sets()))) {
+      LOG_WARN("failed to append input equal sets", K(ret));
+    } else { /*do nothing*/ }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(get_plan()) ||
+             OB_ISNULL(child_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(get_plan()->get_subplan_filter_equal_keys(child_op,
+                                                               exec_params_,
+                                                               src_keys,
+                                                               target_keys,
+                                                               null_safe_info))) {
+    LOG_WARN("failed to get repartition keys", K(ret));
+  } else if (OB_UNLIKELY(NULL == child_op->get_strong_sharding())) {
+    strong_sharding = NULL;
+  } else if (OB_FAIL(rebuild_repart_sharding_info(child_op->get_strong_sharding(),
+                                                  src_keys,
+                                                  target_keys,
+                                                  input_esets,
+                                                  strong_sharding))) {
+    LOG_WARN("failed to rebuild repart sharding info", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    weak_sharding.reuse();
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_op->get_weak_sharding().count(); ++i) {
+    ObShardingInfo* out_sharding = NULL;
+    if (OB_FAIL(rebuild_repart_sharding_info(child_op->get_weak_sharding().at(i),
+                                             src_keys,
+                                             target_keys,
+                                             input_esets,
+                                             out_sharding))) {
+      LOG_WARN("failed to rebuild repart sharding info", K(ret));
+    } else if (OB_FAIL(weak_sharding.push_back(out_sharding))) {
+      LOG_WARN("failed to push back sharding", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::rebuild_repart_sharding_info(const ObShardingInfo *input_sharding,
+                                                     ObIArray<ObRawExpr*> &src_keys,
+                                                     ObIArray<ObRawExpr*> &target_keys,
+                                                     EqualSets &input_esets,
+                                                     ObShardingInfo *&out_sharding)
+{
+  int ret = OB_SUCCESS;
+  out_sharding = NULL;
+  ObSEArray<ObRawExpr*, 4> repart_exprs;
+  ObSEArray<ObRawExpr*, 4> repart_sub_exprs;
+  ObSEArray<ObRawExpr*, 4> repart_func_exprs;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(input_sharding)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_ISNULL(out_sharding = reinterpret_cast<ObShardingInfo*>(
+                       get_plan()->get_allocator().alloc(sizeof(ObShardingInfo))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  } else if (OB_FALSE_IT(out_sharding = new(out_sharding) ObShardingInfo())) {
+  } else if (OB_FAIL(out_sharding->copy_without_part_keys(*input_sharding))) {
+    LOG_WARN("failed to assign sharding info", K(ret));
+  } else {
+    ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+    if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
+                                                 src_keys,
+                                                 target_keys,
+                                                 input_sharding->get_partition_keys(),
+                                                 repart_exprs))) {
+      LOG_WARN("failed to get repartition keys", K(ret));
+    } else if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
+                                                        src_keys,
+                                                        target_keys,
+                                                        input_sharding->get_sub_partition_keys(),
+                                                        repart_sub_exprs))) {
+      LOG_WARN("failed to get sub repartition keys", K(ret));
+    } else if (OB_FAIL(copier.add_replaced_expr(input_sharding->get_partition_keys(),
+                                                repart_exprs))) {
+      LOG_WARN("failed to add replace pair", K(ret));
+    } else if (OB_FAIL(copier.add_replaced_expr(input_sharding->get_sub_partition_keys(),
+                                                repart_sub_exprs))) {
+      LOG_WARN("failed to add replace pair", K(ret));
+    } else if (OB_FAIL(copier.copy_on_replace(input_sharding->get_partition_func(),
+                                              repart_func_exprs))) {
+      LOG_WARN("failed to copy partition function", K(ret));
+    } else if (OB_FAIL(out_sharding->get_partition_keys().assign(repart_exprs)) ||
+               OB_FAIL(out_sharding->get_sub_partition_keys().assign(repart_sub_exprs)) ||
+               OB_FAIL(out_sharding->get_partition_func().assign(repart_func_exprs))) {
+      LOG_WARN("failed to assign partition keys", K(ret));
     }
   }
   return ret;

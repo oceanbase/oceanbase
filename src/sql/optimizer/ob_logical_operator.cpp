@@ -367,6 +367,7 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     server_cnt_(1),
     need_late_materialization_(false),
     op_exprs_(),
+    inherit_sharding_index_(-1),
     allocated_osg_(false)
 
 {
@@ -757,6 +758,7 @@ int ObLogicalOperator::compute_sharding_info()
     LOG_WARN("failed to assign sharding info", K(ret));
   } else {
     strong_sharding_ = child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
   }
   return ret;
 }

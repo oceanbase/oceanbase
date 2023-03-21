@@ -50,6 +50,7 @@ int ObLogTempTableInsert::compute_sharding_info()
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
   } else if (child->is_single()) {
     strong_sharding_ = child->get_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
   } else {
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   }

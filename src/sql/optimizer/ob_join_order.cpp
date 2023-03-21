@@ -4510,6 +4510,8 @@ int JoinPath::compute_join_path_sharding()
                                               reselected_dup_pos,
                                               strong_sharding_))) {
         LOG_WARN("failed to compute basic sharding info", K(ret));
+      } else if (OB_FALSE_IT(inherit_sharding_index_ = 0)) {
+        //do nothing
       } else if (reselected_dup_pos.empty()) {
         /*no duplicated table, do nothing*/
       } else if (OB_UNLIKELY(2 != reselected_dup_pos.count())) {
@@ -4529,11 +4531,13 @@ int JoinPath::compute_join_path_sharding()
       strong_sharding_ = opt_ctx.get_local_sharding();
     } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
       strong_sharding_ = left_path_->strong_sharding_;
+      inherit_sharding_index_ = 0;
       if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
         LOG_WARN("failed to append weak sharding", K(ret));
       } else { /*do nothing*/ }
     } else if (DistAlgo::DIST_ALL_NONE == join_dist_algo_) {
       strong_sharding_ = right_path_->strong_sharding_;
+      inherit_sharding_index_ = 1;
       if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
         LOG_WARN("failed to append weak sharding", K(ret));
       } else { /*do nothing*/ }
@@ -4541,6 +4545,7 @@ int JoinPath::compute_join_path_sharding()
                DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo_) {
       if (LEFT_OUTER_JOIN == join_type_) {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_)) ||
             OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
@@ -4550,6 +4555,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else if (RIGHT_OUTER_JOIN == join_type_) {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_)) ||
             OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
@@ -4572,11 +4578,13 @@ int JoinPath::compute_join_path_sharding()
                  LEFT_ANTI_JOIN == join_type_ ||
                  INNER_JOIN == join_type_) {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4592,6 +4600,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4604,6 +4613,7 @@ int JoinPath::compute_join_path_sharding()
         strong_sharding_ = opt_ctx.get_distributed_sharding();		
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4619,6 +4629,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4630,6 +4641,7 @@ int JoinPath::compute_join_path_sharding()
         strong_sharding_ = opt_ctx.get_distributed_sharding();		
       } else {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4641,6 +4653,7 @@ int JoinPath::compute_join_path_sharding()
     } else if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
       if (right_path_->is_single()) {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
       } else {
         strong_sharding_ = opt_ctx.get_distributed_sharding();
       }
