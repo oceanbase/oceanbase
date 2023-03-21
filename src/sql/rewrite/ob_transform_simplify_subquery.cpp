@@ -1323,8 +1323,8 @@ bool ObTransformSimplifySubquery::is_subquery_not_empty(const ObSelectStmt &stmt
 }
 
 int ObTransformSimplifySubquery::select_items_can_be_simplified(const ObItemType op_type,
-                                                         const ObSelectStmt *stmt,
-                                                         bool &can_be_simplified) const
+                                                                const ObSelectStmt *stmt,
+                                                                bool &can_be_simplified) const
 {
   /*
   * 1. calculate max_select_item_size
@@ -1341,11 +1341,16 @@ int ObTransformSimplifySubquery::select_items_can_be_simplified(const ObItemType
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is invalid", K(ret), K(stmt));
-  } else if (stmt->is_set_stmt()) {
-    /*do nothing*/
+  } else if (stmt->is_set_stmt() &&
+             (ObSelectStmt::INTERSECT == stmt->get_set_op() ||
+              ObSelectStmt::EXCEPT == stmt->get_set_op() ||
+              stmt->is_recursive_union())) {
+    //do nothing
   } else if (OB_FAIL(check_limit(op_type, stmt, has_limit))) {
     LOG_WARN("failed to check limit", K(ret));
-  } else if (has_limit && stmt->has_distinct()) {
+  } else if (has_limit &&
+            (stmt->has_distinct() ||
+             (stmt->is_set_stmt() && stmt->is_set_distinct()))) {
     /*
     create table t1(a int);
     insert into t1 values (1),(2),(3),(4);
@@ -1494,8 +1499,13 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
         OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL pointer Error", KP(subquery), KP_(ctx), KP(expr_factory), K(ret));
+    } else if (OB_FAIL(select_items_can_be_simplified(op_type,
+                                                      subquery,
+                                                      can_be_simplified))) {
+      LOG_WARN("Checking if select list can be eliminated in subquery failed", K(ret));
+    } else if (!can_be_simplified) {
+      //do nothing
     } else if (ObSelectStmt::UNION == subquery->get_set_op() && !subquery->is_recursive_union()) {
-
         const ObIArray<ObSelectStmt*> &child_stmts = subquery->get_set_query();
         for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
           ObSelectStmt *child = child_stmts.at(i);
@@ -1503,7 +1513,6 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
             LOG_WARN("Simplify select list in EXISTS fails", K(ret));
           }
         }
-        //union -> union all
         bool has_limit = false;
         bool add_limit_constraint = false;
         if (OB_FAIL(ret)){
@@ -1518,12 +1527,6 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
         } else if (!has_limit) {
           subquery->assign_set_all();
         }
-    } else if (OB_FAIL(select_items_can_be_simplified(op_type,
-                                              subquery,
-                                              can_be_simplified))) {
-      LOG_WARN("Checking if select list can be eliminated in subquery failed", K(ret));
-    } else if (!can_be_simplified) {
-
     } else {
       // Add single select item with const int 1
         int64_t const_value = 1;
