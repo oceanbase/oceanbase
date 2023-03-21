@@ -1204,7 +1204,7 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "get tx ctx from mgr fail", K(ret), K(tx.tx_id_), K(ls_id), K(tx), K(arg));
     ctx = NULL;
-  } else if (!tx.xid_.empty()) {
+  } else if (!tx.xid_.empty() && !existed) {
     ctx->exec_info_.xid_ = tx.xid_;
   }
   TRANS_LOG(TRACE, "create tx ctx", K(ret), K(ls_id), K(tx));
