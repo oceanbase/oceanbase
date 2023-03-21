@@ -842,6 +842,10 @@ ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::RowIterat
 
 ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::~RowIterator()
 {
+  if (nullptr != origin_iter_) {
+    origin_iter_->~ObIStoreRowIterator();
+    origin_iter_ = nullptr;
+  }
 }
 
 int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::init(
