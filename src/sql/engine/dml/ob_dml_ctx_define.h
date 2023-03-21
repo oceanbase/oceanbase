@@ -928,12 +928,14 @@ struct ObDMLRtCtx
   ObDMLRtCtx(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx, ObTableModifyOp &op)
     : das_ref_(eval_ctx, exec_ctx),
       das_task_status_(),
-      op_(op)
+      op_(op),
+      cached_row_size_(0)
   { }
 
   void reuse()
   {
     das_ref_.reuse();
+    cached_row_size_ = 0;
   }
 
   void cleanup()
@@ -950,10 +952,13 @@ struct ObDMLRtCtx
   { return das_task_status_.need_pick_del_task_first(); }
   bool need_non_sub_full_task()
   { return das_task_status_.need_non_sub_full_task(); }
+  void add_cached_row_size(const int64_t row_size) { cached_row_size_ += row_size; }
+  int64_t get_cached_row_size() const { return cached_row_size_; }
 
   ObDASRef das_ref_;
   DasTaskStatus das_task_status_;
   ObTableModifyOp &op_;
+  int64_t cached_row_size_;
 };
 
 template <typename T>

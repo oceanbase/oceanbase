@@ -1099,9 +1099,9 @@ int ObTableModifyOp::submit_all_dml_task()
 int ObTableModifyOp::discharge_das_write_buffer()
 {
   int ret = OB_SUCCESS;
-  if (dml_rtctx_.das_ref_.get_das_mem_used() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE || execute_single_row_) {
+  if (dml_rtctx_.get_cached_row_size() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE || execute_single_row_) {
     LOG_INFO("DASWriteBuffer full or need single row execution, now to write storage",
-             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(execute_single_row_));
+             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(execute_single_row_), K(dml_rtctx_.get_cached_row_size()));
     ret = submit_all_dml_task();
   }
   return ret;

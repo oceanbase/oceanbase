@@ -1549,16 +1549,18 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     if (OB_SUCC(ret)) {
       if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), stored_row, buffer_full))) {
         LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
+      } else if (OB_NOT_NULL(stored_row)) {
+        dml_rtctx.add_cached_row_size(stored_row->row_size_);
       }
       LOG_DEBUG("write row to das op", K(ret), K(buffer_full), "op_type", N,
                 "table_id", ctdef.table_id_, "index_tid", ctdef.index_tid_,
-                "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row));
+                "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row), "row_size", stored_row->row_size_);
     }
     //3. if buffer is full, frozen node, create a new das op to add row
     if (OB_SUCC(ret) && buffer_full) {
       need_retry = true;
       if (REACH_COUNT_INTERVAL(10)) { // print log per 10 times.
-        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()));
+        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()), K(dml_rtctx.get_cached_row_size()));
       }
       dml_rtctx.das_ref_.set_frozen_node();
     }
