@@ -901,6 +901,7 @@ private:
     if (0 != err) {
       if (NULL != s) {
         ObSqlSockSession* sess = (ObSqlSockSession *)s->sess_;
+        remove_session_info(s);
         if (sess->is_inited()) {
           /*
            * if ObSqlSockSession is inited, ObSMConnection and ObSqlSockSession
