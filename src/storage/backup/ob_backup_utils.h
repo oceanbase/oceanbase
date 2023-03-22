@@ -323,8 +323,6 @@ private:
   ObBackupMetaIndexStore meta_index_store_;
   ObBackupProviderItem prev_item_;
   bool has_prev_item_;
-  int supply_count_;
-  int consume_count_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletProvider);
 };
 
