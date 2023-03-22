@@ -644,12 +644,6 @@ int ObMultiTenant::create_virtual_tenants()
     LOG_ERROR("add RS tenant fail", K(ret));
 
   } else if (OB_FAIL(create_tenant_without_unit(
-                         OB_DIAG_TENANT_ID,
-                         OB_DIAG_CPU,
-                         OB_DIAG_CPU))) {
-    LOG_ERROR("add diag tenant fail", K(ret));
-
-  } else if (OB_FAIL(create_tenant_without_unit(
                          OB_SVR_BLACKLIST_TENANT_ID,
                          OB_SVR_BLACKLIST_CPU,
                          OB_SVR_BLACKLIST_CPU))) {
@@ -686,8 +680,6 @@ int ObMultiTenant::create_tenant_without_unit(const uint64_t tenant_id,
     mem_limit = INT64_MAX;
   } else if (OB_EXT_LOG_TENANT_ID == tenant_id) {
     mem_limit = EXT_LOG_TENANT_MEMORY_LIMIT;
-  } else if (OB_DIAG_TENANT_ID == tenant_id) {
-    mem_limit = OB_DIAG_MEMORY;
   } else if (OB_RS_TENANT_ID == tenant_id) {
     mem_limit = GCONF.rootservice_memory_limit;
   } else {
