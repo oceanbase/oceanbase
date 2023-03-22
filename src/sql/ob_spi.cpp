@@ -5717,6 +5717,18 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             LOG_WARN("read result error", K(ret));
           }
         }
+        OX (bulk_tables.reuse());
+        // fetch row阶段可能会触发udf/trigger, udf/trigger内部触发复杂数据类型内存回缩, 导致bulk table记录的table地址异常
+        // 因此这里重新计算一次table 地址
+        for (int64_t i = 0; OB_SUCC(ret) && i < into_count; ++i) {
+          ObPLCollection *table = NULL;
+          CK (OB_NOT_NULL(result_expr = into_exprs[i]));
+          CK (is_obj_access_expression(*result_expr));
+          OZ (spi_calc_expr(ctx, result_expr, OB_INVALID_INDEX, &result_address));
+          CK (OB_NOT_NULL(table = reinterpret_cast<ObPLCollection*>(result_address.get_ext())));
+          CK (OB_NOT_NULL(table));
+          OZ (bulk_tables.push_back(table));
+        }
         if (OB_SUCC(ret)) {
           for (int64_t i = 0; OB_SUCC(ret) && i < bulk_tables.count(); ++i) {
             ObPLCollection *table = bulk_tables.at(i);
