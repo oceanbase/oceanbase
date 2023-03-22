@@ -57,6 +57,12 @@ int ObSpatialIndexLookupOp::init(const ObDASScanCtDef *lookup_ctdef,
   return ret;
 }
 
+ObSpatialIndexLookupOp::~ObSpatialIndexLookupOp()
+{
+  sorter_.clean_up();
+  sorter_.~ObExternalSort();
+}
+
 int ObSpatialIndexLookupOp::reset_lookup_state(bool need_switch_param)
 {
   is_inited_ = false;
