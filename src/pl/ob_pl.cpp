@@ -2400,6 +2400,13 @@ int ObPLExecState::final(int ret)
     }
   }
 
+  if (OB_FAIL(ret) && func_.get_ret_type().is_composite_type() && result_.is_ext() && func_.is_pipelined()) {
+    tmp_ret = ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to destruct pl object", K(tmp_ret));
+    }
+  }
+
   if (OB_NOT_NULL(top_context_)
       && top_context_->get_exec_stack().count() > 0
       && top_context_->get_exec_stack().at(

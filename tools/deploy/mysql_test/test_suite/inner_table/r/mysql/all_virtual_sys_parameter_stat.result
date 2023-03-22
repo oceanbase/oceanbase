@@ -303,6 +303,7 @@ _ob_trans_rpc_timeout
 _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_server_sleep_time
+_pipelined_table_function_memory_limit
 _print_sample_ppm
 _private_buffer_size
 _pushdown_storage_level

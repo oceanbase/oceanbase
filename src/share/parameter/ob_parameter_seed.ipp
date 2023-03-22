@@ -1397,3 +1397,6 @@ DEF_BOOL(_enable_transaction_internal_routing, OB_TENANT_PARAMETER, "True",
 DEF_STR(_load_tde_encrypt_engine, OB_CLUSTER_PARAMETER, "NONE",
         "load the engine that meet the security classification requirement to encrypt data.  default NONE",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_pipelined_table_function_memory_limit, OB_TENANT_PARAMETER, "524288000", "[1024,18446744073709551615]",
+        "pipeline table function result set memory size limit. default 524288000 (500M), Range: [1024,18446744073709551615]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
