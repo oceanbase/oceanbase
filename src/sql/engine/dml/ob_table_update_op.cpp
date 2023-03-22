@@ -116,11 +116,14 @@ ObTableUpdateOp::ObTableUpdateOp(ObExecContext &exec_ctx, const ObOpSpec &spec,
 int ObTableUpdateOp::check_need_exec_single_row()
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.upd_ctdefs_.count() && !execute_single_row_; ++i) {
-    const ObTableUpdateSpec::UpdCtDefArray &ctdefs = MY_SPEC.upd_ctdefs_.at(i);
-    const ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
-    if (has_before_row_trigger(upd_ctdef) || has_after_row_trigger(upd_ctdef)) {
-      execute_single_row_ = true;
+  ret = ObTableModifyOp::check_need_exec_single_row();
+  if (OB_SUCC(ret) && !execute_single_row_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.upd_ctdefs_.count() && !execute_single_row_; ++i) {
+      const ObTableUpdateSpec::UpdCtDefArray &ctdefs = MY_SPEC.upd_ctdefs_.at(i);
+      const ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
+      if (has_before_row_trigger(upd_ctdef) || has_after_row_trigger(upd_ctdef)) {
+        execute_single_row_ = true;
+      }
     }
   }
   return ret;

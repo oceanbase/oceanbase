@@ -97,17 +97,20 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
 int ObTableReplaceOp::check_need_exec_single_row()
 {
   int ret = OB_SUCCESS;
-  ObReplaceCtDef *replace_ctdef = MY_SPEC.replace_ctdefs_.at(0);
-  const ObInsCtDef *ins_ctdef = replace_ctdef->ins_ctdef_;
-  const ObDelCtDef *del_ctdef = replace_ctdef->del_ctdef_;
-  if (OB_NOT_NULL(ins_ctdef) || OB_NOT_NULL(del_ctdef)) {
-    if (has_before_row_trigger(*ins_ctdef) || has_after_row_trigger(*ins_ctdef)
-        || has_before_row_trigger(*del_ctdef) || has_after_row_trigger(*del_ctdef)) {
-      execute_single_row_ = true;
+  ret = ObTableModifyOp::check_need_exec_single_row();
+  if (OB_SUCC(ret) && !execute_single_row_) {
+    ObReplaceCtDef *replace_ctdef = MY_SPEC.replace_ctdefs_.at(0);
+    const ObInsCtDef *ins_ctdef = replace_ctdef->ins_ctdef_;
+    const ObDelCtDef *del_ctdef = replace_ctdef->del_ctdef_;
+    if (OB_NOT_NULL(ins_ctdef) || OB_NOT_NULL(del_ctdef)) {
+      if (has_before_row_trigger(*ins_ctdef) || has_after_row_trigger(*ins_ctdef)
+          || has_before_row_trigger(*del_ctdef) || has_after_row_trigger(*del_ctdef)) {
+        execute_single_row_ = true;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ins_ctdef or del_ctdef of primary table is nullptr", K(ret));
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ins_ctdef or del_ctdef of primary table is nullptr", K(ret));
   }
   return ret;
 }
