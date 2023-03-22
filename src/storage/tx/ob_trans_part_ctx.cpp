@@ -2979,6 +2979,10 @@ int ObPartTransCtx::submit_commit_log_()
     }
 
     if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (is_local_tx_() && exec_info_.upstream_.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected trans type with valid upstream", K(ret), KPC(this));
     } else if (OB_FAIL(log_block.add_new_log(commit_log))) {
       if (OB_BUF_NOT_ENOUGH == ret) {
         TRANS_LOG(WARN, "buf not enough", K(ret), K(commit_log));
@@ -4401,6 +4405,7 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
     TRANS_LOG(WARN, "set app trace id error", K(ret), K(commit_info_log), K(*this));
   } else {
     // NOTE that set xa variables before set trans type
+    set_2pc_upstream_(commit_info_log.get_upstream());
     exec_info_.xid_ = commit_info_log.get_xid();
     exec_info_.is_sub2pc_ = commit_info_log.is_sub2pc();
     if (exec_info_.participants_.count() > 1) {
@@ -4413,19 +4418,18 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
       exec_info_.trans_type_ = TransType::SP_TRANS;
     }
 
-    if (!is_local_tx_() && !commit_info_log.get_upstream().is_valid()) {
-      set_2pc_upstream_(ls_id_);
-      TRANS_LOG(INFO, "set upstream to self", K(*this), K(commit_info_log));
-    } else {
-      set_2pc_upstream_(commit_info_log.get_upstream());
-    }
-    can_elr_ = commit_info_log.is_elr();
-    cluster_version_ = commit_info_log.get_cluster_version();
-    sub_state_.set_info_log_submitted();
     if (commit_info_log.is_dup_tx()) {
       set_dup_table_tx();
       mt_ctx_.before_prepare(timestamp);
     }
+
+    if (!is_local_tx_() && !commit_info_log.get_upstream().is_valid()) {
+      set_2pc_upstream_(ls_id_);
+      TRANS_LOG(INFO, "set upstream to self", K(*this), K(commit_info_log));
+    }
+    can_elr_ = commit_info_log.is_elr();
+    cluster_version_ = commit_info_log.get_cluster_version();
+    sub_state_.set_info_log_submitted();
     reset_redo_lsns_();
     ObTwoPhaseCommitLogType two_phase_log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_MAX;
     if (is_incomplete_replay_ctx_) {
