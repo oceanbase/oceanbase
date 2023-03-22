@@ -2103,7 +2103,11 @@ int ObBackupTabletProvider::check_tablet_continuity_(const share::ObLSID &ls_id,
     const ObTabletMeta &cur_tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
     const int64_t cur_snapshot_version = cur_tablet_meta.report_status_.merge_snapshot_version_;
     const int64_t prev_backup_snapshot_version = prev_backup_tablet_meta.tablet_meta_.report_status_.merge_snapshot_version_;
-    if (cur_snapshot_version < prev_backup_snapshot_version) {
+    if ((prev_backup_snapshot_version <= 0 && prev_backup_tablet_meta.tablet_meta_.table_store_flag_.with_major_sstable())
+        || (cur_snapshot_version <= 0 && cur_tablet_meta.table_store_flag_.with_major_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("prev or current snapshot version should not be invalid", K(ret), K(cur_tablet_meta), K(prev_backup_tablet_meta));
+    } else if (cur_snapshot_version < prev_backup_snapshot_version) {
       ret = OB_BACKUP_MAJOR_NOT_COVER_MINOR;
       LOG_WARN("tablet is not valid", K(ret), K(cur_tablet_meta), K(prev_backup_tablet_meta));
     } else {
