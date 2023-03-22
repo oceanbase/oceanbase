@@ -66,18 +66,18 @@ public:
            const bool is_tightly_coupled,
            const int64_t timeout_seconds,
            const int64_t flags,
-           const bool need_response);
+           const bool is_first_branch);
   const transaction::ObXATransID &get_xid() const { return xid_; }
   const transaction::ObTransID &get_tx_id() const { return tx_id_; }
   const common::ObAddr &get_sender() const { return sender_; }
   bool is_new_branch() const { return is_new_branch_; }
   bool is_tightly_coupled() const { return is_tightly_coupled_; }
-  bool need_response() const { return need_response_; }
+  bool is_first_branch() const { return is_first_branch_; }
   int64_t get_timeout_seconds() const { return timeout_seconds_; }
   int64_t get_flags() const { return flags_; }
   bool is_valid() const;
   TO_STRING_KV(K_(tx_id), K_(xid), K_(sender), K_(is_new_branch), K_(is_tightly_coupled),
-               K_(need_response), K_(timeout_seconds), K_(flags));
+               K_(is_first_branch), K_(timeout_seconds), K_(flags));
 private:
   transaction::ObTransID tx_id_;
   transaction::ObXATransID xid_;
@@ -85,7 +85,7 @@ private:
   bool is_new_branch_;
   // for tightly-coupled xa branches
   bool is_tightly_coupled_;
-  bool need_response_;
+  bool is_first_branch_;
   int64_t timeout_seconds_;
   int64_t flags_;
 };
@@ -97,14 +97,17 @@ public:
   ObXAStartRPCResponse() {}
   ~ObXAStartRPCResponse() {}
   int init(const transaction::ObTransID &tx_id,
-           transaction::ObTxDesc &tx_desc);
+           transaction::ObTxDesc &tx_desc,
+           const bool is_first_branch);
   const transaction::ObTransID &get_tx_id() const { return tx_id_; }
   const transaction::ObTxInfo &get_tx_info() const { return tx_info_; }
+  bool is_first_branch() const { return is_first_branch_; }
   bool is_valid() const { return tx_id_.is_valid() && tx_info_.is_valid(); }
-  TO_STRING_KV(K_(tx_id), K_(tx_info));
+  TO_STRING_KV(K_(tx_id), K_(tx_info), K_(is_first_branch));
 private:
   transaction::ObTransID tx_id_;
   transaction::ObTxInfo tx_info_;
+  bool is_first_branch_;
 };
 
 class ObXAEndRPCRequest

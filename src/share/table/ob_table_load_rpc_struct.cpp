@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX CLIENT
 
@@ -38,10 +38,10 @@ OB_SERIALIZE_MEMBER(ObTableLoadPreBeginPeerRequest,
                     dup_action_,
                     px_mode_,
                     online_opt_stat_gather_,
-                    snapshot_version_,
                     dest_table_id_,
                     task_id_,
                     schema_version_,
+                    snapshot_version_,
                     data_version_,
                     partition_id_array_,
                     target_partition_id_array_);

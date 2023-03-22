@@ -207,7 +207,6 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
   } else if (print_params_.for_dblink_ && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
     bool is_bool_expr = false;
-    bool is_null_type = ob_is_null(expr->get_result_type().get_type());
     if (expr->is_exec_param_expr()) {
       ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr*>(expr);
       if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(exec_expr->get_ref_expr(), is_bool_expr))) {
@@ -227,17 +226,10 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
        *
        */
       LOG_WARN("fail to print 1 =", K(ret));
-    } else if (!is_null_type && OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "cast("))) {
-      LOG_WARN("fail to print cast(", K(ret));
     } else if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
       OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
     } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, expr->get_value().get_unknown()))) {
       LOG_WARN("fail to write param to buf", K(ret));
-    }
-    if (OB_SUCC(ret) && !is_null_type) {
-      DATA_PRINTF(" as ");
-      OZ(print_type(expr->get_result_type()));
-      DATA_PRINTF(")");
     }
   } else if (OB_NOT_NULL(param_store_) && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
@@ -3039,7 +3031,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         // func_name
         if (T_FUN_SYS_ORA_DECODE == expr->get_expr_type()) {
           //同一个函数 在Oracle下名为decode， 在MySQL下名为ora_decode
-          // for https://work.aone.alibaba-inc.com/issue/31150999
+          // for
           // 保证SQL反拼不会出错
           if (lib::is_oracle_mode()) {
             func_name = "decode";

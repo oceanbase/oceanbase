@@ -367,6 +367,7 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     server_cnt_(1),
     need_late_materialization_(false),
     op_exprs_(),
+    inherit_sharding_index_(-1),
     allocated_osg_(false)
 
 {
@@ -757,6 +758,7 @@ int ObLogicalOperator::compute_sharding_info()
     LOG_WARN("failed to assign sharding info", K(ret));
   } else {
     strong_sharding_ = child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
   }
   return ret;
 }
@@ -3487,7 +3489,7 @@ int ObLogicalOperator::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
               OZ (allocate_material(i));
             }
           } else if (LOG_WINDOW_FUNCTION == child->get_type()) {
-            /* https://yuque.antfin.com/ob/sql/wf_adaptive_parallel_execution
+            /*
              Window function participators require sync responds from datahub between threads.
              Consider the following scene : (DOP = 2)
 
@@ -3857,7 +3859,7 @@ int ObLogicalOperator::pw_allocate_granule_post(AllocGIContext &ctx)
     // However, at most one gi_random can be supported within a DFO,
     // so that won't work in the plan found in this bug.
     // Now we support GI rescan in partition_wise_state so we just push up the GI here in such case
-    // https://aone.alibaba-inc.com/task/32370920
+    //
     if (ctx.is_in_partition_wise_state() && is_fully_paratition_wise()) {
       ctx.alloc_gi_ = true;
       if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
@@ -4430,7 +4432,7 @@ int ObLogicalOperator::check_subplan_filter_child_exchange_rescanable()
   // 从second child起, 均需要标记为px coord.
   // 右孩子们是否标记为px coord取决于是否需要rescan.
   // 左孩子是否标记为px, 取决于右子孩子是否有onetime expr, 原因是需要先获取expr值, 再下压至左孩子,
-  // 详见issue https://work.aone.alibaba-inc.com/issue/30827301
+  // 详见issue
   if (OB_UNLIKELY(LOG_SUBPLAN_FILTER != type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected operator type", K(ret), K(type_));

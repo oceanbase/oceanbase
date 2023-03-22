@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -187,7 +187,7 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
     }
   }
   ObDirectLoadTableStoreParam param;
-  param.snapshot_version_ = param_.snapshot_version_;
+  param.snapshot_version_ = trans_ctx_->ctx_->ddl_param_.snapshot_version_;
   param.table_data_desc_ = *table_data_desc_;
   param.datum_utils_ = &(trans_ctx_->ctx_->schema_.datum_utils_);
   param.col_descs_ = &(trans_ctx_->ctx_->schema_.column_descs_);

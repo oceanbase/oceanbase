@@ -47,6 +47,7 @@ public:
   int set_nls_format(const ObString &nls_date_format,
                      const ObString &nls_timestamp_format,
                      const ObString &nls_timestamp_tz_format);
+  ObDDLTaskID get_ddl_task_id() { return ObDDLTaskID(tenant_id_, task_id_); }
   virtual int process() override;
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;

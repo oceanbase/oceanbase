@@ -902,7 +902,6 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObTableHandleV2 &kv_handle)
 int ObTabletDDLKvMgr::get_or_create_ddl_kv(const SCN &start_scn, const SCN &scn, ObTableHandleV2 &kv_handle)
 {
   int ret = OB_SUCCESS;
-  const int64_t TRY_LOCK_TIMEOUT = 1 * 1000000; // 1s
   kv_handle.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1105,15 +1104,20 @@ int ObTabletDDLKvMgr::get_ddl_kvs(const bool frozen_only, ObTablesHandleArray &k
 int ObTabletDDLKvMgr::get_ddl_kvs_for_query(ObTablet &tablet, ObTablesHandleArray &kv_handle_array)
 {
   int ret = OB_SUCCESS;
+  uint32_t lock_tid = 0;
   kv_handle_array.reset();
-  ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
+  } else if (OB_FAIL(rdlock(TRY_LOCK_TIMEOUT, lock_tid))) {
+    LOG_WARN("failed to rdlock", K(ret), K(tablet.get_tablet_meta()));
   } else if (!can_schedule_major_compaction_nolock(tablet.get_tablet_meta())) {
     // do nothing
   } else if (OB_FAIL(get_ddl_kvs_unlock(true/*frozen_only*/, kv_handle_array))) {
     LOG_WARN("get ddl kv unlock failed", K(ret));
+  }
+  if (0 != lock_tid) {
+    unlock(lock_tid);
   }
   return ret;
 }

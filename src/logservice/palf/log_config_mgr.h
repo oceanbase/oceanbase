@@ -350,6 +350,8 @@ public:
     J_OBJ_START();
     J_KV(K_(palf_id), K_(self), K_(alive_paxos_memberlist), K_(alive_paxos_replica_num),         \
       K_(log_ms_meta), K_(prev_log_proposal_id),                                                 \
+      K_(applied_alive_paxos_memberlist), K_(applied_alive_paxos_replica_num),                   \
+      K_(applied_all_learnerlist),                                                               \
       K_(prev_lsn), K_(prev_mode_pid), K_(state), K_(persistent_config_version),                 \
       K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),                           \
       K_(last_submit_config_log_time_us), K_(region), K_(paxos_member_region_map),                 \

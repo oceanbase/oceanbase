@@ -928,8 +928,7 @@ int64_t ObTableRedefinitionTask::get_serialize_param_size() const
   int8_t copy_foreign_keys = static_cast<int8_t>(is_copy_foreign_keys_);
   int8_t ignore_errors = static_cast<int8_t>(is_ignore_errors_);
   int8_t do_finish = static_cast<int8_t>(is_do_finish_);
-  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_)
-         + serialization::encoded_length_i64(parallelism_) + serialization::encoded_length_i64(data_format_version_)
+  return alter_table_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size()
          + serialization::encoded_length_i8(copy_indexes) + serialization::encoded_length_i8(copy_triggers)
          + serialization::encoded_length_i8(copy_constraints) + serialization::encoded_length_i8(copy_foreign_keys)
          + serialization::encoded_length_i8(ignore_errors) + serialization::encoded_length_i8(do_finish);
@@ -947,14 +946,10 @@ int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_len, pos))) {
+    LOG_WARN("ObDDLTask serialize failed", K(ret));
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, parallelism_))) {
-    LOG_WARN("fail to serialize parallelism_", K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, data_format_version_))) {
-    LOG_WARN("fail to serialize parallelism_", K(ret));
   } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, copy_indexes))) {
     LOG_WARN("fail to serialize is_copy_indexes", K(ret));
   } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, copy_triggers))) {
@@ -986,18 +981,14 @@ int ObTableRedefinitionTask::deserlize_params_from_message(const uint64_t tenant
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
+  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos))) {
+    LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
   } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
     LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &parallelism_))) {
-    LOG_WARN("fail to deserialize parallelism", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &data_format_version_))) {
-    LOG_WARN("fail to deserialize data format version", K(ret));
   } else if (pos < data_len) {
     if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &copy_indexes))) {
       LOG_WARN("fail to deserialize is_copy_indexes_", K(ret));

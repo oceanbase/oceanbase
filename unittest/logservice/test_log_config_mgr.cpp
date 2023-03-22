@@ -609,6 +609,8 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
     // memberlist will not be applied right now when there is arb member, so use alive_paxos_memberlist_
     bool member_equal = (cm.alive_paxos_memberlist_.member_addr_equal(expect_member_list));
     EXPECT_TRUE(member_equal);
+    // apply config meta
+    cm.config_meta_ = cm.log_ms_meta_;
     // remove(C, 5)
     cm.reset_status();
     LogConfigChangeArgs remove_c_arg(ObMember(addr3, -1), 5, palf::REMOVE_MEMBER);

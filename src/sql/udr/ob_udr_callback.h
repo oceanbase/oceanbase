@@ -1,8 +1,8 @@
 // Copyright 2015-2016 Alibaba Inc. All Rights Reserved.
 // Author:
-//     LuoFan luofan.zp@alibaba-inc.com
+//     LuoFan
 // Normalizer:
-//     LuoFan luofan.zp@alibaba-inc.com
+//     LuoFan
 
 
 #ifndef OB_SQL_UDR_OB_UDR_CALLBACK_H_

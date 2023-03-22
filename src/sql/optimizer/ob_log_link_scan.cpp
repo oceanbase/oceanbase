@@ -1,6 +1,6 @@
 // Copyright 2010-2018 Alibaba Inc. All Rights Reserved.
 // Author:
-//   ethan.xy@antfin.com
+//
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_link_scan.h"

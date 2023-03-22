@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #pragma once
 
@@ -64,10 +64,10 @@ public:
       dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
       px_mode_(false),
       online_opt_stat_gather_(false),
-      snapshot_version_(0),
       dest_table_id_(common::OB_INVALID_ID),
       task_id_(0),
       schema_version_(0),
+      snapshot_version_(0),
       data_version_(0)
   {
   }
@@ -77,10 +77,10 @@ public:
                K_(dup_action),
                K_(px_mode),
                K_(online_opt_stat_gather),
-               K_(snapshot_version),
                K_(dest_table_id),
                K_(task_id),
                K_(schema_version),
+               K_(snapshot_version),
                K_(data_version),
                K_(partition_id_array),
                K_(target_partition_id_array));
@@ -92,11 +92,11 @@ public:
   sql::ObLoadDupActionType dup_action_;
   bool px_mode_;
   bool online_opt_stat_gather_;
-  int64_t snapshot_version_;
   // ddl param
   uint64_t dest_table_id_;
   int64_t task_id_;
   int64_t schema_version_;
+  int64_t snapshot_version_;
   int64_t data_version_;
   // partition info
   ObTableLoadArray<ObTableLoadLSIdAndPartitionId> partition_id_array_;//orig table

@@ -611,6 +611,7 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
               }
             } else if (conn_->is_driver_client()) {
               // will not track session variables, do nothing
+              okp.set_use_standard_serialize(true);
             } else {
               if (OB_FAIL(ObMPUtils::add_changed_session_info(okp, session))) {
                 SERVER_LOG(WARN, "fail to add changed session info", K(ret));
@@ -850,7 +851,7 @@ int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
         } else {
           // try again with larger buf size
           const int64_t new_alloc_size = TRY_EZ_BUF_SIZES[try_steps++];
-          // refer to doc: https://work.aone.alibaba-inc.com/issue/46055888
+          // refer to doc:
           if (OB_SIZE_OVERFLOW != last_ret && OB_BUF_NOT_ENOUGH != last_ret) {
             ret = last_ret;
             LOG_WARN("last_ret is not size overflow, need check code", K(last_ret));

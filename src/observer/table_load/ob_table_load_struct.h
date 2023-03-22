@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #pragma once
 
@@ -107,8 +107,7 @@ struct ObTableLoadParam
       px_mode_(false),
       online_opt_stat_gather_(false),
       data_type_(ObTableLoadDataType::RAW_STRING),
-      dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
-      snapshot_version_(0)
+      dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE)
   {
   }
 
@@ -129,13 +128,12 @@ struct ObTableLoadParam
            common::OB_INVALID_ID != table_id_ &&
            session_count_ > 0 && session_count_ <= MAX_TABLE_LOAD_SESSION_COUNT &&
            batch_size_ > 0 &&
-           column_count_ > 0 &&
-           snapshot_version_ > 0;
+           column_count_ > 0;
   }
 
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(session_count), K_(batch_size),
                K_(max_error_row_count), K_(sql_mode), K_(column_count), K_(need_sort), K_(px_mode),
-               K_(online_opt_stat_gather), K_(data_type), K_(dup_action), K_(snapshot_version));
+               K_(online_opt_stat_gather), K_(data_type), K_(dup_action));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -149,32 +147,39 @@ public:
   bool online_opt_stat_gather_;
   ObTableLoadDataType data_type_;
   sql::ObLoadDupActionType dup_action_;
-  int64_t snapshot_version_;
 };
 
 struct ObTableLoadDDLParam
 {
 public:
   ObTableLoadDDLParam()
-    : dest_table_id_(common::OB_INVALID_ID), task_id_(0), schema_version_(0), data_version_(0) {}
+    : dest_table_id_(common::OB_INVALID_ID),
+      task_id_(0),
+      schema_version_(0),
+      snapshot_version_(0),
+      data_version_(0)
+  {
+  }
   void reset()
   {
     dest_table_id_ = common::OB_INVALID_ID;
     task_id_ = 0;
     schema_version_ = 0;
+    snapshot_version_ = 0;
     data_version_ = 0;
   }
   bool is_valid() const
   {
     return common::OB_INVALID_ID != dest_table_id_ && 0 != task_id_ && 0 != schema_version_ &&
-           0 != data_version_;
+           0 != snapshot_version_ && 0 != data_version_;
   }
-  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(data_version));
-
+  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(snapshot_version),
+               K_(data_version));
 public:
   uint64_t dest_table_id_;
   int64_t task_id_;
   int64_t schema_version_;
+  int64_t snapshot_version_;
   int64_t data_version_;
 };
 

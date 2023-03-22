@@ -111,6 +111,12 @@ void ObTxLoopWorker::run1()
 
     (void)scan_all_ls_(can_gc_tx, can_gc_retain_ctx);
 
+    // TODO shanyan.g
+    // 1) We use max(max_commit_ts, gts_cache) as read snapshot,
+    //    but now we adopt updating max_commit_ts periodly to avoid getting gts cache cost
+    // 2) Some time later, we will revert current modification when performance problem solved;
+      update_max_commit_ts_();
+
     time_used = ObTimeUtility::current_time() - start_time_us;
 
     if (time_used < LOOP_INTERVAL) {
@@ -162,7 +168,7 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
       // tx gc, interval = 15s
       if (can_tx_gc) {
         // TODO shanyan.g close ctx gc temporarily because of logical bug
-        // https://work.aone.alibaba-inc.com/issue/42892101
+        //
         do_tx_gc_(cur_ls_ptr, min_start_scn, status);
       }
 
@@ -185,12 +191,6 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
 
       // keep alive, interval = 100ms
       do_keep_alive_(cur_ls_ptr, min_start_scn, status);
-
-      // TODO shanyan.g
-      // 1) We use max(max_commit_ts, gts_cache) as read snapshot,
-      //    but now we adopt updating max_commit_ts periodly to avoid getting gts cache cost
-      // 2) Some time later, we will revert current modification when performance problem solved;
-      update_max_commit_ts_(cur_ls_ptr);
 
       if (can_gc_retain_ctx) {
         do_retain_ctx_gc_(cur_ls_ptr);
@@ -229,11 +229,12 @@ void ObTxLoopWorker::do_tx_gc_(ObLS *ls_ptr, SCN &min_start_scn, MinStartScnStat
   UNUSED(ret);
 }
 
-void ObTxLoopWorker::update_max_commit_ts_(ObLS *ls_ptr)
+void ObTxLoopWorker::update_max_commit_ts_()
 {
   int ret = OB_SUCCESS;
   SCN snapshot;
   const int64_t expire_ts = ObClockGenerator::getClock() + 1000000; // 1s
+  ObTransService *txs = NULL;
 
   do {
     int64_t n = ObClockGenerator::getClock();
@@ -248,11 +249,11 @@ void ObTxLoopWorker::update_max_commit_ts_(ObLS *ls_ptr)
     } else if (OB_UNLIKELY(!snapshot.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "invalid snapshot from gts", K(snapshot));
+    } else if (OB_ISNULL(txs = MTL(ObTransService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected transaction service", K(ret), KP(txs));
     } else {
-      if (NULL != ls_ptr) {
-        ls_ptr->get_tx_svr()->get_trans_service()
-                            ->get_tx_version_mgr().update_max_commit_ts(snapshot, false);
-      }
+      txs->get_tx_version_mgr().update_max_commit_ts(snapshot, false);
     }
   } while (OB_EAGAIN == ret);
 }

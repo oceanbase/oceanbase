@@ -183,7 +183,7 @@ select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20
 drop table if exists t_r4_01_20;
 --enable_warnings
 
-## bug:https://aone.alibaba-inc.com/issue/9211556?spm=a2o8d.corp_prod_issue_list.0.0.25893050Y8aynZ&stat=1.5.38&toPage=1&versionId=1043693
+## bug:
 --disable_warnings
 drop table if exists t2, t7;
 --enable_warnings

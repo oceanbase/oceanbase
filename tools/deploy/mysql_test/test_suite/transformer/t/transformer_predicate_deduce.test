@@ -403,7 +403,7 @@ insert/**/ into pujydypf values ('ok', '20605', 'yes', 'testcase');
 select /*+use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
 select /*+no_rewrite, use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
 
-## bug: https://work.aone.alibaba-inc.com/issue/32926523
+## bug:
 --disable_warnings
 drop table if exists t1, t2;
 --enable_warnings
@@ -432,7 +432,7 @@ drop table if exists tt1, tt2, tt3;
 drop table if exists cghldinf, puzdjypf, pujydypf;
 --enable_warnings
 
-#Bugfix:https://work.aone.alibaba-inc.com/issue/47217185
+#Bugfix:
 --disable_warnings
 drop table if exists v0;
 --enable_warnings
@@ -442,7 +442,7 @@ explain select * from v0 where v1 in (select -127 minus select _BINARY 'x');
 drop table if exists v0;
 
 
-#Bugfix:https://work.aone.alibaba-inc.com/issue/47186369
+#Bugfix:
 --explain_protocol 0
 --disable_warnings
 drop table if exists t1;

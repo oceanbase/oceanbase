@@ -725,7 +725,7 @@ int ObDDLUtil::generate_build_replica_sql(
 
       if (OB_FAIL(ret)) {
       } else if (oracle_mode) {
-        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) use_px */INTO \"%.*s\".\"%.*s\"(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" as of scn %ld %.*s",
+        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */INTO \"%.*s\".\"%.*s\"(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" as of scn %ld %.*s",
             real_parallelism, execution_id, task_id,
             static_cast<int>(dest_database_name.length()), dest_database_name.ptr(), static_cast<int>(dest_table_name.length()), dest_table_name.ptr(),
             static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
@@ -737,7 +737,7 @@ int ObDDLUtil::generate_build_replica_sql(
           LOG_WARN("fail to assign sql string", K(ret));
         }
       } else {
-        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) use_px */INTO `%.*s`.`%.*s`(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` as of snapshot %ld %.*s",
+        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */INTO `%.*s`.`%.*s`(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` as of snapshot %ld %.*s",
             real_parallelism, execution_id, task_id,
             static_cast<int>(dest_database_name.length()), dest_database_name.ptr(), static_cast<int>(dest_table_name.length()), dest_table_name.ptr(),
             static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),

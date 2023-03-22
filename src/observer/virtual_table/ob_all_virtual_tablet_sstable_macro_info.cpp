@@ -34,6 +34,7 @@ ObAllVirtualTabletSSTableMacroInfo::MacroInfo::MacroInfo()
     data_checksum_(0),
     occupy_size_(0),
     original_size_(0),
+    data_size_(0),
     data_zsize_(0),
     store_range_(),
     row_count_(0),
@@ -56,6 +57,7 @@ void ObAllVirtualTabletSSTableMacroInfo::MacroInfo::reset()
   data_checksum_ = 0;
   occupy_size_ = 0;
   original_size_ = 0;
+  data_size_ = 0;
   data_zsize_ = 0;
   store_range_.reset();
   row_count_ = 0;
@@ -467,6 +469,7 @@ void ObAllVirtualTabletSSTableMacroInfo::release_last_tenant()
     macro_iter_ = nullptr;
   }
   curr_range_.reset();
+  tablet_allocator_.reset();
 }
 
 bool ObAllVirtualTabletSSTableMacroInfo::is_need_process(uint64_t tenant_id)
@@ -513,6 +516,8 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_tablet()
     }
   }
   while(OB_SUCC(ret)) {
+    tablet_handle_.reset();
+    tablet_allocator_.reuse();
     if (OB_FAIL(tablet_iter_->get_next_tablet(tablet_handle_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         SERVER_LOG(WARN, "fail to get tablet iter", K(ret));

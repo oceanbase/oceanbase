@@ -223,10 +223,10 @@ void ObMemtableCtx::dec_ref()
   (void)ATOMIC_AAF(&ref_, -1);
 }
 
-void ObMemtableCtx::set_replay()
+void ObMemtableCtx::wait_pending_write()
 {
-  WRLockGuard guard(rwlock_);
-  is_master_ = false;
+  ATOMIC_STORE(&is_master_, false);
+  WRLockGuard wrguard(rwlock_);
 }
 
 SCN ObMemtableCtx::get_tx_end_scn() const
@@ -907,9 +907,8 @@ int ObMemtableCtx::rollback(const int64_t to_seq_no, const int64_t from_seq_no)
 bool ObMemtableCtx::is_all_redo_submitted()
 {
   ObByteLockGuard guard(lock_);
-  return trans_mgr_.is_all_redo_submitted(log_gen_.get_generate_cursor());
+  return trans_mgr_.is_all_redo_submitted();
 }
-
 
 int ObMemtableCtx::remove_callbacks_for_fast_commit()
 {

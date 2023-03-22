@@ -371,7 +371,7 @@ int ObMPConnect::process()
   return ret;
 }
 
-//https://aone.alibaba-inc.com/project/81079/issue/9891844
+//
 inline bool is_inner_proxyro_user(const ObSMConnection &conn, const ObString &user_name)
 {
   const static ObString PROXYRO_USERNAME(OB_PROXYRO_USERNAME);
@@ -428,7 +428,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         share::schema::ObSessionPrivInfo session_priv;
         uint64_t db_id = OB_INVALID_ID;
         if (ORACLE_MODE == session.get_compatibility_mode()) {
-          // https://work.aone.alibaba-inc.com/issue/31514373
+          //
           hsr_.set_client_found_rows();
         }
         session.set_capability(hsr_.get_capability_flags());
@@ -640,7 +640,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
       if (OB_SUCC(ret)) {
         // Attention!! must set session capability firstly
         if (ORACLE_MODE == session.get_compatibility_mode()) {
-          // https://work.aone.alibaba-inc.com/issue/31514373
+          //
           hsr_.set_client_found_rows();
         }
         session.set_capability(hsr_.get_capability_flags());
@@ -2057,7 +2057,7 @@ int ObMPConnect::update_charset_sys_vars(ObSMConnection &conn, ObSQLSessionInfo 
   //            default charset for mysqltest
   //TODO: after obclient&mysqltest support default charset = utf8
   //      login for cs_type != LATIN1_CS would be deleted
-  if (cs_type != LATIN1_CS && ObCharset::is_valid_collation(cs_type)) {
+  if (ObCharset::is_valid_collation(cs_type)) {
     if (OB_FAIL(sess_info.update_sys_variable(SYS_VAR_CHARACTER_SET_CLIENT, cs_type))) {
       SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
     } else if (OB_FAIL(sess_info.update_sys_variable(SYS_VAR_CHARACTER_SET_RESULTS, cs_type))) {

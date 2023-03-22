@@ -1328,15 +1328,32 @@ int ObService::switch_schema(
         }
       } while (OB_SUCC(ret));
       */
+      // To set the received_schema_version period in advance,
+      // let refresh_schema can execute before analyze_dependencies logic;
+      int64_t LEFT_TIME = 200 * 1000;// 200ms
+      int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+      if (INT64_MAX != origin_timeout_ts
+          && origin_timeout_ts >= ObTimeUtility::current_time() + LEFT_TIME) {
+        THIS_WORKER.set_timeout_ts(origin_timeout_ts - LEFT_TIME);
+      }
       if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version))) {
         LOG_WARN("fail to async schema version", KR(ret), K(tenant_id), K(schema_version));
       }
+      THIS_WORKER.set_timeout_ts(origin_timeout_ts);
       int64_t tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = schema_service->set_tenant_received_broadcast_version(tenant_id, schema_version))) {
         LOG_WARN("failt to update received schema version", KR(tmp_ret), K(tenant_id), K(schema_version));
         ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
-
+      if (THIS_WORKER.is_timeout_ts_valid()
+          && !THIS_WORKER.is_timeout()
+          && OB_TIMEOUT == ret) {
+        // To set set_tenant_received_broadcast_version in advance, we reduce the abs_time,
+        // if not timeout after first async_refresh_schema, we should execute async_refresh_schema again and overwrite the ret code
+        if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version))) {
+          LOG_WARN("fail to async schema version", KR(ret), K(tenant_id), K(schema_version));
+        }
+      }
       if (OB_FAIL(ret)) {
       } else if (schema_info.get_schema_version() <= 0) {
         // skip

@@ -478,7 +478,7 @@ int ObSelectStmtPrinter::print_select()
               alias_string = select_item.expr_name_;
             }
             /* oracle模式下，由于部分函数的别名可能出现双引号“”，将导致二次解析出错，因此需要将这些双引号去掉
-            *  https://work.aone.alibaba-inc.com/issue/28227961
+            *
             */
             ObArenaAllocator arena_alloc;
             if (is_oracle_mode && OB_FAIL(remove_double_quotation_for_string(alias_string,

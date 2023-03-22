@@ -621,7 +621,8 @@ int ObLobLocatorV2::get_inrow_data(ObString &inrow_data) const
         int64_t handle_size = disk_loc->get_handle_size(byte_size);
         if (byte_size + handle_size + handle_offset > size_) {
           ret = OB_INVALID_ARGUMENT;
-          COMMON_LOG(WARN, "Lob: invalid inrow data", K(ret), K(byte_size), K(handle_size), K(*disk_loc), K(handle_offset));
+          COMMON_LOG(WARN, "Lob: invalid inrow data", K(ret), K(byte_size), K(handle_size),
+                     K(*disk_loc), K(handle_offset), K(size_));
         } else {
           inrow_data.assign_ptr(disk_loc_buff.ptr() + handle_size, byte_size);
         }

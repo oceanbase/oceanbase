@@ -47,9 +47,9 @@ public:
                           const int64_t start_turn_id,
                           const int64_t turn_id,
                           const int64_t retry_id);
-  static int statistic_info(ObBackupLeaseService &lease_service,
-                            common::ObISQLClient &sql_proxy,
-                            const share::ObBackupLSTaskAttr &ls_attr);
+  static int mark_ls_task_info_final(ObBackupLeaseService &lease_service,
+                                     common::ObISQLClient &sql_proxy,
+                                     const share::ObBackupLSTaskAttr &ls_attr);
   static int update_black_server(ObBackupLeaseService &lease_service,
                                  common::ObISQLClient &sql_proxy,
                                  const share::ObBackupLSTaskAttr &ls_attr,

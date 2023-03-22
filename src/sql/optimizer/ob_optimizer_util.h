@@ -776,7 +776,10 @@ public:
                                              ObSQLSessionInfo *session_info,
                                              const ObItemType filter_type,
                                              ObRawExpr *const_expr,
-                                             ObRawExpr *&offset_int_expr);
+                                             ObRawExpr *&offset_int_expr,
+                                             ObRawExpr *zero_expr,
+                                             bool &offset_is_not_neg,
+                                             ObTransformerCtx *ctx);
 
   static int convert_rownum_filter_as_limit(ObRawExprFactory &expr_factory,
                                             ObSQLSessionInfo *session_info,

@@ -3264,7 +3264,7 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
         LOG_WARN("fail to extract info child 3 of between node", K(ret));
       } else if (btw_params[1]->has_flag(CNT_PL_UDF)
                  || btw_params[2]->has_flag(CNT_PL_UDF)) {
-        // skip rewrite, relevant issue : https://work.aone.alibaba-inc.com/issue/35465473
+        // skip rewrite, relevant issue :
       } else if (btw_params[1]->is_const_expr()
                  && btw_params[2]->is_const_expr()) {
         // We will transform if the second and the third param are both const value or const expr
@@ -3470,7 +3470,7 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
       escape_node.raw_text_ = NULL;
 
       /*
-      bugfix:https://work.aone.alibaba-inc.com/issue/36691548
+      bugfix:
       in NO_BACKSLASH_ESCAPES mode, 'like BINARY xxx' stmt should also set the escapes as null, instead of '\' 
       */
       bool no_escapes = false;
@@ -5834,7 +5834,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
           }
         } //end for
 
-        // https://work.aone.alibaba-inc.com/issue/37807086
+        //
         // check param count
         if (ret != OB_SUCCESS) {
           int temp_ret = ret;
@@ -5906,7 +5906,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
 
   //mark expr is deterministic or not(default deterministic)
   if (OB_SUCC(ret)) {
-    //bug:https://work.aone.alibaba-inc.com/issue/32921493
+    //bug:
     //maybe have more exprs, can be added below in the future.
     if (lib::is_oracle_mode() && expr->get_expr_type() == T_FUN_SYS_REGEXP_REPLACE) {
       expr->set_is_deterministic(false);

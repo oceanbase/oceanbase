@@ -4,9 +4,9 @@
 // version 2 as published by the Free Software Foundation.
 // Version: $Id$
 //  Authors:
-//    yebangyu <bangyu.yby@alibaba-inc.com>
+//    yebangyu <>
 //  Normalizer:
-//    yebangyu <bangyu.yby@alipay.com>
+//    yebangyu <>
 // This file is for implementation of func get_user_var
 
 #define USING_LOG_PREFIX  SQL_ENG

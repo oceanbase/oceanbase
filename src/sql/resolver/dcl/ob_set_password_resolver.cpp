@@ -330,7 +330,7 @@ int ObSetPasswordResolver::resolve_oracle_password_strength(common::ObString &us
 }
 
 /*
-bugfix : https://work.aone.alibaba-inc.com/issue/46244474
+bugfix :
 alter user resource identified by password core cause by invalid memory access
 */
 int ObSetPasswordResolver::check_role_as_user(ParseNode *user_hostname_node, bool &is_valid) {

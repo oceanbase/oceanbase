@@ -247,7 +247,7 @@ public:
 protected:
   // this is a trick!
   // get part id from hashmap, implicate that only one level-1 part in the map
-  // reference to https://work.aone.alibaba-inc.com/issue/32897802
+  // reference to
   virtual int get_part_id_by_one_level_sub_ch_map(int64_t &part_id);
   virtual int get_sub_part_id_by_one_level_first_ch_map(
     const int64_t part_id, int64_t &sub_part_id);

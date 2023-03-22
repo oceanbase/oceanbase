@@ -1538,17 +1538,23 @@ int ObMPStmtExecute::try_batch_multi_stmt_optimization(ObSQLSessionInfo &session
     LOG_WARN("fail to trans_form extend type params_store", K(ret), K(arraybinding_size_));
   } else if (OB_FAIL(do_process_single(session, array_binding_params, has_more_result, force_sync_resp, async_resp_used))) {
     // 调用do_single接口
-    if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
+    if (THIS_WORKER.need_retry()) {
+      // just go back to large query queue and retry
+    } else if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
       LOG_TRACE("batched multi_stmt needs rollback", K(ret));
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("failed to process single stmt", K(ret));
+      // 无论什么报错，都走单行执行一次，用于容错
+      int ret_tmp = ret;
+      ret = OB_SUCCESS;
+      LOG_WARN("failed to process batch stmt, cover the error code, reset retry flag, then execute with single row",
+          K(ret_tmp), K(ret), K(THIS_WORKER.need_retry()));
     }
   } else {
     optimization_done = true;
   }
   LOG_TRACE("after try batched multi-stmt optimization", K(ret), K(stmt_type_), K(use_plan_cache),
-      K(optimization_done), K(enable_batch_opt), K(is_ab_returning), K(arraybinding_size_));
+      K(optimization_done), K(enable_batch_opt), K(is_ab_returning), K(THIS_WORKER.need_retry()), K(arraybinding_size_));
   return ret;
 }
 

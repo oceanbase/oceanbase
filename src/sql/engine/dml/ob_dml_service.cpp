@@ -243,7 +243,7 @@ int ObDMLService::create_rowkey_check_hashset(int64_t estimate_row,
       rowkey_dist_ctx = new (buf) SeRowkeyDistCtx();
       int64_t match_rows = estimate_row > ObDMLBaseCtDef::MIN_ROWKEY_DISTINCT_BUCKET_NUM ?
                             estimate_row : ObDMLBaseCtDef::MIN_ROWKEY_DISTINCT_BUCKET_NUM;
-      // https://work.aone.alibaba-inc.com/issue/23348769
+      //
       // match_rows是优化器估行的结果，如果这个值很大，
       // 直接创建有这么多bucket的hashmap会申请
       // 不到内存，这里做了限制为64k，防止报内存不足的错误
@@ -1009,7 +1009,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
       }
     }
     if (OB_SUCC(ret)) {
-      //because of this bug: https://work.aone.alibaba-inc.com/issue/31915604
+      //because of this bug:
       //if the updated row is moved across partitions, we must delete old row at first
       //and then store new row to a temporary buffer,
       //only when all old rows have been deleted, new rows can be inserted
@@ -1549,16 +1549,18 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     if (OB_SUCC(ret)) {
       if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), stored_row, buffer_full))) {
         LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
+      } else if (OB_NOT_NULL(stored_row)) {
+        dml_rtctx.add_cached_row_size(stored_row->row_size_);
       }
       LOG_DEBUG("write row to das op", K(ret), K(buffer_full), "op_type", N,
                 "table_id", ctdef.table_id_, "index_tid", ctdef.index_tid_,
-                "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row));
+                "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row), "row_size", stored_row->row_size_);
     }
     //3. if buffer is full, frozen node, create a new das op to add row
     if (OB_SUCC(ret) && buffer_full) {
       need_retry = true;
       if (REACH_COUNT_INTERVAL(10)) { // print log per 10 times.
-        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()));
+        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()), K(dml_rtctx.get_cached_row_size()));
       }
       dml_rtctx.das_ref_.set_frozen_node();
     }

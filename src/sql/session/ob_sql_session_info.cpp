@@ -375,7 +375,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     }
 
     // 反序列化出来的 session 不应该做 end_trans 等清理工作
-    // bug: https://aone.alibaba-inc.com/issue/17438593
+    // bug:
     if (false == get_is_deserialized()) {
       if (false == ObSchemaService::g_liboblog_mode_) {
         //session断开时调用ObTransService::end_trans回滚事务，

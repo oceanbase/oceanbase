@@ -75,13 +75,26 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
   int ret = OB_SUCCESS;
   no_need_submit_log = false;
 
-  if (exec_info_.is_dup_tx_ || OB_SUCC(search_unsubmitted_dup_table_redo_())) {
-    no_need_submit_log = true;
-    if (OB_FAIL(dup_table_tx_redo_sync_())) {
-      TRANS_LOG(WARN, "dup table tx  redo sync failed", K(ret));
+  if (OB_SUCC(ret)) {
+    if (sub_state_.is_force_abort()) {
+      if (OB_FAIL(compensate_abort_log_())) {
+        TRANS_LOG(WARN, "compensate abort log failed", K(ret), K(ls_id_), K(trans_id_),
+                  K(get_downstream_state()), K(get_upstream_state()), K(sub_state_));
+      } else {
+        ret = OB_TRANS_KILLED;
+      }
     }
-  } else if (OB_FAIL(generate_prepare_version_())) {
-    TRANS_LOG(WARN, "generate prepare version failed", K(ret), K(*this));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (exec_info_.is_dup_tx_ || OB_SUCC(search_unsubmitted_dup_table_redo_())) {
+      no_need_submit_log = true;
+      if (OB_FAIL(dup_table_tx_redo_sync_())) {
+        TRANS_LOG(WARN, "dup table tx  redo sync failed", K(ret));
+      }
+    } else if (OB_FAIL(generate_prepare_version_())) {
+      TRANS_LOG(WARN, "generate prepare version failed", K(ret), K(*this));
+    }
   }
 
   if (OB_SUCC(ret)) {

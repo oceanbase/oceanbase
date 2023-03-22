@@ -118,13 +118,19 @@ public:
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
 
-  virtual int compute_equal_set() override;
-
-  int get_equal_set_conditions(ObIArray<ObRawExpr*> &equal_conds);
-
   common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
 
   common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
+
+  int get_repart_sharding_info(ObLogicalOperator* child_op,
+                               ObShardingInfo *&strong_sharding,
+                               ObIArray<ObShardingInfo*> &weak_sharding);
+
+  int rebuild_repart_sharding_info(const ObShardingInfo *input_sharding,
+                                   ObIArray<ObRawExpr*> &src_keys,
+                                   ObIArray<ObRawExpr*> &target_keys,
+                                   EqualSets &input_esets,
+                                   ObShardingInfo *&out_sharding);
 
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,

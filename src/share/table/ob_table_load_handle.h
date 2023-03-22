@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #ifndef OB_TABLE_LOAD_HANDLE_H_
 #define OB_TABLE_LOAD_HANDLE_H_

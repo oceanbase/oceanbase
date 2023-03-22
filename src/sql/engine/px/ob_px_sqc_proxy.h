@@ -126,16 +126,24 @@ public:
                           int64_t timeout_ts,
                           bool is_transmit);
 
-  // for peek datahub whole msg
   template <class PieceMsg, class WholeMsg>
-  int get_dh_msg(
-      uint64_t op_id,
+  int get_dh_msg_sync(uint64_t op_id,
       dtl::ObDtlMsgType msg_type,
       const PieceMsg &piece,
       const WholeMsg *&whole,
       int64_t timeout_ts,
       bool send_piece = true,
       bool need_wait_whole_msg = true);
+
+  template <class PieceMsg, class WholeMsg>
+  int get_dh_msg(uint64_t op_id,
+      dtl::ObDtlMsgType msg_type,
+      const PieceMsg &piece,
+      const WholeMsg *&whole,
+      int64_t timeout_ts,
+      bool send_piece = true,
+      bool need_wait_whole_msg = true);
+
 
   // 用于 worker 汇报执行结果
   int report_task_finish_status(int64_t task_idx, int rc);
@@ -168,6 +176,9 @@ public:
   int append_bf_send_ctx(int64_t &bf_send_ctx_idx);
   int64_t get_task_count() const;
   common::ObThreadCond &get_msg_ready_cond() { return msg_ready_cond_; }
+  int64_t get_dh_msg_cnt() const;
+  void atomic_inc_dh_msg_cnt();
+  int64_t atomic_add_and_fetch_dh_msg_cnt();
 private:
   /* functions */
   int setup_loop_proc(ObSqcCtx &sqc_ctx);
@@ -180,6 +191,18 @@ private:
   int get_whole_msg_provider(uint64_t op_id, dtl::ObDtlMsgType msg_type, ObPxDatahubDataProvider *&provider);
   int64_t get_process_query_time();
   int64_t get_query_timeout_ts();
+  int sync_wait_all(ObPxDatahubDataProvider &provider);
+  // for peek datahub whole msg
+  template <class PieceMsg, class WholeMsg>
+  int inner_get_dh_msg(
+      uint64_t op_id,
+      dtl::ObDtlMsgType msg_type,
+      const PieceMsg &piece,
+      const WholeMsg *&whole,
+      int64_t timeout_ts,
+      bool need_sync,
+      bool send_piece,
+      bool need_wait_whole_msg);
   /* variables */
   public:
   ObSqcCtx &sqc_ctx_;
@@ -201,12 +224,41 @@ private:
 
 
 template <class PieceMsg, class WholeMsg>
-int ObPxSQCProxy::get_dh_msg(
+int ObPxSQCProxy::get_dh_msg_sync(uint64_t op_id,
+        dtl::ObDtlMsgType msg_type,
+        const PieceMsg &piece,
+        const WholeMsg *&whole,
+        int64_t timeout_ts,
+        bool send_piece,
+        bool need_wait_whole_msg)
+{
+  return inner_get_dh_msg(op_id, msg_type, piece, whole,
+                          timeout_ts, true, send_piece,
+                          need_wait_whole_msg);
+}
+
+template <class PieceMsg, class WholeMsg>
+int ObPxSQCProxy::get_dh_msg(uint64_t op_id,
+    dtl::ObDtlMsgType msg_type,
+    const PieceMsg &piece,
+    const WholeMsg *&whole,
+    int64_t timeout_ts,
+    bool send_piece,
+    bool need_wait_whole_msg)
+{
+  return inner_get_dh_msg(op_id, msg_type, piece, whole,
+                          timeout_ts, false, send_piece,
+                          need_wait_whole_msg);
+}
+
+template <class PieceMsg, class WholeMsg>
+int ObPxSQCProxy::inner_get_dh_msg(
     uint64_t op_id,
     dtl::ObDtlMsgType msg_type,
     const PieceMsg &piece,
     const WholeMsg *&whole,
     int64_t timeout_ts,
+    bool need_sync,
     bool send_piece /*= true*/,
     bool need_wait_whole_msg /*= true*/)
 {
@@ -214,6 +266,8 @@ int ObPxSQCProxy::get_dh_msg(
   ObPxDatahubDataProvider *provider = nullptr;
   if (OB_FAIL(get_whole_msg_provider(op_id, msg_type, provider))) {
     SQL_LOG(WARN, "fail get provider", K(ret));
+  } else if (need_sync && OB_FAIL(sync_wait_all(*provider))) {
+    SQL_LOG(WARN, "failed to sync wait", K(ret));
   } else {
     if (send_piece) {
       ObLockGuard<ObSpinLock> lock_guard(dtl_lock_);
@@ -238,7 +292,7 @@ int ObPxSQCProxy::get_dh_msg(
           ret = process_dtl_msg(timeout_ts);
           SQL_LOG(DEBUG, "process dtl msg done", K(ret));
         }
-        if (OB_SUCC(ret)) {
+        if (OB_EAGAIN == ret || OB_SUCCESS == ret) {
           const dtl::ObDtlMsg *msg = nullptr;
           if (OB_FAIL(p->get_msg_nonblock(msg, timeout_ts))) {
             SQL_LOG(TRACE, "fail get msg", K(timeout_ts), K(ret));

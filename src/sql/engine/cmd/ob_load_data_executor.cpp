@@ -61,6 +61,9 @@ int ObLoadDataExecutor::execute(ObExecContext &ctx, ObLoadDataStmt &stmt)
       if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataDirectImpl, (&ctx.get_allocator())))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
+      } else if (stmt.get_table_assignment().count() > 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("direct load not support");
       }
     }
   }

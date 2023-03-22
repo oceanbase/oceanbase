@@ -1,17 +1,18 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_partition_merge_task.h"
+#include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_stat_define.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
-#include "storage/direct_load/ob_direct_load_multiple_heap_table.h"
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
-#include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_stat_define.h"
+#include "storage/direct_load/ob_direct_load_multiple_heap_table.h"
+#include "storage/direct_load/ob_direct_load_origin_table.h"
 
 namespace oceanbase
 {
@@ -807,6 +808,238 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::construct_row_iter(
       LOG_WARN("fail to new RowIterator", KR(ret));
     } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), heap_table_,
                                       pk_interval_))) {
+      LOG_WARN("fail to init row iter", KR(ret));
+    } else {
+      result_row_iter = row_iter;
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != row_iter) {
+        row_iter->~RowIterator();
+        allocator.free(row_iter);
+        row_iter = nullptr;
+      }
+    }
+  }
+  return ret;
+}
+
+/**
+ * ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask
+ */
+
+ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::RowIterator()
+  : origin_iter_(nullptr),
+    rowkey_column_num_(0),
+    store_column_count_(0),
+    heap_table_array_(nullptr),
+    pos_(0),
+    deserialize_datums_(nullptr),
+    deserialize_datum_cnt_(0),
+    result_info_(nullptr),
+    is_inited_(false)
+{
+}
+
+ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::~RowIterator()
+{
+  if (nullptr != origin_iter_) {
+    origin_iter_->~ObIStoreRowIterator();
+    origin_iter_ = nullptr;
+  }
+}
+
+int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::init(
+  const ObDirectLoadMergeParam &merge_param, const ObTabletID &tablet_id,
+  ObDirectLoadOriginTable *origin_table,
+  const ObIArray<ObDirectLoadMultipleHeapTable *> *heap_table_array,
+  const ObTabletCacheInterval &pk_interval)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator init twice", KR(ret),
+             KP(this));
+  } else if (OB_UNLIKELY(!merge_param.is_valid() || !tablet_id.is_valid() ||
+                         nullptr == origin_table || nullptr == heap_table_array)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), KP(origin_table),
+             KP(heap_table_array));
+  } else {
+    range_.set_whole_range();
+    if (OB_FAIL(origin_table->scan(range_, allocator_, origin_iter_))) {
+      LOG_WARN("fail to scan origin table", KR(ret));
+    }
+    // init datum_row_
+    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
+                                     ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
+      LOG_WARN("fail to init datum row", KR(ret));
+    } else {
+      datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
+      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
+        -merge_param.snapshot_version_); // fill trans_version
+      datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
+      deserialize_datums_ = datum_row_.storage_datums_ + merge_param.rowkey_column_num_ +
+                            ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+      deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
+      rowkey_column_num_ = merge_param.rowkey_column_num_;
+      store_column_count_ = merge_param.store_column_count_;
+      tablet_id_ = tablet_id;
+      table_data_desc_ = merge_param.table_data_desc_;
+      heap_table_array_ = heap_table_array;
+      pk_interval_ = pk_interval;
+      result_info_ = merge_param.result_info_;
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::get_next_row(
+  const ObDatumRow *&result_row)
+{
+  int ret = OB_SUCCESS;
+  result_row = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator not init",
+             KR(ret), KP(this));
+  } else {
+    if (pos_ == 0) {
+      const ObDatumRow *datum_row = nullptr;
+      if (OB_FAIL(origin_iter_->get_next_row(datum_row))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get next row", KR(ret));
+        } else {
+          // switch heap table
+          ret = OB_SUCCESS;
+          if (OB_FAIL(switch_next_heap_table())) {
+            if (OB_UNLIKELY(OB_ITER_END != ret)) {
+              LOG_WARN("fail to switch next heap table", KR(ret));
+            }
+          }
+        }
+      } else if (OB_UNLIKELY(datum_row->count_ != store_column_count_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected column count", KR(ret), K(store_column_count_), KPC(datum_row));
+      } else {
+        // copy rowkey columns
+        for (int64_t i = 0; i < rowkey_column_num_; ++i) {
+          datum_row_.storage_datums_[i] = datum_row->storage_datums_[i];
+        }
+        // copy normal columns
+        for (int64_t
+               i = rowkey_column_num_,
+               j = rowkey_column_num_ + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+             i < datum_row->count_; ++i, ++j) {
+          datum_row_.storage_datums_[j] = datum_row->storage_datums_[i];
+        }
+        result_row = &datum_row_;
+      }
+    }
+    while (OB_SUCC(ret) && result_row == nullptr) {
+      const ObDirectLoadMultipleExternalRow *external_row = nullptr;
+      uint64_t pk_seq = OB_INVALID_ID;
+      if (OB_FAIL(scanner_.get_next_row(external_row))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get next row", KR(ret));
+        } else {
+          // switch next heap table
+          ret = OB_SUCCESS;
+          if (OB_FAIL(switch_next_heap_table())) {
+            if (OB_UNLIKELY(OB_ITER_END != ret)) {
+              LOG_WARN("fail to switch next heap table", KR(ret));
+            }
+          }
+        }
+      } else if (OB_FAIL(external_row->to_datums(deserialize_datums_, deserialize_datum_cnt_))) {
+        LOG_WARN("fail to transfer datum row", KR(ret));
+      } else if (OB_FAIL(pk_interval_.next_value(pk_seq))) {
+        LOG_WARN("fail to get next pk seq", KR(ret));
+      } else {
+        // fill hide pk
+        datum_row_.storage_datums_[0].set_int(pk_seq);
+        result_row = &datum_row_;
+        ATOMIC_INC(&result_info_->rows_affected_);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::switch_next_heap_table()
+{
+  int ret = OB_SUCCESS;
+  if (pos_ >= heap_table_array_->count()) {
+    ret = OB_ITER_END;
+  } else {
+    ObDirectLoadMultipleHeapTable *heap_table = heap_table_array_->at(pos_);
+    // restructure scanner
+    scanner_.~ObDirectLoadMultipleHeapTableTabletWholeScanner();
+    new (&scanner_) ObDirectLoadMultipleHeapTableTabletWholeScanner();
+    if (OB_FAIL(scanner_.init(heap_table, tablet_id_, table_data_desc_))) {
+      LOG_WARN("fail to init scanner", KR(ret));
+    } else {
+      ++pos_;
+    }
+  }
+  return ret;
+}
+
+ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::
+  ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask()
+  : origin_table_(nullptr), heap_table_array_(nullptr)
+{
+}
+
+ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::
+  ~ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask()
+{
+}
+
+int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::init(
+  const ObDirectLoadMergeParam &merge_param, ObDirectLoadTabletMergeCtx *merge_ctx,
+  ObDirectLoadOriginTable *origin_table,
+  const ObIArray<ObDirectLoadMultipleHeapTable *> &heap_table_array,
+  const ObTabletCacheInterval &pk_interval)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObDirectLoadPartitionHeapTableMultipleMergeTask init twice", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!merge_param.is_valid() || nullptr == merge_ctx ||
+                         nullptr == origin_table || heap_table_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(merge_param), KP(merge_ctx), KP(origin_table),
+             K(heap_table_array));
+  } else {
+    merge_param_ = &merge_param;
+    merge_ctx_ = merge_ctx;
+    parallel_idx_ = 0;
+    origin_table_ = origin_table;
+    heap_table_array_ = &heap_table_array;
+    pk_interval_ = pk_interval;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::construct_row_iter(
+  ObIAllocator &allocator, ObIStoreRowIterator *&result_row_iter)
+{
+  int ret = OB_SUCCESS;
+  result_row_iter = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask not init", KR(ret),
+             KP(this));
+  } else {
+    RowIterator *row_iter = nullptr;
+    if (OB_ISNULL(row_iter = OB_NEWx(RowIterator, (&allocator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new RowIterator", KR(ret));
+    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), origin_table_,
+                                      heap_table_array_, pk_interval_))) {
       LOG_WARN("fail to init row iter", KR(ret));
     } else {
       result_row_iter = row_iter;

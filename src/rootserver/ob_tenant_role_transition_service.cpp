@@ -376,6 +376,11 @@ int ObTenantRoleTransitionService::do_flashback_(const share::ObAllTenantInfo &t
   } else if (OB_FAIL(log_service->flashback(tenant_id_, tenant_info.get_sync_scn(), ctx.get_timeout()))) {
     LOG_WARN("failed to flashback", KR(ret), K(tenant_id_), K(tenant_info));
   } else {
+    CLUSTER_EVENT_ADD_LOG(ret, "flashback end",
+                      "tenant id", tenant_id_,
+                      "switchover#", tenant_info.get_switchover_epoch(),
+                      "flashback_scn#", tenant_info.get_sync_scn());
+
     ObAllTenantInfo new_tenant_info;
     if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_switchover_status(
             tenant_id_, sql_proxy_, tenant_info.get_switchover_epoch(),

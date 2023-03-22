@@ -1346,7 +1346,7 @@ int ObLS::logstream_freeze(bool is_sync)
     }
   }
 
-  if (is_sync) {
+  if (OB_SUCC(ret) && is_sync) {
     ret = ls_freezer_.wait_freeze_finished(result);
   }
 
@@ -1378,7 +1378,7 @@ int ObLS::tablet_freeze(const ObTabletID &tablet_id, bool is_sync)
     }
   }
 
-  if (is_sync) {
+  if (OB_SUCC(ret) && is_sync) {
     ret = ls_freezer_.wait_freeze_finished(result);
   }
 

@@ -484,12 +484,10 @@ int ObColumnRedefinitionTask::serialize_params_to_message(char *buf, const int64
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_len, pos))) {
+    LOG_WARN("ObDDLTask serialize failed", K(ret));
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("serialize table arg failed", K(ret));
-  } else {
-    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, data_format_version_);
+    LOG_WARN("alter_table_arg_ serialize failed", K(ret));
   }
   return ret;
 }
@@ -500,27 +498,22 @@ int ObColumnRedefinitionTask::deserlize_params_from_message(const uint64_t tenan
   obrpc::ObAlterTableArg tmp_arg;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
+    LOG_WARN("invalid arguments", K(ret), KP(buf), K(tenant_id), K(data_len));
+  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos))) {
+    LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
   } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
     LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
-  } else {
-    LST_DO_CODE(OB_UNIS_DECODE, parallelism_, data_format_version_);
   }
   return ret;
 }
 
 int64_t ObColumnRedefinitionTask::get_serialize_param_size() const
 {
-  return alter_table_arg_.get_serialize_size()
-         + serialization::encoded_length_i64(task_version_)
-         + serialization::encoded_length_i64(parallelism_)
-         + serialization::encoded_length_i64(data_format_version_);
+  return alter_table_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size();
 }
 
 int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus next_task_status)

@@ -2369,6 +2369,7 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
 
   int tmp_ret = ret;
   if (!is_begin_commit_stmt
+      && 0 == context.multi_stmt_item_.get_seq_num() /* only first item of a multi stmt, or single stmt */
       && OB_FAIL(handle_large_query(tmp_ret,
                                     result,
                                     ectx.get_need_disconnect_for_update(),
@@ -4185,7 +4186,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
 
       // the purpose of adding condition (!session.get_is_in_retry()) is
       // send the plan instead of continue sending sqlinfo when retrying remotely.
-      // bug: https://work.aone.alibaba-inc.com/issue/33487009
+      // bug:
       if (OB_SUCC(ret) && phy_plan->is_remote_plan()
           && !phy_plan->contains_temp_table()
           && !enable_send_plan) {

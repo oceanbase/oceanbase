@@ -220,7 +220,7 @@ public:
     using namespace oceanbase::transaction;
     return kill_tx(session, static_cast<int>(ObTxAbortCause::SESSION_DISCONNECT));
   }
-  static int create_savepoint(ObExecContext &exec_ctx, const common::ObString &sp_name);
+  static int create_savepoint(ObExecContext &exec_ctx, const common::ObString &sp_name, const bool user_create = false);
   static int rollback_savepoint(ObExecContext &exec_ctx, const common::ObString &sp_name);
   static int release_savepoint(ObExecContext &exec_ctx, const common::ObString &sp_name);
   static int xa_rollback_all_changes(ObExecContext &exec_ctx);

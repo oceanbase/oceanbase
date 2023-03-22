@@ -272,7 +272,7 @@ void ObInnerSQLConnection::unref()
         LOG_WARN("revert connection failed", K(ret));
       }
     } else {
-      // see https://aone.alibaba-inc.com/issue/17037949.
+      // see
       // extern_session_ = NULL;
     }
   }

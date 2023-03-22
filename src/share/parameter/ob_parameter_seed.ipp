@@ -237,11 +237,11 @@ DEF_CAP(_hash_area_size, OB_TENANT_PARAMETER, "100M", "[4M,]",
         "size of maximum memory that could be used by HASH JOIN. Range: [4M,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-//https://yuque.antfin-inc.com/ob/product_functionality_review/gxmqcg
+//
 DEF_BOOL(_enable_partition_level_retry, OB_CLUSTER_PARAMETER, "True",
          "specifies whether allow the partition level retry when the leader changes",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-//https://yuque.antfin-inc.com/ob/product_functionality_review/zlp56c
+//
 DEF_INT_WITH_CHECKER(_enable_defensive_check, OB_CLUSTER_PARAMETER, "1",
                      common::ObConfigEnableDefensiveChecker,
                      "specifies whether allow to do some defensive checks when the query is executed, "

@@ -1471,7 +1471,10 @@ int ObTableLocation::calculate_partition_ids_by_rows2(ObSQLSessionInfo &session_
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(tablet_ids.push_back(tmp_tablet_ids.at(0)))) {
+          if ((tmp_tablet_ids.count() != 1) || (tmp_part_ids.count() != 1)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid tablet ids or partition ids", KR(ret), K(tmp_tablet_ids), K(tmp_part_ids));
+          } else if (OB_FAIL(tablet_ids.push_back(tmp_tablet_ids.at(0)))) {
             LOG_WARN("fail to push tablet id", KR(ret));
           } else if (OB_FAIL(part_ids.push_back(tmp_part_ids.at(0)))) {
             LOG_WARN("fail to push object id", KR(ret));

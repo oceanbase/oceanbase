@@ -28,9 +28,9 @@
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/ob_server_blacklist.h"
 #include "common/ob_smart_call.h"
 #include "storage/ob_locality_manager.h"
+#include "rpc/obrpc/ob_net_keepalive.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -984,7 +984,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
 }
 
 /**
- * 算法文档：https://yuque.antfin-inc.com/ob/sql/pbaedu
+ * 算法文档：
  * 大致思路：
  * n为总线程数，p为涉及总的partition数，ni为第i个sqc被计算分的线程数，pi为第i个sqc的partition数量。
  * a. 一个adjust函数，递归的调整sqc的线程数。求得ni ＝ n*pi/p的值，保证每个都是大于等于1。
@@ -3480,14 +3480,12 @@ int ObExtraServerAliveCheck::do_check() const
     if (OB_FAIL(dfo_mgr_->get_running_dfos(dfos))) {
       LOG_WARN("fail find dfo", K(ret));
     } else {
-      share::ObServerBlacklist &server_black_list = share::ObServerBlacklist::get_instance();
       // need check all sqc because we set sqc need_report = false here and don't need wait sqc finish msg.
       for (int64_t i = 0; i < dfos.count(); i++) {
         ObIArray<ObPxSqcMeta> &sqcs = dfos.at(i)->get_sqcs();
         for (int64_t j = 0; j < sqcs.count(); j++) {
           if (sqcs.at(j).need_report()) {
-            if (OB_UNLIKELY(server_black_list.is_in_blacklist(
-                share::ObCascadMember(sqcs.at(j).get_exec_addr(), cluster_id_), true,
+            if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(sqcs.at(j).get_exec_addr(),
                 query_start_time_))) {
               sqcs.at(j).set_need_report(false);
               sqcs.at(j).set_thread_finish(true);
@@ -3503,8 +3501,7 @@ int ObExtraServerAliveCheck::do_check() const
       }
     }
   } else if (OB_LIKELY(qc_addr_.is_valid())) {
-    if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(share::ObCascadMember(
-          qc_addr_, cluster_id_), true, query_start_time_))) {
+    if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(qc_addr_, query_start_time_))) {
       ret = OB_RPC_CONNECT_ERROR;
       LOG_WARN("qc not in communication, maybe crashed", K(ret), K(qc_addr_));
     }
@@ -3534,4 +3531,20 @@ bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
     }
   }
   return should_ignore;
+}
+
+bool ObPxCheckAlive::is_in_blacklist(const common::ObAddr &addr, int64_t server_start_time)
+{
+  int ret = OB_SUCCESS;
+  bool in_blacklist = false;
+  obrpc::ObNetKeepAliveData alive_data;
+  if (OB_FAIL(ObNetKeepAlive::get_instance().in_black(addr, in_blacklist, &alive_data))) {
+    LOG_WARN("check in black failed", K(ret));
+  } else if (!in_blacklist && server_start_time > 0) {
+    in_blacklist = alive_data.start_service_time_ >= server_start_time;
+  }
+  if (in_blacklist) {
+    LOG_WARN("server in blacklist", K(addr), K(server_start_time), K(alive_data.start_service_time_));
+  }
+  return in_blacklist;
 }

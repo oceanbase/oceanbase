@@ -1722,7 +1722,7 @@ select f(1);
 drop function f;
 
 ### need has return in mysql function
-### https://work.aone.alibaba-inc.com/issue/34977232
+###
 
 delimiter //;
 DROP FUNCTION IF EXISTS `fun6`//
@@ -1753,7 +1753,7 @@ DROP FUNCTION IF EXISTS `fun6`//
 delimiter ;//
 
 ### label dup
-### https://work.aone.alibaba-inc.com/issue/34954831
+###
 delimiter //;
 --disable_warnings ONCE
 DROP TABLE IF EXISTS result1//
@@ -1813,7 +1813,7 @@ delimiter ;//
 
 delimiter //;
 ###   ### varchar
-###   ### https://work.aone.alibaba-inc.com/issue/35400448
+###   ###
 ###   DROP TABLE IF EXISTS t2//
 ###   --error 1074
 ###   CREATE TABLE t2 (
@@ -1840,7 +1840,7 @@ delimiter //;
 ###   SELECT fun_l()//
 
 ### char
-### https://work.aone.alibaba-inc.com/issue/35399998
+###
 --disable_warnings
  DROP TABLE IF EXISTS t1//
  DROP TABLE IF EXISTS t2//
@@ -1851,7 +1851,7 @@ delimiter //;
    d1 CHAR(255)
  )//
 ### --error 1074
-### TODO: https://work.aone.alibaba-inc.com/issue/35400448
+### TODO:
 ### CREATE TABLE t2 (
 ###   id INT,
 ###   res1 VARCHAR(128),
@@ -1879,7 +1879,7 @@ delimiter //;
 
 
 ### varbinary
-### https://work.aone.alibaba-inc.com/issue/35614023
+###
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (
@@ -1906,7 +1906,7 @@ SELECT fun_l()//
 
 
 ### number
-### https://work.aone.alibaba-inc.com/issue/35302277
+###
 DROP FUNCTION IF EXISTS `fun_l`//
 --error 1426
 CREATE FUNCTION fun_l() RETURNS DEC(65,30)
@@ -1929,7 +1929,7 @@ END//
 SELECT fun_2()//
 
 ### datetime
-### https://work.aone.alibaba-inc.com/issue/35346065
+###
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t2//
 --error 1426
@@ -1949,7 +1949,7 @@ END//
 SELECT fun_l()//
 
 ### datetime max value insert fail
-### https://work.aone.alibaba-inc.com/issue/35345945
+###
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t2//
 CREATE TABLE t2 (
@@ -1973,7 +1973,7 @@ CALL pro_1()//
 SELECT * FROM t2//
 
 ### int
-### https://work.aone.alibaba-inc.com/issue/35302003
+###
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (
@@ -1995,7 +1995,7 @@ SELECT * FROM t1//
 
 ### commit
 ### rollback
-### https://work.aone.alibaba-inc.com/issue/34756672
+###
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1
@@ -2062,7 +2062,7 @@ BEGIN
 END//
 
 ### BIT
-### https://work.aone.alibaba-inc.com/issue/35280082
+###
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1;//
 DROP PROCEDURE IF EXISTS `pro_2`;//
@@ -2075,7 +2075,7 @@ END;
 //
 
 ### load data
-### https://work.aone.alibaba-inc.com/issue/34756578
+###
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (a INT)//
@@ -2089,7 +2089,7 @@ BEGIN
 END//
 
 ### lock
-### https://work.aone.alibaba-inc.com/issue/34756555
+###
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (a INT)//

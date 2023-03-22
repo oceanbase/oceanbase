@@ -224,6 +224,8 @@ private:
 
   bool in_normal_status_(const ArchiveKey &key) const;
 
+  bool in_doing_status_(const ArchiveKey &key) const;
+
   void statistic(const int64_t log_size, const int64_t ts);
 private:
   class TmpMemoryHelper

@@ -316,7 +316,7 @@ where t1.c1 = t2.c1 and
       t4.d1 = t5.d1 AND
       t1.c1 + t2.c1  = t4.d1 + t5.d2 ;
 
---echo ### 9. https://work.aone.alibaba-inc.com/issue/22041461 leading hint与join order冲突修复 ###
+--echo ### 9.
 explain select /*+leading(t1 (t2 t3))*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #失效
 explain select /*+leading(t2 t3 t1)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #失效
 explain select /*+leading(t3 t1 t2)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #生效

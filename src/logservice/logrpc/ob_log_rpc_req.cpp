@@ -248,17 +248,23 @@ OB_SERIALIZE_MEMBER(LogGetPalfStatResp, palf_stat_);
 // ============= LogServerProbeMsg start =============
 LogServerProbeMsg::LogServerProbeMsg()
     : src_(),
+      palf_id_(-1),
+      req_id_(-1),
       msg_type_(PROBE_REQ),
-      req_ts_(OB_INVALID_TIMESTAMP) { }
+      server_status_(-1) { }
 
 
 LogServerProbeMsg::LogServerProbeMsg(
     const common::ObAddr &src,
+    const int64_t palf_id,
+    const int64_t req_id,
     const LogServerProbeType msg_type,
-    const int64_t req_ts)
+    const int64_t status)
     : src_(src),
+      palf_id_(palf_id),
+      req_id_(req_id),
       msg_type_(msg_type),
-      req_ts_(req_ts) { }
+      server_status_(status) { }
 
 LogServerProbeMsg::~LogServerProbeMsg()
 {
@@ -267,17 +273,19 @@ LogServerProbeMsg::~LogServerProbeMsg()
 
 bool LogServerProbeMsg::is_valid() const
 {
-  return src_.is_valid() && req_ts_ != OB_INVALID_TIMESTAMP;
+  return src_.is_valid() && -1 != palf_id_ && req_id_ != -1 && server_status_ != -1;
 }
 
 void LogServerProbeMsg::reset()
 {
   src_.reset();
+  palf_id_ = -1;
+  req_id_ = -1;
   msg_type_ = PROBE_REQ;
-  req_ts_ = OB_INVALID_TIMESTAMP;
+  server_status_ = -1;
 }
 
-OB_SERIALIZE_MEMBER(LogServerProbeMsg, src_, msg_type_, req_ts_);
+OB_SERIALIZE_MEMBER(LogServerProbeMsg, src_, palf_id_, req_id_, msg_type_, server_status_);
 // ============= LogServerProbeMsg end =============
 
 // ============= LogChangeAccessModeCmd start =============

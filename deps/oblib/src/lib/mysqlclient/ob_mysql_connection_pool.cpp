@@ -520,7 +520,7 @@ int ObMySQLConnectionPool::try_connect(ObMySQLConnection *connection)
       //}
     }
     if (OB_SUCC(ret) && ObMySQLConnection::OCEANBASE_MODE == mode_) {
-      // bugfix: https://work.aone.alibaba-inc.com/issue/25943661
+      // bugfix:
       if (OB_FAIL(connection->init_oceanbase_connection())) {
         LOG_WARN("fail to init oceanabse connection", K(ret));
       }

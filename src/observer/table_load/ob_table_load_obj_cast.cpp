@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   xiaotao.ht <xiaotao.ht@oceanbase.com>
+//   xiaotao.ht <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -34,20 +34,50 @@ static int pad_obj(ObTableLoadCastObjCtx &cast_obj_ctx, const ObColumnSchemaV2 *
   //  is_pad = is_fixed_string;
   //}
   if (is_fixed_string) {
-    int32_t fixed_len = column_schema->get_data_length();
-    if (fixed_len > obj.val_len_) {
-      char *buf = (char *)cast_obj_ctx.cast_ctx_->allocator_v2_->alloc(fixed_len);
-      if (buf == nullptr) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate buf", K(fixed_len), KR(ret));
+    //Because NCHAR stores data in a format similar to Unicode, special treatment is required when padding.
+    if (column_schema->get_data_type() == ObNCharType) {
+      int32_t fixed_len = column_schema->get_data_length() * 2;
+      if (obj.val_len_ % 2 != 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("The length of data for NCHAR type must be even", K(obj.val_len_));
+      } else if (fixed_len > obj.val_len_) {
+        char *buf = (char *)cast_obj_ctx.cast_ctx_->allocator_v2_->alloc(fixed_len);
+        if (buf == nullptr) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate buf", K(fixed_len), KR(ret));
+        }
+        if (OB_SUCC(ret)) {
+          const ObCharsetType &cs = ObCharset::charset_type_by_coll(obj.get_collation_type());
+          char padding_char = (CHARSET_BINARY == cs) ? OB_PADDING_BINARY : OB_PADDING_CHAR;
+          MEMCPY(buf, obj.v_.ptr_, obj.val_len_);
+          if (CHARSET_BINARY == cs) {
+            MEMSET(buf + obj.val_len_, padding_char, fixed_len - obj.val_len_);
+          } else {
+            for (int i = 0; i < fixed_len - obj.val_len_; i += 2) {
+              *(buf + obj.val_len_ + i) = '\0';
+              *(buf + obj.val_len_ + i + 1) = padding_char;
+            }
+          }
+          obj.v_.ptr_ = buf;
+          obj.val_len_ = fixed_len;
+        }
       }
-      if (OB_SUCC(ret)) {
-        const ObCharsetType &cs = ObCharset::charset_type_by_coll(obj.get_collation_type());
-        char padding_char = (CHARSET_BINARY == cs) ? OB_PADDING_BINARY : OB_PADDING_CHAR;
-        MEMCPY(buf, obj.v_.ptr_, obj.val_len_);
-        MEMSET(buf + obj.val_len_, padding_char, fixed_len - obj.val_len_);
-        obj.v_.ptr_ = buf;
-        obj.val_len_ = fixed_len;
+    } else {
+      int32_t fixed_len = column_schema->get_data_length();
+      if (fixed_len > obj.val_len_) {
+        char *buf = (char *)cast_obj_ctx.cast_ctx_->allocator_v2_->alloc(fixed_len);
+        if (buf == nullptr) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate buf", K(fixed_len), KR(ret));
+        }
+        if (OB_SUCC(ret)) {
+          const ObCharsetType &cs = ObCharset::charset_type_by_coll(obj.get_collation_type());
+          char padding_char = (CHARSET_BINARY == cs) ? OB_PADDING_BINARY : OB_PADDING_CHAR;
+          MEMCPY(buf, obj.v_.ptr_, obj.val_len_);
+          MEMSET(buf + obj.val_len_, padding_char, fixed_len - obj.val_len_);
+          obj.v_.ptr_ = buf;
+          obj.val_len_ = fixed_len;
+        }
       }
     }
   }

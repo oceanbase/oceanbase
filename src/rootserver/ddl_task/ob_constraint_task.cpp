@@ -212,7 +212,7 @@ int ObForeignKeyConstraintValidationTask::check_fk_by_send_sql() const
   ObSchemaGetterGuard schema_guard;
   // notice that data_table_id_ may be parent_table_id or child_table_id,
   // for example: data_table_id will be parent_table_id when altering non-ref column type of parent table.
-  // https://work.aone.alibaba-inc.com/issue/38544828
+  //
   const ObTableSchema *data_table_schema = nullptr;
   const ObDatabaseSchema *data_database_schema = nullptr;
   const ObTableSchema *child_table_schema = nullptr;
@@ -837,7 +837,8 @@ int ObConstraintTask::cleanup_impl()
   }
 
   if (OB_SUCC(ret) && parent_task_id_ > 0) {
-    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id_, get_task_key(), ret_code_, trace_id_);
+    const ObDDLTaskID parent_task_id(tenant_id_, parent_task_id_);
+    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id, get_task_key(), ret_code_, trace_id_);
   }
   return ret;
 }
@@ -1811,8 +1812,8 @@ int ObConstraintTask::serialize_params_to_message(char *buf, const int64_t buf_l
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_len, pos))) {
+    LOG_WARN("ObDDLTask serialize failed", K(ret));
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
   }
@@ -1826,8 +1827,8 @@ int ObConstraintTask::deserlize_params_from_message(const uint64_t tenant_id, co
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
+  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos))) {
+    LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
   } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
@@ -1840,9 +1841,8 @@ int ObConstraintTask::deserlize_params_from_message(const uint64_t tenant_id, co
 
 int64_t ObConstraintTask::get_serialize_param_size() const
 {
-  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_);
+  return alter_table_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size();
 }
-
 void ObConstraintTask::flt_set_task_span_tag() const
 {
   FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,

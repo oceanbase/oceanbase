@@ -507,7 +507,8 @@ int ObTransformExprPullup::check_stmt_validity(const ObDMLStmt *stmt, bool &is_v
   } else if (stmt->is_select_stmt()) {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt);
     if (!select_stmt->is_set_stmt()
-        && !select_stmt->is_hierarchical_query()) {
+        && !select_stmt->is_hierarchical_query()
+        && !select_stmt->has_rollup()) {
       is_valid = true;
     }
   }

@@ -45,3 +45,4 @@ devdeps-rocksdb-6.22.1.1-52022100420.el8.x86_64.rpm
 [test-utils]
 ob-deploy-1.6.0-41.el8.x86_64.rpm target=community
 obclient-2.0.2-3.el8.x86_64.rpm target=community
+libobclient-2.0.2-2.el8.x86_64.rpm target=community

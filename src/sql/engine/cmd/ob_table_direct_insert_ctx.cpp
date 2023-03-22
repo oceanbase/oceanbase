@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   yuya.yu <yuya.yu@oceanbase.com>
+//   yuya.yu <>
 
 #define USING_LOG_PREFIX SQL_ENG
 
@@ -65,7 +65,6 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         param.max_error_row_count_ = 0;
         param.dup_action_ = sql::ObLoadDupActionType::LOAD_STOP_ON_DUP;
         param.sql_mode_ = sql_mode;
-        param.snapshot_version_ = ObTimeUtil::current_time_ns();
         if (OB_FAIL(table_load_instance_->init(param, store_column_idxs, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret));
         } else {

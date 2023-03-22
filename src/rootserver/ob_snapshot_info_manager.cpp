@@ -14,6 +14,8 @@
 #include "ob_snapshot_info_manager.h"
 #include "share/ob_snapshot_table_proxy.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/ob_ddl_common.h"
+#include "common/ob_timeout_ctx.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "ob_rs_event_history_table_operator.h"
 
@@ -67,6 +69,7 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
   ObMySQLTransaction trans;
   ObSnapshotTableProxy snapshot_proxy;
   ObSnapshotInfo snapshot;
+  ObTimeoutCtx timeout_ctx;
   snapshot.snapshot_type_ = snapshot_type;
   snapshot.tenant_id_ = tenant_id;
   snapshot.snapshot_scn_ = snapshot_scn;
@@ -76,7 +79,17 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_ids.count()));
   } else {
-    if (OB_FAIL(trans.start(&proxy, tenant_id))) {
+    int64_t rpc_timeout = 0;
+    int64_t trx_timeout = 0;
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tablet_ids.count(), rpc_timeout))) {
+      LOG_WARN("get ddl rpc timeout failed", K(ret), K(tablet_ids.count()));
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_tx_timeout(tablet_ids.count(), trx_timeout))) {
+      LOG_WARN("get ddl tx timeout failed", K(ret), K(tablet_ids.count()));
+    } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(trx_timeout))) {
+      LOG_WARN("set trx timeout failed", K(ret), K(trx_timeout));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(rpc_timeout))) {
+      LOG_WARN("set timeout failed", K(ret), K(rpc_timeout));
+    } else if (OB_FAIL(trans.start(&proxy, tenant_id))) {
       LOG_WARN("fail to start trans", K(ret), K(tenant_id));
     } else if (OB_FAIL(snapshot_proxy.batch_add_snapshot(trans, snapshot_type,
         tenant_id, schema_version, snapshot.snapshot_scn_, comment, tablet_ids))) {

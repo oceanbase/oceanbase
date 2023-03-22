@@ -62,22 +62,22 @@ public:
   template<typename F>
   int modify_task(const ObDDLTaskKey &task_key, F &&op);
   template<typename F>
-  int modify_task(const int64_t task_id, F &&op);
-  int update_task_copy_deps_setting(const int64_t task_id,
+  int modify_task(const ObDDLTaskID &task_id, F &&op);
+  int update_task_copy_deps_setting(const ObDDLTaskID &task_id,
                                     const bool is_copy_constraints,
                                     const bool is_copy_indexes,
                                     const bool is_copy_triggers,
                                     const bool is_copy_foreign_keys,
                                     const bool is_ignore_errors);
-  int update_task_process_schedulable(const int64_t task_id);
-  int abort_task(const int64_t task_id);
+  int update_task_process_schedulable(const ObDDLTaskID &task_id);
+  int abort_task(const ObDDLTaskID &task_id);
   int64_t get_task_cnt() const { return task_list_.get_size(); }
   void destroy();
 private:
   typedef common::ObDList<ObDDLTask> TaskList;
   typedef common::hash::ObHashMap<ObDDLTaskKey, ObDDLTask *,
           common::hash::NoPthreadDefendMode> TaskKeyMap;
-  typedef common::hash::ObHashMap<int64_t, ObDDLTask *,
+  typedef common::hash::ObHashMap<ObDDLTaskID, ObDDLTask *,
           common::hash::NoPthreadDefendMode> TaskIdMap;
   TaskList task_list_;
   TaskKeyMap task_map_;
@@ -92,12 +92,12 @@ public:
   ObDDLTaskHeartBeatMananger();
   ~ObDDLTaskHeartBeatMananger();
   int init();
-  int update_task_active_time(const int64_t task_id);
-  int remove_task(const int64_t task_id);
-  int get_inactive_ddl_task_ids(ObArray<int64_t>& remove_task_ids);
+  int update_task_active_time(const ObDDLTaskID &task_id);
+  int remove_task(const ObDDLTaskID &task_id);
+  int get_inactive_ddl_task_ids(ObArray<ObDDLTaskID>& remove_task_ids);
 private:
   static const int64_t BUCKET_LOCK_BUCKET_CNT = 10243L;
-  common::hash::ObHashMap<int64_t, int64_t> register_task_time_;
+  common::hash::ObHashMap<ObDDLTaskID, int64_t> register_task_time_;
   bool is_inited_;
   common::ObBucketLock bucket_lock_;
 };
@@ -194,7 +194,7 @@ public:
       const ObDDLTaskInfo &addition_info);
 
   int on_ddl_task_finish(
-      const int64_t parent_task_id,
+      const ObDDLTaskID &parent_task_id,
       const ObDDLTaskKey &task_key,
       const int ret_code,
       const ObCurTraceId::TraceId &parent_task_trace_id);
@@ -203,18 +203,25 @@ public:
       const ObDDLTaskKey &task_key,
       const uint64_t autoinc_val,
       const int ret_code);
-  int abort_redef_table(const int64_t task_id);
+  template<typename F>
+  int update_task_info(const ObDDLTaskID &task_id,
+                                      ObMySQLTransaction &trans,
+                                      ObDDLTaskRecord &task_record,
+                                      ObTableRedefinitionTask *ddl_task,
+                                      common::ObArenaAllocator &allocator,
+                                      F &&modify_info);
 
-  int copy_table_dependents(const int64_t task_id,
-                            const uint64_t tenant_id,
+  int abort_redef_table(const ObDDLTaskID &task_id);
+
+  int copy_table_dependents(const ObDDLTaskID &task_id,
                             const bool is_copy_constraints,
                             const bool is_copy_indexes,
                             const bool is_copy_triggers,
                             const bool is_copy_foreign_keys,
                             const bool is_ignore_errors);
-  int finish_redef_table(const int64_t task_id, const uint64_t tenant_id);
+  int finish_redef_table(const ObDDLTaskID &task_id);
   int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res);
-  int update_ddl_task_active_time(const int64_t task_id);
+  int update_ddl_task_active_time(const ObDDLTaskID &task_id);
 
   int prepare_alter_table_arg(const ObPrepareAlterTableArgParam &param,
                               const ObTableSchema *target_table_schema,

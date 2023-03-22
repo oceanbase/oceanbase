@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -113,7 +113,6 @@ int ObTableLoadBeginP::process()
       param.online_opt_stat_gather_ = false;
       param.data_type_ = static_cast<ObTableLoadDataType>(arg_.config_.flag_.data_type_);
       param.dup_action_ = ObLoadDupActionType::LOAD_STOP_ON_DUP;
-      param.snapshot_version_ = ObTimeUtil::current_time_ns();
       if (OB_FAIL(param.normalize())) {
         LOG_WARN("fail to normalize param", KR(ret));
       }
@@ -207,6 +206,7 @@ int ObTableLoadBeginP::create_table_ctx(const ObTableLoadParam &param,
     ddl_param.dest_table_id_ = start_res.dest_table_id_;
     ddl_param.task_id_ = start_res.task_id_;
     ddl_param.schema_version_ = start_res.schema_version_;
+    ddl_param.snapshot_version_ = start_res.snapshot_version_;
     ddl_param.data_version_ = data_version;
   }
   if (OB_SUCC(ret)) {
@@ -275,12 +275,12 @@ int ObTableLoadPreBeginPeerP::process()
     param.px_mode_ = arg_.px_mode_;
     param.online_opt_stat_gather_ = arg_.online_opt_stat_gather_;
     param.dup_action_ = arg_.dup_action_;
-    param.snapshot_version_ = arg_.snapshot_version_;
     ObTableLoadDDLParam ddl_param;
     uint64_t data_version = 0;
     ddl_param.dest_table_id_ = arg_.dest_table_id_;
     ddl_param.task_id_ = arg_.task_id_;
     ddl_param.schema_version_ = arg_.schema_version_;
+    ddl_param.snapshot_version_ = arg_.snapshot_version_;
     ddl_param.data_version_ = arg_.data_version_;
     if (OB_FAIL(create_table_ctx(param, ddl_param, table_ctx))) {
       LOG_WARN("fail to create table ctx", KR(ret));

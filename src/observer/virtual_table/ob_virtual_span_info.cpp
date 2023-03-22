@@ -10,7 +10,7 @@
  * See the Mulan PubL v1 for more details.
  * ---------------------------------------------------------------------------------------
  * Authors:
- *   Juehui <guoyun.lgy@alipay.com>
+ *   Juehui <>
  * ---------------------------------------------------------------------------------------
  */
 #include "observer/virtual_table/ob_virtual_span_info.h"

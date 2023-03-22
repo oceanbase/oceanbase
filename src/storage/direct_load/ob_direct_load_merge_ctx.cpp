@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -303,6 +303,54 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
   return ret;
 }
 
+int ObDirectLoadTabletMergeCtx::init_sstable_array(
+  const ObIArray<ObIDirectLoadPartitionTable *> &table_array)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
+    ObDirectLoadSSTable *sstable = nullptr;
+    if (OB_ISNULL(sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(i)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected table", KR(ret), K(i), K(table_array));
+    } else if (OB_FAIL(sstable_array_.push_back(sstable))) {
+      LOG_WARN("fail to push back sstable", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadTabletMergeCtx::init_multiple_sstable_array(
+  const ObIArray<ObIDirectLoadPartitionTable *> &table_array)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
+    ObDirectLoadMultipleSSTable *sstable = nullptr;
+    if (OB_ISNULL(sstable = dynamic_cast<ObDirectLoadMultipleSSTable *>(table_array.at(i)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected table", KR(ret), K(i), K(table_array));
+    } else if (OB_FAIL(multiple_sstable_array_.push_back(sstable))) {
+      LOG_WARN("fail to push back multiple sstable", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadTabletMergeCtx::init_multiple_heap_table_array(
+  const ObIArray<ObIDirectLoadPartitionTable *> &table_array)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
+    ObDirectLoadMultipleHeapTable *heap_table = nullptr;
+    if (OB_ISNULL(heap_table = dynamic_cast<ObDirectLoadMultipleHeapTable *>(table_array.at(i)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected table", KR(ret), K(i), K(table_array));
+    } else if (OB_FAIL(multiple_heap_table_array_.push_back(heap_table))) {
+      LOG_WARN("fail to push back multiple heap table", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadTabletMergeCtx::build_merge_task(
   const ObIArray<ObIDirectLoadPartitionTable *> &table_array,
   const ObIArray<ObColDesc> &col_descs,
@@ -393,16 +441,10 @@ int ObDirectLoadTabletMergeCtx::build_pk_table_merge_task(
   int64_t max_parallel_degree)
 {
   int ret = OB_SUCCESS;
-  // split range
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
-    ObDirectLoadSSTable *sstable = nullptr;
-    if (OB_ISNULL(sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(i)))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table", KR(ret), K(i), K(table_array));
-    } else if (OB_FAIL(sstable_array_.push_back(sstable))) {
-      LOG_WARN("fail to push back sstable", KR(ret));
-    }
+  if (OB_FAIL(init_sstable_array(table_array))) {
+    LOG_WARN("fail to init sstable array", KR(ret));
   }
+  // split range
   if (OB_SUCC(ret)) {
     ObDirectLoadMergeRangeSplitter range_splitter;
     if (OB_FAIL(
@@ -444,16 +486,10 @@ int ObDirectLoadTabletMergeCtx::build_pk_table_multiple_merge_task(
   int64_t max_parallel_degree)
 {
   int ret = OB_SUCCESS;
-  // split range
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
-    ObDirectLoadMultipleSSTable *sstable = nullptr;
-    if (OB_ISNULL(sstable = dynamic_cast<ObDirectLoadMultipleSSTable *>(table_array.at(i)))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table", KR(ret), K(i), K(table_array));
-    } else if (OB_FAIL(multiple_sstable_array_.push_back(sstable))) {
-      LOG_WARN("fail to push back sstable", KR(ret));
-    }
+  if (OB_FAIL(init_multiple_sstable_array(table_array))) {
+    LOG_WARN("fail to init multiple sstable array", KR(ret));
   }
+  // split range
   if (OB_SUCC(ret)) {
     ObDirectLoadMultipleMergeTabletRangeSplitter range_splitter;
     if (OB_FAIL(range_splitter.init(tablet_id_, &origin_table_, multiple_sstable_array_,
@@ -617,6 +653,9 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_multiple_merge_task(
 {
   int ret = OB_SUCCESS;
   int64_t parallel_idx = 0;
+  if (OB_FAIL(init_multiple_heap_table_array(table_array))) {
+    LOG_WARN("fail to init multiple heap table array", KR(ret));
+  }
   // for existing data, construct task by split range
   if (OB_SUCC(ret)) {
     ObDirectLoadMergeRangeSplitter range_splitter;
@@ -651,16 +690,12 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_multiple_merge_task(
     }
   }
   // for imported data, construct task by multiple heap table
-  for (int64_t i = 0; OB_SUCC(ret) && !param_.is_fast_heap_table_ && i < table_array.count(); ++i) {
-    ObDirectLoadMultipleHeapTable *heap_table = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && !param_.is_fast_heap_table_ && i < multiple_heap_table_array_.count(); ++i) {
+    ObDirectLoadMultipleHeapTable *heap_table = multiple_heap_table_array_.at(i);
     ObDirectLoadPartitionHeapTableMultipleMergeTask *merge_task = nullptr;
     int64_t row_count = 0;
     ObTabletCacheInterval pk_interval;
-    if (OB_ISNULL(heap_table = dynamic_cast<ObDirectLoadMultipleHeapTable *>(table_array.at(i)))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table", KR(ret), K(i), K(table_array));
-    } else if (OB_FAIL(heap_table->get_tablet_row_count(tablet_id_, param_.table_data_desc_,
-                                                        row_count))) {
+    if (OB_FAIL(heap_table->get_tablet_row_count(tablet_id_, param_.table_data_desc_, row_count))) {
       LOG_WARN("fail to get tablet row count", KR(ret), K(tablet_id_));
     } else if (0 == row_count) {
       // ignore
@@ -681,6 +716,50 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_multiple_merge_task(
         allocator_.free(merge_task);
         merge_task = nullptr;
       }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadTabletMergeCtx::build_aggregate_merge_task_for_multiple_heap_table(
+  const ObIArray<ObIDirectLoadPartitionTable *> &table_array)
+{
+  int ret = OB_SUCCESS;
+  int64_t total_row_count = 0;
+  ObTabletCacheInterval pk_interval;
+  ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask *merge_task = nullptr;
+  if (OB_FAIL(init_multiple_heap_table_array(table_array))) {
+    LOG_WARN("fail to init multiple heap table array", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < multiple_heap_table_array_.count(); ++i) {
+    ObDirectLoadMultipleHeapTable *heap_table = multiple_heap_table_array_.at(i);
+    int64_t row_count = 0;
+    if (OB_FAIL(heap_table->get_tablet_row_count(tablet_id_, param_.table_data_desc_, row_count))) {
+      LOG_WARN("fail to get tablet row count", KR(ret), K(tablet_id_));
+    } else {
+      total_row_count += row_count;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (total_row_count > 0 && OB_FAIL(get_autoincrement_value(total_row_count, pk_interval))) {
+      LOG_WARN("fail to get autoincrement value", KR(ret), K(total_row_count));
+    } else if (OB_ISNULL(merge_task =
+                           OB_NEWx(ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask,
+                                   (&allocator_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask", KR(ret));
+    } else if (OB_FAIL(merge_task->init(param_, this, &origin_table_, multiple_heap_table_array_,
+                                        pk_interval))) {
+      LOG_WARN("fail to init merge task", KR(ret));
+    } else if (OB_FAIL(task_array_.push_back(merge_task))) {
+      LOG_WARN("fail to push back merge task", KR(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (nullptr != merge_task) {
+      merge_task->~ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask();
+      allocator_.free(merge_task);
+      merge_task = nullptr;
     }
   }
   return ret;

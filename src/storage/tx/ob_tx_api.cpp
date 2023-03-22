@@ -585,9 +585,7 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
                                                    snapshot.uncertain_bound_))) {
     TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
   } else {
-    if (tx.is_can_elr() && MTL_IS_PRIMARY_TENANT()) {
-      snapshot.core_.version_ = std::max(snapshot.core_.version_, tx_version_mgr_.get_max_commit_ts(true));
-    }
+    // do nothing
   }
   if (OB_SUCC(ret)) {
     snapshot.source_ = ObTxReadSnapshot::SRC::GLOBAL;
@@ -1145,7 +1143,10 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
   return ret;
 }
 
-int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &savepoint, const uint32_t session_id)
+int ObTransService::create_explicit_savepoint(ObTxDesc &tx,
+                                              const ObString &savepoint,
+                                              const uint32_t session_id,
+                                              const bool user_create)
 {
   int ret = OB_SUCCESS;
   int64_t scn = 0;
@@ -1153,7 +1154,7 @@ int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &save
   tx.inc_op_sn();
   scn = ObSequence::inc_and_get_max_seq_no();
   ObTxSavePoint sp;
-  if (OB_SUCC(sp.init(scn, savepoint, session_id))) {
+  if (OB_SUCC(sp.init(scn, savepoint, session_id, user_create))) {
     if (OB_FAIL(tx.savepoints_.push_back(sp))) {
       TRANS_LOG(WARN, "push savepoint failed", K(ret));
     } else if (!tx.tx_id_.is_valid() && OB_FAIL(tx_desc_mgr_.add(tx))) {
@@ -1299,7 +1300,7 @@ int ObTransService::create_stash_savepoint(ObTxDesc &tx, const ObString &name)
   tx.inc_op_sn();
   auto seq_no = ObSequence::inc_and_get_max_seq_no();
   ObTxSavePoint sp;
-  if (OB_SUCC(sp.init(seq_no, name, 0, true))) {
+  if (OB_SUCC(sp.init(seq_no, name, 0, false, true))) {
     if (OB_FAIL(tx.savepoints_.push_back(sp))) {
       TRANS_LOG(WARN, "push savepoint failed", K(ret));
     }

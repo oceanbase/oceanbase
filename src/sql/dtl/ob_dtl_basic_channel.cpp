@@ -30,8 +30,8 @@
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
 #include "sql/dtl/ob_dtl_channel_watcher.h"
-#include "share/ob_server_blacklist.h"
 #include "observer/omt/ob_th_worker.h"
+#include "sql/engine/px/ob_px_util.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
@@ -850,9 +850,8 @@ int ObDtlBasicChannel::wait_unblocking()
                 LOG_WARN("worker interrupt", K(tmp_ret), K(ret));
                 break;
               }
-              if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
-                    share::ObCascadMember(peer_, GCONF.cluster_id), true,
-                    channel_loop_->get_process_query_time()))) {
+              if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(peer_,
+                              channel_loop_->get_process_query_time()))) {
                 ret = OB_RPC_CONNECT_ERROR;
                 LOG_WARN("peer no in communication, maybe crashed", K(ret), K(peer_),
                          K(static_cast<int64_t>(GCONF.cluster_id)));

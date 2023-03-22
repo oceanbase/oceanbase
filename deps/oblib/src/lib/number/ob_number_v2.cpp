@@ -3637,7 +3637,7 @@ int ObNumber::get_npi_(int64_t n, ObNumber& out, ObIAllocator &alloc, const bool
 }
 
 // 根据前一项的阶乘计算本项阶乘，每次只用乘两个数即可,不需要从头计算
-// 见sin/cos的泰勒展开式https://yuque.antfin-inc.com/ob/sql/eid7bv
+// 见sin/cos的泰勒展开式
 int ObNumber::simple_factorial_for_sincos_(int64_t start, ObIAllocator &allocator, ObNumber &result) const
 {
   int ret = OB_SUCCESS;

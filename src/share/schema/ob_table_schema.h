@@ -1607,7 +1607,7 @@ inline bool ObSimpleTableSchemaV2::is_global_unique_index_table(const ObIndexTyp
 
 inline bool ObSimpleTableSchemaV2::is_local_unique_index_table() const
 {
-  // https://work.aone.alibaba-inc.com/issue/35726194
+  //
   return INDEX_TYPE_UNIQUE_LOCAL == index_type_
       || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_;
 }

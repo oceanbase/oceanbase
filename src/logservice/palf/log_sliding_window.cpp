@@ -95,6 +95,7 @@ LogSlidingWindow::LogSlidingWindow()
     last_slide_log_pid_(INVALID_PROPOSAL_ID),
     last_slide_log_accum_checksum_(-1),
     fetch_info_lock_(common::ObLatchIds::PALF_SW_FETCH_INFO_LOCK),
+    last_fetch_req_time_(0),
     last_fetch_end_lsn_(),
     last_fetch_max_log_id_(OB_INVALID_LOG_ID),
     last_fetch_committed_end_lsn_(),
@@ -1663,6 +1664,7 @@ void LogSlidingWindow::try_reset_last_fetch_log_info_(const LSN &expected_end_ls
   } else if (log_id <= last_fetch_max_log_id_) {
     // If it receives push log whose end_lsn AND log_id is less than or equal to last_fetch_info,
     // which means it can receive other logs from leader, so reset last fetch info.
+    last_fetch_req_time_ = 0;
     last_fetch_end_lsn_.reset();
     last_fetch_committed_end_lsn_.reset();
     last_fetch_max_log_id_ = OB_INVALID_LOG_ID;
@@ -1735,13 +1737,21 @@ void LogSlidingWindow::try_update_committed_lsn_for_fetch_(
 bool LogSlidingWindow::need_execute_fetch_(const FetchTriggerType &fetch_trigger_type)
 {
   bool bool_ret = true;
-  // If self is currently in streamingly fetch state, it does not need fetch again
-  // in some trigger cases.
+  const int64_t now = ObTimeUtility::current_time();
   if (FetchTriggerType::SLIDING_CB == last_fetch_trigger_type_
       && (FetchTriggerType::ADD_MEMBER_PRE_CHECK == fetch_trigger_type
-          || FetchTriggerType::MODE_META_BARRIER == fetch_trigger_type)) {
+          || FetchTriggerType::MODE_META_BARRIER == fetch_trigger_type
+          || FetchTriggerType::LEARNER_REGISTER == fetch_trigger_type)) {
+    // If self is currently in streamingly fetch state, it does not need fetch again
+    // in some trigger cases.
     bool_ret = false;
-  }
+  } else if (now - last_fetch_req_time_ < PALF_FETCH_LOG_OUTER_TRIGGER_INTERVAL
+      && (FetchTriggerType::ADD_MEMBER_PRE_CHECK == fetch_trigger_type
+          || FetchTriggerType::MODE_META_BARRIER == fetch_trigger_type
+          || FetchTriggerType::LEARNER_REGISTER == fetch_trigger_type)) {
+    // Prevent config pre check generating fetch req too frequently.
+    bool_ret = false;
+  } else {}
   return bool_ret;
 }
 
@@ -1762,7 +1772,9 @@ int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
     // require argument are all valid or all invalid
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K_(self), K(fetch_log_type), K(prev_lsn), K(fetch_start_lsn), K(fetch_start_log_id));
-  } else if (OB_FAIL(get_fetch_log_dst_(fetch_log_dst)) || !fetch_log_dst.is_valid()) {
+  } else if (OB_FAIL(get_fetch_log_dst_(fetch_log_dst))
+      || !fetch_log_dst.is_valid()
+      || fetch_log_dst == self_) {
     if (palf_reach_time_interval(5 * 1000 * 1000, fetch_failure_print_time_)) {
       PALF_LOG(WARN, "get_fetch_log_dst failed or invalid", K(ret), K_(palf_id), K_(self), K(fetch_log_dst));
     }
@@ -1905,11 +1917,12 @@ int LogSlidingWindow::do_fetch_log_(const FetchTriggerType &trigger_type,
         PALF_LOG(WARN, "submit_fetch_log_req failed", K(ret), K_(palf_id), K_(self));
       } else {
         // Record fetch trigger type
+        last_fetch_req_time_ = ObTimeUtility::current_time();
         last_fetch_trigger_type_ = trigger_type;
       }
       PALF_LOG(INFO, "do_fetch_log_ finished", K(ret), K_(palf_id), K_(self), K(dest),
           K(fetch_log_count), K(fetch_start_lsn), K(prev_lsn), K(fetch_start_log_id),
-          K(last_slide_log_id), K(fetch_log_size), K(accepted_mode_pid),
+          K(last_slide_log_id), K(fetch_log_size), K(accepted_mode_pid), K_(last_fetch_req_time),
           K_(last_fetch_end_lsn), K_(last_fetch_max_log_id), K_(last_fetch_committed_end_lsn),
           K(trigger_type), KPC(this));
     }
@@ -3222,8 +3235,7 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
       if (OB_SUCC(ret)) {
         SCN min_scn;
         if (log_task->is_valid()) {
-          if (group_entry_header.get_log_proposal_id() != log_task->get_proposal_id()
-              || lsn != log_task->get_begin_lsn()
+          if (lsn != log_task->get_begin_lsn()
               || group_entry_header.get_max_scn() != log_task->get_max_scn()
               || group_entry_header.get_accum_checksum() != log_task->get_accum_checksum()) {
             ret = OB_ERR_UNEXPECTED;

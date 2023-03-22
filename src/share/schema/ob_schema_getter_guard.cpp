@@ -4155,7 +4155,7 @@ inline bool ObSchemaGetterGuard::check_inner_stat() const
 }
 
 // OB_INVALID_VERSION means schema doesn't exist.
-// bugfix: https://aone.alibaba-inc.com/issue/17565984
+// bugfix:
 int ObSchemaGetterGuard::get_schema_version(
     const ObSchemaType schema_type,
     const uint64_t tenant_id,

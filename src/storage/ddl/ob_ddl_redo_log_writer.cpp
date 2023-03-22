@@ -1072,7 +1072,7 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->register_to_tablet(get_start_scn(), ddl_kv_mgr_handle))) {
     LOG_WARN("register ddl kv mgr to tablet failed", K(ret), K(ls_id_), K(tablet_id_));
   } else {
-    ddl_kv_mgr_handle.get_obj()->reset_commit_success(); // releated issue: https://work.aone.alibaba-inc.com/issue/47686927
+    ddl_kv_mgr_handle.get_obj()->reset_commit_success(); // releated issue:
   }
   return ret;
 }

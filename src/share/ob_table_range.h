@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2022 Alipay Inc. All Rights Reserved.
  * Authors:
- *     Danling <fengjingkun.fjk@antgroup.com>
+ *     Danling <>
  */
 
 #ifndef OCEANBASE_SHARE_OB_TABLE_RANGE_H_

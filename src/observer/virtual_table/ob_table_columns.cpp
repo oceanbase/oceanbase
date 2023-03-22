@@ -97,7 +97,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             LOG_WARN("select_stmt is NULL", K(ret));
           } else if (OB_ISNULL(real_stmt = select_stmt->get_real_stmt())) {
             // case : view definition is set_op
-            // Bug : http://k3.alibaba-inc.com/issue/6455327?stat=1.5.3&toPage=1&versionId=1043693
+            // Bug :
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("real stmt is NULL", K(ret));
           } else {
@@ -675,7 +675,7 @@ int ObTableColumns::deduce_column_attributes(
   ObRawExpr *&item_expr = const_cast<SelectItem &>(select_item).expr_;
   // In static engine the scale not idempotent in type deducing,
   // because the implicit cast is added, see:
-  // https://aone.alibaba-inc.com/project/81079/task/35977618
+  //
   //
   // We erase the added implicit cast and do formalize again for workaround.
   OZ(ObRawExprUtils::erase_operand_implicit_cast(item_expr, item_expr));

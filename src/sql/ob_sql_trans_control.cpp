@@ -663,7 +663,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     bool local_single_ls_plan = plan->is_local_plan()
       && OB_PHY_PLAN_LOCAL == plan->get_location_type()
       && das_ctx.has_same_lsid(&local_ls_id);
-    if (local_single_ls_plan && !tx_desc.is_can_elr()) {
+    if (local_single_ls_plan) {
       ret = txs->get_ls_read_snapshot(tx_desc,
                                       session->get_tx_isolation(),
                                       local_ls_id,
@@ -722,7 +722,8 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
              K(session->get_txn_free_route_ctx()), KPC(session));       \
   }
 int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
-                                        const ObString &sp_name)
+                                        const ObString &sp_name,
+                                        const bool user_create)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
@@ -734,7 +735,7 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
   OZ (acquire_tx_if_need_(txs, *session));
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
-  OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session)), sp_name);
+  OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session), user_create), sp_name);
   if (start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {

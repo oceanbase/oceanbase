@@ -42,6 +42,7 @@ public:
       const ObTableSchema &orig_table_schema,
       const AlterTableSchema &alter_table_schema,
       const ObTimeZoneInfoWrap &tz_info_wrap);
+  ObDDLTaskID get_ddl_task_id() { return ObDDLTaskID(tenant_id_, task_id_); }
   virtual ~ObDDLRedefinitionSSTableBuildTask() = default;
   virtual int process() override;
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }

@@ -165,9 +165,11 @@ public:
   static int update_ddl_table_store(const ObTabletDDLParam &ddl_param,
                                     const ObTableHandleV2 &table_handle);
 
-  static int compact_ddl_sstable(const ObIArray<ObITable *> &ddl_sstables,
+  static int compact_ddl_sstable(const ObTablesHandleArray &ddl_sstables,
                                  const ObTableReadInfo &read_info,
-                                 const ObTabletDDLParam &ddl_param,
+                                 const bool is_commit,
+                                 const share::SCN &rec_scn,
+                                 ObTabletDDLParam &ddl_param,
                                  ObTableHandleV2 &table_handle);
 
   static int report_ddl_checksum(const share::ObLSID &ls_id,

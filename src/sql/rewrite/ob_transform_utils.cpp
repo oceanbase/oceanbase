@@ -1902,7 +1902,8 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
   } else if (is_not_null) {
     // do nothing
   } else if (expr->is_static_scalar_const_expr()) {
-    if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null))) {
+    bool is_null = false;
+    if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null, is_null))) {
       LOG_WARN("failed to check calculable expr not null", K(ret));
     } else if (is_not_null && !expr->is_const_raw_expr() && 
                NULL != constraints &&
@@ -1954,12 +1955,14 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
 
 int ObTransformUtils::is_const_expr_not_null(ObNotNullContext &ctx,
                                              const ObRawExpr *expr,
-                                             bool &is_not_null)
+                                             bool &is_not_null,
+                                             bool &is_null)
 {
   int ret = OB_SUCCESS;
   ObObj result;
   bool got_result = false;
   is_not_null = false;
+  is_null = false;
   if (OB_ISNULL(expr) || !expr->is_static_scalar_const_expr()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
@@ -1986,8 +1989,10 @@ int ObTransformUtils::is_const_expr_not_null(ObNotNullContext &ctx,
   if (OB_SUCC(ret) && got_result) {
     if (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle())) {
       is_not_null = false;
+      is_null = true;
     } else {
       is_not_null = true;
+      is_null = false;
     }
   }
   return ret;
@@ -4406,7 +4411,7 @@ int ObTransformUtils::compute_table_property(const ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   const JoinedTable *joined_table = NULL;
-  if (OB_ISNULL(table)) {
+  if (OB_ISNULL(table) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected stmt", K(ret));
   } else if (table->is_basic_table()
@@ -4418,7 +4423,12 @@ int ObTransformUtils::compute_table_property(const ObDMLStmt *stmt,
                                                                    cond_exprs, res_info)))) {
     LOG_WARN("failed to compute generate table property", K(ret));
   } else if (!table->is_joined_table()) {
-    /*do nothing*/
+    ObSqlBitSet<> rel_ids;
+    if (OB_FAIL(stmt->get_table_rel_ids(*table, rel_ids))) {
+      LOG_WARN("failed to get table ids", K(ret));
+    } else if (OB_FAIL(res_info.table_set_.add_members(rel_ids))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
   } else if (FALSE_IT(joined_table = static_cast<const JoinedTable *>(table))) {
   } else if (joined_table->is_inner_join()) {
     ret = SMART_CALL(compute_inner_join_property(stmt, check_helper, joined_table,
@@ -7975,26 +7985,6 @@ int ObTransformUtils::merge_limit_as_zero(ObTransformerCtx &ctx,
       is_valid = true;
     }
   }
-  if (OB_FAIL(ret)) {//to create constraint
-  } else if (view_offset == NULL) {
-  } else if (OB_FAIL(compare_const_expr_result(&ctx, view_offset, T_OP_GE, 0, is_not_neg))) {
-    LOG_WARN("failed to get_expr_int_value", K(ret));
-  } else {
-    ObRawExpr *cmp_expr = NULL;
-    if (zero_expr == NULL && OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx.expr_factory_,
-                                                            ObIntType,
-                                                            0,
-                                                            zero_expr))) {
-      LOG_WARN("create expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx.expr_factory_, ctx.session_info_, T_OP_GE, cmp_expr,
-                                                          view_offset, zero_expr))) {
-      LOG_WARN("create_double_op_expr_failed", K(ret));
-    } else if (OB_FAIL(params.push_back(cmp_expr))) {
-      LOG_WARN("push back failed", K(ret));
-    } else if (!is_not_neg) {
-      is_valid = true;
-    }
-  }
   if (OB_FAIL(ret)) {
   } else if (upper_limit == NULL) {
   } else if (OB_FAIL(compare_const_expr_result(&ctx, upper_limit, T_OP_GE, 1, is_not_neg))) {
@@ -8015,27 +8005,6 @@ int ObTransformUtils::merge_limit_as_zero(ObTransformerCtx &ctx,
       is_valid = true;
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if (upper_offset == NULL) {
-  } else if (OB_FAIL(compare_const_expr_result(&ctx, upper_offset, T_OP_GE, 0, is_not_neg))) {
-    LOG_WARN("failed to get_expr_int_value", K(ret));
-  } else {
-    ObRawExpr *cmp_expr = NULL;
-    if (zero_expr == NULL && OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx.expr_factory_,
-                                                            ObIntType,
-                                                            0,
-                                                            zero_expr))) {
-      LOG_WARN("create expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx.expr_factory_, ctx.session_info_, T_OP_GE, cmp_expr,
-                                                              upper_offset, zero_expr))) {
-      LOG_WARN("create_double_op_expr_failed", K(ret));
-    } else if (OB_FAIL(params.push_back(cmp_expr))) {
-      LOG_WARN("push back failed", K(ret));
-    } else if (!is_not_neg) {
-      is_valid = true;
-    }
-  }
-
 
   if (OB_FAIL(ret) || view_limit == NULL || upper_offset == NULL) {
     //do nothing
@@ -8065,11 +8034,12 @@ int ObTransformUtils::merge_limit_as_zero(ObTransformerCtx &ctx,
 
   ObRawExpr *and_expr = NULL;
   if (OB_FAIL(ret)) {
+  } else if (params.count() == 0) {
+    //do nothing
   } else if (OB_FAIL(ObRawExprUtils::build_and_expr(*(ctx.expr_factory_), params, and_expr))) {
     LOG_WARN("build and expr failed", K(ret));
   } else if (OB_FAIL(and_expr->formalize(ctx.session_info_))) {
     LOG_WARN("formalize expr failed", K(ret));
-
   } else if (is_valid) {
     if (OB_FAIL(add_param_bool_constraint(&ctx, and_expr, false))) {
       LOG_WARN("build cons failed", K(ret));
@@ -8207,9 +8177,40 @@ int ObTransformUtils::merge_limit_offset(ObTransformerCtx *ctx,
                                                           upper_offset))) {
       LOG_WARN("create double op expr", K(ret));
     }
-    if (OB_FAIL(ret) || upper_limit == NULL || calc_limit_expr == NULL) {
-      //do nothing
-    } else {
+    if (OB_FAIL(ret)) {
+    } else if ( upper_limit == NULL && calc_limit_expr != NULL) {
+      limit_expr = calc_limit_expr;
+      bool is_true = false;
+      ObRawExpr *cmp_expr = NULL;
+      ObConstRawExpr *zero_expr = NULL;
+
+      if (!lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx->expr_factory_,
+                                                        ObIntType,
+                                                        0,
+                                                        zero_expr))) {
+          LOG_WARN("create zero expr failed", K(ret));
+      } else if (lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_number_expr(*ctx->expr_factory_,
+                                                                                          ObNumberType,
+                                                                                          ObNumber::get_zero(),
+                                                                                          zero_expr))) {
+        LOG_WARN("create zero expr failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx->expr_factory_, ctx->session_info_,
+                                                                T_OP_GE, cmp_expr, calc_limit_expr, zero_expr))) {
+        LOG_WARN("create double op expr failed", K(ret));
+      } else if (OB_FAIL(compare_const_expr_result(ctx, *calc_limit_expr, T_OP_GE, *zero_expr, is_true))) {
+        LOG_WARN("compare const expr is failed", K(ret));
+      } else if (is_true) {
+        limit_expr = calc_limit_expr;
+        if (OB_FAIL(add_param_bool_constraint(ctx, cmp_expr, true))) {
+          LOG_WARN("add cons failed", K(ret));
+        }
+      } else {
+        limit_expr = zero_expr;
+        if (OB_FAIL(add_param_bool_constraint(ctx, cmp_expr, false))) {
+          LOG_WARN("add cons failed", K(ret));
+        }
+      }
+    } else if ( upper_limit != NULL && calc_limit_expr != NULL) {
       bool is_true = false;
       ObRawExpr *cmp_expr = NULL;
       if (OB_FAIL(compare_const_expr_result(ctx, *upper_limit, T_OP_LE, *calc_limit_expr, is_true))) {

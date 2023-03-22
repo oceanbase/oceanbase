@@ -126,7 +126,7 @@ uint64_t ObExprFuncPartHash::calc_hash_value_with_seed(const ObObj &obj, int64_t
 {
   uint64 hval = 0;
   ObObjType type = obj.get_type();
-  //定长类型需要去除末尾空格, 见 https://aone.alibaba-inc.com/workitem/17481198
+  //定长类型需要去除末尾空格, 见
   if (ObCharType == type || ObNCharType == type) {
     ObObj obj_trimmed;
     int32_t val_len = obj.get_val_len();

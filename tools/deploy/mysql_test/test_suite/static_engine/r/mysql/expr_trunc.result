@@ -131,7 +131,7 @@ select truncate(c_null, -1) from t1;
 +----------------------+
 
 ## truncate(c20, c16) 结果与mysql不一致，cast(c16 as signed)的结果发生变化导致truncate的结果变化
-## cast的结果符合预期，tuncate的结果不符合预期。bug： https://work.aone.alibaba-inc.com/issue/31724351
+## cast的结果符合预期，tuncate的结果不符合预期。bug：
 EXPLAIN select c1, c1, truncate(c1, c1) from t1;
 Query Plan
 ==========================================

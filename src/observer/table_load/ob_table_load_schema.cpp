@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -103,38 +103,6 @@ int ObTableLoadSchema::get_column_names(const ObTableSchema *table_schema, ObIAl
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::get_schema_version(uint64_t tenant_id, uint64_t table_id,
-                                          int64_t &schema_version)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(
-        ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else {
-    schema_version = table_schema->get_schema_version();
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_constraints(ObSchemaGetterGuard &schema_guard,
-                                         const ObTableSchema *table_schema)
-{
-  int ret = OB_SUCCESS;
-  bool trigger_enabled = false;
-  ObArray<ObAuxTableMetaInfo> simple_index_infos;
-  if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("failed to get simple index infos", KR(ret));
-  } else if (OB_FAIL(table_schema->check_has_trigger_on_table(schema_guard, trigger_enabled))) {
-    LOG_WARN("failed to check has trigger in table", KR(ret));
-  } else if (trigger_enabled) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("direct-load does not support table with trigger enabled", KR(ret), K(trigger_enabled));
   }
   return ret;
 }

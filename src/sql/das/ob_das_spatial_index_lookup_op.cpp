@@ -6,7 +6,7 @@
  * ob_das_spatial_index_lookup_op.cpp is for …
  *
  * Authors:
- *     shengle<xiaoyi.xy@alibaba-inc.com>
+ *     shengle<>
  */
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_spatial_index_lookup_op.h"

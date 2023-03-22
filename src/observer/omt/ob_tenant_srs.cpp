@@ -343,7 +343,7 @@ int ObTenantSrs::fetch_all_srs(ObSrsCacheSnapShot *&srs_snapshot, bool is_sys_sr
   uint32_t res_count = 0;
 
   ObSqlString sql;
-  ObSQLClientRetryWeak sql_client_retry_weak(srs_mgr_->sql_proxy_, false);
+  ObSQLClientRetryWeak sql_client_retry_weak(srs_mgr_->sql_proxy_, tenant_id_, OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TID);
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
     if (is_sys_srs) {

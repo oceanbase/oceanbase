@@ -1,6 +1,6 @@
 // Copyright (c) 2019-2021 Alibaba Inc. All Rights Reserved.
 // Author:
-//     lixia.yq@antfin.com
+//
 //
 
 #include <gtest/gtest.h>

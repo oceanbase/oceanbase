@@ -17,6 +17,7 @@
 #include "lib/lock/ob_rwlock.h"
 #include "common/ob_tablet_id.h"
 #include "share/scn.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
 
 namespace oceanbase
 {
@@ -51,14 +52,17 @@ public:
   static bool is_tablet_gc_trigger(uint8_t tablet_persist_trigger)
   { return 0 != (tablet_persist_trigger & 2); }
   bool is_tablet_gc_trigger_and_reset();
+  int check_tablet_gc_for_standby_(bool &cannot_gc, ObTabletHandle &tablet_handle);
+  int check_tablet_gc_(bool &cannot_gc, ObTabletHandle &tablet_handle);
   void set_tablet_persist_trigger();
   void set_tablet_gc_trigger();
   uint8_t get_tablet_persist_trigger_and_reset();
   int get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_create_tablet_ids,
+                               bool &need_retry,
                                bool only_deleted = false);
   int flush_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids,
                                  const share::SCN checkpoint_scn);
-  int gc_tablets(bool &is_gc);
+  int gc_tablets(bool &is_gc, bool &need_retry);
   bool check_stop() { return ATOMIC_LOAD(&update_enabled_) == false; }
   int offline();
   void online();

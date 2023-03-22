@@ -1270,6 +1270,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     bool hint_force_no_das = false;
     force_das_tsc = get_plan()->get_optimizer_context().in_nested_sql() ||
                     get_plan()->get_optimizer_context().has_pl_udf() ||
+                    get_plan()->get_optimizer_context().has_dblink() ||
                     get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
                     is_batch_update_table;
     //this sql force to use DAS TSC:
@@ -2568,7 +2569,7 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
  * @interest_column_ids 匹配索引前缀的列id
  * @const_column_info   interest_column_ids对应的每一个column是否为const
  * 具体的匹配规则可以看
- * https://aone.alibaba-inc.com/code/D170675
+ *
  * */
 int ObJoinOrder::check_all_interesting_order(const ObIArray<OrderItem> &ordering,
                                              const ObDMLStmt *stmt,
@@ -4509,6 +4510,8 @@ int JoinPath::compute_join_path_sharding()
                                               reselected_dup_pos,
                                               strong_sharding_))) {
         LOG_WARN("failed to compute basic sharding info", K(ret));
+      } else if (OB_FALSE_IT(inherit_sharding_index_ = 0)) {
+        //do nothing
       } else if (reselected_dup_pos.empty()) {
         /*no duplicated table, do nothing*/
       } else if (OB_UNLIKELY(2 != reselected_dup_pos.count())) {
@@ -4528,11 +4531,13 @@ int JoinPath::compute_join_path_sharding()
       strong_sharding_ = opt_ctx.get_local_sharding();
     } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
       strong_sharding_ = left_path_->strong_sharding_;
+      inherit_sharding_index_ = 0;
       if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
         LOG_WARN("failed to append weak sharding", K(ret));
       } else { /*do nothing*/ }
     } else if (DistAlgo::DIST_ALL_NONE == join_dist_algo_) {
       strong_sharding_ = right_path_->strong_sharding_;
+      inherit_sharding_index_ = 1;
       if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
         LOG_WARN("failed to append weak sharding", K(ret));
       } else { /*do nothing*/ }
@@ -4540,6 +4545,7 @@ int JoinPath::compute_join_path_sharding()
                DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo_) {
       if (LEFT_OUTER_JOIN == join_type_) {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_)) ||
             OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
@@ -4549,6 +4555,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else if (RIGHT_OUTER_JOIN == join_type_) {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_)) ||
             OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
@@ -4571,11 +4578,13 @@ int JoinPath::compute_join_path_sharding()
                  LEFT_ANTI_JOIN == join_type_ ||
                  INNER_JOIN == join_type_) {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4591,6 +4600,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4603,6 +4613,7 @@ int JoinPath::compute_join_path_sharding()
         strong_sharding_ = opt_ctx.get_distributed_sharding();		
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4618,6 +4629,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4629,6 +4641,7 @@ int JoinPath::compute_join_path_sharding()
         strong_sharding_ = opt_ctx.get_distributed_sharding();		
       } else {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4640,6 +4653,7 @@ int JoinPath::compute_join_path_sharding()
     } else if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
       if (right_path_->is_single()) {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
       } else {
         strong_sharding_ = opt_ctx.get_distributed_sharding();
       }
@@ -12533,7 +12547,7 @@ int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
         LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
       } else if (T_OP_LIKE == expr->get_expr_type()) {
         /*
-        https://work.aone.alibaba-inc.com/issue/33030027
+
         err1: should add const expr for expr2
         err2: if expr2 is 'a%d' deduce is error
               c1 like 'a%d' DOESN'T MEAN:

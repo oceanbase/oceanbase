@@ -99,7 +99,7 @@ select * from t2;
 drop table t1;
 drop table t2;
 
---echo bug: https://work.aone.alibaba-inc.com/issue/29047026
+--echo bug:
 --disable_warnings
 drop table if exists t2;
 --enable_warnings

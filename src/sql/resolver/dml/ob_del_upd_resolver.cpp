@@ -2244,10 +2244,16 @@ int ObDelUpdResolver::expand_record_to_columns(const ParseNode &record_node,
         const pl::ObUserDefinedType *user_type = NULL;
         ParseNode *column_node = NULL;
         const ParseNode *member_node = &record_node;
-        while (NULL != member_node && NULL != member_node->children_[1]) {
+        bool multi_level_count = 0;
+        while (NULL != member_node && member_node->num_child_ > 1 && NULL != member_node->children_[1]) {
           member_node = member_node->children_[1];
+          multi_level_count++;
         }
-        if (OB_ISNULL(column_node = new_terminal_node(allocator_, T_IDENT))) {
+        if (multi_level_count > 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support to expand", K(composite_type), K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutil level record reference");
+        } else if (OB_ISNULL(column_node = new_terminal_node(allocator_, T_IDENT))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("make db name T_IDENT node failed", K(ret));
         } else if (OB_ISNULL(member_node->children_[1] = new_non_terminal_node(allocator_,
@@ -3201,7 +3207,7 @@ int ObDelUpdResolver::build_row_for_empty_brackets(ObArray<ObRawExpr*> &value_ro
         }
       } else if (item->is_auto_increment()) {
         // insert into t (..) values (); 场景下不可以自动生成 nextval 表达式，而应该生成 null
-        // 否则会出现问题：https://work.aone.alibaba-inc.com/issue/27172629
+        // 否则会出现问题：
         if (OB_FAIL(ObRawExprUtils::build_null_expr(*params_.expr_factory_, expr))) {
           LOG_WARN("failed to build next_val expr as null", K(ret));
         } else if (OB_FAIL(value_row.push_back(expr))) {

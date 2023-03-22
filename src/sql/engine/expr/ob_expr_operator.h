@@ -460,7 +460,7 @@ public:
     const ObExprResType *types,
     int64_t param_num,
     const common::ObCollationType conn_coll_type);
-  //skip_null for expr COALESCE https://work.aone.alibaba-inc.com/issue/31824340
+  //skip_null for expr COALESCE
   static int aggregate_result_type_for_merge(
     ObExprResType &type,
     const ObExprResType *types,

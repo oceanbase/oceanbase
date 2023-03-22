@@ -25,20 +25,27 @@ namespace sql
 class ObPxDatahubDataProvider
 {
 public:
+  ObPxDatahubDataProvider()
+      : op_id_(-1), msg_type_(dtl::TESTING), msg_set_(false), dh_msg_cnt_(0), rescan_cnt_(0)
+  {
+  }
   virtual int get_msg_nonblock(const dtl::ObDtlMsg *&msg, int64_t timeout_ts) = 0;
   virtual void reset() {}
   TO_STRING_KV(K_(op_id), K_(msg_type));
   uint64_t op_id_; // 注册本 provider 的算子 id，用于 provder 数组里寻址对应 provider
   dtl::ObDtlMsgType msg_type_;
+  bool msg_set_;
+  volatile int64_t dh_msg_cnt_;
+  volatile int64_t rescan_cnt_;
 };
 
 template <typename T>
 class ObWholeMsgProvider : public ObPxDatahubDataProvider
 {
 public:
-  ObWholeMsgProvider() : msg_set_(false) {}
+  ObWholeMsgProvider() {}
   virtual ~ObWholeMsgProvider() = default;
-  virtual void reset() override { msg_.reset(); msg_set_ = false; }
+  virtual void reset() override { msg_.reset();}
   int get_msg_nonblock(const dtl::ObDtlMsg *&msg, int64_t timeout_ts)
   {
     int ret = OB_SUCCESS;
@@ -83,7 +90,6 @@ private:
     return ret;
   }
 private:
-  bool msg_set_;
   T msg_;
   common::ObThreadCond msg_ready_cond_;
 };

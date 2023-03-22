@@ -81,7 +81,7 @@ update t7 set c1=1 where c1 in (select c1 from t8 where t7.c2=c2);
 update t7 set c1=(select c1 from t8);
 update t7 set c1=(select c1 from t8 where t7.c2=c2);
 
-##bug:http://k3.alibaba-inc.com/issue/6652088?stat=1.5.2&toPage=1&versionId=1043693  elimilation of orderby in delete_stmt and update_stmt
+##bug:
 delete from t7 where abs(c1) > 0 order by c1 limit 1;
 update t7 set c1 = 1 where abs(c2) > 0 order by c1 limit 1;
 

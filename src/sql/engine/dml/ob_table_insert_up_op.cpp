@@ -885,8 +885,8 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &ins
   int64_t simulate_batch_row_cnt = - EVENT_CALL(EventTable::EN_TABLE_INSERT_UP_BATCH_ROW_COUNT);
   int64_t default_row_batch_cnt = simulate_batch_row_cnt > 0 ?
                                   simulate_batch_row_cnt : INT64_MAX;
-  if (is_ignore_) {
-    // If it is ignore mode, degenerate into single line execution
+  if (is_ignore_ || execute_single_row_) {
+    // If it is ignore mode or need excute row by row, degenerate into single line execution
     default_row_batch_cnt = 1;
   }
   LOG_DEBUG("simulate lookup row batch count", K(simulate_batch_row_cnt), K(default_row_batch_cnt));

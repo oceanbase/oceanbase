@@ -112,7 +112,7 @@ TEST_F(TestObTxLog, tx_log_block_header)
   int64_t pos = 0;
   ObTxLogBlock fill_block, replay_block;
 
-  ObTxLogBlockHeader fill_block_header(TEST_ORG_CLUSTER_ID, TEST_LOG_ENTRY_NO, ObTransID(TEST_TX_ID));
+  ObTxLogBlockHeader fill_block_header(TEST_ORG_CLUSTER_ID, TEST_LOG_ENTRY_NO, ObTransID(TEST_TX_ID), TEST_ADDR);
   ASSERT_EQ(OB_SUCCESS, fill_block.init(TEST_TX_ID, fill_block_header));
 
   // check log_block_header
@@ -205,7 +205,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
   ObTxAbortLog fill_abort(TEST_TX_BUFFER_NODE_ARRAY);
   ObTxRecordLog fill_record(TEST_LOG_OFFSET, TEST_LOG_OFFSET_ARRY);
 
-  ObTxLogBlockHeader header(TEST_ORG_CLUSTER_ID, TEST_LOG_ENTRY_NO, ObTransID(TEST_TX_ID));
+  ObTxLogBlockHeader header(TEST_ORG_CLUSTER_ID, TEST_LOG_ENTRY_NO, ObTransID(TEST_TX_ID), TEST_ADDR);
   ASSERT_EQ(OB_SUCCESS, fill_block.init(TEST_TX_ID, header));
   ASSERT_EQ(OB_SUCCESS, fill_block.add_new_log(fill_active_state));
   ASSERT_EQ(OB_SUCCESS, fill_block.add_new_log(fill_commit_state));
@@ -320,7 +320,7 @@ TEST_F(TestObTxLog, tx_log_body_redo)
                             TEST_LOG_OFFSET,
                             TEST_INFO_ARRAY);
 
-  ObTxLogBlockHeader fill_block_header(TEST_ORG_CLUSTER_ID, TEST_LOG_ENTRY_NO, ObTransID(TEST_TX_ID));
+  ObTxLogBlockHeader fill_block_header(TEST_ORG_CLUSTER_ID, TEST_LOG_ENTRY_NO, ObTransID(TEST_TX_ID), TEST_ADDR);
   ASSERT_EQ(OB_SUCCESS, fill_block.init(TEST_TX_ID, fill_block_header));
 
   ObString TEST_MUTATOR_BUF("FFF");
@@ -506,6 +506,8 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   replay_member_cnt++;
   EXPECT_EQ(fill_block_header.get_tx_id().get_id(), replay_block_header.get_tx_id().get_id());
   replay_member_cnt++;
+  EXPECT_EQ(fill_block_header.get_scheduler(), replay_block_header.get_scheduler());
+  replay_member_cnt++;
   EXPECT_EQ(replay_member_cnt, fill_member_cnt);
 
   ObTxActiveInfoLogTempRef active_temp_ref;
@@ -686,8 +688,8 @@ void test_big_commit_info_log(int64_t log_size)
                                       TEST_IS_DUP, TEST_CAN_ELR, TEST_TRACE_ID_STR, TEST_TRCE_INFO,
                                       TEST_LOG_OFFSET, TEST_BIG_REDO_LSN_ARRAY, TEST_LS_ARRAY,
                                       TEST_CLUSTER_VERSION, TEST_XID);
-  ObTxLogBlockHeader fill_block_header(TEST_ORG_CLUSTER_ID, TEST_LOG_ENTRY_NO,
-                                       ObTransID(TEST_TX_ID));
+  ObTxLogBlockHeader
+      fill_block_header(TEST_ORG_CLUSTER_ID, TEST_LOG_ENTRY_NO, ObTransID(TEST_TX_ID), TEST_ADDR);
   ASSERT_EQ(OB_SUCCESS, fill_block.init(TEST_TX_ID, fill_block_header));
   ASSERT_EQ(OB_LOG_TOO_LARGE, fill_block.add_new_log(fill_commit_state, &fill_big_segment));
 

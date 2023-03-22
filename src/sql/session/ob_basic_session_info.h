@@ -294,7 +294,7 @@ public:
     SqlScopeFlags &sql_scope_flags_;
   };
   // 切换自治事务一定需要切换嵌套语句，否则切回主事务后语句执行的上下文信息可能已经有变化，比如：
-  // https://work.aone.alibaba-inc.com/issue/30832457
+  //
   // 所以原则上TransSavedValue应该包含StmtSavedValue的所有属性，考虑将前者作为后者的子类，
   // 但有几个属性在两者中都存在、需要执行的操作却不同，最后决定将两者处理相同的属性抽出来放进
   // 公共基类BaseSavedValue，方便最大程度复用代码，将来新增属性时也要参考类似原则确定放在哪个类中。
@@ -468,7 +468,7 @@ public:
   const common::ObString get_tenant_name() const;
   uint64_t get_priv_tenant_id() const { return tenant_id_; }
   const common::ObString get_effective_tenant_name() const;
-  // 关于各种tenant_id的使用，可参考 https://lark.alipay.com/ob/rootservice/gkz8ex
+  // 关于各种tenant_id的使用，可参考
   uint64_t get_effective_tenant_id() const { return effective_tenant_id_; }
   // RPC framework use rpc_tenant_id() to deliver remote/distribute tasks.
   void set_rpc_tenant_id(uint64_t tenant_id) { rpc_tenant_id_ = tenant_id; }

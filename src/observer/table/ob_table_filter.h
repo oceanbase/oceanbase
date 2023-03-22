@@ -10,7 +10,7 @@
  * ob_table_filters.h
  *
  * Authors:
- *    xuanchao.xc <xuanchao.xc@antgroup.com>
+ *    xuanchao.xc <>
  *
  */
 #ifndef _OB_TABLE_FILTERS_H

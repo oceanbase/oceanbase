@@ -262,7 +262,7 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
             SERVER_LOG(WARN, "select_stmt is NULL", K(ret));
           } else if (OB_ISNULL(real_stmt = select_stmt->get_real_stmt())) {
             // case : view definition is set_op
-            // Bug : http://k3.alibaba-inc.com/issue/6455327?stat=1.5.3&toPage=1&versionId=1043693
+            // Bug :
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "real stmt is NULL", K(ret));
           }

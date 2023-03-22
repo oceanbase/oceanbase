@@ -176,7 +176,7 @@ public:
   // for primary key and identity column in Oracle mode.
 	// is_nullable() is usually used in Mysql mode, also used when schema interacts with inner table.
   // Following function is_not_null_for_read and is_not_null_for_write is more practical.
-	// More info: https://yuque.antfin-inc.com/ob/ooiw0v/dgfec2 Chapter 3.4
+	// More info:
   inline bool is_nullable() const { return is_nullable_; }
   inline bool is_zero_fill() const { return is_zero_fill_; }
   inline bool is_autoincrement() const { return is_autoincrement_; }

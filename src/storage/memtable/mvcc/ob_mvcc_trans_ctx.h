@@ -237,9 +237,23 @@ public:
   void clear_pending_log_size() { ATOMIC_STORE(&pending_log_size_, 0); }
   int64_t get_pending_log_size() { return ATOMIC_LOAD(&pending_log_size_); }
   int64_t get_flushed_log_size() { return ATOMIC_LOAD(&flushed_log_size_); }
-  bool is_all_redo_submitted(ObITransCallback *generate_cursor)
+  bool is_all_redo_submitted()
   {
-    return (ObITransCallback *)callback_list_.get_tail() == generate_cursor;
+    bool all_redo_submitted = true;
+    if (OB_NOT_NULL(callback_lists_)) {
+      for (int64_t i = 0; i < MAX_CALLBACK_LIST_COUNT; ++i) {
+        if (!callback_lists_[i].empty()) {
+          all_redo_submitted = false;
+          break;
+        }
+      }
+    }
+
+    if (all_redo_submitted) {
+      all_redo_submitted = !(((ObITransCallback *)callback_list_.get_tail())->need_submit_log());
+    }
+
+    return all_redo_submitted;
   }
   void merge_multi_callback_lists();
   void reset_pdml_stat();
@@ -278,10 +292,6 @@ public:
   share::SCN get_checksum_scn() const { return callback_list_.get_checksum_scn(); }
   transaction::ObPartTransCtx *get_trans_ctx() const;
 private:
-  bool is_all_redo_submitted(ObMvccRowCallback *generate_cursor)
-  {
-    return (ObMvccRowCallback *)callback_list_.get_tail() == generate_cursor;
-  }
   void force_merge_multi_callback_lists();
 private:
   ObITransCallback *get_guard_() { return callback_list_.get_guard(); }

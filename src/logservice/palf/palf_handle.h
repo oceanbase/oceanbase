@@ -318,6 +318,11 @@ public:
   //   OB_SUCCESS
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const;
   int get_access_mode(AccessMode &access_mode) const;
+
+  // @brief: check whether the palf instance is allowed to vote for logs
+  // By default, return true;
+  // After calling disable_vote(), return false.
+  bool is_vote_enabled() const;
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.

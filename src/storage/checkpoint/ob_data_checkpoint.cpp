@@ -787,7 +787,7 @@ int ObDataCheckpoint::freeze_base_on_needs_(share::SCN recycle_scn)
       }
 
       if (logstream_freeze) {
-        if (OB_FAIL(ls_->logstream_freeze())) {
+        if (OB_FAIL(ls_->logstream_freeze(true/*is_sync*/))) {
           STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
         }
       } else {

@@ -132,7 +132,7 @@ int ObPxResourceAnalyzer::analyze(
   // 2. 然后模拟调度，每调度一对 dfo，就将 child 设置为 done，然后统计当前时刻多少个未完成 dfo
   // 3. 如此继续调度，直至所有 dfo 调度完成
   //
-  // ref: https://yuque.antfin-inc.com/xiaochu.yh/doc/dlmg3w
+  // ref:
   ObArray<PxInfo> px_trees;
   if (OB_FAIL(convert_log_plan_to_nested_px_tree(px_trees, root_op))) {
     LOG_WARN("fail convert log plan to nested px tree", K(ret));

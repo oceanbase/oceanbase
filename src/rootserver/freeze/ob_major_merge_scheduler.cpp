@@ -149,6 +149,9 @@ void ObMajorMergeScheduler::run3()
       } else if (OB_FAIL(do_work())) {
         LOG_WARN("fail to do major scheduler work", KR(ret), K_(tenant_id), "cur_epoch", get_epoch());
       }
+      // out of do_work, there must be no major merge on this server. therefore, here, clear
+      // compcation diagnose infos that stored in memory of this server.
+      progress_checker_.reset_uncompacted_tablets();
 
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(try_idle(DEFAULT_IDLE_US, ret))) {
@@ -317,7 +320,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
       // Place is_last_merge_complete() to the head of this while loop.
       // So as to break this loop at once, when the last merge is complete.
       // Otherwise, may run one extra loop that should not run, and thus incur error.
-      // https://work.aone.alibaba-inc.com/issue/45954449
+      //
       if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
         LOG_WARN("fail to get zone global merge info", KR(ret));
       } else if (global_info.is_last_merge_complete()) {
@@ -487,8 +490,9 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
     LOG_WARN("fail to get_global_broadcast_scn", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(freeze_info_mgr_->get_freeze_info(global_broadcast_scn, frozen_status))) {
     LOG_WARN("fail to get freeze info", KR(ret), K_(tenant_id), K(global_broadcast_scn));
-  } else if (OB_FAIL(progress_checker_.check_merge_progress(stop_, global_broadcast_scn, all_progress))) {
-    LOG_WARN("fail to check merge status", KR(ret), K_(tenant_id), K(global_broadcast_scn));
+  } else if (OB_FAIL(progress_checker_.check_merge_progress(stop_, global_broadcast_scn,
+                     all_progress, expected_epoch))) {
+    LOG_WARN("fail to check merge status", KR(ret), K_(tenant_id), K(global_broadcast_scn), K(expected_epoch));
     int64_t time_interval = 10L * 60 * 1000 * 1000;  // record every 10 minutes
     if (TC_REACH_TIME_INTERVAL(time_interval)) {
       ROOTSERVICE_EVENT_ADD("daily_merge", "merge_process", K_(tenant_id),
@@ -554,7 +558,7 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
           // since merge_info can be reload at any time.
           // 1) Larger:  e.g., broadcast_scn (that has increased) of zones is reload in one
           // new epoch, while global_broadcast_scn is the one generated in one old epoch.
-          // https://work.aone.alibaba-inc.com/issue/46027393
+          //
           // 2) Smaller: broadcast_scn of new added zones may be smaller than global_broadcast_scn.
           // 3) Equal:   the common case.
 
@@ -603,7 +607,7 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
             // cur_all_merged_scn >= cur_merged_scn
             // 1. Equal: snapshot_version of all tablets change to frozen_scn after major compaction
             // 2. Greater: In backup-restore situation, tablets may have higher snapshot_version, which
-            // is larger than current frozen_scn. https://work.aone.alibaba-inc.com/issue/45933591
+            // is larger than current frozen_scn.
             //
             // cur_all_merged_scn >= ori_all_merged_scn
             // 1. Greater: all_merged_scn will increase like last_merged_scn after major compaction
@@ -749,7 +753,7 @@ int ObMajorMergeScheduler::try_update_epoch_and_reload()
         // Here, we do not know if freeze_service_epoch in __all_service_epoch has been updated to
         // latest_epoch. If it has been updated to latest_epoch, freeze_service_epoch in memory
         // must also be updated to latest_epoch. So as to keep freeze_service_epoch consistent in
-        // memory and table. https://work.aone.alibaba-inc.com/issue/47854487
+        // memory and table.
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(update_epoch_in_memory_and_reload())) {
           if (OB_EAGAIN == tmp_ret) {

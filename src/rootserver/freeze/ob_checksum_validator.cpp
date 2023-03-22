@@ -229,7 +229,6 @@ int ObTabletChecksumValidator::check_all_table_verification_finished(
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
   UNUSED(ori_table_ids);
-  UNUSED(expected_epoch);
 
   const int64_t start_time_us = ObTimeUtil::current_time();
   if (OB_UNLIKELY(!frozen_scn.is_valid())) {
@@ -249,11 +248,15 @@ int ObTabletChecksumValidator::check_all_table_verification_finished(
         LOG_WARN("fail to get tenant table schemas", KR(ret), K_(tenant_id));
       } else {
         table_count = table_schemas.count();
+        int64_t last_epoch_check_us = ObTimeUtil::fast_current_time();
         for (int64_t i = 0; (i < table_count) && OB_SUCC(ret) && !stop; ++i) {
           const ObSimpleTableSchemaV2 *simple_schema = table_schemas.at(i);
           if (OB_ISNULL(simple_schema)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected error, simple schema is null", KR(ret), K_(tenant_id));
+          } else if (OB_FAIL(ObMajorFreezeUtil::check_epoch_periodically(*sql_proxy_, tenant_id_,
+                             expected_epoch, last_epoch_check_us))) {
+            LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K(stop));
           } else {
             const uint64_t table_id = simple_schema->get_table_id();
             // check whether all tablets of this table finished compaction or not, and
@@ -266,7 +269,11 @@ int ObTabletChecksumValidator::check_all_table_verification_finished(
             if (OB_CHECKSUM_ERROR == ret) {
               check_ret = ret;
             }
-            ret = OB_SUCCESS;  // ignore ret, and continue check next table_schema
+            if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret) {
+              // do not ignore ret, therefore not continue to check next table_schema
+            } else {
+              ret = OB_SUCCESS; // ignore ret, and continue to check next table_schema
+            }
           }
         }  // end for loop
       }

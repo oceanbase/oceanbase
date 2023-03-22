@@ -425,12 +425,15 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
             } else {
               jb_node = (ObJsonNull*)new(buf)ObJsonNull(true);
             }
-          } else if (ObJsonBaseFactory::transform(&temp_allocator, hits[i], ObJsonInType::JSON_TREE, jb_node)) { // to tree
+          } else if (OB_FAIL(ObJsonBaseFactory::transform(&temp_allocator, hits[i], ObJsonInType::JSON_TREE, jb_node))) { // to tree
             LOG_WARN("fail to transform to tree", K(ret), K(i), K(*(hits[i])));
           }
           if (OB_SUCC(ret)) {
             j_node = static_cast<ObJsonNode *>(jb_node);
-            if (OB_FAIL(jb_res->array_append(j_node->clone(&temp_allocator)))) {
+            if (OB_ISNULL(j_node)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("json node input is null", K(ret), K(i), K(is_null_res), K(hits[i]));
+            } else if (OB_FAIL(jb_res->array_append(j_node->clone(&temp_allocator)))) {
               LOG_WARN("result array append failed", K(ret), K(i), K(*j_node));
             }
           }

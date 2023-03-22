@@ -134,7 +134,7 @@ int ObSMHandler::on_connect(easy_connection_t *c)
 
 int ObSMHandler::on_disconnect(easy_connection_t *c)
 {
-  // https://work.aone.alibaba-inc.com/issue/34775964
+  //
   int eret = EASY_OK;
   int tmp_ret = OB_SUCCESS;
   ObSMConnection *conn = NULL;

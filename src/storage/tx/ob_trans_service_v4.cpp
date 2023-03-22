@@ -1204,7 +1204,7 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "get tx ctx from mgr fail", K(ret), K(tx.tx_id_), K(ls_id), K(tx), K(arg));
     ctx = NULL;
-  } else if (!tx.xid_.empty()) {
+  } else if (!tx.xid_.empty() && !existed) {
     ctx->exec_info_.xid_ = tx.xid_;
   }
   TRANS_LOG(TRACE, "create tx ctx", K(ret), K(ls_id), K(tx));
@@ -1496,6 +1496,7 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
   bool leader = false;
   SCN snapshot0;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+  const bool can_elr = MTL_IS_PRIMARY_TENANT() ? true : false;
   if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
     TRANS_LOG(WARN, "get ls_tx_ctx_mgr fail", K(ret), K(ls_id));
   } else if (!ls_tx_ctx_mgr->in_leader_serving_state()) {
@@ -1507,7 +1508,7 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
     TRANS_LOG(WARN, "get replica role fail", K(ret), K(ls_id));
   } else if (!leader) {
     ret = OB_NOT_MASTER;
-  } else if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(true))) {
+  } else if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(can_elr))) {
   } else if (!snapshot0.is_valid_and_not_min()) {
     ret = OB_EAGAIN;
   } else {
@@ -2351,6 +2352,10 @@ int ObTransService::recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx)
     tx_desc_mgr_.revert(*tx);
     tx = NULL;
     TRANS_LOG(WARN, "assgin parts fail", K(ret));
+  } else if (tx->savepoints_.assign(tx_info.savepoints_)) {
+    tx_desc_mgr_.revert(*tx);
+    tx = NULL;
+    TRANS_LOG(WARN, "assgin savepoints fail", K(ret));
   } else if (OB_FAIL(tx_desc_mgr_.add_with_txid(tx_info.tx_id_, *tx))) {
     tx_desc_mgr_.revert(*tx);
     tx = NULL;
@@ -2386,6 +2391,8 @@ int ObTransService::get_tx_info(ObTxDesc &tx, ObTxInfo &tx_info)
   tx.lock_.lock();
   if (OB_FAIL(tx_info.parts_.assign(tx.parts_))) {
     TRANS_LOG(WARN, "assgin parts fail", K(ret), K(tx));
+  } else if (OB_FAIL(assign_user_savepoint_(tx, tx_info.savepoints_))) {
+    TRANS_LOG(WARN, "assgin savepoint fail", K(ret), K(tx));
   } else {
     tx_info.tenant_id_ = tx.tenant_id_;
     tx_info.cluster_id_ = tx.cluster_id_;
@@ -2409,12 +2416,43 @@ int ObTransService::get_tx_info(ObTxDesc &tx, ObTxInfo &tx_info)
   return ret;
 }
 
+int ObTransService::assign_user_savepoint_(ObTxDesc &tx, ObTxSavePointList &savepoints)
+{
+  int ret = OB_SUCCESS;
+  ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
+    if (tx.savepoints_.at(i).user_create_) {
+      if (OB_FAIL(savepoints.push_back(tx.savepoints_.at(i)))) {
+        TRANS_LOG(WARN, "push back user create sp fail", K(ret), K(tx));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList &savepoints)
+{
+  int ret = OB_SUCCESS;
+  int j = 0;
+  bool is_contain = false;
+  ARRAY_FOREACH_N(savepoints, i, cnt) {
+    for (j = 0, is_contain = false; j<tx.savepoints_.count() && !is_contain; j++) {
+      is_contain = savepoints.at(i) == tx.savepoints_.at(j);
+    }
+    if (!is_contain && OB_FAIL(tx.savepoints_.push_back(savepoints.at(i)))) {
+      TRANS_LOG(WARN, "push back user sp fail", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransService::get_tx_stmt_info(ObTxDesc &tx, ObTxStmtInfo &stmt_info)
 {
   int ret = OB_SUCCESS;
   tx.lock_.lock();
   if (OB_FAIL(stmt_info.parts_.assign(tx.parts_))) {
     TRANS_LOG(WARN, "assgin parts fail", K(ret), K(tx));
+  } else if (OB_FAIL(assign_user_savepoint_(tx, stmt_info.savepoints_))) {
+    TRANS_LOG(WARN, "assgin savepoint fail", K(ret), K(tx));
   } else {
     stmt_info.tx_id_ = tx.tx_id_;
     stmt_info.op_sn_ = tx.op_sn_;
@@ -2431,6 +2469,9 @@ int ObTransService::update_tx_with_stmt_info(const ObTxStmtInfo &tx_info, ObTxDe
   tx->op_sn_ = tx_info.op_sn_;
   tx->state_ = tx_info.state_;
   tx->update_parts_(tx_info.parts_);
+  if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint(*tx, tx_info.savepoints_))) {
+    TRANS_LOG(WARN, "update user sp fail", K(ret), K(*this), K(tx), K(tx_info));
+  }
   tx->lock_.unlock();
   return ret;
 }

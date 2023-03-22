@@ -160,7 +160,7 @@ desc t1;
 drop table t1;
 
 
-## bugfix#https://work.aone.alibaba-inc.com/issue/36895309
+## bugfix#
 --disable_warnings
 drop table if exists T_36895309;
 --enable_warnings

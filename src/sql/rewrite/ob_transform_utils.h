@@ -443,7 +443,8 @@ public:
   
   static int is_const_expr_not_null(ObNotNullContext &ctx,
                                     const ObRawExpr *expr,
-                                    bool &is_not_null);
+                                    bool &is_not_null,
+                                    bool &is_null);
 
   static int is_general_expr_not_null(ObNotNullContext &ctx,
                                       const ObRawExpr *expr,
@@ -1201,7 +1202,6 @@ public:
                                 ObRawExpr *upper_offset,
                                 ObRawExpr *&limit_expr,
                                 ObRawExpr *&offset_expr);
-
   static int compare_const_expr_result(ObTransformerCtx *ctx,
                                       ObRawExpr *expr,
                                       ObItemType op_type,

@@ -542,7 +542,7 @@ int ObTransformSubqueryCoalesce::transform_diff_exprs(
     LOG_WARN("params have null", K(ret), K(trans_stmt), K(select_trans_stmt));
   } else if (!where_is_false && OB_FAIL(coalesce_diff_exists_exprs(trans_stmt, trans_stmt->get_condition_exprs(), where_params))) {
     LOG_WARN("failed to do coalesce diff where conditions", K(ret));
-  //bug:https://work.aone.alibaba-inc.com/issue/25355260 暂时禁掉
+  //bug:
   // } else if (OB_NOT_NULL(select_trans_stmt) && !having_is_false &&
   //            OB_FAIL(coalesce_diff_exists_exprs(trans_stmt,
   //                                               select_trans_stmt->get_having_exprs(),

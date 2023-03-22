@@ -312,7 +312,7 @@ int ObDblinkUtils::process_dblink_errno(common::sqlclient::DblinkDriverProto dbl
   return OB_SUCCESS;
 }
 
-int ObDblinkUtils::has_reverse_link(const ObDMLStmt *stmt, bool &has) {
+int ObDblinkUtils::has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &has, bool has_any_dblink) {
   int ret = OB_SUCCESS;
   const common::ObIArray<TableItem*> &table_items = stmt->get_table_items();
   ObArray<ObSelectStmt*> child_stmts;
@@ -321,12 +321,16 @@ int ObDblinkUtils::has_reverse_link(const ObDMLStmt *stmt, bool &has) {
     if (OB_ISNULL(table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null ptr", K(ret));
-    } else if (table_item->is_reverse_link_) {
+    } else if (has_any_dblink && (table_item->is_reverse_link_ || OB_INVALID_ID != table_item->dblink_id_)) {
+      has = true;
+      LOG_DEBUG("succ to find reverse link", K(table_item), K(i));
+      break;
+    } else if (!has_any_dblink && table_item->is_reverse_link_) {
       has = true;
       LOG_DEBUG("succ to find reverse link", K(table_item), K(i));
       break;
     } else if (table_item->is_temp_table()) {
-      if (OB_FAIL(SMART_CALL(has_reverse_link(table_item->ref_query_, has)))) {
+      if (OB_FAIL(SMART_CALL(has_reverse_link_or_any_dblink(table_item->ref_query_, has, has_any_dblink)))) {
           LOG_WARN("failed to exec has_reverse_link", K(ret));
       } else if (has) {
         break;
@@ -342,7 +346,7 @@ int ObDblinkUtils::has_reverse_link(const ObDMLStmt *stmt, bool &has) {
         if (OB_ISNULL(child_stmt)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null ptr", K(ret));
-        } else if (OB_FAIL(SMART_CALL(has_reverse_link(child_stmt, has)))) {
+        } else if (OB_FAIL(SMART_CALL(has_reverse_link_or_any_dblink(child_stmt, has, has_any_dblink)))) {
           LOG_WARN("failed to exec has_reverse_link", K(ret));
         } else if (has) {
           break;

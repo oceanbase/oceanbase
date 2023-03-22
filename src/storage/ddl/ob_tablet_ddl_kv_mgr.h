@@ -99,6 +99,7 @@ private:
   bool is_commit_success_unlock() const;
 public:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 16;
+  static const int64_t TRY_LOCK_TIMEOUT = 1 * 1000000; // 1s
 private:
   bool is_inited_;
   share::SCN success_start_scn_;

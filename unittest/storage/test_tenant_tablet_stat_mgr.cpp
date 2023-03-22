@@ -1,6 +1,6 @@
 /*
  * test_tenant_tablet_stat_mgr.cpp
- * Author: fengjingkun.fjk@antgroup.com
+ * Author:
  */
 
 #include <gtest/gtest.h>

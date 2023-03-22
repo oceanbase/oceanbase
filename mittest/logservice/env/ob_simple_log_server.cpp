@@ -132,6 +132,7 @@ int ObSimpleLogServer::simple_init(
   }
   tenant_base_->init();
   tenant_base_->set(&log_service_);
+  tenant_base_->set(&detector_);
   ObTenantEnv::set_tenant(tenant_base_);
   assert(&log_service_ == MTL(logservice::ObLogService*));
   guard.click("init tenant_base");

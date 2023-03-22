@@ -181,7 +181,7 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
         ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH; // 重写错误码，使得scheduler端能等待远端schema刷新并重试
       }
     } else if (ret == OB_TENANT_NOT_EXIST) {
-      // fix bug: https://work.aone.alibaba-inc.com/issue/45890226
+      // fix bug:
       // 控制端重启observer，导致租户schema没刷出来，发送过来的schema_version异常, 让对端重试
       ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
     } else {

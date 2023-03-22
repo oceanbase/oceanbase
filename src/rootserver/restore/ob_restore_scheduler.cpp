@@ -545,7 +545,7 @@ int ObRestoreService::convert_parameters(
 
   if (OB_SUCC(ret)) {
     // Broadcast tenant's config version after system tables are restored.
-    // bugfix: https://work.aone.alibaba-inc.com/issue/31846022
+    // bugfix:
     // TODO check all config is valid on observer
   }
   return ret;
@@ -1244,7 +1244,7 @@ int ObRestoreService::check_all_ls_restore_finish_(
         int32_t restore_status = -1;
         //TODO no ls in ls_meta
         //if one of ls restore failed, make tenant restore failed
-        //https://work.aone.alibaba-inc.com/issue/44518531
+        //
         while (OB_SUCC(ret) && OB_SUCC(result->next())
             && !is_tenant_restore_failed(tenant_restore_status)) {
           EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);

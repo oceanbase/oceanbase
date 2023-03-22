@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -162,11 +162,22 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
     const uint64_t tenant_id = MTL_ID();
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
+    bool trigger_enabled = false;
     if (OB_FAIL(
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-    } else if (OB_FAIL(ObTableLoadSchema::check_constraints(schema_guard, table_schema))) {
-      LOG_WARN("fail to check schema constraints", KR(ret), K(tenant_id), K(table_id));
+    }
+    // check if exists generated column
+    else if (OB_UNLIKELY(table_schema->has_generated_column())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has generated column", KR(ret));
+    }
+    // check if the trigger is enabled
+    else if (OB_FAIL(table_schema->check_has_trigger_on_table(schema_guard, trigger_enabled))) {
+      LOG_WARN("failed to check has trigger in table", KR(ret));
+    } else if (trigger_enabled) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table with trigger enabled", KR(ret), K(trigger_enabled));
     }
   }
   return ret;

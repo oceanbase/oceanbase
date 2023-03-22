@@ -303,8 +303,9 @@ void ObMetaObjGuard<T>::reset_obj()
       const int64_t ref_cnt = obj_->dec_ref();
       const int64_t hold_time = ObTimeUtility::current_time() - hold_start_time_;
       if (OB_UNLIKELY(hold_time > HOLD_OBJ_MAX_TIME && need_hold_time_check())) {
-        STORAGE_LOG_RET(ERROR, OB_ERR_TOO_MUCH_TIME, "The meta obj reference count was held for more "
-            "than two hours ", K(ref_cnt), KP(this), K(hold_time), K(hold_start_time_), KPC(this));
+        int ret = OB_ERR_TOO_MUCH_TIME;
+        STORAGE_LOG(WARN, "The meta obj reference count was held for more "
+            "than two hours ", K(ref_cnt), KP(this), K(hold_time), K(hold_start_time_), KPC(this), K(common::lbt()));
       }
       if (0 == ref_cnt) {
         if (nullptr != obj_pool_) {

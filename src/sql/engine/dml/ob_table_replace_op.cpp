@@ -270,7 +270,10 @@ OB_INLINE int ObTableReplaceOp::load_all_replace_row(bool &is_iter_end)
   int64_t default_row_batch_cnt = simulate_batch_row_cnt > 0 ?
                                   simulate_batch_row_cnt : DEFAULT_REPLACE_BATCH_ROW_COUNT;
   LOG_DEBUG("simulate lookup row batch count", K(simulate_batch_row_cnt), K(default_row_batch_cnt));
-  while (OB_SUCC(ret) &&  ++row_cnt < default_row_batch_cnt) {
+  if (execute_single_row_) {
+    default_row_batch_cnt = 1;
+  }
+  while (OB_SUCC(ret) &&  ++row_cnt <= default_row_batch_cnt) {
     // todo @kaizhan.dkz @wangbo.wb 增加行前trigger逻辑在这里
     // 新行的外键检查也在这里做
     if (OB_FAIL(get_next_row_from_child())) {

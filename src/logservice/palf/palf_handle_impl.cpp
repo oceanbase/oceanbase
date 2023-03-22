@@ -1207,6 +1207,16 @@ int PalfHandleImpl::disable_sync()
   return ret;
 }
 
+bool PalfHandleImpl::is_vote_enabled() const
+{
+  bool bool_ret = false;
+  if (IS_NOT_INIT) {
+  } else {
+    bool_ret = state_mgr_.is_allow_vote();
+  }
+  return bool_ret;
+}
+
 int PalfHandleImpl::disable_vote()
 {
   int ret = OB_SUCCESS;
@@ -2588,10 +2598,11 @@ int PalfHandleImpl::submit_group_log(const PalfAppendOptions &opts,
           if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
             PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(opts), K(lsn));
           }
-        } else if (!state_mgr_.can_raw_write()) {
+        } else if (!state_mgr_.can_raw_write(opts.proposal_id, opts.need_check_proposal_id)) {
           ret = OB_NOT_MASTER;
           PALF_LOG(WARN, "cannot submit_group_log", K(ret), K_(self), K_(palf_id), KP(buf), K(buf_len),
               "role", state_mgr_.get_role(), "state", state_mgr_.get_state(),
+              "current proposal_id", state_mgr_.get_proposal_id(),
               "mode_mgr can_raw_write", mode_mgr_.can_raw_write(), K(opts));
         } else if (OB_UNLIKELY(state_mgr_.is_changing_config_with_arb())) {
           ret = OB_EAGAIN;

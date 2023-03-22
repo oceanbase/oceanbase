@@ -1211,6 +1211,9 @@ int ObTmpTenantMemBlockManager::write_io(
       STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(write_info), K(handle));
     } else if (OB_FAIL(block_write_ctx_.add_macro_block_id(handle.get_macro_id()))) {
       STORAGE_LOG(WARN, "fail to add macro id", K(ret), "macro id", handle.get_macro_id());
+    } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(handle.get_macro_id(),
+        true/*update_to_max_time*/))) { //just to skip bad block inspect
+      STORAGE_LOG(WARN, "fail to update macro id write time", K(ret), "macro id", handle.get_macro_id());
     }
   }
   return ret;

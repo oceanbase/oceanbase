@@ -426,6 +426,9 @@ int ObSSTableRowWholeScanner::open_macro_block()
                   scan_handle.is_right_border_))) {
         LOG_WARN("failed to open micro block iter", K(ret), K(scan_handle.macro_io_handle_));
       } else {
+        if (iter_macro_cnt_ < 10) {
+          FLOG_INFO("iter macro block id", K(scan_handle.macro_block_desc_.macro_block_id_), K(iter_macro_cnt_++), K(sstable_));
+        }
         break;
       }
     }

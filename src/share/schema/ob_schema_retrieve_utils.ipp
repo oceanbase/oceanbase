@@ -1159,7 +1159,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
      * Here comes a compatibility problem:
      * row_store_type's default value is defined as flat_row_store when cluster is upgraded from ver 1.4.x
      * and is defined as encoding_row_store when cluster is upgraded from ver 2.x.
-     * (https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/1024990)
+     * (
      *
      * Because we don't actually record row_store_type by DML when cluster is in upgradation,
      * row_store_type's value is different according to different hardcoded row_store_type's default value

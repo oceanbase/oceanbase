@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SQL_ENG
 
@@ -1241,7 +1241,7 @@ int ObLoadDataDirectImpl::FileLoadExecutor::handle_all_task_result()
 {
   int ret = OB_SUCCESS;
   TaskHandle *handle = nullptr;
-  while (handle_reserve_queue_.count() > 0) {
+  while (OB_SUCC(ret) && handle_reserve_queue_.count() > 0) {
     if (OB_FAIL(handle_reserve_queue_.pop(handle))) {
       LOG_WARN("fail to pop handle", KR(ret));
     } else if (OB_ISNULL(handle)) {
@@ -2048,7 +2048,6 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.sql_mode_ = execute_param_.sql_mode_;
   load_param.px_mode_ = false;
   load_param.online_opt_stat_gather_ = execute_param_.online_opt_stat_gather_;
-  load_param.snapshot_version_ = ObTimeUtil::current_time_ns();
   if (OB_FAIL(direct_loader_.init(load_param,
       execute_param_.store_column_idxs_, &execute_ctx_))) {
     LOG_WARN("fail to init direct loader", KR(ret));

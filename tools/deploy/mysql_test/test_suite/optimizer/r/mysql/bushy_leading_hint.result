@@ -2875,7 +2875,7 @@ where t1.c1 = t2.c1 and
 |       40 |                     2 |
 +----------+-----------------------+
 
-### 9. https://work.aone.alibaba-inc.com/issue/22041461 leading hint与join order冲突修复 ###
+### 9.
 explain select /*+leading(t1 (t2 t3))*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
 Query Plan
 ========================================================

@@ -412,6 +412,15 @@ int PalfHandle::disable_vote()
   return ret;
 }
 
+bool PalfHandle::is_vote_enabled() const
+{
+  int ret = OB_SUCCESS;
+  bool bool_ret = false;
+  CHECK_VALID;
+  bool_ret = palf_handle_impl_->is_vote_enabled();
+  return bool_ret;
+}
+
 int PalfHandle::enable_vote()
 {
   int ret = OB_SUCCESS;
