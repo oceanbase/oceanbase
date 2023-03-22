@@ -589,6 +589,8 @@ int ObTabletDDLKvMgr::online()
                                                     tablet_handle,
                                                     ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else if (!tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_.is_valid_and_not_min()) {
+    LOG_DEBUG("no need to start ddl kv manager", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
   } else {
     const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
     ObITable::TableKey table_key;
