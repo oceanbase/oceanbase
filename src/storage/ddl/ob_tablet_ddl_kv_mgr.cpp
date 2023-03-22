@@ -32,7 +32,7 @@ using namespace oceanbase::storage;
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
   : is_inited_(false), success_start_scn_(SCN::min_scn()), ls_id_(), tablet_id_(), table_key_(), data_format_version_(0),
     start_scn_(SCN::min_scn()), commit_scn_(SCN::min_scn()), max_freeze_scn_(SCN::min_scn()),
-    table_id_(0), execution_id_(-1), head_(0), tail_(0), lock_(), ref_cnt_(0)
+    table_id_(0), execution_id_(-1), ddl_task_id_(0), head_(0), tail_(0), lock_(), ref_cnt_(0)
 {
 }
 
@@ -66,6 +66,7 @@ void ObTabletDDLKvMgr::destroy()
   max_freeze_scn_.set_min();
   table_id_ = 0;
   execution_id_ = -1;
+  ddl_task_id_ = 0;
   success_start_scn_.set_min();
   is_inited_ = false;
 }
@@ -158,6 +159,7 @@ int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
       // save variables under lock
       saved_start_scn = start_scn_;
       saved_snapshot_version = table_key_.get_snapshot_version();
+      commit_scn_ = get_commit_scn_nolock(tablet.get_tablet_meta());
     }
   }
   if (OB_SUCC(ret) && !checkpoint_scn.is_valid_and_not_min()) {
@@ -537,6 +539,7 @@ void ObTabletDDLKvMgr::cleanup_unlock()
   max_freeze_scn_.set_min();
   table_id_ = 0;
   execution_id_ = -1;
+  ddl_task_id_ = 0;
   success_start_scn_.set_min();
 }
 

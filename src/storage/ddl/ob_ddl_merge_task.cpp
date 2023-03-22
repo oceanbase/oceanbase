@@ -772,7 +772,7 @@ int ObTabletDDLUtil::compact_ddl_sstable(const ObTablesHandleArray &ddl_sstables
   ObBlockMetaTree meta_tree;
   ObArray<const ObDataMacroBlockMeta *> sorted_metas;
   bool is_data_complete = false;
-  if (OB_UNLIKELY(!ddl_param.is_valid() || ddl_sstables.empty() || (is_commit && !rec_scn.is_valid_and_not_min()))) {
+  if (OB_UNLIKELY(!ddl_param.is_valid() || (is_commit && !rec_scn.is_valid_and_not_min()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_param), K(ddl_sstables.get_count()), K(is_commit), K(rec_scn));
   } else if (OB_FAIL(ObTabletDDLUtil::check_data_integrity(ddl_sstables,
