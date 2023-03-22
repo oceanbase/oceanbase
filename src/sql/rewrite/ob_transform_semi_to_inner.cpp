@@ -298,7 +298,7 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
       // do nothing
     } else if (OB_FAIL(ObTransformUtils::add_const_param_constraints(
                          stmt->get_limit_expr(), ctx_))) {
-      LOG_WARN("failed to add const param constriants", K(ret));
+      LOG_WARN("failed to add const param constraints", K(ret));
     }
   } else if (trans_param.use_aggr_inner()) {
     if (OB_FAIL(do_transform_with_aggr(*stmt, semi_info, ctx, trans_param))) {
@@ -375,7 +375,7 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
  * @param equal_join_conds equal-value correlated conditions in semi-join
  * @param cmp_join_conds less/greater correlated conditions (>,<,>=,<=) in semi-join
  * @param filter_conds non-correlated filter conditions that act on the left or right table alone
- * @param invalid_conds conditon references a table other than the left or right table in semi-join
+ * @param invalid_conds condition references a table other than the left or right table in semi-join
  * @param other_conds condition references to the left and right tables are not located on either side of the operator
  *        OR uses operators beyond: =, >, <, >=, <=
  */
@@ -402,9 +402,9 @@ int ObTransformSemiToInner::split_join_condition(ObDMLStmt& stmt,
   } else if (OB_FAIL(stmt.get_table_rel_ids(semi_info.right_table_id_, right_table_set))) {
     LOG_WARN("failed to get table rel ids", K(ret));
   } else if (OB_FAIL(union_table_set.add_members(left_table_set))) {
-    LOG_WARN("failed to add menber of table bitset", K(ret));
+    LOG_WARN("failed to add member of table bitset", K(ret));
   } else if (OB_FAIL(union_table_set.add_members(right_table_set))) {
-    LOG_WARN("failed to add menber of table bitset", K(ret));
+    LOG_WARN("failed to add member of table bitset", K(ret));
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < semi_conditions.count(); ++i) {
@@ -492,7 +492,7 @@ int ObTransformSemiToInner::split_join_condition(ObDMLStmt& stmt,
  *      如果需要cast(left_expr)-->right_expr,则不能加distinct
  *      如果需要cast(right_expr)-->left_expr,则需要为右表的expr包裹cast后，才能加distinct
  *      如果左右expr的类型一致，直接加distinct
- *   c. semi condtion是否overlap左右表的索引
+ *   c. semi condition是否overlap左右表的索引
  *   如果上面的条件都满足，则改写为inner
  * 3.出现在嵌套子查询中的含有semi info信息的stmt，如果子查询的输出结果是否存在重复值不影响上层查询的输出结果，
  *   那么可以直接将semi join改为inner join，不需要添加distinct
@@ -790,7 +790,7 @@ int ObTransformSemiToInner::check_right_exprs_unique(ObDMLStmt &stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null ctx", K(ret), K(right_table), K(ctx_));
   } else if (!right_table->is_generated_table() && !right_table->is_temp_table()) {
-    // baisc table
+    // basic table
     ObSEArray<TableItem*, 1> right_tables;
     ObSEArray<ObRawExpr*, 1> dummy_conds;
     if (OB_FAIL(right_tables.push_back(right_table))) {
@@ -835,7 +835,7 @@ int ObTransformSemiToInner::check_right_exprs_unique(ObDMLStmt &stmt,
  * left_exprs: 所有EQ表达式的属于左表的expr
  * right_exprs: 所有EQ表达式的属于右表的expr
  * right_columns: 如果有lef_expr = right_column，保存column expr
- * is_all_euqal_cond:是否所有的表达式都是left_expr = right_expr形式
+ * is_all_equal_cond:是否所有的表达式都是left_expr = right_expr形式
  */
 int ObTransformSemiToInner::check_semi_join_condition(ObDMLStmt &stmt,
                                                       SemiInfo &semi_info,
@@ -1614,7 +1614,7 @@ int ObTransformSemiToInner::check_is_semi_condition(ObIArray<ObExecParamRawExpr 
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
       uint64_t table_id = table_ids.at(i);
       if (OB_FAIL(ObOptimizerUtil::extract_column_ids(param_exprs, table_id, column_ids))) {
-        LOG_WARN("failed to extract colulmn ids", K(ret));
+        LOG_WARN("failed to extract column ids", K(ret));
       } else if (!column_ids.is_empty()) {
         is_valid = true;
       }
