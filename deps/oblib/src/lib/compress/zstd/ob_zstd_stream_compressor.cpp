@@ -79,8 +79,8 @@ int ObZstdStreamCompressor::create_compress_ctx(void *&ctx)
   int ret = OB_SUCCESS;
   ctx = NULL;
 
-  ObZstdStreamCtxAllocator *zstd_allocator = GET_TSI_MULT(ObZstdStreamCtxAllocator, 1);
-  OB_ZSTD_customMem zstd_mem = {ob_zstd_stream_malloc, ob_zstd_stream_free, zstd_allocator};
+  ObZstdStreamCtxAllocator &zstd_allocator = ObZstdStreamCtxAllocator::get_thread_local_instance();
+  OB_ZSTD_customMem zstd_mem = {ob_zstd_stream_malloc, ob_zstd_stream_free, &zstd_allocator};
   if (OB_FAIL(ObZstdWrapper::create_cctx(zstd_mem, ctx))) {
     LIB_LOG(WARN, "failed to create cctx", K(ret));
   }
@@ -146,8 +146,8 @@ int ObZstdStreamCompressor::stream_compress(void *ctx, const char *src, const in
 int ObZstdStreamCompressor::create_decompress_ctx(void *&ctx)
 {
   int ret = OB_SUCCESS;
-  ObZstdStreamCtxAllocator *zstd_allocator = GET_TSI_MULT(ObZstdStreamCtxAllocator, 1);
-  OB_ZSTD_customMem zstd_mem = {ob_zstd_stream_malloc, ob_zstd_stream_free, zstd_allocator};
+  ObZstdStreamCtxAllocator &zstd_allocator = ObZstdStreamCtxAllocator::get_thread_local_instance();
+  OB_ZSTD_customMem zstd_mem = {ob_zstd_stream_malloc, ob_zstd_stream_free, &zstd_allocator};
   ctx = NULL;
 
   if (OB_FAIL(ObZstdWrapper::create_dctx(zstd_mem, ctx))) {

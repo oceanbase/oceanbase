@@ -413,10 +413,10 @@ const char *inet_ntoa_s(char *buffer, size_t n, const uint32_t ip)
 const char *time2str(const int64_t time_us, const char *format)
 {
   // FIXME: To Be Removed
-  static const int32_t BUFFER_SIZE = 1024;
+  static const int32_t BUFFER_SIZE = 256;
+  thread_local char buffer[4 * BUFFER_SIZE];
   RLOCAL(uint64_t, i);
-  char *buffer = (char*)GET_TSI_MULT(ByteBuf<10 * BUFFER_SIZE>, 5);
-  uint64_t cur = i++ % 10;
+  uint64_t cur = i++ % 4;
   buffer[cur * BUFFER_SIZE] = '\0';
   struct tm time_struct;
   int64_t time_s = time_us / 1000000;

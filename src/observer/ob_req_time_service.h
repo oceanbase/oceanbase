@@ -31,7 +31,11 @@ struct ObReqTimeInfo: public common::ObDLinkBase<ObReqTimeInfo>
 
   ObReqTimeInfo();
   ~ObReqTimeInfo();
-
+  static ObReqTimeInfo &get_thread_local_instance()
+  {
+    thread_local ObReqTimeInfo req_timeinfo;
+    return req_timeinfo;
+  }
   void update_start_time()
   {
     if (0 == reentrant_cnt_) {
@@ -135,18 +139,14 @@ struct ObReqTimeGuard
 {
   ObReqTimeGuard()
   {
-    ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(ObReqTimeInfo,
-                                               ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_start_time();
+    ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_start_time();
   }
 
   ~ObReqTimeGuard()
   {
-    ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(ObReqTimeInfo,
-                                               ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_end_time();
+    ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_end_time();
   }
 };
 } // end namespace observer

@@ -1113,24 +1113,25 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
                                           int64_t index)
 {
   char *buffer = NULL;
-  int64_t pos = 0;
-  CStringBufMgr *mgr = GET_TSI(CStringBufMgr);
-  mgr->inc_level();
-  CStringBufMgr::BufNode *node = mgr->acquire();
-  if (OB_ISNULL(node)) {
+  int64_t str_len = 0;
+  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
+  mgr.inc_level();
+  buffer = mgr.acquire();
+  if (OB_ISNULL(buffer)) {
     LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    buffer = node->buf_;
-    databuff_printf(buffer, CStringBufMgr::BUF_SIZE, pos, "vectorized_rows(%ld)=", index);
-    pos += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + pos, CStringBufMgr::BUF_SIZE - pos - 1);
-    if (pos >= 0 && pos < CStringBufMgr::BUF_SIZE) {
-      buffer[pos] = '\0';
+    int64_t pos = mgr.get_pos();
+    const int64_t buf_len = CStringBufMgr::BUF_SIZE - pos;
+    databuff_printf(buffer, buf_len, str_len, "vectorized_rows(%ld)=", index);
+    str_len += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + str_len, buf_len - str_len - 1);
+    if (str_len >= 0 && str_len < buf_len) {
+      buffer[str_len] = '\0';
     } else {
       buffer[0] = '\0';
     }
   }
-  mgr->try_clear_list();
-  mgr->dec_level();
+  mgr.try_clear_list();
+  mgr.dec_level();
   return buffer;
 }
 

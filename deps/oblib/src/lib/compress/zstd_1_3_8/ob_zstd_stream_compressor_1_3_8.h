@@ -28,6 +28,11 @@ class ObZstdStreamCtxAllocator
 public:
   ObZstdStreamCtxAllocator();
   virtual ~ObZstdStreamCtxAllocator();
+  static ObZstdStreamCtxAllocator &get_thread_local_instance()
+  {
+    thread_local ObZstdStreamCtxAllocator allocator;
+    return allocator;
+  }
   void *alloc(size_t size);
   void free(void *addr);
 private:

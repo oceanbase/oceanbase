@@ -42,12 +42,9 @@ ObReqTimeInfo::~ObReqTimeInfo()
 void ObGlobalReqTimeService::check_req_timeinfo()
 {
 #if !defined(NDEBUG)
-  observer::ObReqTimeInfo *req_timeinfo =  GET_TSI_MULT(
-                                              observer::ObReqTimeInfo,
-                                              observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-  OB_ASSERT(req_timeinfo != NULL);
+  observer::ObReqTimeInfo &req_timeinfo =  observer::ObReqTimeInfo::get_thread_local_instance();
 
-  OB_ASSERT(req_timeinfo->reentrant_cnt_ > 0);
+  OB_ASSERT(req_timeinfo.reentrant_cnt_ > 0);
 #endif
 }
 } // end namespace server
