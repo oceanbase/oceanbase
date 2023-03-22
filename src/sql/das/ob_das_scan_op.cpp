@@ -1026,13 +1026,15 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
       ObString func_name = ObString::make_string("check_lookup_row_cnt");
       LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
       LOG_ERROR("Fatal Error!!! Catch a defensive error!",
-                K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
-                "index_group_cnt", get_index_group_cnt(),
-                "lookup_group_cnt", get_lookup_group_cnt(),
-                "scan_range", scan_param_.key_ranges_,
-                "index_table_id", index_ctdef_->ref_table_id_ ,
-                "data_table_tablet_id", tablet_id_ ,
-                KPC_(lookup_ctdef), KPC_(lookup_rtdef));
+                      K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
+                      "index_group_cnt", get_index_group_cnt(),
+                      "lookup_group_cnt", get_lookup_group_cnt(),
+                      "scan_range", scan_param_.key_ranges_,
+                      "index_table_id", index_ctdef_->ref_table_id_ ,
+                      "data_table_tablet_id", tablet_id_ ,
+                      KPC_(tx_desc));
+      LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+                K(ret), KPC_(lookup_ctdef), KPC_(lookup_rtdef));
     }
   }
   return ret;
