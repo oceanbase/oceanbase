@@ -167,7 +167,11 @@ int ObMicroBlockCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCac
         const ObIndexBlockDataHeader *src_idx_header
             = reinterpret_cast<const ObIndexBlockDataHeader *>(block_data_.get_extra_buf());
         ObIndexBlockDataTransformer *transformer = nullptr;
-        if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
+        ObDecoderAllocator* allocator = nullptr;
+        if (OB_ISNULL(allocator = get_decoder_allocator())) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate decoder allocator", K(ret));
+        } else if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("Fail to get thread local index block data transformer", K(ret));
         } else if (OB_FAIL(transformer->update_index_block(
@@ -1423,10 +1427,14 @@ int ObIndexMicroBlockCache::ObIndexMicroBlockIOCallback::write_extra_buf_on_dema
 {
   int ret = OB_SUCCESS;
   ObIndexBlockDataTransformer *transformer = nullptr;
+  ObDecoderAllocator* allocator = nullptr;
   if (OB_ISNULL(index_read_info_)
       || OB_UNLIKELY(!index_read_info_->is_valid() || !micro_data.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), KPC(index_read_info_), K(micro_data));
+  } else if (OB_ISNULL(allocator = get_decoder_allocator())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate decoder allocator", K(ret));
   } else if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate ObIndexBlockDataTransformer", K(ret));

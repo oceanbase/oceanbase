@@ -213,9 +213,13 @@ int ObRootBlockInfo::transform_root_block_data(const ObTableReadInfo &read_info)
   int ret = OB_SUCCESS;
   if (OB_ISNULL(block_data_.get_extra_buf()) && OB_NOT_NULL(block_data_.get_buf())) {
     ObIndexBlockDataTransformer *transformer = nullptr;
+    ObDecoderAllocator* allocator = nullptr;
     if (OB_UNLIKELY(!read_info.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid read_info", K(ret));
+    } else if (OB_ISNULL(allocator = get_decoder_allocator())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate decoder allocator", K(ret));
     } else if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate transformer", K(ret));
