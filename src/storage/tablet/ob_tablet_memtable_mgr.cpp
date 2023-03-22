@@ -500,13 +500,15 @@ int ObTabletMemtableMgr::get_memtable_for_replay(int64_t replay_log_ts,
                                                  ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
-  const share::ObLSID ls_id = ls_->get_ls_id();
   ObMemtable *memtable = nullptr;
   handle.reset();
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls is null", K(ret));
   } else {
     SpinRLockGuard lock_guard(lock_);
     int64_t i = 0;
@@ -597,12 +599,15 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
 {
   UNUSED(force);
   int ret = OB_SUCCESS;
-  const share::ObLSID ls_id = ls_->get_ls_id();
   memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
 
   if (OB_UNLIKELY(get_memtable_count_() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls is null", K(ret));
   } else {
+    const share::ObLSID &ls_id = ls_->get_ls_id();
     const int64_t idx = get_memtable_idx(memtable_head_);
     if (nullptr != tables_[idx] && memtable == tables_[idx]) {
       LOG_INFO("release head memtable", K(ret), K(ls_id), KPC(memtable));
@@ -620,6 +625,35 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
       release_head_memtable();
       FLOG_INFO("succeed to release head data memtable", K(ret), K(ls_id), K(tablet_id_));
+    }
+  }
+
+  return ret;
+}
+
+int ObTabletMemtableMgr::remove_memtables_from_data_checkpoint()
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard lock_guard(lock_);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not inited", K(ret));
+  } else if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls is null", K(ret));
+  } else {
+    const share::ObLSID &ls_id = ls_->get_ls_id();
+    for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
+      // memtable that cannot be released will block memtables behind it
+      ObMemtable *memtable = static_cast<memtable::ObMemtable *>(tables_[get_memtable_idx(i)]);
+      if (OB_ISNULL(memtable)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "memtable is nullptr", K(ret), K(ls_id), KP(memtable), K(i));
+      } else {
+        STORAGE_LOG(INFO, "remove memtable from data_checkpoint", K(ls_id), K(i), K(*memtable));
+        memtable->remove_from_data_checkpoint();
+      }
     }
   }
 

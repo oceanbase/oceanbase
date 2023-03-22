@@ -529,6 +529,8 @@ int ObLSTabletService::remove_tablets(const common::ObIArray<common::ObTabletID>
           } else {
             LOG_WARN("failed to get tablet", K(ret), K(key));
           }
+        } else if (OB_FAIL(tablet_handle.get_obj()->remove_memtables_from_data_checkpoint())) {
+          LOG_WARN("failed to remove memtables from data_checkpoint", K(ret), K(key));
         } else if (OB_FAIL(tablet_handle.get_obj()->get_meta_disk_addr(tablet_addr))) {
           LOG_WARN("failed to get tablet addr", K(ret), K(key));
         } else if (!tablet_addr.is_disked()) {

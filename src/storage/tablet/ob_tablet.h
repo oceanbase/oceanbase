@@ -358,6 +358,7 @@ public:
   int set_tx_data_in_tablet_pointer();
   int set_memtable_clog_checkpoint_ts(
       const ObMigrationTabletParam *tablet_meta);
+  int remove_memtables_from_data_checkpoint();
 
   TO_STRING_KV(KP(this), K_(wash_score), K_(ref_cnt), K_(tablet_meta), K_(table_store), K_(storage_schema));
 private:

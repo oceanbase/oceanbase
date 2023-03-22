@@ -127,7 +127,7 @@ public:
   { // do nothing
     return OB_NOT_SUPPORTED;
   }
-
+  virtual int remove_memtables_from_data_checkpoint() { return OB_SUCCESS; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   static int64_t get_memtable_idx(const int64_t pos) { return pos & (MAX_MEMSTORE_CNT - 1); }
