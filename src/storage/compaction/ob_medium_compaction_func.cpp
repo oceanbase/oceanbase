@@ -238,15 +238,18 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
   } else if (adaptive_merge_reason > ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE) {
     schedule_medium_flag = true;
   }
-  LOG_DEBUG("schedule next medium in primary cluster", K(ret), KPC(this), K(schedule_medium_flag),
+  LOG_TRACE("schedule next medium in primary cluster", K(ret), KPC(this), K(schedule_medium_flag),
       K(schedule_major_snapshot), K(adaptive_merge_reason), KPC(last_major), K(medium_list), K(max_sync_medium_scn));
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
-    if (OB_FAIL(ret) && tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
-      FLOG_INFO("set schedule medium with errsim", KPC(this));
-      ret = OB_SUCCESS;
-      schedule_medium_flag = true;
+    if (tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+      ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
+      LOG_INFO("errsim", K(ret), KPC(this));
+      if (OB_FAIL(ret)) {
+        FLOG_INFO("set schedule medium with errsim", KPC(this));
+        ret = OB_SUCCESS;
+        schedule_medium_flag = true;
+      }
     }
   }
 #endif
@@ -360,11 +363,14 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       }
     }
 #ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
-    if (OB_FAIL(ret) && tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
-      FLOG_INFO("set schedule medium with errsim", KPC(this));
-      ret = OB_SUCCESS;
+  if (OB_SUCC(ret) || OB_NO_NEED_MERGE == ret) {
+    if (tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+      ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
+      LOG_INFO("errsim", K(ret), KPC(this));
+      if (OB_FAIL(ret)) {
+        FLOG_INFO("set schedule medium with errsim", KPC(this));
+        ret = OB_SUCCESS;
+      }
     }
   }
 #endif
