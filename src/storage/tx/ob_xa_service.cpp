@@ -2209,20 +2209,28 @@ int ObXAService::terminate_to_original_(const ObXATransID &xid,
 int ObXAService::xa_rollback_all_changes(const ObXATransID &xid, ObTxDesc *&tx_desc, const int64_t stmt_expired_time)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const int64_t savepoint = 1;
 
   if (NULL == tx_desc || !tx_desc->is_valid() || !xid.is_valid() || stmt_expired_time < 0) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(tx_desc), K(xid), K(stmt_expired_time));
   } else {
+    ObTransID tx_id = tx_desc->get_tx_id();
     if (OB_FAIL(start_stmt(xid, 0/*unused session id*/, *tx_desc))) {
-      TRANS_LOG(WARN, "xa start stmt fail", K(ret), K(tx_desc), K(xid));
-    } else if (OB_FAIL(MTL(transaction::ObTransService *)->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expired_time, NULL))) {
-      TRANS_LOG(WARN, "do savepoint rollback error", K(ret), K(tx_desc));
-    } else if (OB_FAIL(end_stmt(xid, *tx_desc))) {
-      TRANS_LOG(WARN, "xa start stmt fail", K(ret), K(tx_desc), K(xid));
+      TRANS_LOG(WARN, "xa start stmt fail", K(ret), K(xid), K(tx_id));
     } else {
-      TRANS_LOG(INFO, "xa rollback all changes success", K(ret), K(tx_desc), K(xid));
+      if (OB_FAIL(MTL(transaction::ObTransService *)->rollback_to_implicit_savepoint(*tx_desc,
+              savepoint, stmt_expired_time, NULL))) {
+        TRANS_LOG(WARN, "do savepoint rollback error", K(ret), K(xid), K(tx_id));
+      } else {
+        TRANS_LOG(INFO, "xa rollback all changes success", K(ret), K(xid), K(tx_id));
+      }
+      if (OB_SUCCESS != (tmp_ret = end_stmt(xid, *tx_desc))) {
+        // return the error code of end stmt first
+        ret = tmp_ret;
+        TRANS_LOG(WARN, "xa end stmt fail", K(ret), K(xid), K(tx_id));
+      }
     }
   }
   return ret;
