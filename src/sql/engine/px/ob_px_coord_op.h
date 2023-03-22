@@ -159,6 +159,7 @@ protected:
   int64_t time_recorder_;
   int64_t batch_rescan_param_version_;
   ObExtraServerAliveCheck server_alive_checker_;
+  int64_t last_px_batch_rescan_size_;
 };
 
 class ObPxCoordSpec : public ObPxReceiveSpec
