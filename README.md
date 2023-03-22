@@ -44,6 +44,8 @@ For our success stories, see [Success stories](https://www.oceanbase.com/en/cust
 
 Your contributions to our code will be highly appreciated. For details about how to contribute to OceanBase, see [Contribute to OceanBase](https://github.com/oceanbase/oceanbase/wiki/Contribute-to-OceanBase).
 
+
+
 ## Licensing
 
 OceanBase Database is licensed under the Mulan Public License, Version 2. See the [LICENSE](LICENSE) file for more info.
