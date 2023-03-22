@@ -586,8 +586,9 @@ static int eval_substr_text(const ObCollationType &cs_type,
       }
       if (OB_FAIL(ret)) {
       } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state));
+        ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                input_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
       } else {
         output_result.set_result();
       }

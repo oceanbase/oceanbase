@@ -437,8 +437,9 @@ int ObExprLowerUpper::calc_common(const ObExpr &expr, ObEvalCtx &ctx,
         }
         if (OB_FAIL(ret)) {
         } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-          ret = OB_INVALID_DATA;
-          LOG_WARN("get_calc_cs_type failed", K(ret), K(state));
+          ret = (src_iter.get_inner_ret() != OB_SUCCESS) ?
+                src_iter.get_inner_ret() : OB_INVALID_DATA;
+          LOG_WARN("iter state invalid", K(ret), K(state), K(src_iter));
         } else {
           output_result.get_result_buffer(str_result);
         }

@@ -186,8 +186,9 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
         not_first_search = true;
       }
       if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = OB_INVALID_DATA;
-        LOG_WARN("get_calc_cs_type failed", K(ret), K(state));
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+              haystack_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
       } else {
         if (idx != 0) {
           // 需要加上get next block实际访问过的长度
@@ -238,7 +239,7 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
             haystack_data.assign_ptr(haystack_data.ptr(), accessed_byte_len);
           }
         }
-        for (; count < occ_int; ++count) {
+        for (; count < occ_int && OB_SUCC(ret); ++count) {
           if (OB_FAIL(ObExprOracleInstr::slow_reverse_search(calc_alloc, calc_cs_type, haystack_data,
                                                              needle_data, pos_int, 1, idx))) {
             LOG_WARN("slow_reverse_search failed", K(ret), K(calc_cs_type),
@@ -258,8 +259,9 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
       }
       if (OB_FAIL(ret)) {
       } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = OB_INVALID_DATA;
-        LOG_WARN("get_calc_cs_type failed", K(ret), K(state));
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+              haystack_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
       } else {
         if (idx != 0 && !access_inrow_lob_prefix) {
           // need to count accessed length by get_next_block

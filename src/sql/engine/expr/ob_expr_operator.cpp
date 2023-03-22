@@ -5355,8 +5355,9 @@ int ObLocationExprOperator::calc_(const ObExpr &expr, const ObExpr &sub_arg,
                                   sub_str_data.ptr(), sub_str_data.length(), pos_int);
         }
         if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-          ret = OB_INVALID_DATA;
-          LOG_WARN("get_calc_cs_type failed", K(ret), K(state));
+          ret = (ori_str_iter.get_inner_ret() != OB_SUCCESS) ?
+                ori_str_iter.get_inner_ret() : OB_INVALID_DATA;
+          LOG_WARN("iter state invalid", K(ret), K(state), K(ori_str_iter));
         } else {
           if (idx != 0) {
             // need to add length accessed by get_next_block

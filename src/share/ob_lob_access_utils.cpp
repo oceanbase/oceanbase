@@ -560,7 +560,7 @@ ObTextStringIterState ObTextStringIter::get_next_block(ObString &str)
   str.reset();
   if (!is_init_ || state_ < TEXTSTRING_ITER_INIT) {
     state_ = TEXTSTRING_ITER_INVALID;
-    COMMON_LOG(WARN, "Lob: iter not initiated", K(ret));
+    COMMON_LOG(WARN, "Lob: iter not initiated", K(ret), K(*this));
   } else if (!is_lob_ || !is_outrow_ || !has_lob_header_) { // if not outrow lob, get full data
     switch (state_) {
       case TEXTSTRING_ITER_INIT: {
@@ -592,12 +592,13 @@ ObTextStringIterState ObTextStringIter::get_next_block(ObString &str)
       }
     }
   } else {
-    COMMON_LOG(WARN, "Lob: error case in of iter", K(*this));
+    COMMON_LOG(WARN, "Lob: error case in of iter", K(ret), K(*this));
     state_ = TEXTSTRING_ITER_INVALID;
   }
   if (OB_FAIL(ret)) {
-    COMMON_LOG(WARN, "Lob: iter get_next_block failed", K(*this));
+    COMMON_LOG(WARN, "Lob: iter get_next_block failed", K(ret), K(*this));
     state_ = TEXTSTRING_ITER_INVALID;
+    err_ret_ = ret;
   }
   return state_;
 }
