@@ -420,7 +420,8 @@ int ObLobManager::is_remote(ObLobAccessParam& param, bool& is_remote, common::Ob
     } else {
       is_remote = (dst_addr != self_addr);
       if (param.from_rpc_ == true && is_remote) {
-        LOG_WARN("call from rpc, but remote again", K(dst_addr), K(self_addr));
+        ret = OB_NOT_MASTER;
+        LOG_WARN("call from rpc, but remote again", K(ret), K(dst_addr), K(self_addr));
       }
     }
   }

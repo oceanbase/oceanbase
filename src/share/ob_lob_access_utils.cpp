@@ -1019,7 +1019,7 @@ int ObTextStringResult::calc_buffer_len(int64_t res_len)
       res_len += sizeof(ObLobCommon);
       buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), false);
     } else {
-      ret = OB_SIZE_OVERFLOW;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("Lob: out row temp lob not implemented, not support length bigger than 512M",
         K(ret), K(this), K(pos_), K(buff_len_), K(res_len));
     }
