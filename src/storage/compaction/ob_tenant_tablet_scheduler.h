@@ -103,6 +103,13 @@ public:
   void wait();
   bool is_stop() const { return is_stop_; }
   int reload_tenant_config();
+  bool enable_adaptive_compaction() const { return enable_adaptive_compaction_; }
+  int64_t get_error_tablet_cnt() { return ATOMIC_LOAD(&error_tablet_cnt_); }
+  void clear_error_tablet_cnt() { ATOMIC_STORE(&error_tablet_cnt_, 0); }
+  void update_error_tablet_cnt(const int64_t delta_cnt)
+  {
+    (void)ATOMIC_AAF(&error_tablet_cnt_, delta_cnt);
+  }
 
   // major merge status control
   void stop_major_merge();
@@ -194,7 +201,7 @@ private:
   class MediumLoopTask : public common::ObTimerTask
   {
   public:
-    MediumLoopTask() = default;
+    MediumLoopTask() { disable_timeout_check(); }
     virtual ~MediumLoopTask() = default;
     virtual void runTimerTask() override;
   };
@@ -241,6 +248,8 @@ private:
   MediumLoopTask medium_loop_task_;
   SSTableGCTask sstable_gc_task_;
   ObFastFreezeChecker fast_freeze_checker_;
+  bool enable_adaptive_compaction_;
+  int64_t error_tablet_cnt_; // for diagnose
 };
 
 } // namespace storage

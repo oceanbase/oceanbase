@@ -295,7 +295,7 @@ int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_from_local_file_(
 
   if (is_online_refresh_mode(TCTX.refresh_mode_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("only effect in data_dict mode, KR(ret)");
+    LOG_ERROR("only effect in data_dict mode)", KR(ret));
   } else if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(
       tenant_id,
       dict_tenant_info_guard))) {
@@ -417,7 +417,7 @@ int ObLogTimeZoneInfoGetter::init_tz_info_wrap(
     }
   } else if (is_data_dict_refresh_mode(TCTX.refresh_mode_)) {
     if (OB_FAIL(refresh_tenant_timezone_info_from_local_file_(tenant_id, tz_info_map))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
+      if (OB_IO_ERROR == ret) {
         LOG_INFO("refresh_tenant_timezone_info_from_local_file_ tz_info may not exist "
             "or tenant is not oracle mode, ignore.", KR(ret), K(tenant_id));
         ret = OB_SUCCESS;

@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -26,16 +26,20 @@ int ObTableLoadAbortP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST == ret)) {
         LOG_WARN("fail to get table ctx", KR(ret), K(key));
+      } else {
+        ret = OB_SUCCESS;
       }
     } else {
-      if (OB_FAIL(ObTableLoadCoordinator::abort_ctx(table_ctx))) {
-        LOG_WARN("fail to abort coordinator ctx", KR(ret));
+      if (OB_FAIL(ObTableLoadUtils::init_session_info(credential_.user_id_, session_info_))) {
+        LOG_WARN("fail to init session info", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
         LOG_WARN("fail to remove table ctx", KR(ret), K(key));
+      } else {
+        ObTableLoadCoordinator::abort_ctx(table_ctx, session_info_);
       }
     }
     if (OB_NOT_NULL(table_ctx)) {
@@ -62,16 +66,16 @@ int ObTableLoadAbortPeerP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST == ret)) {
         LOG_WARN("fail to get table ctx", KR(ret), K(key));
       }
     } else {
-      if (OB_FAIL(ObTableLoadStore::abort_ctx(table_ctx))) {
-        LOG_WARN("fail to abort store ctx", KR(ret));
-      } else if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
+      if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
         LOG_WARN("fail to remove table ctx", KR(ret), K(key));
+      } else {
+        ObTableLoadStore::abort_ctx(table_ctx);
       }
     }
     if (OB_NOT_NULL(table_ctx)) {

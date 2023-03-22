@@ -46,6 +46,23 @@ public:
   int64_t schema_version_;
 };
 
+struct ObDDLTaskID final
+{
+public:
+  ObDDLTaskID();
+  ObDDLTaskID(const uint64_t tenant_id, const int64_t task_id);
+  ~ObDDLTaskID() = default;
+  uint64_t hash() const;
+  bool operator==(const ObDDLTaskID &other) const;
+  bool operator!=(const ObDDLTaskID &other) const;
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && task_id_ > 0; }
+  int assign(const ObDDLTaskID &other);
+  TO_STRING_KV(K_(tenant_id), K_(task_id));
+public:
+  uint64_t tenant_id_;
+  int64_t task_id_;
+};
+
 struct ObDDLTaskRecord final
 {
 public:
@@ -87,6 +104,22 @@ public:
   int64_t row_inserted_;
 };
 
+struct ObDDLTaskSerializeField final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(is_abort));
+  ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0), is_abort_(false) {}
+  ObDDLTaskSerializeField(const int64_t task_version, const int64_t parallelism,
+                          const int64_t data_format_version, const bool is_abort);
+  ~ObDDLTaskSerializeField() = default;
+  void reset();
+public:
+  int64_t task_version_;
+  int64_t parallelism_;
+  int64_t data_format_version_;
+  bool is_abort_;
+};
 struct ObCreateDDLTaskParam final
 {
 public:
@@ -171,10 +204,16 @@ public:
       int64_t &task_status,
       int64_t &execution_id);
 
-  static int get_all_record(
+  static int get_ddl_task_record(
+      const int64_t task_id,
+      common::ObMySQLProxy &proxy,
+      common::ObIAllocator &allocator,
+      ObDDLTaskRecord &record);
+  static int get_all_ddl_task_record(
       common::ObMySQLProxy &proxy,
       common::ObIAllocator &allocator,
       common::ObIArray<ObDDLTaskRecord> &records);
+
   static int check_task_id_exist(
       common::ObMySQLProxy &proxy,
       const int64_t task_id,
@@ -185,7 +224,7 @@ public:
      common::ObIAllocator &allocator,
      const uint64_t table_id,
      bool &is_building);
-  
+
   static int check_has_long_running_ddl(
      common::ObMySQLProxy *proxy,
      const uint64_t tenant_id,
@@ -219,11 +258,16 @@ private:
       ObDDLTaskRecord &task_record);
 
   static int64_t get_record_id(share::ObDDLType ddl_type, int64_t origin_id);
-
   static int kill_inner_sql(
       common::ObMySQLProxy &proxy,
       const uint64_t tenant_id,
       const uint64_t session_id);
+
+  static int get_task_record(
+      const ObSqlString &sql_string,
+      common::ObMySQLProxy &proxy,
+      common::ObIAllocator &allocator,
+      common::ObIArray<ObDDLTaskRecord> &records);
 };
 
 class ObDDLWaitTransEndCtx
@@ -249,7 +293,7 @@ public:
   int try_wait(bool &is_trans_end, int64_t &snapshot_version, const bool need_wait_trans_end = true);
   transaction::ObTransID get_pending_tx_id() const { return pending_tx_id_; }
   TO_STRING_KV(K(is_inited_), K_(tenant_id), K(table_id_), K(is_trans_end_), K(wait_type_),
-      K(wait_version_), K_(pending_tx_id), K(tablet_ids_), K(snapshot_array_));
+      K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(snapshot_array_.count()));
 
 private:
   static bool is_wait_trans_type_valid(const WaitTransType wait_trans_type);
@@ -373,13 +417,13 @@ class ObDDLTask : public common::ObDLinkBase<ObDDLTask>
 {
 public:
   explicit ObDDLTask(const share::ObDDLType task_type)
-    : lock_(), ddl_tracing_(this), is_inited_(false), need_retry_(true), is_running_(false),
+    : lock_(), ddl_tracing_(this), is_inited_(false), need_retry_(true), is_running_(false), is_abort_(false),
       task_type_(task_type), trace_id_(), tenant_id_(0), object_id_(0), schema_version_(0),
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
       longops_stat_(nullptr), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
-      execution_id_(-1), sql_exec_addr_(), start_time_(0), cluster_version_(0)
+      execution_id_(-1), sql_exec_addr_(), start_time_(0), data_format_version_(0)
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -391,6 +435,8 @@ public:
   share::ObDDLType get_task_type() const { return task_type_; }
   void set_not_running() { ATOMIC_SET(&is_running_, false); }
   void set_task_status(const share::ObDDLTaskStatus new_status) {task_status_ = new_status; }
+  void set_is_abort(const bool is_abort) { is_abort_ = is_abort; }
+  bool get_is_abort() { return is_abort_; }
   bool try_set_running() { return !ATOMIC_CAS(&is_running_, false, true); }
   uint64_t get_tenant_id() const { return tenant_id_; }
   uint64_t get_object_id() const { return object_id_; }
@@ -401,6 +447,7 @@ public:
   int get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_str);
   int64_t get_ret_code() const { return ret_code_; }
   int64_t get_task_id() const { return task_id_; }
+  ObDDLTaskID get_ddl_task_id() const { return ObDDLTaskID(tenant_id_, task_id_); }
   ObDDLTaskKey get_task_key() const { return ObDDLTaskKey(target_object_id_, schema_version_); }
   int64_t get_parent_task_id() const { return parent_task_id_; }
   int64_t get_task_version() const { return task_version_; }
@@ -410,11 +457,11 @@ public:
                                  obrpc::ObDDLArg &dest_arg);
   void set_longops_stat(share::ObDDLLongopsStat *longops_stat) { longops_stat_ = longops_stat; }
   share::ObDDLLongopsStat *get_longops_stat() const { return longops_stat_; }
-  int64_t get_cluster_version() const { return cluster_version_; }
+  int64_t get_data_format_version() const { return data_format_version_; }
   static int fetch_new_task_id(ObMySQLProxy &sql_proxy, int64_t &new_task_id);
-  virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const = 0;
-  virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) = 0;
-  virtual int64_t get_serialize_param_size() const = 0;
+  virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const;
+  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos);
+  virtual int64_t get_serialize_param_size() const;
   const ObString &get_ddl_stmt_str() const { return ddl_stmt_str_; }
   int set_ddl_stmt_str(const ObString &ddl_stmt_str);
   int convert_to_record(ObDDLTaskRecord &task_record, common::ObIAllocator &allocator);
@@ -423,6 +470,7 @@ public:
   int refresh_schema_version();
   int remove_task_record();
   int report_error_code(const ObString &forward_user_message, const int64_t affected_rows = 0);
+  int check_ddl_task_is_cancel(const TraceId &trace_id, bool &is_cancel);
   int wait_trans_end(
       ObDDLWaitTransEndCtx &wait_trans_ctx,
       const share::ObDDLTaskStatus next_task_status);
@@ -458,7 +506,7 @@ public:
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
       K_(sys_task_id), K_(err_code_occurence_cnt), K_(stat_info),
-      K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(cluster_version));
+      K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(data_format_version));
 protected:
   int gather_redefinition_stats(const uint64_t tenant_id,
                                 const int64_t task_id,
@@ -496,6 +544,7 @@ protected:
   bool is_inited_;
   bool need_retry_;
   bool is_running_;
+  bool is_abort_;
   share::ObDDLType task_type_;
   TraceId trace_id_;
   uint64_t tenant_id_;
@@ -522,7 +571,7 @@ protected:
   int64_t execution_id_; // guarded by lock_
   common::ObAddr sql_exec_addr_;
   int64_t start_time_;
-  int64_t cluster_version_;
+  int64_t data_format_version_;
 };
 
 enum ColChecksumStat
@@ -582,7 +631,7 @@ public:
   bool is_inited() const { return is_inited_; }
   int try_wait(bool &is_column_checksum_ready);
   int update_status(const common::ObTabletID &tablet_id, const int ret_code);
-  TO_STRING_KV(K(is_inited_), K(is_calc_done_), K(source_table_id_), K(target_table_id_),
+  TO_STRING_KV(K(is_inited_), K(source_table_id_), K(target_table_id_),
       K(schema_version_), K(snapshot_version_), K(execution_id_), K(timeout_us_),
       K(last_drive_ts_), K(stat_array_), K_(tenant_id));
 
@@ -592,7 +641,6 @@ private:
 
 private:
   bool is_inited_;
-  bool is_calc_done_;
   uint64_t source_table_id_;
   uint64_t target_table_id_;
   int64_t schema_version_;

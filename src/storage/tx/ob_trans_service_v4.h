@@ -140,6 +140,7 @@ int iterate_tx_scheduler_stat(ObTxSchedulerStatIterator &tx_scheduler_stat_iter)
  * recover transaction descriptor with tx info
  */
 int recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx);
+int update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList &savepoints);
 int get_tx_info(ObTxDesc &tx, ObTxInfo &tx_info);
 int get_tx_stmt_info(ObTxDesc &tx, ObTxStmtInfo &stmt_info);
 int update_tx_with_stmt_info(const ObTxStmtInfo &tx_info, ObTxDesc *&tx);
@@ -292,6 +293,7 @@ int sub_end_tx_local_ls_(const ObTransID &tx_id,
                          const ObXATransID &xid,
                          const common::ObAddr &sender_addr,
                          const bool is_rollback);
+int assign_user_savepoint_(ObTxDesc &tx, ObTxSavePointList &savepoints);
 
 private:
 ObTxCtxMgr tx_ctx_mgr_;

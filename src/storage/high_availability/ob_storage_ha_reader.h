@@ -363,7 +363,7 @@ private:
   int get_tablet_meta_(
       const common::ObTabletID &tablet_id,
       ObMigrationTabletParam &tablet_meta);
-  int may_update_tablet_meta_(
+  int update_tablet_meta_if_restore_major_(
       const common::ObTabletID &tablet_id,
       ObTabletHandle &tablet_handle,
       ObMigrationTabletParam &tablet_meta);

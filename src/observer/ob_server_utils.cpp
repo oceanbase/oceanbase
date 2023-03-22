@@ -91,8 +91,9 @@ int ObServerUtils::cal_all_part_disk_size(const int64_t suggested_data_disk_size
 {
   int ret = OB_SUCCESS;
 
-// background information about default disk percentage
-// https://yuque.antfin-inc.com/ob/rootservice/buzmfz
+// background information about default disk percentage:
+// If not in shared mode, disk will be used up to 90%.
+// If in shared mode, data and clog disk usage will be up to 60% and 30%
   const int64_t DEFAULT_DISK_PERCENTAGE_IN_SEPRATE_MODE = 90;
   const int64_t DEFAULT_DATA_DISK_PERCENTAGE_IN_SHARED_MODE = 60;
   const int64_t DEFAULT_CLOG_DISK_PERCENTAGE_IN_SHARED_MODE = 30;

@@ -2424,7 +2424,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             need_execute_sql = false;
         } else if (ObStmt::is_dml_write_stmt(stmt_type) && inner_into_cnt > 0 && 0 == into_count) {
           /*
-          * 处理https://work.aone.alibaba-inc.com/issue/28206174这种特殊的用法。
+          * 处理
           * 仅当dml语句含returning变量，并且外部没有INTO变量时才允许使用USING OUT接收参数
           */
           CK (param_count >= inner_into_cnt);
@@ -2826,6 +2826,7 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
       } else {
         CK (OB_NOT_NULL(ctx->allocator_));
         OZ (spi_cursor_alloc(*ctx->allocator_, obj));
+        OX (obj.set_extend(obj.get_ext(), PL_REF_CURSOR_TYPE));
         OX (cursor = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext()));
       }
       OX (cursor->set_ref_by_refcursor());
@@ -3111,29 +3112,9 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
     if (OB_FAIL(ret)) {
     } else if (DECL_PKG == loc) {
       OZ (spi_set_package_variable(ctx, package_id, formal_param_idxs[i], dummy_result));
-    } else if (DECL_SUBPROG == loc) {
+    } else {
       OZ (ObPLContext::set_subprogram_var_from_local(
         session_info, package_id, routine_id, formal_param_idxs[i], dummy_result));
-    } else {
-      int64_t result_idx = formal_param_idxs[i];
-      CK (DECL_LOCAL == loc);
-      CK (result_idx >= 0 && result_idx < ctx->params_->count());
-      if (OB_SUCC(ret)) {
-        ObObjParam &param = ctx->params_->at(result_idx);
-        bool is_ref_cursor = param.is_ref_cursor_type();
-        if (!dummy_result.is_ext()) {
-          dummy_result.ObObj::set_scale(param.get_meta().get_scale());
-          dummy_result.set_accuracy(ctx->params_->at(result_idx).get_accuracy());
-          param = dummy_result;
-          param.set_is_ref_cursor_type(is_ref_cursor);
-          param.set_param_meta();
-        } else if (!is_ref_cursor) {
-          int64_t orig_udt_id = ctx->params_->at(result_idx).get_udt_id();
-          ctx->params_->at(result_idx) = dummy_result;
-          ctx->params_->at(result_idx).set_udt_id(orig_udt_id);
-          ctx->params_->at(result_idx).set_param_meta();
-        }
-      }
     }
   }
 
@@ -3214,6 +3195,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
           || (package_id != OB_INVALID_ID && OB_INVALID_ID == routine_id);
         if (is_server_cursor) {
           OZ (ObPLCursorInfo::prepare_entity(*session_info, cursor->get_cursor_entity()));
+          OX (cursor->set_spi_cursor(NULL));
         }
       }
       OZ (session_info->ps_use_stream_result_set(use_stream));
@@ -3315,6 +3297,9 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
             }
             if (OB_NOT_NULL(spi_result)) {
               spi_result->end_cursor_stmt(ctx, ret);
+              if (!need_destruct && OB_SUCCESS != ret) {
+                need_destruct = true;
+              }
             }
             if (need_destruct) {
               spi_result->~ObSPIResultSet();
@@ -3465,6 +3450,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         // 此处只能处理cursor.get_cursor_entity(), 不能处理cursor.get_dbms_entity(),否则exec_params等的值的allocator被reset
         // 会导致core
         LOG_WARN("failed to alloc ref cursor entity", K(ret));
+      } else {
+        cursor.set_spi_cursor(NULL);
       }
     }
   }
@@ -5423,6 +5410,32 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
                      cast_ctx, tmp_result, return_types, return_type_count)); \
   }
 
+int ObSPIService::get_package_var_info_by_expr(const ObSqlExpression *expr,
+                                              uint64_t &package_id,
+                                              uint64_t &var_idx)
+{
+  int ret = OB_SUCCESS;
+  // package var need add package change to sync var to remote
+  CK (OB_NOT_NULL(expr));
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (T_OP_GET_PACKAGE_VAR == get_expression_type(*expr)) {
+    OV (5 <= expr->get_expr_items().count(), OB_ERR_UNEXPECTED, expr->get_expr_items().count());
+    CK (T_UINT64 == expr->get_expr_items().at(1).get_item_type());
+    CK (T_INT == expr->get_expr_items().at(2).get_item_type());
+    OX (package_id = expr->get_expr_items().at(1).get_obj().get_uint64());// pkg id
+    OX (var_idx = expr->get_expr_items().at(2).get_obj().get_int());// var idx
+  } else if (is_obj_access_expression(*expr)
+              && expr->get_expr_items().count() > 1
+              && T_OP_GET_PACKAGE_VAR == expr->get_expr_items().at(1).get_item_type()) {
+    uint16_t param_pos = expr->get_expr_items().at(1).get_param_idx();
+    OX (package_id = expr->get_expr_items().at(param_pos).get_obj().get_uint64());
+    OX (var_idx = expr->get_expr_items().at(param_pos+1).get_obj().get_int());
+  }
+  LOG_DEBUG("get_package_var_info_by_expr ", K(package_id), K(var_idx));
+  return ret;
+}
+
 /***************************************************************************************/
 /* 注意：以下是内存排列有关的代码，修改这里一定要十分理解各种数据类型在LLVM端和SQL端的内存排列和生命周期。
  * SQL端的隐式赋值（Into/Bulk Collect Into）相对于显式赋值（Assign）较为简单，因为需要存储的源数据一定是从查询语句获得的
@@ -5588,7 +5601,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
          * 2、如果into的数目比select item少，那么into的数目必须是1（一定是单个record的情况）；
          * 3、如果into的数目和select item一样多，并且是1，那么是单个record还是单个变量不确定，但是同样是合法的；
          * 还有一种特殊情况，是动态DML语句带RETURNING通过USING OUT传递参数的情况，详见：
-         *  https://work.aone.alibaba-inc.com/issue/28206174
+         *
          *  这种情况仅支持SQL基础类型。
          *  另外，DBMS_SQL没有输出参数，只需要返回current_row即可
          */
@@ -5647,11 +5660,14 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         ObObjParam result_address;
         ObArray<ObPLCollection*> bulk_tables;
         ObArray<ObCastCtx> cast_ctxs;
+        ObArray<std::pair<uint64_t, uint64_t>> package_vars_info;
         ObArenaAllocator tmp_allocator;
         OZ (bulk_tables.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
         OZ (cast_ctxs.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
+        OZ (package_vars_info.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
         for (int64_t i = 0; OB_SUCC(ret) && i < into_count; ++i) {
           ObPLCollection *table = NULL;
+          std::pair<uint64_t, uint64_t> package_var_info = std::pair<uint64_t, uint64_t>(OB_INVALID_ID, OB_INVALID_ID);
           // ObIAllocator *collection_allocator = NULL;
           CK (OB_NOT_NULL(result_expr = into_exprs[i]));
           CK (is_obj_access_expression(*result_expr));
@@ -5668,6 +5684,10 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             //FORALL的BULK是追加模式，仅在非追加模式或追加模式的第一次需要spi_reset_collection
             OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
                                      ctx, *allocator, *table, 0));
+          }
+          OZ (get_package_var_info_by_expr(result_expr, package_var_info.first, package_var_info.second));
+          if (OB_INVALID_ID != package_var_info.first && OB_INVALID_ID != package_var_info.second) {
+            OX (package_vars_info.push_back(package_var_info));
           }
           // collection may modified by sql fetch, which can be reset and allocator will change, such like stmt a:=b in trigger
           // so allocator of collection can not be used by collect_cells.
@@ -5703,8 +5723,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             CK (OB_NOT_NULL(table));
             if (OB_SUCC(ret) && table->get_count() > 0) {
               if (implicit_cursor == NULL || !implicit_cursor->get_in_forall()) {
-                // only clear table data, do not reset collection allocator,
-                // because fetch rows already copy to collection allocator, in store_result only do shadow copy.
+                // only clear table data, do not reset collection allocator
                 table->set_count(0);
                 table->set_first(OB_INVALID_INDEX);
                 table->set_last(OB_INVALID_INDEX);
@@ -5716,6 +5735,10 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         if (OB_SUCC(ret) && row_count > 0) { // 累积存储在pl table里
           OZ (store_result(bulk_tables, row_count, type_count, tmp_result,
                           NULL == implicit_cursor ? false : implicit_cursor->get_in_forall()));
+        }
+        // update package info
+        for (int64_t i = 0; OB_SUCC(ret) && i < package_vars_info.count(); i++) {
+          OZ (spi_update_package_change_info(ctx, package_vars_info.at(i).first, package_vars_info.at(i).second));
         }
         if (!for_cursor && OB_NOT_NULL(implicit_cursor)) {
           OX (implicit_cursor->set_rowcount(row_count)); // 设置隐式游标

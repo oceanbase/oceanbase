@@ -650,7 +650,7 @@ int ObPxMSReceiveOp::inner_get_next_row()
       if (0 == row_heap_.capacity()) {
         ret = OB_ITER_END;
         iter_end_ = true;
-        metric_.mark_last_out();
+        metric_.mark_eof();
         int release_ret = OB_SUCCESS;
         if (OB_SUCCESS != (release_ret = release_merge_inputs())) {
           LOG_WARN("failed to release merge sort and row store", K(ret), K(release_ret));
@@ -668,6 +668,7 @@ int ObPxMSReceiveOp::inner_get_next_row()
         }
         metric_.count();
         metric_.mark_first_out();
+        metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid row heap state", K(row_heap_), K(ret));

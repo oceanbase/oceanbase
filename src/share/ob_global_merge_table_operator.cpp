@@ -221,18 +221,18 @@ int ObGlobalMergeTableOperator::check_scn_revert(
             if (it->need_update_ && it->is_scn_) {
               if (0 == STRCMP(it->name_, "frozen_scn")) {
                 if (it->get_scn() < global_merge_info.frozen_scn_.get_scn()) {
-                  LOG_ERROR("frozen_scn revert", K(tenant_id), "origin_frozen_scn", it->get_scn(),
-                    "new_frozen_scn", global_merge_info.frozen_scn_.get_scn());
+                  LOG_WARN("frozen_scn revert", K(tenant_id), "new_frozen_scn", it->get_scn(),
+                    "origin_frozen_scn", global_merge_info.frozen_scn_.get_scn());
                 }
               } else if (0 == STRCMP(it->name_, "global_broadcast_scn")) {
                 if (it->get_scn() < global_merge_info.global_broadcast_scn_.get_scn()) {
-                  LOG_ERROR("global_broadcast_scn revert", K(tenant_id), "origin_global_broadcast_scn",
-                    it->get_scn(), "new_global_broadcast_scn", global_merge_info.global_broadcast_scn_.get_scn());
+                  LOG_WARN("global_broadcast_scn revert", K(tenant_id), "new_global_broadcast_scn",
+                    it->get_scn(), "origin_global_broadcast_scn", global_merge_info.global_broadcast_scn_.get_scn());
                 }
               } else if (0 == STRCMP(it->name_, "last_merged_scn")) {
                 if (it->get_scn() < global_merge_info.last_merged_scn_.get_scn()) {
-                  LOG_ERROR("last_merged_scn revert", K(tenant_id), "origin_last_merged_scn",
-                    it->get_scn(), "new_last_merged_scn", global_merge_info.last_merged_scn_.get_scn());
+                  LOG_WARN("last_merged_scn revert", K(tenant_id), "new_last_merged_scn",
+                    it->get_scn(), "origin_last_merged_scn", global_merge_info.last_merged_scn_.get_scn());
                 }
               }
             }

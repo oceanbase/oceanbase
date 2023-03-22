@@ -36,7 +36,7 @@ public:
     ObTableApiCacheGuard cache_guard;
     if (OB_FAIL(get_or_create_spec<TYPE>(tb_ctx, cache_guard, spec))) {
       SERVER_LOG(WARN, "fail to get or create spec", K(ret), K(TYPE));
-    }else if (OB_FAIL(process_op_with_spec(tb_ctx, spec, op_result))) {
+    } else if (OB_FAIL(process_op_with_spec(tb_ctx, spec, op_result))) {
       SERVER_LOG(WARN, "fail to process op with spec", K(ret), K(TYPE));
     } else {
       tb_ctx.set_expr_info(nullptr);
@@ -84,6 +84,17 @@ public:
                                        const ObTableSchema *table_schema,
                                        const ObIArray<ObString> &cnames,
                                        ObITableEntity *entity);
+  static void replace_ret_code(int &ret)
+  {
+    if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret
+        || OB_BAD_NULL_ERROR == ret
+        || OB_OBJ_TYPE_ERROR == ret
+        || OB_ERR_COLLATION_MISMATCH == ret
+        || OB_ERR_DATA_TOO_LONG == ret
+        || OB_DATA_OUT_OF_RANGE == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
 };
 
 class ObHTableDeleteExecutor

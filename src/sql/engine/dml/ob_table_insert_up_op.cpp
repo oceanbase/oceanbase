@@ -88,6 +88,24 @@ OB_DEF_SERIALIZE_SIZE(ObTableInsertUpSpec)
   return len;
 }
 
+int ObTableInsertUpOp::check_need_exec_single_row()
+{
+  int ret = OB_SUCCESS;
+  ObInsertUpCtDef *insert_up_ctdef = MY_SPEC.insert_up_ctdefs_.at(0);
+  const ObInsCtDef *ins_ctdef = insert_up_ctdef->ins_ctdef_;
+  const ObUpdCtDef *upd_ctdef = insert_up_ctdef->upd_ctdef_;
+  if (OB_NOT_NULL(ins_ctdef) && OB_NOT_NULL(upd_ctdef)) {
+    if (has_before_row_trigger(*ins_ctdef) || has_after_row_trigger(*ins_ctdef) ||
+      has_before_row_trigger(*upd_ctdef) || has_after_row_trigger(*upd_ctdef)) {
+    execute_single_row_ = true;
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ins_ctdef or upd_ctdef of primary table is nullptr", K(ret));
+  }
+  return ret;
+}
+
 int ObTableInsertUpOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -819,7 +837,7 @@ int ObTableInsertUpOp::do_insert_up()
       LOG_WARN("fail to load all row", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task(dml_rtctx_, false))) {
       LOG_WARN("fail to post all das task", K(ret));
-    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing_batch(&dml_modify_rows_))) {
+    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
       LOG_WARN("try insert is not duplicated, failed to process foreign key handle", K(ret));
     } else if (!check_is_duplicated()) {
       insert_rows_ += insert_rows;
@@ -843,7 +861,7 @@ int ObTableInsertUpOp::do_insert_up()
       LOG_WARN("do insert rows post process failed", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task(dml_rtctx_, false))) {
       LOG_WARN("do insert rows post process failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::handle_after_row_processing_batch(&dml_modify_rows_))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
 
@@ -867,8 +885,8 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &ins
   int64_t simulate_batch_row_cnt = - EVENT_CALL(EventTable::EN_TABLE_INSERT_UP_BATCH_ROW_COUNT);
   int64_t default_row_batch_cnt = simulate_batch_row_cnt > 0 ?
                                   simulate_batch_row_cnt : INT64_MAX;
-  if (is_ignore_) {
-    // If it is ignore mode, degenerate into single line execution
+  if (is_ignore_ || execute_single_row_) {
+    // If it is ignore mode or need excute row by row, degenerate into single line execution
     default_row_batch_cnt = 1;
   }
   LOG_DEBUG("simulate lookup row batch count", K(simulate_batch_row_cnt), K(default_row_batch_cnt));

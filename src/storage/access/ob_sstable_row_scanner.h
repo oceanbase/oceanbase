@@ -64,7 +64,7 @@ protected:
   ObMacroBlockReader macro_block_reader_;
   ObIMicroBlockRowScanner *micro_scanner_;
 private:
-  int32_t cur_range_idx_;
+  int64_t cur_range_idx_;
 };
 
 }

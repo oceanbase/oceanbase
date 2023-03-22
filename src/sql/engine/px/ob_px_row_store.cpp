@@ -326,7 +326,9 @@ int ObReceiveRowReader::to_expr(const ObChunkDatumStore::StoredRow *srow,
     if (dynamic_const_exprs.count() > 0) {
       for (int64_t i = 0; OB_SUCC(ret) && i < dynamic_const_exprs.count(); i++) {
         ObExpr *expr = dynamic_const_exprs.at(i);
-        if (OB_FAIL(expr->deep_copy_self_datum(eval_ctx))) {
+        if (0 == expr->res_buf_off_) {
+          // for compat 4.0, do nothing
+        } else if (OB_FAIL(expr->deep_copy_self_datum(eval_ctx))) {
           LOG_WARN("fail to deep copy datum", K(ret), K(eval_ctx), K(*expr));
         }
       }
@@ -397,7 +399,9 @@ int ObReceiveRowReader::attach_rows(const common::ObIArray<ObExpr*> &exprs,
       for (int64_t i = 0; OB_SUCC(ret) && i < dynamic_const_exprs.count(); i++) {
         ObExpr *expr = dynamic_const_exprs.at(i);
         OB_ASSERT(!expr->is_batch_result());
-        if (OB_FAIL(expr->deep_copy_self_datum(eval_ctx))) {
+        if (0 == expr->res_buf_off_) {
+          // for compat 4.0, do nothing
+        } else if (OB_FAIL(expr->deep_copy_self_datum(eval_ctx))) {
           LOG_WARN("fail to deep copy datum", K(ret), K(eval_ctx), K(*expr));
         }
       }

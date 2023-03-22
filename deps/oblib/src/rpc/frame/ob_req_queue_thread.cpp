@@ -148,7 +148,7 @@ void ObReqQueue::loop()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(qhandler_));
   } else if (OB_FAIL(qhandler_->onThreadCreated(nullptr))) {
-    LOG_ERROR("do thread craeted fail, thread will exit", K(ret));
+    LOG_ERROR("do thread created fail, thread will exit", K(ret));
   } else {
     // The main loop threads process tasks.
     while (!Thread::current().has_set_stop()) {

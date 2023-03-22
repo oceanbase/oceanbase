@@ -132,24 +132,25 @@ int MultiDataSourceInfo::get_new_tenant_scehma_info(
   bool found = false;
   const int64_t tenant_meta_cnt = dict_tenant_metas_.count();
 
-  for (int i = 0; OB_SUCC(ret) && ! found && i < tenant_meta_cnt; i++) {
-    const ObDictTenantMeta *tenant_meta = dict_tenant_metas_[i];
+  if (OB_UNLIKELY(tenant_meta_cnt > 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("expect at most one tenant_dict in multi_data_source_info", KR(ret),
+        K(tenant_meta_cnt), K_(dict_tenant_metas));
+  } else if (0 == tenant_meta_cnt) {
+    ret = OB_ENTRY_NOT_EXIST;
+  } else {
+    const ObDictTenantMeta *tenant_meta = dict_tenant_metas_[0];
 
     if (OB_ISNULL(tenant_meta)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid tenant_meta", KR(ret), K(tenant_id));
-    } else if (tenant_meta->get_tenant_id() == tenant_id) {
+      LOG_ERROR("invalid dict_tenant_meta", KR(ret), K(tenant_id));
+    } else {
       tenant_schema_info.reset(
-          tenant_meta->get_tenant_id(),
+          tenant_id,
           tenant_meta->get_schema_version(),
           tenant_meta->get_tenant_name(),
           tenant_meta->is_restore());
-      found = true;
     }
-  }
-
-  if (OB_SUCC(ret) && ! found) {
-    ret = OB_ENTRY_NOT_EXIST;
   }
 
   return ret;
@@ -171,7 +172,7 @@ int MultiDataSourceInfo::get_new_database_scehma_info(
     if (OB_ISNULL(db_meta)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid database_meta", KR(ret), K(tenant_id), K(database_id));
-    } else if (db_meta->get_tenant_id() == tenant_id && db_meta->get_database_id() == database_id) {
+    } else if (db_meta->get_database_id() == database_id) {
       db_schema_info.reset(
           db_meta->get_database_id(),
           db_meta->get_schema_version(),
@@ -203,7 +204,7 @@ int MultiDataSourceInfo::get_new_table_meta(
     if (OB_ISNULL(tb_meta)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid table_meta", KR(ret), K(tenant_id), K(table_id));
-    } else if (tb_meta->get_tenant_id() == tenant_id && tb_meta->get_table_id() == table_id) {
+    } else if (tb_meta->get_table_id() == table_id) {
       table_meta = tb_meta;
       found = true;
     }

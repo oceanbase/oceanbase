@@ -115,14 +115,13 @@ public:
   // 删除租户cgroup规则
   int remove_tenant_cgroup(const uint64_t tenant_id);
 
-  int add_thread_to_cgroup(const pid_t tid, const uint64_t tenant_id, int64_t group_id = INT64_MAX);
+  int add_self_to_cgroup(const uint64_t tenant_id, int64_t group_id = INT64_MAX);
 
   // 从指定租户cgroup组移除指定tid
-  int remove_thread_from_cgroup(const pid_t tid, const uint64_t tenant_id);
+  int remove_self_from_cgroup(const uint64_t tenant_id);
 
   // 后台线程绑定接口
-  int add_thread_to_group(const pid_t tid,
-                          const uint64_t tenant_id,
+  int add_self_to_group(const uint64_t tenant_id,
                           const uint64_t group_id);
   // 设定指定租户cgroup组的cpu.shares
   int set_cpu_shares(const int32_t cpu_shares, const uint64_t tenant_id, int64_t group_id = INT64_MAX);
@@ -225,7 +224,10 @@ private:
   int get_group_info_by_group_id(const uint64_t tenant_id,
                                  int64_t group_id,
                                  share::ObGroupName &group_name);
-
+  enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
+  int which_type_dir_(const char *curr_path, int &result);
+  int remove_dir_(const char *curr_dir);
+  int recursion_remove_group_(const char *curr_path);
 };
 
 }  // share

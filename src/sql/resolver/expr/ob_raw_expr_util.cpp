@@ -755,6 +755,7 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
     } else { \
       meta.set_ext(); \
       res_type.set_meta(meta); \
+      res_type.set_extend_type(pl_type.get_type());\
       res_type.set_udt_id(pl_type.get_user_type_id()); \
     } \
   }
@@ -3105,6 +3106,29 @@ bool ObRawExprUtils::is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exp
   return is_all_column;
 }
 
+int ObRawExprUtils::extract_set_op_exprs(const ObRawExpr *raw_expr,
+                                         common::ObIArray<ObRawExpr*> &set_op_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(raw_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid raw expr", K(ret), K(raw_expr));
+  } else if (raw_expr->is_set_op_expr()) {
+    if (OB_FAIL(add_var_to_array_no_dup(set_op_exprs, const_cast<ObRawExpr*>(raw_expr)))) {
+      LOG_WARN("failed to append expr", K(ret));
+    }
+  } else {
+    int64_t N = raw_expr->get_param_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      if (OB_FAIL(SMART_CALL(extract_set_op_exprs(raw_expr->get_param_expr(i),
+                                                  set_op_exprs)))) {
+        LOG_WARN("failed to extract set op exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
                                          ObIArray<ObRawExpr*> &column_exprs,
                                          bool need_pseudo_column)
@@ -3779,7 +3803,8 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
                                             ObRawExpr *src_expr,
                                             ObSysFunRawExpr *&out_expr,
                                             ObSQLSessionInfo *session_info,
-                                            bool is_type_to_str)
+                                            bool is_type_to_str,
+                                            ObObjType dst_type)
 {
   int ret = OB_SUCCESS;
   ObExprOperator *op = NULL;
@@ -3815,6 +3840,11 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
       LOG_ERROR("allocate expr operator failed", K(ret));
     } else {
       out_expr->set_func_name(ObString::make_string(func_name));
+      if (ob_is_large_text(dst_type)) {
+        out_expr->set_extra(static_cast<uint64_t>(dst_type));
+      } else {
+        out_expr->set_extra(0);
+      }
     }
 
     ObConstRawExpr *col_accuracy_expr = NULL;
@@ -6810,77 +6840,18 @@ int ObRawExprUtils::create_real_cast_expr(ObRawExprFactory &expr_factory,
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *dst_expr = NULL;
-  ParseNode parse_node;
-  memset(&parse_node, 0, sizeof(ParseNode));
-  ObObj val;
-
   if (OB_ISNULL(src_expr) || OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KP(src_expr), KP(session_info));
   } else {
     if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_CAST, func_expr))) {
       LOG_WARN("create cast expr failed", K(ret));
-    } else if (OB_FAIL(expr_factory.create_raw_expr(T_INT, dst_expr))) {
-      LOG_WARN("create dest type expr failed", K(ret));
+    } else if (OB_FAIL(create_type_expr(expr_factory, dst_expr, dst_type))) {
+      LOG_WARN("create type expr failed", K(ret));
     } else if (OB_FAIL(func_expr->add_param_expr(src_expr))) {
       LOG_WARN("add real param expr failed", K(ret));
     } else {
       ObString func_name = ObString::make_string(N_CAST);
-      parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = static_cast<int16_t>(dst_type.get_type());
-      parse_node.int16_values_[OB_NODE_CAST_COLL_IDX] = static_cast<int16_t>(
-                                                          dst_type.get_collation_type());
-      if (ob_is_string_or_lob_type(dst_type.get_type())) {
-        parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = dst_type.get_length();
-        if (lib::is_oracle_mode()) {
-          dst_expr->set_length_semantics(dst_type.get_length_semantics());
-        }
-      } else if (ob_is_rowid_tc(dst_type.get_type())) {
-        int32_t urowid_len = dst_type.get_length();
-        if (urowid_len <= -1) {
-          urowid_len = 4000;
-        }
-        parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
-      } else if (ObIntervalYMType == dst_type.get_type()) {
-        // TODO: @shaoge 针对ObIntervalYMType和ObIntervalDSType，parse_node的设置需要写case验证
-        if (dst_type.get_scale() == -1) {
-          // scale=-1 is invalid, update to default value
-          ObCompatibilityMode compatibility_mode = get_compatibility_mode();
-          parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] =
-              ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode]
-                                               [ObIntervalYMType]
-                                                   .get_scale();
-        } else {
-          parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] =
-              dst_type.get_scale(); // year
-        }
-      } else if (ObIntervalDSType == dst_type.get_type()) {
-        ObCompatibilityMode compatibility_mode = get_compatibility_mode();
-        parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = (dst_type.get_scale() / 10); // day
-        if (dst_type.get_scale() == -1) {
-          // scale=-1 is invalid, update to default value
-          parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = 0;
-        } else {
-          parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = (dst_type.get_scale() % 10);// second
-        }
-      } else if ((ObTimestampNanoType == dst_type.get_type() ||
-                  ObTimestampTZType == dst_type.get_type() ||
-                  ObTimestampLTZType == dst_type.get_type()) &&
-                 dst_type.get_scale() == -1) {
-        // scale=-1 is invalid, update to default value
-        ObCompatibilityMode compatibility_mode = get_compatibility_mode();
-        parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = dst_type.get_precision();
-        parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] =
-              ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode]
-                                               [dst_type.get_type()]
-                                                   .get_scale();
-      } else {
-        parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = dst_type.get_precision();
-        parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = dst_type.get_scale();
-      }
-
-      val.set_int(parse_node.value_);
-      dst_expr->set_value(val);
-      dst_expr->set_param(val);
       func_expr->set_func_name(func_name);
       if (src_expr->is_for_generated_column()) {
         func_expr->set_for_generated_column();
@@ -6891,6 +6862,80 @@ int ObRawExprUtils::create_real_cast_expr(ObRawExprFactory &expr_factory,
       LOG_DEBUG("create_cast_expr debug", K(ret), K(*src_expr), K(dst_type),
                                           K(*func_expr), K(lbt()));
     }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::create_type_expr(ObRawExprFactory &expr_factory,
+                                     ObConstRawExpr *&type_expr,
+                                     const ObExprResType &dst_type,
+                                     bool avoid_zero_len)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *dst_expr = NULL;
+  ParseNode parse_node;
+  memset(&parse_node, 0, sizeof(ParseNode));
+  ObObj val;
+  if (OB_FAIL(expr_factory.create_raw_expr(T_INT, dst_expr))) {
+    LOG_WARN("create dest type expr failed", K(ret));
+  } else {
+    parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = static_cast<int16_t>(dst_type.get_type());
+    parse_node.int16_values_[OB_NODE_CAST_COLL_IDX] = static_cast<int16_t>(
+                                                        dst_type.get_collation_type());
+    if (ob_is_string_or_lob_type(dst_type.get_type())) {
+      parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = (avoid_zero_len && dst_type.get_length() == 0) ?
+                                                          1 : dst_type.get_length();
+      if (lib::is_oracle_mode()) {
+        dst_expr->set_length_semantics(dst_type.get_length_semantics());
+      }
+    } else if (ob_is_rowid_tc(dst_type.get_type())) {
+      int32_t urowid_len = dst_type.get_length();
+      if (urowid_len <= -1) {
+        urowid_len = 4000;
+      }
+      parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
+    } else if (ObIntervalYMType == dst_type.get_type()) {
+      // TODO: @shaoge 针对ObIntervalYMType和ObIntervalDSType，parse_node的设置需要写case验证
+      if (dst_type.get_scale() == -1) {
+        // scale=-1 is invalid, update to default value
+        ObCompatibilityMode compatibility_mode = get_compatibility_mode();
+        parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] =
+            ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode]
+                                             [ObIntervalYMType]
+                                                 .get_scale();
+      } else {
+        parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] =
+            dst_type.get_scale(); // year
+      }
+    } else if (ObIntervalDSType == dst_type.get_type()) {
+      ObCompatibilityMode compatibility_mode = get_compatibility_mode();
+      parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = (dst_type.get_scale() / 10); // day
+      if (dst_type.get_scale() == -1) {
+        // scale=-1 is invalid, update to default value
+        parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = 0;
+      } else {
+        parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = (dst_type.get_scale() % 10);// second
+      }
+    } else if ((ObTimestampNanoType == dst_type.get_type() ||
+                ObTimestampTZType == dst_type.get_type() ||
+                ObTimestampLTZType == dst_type.get_type()) &&
+               dst_type.get_scale() == -1) {
+      // scale=-1 is invalid, update to default value
+      ObCompatibilityMode compatibility_mode = get_compatibility_mode();
+      parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = dst_type.get_precision();
+      parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] =
+            ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode]
+                                             [dst_type.get_type()]
+                                                 .get_scale();
+    } else {
+      parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = dst_type.get_precision();
+      parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = dst_type.get_scale();
+    }
+
+    val.set_int(parse_node.value_);
+    dst_expr->set_value(val);
+    dst_expr->set_param(val);
+    type_expr = dst_expr;
   }
   return ret;
 }

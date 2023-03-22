@@ -1,6 +1,6 @@
 // Copyright 2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//     lvling <zhaoruizhe.zrz@alibaba-inc.com>
+//     lvling <>
 
 #ifndef OCEANBASE_COMMON_KVCACHE_PRE_WARMER_H_
 #define OCEANBASE_COMMON_KVCACHE_PRE_WARMER_H_

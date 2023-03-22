@@ -199,6 +199,12 @@ bool ObArchiveRoundMgr::is_in_archive_status(const ArchiveKey &key) const
   return key == key_ && log_archive_state_.is_doing();
 }
 
+bool ObArchiveRoundMgr::is_in_suspend_status(const ArchiveKey &key) const
+{
+  RLockGuard guard(rwlock_);
+  return key == key_ && log_archive_state_.is_suspend();
+}
+
 bool ObArchiveRoundMgr::is_in_archive_stopping_status(const ArchiveKey &key) const
 {
   RLockGuard guard(rwlock_);

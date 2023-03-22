@@ -33,13 +33,13 @@ class  ObDetectorRpcProxy : public ObRpcProxy
 {
 public:
   DEFINE_TO(ObDetectorRpcProxy);
-  RPC_AP(PR5 post_lcl_message,
+  RPC_AP(PR9 post_lcl_message,
          OB_DETECTOR_LCL_MESSAGE,
          (share::detector::ObLCLMessage), Int64);
-  RPC_AP(PR5 post_collect_info_message,
+  RPC_AP(PR9 post_collect_info_message,
          OB_DETECTOR_COLLECT_INFO_MESSAGE,
          (share::detector::ObDeadLockCollectInfoMessage), Int64);
-  RPC_AP(PR5 post_notify_parent_message,
+  RPC_AP(PR9 post_notify_parent_message,
          OB_DETECTOR_NOTIFY_PARENT_MESSAGE,
          (share::detector::ObDeadLockNotifyParentMessage), Int64)
 };

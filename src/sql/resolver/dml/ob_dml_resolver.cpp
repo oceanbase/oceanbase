@@ -353,6 +353,7 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
   int8_t depth = 0;
   bool exist_fun = false;
   bool check_res = true;
+  bool check_valid = false;
 
   if (OB_ISNULL(col_node)) { // do nothing
   } else if (OB_ISNULL(tmp_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
@@ -377,6 +378,8 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
       } else if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_,
                           col_node->children_[0]->str_value_, tmp_node, T_COLUMN_REF))) {
         LOG_WARN("create json doc node fail", K(ret));
+      } else {
+        check_valid = true;
       }
     } else if (depth == 2) {
       // childe[1]列名 child[0]表名
@@ -401,12 +404,13 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
           table_node->str_len_ = col_node->children_[0]->str_len_;
           table_node->text_len_ = col_node->children_[0]->text_len_;
           tmp_node->children_[1] = table_node;
+          check_valid = true;
         }
       }
     }
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(ObDMLResolver::check_column_json_type(tmp_node, format_json, only_is_json))) {
+  if (OB_SUCC(ret) && check_valid && OB_FAIL(ObDMLResolver::check_column_json_type(tmp_node, format_json, only_is_json))) {
     LOG_WARN("fail to check is_json", K(ret));
   }
   return ret;
@@ -616,7 +620,7 @@ int ObDMLResolver::print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str)
   } else {
     if (OB_FAIL(res_str.append("."))) {
       LOG_WARN("dot symbol write fail", K(ret));
-    } else if (tmp_path->children_[0]->is_input_quoted == 1 && OB_FAIL(res_str.append("\""))) {
+    } else if (tmp_path->children_[0]->is_input_quoted_ == 1 && OB_FAIL(res_str.append("\""))) {
       LOG_WARN("add \" fail in side", K(ret));
     } else if (OB_NOT_NULL(tmp_path->children_[0]->raw_text_)
                 && OB_FAIL(res_str.append(tmp_path->children_[0]->raw_text_, tmp_path->children_[0]->text_len_))) {
@@ -625,7 +629,7 @@ int ObDMLResolver::print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str)
       if (OB_FAIL(res_str.append(tmp_path->children_[0]->str_value_, tmp_path->children_[0]->str_len_))) {
         LOG_WARN("str_value write fail");
       }
-    } else if (tmp_path->children_[0]->is_input_quoted == 1 && OB_FAIL(res_str.append("\""))) {
+    } else if (tmp_path->children_[0]->is_input_quoted_ == 1 && OB_FAIL(res_str.append("\""))) {
       LOG_WARN("add \" fail in side", K(ret));
     }
     if (tmp_path->type_ == T_FUN_SYS) {
@@ -2166,9 +2170,12 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
       LOG_WARN("push back failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr))) {
       LOG_WARN("replace column ref expr failed", K(ret));
-    } else if (expr->is_sys_func_expr() && OB_FAIL(check_col_param_on_expr(expr))) {
-      LOG_WARN("illegal param on func_expr", K(ret));
     } else { /*do nothing*/ }
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(expr) && expr->is_sys_func_expr()
+      && OB_FAIL(check_col_param_on_expr(expr))) {
+    LOG_WARN("illegal param on func_expr", K(ret));
   }
   return ret;
 }
@@ -3820,7 +3827,7 @@ int ObDMLResolver::do_resolve_generate_table(const ParseNode &table_node,
    /*oracle模式允许sel/upd/del stmt中的generated table含有重复列，只要外层没有引用到重复列就行，同时对于外层引用
   * 到的列是否为重复列会在检查column时进行检测，eg: select 1 from (select c1,c1 from t1);
   * 因此对于oracle模式下sel/upd/del stmt进行检测时，检测到重复列时只需skip，但是仍然需要添加相关plan cache约束
-  * https://work.aone.alibaba-inc.com/issue/29799516
+  *
    */
   bool can_skip = (lib::is_oracle_mode() && get_stmt()->is_sel_del_upd());
   if (OB_FAIL(child_resolver.resolve_child_stmt(table_node))) {
@@ -4131,7 +4138,7 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
   }
   OZ (stmt->add_table_item(session_info_, item));
   if (OB_SUCC(ret)) {
-    // https://work.aone.alibaba-inc.com/issue/31120239
+    //
     // ObFunctionTable填充行数据时依赖row前面的列是udf的输出列, 这里强制将udf的输出列加到ObFunctionTable
     ObSEArray<ColumnItem, 16> col_items;
     CK (OB_NOT_NULL(item));
@@ -4169,9 +4176,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
   }
   if (OB_SUCC(ret)) {
     item->synonym_name_ = synonym_name;
-    if (is_db_explicit) {
-      item->synonym_db_name_ = synonym_db_name;
-    }
+    item->synonym_db_name_ = synonym_db_name;
     item->database_name_ = db_name;
     bool select_index_enabled = false;
     uint64_t database_id = OB_INVALID_ID;
@@ -4211,7 +4216,8 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
       if (OB_FAIL(check_in_sysview(in_sysview))) {
         LOG_WARN("check in sys view failed", K(ret));
       } else {
-        if (!in_sysview) {
+        //allow the inner sql to access, like gather virtual table stats.
+        if (!in_sysview && !(session_info_->is_inner() && !session_info_->is_user_session())) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("restrict accessible virtual table can not access directly",
               K(ret), K(db_name), K(tbl_name));
@@ -4541,6 +4547,8 @@ int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &vie
       bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
       if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
         LOG_WARN("failed to resolve view", K(ret));
+      } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret && lib::is_mysql_mode())) {
+        // do nothing
       } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(*view_schema, view_stmt,reset_column_infos, *allocator_, *session_info_))) {
         LOG_WARN("failed to add recompile view task", K(tmp_ret));
         if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
@@ -6174,7 +6182,7 @@ int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo *session,
       // Since we expanded the generated column into a dependent expression,
       // we need to add trim on its dependent expression in this layer.
       if (const_cast<ObSQLSessionInfo *>(session)->get_ddl_info().is_ddl() &&
-          stmt::T_INSERT == session->get_stmt_type()) {
+          stmt::T_INSERT == session->get_stmt_type() && column_schema->is_virtual_generated_column()) {
         if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema,
                                                     *params_.expr_factory_,
                                                     session_info_,
@@ -6834,7 +6842,7 @@ int ObDMLResolver::deduce_generated_exprs(ObIArray<ObRawExpr*> &exprs)
           LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
         } else if (T_OP_LIKE == expr->get_expr_type()) {
           /*
-          https://work.aone.alibaba-inc.com/issue/33030027
+
           err1: should add const expr for expr2
           err2: if expr2 is 'a%d' deduce is error
                 c1 like 'a%d' DOESN'T MEAN:
@@ -7318,6 +7326,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
   ObString out_db_name;
   ObString out_table_name;
   synonym_db_name.reset();
+  bool is_public_synonym = false;
   if (OB_FAIL(resolve_table_relation_node_v2(node, table_name, db_name, is_db_explicit))) {
     LOG_WARN("failed to resolve table relation node!", K(ret));
   } else if (FALSE_IT(orig_name.assign_ptr(table_name.ptr(), table_name.length()))) {
@@ -7335,7 +7344,8 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
                                                         table_name,
                                                         db_name,
                                                         synonym_checker,
-                                                        is_db_explicit))) {
+                                                        is_db_explicit,
+                                                        is_public_synonym))) {
     if (OB_TABLE_NOT_EXIST == ret) {
       if (synonym_checker.has_synonym()) {
         ret = OB_ERR_SYNONYM_TRANSLATION_INVALID;
@@ -7352,10 +7362,13 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     synonym_db_name.reset();
   } else {
     synonym_name = orig_name;
+    if (is_public_synonym) {
+      synonym_db_name.reset();
+    }
     ObStmt *stmt = get_basic_stmt();
     // 一般的对synonym操作的dml语句stmt不会是NULL，但是类似于desc synonym_name的语句，运行到这里
     // stmt还未生成，因为还未生成从虚拟表select的语句，所以stmt为NULL
-    // https://work.aone.alibaba-inc.com/issue/21978477
+    //
     if (OB_NOT_NULL(stmt)) {
       if (OB_FAIL(add_synonym_obj_id(synonym_checker, false/* error_with_exist */))) {
         LOG_WARN("add_synonym_obj_id failed", K(ret));
@@ -7447,7 +7460,8 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
                                                       ObString &table_name,
                                                       ObString &db_name,
                                                       ObSynonymChecker &synonym_checker,
-                                                      bool is_db_explicit)
+                                                      bool is_db_explicit,
+                                                      bool &is_synonym_public)
 {
   int ret = OB_SUCCESS;
   bool exist_with_synonym = false;
@@ -7470,7 +7484,7 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
       ret = OB_SUCCESS;
       if (OB_FAIL(schema_checker_->get_synonym_schema(tenant_id, database_id, table_name,
                                                       object_db_id, synonym_id, object_table_name,
-                                                      exist_with_synonym, !is_db_explicit))) {
+                                                      exist_with_synonym, !is_db_explicit, &is_synonym_public))) {
         LOG_WARN("get synonym schema failed", K(tenant_id), K(database_id), K(table_name), K(ret));
       } else if (exist_with_synonym) {
         synonym_checker.set_synonym(true);
@@ -7485,12 +7499,14 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
           db_name = database_schema->get_database_name_str();
           table_name = object_table_name;
           database_id = object_db_id;
+          bool dummy = false;
           if (OB_FAIL(SMART_CALL(resolve_table_relation_recursively(tenant_id,
                                                                     database_id,
                                                                     table_name,
                                                                     db_name,
                                                                     synonym_checker,
-                                                                    is_db_explicit)))) {
+                                                                    is_db_explicit,
+                                                                    dummy)))) {
             LOG_WARN("fail to resolve table relation", K(tenant_id), K(database_id), K(table_name), K(ret));
           }
         }
@@ -7654,15 +7670,58 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is NULL", K(ret));
+  } else if (parse_tree.type_  == T_OBJ_ACCESS_REF) {
+    ObJsonBuffer path_buffer(allocator);
+    if (OB_FAIL(path_buffer.append("$."))) {
+      LOG_WARN("failed to append path start", K(ret));
+    } else if (parse_tree.num_child_ != 2
+               || OB_ISNULL(parse_tree.children_)
+               || OB_ISNULL(parse_tree.children_[0])
+               || OB_ISNULL(parse_tree.children_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to make path, param not expected", K(ret), K(parse_tree.num_child_),
+              KP(parse_tree.children_));
+    } else if (OB_FAIL(path_buffer.append(parse_tree.children_[0]->str_value_,
+                                          parse_tree.children_[0]->str_len_))) {
+      LOG_WARN("failed to append raw text", K(ret));
+    } else {
+      ParseNode *tmp_path = parse_tree.children_[1];
+      while (OB_SUCC(ret) && OB_NOT_NULL(tmp_path)) {
+        if (OB_ISNULL(tmp_path->children_[0])) {
+          tmp_path = NULL;
+          // do nothing
+        } else {
+          if (OB_FAIL(print_json_path(tmp_path, path_buffer))) {
+            LOG_WARN("failed to print path", K(ret));
+          }
+        }
+      }
+
+      char* path_buf = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(path_buf = static_cast<char*>(allocator->alloc(path_buffer.length() + 1)))) {
+        LOG_WARN("failed to allocate path buffer", K(ret), K(path_buffer.length()));
+      } else {
+        MEMCPY(path_buf, path_buffer.ptr(), path_buffer.length());
+        path_buf[path_buffer.length()] = 0;
+        path_str.assign_ptr(path_buf, strlen(path_buf));
+      }
+    }
   } else {
-    char* str_buf = static_cast<char*>(allocator->alloc(parse_tree.str_len_ + 3));
+    char* str_buf = static_cast<char*>(allocator->alloc(parse_tree.text_len_ + 3));
     if (OB_ISNULL(str_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(parse_tree.str_len_));
     } else {
-      MEMCPY(str_buf + 2, parse_tree.raw_text_, parse_tree.text_len_);
       MEMCPY(str_buf, "$.", 2);
-      str_buf[parse_tree.str_len_ + 2] = '\0';
+      str_buf[parse_tree.text_len_ + 2] = '\0';
+      if (parse_tree.text_len_ > 0
+          && (parse_tree.raw_text_[0] == '\'' && parse_tree.raw_text_[parse_tree.text_len_-1] == '\'')) {
+        MEMCPY(str_buf + 2, parse_tree.raw_text_ + 1, parse_tree.text_len_ - 1);
+        str_buf[parse_tree.text_len_] = '\0';
+      } else {
+        MEMCPY(str_buf + 2, parse_tree.raw_text_, parse_tree.text_len_);
+      }
       path_str.assign_ptr(str_buf, strlen(str_buf));
     }
   }
@@ -7687,13 +7746,21 @@ int ObDMLResolver::resolve_json_table_column_name_and_path(const ParseNode *name
   } else if (path_node->type_ != T_NULL
               && (path_node->str_len_ > 0 && OB_NOT_NULL(path_node->str_value_))) {
     col_def->col_base_info_.path_.assign_ptr(path_node->str_value_, path_node->str_len_);
+    if (*path_node->str_value_ != '$' && path_node->value_ != 1
+        && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_))) {
+      LOG_WARN("failed to make json path", K(ret));
+    }
   } else if (path_node->type_ == T_NULL
-      && OB_FAIL(json_table_make_json_path(*name_node, allocator, col_def->col_base_info_.path_))) {
-    LOG_WARN("failed to make json path", K(ret));
+             && OB_FAIL(json_table_make_json_path(*name_node, allocator, col_def->col_base_info_.path_))) {
+    LOG_WARN("failed to make json path by name", K(ret));
+  } else if (path_node->type_  == T_OBJ_ACCESS_REF
+             && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_))) {
+    LOG_WARN("failed to make json path by lists", K(ret));
   }
 
   if (OB_SUCC(ret)) {
     col_def->col_base_info_.col_name_.assign_ptr(name_node->str_value_, name_node->str_len_);
+    col_def->col_base_info_.is_name_quoted_ = name_node->is_input_quoted_;
   }
   return ret;
 }
@@ -7736,9 +7803,13 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
   if (col_type == COL_TYPE_ORDINALITY) {
     data_type.set_int();
     data_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObInt32Type]);
+  } else if (col_type == COL_TYPE_QUERY && obj_type == ObJsonType) {
+    ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
+    LOG_WARN("failed to resolve column, not support return json in query column define", K(ret));
   } else if (col_type == COL_TYPE_EXISTS
              || col_type == COL_TYPE_VALUE
-             || col_type == COL_TYPE_QUERY) {
+             || col_type == COL_TYPE_QUERY
+             || col_type == COL_TYPE_QUERY_JSON_COL) {
     if (ObNumberType == obj_type
         && parse_tree.int16_values_[2] == -1 && parse_tree.int16_values_[3] == 0) {
       obj_type = ObIntType;
@@ -7752,7 +7823,6 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
     common::ObAccuracy accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[1][obj_type];
     common::ObLengthSemantics length_semantics = parse_tree.length_semantics_;
     accuracy.set_length_semantics(length_semantics);
-
     ObObjTypeClass dest_tc = ob_obj_type_class(obj_type);
 
     if (ObStringTC == dest_tc) {
@@ -7764,7 +7834,7 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
     } else if (ObRawTC == dest_tc) {
       accuracy.set_length(parse_tree.int32_values_[1]);
     } else if (ObTextTC == dest_tc || ObJsonTC == dest_tc) {
-      accuracy.set_length(parse_tree.int32_values_[1] < 0 ?
+      accuracy.set_length(parse_tree.int32_values_[1] <= 0 ?
           ObAccuracy::DDL_DEFAULT_ACCURACY[obj_type].get_length() : parse_tree.int32_values_[1]);
     } else if (ObIntervalTC == dest_tc) {
       if (OB_UNLIKELY(!ObIntervalScaleUtil::scale_check(parse_tree.int16_values_[3]) ||
@@ -7784,6 +7854,9 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
       if (ObNumberType == obj_type && parse_tree.int16_values_[2] == -1) {
         accuracy.set_precision(parse_tree.int16_values_[2]);
         accuracy.set_scale(parse_tree.int16_values_[3]);
+      } else if (ObIntType == obj_type) {
+        data_type.set_int();
+        accuracy = def_acc;
       } else {
         accuracy.set_precision(parse_tree.int16_values_[2]);
         accuracy.set_scale(parse_tree.int16_values_[3]);
@@ -7896,7 +7969,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
     LOG_WARN("internal error find jt column failed", K(ret));
   } else if ((col_type == COL_TYPE_EXISTS && parse_tree.num_child_ != 4) ||
              (col_type == COL_TYPE_VALUE && parse_tree.num_child_ != 5) ||
-             (col_type == COL_TYPE_QUERY && parse_tree.num_child_ != 6) ||
+             ((col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) && parse_tree.num_child_ != 6) ||
              (col_type == COL_TYPE_ORDINALITY && parse_tree.num_child_ != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to resolve json table regular column", K(ret), K(parse_tree.num_child_), K(col_type));
@@ -7951,7 +8024,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
             }
           }
         }
-      } else if (col_type == COL_TYPE_QUERY) {
+      } else if (col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) {
         const ParseNode* scalar_node = parse_tree.children_[2];
         const ParseNode* wrapper_node = parse_tree.children_[3];
         const ParseNode* path_node = parse_tree.children_[4];
@@ -8259,7 +8332,8 @@ int ObDMLResolver::resolve_json_table_column_item(const ParseNode &parse_tree,
       if (col_type == COL_TYPE_VALUE ||
           col_type == COL_TYPE_QUERY ||
           col_type == COL_TYPE_EXISTS ||
-          col_type == COL_TYPE_ORDINALITY) {
+          col_type == COL_TYPE_ORDINALITY ||
+          col_type == COL_TYPE_QUERY_JSON_COL) {
         if (OB_FAIL(resolve_json_table_regular_column(*cur_node, table_item, cur_col_def, cur_node_id, id, cur_column_id))) {
           LOG_WARN("resolve column defination in json table failed.", K(ret), K(cur_node->value_));
         } else if (OB_ISNULL(cur_col_def)) {
@@ -8455,7 +8529,7 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
   return ret;
 }
 
-// https://work.aone.alibaba-inc.com/issue/47046607
+//
 // columns with is json constraint should set_strict_json_column > 00
 bool ObDMLResolver::check_generated_column_has_json_constraint(const ObSelectStmt *stmt, const ObColumnRefRawExpr *col_expr)
 {
@@ -8507,7 +8581,7 @@ bool ObDMLResolver::check_generated_column_has_json_constraint(const ObSelectStm
   @param select_item_offset:
     the argument select_item_offset is used to tell the function to traverse select_items from the select_item_offset-th select item.
   @param skip_check:
-    bugfix: https://work.aone.alibaba-inc.com/issue/36334616
+    bugfix:
     if the all the three conditions are true, we can skip the check and directly copy the select_item to column_item:
     1. the function is called directly or indirectly from reslove_star. (e.g., in select * from xxxx)
     2. is oracle mode
@@ -11052,7 +11126,7 @@ int ObDMLResolver::get_all_column_ref(ObRawExpr *expr, ObIArray<ObColumnRefRawEx
  * 以上才能真正重新解析出来part expr, 否则会误解析为函数，本质上这里表示的为普通列性质,目前已知的有如下关键字：
  * SYSTIMESTAMP、CURRENT_DATE、LOCALTIMESTAMP、CURRENT_TIMESTAMP、SESSIONTIMEZONE、DBTIMEZONE、
  * CONNECT_BY_ISCYCLE、CONNECT_BY_ISLEAF
- * bug:https://work.aone.alibaba-inc.com/issue/32136817
+ * bug:
  */
 
 #define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
@@ -11673,6 +11747,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_DBMS_STATS: {
+      CHECK_HINT_PARAM(hint_node, 0) {
+        global_hint.set_dbms_stats();
+      }
+      break;
+    }
     case T_DOP: {
       CHECK_HINT_PARAM(hint_node, 2) {
         if (OB_FAIL(global_hint.merge_dop_hint(static_cast<uint64_t>(child0->value_),
@@ -11913,8 +11993,6 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     }
     case T_USE_LATE_MATERIALIZATION:
     case T_NO_USE_LATE_MATERIALIZATION:
-    case T_USE_HASH_AGGREGATE:
-    case T_NO_USE_HASH_AGGREGATE:
     case T_GBY_PUSHDOWN:
     case T_NO_GBY_PUSHDOWN:
     case T_USE_HASH_DISTINCT:
@@ -11927,6 +12005,13 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_NO_USE_DISTRIBUTED_DML: {
       if (OB_FAIL(resolve_normal_optimize_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve normal optimize hint.", K(ret));
+      }
+      break;
+    }
+    case T_USE_HASH_AGGREGATE:
+    case T_NO_USE_HASH_AGGREGATE: {
+      if (OB_FAIL(resolve_aggregation_hint(hint_node, opt_hint))) {
+        LOG_WARN("failed to resolve aggregation hint.", K(ret));
       }
       break;
     }
@@ -12678,6 +12763,34 @@ int ObDMLResolver::resolve_normal_optimize_hint(const ParseNode &hint_node,
     LOG_WARN("failed to resolve qb name node.", K(ret));
   } else {
     hint->set_qb_name(qb_name);
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_aggregation_hint(const ParseNode &hint_node,
+                                            ObOptHint *&hint)
+{
+  int ret = OB_SUCCESS;
+  hint = NULL;
+  ObAggHint *agg_hint = NULL;
+  ObString qb_name;
+  if (OB_UNLIKELY(1 != hint_node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hint with qb name param has no one children.", K(ret));
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, agg_hint))) {
+    LOG_WARN("failed to create hint", K(ret));
+  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
+    LOG_WARN("failed to resolve qb name node.", K(ret));
+  } else {
+    hint = agg_hint;
+    agg_hint->set_qb_name(qb_name);
+    if (T_NO_USE_HASH_AGGREGATE == hint_node.type_) {
+      if (1 == hint_node.value_) {
+        agg_hint->set_use_partition_sort(true);
+      } else if (0 == hint_node.value_) {
+        agg_hint->set_use_partition_sort(false);
+      }
+    }
   }
   return ret;
 }
@@ -13734,7 +13847,7 @@ int ObDMLResolver::resolve_with_clause(const ParseNode *node, bool same_level)
     // do nothing
   } else if (OB_UNLIKELY(node->type_ != T_WITH_CLAUSE_LIST)) {
     //should not be here
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_MISSING_KEYWORD;
     LOG_WARN("resolver with_clause_as met unexpected node type", K_(node->type));
   } else {
     int num_child = node->num_child_;

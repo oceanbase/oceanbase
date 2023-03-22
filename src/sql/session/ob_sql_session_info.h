@@ -963,8 +963,6 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_sql_extension();
   }
-  bool is_registered_to_deadlock() const { return ATOMIC_LOAD(&is_registered_to_deadlock_); }
-  void set_registered_to_deadlock(bool state) { ATOMIC_SET(&is_registered_to_deadlock_, state); }
   bool is_ps_prepare_stage() const { return is_ps_prepare_stage_; }
   void set_is_ps_prepare_stage(bool v) { is_ps_prepare_stage_ = v; }
   int get_tenant_audit_trail_type(ObAuditTrailType &at_type)
@@ -1139,8 +1137,6 @@ private:
   bool is_table_name_hidden_;
   void *piece_cache_;
   bool is_load_data_exec_session_;
-  // 记录session是否注册过死锁检测的信息
-  bool is_registered_to_deadlock_;
   ObSqlString pl_exact_err_msg_;
   bool is_ps_prepare_stage_;
   // Record whether this session has got connection resource, which means it increased connections count.
@@ -1186,6 +1182,7 @@ private:
   ObTxnExtraInfoEncoder txn_extra_info_encoder_;
 public:
   void post_sync_session_info();
+  void prep_txn_free_route_baseline(bool reset_audit = true);
   void set_txn_free_route(bool txn_free_route);
   int calc_txn_free_route();
   bool can_txn_free_route() const;
@@ -1201,7 +1198,7 @@ private:
   ObExecContext *cur_exec_ctx_;
   bool restore_auto_commit_; // for dblink xa transaction to restore the value of auto_commit
   oceanbase::sql::ObDblinkCtxInSession dblink_context_;
-  int64_t sql_req_level_; // for sql request between cluster avoid dead lock, such as dblink dead lock https://yuque.antfin.com/ob/sql/gum62i
+  int64_t sql_req_level_; // for sql request between cluster avoid dead lock, such as dblink dead lock
   int64_t expect_group_id_;
   // When try packet retry failed, set this flag true and retry at current thread.
   // This situation is unexpected and will report a warning to user.

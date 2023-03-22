@@ -61,7 +61,7 @@ struct ObUnitGroupInfo
   void reset();
   int assign(const ObUnitGroupInfo &other);
   int remove_ls_group(const uint64_t ls_group_id);
-  bool operator==(const ObUnitGroupInfo &other) const; 
+  bool operator==(const ObUnitGroupInfo &other) const;
 
   uint64_t unit_group_id_;
   share::ObUnit::Status unit_status_;
@@ -94,7 +94,7 @@ struct ObLSStatusMachineParameter
 {
   ObLSStatusMachineParameter() : ls_id_(), status_info_(), ls_info_(share::OB_LS_EMPTY) {}
   virtual ~ObLSStatusMachineParameter() {}
-  bool is_valid() const 
+  bool is_valid() const
   {
     return ls_id_.is_valid()
            && (share::OB_LS_EMPTY == status_info_.status_
@@ -103,7 +103,7 @@ struct ObLSStatusMachineParameter
   int init(const share::ObLSID &id, const share::ObLSStatusInfo &status_info,
            const share::ObLSStatus &ls_info);
   void reset();
-  share::ObLSID ls_id_;                
+  share::ObLSID ls_id_;
   share::ObLSStatusInfo status_info_;//for create ls and status of __all_ls_status
   share::ObLSStatus ls_info_;//status in __all_ls
   TO_STRING_KV(K_(ls_id), K_(status_info), K_(ls_info));
@@ -138,13 +138,13 @@ public:
   bool is_valid() const;
 
   int gather_stat(bool for_recovery);
-  //some ls not in __all_ls, but in __all_ls_status 
+  //some ls not in __all_ls, but in __all_ls_status
   //it need delete by gc, no need process it anymore.
   //check the ls status, and delete no need ls
   int process_ls_status_missmatch(
       const bool lock_sys_ls,
       const share::ObTenantSwitchoverStatus &working_sw_status);
-  
+
   // need create or delete new ls group
   int check_ls_group_match_unitnum();
 
@@ -251,7 +251,7 @@ private:
   int adjust_primary_zone_by_ls_group_(const common::ObIArray<common::ObZone> &primary_zone_array,
                                        const share::ObLSPrimaryZoneInfoArray &primary_zone_infos,
                                        const share::schema::ObTenantSchema &tenant_schema);
-  
+
 private:
   ObMySQLProxy *sql_proxy_;
   const share::schema::ObTenantSchema *tenant_schema_;
@@ -261,7 +261,7 @@ private:
   share::ObLSStatusInfoArray status_array_;
   common::hash::ObHashMap<share::ObLSID, int64_t> status_map_;
   ObUnitGroupInfoArray unit_group_array_;
-  ObLSGroupInfoArray ls_group_array_; 
+  ObLSGroupInfoArray ls_group_array_;
   ObArray<common::ObZone> primary_zone_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   share::ObLSTableOperator *lst_operator_;
@@ -282,11 +282,13 @@ public:
   int start();
   void stop();
   void wait();
+  void mtl_thread_stop();
+  void mtl_thread_wait();
   int create(const char* thread_name, int tg_def_id, ObTenantThreadHelper &tenant_thread);
   void idle(const int64_t idle_time_us);
 public:
   virtual void switch_to_follower_forcedly() override;
-  
+
   virtual int switch_to_leader() override;
   virtual int switch_to_follower_gracefully() override
   {
@@ -296,6 +298,26 @@ public:
   virtual int resume_leader() override
   {
     return OB_SUCCESS;
+  }
+
+#define DEFINE_MTL_FUNC(TYPE)\
+  static int mtl_init(TYPE *&ka) {\
+    int ret = OB_SUCCESS;\
+    if (OB_ISNULL(ka)) {\
+      ret = OB_ERR_UNEXPECTED;\
+    } else if (OB_FAIL(ka->init())) {\
+    }\
+    return ret;\
+  }\
+  static void mtl_stop(TYPE *&ka) {\
+    if (OB_NOT_NULL(ka)) {\
+      ka->mtl_thread_stop();\
+    }\
+  }\
+  static void mtl_wait(TYPE *&ka) {\
+    if (OB_NOT_NULL(ka)) {\
+      ka->mtl_thread_wait();\
+    }\
   }
 
 protected:
@@ -323,10 +345,10 @@ class ObPrimaryLSService : public ObTenantThreadHelper,
 public:
   ObPrimaryLSService():inited_(false), tenant_id_(OB_INVALID_TENANT_ID) {}
   virtual ~ObPrimaryLSService() {}
-  static int mtl_init(ObPrimaryLSService *&ka);
   int init();
   void destroy();
   virtual void do_work() override;
+  DEFINE_MTL_FUNC(ObPrimaryLSService)
 
 public:
   virtual share::SCN get_rec_scn() override { return share::SCN::max_scn();}

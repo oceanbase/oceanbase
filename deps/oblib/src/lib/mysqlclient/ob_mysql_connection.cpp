@@ -159,7 +159,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     MYSQL *mysql = mysql_real_connect(&mysql_, host, user, pass, db, port, NULL, 0);
     if (OB_ISNULL(mysql)) {
       ret = -mysql_errno(&mysql_);
-      LOG_WARN("fail to connect to mysql server", KCSTRING(host), KCSTRING(user), K(port),
+      LOG_WARN("fail to connect to mysql server", K(get_sessid()), KCSTRING(host), KCSTRING(user), K(port),
                "info", mysql_error(&mysql_), K(ret));
     } else {
       /*Note: mysql_real_connect() incorrectly reset the MYSQL_OPT_RECONNECT option
@@ -172,6 +172,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
       my_bool reconnect = 0; // in OB, do manual reconnect. xiaochu.yh
       mysql_options(&mysql_, MYSQL_OPT_RECONNECT, &reconnect);
       closed_ = false;
+      set_usable(true);
       tenant_id_ = OB_SYS_TENANT_ID;
       read_consistency_ = -1;
     }
@@ -228,7 +229,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     MYSQL *mysql = mysql_real_connect(&mysql_, host, user, pass, db, port, NULL, 0);
     if (OB_ISNULL(mysql)) {
       ret = -mysql_errno(&mysql_);
-      LOG_WARN("fail to connect to mysql server", KCSTRING(host), KCSTRING(user), K(port),
+      LOG_WARN("fail to connect to mysql server", K(get_sessid()), KCSTRING(host), KCSTRING(user), K(port),
                "info", mysql_error(&mysql_), K(ret));
     } else {
       /*Note: mysql_real_connect() incorrectly reset the MYSQL_OPT_RECONNECT option
@@ -241,6 +242,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
       my_bool reconnect = 0; // in OB, do manual reconnect. xiaochu.yh
       mysql_options(&mysql_, MYSQL_OPT_RECONNECT, &reconnect);
       closed_ = false;
+      set_usable(true);
       db_name_ = db;
       tenant_id_ = OB_SYS_TENANT_ID;
       read_consistency_ = -1;
@@ -254,6 +256,7 @@ void ObMySQLConnection::close()
   if (!closed_) {
     mysql_close(&mysql_);
     closed_ = true;
+    sessid_ = 0;
     memset(&mysql_, 0, sizeof(MYSQL));
     set_init_remote_env(false);
   }
@@ -614,7 +617,7 @@ int ObMySQLConnection::set_session_variable(const ObString &name, const ObString
 
 // When the main database is in the switching state, the external SQL will be affected by the ob_read_consistency set by the user, and the standby database may weakly read the internal table, but an error is reported because multiple versions do not exist.
 // In fact, the current code does not require external SQL to weaken consistent reads. For the implementation of ObMySqlConnection, it is restricted to use strong consistent reads.
-// bug: https://work.aone.alibaba-inc.com/issue/23188074
+// bug:
 int ObMySQLConnection::reset_read_consistency()
 {
   int ret = OB_SUCCESS;

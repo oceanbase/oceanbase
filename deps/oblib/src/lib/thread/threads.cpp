@@ -278,8 +278,3 @@ void Threads::destroy()
     threads_ = nullptr;
   }
 }
-
-void Threads::set_thread_max_tasks(uint64_t cnt)
-{
-  thread_max_tasks_ = cnt;
-}

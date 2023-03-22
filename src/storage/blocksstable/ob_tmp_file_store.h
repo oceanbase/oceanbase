@@ -120,10 +120,7 @@ public:
   OB_INLINE char *get_buffer() { return buffer_; }
   OB_INLINE uint8_t get_max_cont_page_nums() const { return page_buddy_.get_max_cont_page_nums(); }
   OB_INLINE uint8_t get_free_page_nums() const { return free_page_nums_; }
-  OB_INLINE int64_t get_used_page_nums() const
-  {
-    return get_mblk_page_nums() - free_page_nums_;
-  }
+  int64_t get_used_page_nums() const;
   int get_block_cache_handle(ObTmpBlockValueHandle &handle);
   int get_wash_io_info(ObTmpBlockIOInfo &info);
   void set_io_desc(const common::ObIOFlag &io_desc);
@@ -154,7 +151,7 @@ public:
   int close(bool &is_all_close, uint8_t &free_page_nums);
   int give_back_buf_into_cache(bool is_wash = false);
   OB_INLINE double get_wash_score(int64_t cur_time) const {
-    if (get_free_page_nums() == 0) {
+    if (ObTmpFilePageBuddy::MAX_PAGE_NUMS == get_used_page_nums()) {
       return INT64_MAX;
     }
     return (double) get_used_page_nums() * (cur_time - get_alloc_time()) / (get_access_time() - get_alloc_time());

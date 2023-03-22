@@ -2163,10 +2163,43 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
 {
   int ret = OB_SUCCESS;
   ParamStore *params = ctx_.params_;
+  ObObjParam copy_value;
+
   CK (OB_NOT_NULL(params));
   CK (OB_NOT_NULL(get_allocator()));
   CK (var_idx >= 0 && var_idx < params->count());
-  OZ (deep_copy_obj(*get_allocator(), value, params->at(var_idx)));
+
+  if (OB_SUCC(ret)
+      && params->at(var_idx).is_pl_extend()
+      && params->at(var_idx).get_ext() != 0
+      && params->at(var_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
+    OZ (ObUserDefinedType::destruct_obj(params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (value.is_pl_extend()
+              && value.get_ext() != 0
+              && value.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
+    OZ (ObUserDefinedType::deep_copy_obj(*get_allocator(), value, copy_value));
+  } else {
+    OZ (deep_copy_obj(*get_allocator(), value, copy_value));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!copy_value.is_ext()) {
+    bool is_ref_cursor = params->at(var_idx).is_ref_cursor_type();
+    copy_value.ObObj::set_scale(params->at(var_idx).get_meta().get_scale());
+    copy_value.set_accuracy(params->at(var_idx).get_accuracy());
+    params->at(var_idx) = copy_value;
+    params->at(var_idx).set_is_ref_cursor_type(is_ref_cursor);
+    params->at(var_idx).set_param_meta();
+  } else if (!params->at(var_idx).is_ref_cursor_type()) {
+    int64_t udt_id = params->at(var_idx).get_udt_id();
+    params->at(var_idx) = copy_value;
+    params->at(var_idx).set_udt_id(udt_id);
+  } else {
+    params->at(var_idx) = copy_value;
+  }
   OX (params->at(var_idx).set_param_meta());
   return ret;
 }
@@ -2222,6 +2255,23 @@ int ObPLExecCtx::get_user_type(uint64_t type_id,
     if (OB_SUCC(ret) && type_id == func_->get_type_table().at(i)->get_user_type_id()) {
       user_type = func_->get_type_table().at(i);
     }
+  }
+  if (OB_SUCC(ret)
+      && OB_ISNULL(user_type)
+      && OB_NOT_NULL(allocator_)
+      && OB_NOT_NULL(exec_ctx_)
+      && OB_NOT_NULL(exec_ctx_->get_my_session())
+      && OB_NOT_NULL(exec_ctx_->get_sql_ctx())
+      && OB_NOT_NULL(exec_ctx_->get_sql_ctx()->schema_guard_)
+      && OB_NOT_NULL(exec_ctx_->get_sql_proxy())
+      && OB_NOT_NULL(guard_)) {
+    pl::ObPLResolveCtx resolve_ctx(*allocator_,
+                                    *(exec_ctx_->get_my_session()),
+                                    *(exec_ctx_->get_sql_ctx()->schema_guard_),
+                                    *(guard_),
+                                    *(exec_ctx_->get_sql_proxy()),
+                                    false);
+    OZ (resolve_ctx.get_user_type(type_id, user_type));
   }
   return ret;
 }
@@ -2350,6 +2400,13 @@ int ObPLExecState::final(int ret)
     }
   }
 
+  if (OB_FAIL(ret) && func_.get_ret_type().is_composite_type() && result_.is_ext() && func_.is_pipelined()) {
+    tmp_ret = ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to destruct pl object", K(tmp_ret));
+    }
+  }
+
   if (OB_NOT_NULL(top_context_)
       && top_context_->get_exec_stack().count() > 0
       && top_context_->get_exec_stack().at(
@@ -2361,7 +2418,7 @@ int ObPLExecState::final(int ret)
   // reset physical plan context
   if (need_reset_physical_plan_) {
     if (func_.get_expr_op_size() > 0) {
-      //Memory leak https://work.aone.alibaba-inc.com/issue/33582334
+      //Memory leak
       //Must be reset before free expr_op_ctx!
       ctx_.exec_ctx_->reset_expr_op();
       ctx_.exec_ctx_->get_allocator().free(ctx_.exec_ctx_->get_expr_op_ctx_store());
@@ -2731,7 +2788,7 @@ do {                                                                  \
               LOG_WARN("failed to apply tmp to params",
                        K(ret), K(tmp), K(i), K(params->count()));
             } else {
-              // https://work.aone.alibaba-inc.com/issue/31131417
+              //
               // 由存储层传入的数据未设置collation_level, 这里设置下
               if (get_params().at(i).is_string_type()) {
                 get_params().at(i).set_collation_level(result_type.get_collation_level());
@@ -2830,7 +2887,7 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
 
   if (OB_SUCC(ret)) {
     // TODO bin.lb: how about the memory?
-    // https://aone.alibaba-inc.com/project/81079/task/34962640
+    //
     OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, ctx_.allocator_));
   }
 

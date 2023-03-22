@@ -80,6 +80,7 @@ void ObXACtx::reset()
   if (OB_NOT_NULL(xa_branch_info_)) {
     xa_branch_info_->reset();
   }
+  xa_stmt_info_.reset();
   is_terminated_ = false;
   tlog_.reset();
   need_print_trace_log_ = true;
@@ -729,9 +730,9 @@ int ObXACtx::process_xa_start_tightly_(const obrpc::ObXAStartRPCRequest &req)
     } else if (is_new_branch) {
       ++xa_branch_count_;
     }
-    if (OB_SUCC(ret) && req.need_response()) {
+    if (OB_SUCC(ret)) {
       SMART_VAR(ObXAStartRPCResponse, response) {
-        if (OB_FAIL(response.init(trans_id_, *tx_desc_))) {
+        if (OB_FAIL(response.init(trans_id_, *tx_desc_, req.is_first_branch()))) {
           TRANS_LOG(WARN, "init xa start response failed", K(ret));
         } else if (OB_FAIL(xa_rpc_->xa_start_response(tenant_id_, sender, response, NULL))) {
           TRANS_LOG(WARN, "xa start response failed", K(ret));
@@ -772,7 +773,7 @@ int ObXACtx::process_xa_start_loosely_(const obrpc::ObXAStartRPCRequest &req)
     TRANS_LOG(WARN, "register xa trans timeout task failed", K(ret), K(xid), K(*this));
   } else {
     SMART_VAR(ObXAStartRPCResponse, response) {
-      if (OB_FAIL(response.init(trans_id_, *tx_desc_))) {
+      if (OB_FAIL(response.init(trans_id_, *tx_desc_, req.is_first_branch()))) {
         TRANS_LOG(WARN, "init xa start response failed", K(ret));
       } else if (OB_FAIL(xa_rpc_->xa_start_response(tenant_id_, sender, response, NULL))) {
         TRANS_LOG(WARN, "xa start response failed", K(ret));
@@ -789,9 +790,13 @@ int ObXACtx::process_xa_start_response(const obrpc::ObXAStartRPCResponse &resp)
   int ret = OB_SUCCESS;
   const ObTxInfo &tx_info = resp.get_tx_info();
   // no need guard
-  if (NULL != tx_desc_) {
+  if (resp.is_first_branch() && NULL != tx_desc_) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "trans desc is NULL", K(ret));
+  } else if (!resp.is_first_branch()) {
+    if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint(*tx_desc_, tx_info.savepoints_))) {
+      TRANS_LOG(WARN, "update user sp fail", K(ret), K(*this), K(tx_info));
+    }
   } else if (OB_FAIL(MTL(ObTransService *)->recover_tx(tx_info, tx_desc_))) {
     TRANS_LOG(WARN, "recover tx failed", K(ret), K(*this), K(tx_info));
   } else {
@@ -846,6 +851,11 @@ int ObXACtx::process_xa_end(const obrpc::ObXAEndRPCRequest &req)
       // if loosely coupled, need to update tx desc
       if (OB_FAIL(MTL(ObTransService*)->update_tx_with_stmt_info(stmt_info, tx_desc_))) {
         TRANS_LOG(WARN, "update tx desc with stmt info failed", K(ret), K(req), K(*this));
+      }
+    } else {
+      // if tightly coupled, need to update user savepoint
+      if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint(*tx_desc_, stmt_info.savepoints_))) {
+        TRANS_LOG(WARN, "update user sp fail", K(ret), K(*this), K(req));
       }
     }
   }
@@ -986,6 +996,9 @@ int ObXACtx::process_end_stmt(const obrpc::ObXAEndStmtRPCRequest &req)
   } else if (OB_FAIL(check_for_execution_(xid, false))) {
     // include branch fail
     TRANS_LOG(WARN, "check for execution failed", K(ret), K(xid), K(*this));
+  } else if (lock_xid_.empty()) {
+    // The rpc timeout may trigger repeated unlocking operations,
+    // which should be considered successful at this time
   } else {
     const ObTxStmtInfo &stmt_info = req.get_stmt_info();
     // TODO, remove duplicate
@@ -1353,6 +1366,7 @@ int ObXACtx::xa_start_remote_first(const ObXATransID &xid,
   } else {
     // set global trans type to xa trans
     tx_desc->set_global_tx_type(ObGlobalTxType::XA_TRANS);
+    TRANS_LOG(WARN, "xa start remote success", K(ret), K(xid), K(flags), K(*tx_desc), K(*this));
   }
   TRANS_LOG(INFO, "xa start remote first", K(ret), K(xid), K(flags), K(*this));
   return ret;
@@ -1376,6 +1390,8 @@ int ObXACtx::xa_start_(const ObXATransID &xid,
     TRANS_LOG(WARN, "update branch info failed", K(ret), K(*this));
   } else if (OB_FAIL(save_tx_desc_(tx_desc))) {
     TRANS_LOG(WARN, "save trans desc failed", K(ret), K(*this));
+  } else if (OB_FAIL(update_xa_stmt_info_(xid))) {
+    TRANS_LOG(WARN, "update xa stmt info failed", K(ret), K(xid), K(*this));
   } else if (OB_FAIL(register_xa_timeout_task_())) {
     TRANS_LOG(WARN, "register xa timeout task failed", K(ret), K(*this));
   } else {
@@ -1420,6 +1436,8 @@ int ObXACtx::xa_start_local_(const ObXATransID &xid,
                                             timeout_seconds,
                                             flags))) {
     TRANS_LOG(WARN, "update xa branch info failed", K(ret), K(xid), K(*this));
+  } else if (OB_FAIL(update_xa_stmt_info_(xid))) {
+    TRANS_LOG(WARN, "update xa stmt info failed", K(ret), K(xid), K(*this));
   } else if (OB_FAIL(register_xa_timeout_task_())) {
     TRANS_LOG(WARN, "register xa timeout task failed", K(ret), K(xid), K(*this));
   } else {
@@ -1439,6 +1457,30 @@ int ObXACtx::xa_start_local_(const ObXATransID &xid,
   return ret;
 }
 
+int ObXACtx::update_xa_stmt_info_(const ObXATransID &xid)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  if (!xa_stmt_info_.empty()) {
+    for (int64_t i = 0; !found && i < xa_stmt_info_.count(); ++i) {
+      ObXAStmtInfo &info = xa_stmt_info_.at(i);
+      if (info.xid_.all_equal_to(xid)) {
+        found = true;
+        break;
+      }
+    }
+  }
+  if (!found) {
+    ObXAStmtInfo stmt_info(xid);
+    if (OB_FAIL(xa_stmt_info_.push_back(stmt_info))) {
+      TRANS_LOG(WARN, "add stmt info failed", K(ret), K(stmt_info), K(*this));
+    }
+  } else {
+    TRANS_LOG(WARN, "xa stmt info already exists ", K(ret), K(found), K(xid), K(*this));
+  }
+  return ret;
+}
+
 // xa start in non-original scheduler
 // case 1: loosely coupled, xa start join
 // case 2: tightly coupled, xa start join
@@ -1454,7 +1496,7 @@ int ObXACtx::xa_start_remote_first_(const ObXATransID &xid,
   int tmp_ret = OB_SUCCESS;
   int result = OB_SUCCESS;
   const int64_t now = ObTimeUtility::current_time();
-  const bool need_response = true;  // need tx desc
+  const bool is_first_branch = true;  // need tx desc
   ObXAStartRPCRequest xa_start_request;
   obrpc::ObXARPCCB<obrpc::OB_XA_START_REQ> cb;
   ObTransCond cond;
@@ -1471,7 +1513,7 @@ int ObXACtx::xa_start_remote_first_(const ObXATransID &xid,
                                            is_tightly_coupled_,
                                            timeout_seconds,
                                            flags,
-                                           need_response))) {
+                                           is_first_branch))) {
     TRANS_LOG(WARN, "init sync request failed", K(ret), K(*this));
   } else if (OB_FAIL(cb.init(&cond))) {
     TRANS_LOG(WARN, "init cb failed", K(ret), K(xid), K(*this));
@@ -1504,8 +1546,11 @@ int ObXACtx::xa_start_remote_first_(const ObXATransID &xid,
     if (OB_TRANS_XA_BRANCH_FAIL == ret) {
       set_terminated_();
     }
+  } else if (OB_FAIL(update_xa_stmt_info_(xid))) {
+    TRANS_LOG(WARN, "update xa stmt info failed", K(ret), K(xid), K(*this));
   } else {
     // xa_ref_count_ is added only when success is returned
+    xa_trans_state_ = ObXATransState::ACTIVE;
     ++xa_ref_count_;
     tx_desc_->set_xid(xid);
     tx_desc_->set_xa_ctx(this);
@@ -1530,12 +1575,12 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
   int tmp_ret = OB_SUCCESS;
   int result = OB_SUCCESS;
   const int64_t now = ObTimeUtility::current_time();
-  const bool need_response = false;  // no need tx desc
+  const bool is_first_branch = false;  // no need tx desc
   ObXAStartRPCRequest xa_start_request;
   obrpc::ObXARPCCB<obrpc::OB_XA_START_REQ> cb;
   ObTransCond cond;
   const int64_t wait_time = (INT64_MAX / 2 ) - now;
-  // xa_sync_status_cond_.reset();
+  xa_sync_status_cond_.reset();
 
   if (OB_ISNULL(xa_rpc_) || OB_ISNULL(xa_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1553,7 +1598,7 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
                                            is_tightly_coupled_,
                                            timeout_seconds,
                                            flags,
-                                           need_response))) {
+                                           is_first_branch))) {
     TRANS_LOG(WARN, "init sync request failed", K(ret), K(*this));
   } else if (OB_FAIL(cb.init(&cond))) {
     TRANS_LOG(WARN, "init cb failed", K(ret), K(xid), K(*this));
@@ -1571,6 +1616,10 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
       } else {
         TRANS_LOG(WARN, "wait cond failed", K(ret), K(xid), K(result));
       }
+    } else if (OB_FAIL(wait_xa_sync_status_(wait_time))) {
+      TRANS_LOG(WARN, "wait xa sync status failed", K(ret), K(xid));
+    } else {
+      // do nothing
     }
   }
 
@@ -1579,6 +1628,8 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
     if (OB_TRANS_XA_BRANCH_FAIL == ret) {
       set_terminated_();
     }
+  } else if (OB_FAIL(update_xa_stmt_info_(xid))) {
+    TRANS_LOG(WARN, "update xa stmt info failed", K(ret), K(xid), K(*this));
   } else {
     // xa_ref_count_ is increased only when success is returned
     ++xa_ref_count_;
@@ -1655,6 +1706,9 @@ int ObXACtx::xa_end(const ObXATransID &xid,
       }
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(remove_xa_stmt_info_(xid))) {
+    TRANS_LOG(WARN, "remove xa stmt info failed", K(ret), K(xid), K(*this));
+  }
 
   --xa_ref_count_;
   // if fail, force terminate
@@ -1679,11 +1733,32 @@ int ObXACtx::xa_end(const ObXATransID &xid,
   return ret;
 }
 
+int ObXACtx::remove_xa_stmt_info_(const ObXATransID &xid)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  if (!xa_stmt_info_.empty()) {
+    for (int64_t i = 0; !found && i < xa_stmt_info_.count(); ++i) {
+      ObXAStmtInfo &info = xa_stmt_info_.at(i);
+      if (info.xid_.all_equal_to(xid)) {
+        found = true;
+        xa_stmt_info_.remove(i);
+        break;
+      }
+    }
+  }
+  if (!found) {
+    ret = OB_ERR_UNEXPECTED;
+  }
+  TRANS_LOG(INFO, "remove xa stmt info", K(ret), K(found), K(xid), K(*this));
+  return ret;
+}
+
 // start stmt
 // if tightly coupled mode, acquire lock and get tx info from original scheduler
 // if loosely coupled mode, do nothing
 // @param [in] xid, this is from session
-int ObXACtx::start_stmt(const ObXATransID &xid)
+int ObXACtx::start_stmt(const ObXATransID &xid, const uint32_t session_id)
 {
   int ret = OB_SUCCESS;
   const bool is_original = (GCTX.self_addr() == original_sche_addr_);
@@ -1701,9 +1776,18 @@ int ObXACtx::start_stmt(const ObXATransID &xid)
   } else if (OB_ISNULL(tx_desc_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "trans desc is null", K(ret), K(*this));
+  } else if (is_exiting_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "xa ctx is exiting", K(ret), K(*this));
+  } else if (is_terminated_) {
+    // NOTE that anohter error code maybe required for loosely coupled mode
+    ret = OB_TRANS_XA_BRANCH_FAIL;
+    TRANS_LOG(INFO, "xa trans has terminated", K(ret), K(xid), K(*this));
   } else if (!is_tightly_coupled_) {
     // loosely coupled mode
-    // do nothing
+    if (OB_FAIL(create_xa_savepoint_if_need_(xid, session_id))) {
+      TRANS_LOG(WARN, "check xa savepoint fail", K(ret), K(xid), K(session_id), K(*this));
+    }
   } else {
     // tightly coupled mode
     if (is_executing_) {
@@ -1742,6 +1826,34 @@ int ObXACtx::start_stmt(const ObXATransID &xid)
   }
 
   TRANS_LOG(INFO, "xa trans start stmt", K(ret), K(xid), K(*this));
+  return ret;
+}
+
+int ObXACtx::create_xa_savepoint_if_need_(const ObXATransID &xid, const uint32_t session_id)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  if (!xa_stmt_info_.empty()) {
+    for (int64_t i = 0; !found && i < xa_stmt_info_.count(); ++i) {
+      ObXAStmtInfo &info = xa_stmt_info_.at(i);
+      if (info.xid_.all_equal_to(xid)) {
+        found = true;
+        TRANS_LOG(INFO, "find info", K(ret), K(xid), K(info));
+        if (info.is_first_stmt_) {
+          if (OB_FAIL(MTL(transaction::ObTransService *)->create_explicit_savepoint(*tx_desc_, PL_XA_IMPLICIT_SAVEPOINT, session_id, false))) {
+            TRANS_LOG(WARN, "create xa savepoint fail", K(ret), K(xid), K(session_id), K(*this));
+          } else {
+            TRANS_LOG(INFO, "create pl xa savepoint success", K(ret), K(xid), K(session_id), K(*this));
+          }
+          info.is_first_stmt_ = false;
+        }
+        break;
+      }
+    }
+  }
+  if (!found) {
+    ret = OB_ERR_UNEXPECTED;
+  }
   return ret;
 }
 
@@ -1819,6 +1931,9 @@ int ObXACtx::end_stmt(const ObXATransID &xid)
   } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa ctx not inited", K(ret), K(*this));
+  } else if (is_exiting_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "xa ctx is exiting", K(ret), K(*this));
   } else if (!is_tightly_coupled_) {
     // do nothing
   } else if (OB_UNLIKELY(!is_executing_)) {
@@ -2164,7 +2279,7 @@ bool ObXACtx::check_response_(const int64_t response_id,
 
 // wait the result of start stmt
 // this function is called only when SUCCESS is returned by start_stmt (local/remote)
-int ObXACtx::wait_start_stmt()
+int ObXACtx::wait_start_stmt(const uint32_t session_id)
 {
   int ret = OB_SUCCESS;
   int result = OB_SUCCESS;
@@ -2206,8 +2321,12 @@ int ObXACtx::wait_start_stmt()
       TRANS_LOG(WARN, "fail to wait start stmt", K(ret), K(*this));
       is_executing_ = false;
       executing_xid_.reset();
+    } else if (OB_FAIL(create_xa_savepoint_if_need_(executing_xid_, session_id))) {
+      TRANS_LOG(WARN, "check xa savepoint fail", K(ret), K(session_id), K(*this));
+    } else {
+      // do nothing
     }
-  } 
+  }
 
   return ret;
 }
@@ -2235,7 +2354,10 @@ int ObXACtx::one_phase_end_trans(const ObXATransID &xid,
   } else if (OB_FAIL(check_terminated_())) {
     TRANS_LOG(WARN, "check terminated failed", K(ret), K(*this));
   } else if (OB_FAIL(check_trans_state_(is_rollback, request_id, true))) {
-    TRANS_LOG(WARN, "check trans state failed", K(ret), K(*this));
+    if (!((is_rollback && OB_TRANS_ROLLBACKED == ret)
+        || (!is_rollback && OB_TRANS_COMMITED == ret))) {
+      TRANS_LOG(WARN, "check trans state failed", K(ret), K(*this));
+    }
   } else if (OB_FAIL(is_one_phase_end_trans_allowed_(xid, is_rollback))) {
     TRANS_LOG(WARN, "one phase xa end trans is not allowed", K(ret), K(xid), K(*this));
   } else {
@@ -2247,7 +2369,7 @@ int ObXACtx::one_phase_end_trans(const ObXATransID &xid,
     }
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_EAGAIN != ret) {
     if (is_rollback && is_tightly_coupled_) {
       set_terminated_();
     }
@@ -2371,7 +2493,9 @@ int ObXACtx::try_heartbeat()
   int tmp_ret = OB_SUCCESS;
   ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
   const int64_t now = ObTimeUtility::current_time();
-  if (original_sche_addr_ != GCTX.self_addr()) {
+  if (is_exiting_ || is_terminated_) {
+    // do nothing
+  } else if (original_sche_addr_ != GCTX.self_addr()) {
     // temproray scheduler, do nothing
   } else if (OB_ISNULL(xa_branch_info_)
       && (ObXATransState::IDLE < xa_trans_state_ || ObXATransState::UNKNOWN == xa_trans_state_)) {
@@ -2574,10 +2698,12 @@ int ObXACtx::xa_prepare(const ObXATransID &xid, const int64_t timeout_us)
   } else if (OB_FAIL(xa_prepare_(xid, timeout_us, need_exit))) {
     TRANS_LOG(WARN, "xa prepare failed", K(ret), K(xid), K(need_exit), K(*this));
     if (need_exit) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc_,
-              ObTxAbortCause::IMPLICIT_ROLLBACK))) {
-        TRANS_LOG(WARN, "fail to stop transaction", K(tmp_ret), K(*this));
+      if (OB_ERR_READ_ONLY_TRANSACTION != ret) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc_,
+                ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+          TRANS_LOG(WARN, "fail to stop transaction", K(tmp_ret), K(*this));
+        }
       }
       set_terminated_();
       set_exiting_();
@@ -2752,7 +2878,10 @@ int ObXACtx::two_phase_end_trans(const ObXATransID &xid,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa ctx not inited", K(ret), K(*this));
   } else if (OB_FAIL(check_trans_state_(is_rollback, request_id, false))) {
-    TRANS_LOG(WARN, "check trans state fail", K(ret), K(xid), K(is_rollback), K(timeout_us));
+    if (!((is_rollback && OB_TRANS_ROLLBACKED == ret)
+        || (!is_rollback && OB_TRANS_COMMITED == ret))) {
+      TRANS_LOG(WARN, "check trans state fail", K(ret), K(xid), K(is_rollback), K(timeout_us));
+    }
   } else {
     ObTxDesc *tx = NULL;
     if (OB_FAIL(MTL(ObTransService*)->end_two_phase_tx(trans_id_, xid, coord, timeout_us,
@@ -2873,12 +3002,12 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
       }
       case ObXATransState::COMMITTING:
       case ObXATransState::COMMITTED: {
-        ret = OB_TRANS_COMMITED;
+        ret = OB_TRANS_XA_PROTO;
         break;
       }
       case ObXATransState::ACTIVE: {
         if (!is_xa_one_phase) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         } else {
           ret = OB_SUCCESS;
         }
@@ -2900,6 +3029,7 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
         if (request_id_ == request_id) {
           ret = OB_EAGAIN;
         } else {
+          // todo lixinze:error or not
           if (is_xa_one_phase_) {
             ret = OB_TRANS_ROLLBACKED;
           } else {
@@ -2910,19 +3040,19 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
       }
       case ObXATransState::NON_EXISTING:
       case ObXATransState::IDLE: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
       case ObXATransState::UNKNOWN: {
         if (!is_xa_one_phase) {
           ret = OB_SUCCESS;
         } else {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         }
         break;
       }
       default: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
     }
@@ -2930,7 +3060,7 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
     switch (xa_trans_state_) {
       case ObXATransState::PREPARING:{
         if (!is_xa_one_phase) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         } else {
           ret = OB_SUCCESS;
         }
@@ -2953,11 +3083,11 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
         break;
       }
       case ObXATransState::PREPARED: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
       case ObXATransState::ROLLBACKED: {
-        ret = OB_TRANS_ROLLBACKED;
+        ret = OB_TRANS_XA_PROTO;
         break;
       }
       case ObXATransState::ROLLBACKING: {
@@ -2966,7 +3096,7 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
       }
       case ObXATransState::ACTIVE: {
         if (!is_xa_one_phase) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         } else {
           ret = OB_SUCCESS;
         }
@@ -2974,19 +3104,19 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
       }
       case ObXATransState::NON_EXISTING:
       case ObXATransState::IDLE: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
       case ObXATransState::UNKNOWN: {
         if (!is_xa_one_phase) {
           ret = OB_SUCCESS;
         } else {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_TRANS_XA_RMFAIL;
         }
         break;
       }
       default: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TRANS_XA_RMFAIL;
         break;
       }
     }

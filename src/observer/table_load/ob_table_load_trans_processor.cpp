@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -26,7 +26,7 @@ int ObTableLoadStartTransP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -64,7 +64,7 @@ int ObTableLoadPreStartTransPeerP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -99,7 +99,7 @@ int ObTableLoadConfirmStartTransPeerP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -136,7 +136,7 @@ int ObTableLoadFinishTransP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -171,7 +171,7 @@ int ObTableLoadPreFinishTransPeerP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -206,7 +206,7 @@ int ObTableLoadConfirmFinishTransPeerP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -243,7 +243,7 @@ int ObTableLoadAbandonTransP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -278,7 +278,7 @@ int ObTableLoadAbandonTransPeerP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -315,7 +315,7 @@ int ObTableLoadGetTransStatusP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -352,7 +352,7 @@ int ObTableLoadGetTransStatusPeerP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {

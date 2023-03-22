@@ -6038,7 +6038,9 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
           scale1 = (val_type1 == ObBitType) ? aggr_info.param_exprs_.at(1)->datum_meta_.length_semantics_ : scale1;
           ObCollationType cs_type1 = tmp_obj[1].get_collation_type();
           ObString key_string = tmp_obj[0].get_string();
-          if (OB_SUCC(ret) && ObCharset::charset_type_by_coll(cs_type0) != CHARSET_UTF8MB4) {
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc, tmp_obj[0], key_string))) {
+            LOG_WARN("fail to read key string", K(ret), K(tmp_obj[0]));
+          } else if (ObCharset::charset_type_by_coll(cs_type0) != CHARSET_UTF8MB4) {
             ObString converted_key_str;
             if (OB_FAIL(ObExprUtil::convert_string_collation(key_string, cs_type0, converted_key_str, 
                                                                   CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
@@ -6231,7 +6233,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
             }
             ObJsonString ob_str(key_string.ptr(), key_string.length());
             if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(ob_str.print(json_object_buf, true, false, 0, true))) {
+            } else if (OB_FAIL(ob_str.print(json_object_buf, true))) {
               LOG_WARN("fail to print json node", K(ret));
             } else if (OB_FAIL(json_object_buf.append(":"))) {
               LOG_WARN("fail to append colon", K(ret));
@@ -6313,8 +6315,8 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
       ret = OB_SUCCESS;
       ParseNode parse_node;
       parse_node.value_ = aggr_info.returning_type_;
-      ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
-      ObCollationType obj_cs_type = static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]);
+      ObObjType obj_type = aggr_info.expr_->obj_meta_.get_type();
+      ObCollationType obj_cs_type = aggr_info.expr_->obj_meta_.get_collation_type();
       if (json_object_buf.length() > 1) {
         char *end_of_obj = json_object_buf.ptr() + json_object_buf.length() - 1;
         *end_of_obj = '}';

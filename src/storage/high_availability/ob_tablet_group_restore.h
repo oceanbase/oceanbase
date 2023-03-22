@@ -457,6 +457,7 @@ public:
 private:
   int update_data_status_();
   int update_restore_status_();
+  int check_tablet_valid_();
   int record_server_event_();
 
 private:

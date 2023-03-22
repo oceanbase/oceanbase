@@ -369,7 +369,7 @@ int ObObjFreeList::init(const char *name, const int64_t obj_size,
     alignment_ = alignment;
     obj_count_base_ = (OP_GLOBAL == cache_type) ? 0 : obj_count;
     type_size_base_ = obj_size;
-    only_global_ = (OP_RECLAIM != cache_type);
+    only_global_ = (OP_GLOBAL == cache_type);
     name_ = name;
 
     // Make sure we align *all* the objects in the allocation,
@@ -631,22 +631,6 @@ void *ObObjFreeList::reclaim_alloc(ObThreadCache *thread_cache)
   return ret;
 }
 
-void *ObObjFreeList::tc_alloc(ObThreadCache *thread_cache)
-{
-  void *ret = NULL;
-  if (OB_LIKELY(NULL != thread_cache)){
-    if (NULL != (ret = thread_cache->inner_free_list_.pop())) {
-      thread_cache->nr_free_--;
-      thread_cache->nr_malloc_++;
-    } else if (only_global_) {
-      if (NULL != (ret = global_alloc())) {
-        thread_cache->nr_malloc_++;
-      }
-    }
-  }
-  return ret;
-}
-
 void *ObObjFreeList::alloc()
 {
   void *ret = NULL;
@@ -661,7 +645,9 @@ void *ObObjFreeList::alloc()
   }
 
   if (only_global_) {
-    ret = tc_alloc(thread_cache);
+    if (OB_NOT_NULL(ret = global_alloc())) {
+      thread_cache->nr_malloc_++;
+    }
   } else {
     ret = reclaim_alloc(thread_cache);
   }
@@ -691,36 +677,6 @@ void ObObjFreeList::reclaim_free(ObThreadCache *cur_thread_cache, void *item)
   rcu_read_unlock(cur_thread_cache);
 }
 
-void ObObjFreeList::tc_free(ObThreadCache *cur_thread_cache, void *item)
-{
-  if (obj_count_base_ > 0) {
-    // free all thread cache obj upto global free list if it's overflow
-    if (OB_UNLIKELY(cur_thread_cache->nr_free_ >= obj_count_base_)) {
-      void *next = NULL;
-      obj_free_list_.push(item);
-      // keep half of obj_count_base_
-      int64_t low_watermark = obj_count_base_ / 2;
-      while (cur_thread_cache->nr_free_ > low_watermark
-             && NULL != (next = cur_thread_cache->inner_free_list_.pop())) {
-        obj_free_list_.push(next);
-        cur_thread_cache->nr_free_--;
-      }
-    } else {
-      cur_thread_cache->inner_free_list_.push(reinterpret_cast<ObFreeObject *>(item));
-      cur_thread_cache->nr_free_++;
-    }
-  } else {
-    global_free(item);
-  }
-
-  /**
-   * For global allocate mode, maybe thread A allocates memory and thread B frees it.
-   * So when thread B frees, B's thread cache maybe NULL. The thread_cache->nr_malloc_
-   * isn't the actual malloc number of this thread, maybe it's negative.
-   */
-  cur_thread_cache->nr_malloc_--;
-}
-
 void ObObjFreeList::free(void *item)
 {
   ObThreadCache *thread_cache = NULL;
@@ -734,7 +690,8 @@ void ObObjFreeList::free(void *item)
 
     if (OB_LIKELY(NULL != thread_cache)) {
       if (only_global_) {
-        tc_free(thread_cache, item);
+        global_free(item);
+        thread_cache->nr_malloc_--;
       } else {
         reclaim_free(thread_cache, item);
       }

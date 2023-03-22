@@ -989,32 +989,70 @@ int ObTabletReplicaChecksumOperator::innner_verify_tablet_replica_checksum(
   return ret;
 }
 
+int ObTabletReplicaChecksumOperator::get_index_and_data_table_schema(
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const uint64_t index_table_id,
+    const uint64_t data_table_id,
+    const ObTableSchema *&index_table_schema,
+    const ObTableSchema *&data_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_table_id, index_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_ISNULL(index_table_schema)) {
+    LOG_WARN("index_table_schema is null", K(tenant_id), K(index_table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(data_table_schema)) {
+    LOG_WARN("data_table_schema is null", K(tenant_id), K(data_table_id));
+  }
+  return ret;
+}
+
 int ObTabletReplicaChecksumOperator::check_column_checksum(
     const uint64_t tenant_id,
-    const ObTableSchema &data_table_schema,
-    const ObTableSchema &index_table_schema,
+    const ObSimpleTableSchemaV2 &data_simple_schema,
+    const ObSimpleTableSchemaV2 &index_simple_schema,
     const SCN &compaction_scn,
     ObMySQLProxy &sql_proxy,
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) 
-      || !data_table_schema.is_valid() 
-      || !index_table_schema.is_valid())) {
+  const uint64_t index_table_id = index_simple_schema.get_table_id();
+  const uint64_t data_table_id = data_simple_schema.get_table_id();
+  const ObTableSchema *index_table_schema = nullptr;
+  const ObTableSchema *data_table_schema = nullptr;
+  // destruct the schema_guard after validating index column checksum to free memory
+  ObSchemaGetterGuard schema_guard;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || !data_simple_schema.is_valid()
+      || !index_simple_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(data_table_schema), K(index_table_schema));
+    LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(data_simple_schema), K(index_simple_schema));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_index_and_data_table_schema(schema_guard, tenant_id, index_table_id,
+                     data_table_id, index_table_schema, data_table_schema))) {
+    LOG_WARN("fail to get index and data table schema", KR(ret), K(index_simple_schema), K(data_simple_schema));
+  } else if (OB_ISNULL(index_table_schema) || OB_ISNULL(data_table_schema)) {
+    // table schemas are changed, and index_table or data_table does not exist in new table schemas.
+    // no need to check index column checksum.
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema is null", KR(ret), KP(index_table_schema), KP(data_table_schema),
+             K(index_table_id), K(data_table_id));
   } else {
-    const bool is_global_index = index_table_schema.is_global_index_table();
+    const bool is_global_index = index_simple_schema.is_global_index_table();
     if (is_global_index) {
-      if (OB_FAIL(check_global_index_column_checksum(tenant_id, data_table_schema, index_table_schema,
+      if (OB_FAIL(check_global_index_column_checksum(tenant_id, *data_table_schema, *index_table_schema,
           compaction_scn, sql_proxy, expected_epoch))) {
         LOG_WARN("fail to check global index column checksum", KR(ret), K(tenant_id), K(compaction_scn));
       }
-    } else if (OB_UNLIKELY(index_table_schema.is_spatial_index())) {
+    } else if (OB_UNLIKELY(index_simple_schema.is_spatial_index())) {
       // do nothing
       // spatial index column is different from data table column
     } else {
-      if (OB_FAIL(check_local_index_column_checksum(tenant_id, data_table_schema, index_table_schema,
+      if (OB_FAIL(check_local_index_column_checksum(tenant_id, *data_table_schema, *index_table_schema,
           compaction_scn, sql_proxy, expected_epoch))) {
         LOG_WARN("fail to check local index column checksum", KR(ret), K(tenant_id), K(compaction_scn));
       }
@@ -1090,7 +1128,7 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
         } else if (!is_match) {
           // Do not compare column checksum in case of OB_FREEZE_SERVICE_EPOCH_MISMATCH, since
           // tablet replica checksum items may be incomplete now.
-          // https://work.aone.alibaba-inc.com/issue/46876280
+          //
           ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
           LOG_WARN("no need to compare column checksum, cuz freeze_service_epoch mismatch",
                     KR(ret), K(tenant_id), K(compaction_scn), K(expected_epoch));
@@ -1399,20 +1437,20 @@ int ObTabletReplicaChecksumOperator::find_checksum_item_(
 
 int ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(
     const uint64_t tenant_id,
-    const ObTableSchema &table_schema,
+    const ObSimpleTableSchemaV2 &simple_schema,
     ObMySQLProxy &sql_proxy,
     ObIArray<ObTabletLSPair> &pairs)
 {
   int ret = OB_SUCCESS;
-  if ((!is_valid_tenant_id(tenant_id)) || (!table_schema.is_valid())) {
+  if ((!is_valid_tenant_id(tenant_id)) || (!simple_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
     SMART_VAR(ObArray<ObTabletID>, tablet_ids) {
-      if (OB_FAIL(get_table_all_tablet_ids_(table_schema, tablet_ids))) {
-        LOG_WARN("fail to get table all tablet ids", KR(ret), K(table_schema));
+      if (OB_FAIL(get_table_all_tablet_ids_(simple_schema, tablet_ids))) {
+        LOG_WARN("fail to get table all tablet ids", KR(ret), K(simple_schema));
       } else if (tablet_ids.count() > 0) {
-        const uint64_t table_id = table_schema.get_table_id();
+        const uint64_t table_id = simple_schema.get_table_id();
         if (OB_FAIL(get_tablet_ls_pairs(tenant_id, table_id, sql_proxy, tablet_ids, pairs))) {
           LOG_WARN("fail to get tablet_ls_pairs", KR(ret), K(tenant_id), K(table_id));
         }
@@ -1477,18 +1515,18 @@ int ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(
 int ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items_(
     const uint64_t tenant_id,
     ObMySQLProxy &sql_proxy,
-    const ObTableSchema &table_schema,
+    const ObSimpleTableSchemaV2 &simple_schema,
     const SCN &compaction_scn,
     ObIArray<ObTabletLSPair> &tablet_pairs,
     ObIArray<ObTabletReplicaChecksumItem> &items)
 {
   int ret = OB_SUCCESS;
-  if ((!is_valid_tenant_id(tenant_id)) || (!table_schema.is_valid())) {
+  if ((!is_valid_tenant_id(tenant_id)) || (!simple_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
-    const uint64_t table_id = table_schema.get_table_id();
-    if (OB_FAIL(get_tablet_ls_pairs(tenant_id, table_schema, sql_proxy, tablet_pairs))) {
+    const uint64_t table_id = simple_schema.get_table_id();
+    if (OB_FAIL(get_tablet_ls_pairs(tenant_id, simple_schema, sql_proxy, tablet_pairs))) {
       LOG_WARN("fail to get tablet_ls_pairs", KR(ret), K(tenant_id), K(table_id));
     } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, tablet_pairs, compaction_scn,
         sql_proxy, items, true/*include_larger_than*/))) {
@@ -1503,17 +1541,17 @@ int ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items_(
 }
 
 int ObTabletReplicaChecksumOperator::get_table_all_tablet_ids_(
-    const ObTableSchema &table_schema,
+    const ObSimpleTableSchemaV2 &simple_schema,
     ObIArray<ObTabletID> &schema_tablet_ids)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!table_schema.is_valid())) {
+  if (OB_UNLIKELY(!simple_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KR(ret), K(table_schema));
+    LOG_WARN("invalid arguments", KR(ret), K(simple_schema));
   } else {
-    if (table_schema.has_tablet()) {
-      if (OB_FAIL(table_schema.get_tablet_ids(schema_tablet_ids))) {
-        LOG_WARN("fail to get tablet_ids from table schema", KR(ret), K(table_schema));
+    if (simple_schema.has_tablet()) {
+      if (OB_FAIL(simple_schema.get_tablet_ids(schema_tablet_ids))) {
+        LOG_WARN("fail to get tablet_ids from table schema", KR(ret), K(simple_schema));
       }
     }
   }
@@ -1550,7 +1588,7 @@ int ObTabletReplicaChecksumOperator::check_table_all_tablets_ckm_status_(
 
 int ObTabletReplicaChecksumOperator::need_verify_checksum_(
     const SCN &compaction_scn,
-    const ObTableSchema &table_schema,
+    const ObSimpleTableSchemaV2 &simple_schema,
     const ObIArray<ObTabletReplicaChecksumItem> &items,
     bool &need_verify,
     int64_t &ckm_tablet_cnt)
@@ -1563,8 +1601,8 @@ int ObTabletReplicaChecksumOperator::need_verify_checksum_(
     if (item_cnt <= 0) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), K(item_cnt));
-    } else if (OB_FAIL(get_table_all_tablet_ids_(table_schema, schema_tablet_ids))) {
-      LOG_WARN("fail to get table all tablet ids", KR(ret), K(table_schema));
+    } else if (OB_FAIL(get_table_all_tablet_ids_(simple_schema, schema_tablet_ids))) {
+      LOG_WARN("fail to get table all tablet ids", KR(ret), K(simple_schema));
     } else if (OB_FAIL(tablet_id_set.create(item_cnt))) {
       LOG_WARN("fail to create tablet_id set", KR(ret), K(item_cnt));
     } else {
@@ -1607,7 +1645,7 @@ int ObTabletReplicaChecksumOperator::need_verify_checksum_(
             need_verify = false;
             ret = OB_SUCCESS;
             LOG_INFO("no need to verify checksum, cuz tablet in table_schema has no checksum_item",
-                  "table_id", table_schema.get_table_id(), "tablet_id", tablet_id->id(), K(items));
+                  "table_id", simple_schema.get_table_id(), "tablet_id", tablet_id->id(), K(items));
           } else if (OB_HASH_EXIST == ret) {
             ret = OB_SUCCESS;
           } else {

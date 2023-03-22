@@ -23,7 +23,7 @@ namespace storage
 class ObDDLServerClient final
 {
 public:
-  static int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res, sql::ObSQLSessionInfo &session);
+  static int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res, int64_t &snapshot_version, sql::ObSQLSessionInfo &session);
   static int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res, sql::ObSQLSessionInfo &session);
   static int copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg);
   static int finish_redef_table(const obrpc::ObFinishRedefTableArg &finish_redef_arg,
@@ -32,7 +32,8 @@ public:
   static int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg, sql::ObSQLSessionInfo &session);
   static int build_ddl_single_replica_response(const obrpc::ObDDLBuildSingleReplicaResponseArg &arg);
 private:
-  static int wait_table_lock(const uint64_t tenant_id, const int64_t task_id, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session);
+  static int wait_task_reach_pending(const uint64_t tenant_id, const int64_t task_id, int64_t &snapshot_version, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session);
+  static int heart_beat_clear(const int64_t task_id);
 };
 
 }  // end of namespace observer

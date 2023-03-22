@@ -351,7 +351,7 @@ void ObMicroBlockEncoder::update_estimate_size_limit(const ObMicroBlockEncodingC
   int64_t data_size_limit = (2 * ctx.micro_block_size_ - header_size_) > 0
                                   ? (2 * ctx.micro_block_size_ - header_size_)
                                   : (2 * ctx.micro_block_size_);
-//TODO huronghui.hrh@oceanbase.com use 4.1.0.0 for version judgment
+//TODO  use 4.1.0.0 for version judgment
   if(ctx.major_working_cluster_version_ >= DATA_VERSION_4_1_0_0 ) {
     data_size_limit = MAX(data_size_limit, DEFAULT_MICRO_MAX_SIZE);
   }
@@ -994,6 +994,13 @@ int ObMicroBlockEncoder::copy_cell(
     LOG_WARN("unsupported store extend datum type", K(ret), K(src));
   } else {
     datum_size = is_int_sc ? sizeof(uint64_t) : dest.len_;
+    if (ctx_.major_working_cluster_version_ >= DATA_VERSION_4_1_0_0) {
+      if (is_var_length_type(store_class)) {
+        // For var-length type column, we need to add extra 8 bytes for estimate safety
+        // e.g: ref size for dictionary, meta data for encoding etc.
+        datum_size += sizeof(uint64_t);
+      }
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1024,6 +1031,7 @@ int ObMicroBlockEncoder::process_large_row(
   // store_size represents for the serialized data size on disk,
   const int64_t datums_len = sizeof(ObDatum) * src.get_column_count();
   int64_t copy_size = datums_len;
+  int64_t var_len_column_cnt = 0;
   for (int64_t col_idx = 0; col_idx < src.get_column_count(); ++col_idx) {
     const ObColDesc &col_desc = ctx_.col_descs_->at(col_idx);
     ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
@@ -1033,12 +1041,19 @@ int ObMicroBlockEncoder::process_large_row(
         copy_size += sizeof(uint64_t);
       } else {
         copy_size += datum.len_;
+        if (is_var_length_type(store_class)) {
+          ++var_len_column_cnt;
+        }
       }
     } else {
       copy_size += sizeof(uint64_t);
     }
   }
-  store_size = copy_size - datums_len;
+  if (ctx_.major_working_cluster_version_ >= DATA_VERSION_4_1_0_0) {
+    store_size = copy_size - datums_len + var_len_column_cnt * sizeof(uint64_t);
+  } else {
+    store_size = copy_size - datums_len;
+  }
   if (OB_FAIL(row_buf_holder_.try_alloc(copy_size))) {
     LOG_WARN("Fail to alloc large row buffer", K(ret), K(copy_size));
   } else {

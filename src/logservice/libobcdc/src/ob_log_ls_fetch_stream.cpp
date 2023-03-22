@@ -494,7 +494,7 @@ int FetchStream::check_need_fetch_log_with_upper_limit_(bool &need_fetch_log)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_upper_limit(upper_limit_))) {
-    LOG_ERROR("get upper limit failed", KR(ret));
+    LOG_ERROR("get upper limit failed", KR(ret), "tls_id", ls_fetch_ctx_->get_tls_id());
   } else if (OB_FAIL(check_need_fetch_log_(upper_limit_, need_fetch_log))) {
     LOG_ERROR("check need fetch log failed", KR(ret), K(upper_limit_));
   }
@@ -703,7 +703,7 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
 
     // Continuously iterate through the fetch log results while the current fetch log stream is continuously active, and then process
     while (! stop_flag
-        && OB_SUCCESS == ret
+        && OB_SUCC(ret)
         && is_stream_valid
         && OB_SUCC(fetch_log_arpc_.next_result(result, rpc_is_flying))) {
       need_hibernate = false;
@@ -732,7 +732,7 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
         fetch_log_arpc_.revert_result(result);
         result = NULL;
       }
-    }
+    } // while
 
     if (stop_flag) {
       ret = OB_IN_STOP_STATE;
@@ -750,6 +750,11 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
         // The RPC is not running, it is still the current thread that is responsible for that fetch log stream
         stream_been_taken_over_by_rpc = false;
       }
+    }
+
+    // Fetching missing log RPC failed, need retry
+    if (OB_NEED_RETRY == ret) {
+      ret = OB_SUCCESS;
     }
 
     // Final unified processing results
@@ -794,9 +799,9 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
     TransStatInfo &tsi)
 {
   int ret = OB_SUCCESS;
-
   palf::MemPalfBufferIterator entry_iter;
   TransStatInfo local_tsi;
+
   if (group_entry.get_header().is_padding_log()) {
     LOG_DEBUG("GroupLogEntry is_padding_log", K(group_entry), K(group_start_lsn));
   } else if (OB_FAIL(ls_fetch_ctx_->get_log_entry_iterator(group_entry, group_start_lsn, entry_iter))) {
@@ -872,11 +877,13 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
         LOG_DEBUG("get_log_entry succ", K(log_entry), K(entry_lsn));
       }
     } // while
+    // End of iteration
     if (OB_ITER_END == ret) {
       // current group entry iter end, go on with next group_entry(if exist)
       ret = OB_SUCCESS;
     }
   }
+
   return ret;
 }
 
@@ -913,14 +920,15 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
   } else if (! is_direct_fetching_mode(ls_fetch_ctx_->get_fetching_mode())) {
     const ClientFetchingMode mode = ls_fetch_ctx_->get_fetching_mode();
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("fetching mode of ls fetch ctx doesn't match", KR(ret), K(mode));
+    LOG_ERROR("fetching mode of ls fetch ctx doesn't match", KR(ret), K(mode), "tls_id", ls_fetch_ctx_->get_tls_id());
   } else if (OB_FAIL(check_need_fetch_log_with_upper_limit_(need_fetch_log))) {
-    LOG_ERROR("get upper limit failed", KR(ret), KPC(this), K(need_fetch_log));
+    LOG_ERROR("get upper limit failed", KR(ret), KPC(this), K(need_fetch_log), "tls_id", ls_fetch_ctx_->get_tls_id());
   } else if (! need_fetch_log && OB_FAIL(hibernate_())) {
     LOG_ERROR("hibernate_ failed", KR(ret), KPC(this));
   } else {
     KickOutInfo kick_out_info;
     TransStatInfo tsi;
+    const TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
     int64_t fetched_group_entry_cnt = 0;
     int64_t fetched_group_entry_size = 0;
     int64_t start_handle_timestamp = get_timestamp();
@@ -962,12 +970,12 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
           LOG_ERROR("read group entry failed when handling fetch archive task", KR(ret), K(log_group_entry),
               K(lsn), K(kick_out_info), K(ls_fetch_ctx_));
         } else if (OB_NEED_RETRY == ret) {
-          LOG_WARN("read_group_entry failed, retry", KR(ret), K(log_group_entry), K(lsn));
+          LOG_WARN("read_group_entry failed, retry", KR(ret), K(log_group_entry), K(lsn), K(tls_id));
           need_fetch_log = false;
           ret = OB_SUCCESS;
         }
       } else if (OB_FAIL(ls_fetch_ctx_->update_progress(log_group_entry, lsn))) {
-        LOG_ERROR("ls fetch ctx update progress failed", KR(ret), K(log_group_entry), K(lsn));
+        LOG_ERROR("ls fetch ctx update progress failed", KR(ret), K(log_group_entry), K(lsn), K(tls_id));
       }
       if (OB_SUCC(ret)) {
         const int64_t submit_ts = log_group_entry.get_scn().get_val_for_logservice();
@@ -981,7 +989,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
           const int64_t read_log_time = get_timestamp() - start_handle_timestamp;
 
           if (OB_FAIL(update_fetch_task_state_(kick_out_info, stop_flag, flush_time))) {
-            LOG_ERROR("update fetch task state failed", KR(ret), K(kick_out_info));
+            LOG_ERROR("update fetch task state failed", KR(ret), K(kick_out_info), K(tls_id));
           } else {
             update_fetch_stat_info_(fetched_group_entry_cnt, fetched_group_entry_size,
               read_log_time, fetch_remote_time, flush_time, tsi);
@@ -1386,7 +1394,9 @@ int FetchStream::read_log_(
         decode_log_entry_time += (get_timestamp() - begin_time);
         if (OB_FAIL(read_group_entry_(group_entry, group_start_lsn,
             stop_flag, kick_out_info, tsi))) {
-          LOG_ERROR("read group entry failed", KR(ret));
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("read group entry failed", KR(ret));
+          }
         }
 
         // update log process
@@ -1652,8 +1662,8 @@ int FetchStream::handle_log_miss_(
                 }
               }
             }
-            // TODO if OB_NEED_RETRY or other err_code, should add to kick_out_info
           }
+
           if (OB_NEED_RETRY == ret) {
             fail_reason = KickOutReason::MISSING_LOG_FETCH_FAIL;
           }

@@ -70,7 +70,8 @@ private:
           leader_(),
           flashback_scn_(),
           location_adapter_(NULL),
-          rpc_proxy_(NULL) { }
+          rpc_proxy_(NULL),
+          ret_(OB_NOT_INIT) { }
     BaseLSOperator(const uint64_t tenant_id,
                    const share::ObLSID &ls_id,
                    const common::ObAddr &self,
@@ -94,6 +95,7 @@ private:
       flashback_scn_.reset();
       location_adapter_ = NULL;
       rpc_proxy_ = NULL;
+      ret_ = OB_NOT_INIT;
     }
     bool is_valid() const {
       // leader may be invalid
@@ -105,7 +107,7 @@ private:
              OB_NOT_NULL(rpc_proxy_);
     }
     virtual int switch_state() = 0;
-    TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(leader), K_(flashback_scn));
+    TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(leader), K_(flashback_scn), "inner_ret", ret_);
   protected:
     int update_leader_();
     int get_leader_palf_stat_(palf::PalfStat &palf_stat);
@@ -118,6 +120,7 @@ private:
     share::SCN flashback_scn_;
     logservice::ObLocationAdapter *location_adapter_;
     obrpc::ObLogServiceRpcProxy *rpc_proxy_;
+    int ret_;
   };
 
   class CheckLSLogSyncOperator : public BaseLSOperator

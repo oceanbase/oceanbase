@@ -33,6 +33,7 @@
 #include "storage/blocksstable/ob_index_block_macro_iterator.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "share/scn.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {
@@ -83,12 +84,14 @@ protected:
   ObRowGenerate index_row_generate_;
   ObITable::TableKey table_key_;
   ObArenaAllocator allocator_;
+  ObSharedMacroBlockMgr *shared_blk_mgr_;
 };
 
 TestIndexTree::TestIndexTree()
     : tenant_id_(500),
     mgr_(nullptr),
-    tenant_base_(500)
+    tenant_base_(500),
+    shared_blk_mgr_(nullptr)
 {
   ObAddr self;
   rpc::frame::ObReqTransport req_transport(NULL, NULL);
@@ -107,6 +110,7 @@ TestIndexTree::~TestIndexTree()
 
 void TestIndexTree::SetUpTestCase()
 {
+  int ret = OB_SUCCESS;
   STORAGE_LOG(INFO, "SetUpTestCase");
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
 }
@@ -120,12 +124,16 @@ void TestIndexTree::SetUp()
 {
   int ret = OB_SUCCESS;
   mgr_ = OB_NEW(ObTenantFreezeInfoMgr, ObModIds::TEST);
+  shared_blk_mgr_ = OB_NEW(ObSharedMacroBlockMgr, ObModIds::TEST);
+  tenant_base_.set(shared_blk_mgr_);
   tenant_base_.set(mgr_);
 
   share::ObTenantEnv::set_tenant(&tenant_base_);
   ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
   ASSERT_EQ(OB_SUCCESS, mgr_->init(500, *GCTX.sql_proxy_));
+  ASSERT_EQ(OB_SUCCESS, shared_blk_mgr_->init());
   fake_freeze_info();
+  ASSERT_EQ(shared_blk_mgr_, MTL(ObSharedMacroBlockMgr *));
   ASSERT_EQ(mgr_, MTL(ObTenantFreezeInfoMgr *));
   int tmp_ret = OB_SUCCESS;
   ObTenantIOConfig io_config = ObTenantIOConfig::default_instance();
@@ -498,6 +506,7 @@ void TestIndexTree::prepare_index_desc(ObDataStoreDesc &index_desc)
 {
   int ret = OB_SUCCESS;
   ret = index_desc.init(index_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE);
+  index_desc.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -1114,6 +1123,40 @@ TEST_F(TestIndexTree, test_single_row_desc)
   ObSSTableMergeRes res;
   sstable_builder.optimization_mode_ = ObSSTableIndexBuilder::ObSpaceOptimizationMode::DISABLE;
   OK(sstable_builder.close(data_desc.row_column_count_, res));
+
+  // test rebuild sstable
+  ObSSTableIndexBuilder sstable_builder2;
+  prepare_index_builder(index_desc, sstable_builder2);
+  ObIndexBlockRebuilder rebuilder;
+  OK(rebuilder.init(sstable_builder2));
+  ObMacroBlockHandle macro_handle;
+  macro_handle.reset();
+  ObMacroBlockReadInfo info;
+  const int64_t macro_block_size = 2 * 1024 * 1024;
+  info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+  info.offset_ = 0;
+  info.size_ = macro_block_size;
+  info.macro_block_id_ = res.data_block_ids_[0];
+  OK(ObBlockManager::read_block(info, macro_handle));
+  OK(rebuilder.append_macro_row(macro_handle.get_buffer(), macro_handle.get_data_size(), info.macro_block_id_));
+  OK(rebuilder.close());
+  ObSSTableMergeRes res2;
+  OK(sstable_builder2.close(res.data_column_cnt_, res2));
+
+  // test rebuild sstable by another append_macro_row
+  ObSSTableIndexBuilder sstable_builder3;
+  prepare_index_builder(index_desc, sstable_builder3);
+  sstable_builder3.index_store_desc_.major_working_cluster_version_ = DATA_VERSION_4_1_0_0;
+  sstable_builder3.container_store_desc_.major_working_cluster_version_ = DATA_VERSION_4_1_0_0;
+  ObIndexBlockRebuilder other_rebuilder;
+  OK(other_rebuilder.init(sstable_builder3));
+  ObDataMacroBlockMeta *macro_meta = nullptr;
+  OK(sstable_builder.roots_[0]->macro_metas_->at(0)->deep_copy(macro_meta, allocator_));
+  OK(other_rebuilder.append_macro_row(*macro_meta));
+  OK(other_rebuilder.close());
+  ObSSTableMergeRes res3;
+  sstable_builder3.optimization_mode_ = ObSSTableIndexBuilder::ObSpaceOptimizationMode::AUTO;
+  OK(sstable_builder3.close(res.data_column_cnt_, res3));
 }
 
 TEST_F(TestIndexTree, test_data_block_checksum)

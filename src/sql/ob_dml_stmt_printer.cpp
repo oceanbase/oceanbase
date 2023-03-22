@@ -209,7 +209,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
     case TableItem::ALIAS_TABLE: {
         if (OB_FAIL(print_base_table(table_item))) {
           LOG_WARN("failed to print base table", K(ret), K(*table_item));
-        //table in insert all can't print alias(bug:https://work.aone.alibaba-inc.com/issue/31941210)
+        //table in insert all can't print alias(bug:
         } else if (!no_print_alias) {
           PRINT_QUOT_WITH_SPACE;
           DATA_PRINTF("%.*s", LEN_AND_PTR(table_item->alias_name_));
@@ -663,7 +663,12 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
       if (i > 0) {
         DATA_PRINTF(", ");
       }
-      DATA_PRINTF("%.*s ", LEN_AND_PTR(col_info.col_name_));
+      if (col_info.is_name_quoted_) {
+        DATA_PRINTF("\"%.*s\" ", LEN_AND_PTR(col_info.col_name_));
+      } else {
+        DATA_PRINTF("%.*s ", LEN_AND_PTR(col_info.col_name_));
+      }
+
       if (OB_FAIL(ret)) {
       } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_ORDINALITY)) {
         DATA_PRINTF(" for ordinality");
@@ -694,7 +699,10 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
       } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_QUERY)) {
         // to print returning type
         OZ (print_json_return_type(col_info.res_type_, col_info.data_type_));
-        DATA_PRINTF(" format json");
+        ObObjType cast_type = col_info.data_type_.get_obj_type();
+        if (cast_type != ObJsonType){
+          DATA_PRINTF(" format json");
+        }
         if (OB_FAIL(ret)) {
         } else if (col_info.allow_scalar_ == 0) {
           DATA_PRINTF(" allow scalars");
@@ -1104,7 +1112,7 @@ int ObDMLStmtPrinter::print_where()
       } else if (condition_exprs_size > 0 && stmt_->get_semi_info_size() > 0) {
         DATA_PRINTF(" and ");
       }
-      if (OB_FAIL(print_semi_info_to_subquery())) {
+      if (OB_SUCC(ret) && OB_FAIL(print_semi_info_to_subquery())) {
         LOG_WARN("failed to print semi info to subquery", K(ret));
       }
     }

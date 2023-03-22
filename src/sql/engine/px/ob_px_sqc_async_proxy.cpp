@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/px/ob_px_sqc_async_proxy.h"
-#include "share/ob_server_blacklist.h"
+#include "sql/engine/px/ob_px_util.h"
 
 namespace oceanbase {
 using namespace common;
@@ -68,10 +68,8 @@ int ObPxSqcAsyncProxy::launch_all_rpc_request() {
         args.enable_serialize_cache();
       }
       ARRAY_FOREACH_X(sqcs_, idx, count, OB_SUCC(ret)) {
-        if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
-                          share::ObCascadMember(sqcs_.at(idx)->get_exec_addr(), cluster_id),
-                          true /* add_server */,
-                          session_->get_process_query_time()))) {
+        if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(sqcs_.at(idx)->get_exec_addr(),
+                        session_->get_process_query_time()))) {
           ret = OB_RPC_CONNECT_ERROR;
           LOG_WARN("peer no in communication, maybe crashed", K(ret),
                   KPC(sqcs_.at(idx)), K(cluster_id), K(session_->get_process_query_time()));
@@ -203,7 +201,7 @@ int ObPxSqcAsyncProxy::wait_all() {
           if (cb_result.rc_ == OB_ERR_INSUFFICIENT_PX_WORKER) {
             // 没有获得足够的px worker，不需要再做内部SQC的重试，防止死锁
             // SQC如果没有获得足够的worker，外层直接进行query级别的重试
-            // https://work.aone.alibaba-inc.com/issue/28434557
+            //
             LOG_INFO("can't get enough worker resource, and not retry",
                 K(cb_result.rc_), K(*sqcs_.at(idx)));
           }

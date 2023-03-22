@@ -393,7 +393,7 @@ int ObBasicSysVar::session_update(ObExecContext &ctx,
     }
   } else if (set_var.var_name_ == OB_SV__ENABLE_PARALLEL_QUERY) {
       should_update_extra_var = true;
-    // https://yuque.antfin-inc.com/xiaochu.yh/doc/exgk9g/
+    //
     // 实现 Oracle 兼容行为方式如下：有变量 enable 和 parallel
     //  alter session enable parallel query 时 enable = true, parallel = 1   => 走 manual table dop 规则
     //  alter session disable parallel query 时 enable = false, parallel = 1  => 走 no parallel 规则
@@ -2026,8 +2026,8 @@ bool ObSysVarOnCheckFuncs::can_set_trans_var(ObSetVar::SetScopeType scope,
      *     because SET_SCOPE_SESSION and SET_SCOPE_NEXT_TRANS have same behavior in this
      *     function.
      * see:
-     * https://yuque.antfin-inc.com/ob/sql2/zo3rzg
-     * https://yuque.antfin-inc.com/ob/transaction/qtdtfz
+     *
+     *
      */
     ret = !session.is_in_transaction() || session.is_txn_free_route_temp();
   } else if (lib::is_mysql_mode()) {
@@ -2422,7 +2422,7 @@ int ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope(ObExecContext &ctx,
     } else if (lib::is_oracle_mode()) {
       // READ ONLY will use SERIALIZABLE implicitly,
       // READ WRITE need use default value in session, so set UNKNOWN.
-      // https://yuque.antfin-inc.com/ob/sql2/zo3rzg
+      //
       ObTxIsolationLevel isolation = read_only ?
         ObTxIsolationLevel::SERIAL : ObTxIsolationLevel::INVALID;
       session->set_tx_isolation(isolation);

@@ -1644,7 +1644,7 @@ int ObIJsonBase::find_string_method(ObIAllocator* allocator, ObSeekParentInfo &p
     }
   } else if (!str_only) {
     ObJsonBuffer j_buf(allocator);
-    if (OB_FAIL(print(j_buf, true, false, 0, true))) {
+    if (OB_FAIL(print(j_buf, true, false, 0))) {
       trans_fail = true;
     } else {
       ObJsonString* tmp_ans = static_cast<ObJsonString*> (allocator->alloc(sizeof(ObJsonString)));
@@ -1728,7 +1728,7 @@ int ObIJsonBase::find_trans_method(ObIAllocator* allocator, ObSeekParentInfo &pa
       src = ObString(get_data_length(), get_data());
     } else if (type != ObJsonNodeType::J_NULL) {
       ObJsonBuffer j_buf(allocator);
-      if (OB_FAIL(print(j_buf, true, false, 0, true))) {
+      if (OB_FAIL(print(j_buf, true, false, 0))) {
         trans_fail = true;
       } else {
         src = ObString(j_buf.length(), j_buf.ptr());
@@ -3138,7 +3138,7 @@ int ObIJsonBase::get_str_comp_result(ObIAllocator* allocator, ObSeekParentInfo &
         right_str = ObString(var->get_data_length(), var->get_data());
       } else {
         ObJsonBuffer j_buf(allocator);
-        if (OB_FAIL(var->print(j_buf, true, false, 0, true))) {
+        if (OB_FAIL(var->print(j_buf, true, false, 0))) {
           LOG_WARN("fail to get string of sql_var.", K(ret));
         } else {
           right_str = ObString(j_buf.length(), j_buf.ptr());
@@ -3506,7 +3506,7 @@ int ObIJsonBase::print_array(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty
         }
         if (OB_FAIL(get_array_element(i, jb_ptr))) {
           LOG_WARN("fail to get array element", K(ret), K(depth), K(i));
-        } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth, true))) {
+        } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth))) {
           LOG_WARN("fail to print json value to string", K(ret), K(i), K(is_pretty), K(depth));
         }
       }
@@ -3525,7 +3525,7 @@ int ObIJsonBase::print_array(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty
   return ret;
 }
 
-int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty, bool format_json) const
+int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty) const
 {
   INIT_SUCC(ret);
 
@@ -3544,7 +3544,7 @@ int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_prett
           LOG_WARN("fail to get key", K(ret), K(i));
         } else if (is_pretty && OB_FAIL(ObJsonBaseUtil::append_newline_and_indent(j_buf, depth))) {
           LOG_WARN("fail to newline and indent", K(ret), K(depth), K(i), K(key));
-        } else if (OB_FAIL(ObJsonBaseUtil::append_string(j_buf, true, key.ptr(), key.length(), format_json))) { // key
+        } else if (OB_FAIL(ObJsonBaseUtil::append_string(j_buf, true, key.ptr(), key.length()))) { // key
           LOG_WARN("fail to print string", K(ret), K(depth), K(i), K(key));
         } else if (OB_FAIL(j_buf.append(":"))) {
           LOG_WARN("fail to append \":\"", K(ret), K(depth), K(i), K(key));
@@ -3558,7 +3558,7 @@ int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_prett
           }
           if (OB_FAIL(get_object_value(i, jb_ptr))) {
             LOG_WARN("fail to get object value", K(ret), K(i), K(is_pretty), K(depth));
-          } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth, true))) { // value
+          } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth))) { // value
             LOG_WARN("fail to print json value to string", K(ret), K(i), K(is_pretty), K(depth));
           }
         }
@@ -3778,7 +3778,7 @@ int ObIJsonBase::print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quote
   return ret;
 }
 
-int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, bool is_pretty, uint64_t depth, bool format_json) const
+int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, bool is_pretty, uint64_t depth) const
 {
   INIT_SUCC(ret);
   ObJsonNodeType j_type = json_type();
@@ -3814,7 +3814,7 @@ int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, bool is_pretty, uint
       if (ObJsonParser::is_json_doc_over_depth(++depth)) {
         ret = OB_ERR_JSON_OUT_OF_DEPTH;
         LOG_WARN("current json over depth", K(ret), K(depth), K(j_type));
-      } else if (OB_FAIL(print_object(j_buf, depth, is_pretty, format_json))) {
+      } else if (OB_FAIL(print_object(j_buf, depth, is_pretty))) {
         LOG_WARN("fail to print object to string", K(ret), K(depth), K(j_type), K(is_pretty));
       }
       break;
@@ -3883,7 +3883,7 @@ int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, bool is_pretty, uint
       } else if (OB_ISNULL(data) && data_len != 0) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("data is null", K(ret), K(data_len));
-      } else if (OB_FAIL(ObJsonBaseUtil::append_string(j_buf, is_quoted, data, data_len, format_json))) {
+      } else if (OB_FAIL(ObJsonBaseUtil::append_string(j_buf, is_quoted, data, data_len))) {
         // if data is null, data_len is 0, it is an empty string
         LOG_WARN("fail to append string", K(ret), K(j_type), K(is_quoted));
       }
@@ -4333,6 +4333,7 @@ int ObIJsonBase::compare_double(const ObIJsonBase &other, int &res) const
     switch (j_type_b) {
       case ObJsonNodeType::J_OFLOAT: {
         double double_b = other.get_float();
+        double_a = (float) double_a;
         res = ObJsonBaseUtil::compare_numbers(double_a, double_b);
         break;
       }
@@ -4500,7 +4501,11 @@ int ObIJsonBase::path_compare_string(const ObString &str_l, const ObString &str_
   int i = 0;
   while (i < l_len && OB_SUCC(ret) && res == 0) {
     if (i < r_len) {
-      if (str_l[i] < str_r[i]) {
+      if (str_l[i] < 0 && str_r[i] > 0) {
+        res = 1;
+      } else if (str_r[i] < 0 && str_l[i] > 0) {
+        res = -1;
+      } else if (str_l[i] < str_r[i]) {
         res = -1;
       } else if (str_l[i] > str_r[i]) {
         res = 1;
@@ -4540,7 +4545,7 @@ static constexpr int type_comparison[JSON_TYPE_NUM][JSON_TYPE_NUM] = {
   /* 1  DECIMAL */      {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 2  INT */          {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 3  UINT */         {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 4  DOUBLE */       {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
+  /* 4  DOUBLE */       {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 5  STRING */       {1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2},
   /* 6  OBJECT */       {1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 7  ARRAY */        {1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
@@ -4552,7 +4557,7 @@ static constexpr int type_comparison[JSON_TYPE_NUM][JSON_TYPE_NUM] = {
   /* 13  OPAQUE */      {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 14  empty */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /*  ORACLE MODE */
-  /* 15  OFLOAT */      {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
+  /* 15  OFLOAT */      {2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 16  ODOUBLE */     {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 17  ODECIMAL */    {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 18  OINT */        {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
@@ -4580,7 +4585,9 @@ int ObIJsonBase::compare(const ObIJsonBase &other, int &res, bool is_path) const
   if (j_type_a == ObJsonNodeType::J_ERROR || j_type_b == ObJsonNodeType::J_ERROR) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("error json type", K(j_type_a), K(j_type_b));
-  } else if (is_path && (j_type_a == ObJsonNodeType::J_OBJECT || j_type_b == ObJsonNodeType::J_OBJECT)) {
+  } else if (is_path
+            && (j_type_a == ObJsonNodeType::J_OBJECT || j_type_b == ObJsonNodeType::J_OBJECT
+            || ((j_type_a == ObJsonNodeType::J_NULL || j_type_a == ObJsonNodeType::J_NULL) && j_type_a != j_type_b))) {
     res = -3;
   } else {
     // Compare the matrix to get which json type has a higher priority, and return the result if the priority is different.
@@ -6250,23 +6257,13 @@ int ObJsonBaseUtil::add_double_quote(ObJsonBuffer &j_buf, const char *cptr, uint
 }
 
 int ObJsonBaseUtil::append_string(ObJsonBuffer &j_buf, bool is_quoted,
-                                const char *data, uint64_t length, bool format_json)
+                                  const char *data, uint64_t length)
 {
   INIT_SUCC(ret);
 
   if (is_quoted) {
-    if (lib::is_oracle_mode() && !format_json) {
-      if (OB_FAIL(j_buf.append("\"", 1))) {
-        LOG_WARN("fail to append \"", K(ret));
-      } else if (OB_FAIL(j_buf.append(data, length))) {
-        LOG_WARN("fail to append data", K(ret), K(length));
-      } else if (OB_FAIL(j_buf.append("\"", 1))) {
-        LOG_WARN("fail to append \"", K(ret));
-      }
-    } else {
-      if (OB_FAIL(ObJsonBaseUtil::add_double_quote(j_buf, data, length))) {
-        LOG_WARN("fail to add double quote", K(ret), K(length));
-      }
+    if (OB_FAIL(ObJsonBaseUtil::add_double_quote(j_buf, data, length))) {
+      LOG_WARN("fail to add double quote", K(ret), K(length));
     }
   } else {
     if (OB_FAIL(j_buf.append(data, length))) {

@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   yiren.ly <yiren.ly@oceanbase.com>
+//   yiren.ly <>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -8,6 +8,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ob_relative_table.h"
 
 namespace oceanbase
 {
@@ -224,8 +225,11 @@ int ObDirectLoadOriginTableScanner::init_table_access_param()
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   const uint64_t table_id = origin_table_->get_meta().table_id_;
+  const ObTabletID &tablet_id = origin_table_->get_meta().tablet_id_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
+  ObRelativeTable relative_table;
+  int64_t store_column_count = 0;
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
                                                                                   schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
@@ -236,18 +240,23 @@ int ObDirectLoadOriginTableScanner::init_table_access_param()
     LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(schema_param_.convert(table_schema))) {
     LOG_WARN("fail to convert schema para", KR(ret));
-  } else if (OB_FAIL(table_access_param_.init_merge_param(origin_table_->get_meta().table_id_,
-                                                          origin_table_->get_meta().tablet_id_,
-                                                          schema_param_.get_read_info()))) {
-    LOG_WARN("fail to init merge param", KR(ret));
+  } else if (OB_FAIL(relative_table.init(&schema_param_, tablet_id))) {
+    LOG_WARN("fail to init relative table", KR(ret));
+  } else if (OB_FAIL(table_schema->get_store_column_count(store_column_count))) {
+    LOG_WARN("fail to get store column count", KR(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < schema_param_.get_read_info().get_schema_column_count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < store_column_count; ++i) {
     if (OB_FAIL(col_ids_.push_back(i))) {
       LOG_WARN("fail to push back col id", KR(ret), K(i));
     }
   }
   if (OB_SUCC(ret)) {
-    table_access_param_.iter_param_.out_cols_project_ = &col_ids_;
+    if (OB_FAIL(table_access_param_.init_dml_access_param(relative_table,
+                                                          origin_table_->get_tablet_handle().get_obj()->get_full_read_info(),
+                                                          schema_param_,
+                                                          &col_ids_))) {
+      LOG_WARN("fail to init merge param", KR(ret));
+    }
   }
   return ret;
 }
@@ -256,8 +265,12 @@ int ObDirectLoadOriginTableScanner::init_table_access_ctx()
 {
   int ret = OB_SUCCESS;
   const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         false /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
+  ObQueryFlag query_flag(ObQueryFlag::Forward,
+                         false /*daily_merge*/,
+                         true /*optimize*/,
+                         false /*whole_macro_scan*/,
+                         false /*full_row*/,
+                         false /*index_back*/,
                          false /*query_stat*/); //whole_macro_scan use false，otherwise query range is not overlap with sstable range will report error
   ObVersionRange trans_version_range;
   query_flag.multi_version_minor_merge_ = false;

@@ -151,22 +151,15 @@ public:
    * @param[in] proxy
    */ 
   static int init_tenant_info(const ObAllTenantInfo &tenant_info, ObISQLClient *proxy);
-  /**
-   * @description: get all normal tenant's tenant_info from inner table
-   * @param[in] proxy
-   * @param[out] tenant_infos
-   */
-  static int load_all_tenant_infos(
+
+  static int is_standby_tenant(
              ObISQLClient *proxy,
-             common::ObIArray<ObAllTenantInfo> &tenant_infos);
-  /**
-   * @description: get all standby tenants from inner table
-   * @param[in] proxy
-   * @param[out] tenant_ids
-   */
-  static int get_standby_tenants(
+             const uint64_t tenant_id,
+             bool &is_standby);
+
+  static int get_primary_tenant_ids(
              ObISQLClient *proxy,
-             common::ObIArray<uint64_t> &tenant_ids);
+             ObIArray<uint64_t> &tenant_ids);
   /**
    * @description: get target tenant's tenant_info from inner table 
    * @param[in] tenant_id
@@ -222,7 +215,7 @@ public:
    */
   static int update_tenant_status(
     const uint64_t tenant_id,
-    ObISQLClient *proxy,
+    common::ObMySQLTransaction &trans,
     const ObTenantRole new_role,
     const ObTenantSwitchoverStatus &old_status,
     const ObTenantSwitchoverStatus &new_status,

@@ -234,7 +234,6 @@ namespace share
   static const char* const OB_SV_INNODB_STRICT_MODE = "innodb_strict_mode";
   static const char* const OB_SV__WINDOWFUNC_OPTIMIZATION_SETTINGS = "_windowfunc_optimization_settings";
   static const char* const OB_SV_ENABLE_RICH_ERROR_MSG = "ob_enable_rich_error_msg";
-  static const char* const OB_SV_SQL_PLAN_MEMORY_PERCENTAGE = "ob_sql_plan_memory_percentage";
   static const char* const OB_SV_LOG_ROW_VALUE_OPTIONS = "log_row_value_options";
   static const char* const OB_SV_MAX_READ_STALE_TIME = "ob_max_read_stale_time";
   static const char* const OB_SV__OPTIMIZER_GATHER_STATS_ON_LOAD = "_optimizer_gather_stats_on_load";

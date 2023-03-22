@@ -133,6 +133,7 @@ protected:
   int check_values(bool &is_equal,
                    const ObChunkDatumStore::StoredRow *replace_row,
                    const ObChunkDatumStore::StoredRow *delete_row);
+  virtual int check_need_exec_single_row() override;
 private:
   int check_replace_ctdefs_valid() const;
 

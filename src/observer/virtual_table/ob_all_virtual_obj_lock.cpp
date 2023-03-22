@@ -129,7 +129,13 @@ int ObAllVirtualObjLock::get_next_obj_lock_or_iter_tx(ObLockID &lock_id)
       } else {
         obj_lock_iter_.reset();
         if (OB_FAIL(ls_->get_lock_id_iter(obj_lock_iter_))) {
-          SERVER_LOG(WARN, "fail to get obj lock iter", K(ret));
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            SERVER_LOG(WARN,
+                       "fail to get obj lock iter, try to get next ls",
+                       K(ret), K(ls_->get_ls_id()));
+            ret = OB_SUCCESS;  // continue
+          }
+          SERVER_LOG(WARN, "fail to get obj lock iter", K(ret), K(ls_->get_ls_id()));
         }
       }
     } else {
@@ -161,6 +167,12 @@ int ObAllVirtualObjLock::get_next_lock_op(transaction::tablelock::ObTableLockOp 
       } else {
         lock_op_iter_.reset();
         if (OB_FAIL(ls_->get_lock_op_iter(lock_id, lock_op_iter_))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            SERVER_LOG(WARN,
+                       "fail to get lock op iter, try to get next lock_id",
+                       K(ret), K(lock_id));
+            ret = OB_SUCCESS;  // continue
+          }
           SERVER_LOG(WARN, "fail to get lock op iter", K(ret), K(lock_id));
         }
       }

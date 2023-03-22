@@ -270,7 +270,7 @@ int ObTenantBase::pre_run(lib::Threads *th)
   ObTenantEnv::set_tenant(this);
   ObCgroupCtrl *cgroup_ctrl = get_cgroup(th->get_cgroup());
   if (cgroup_ctrl != nullptr) {
-    ret = cgroup_ctrl->add_thread_to_cgroup(static_cast<pid_t>(syscall(__NR_gettid)), id_);
+    ret = cgroup_ctrl->add_self_to_cgroup(id_);
   }
   ATOMIC_INC(&thread_count_);
   LOG_INFO("tenant thread pre_run", K(MTL_ID()), K(ret), K(thread_count_), KP(th));
@@ -283,7 +283,7 @@ int ObTenantBase::end_run(lib::Threads *th)
   ObTenantEnv::set_tenant(nullptr);
   ObCgroupCtrl *cgroup_ctrl = get_cgroup(th->get_cgroup());
   if (cgroup_ctrl != nullptr) {
-    ret = cgroup_ctrl->remove_thread_from_cgroup(static_cast<pid_t>(syscall(__NR_gettid)), id_);
+    ret = cgroup_ctrl->remove_self_from_cgroup(id_);
   }
   ATOMIC_DEC(&thread_count_);
   LOG_INFO("tenant thread end_run", K(id_), K(ret), K(thread_count_));
@@ -470,7 +470,10 @@ int ObTenantSwitchGuard::switch_to(uint64_t tenant_id, bool need_check_allow)
 {
   int ret = OB_SUCCESS;
 
-  if (tenant_id == MTL_ID()) {
+  if (!common::is_valid_tenant_id(tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid tenant id to switch", K(ret), K(tenant_id));
+  } else if (tenant_id == MTL_ID()) {
     // no need to switch
   } else if (is_virtual_tenant_id(tenant_id)) {
     ret = OB_OP_NOT_ALLOW;

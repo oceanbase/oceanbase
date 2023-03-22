@@ -120,6 +120,7 @@ int ObDataDictService::start()
   } else if (OB_FAIL(TG_SCHEDULE(timer_tg_id_, *this, TIMER_TASK_INTERVAL, true/*is_repeat*/))) {
     DDLOG(WARN, "schedule data_dict_service timer_task failed", KR(ret), K_(timer_tg_id));
   } else {
+    disable_timeout_check(); // dump data_dict may cost too much, distable timetout check.
     stop_flag_ = false;
     DDLOG(INFO, "start datadict_service", K_(tenant_id), K_(timer_tg_id));
   }
@@ -167,6 +168,8 @@ void ObDataDictService::destroy()
 
 void ObDataDictService::runTimerTask()
 {
+  ObCurTraceId::init(GCONF.self_addr_);
+
   if (IS_INIT) {
     refresh_config_();
     bool is_leader = ATOMIC_LOAD(&is_leader_);
@@ -406,50 +409,55 @@ int ObDataDictService::get_snapshot_scn_(share::SCN &snapshot_scn)
   return ret;
 }
 
-// generate+dump+report
 int ObDataDictService::generate_dict_and_dump_(const share::SCN &snapshot_scn)
 {
   int ret = OB_SUCCESS;
   int64_t schema_version = OB_INVALID_VERSION;
-  ObSchemaGetterGuard tenant_schema_guard;
-  bool is_normal = false;
+  ObArray<uint64_t> database_ids;
+  ObArray<uint64_t> table_ids;
 
   if (OB_FAIL(sql_client_.get_schema_version(tenant_id_, snapshot_scn, schema_version))) {
     ret = OB_SCHEMA_EAGAIN;
     DDLOG(WARN, "get_schema_version failed", KR(ret), K(snapshot_scn), K(schema_version));
-  } else if (OB_FAIL(get_tenant_schema_guard_(schema_version, tenant_schema_guard))) {
-    DDLOG(WARN, "get_tenant_schema_guard failed", KR(ret), K(snapshot_scn), K(schema_version));
-    ret = OB_SCHEMA_EAGAIN;
-  } else if (OB_FAIL(check_tenant_status_normal_(tenant_schema_guard, is_normal))) {
-    DDLOG(WARN, "check_tenant_status_normal_ failed", KR(ret), K(is_normal));
-  } else if (OB_UNLIKELY(! is_normal)) {
-    DDLOG(TRACE, "ignore non-normal status tenant for dump_data_dict_", K_(tenant_id), K(is_normal));
-  } else if (OB_FAIL(handle_tenant_meta_(snapshot_scn, tenant_schema_guard))) {
+    // NOTICE: SHOULD ALWAYS DUMP TENANT_META BEFORE DB/TB METAS
+  } else if (OB_FAIL(handle_tenant_meta_(snapshot_scn, schema_version, database_ids, table_ids))) {
     DDLOG(WARN, "handle_tenant_meta_ failed", KR(ret), K(snapshot_scn));
-  } else if (OB_FAIL(handle_database_metas_(snapshot_scn, tenant_schema_guard))) {
+  } else if (OB_FAIL(handle_database_metas_(schema_version, database_ids))) {
     DDLOG(WARN, "handle_database_metas_ failed", KR(ret), K(snapshot_scn));
-  } else if (OB_FAIL(handle_table_metas_(snapshot_scn, tenant_schema_guard))) {
-    DDLOG(WARN, "handle_table_metas_ failed", KR(ret), K(snapshot_scn));
+  } else if (OB_FAIL(handle_table_metas_(schema_version, table_ids))) {
+    DDLOG(WARN, "handle_table_metas_ failed", KR(ret), K(snapshot_scn), K(schema_version));
   }
 
-  DDLOG(INFO, "generate_dict_and_dump_", KR(ret), K_(tenant_id),
-      K(snapshot_scn), K(schema_version));
+  DDLOG(INFO, "generate_dict_and_dump_", KR(ret),
+      K_(tenant_id),
+      K(snapshot_scn),
+      K(schema_version),
+      "database_count", database_ids.count(),
+      "table_count", table_ids.count());
 
   return ret;
 }
 
 int ObDataDictService::get_tenant_schema_guard_(
     const int64_t schema_version,
-    ObSchemaGetterGuard &schema_guard)
+    ObSchemaGetterGuard &schema_guard,
+    const bool is_force_fallback)
 {
   int ret = OB_SUCCESS;
+  ObMultiVersionSchemaService::RefreshSchemaMode refresh_mode = ObMultiVersionSchemaService::RefreshSchemaMode::NORMAL;
+
+  if (is_force_fallback) {
+    refresh_mode = ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_FALLBACK;
+  } else {
+    refresh_mode = ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_LAZY;
+  }
 
   RETRY_FUNC_ON_ERROR(OB_SCHEMA_EAGAIN, stop_flag_, *schema_service_, get_tenant_schema_guard,
       tenant_id_,
       schema_guard,
       schema_version,
       OB_INVALID_VERSION,
-      ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_FALLBACK);
+      refresh_mode);
 
   return ret;
 }
@@ -476,23 +484,40 @@ int ObDataDictService::check_tenant_status_normal_(
 
 int ObDataDictService::handle_tenant_meta_(
     const share::SCN &snapshot_scn,
-    schema::ObSchemaGetterGuard &schema_guard)
+    const int64_t schema_version,
+    ObIArray<uint64_t> &database_ids,
+    ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
   ObLSArray ls_array;
+  database_ids.reset();
+  table_ids.reset();
   const ObTenantSchema *tenant_schema = NULL;
+  bool is_normal = false;
+  ObSchemaGetterGuard tenant_schema_guard;
   ObDictTenantMeta tenant_meta(&allocator_);
   ObDictMetaHeader header(ObDictMetaType::TENANT_META);
 
   if (OB_FAIL(sql_client_.get_ls_info(tenant_id_, snapshot_scn, ls_array))) {
     DDLOG(WARN, "get_ls_info failed", KR(ret), K_(tenant_id), K(snapshot_scn), K(ls_array));
-  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
+  } else if (OB_FAIL(get_tenant_schema_guard_(schema_version, tenant_schema_guard, true/*is_force_fallback*/))) {
+    DDLOG(WARN, "get_tenant_schema_guard failed", KR(ret), K(snapshot_scn), K(schema_version));
+    ret = OB_SCHEMA_EAGAIN;
+  } else if (OB_FAIL(check_tenant_status_normal_(tenant_schema_guard, is_normal))) {
+    DDLOG(WARN, "check_tenant_status_normal_ failed", KR(ret), K(is_normal));
+  } else if (OB_UNLIKELY(! is_normal)) {
+    DDLOG(INFO, "ignore non-normal status tenant for dump_data_dict_", K_(tenant_id), K(is_normal));
+  } else if (OB_FAIL(tenant_schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
     DDLOG(WARN, "get_tenant_schema failed", KR(ret), K(snapshot_scn));
   } else if (OB_ISNULL(tenant_schema)) {
     ret = OB_ERR_UNEXPECTED;
     DDLOG(WARN, "invalid tenant_schema", KR(ret), K_(tenant_id), K(snapshot_scn));
   } else if (OB_FAIL(tenant_meta.init_with_ls_info(*tenant_schema, ls_array))) {
     DDLOG(WARN, "init tenant_meta failed", KR(ret), K(ls_array), K(tenant_meta));
+  } else if (OB_FAIL(get_database_ids_(tenant_schema_guard, database_ids))) {
+    DDLOG(WARN, "get_database_ids_in_tenant failed", KR(ret), K(snapshot_scn), K(schema_version));
+  } else if (OB_FAIL(tenant_schema_guard.get_table_ids_in_tenant(tenant_id_, table_ids))) {
+    DDLOG(WARN, "get_table_ids_in_tenant failed", KR(ret), K(snapshot_scn), K(schema_version));
   } else if (OB_FAIL(storage_.handle_dict_meta(tenant_meta, header))) {
     DDLOG(WARN, "handle dict_tenant_meta failed", KR(ret), K(tenant_meta), K(header));
   } else {
@@ -502,30 +527,72 @@ int ObDataDictService::handle_tenant_meta_(
   return ret;
 }
 
-int ObDataDictService::handle_database_metas_(
-    const share::SCN &snapshot_scn,
-    schema::ObSchemaGetterGuard &schema_guard)
+int ObDataDictService::get_database_ids_(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    ObIArray<uint64_t> &database_ids)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<const ObDatabaseSchema*, 16> database_schemas;
+  common::ObArray<const ObSimpleDatabaseSchema*> database_schemas;
+  database_schemas.reset();
 
   if (OB_FAIL(schema_guard.get_database_schemas_in_tenant(tenant_id_, database_schemas))) {
-    DDLOG(WARN, "get_database_schemas_in_tenant failed", KR(ret), K(snapshot_scn));
+    DDLOG(WARN, "get_database_schemas_in_tenant failed", KR(ret));
   } else {
-    for (int i = 0; OB_SUCC(ret) && i < database_schemas.count(); i++) {
-      const ObDatabaseSchema *database_schema = NULL;
-      ObDictDatabaseMeta db_meta(&allocator_);
-      ObDictMetaHeader header(ObDictMetaType::DATABASE_META);
+    const int64_t database_count = database_schemas.count();
+
+    for (int i = 0; OB_SUCC(ret) && !stop_flag_ && i < database_count; i++) {
+      const ObSimpleDatabaseSchema *database_schema = NULL;
+      uint64_t database_id = OB_INVALID_ID;
 
       if (OB_FAIL(database_schemas.at(i, database_schema))) {
-        DDLOG(WARN, "get_database_schema failed", KR(ret), K(i), "count", database_schemas.count());
-      } else if (OB_FAIL(db_meta.init(*database_schema))) {
-        DDLOG(WARN, "init database_meta failed", KR(ret), KPC(database_schema));
-      } else if (OB_FAIL(storage_.handle_dict_meta(db_meta, header))) {
-        DDLOG(WARN, "handle dict_db_meta failed", KR(ret), K(db_meta), K(header), KPC(database_schema));
-      } else {
-        DDLOG(TRACE, "handle dict_db_meta success", KR(ret), K(db_meta), K(header), KPC(database_schema));
+        DDLOG(WARN, "get database_schema failed", KR(ret), K(i), K(database_count));
+      } else if (OB_ISNULL(database_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        DDLOG(WARN, "invalid database_schema get from schema_guard", KR(ret), K(i), K(database_count));
+      } else if (OB_UNLIKELY(OB_INVALID_ID == (database_id = database_schema->get_database_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        DDLOG(WARN, "invalid database_id get from database_schema", KR(ret), K(i), K(database_count), KPC(database_schema));
+      } else if (OB_FAIL(database_ids.push_back(database_id))) {
+        DDLOG(WARN, "push_back database_id into list failed", KR(ret), K(i), K(database_count), KPC(database_schema));
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObDataDictService::handle_database_metas_(
+    const int64_t schema_version,
+    const ObIArray<uint64_t> &database_ids)
+{
+  int ret = OB_SUCCESS;
+  const int64_t database_count = database_ids.count();
+  schema::ObSchemaGetterGuard schema_guard; // will reset while getting schem_guard
+
+  for (int i = 0; OB_SUCC(ret) && !stop_flag_ && i < database_count; i++) {
+    uint64_t database_id = OB_INVALID_ID;
+    const ObDatabaseSchema *database_schema = NULL;
+    ObDictDatabaseMeta db_meta(&allocator_);
+    ObDictMetaHeader header(ObDictMetaType::DATABASE_META);
+
+    if (OB_FAIL(database_ids.at(i, database_id))) {
+      DDLOG(WARN, "get_database_id failed", KR(ret), K(i), K(database_count), K(database_ids));
+    } else if (OB_UNLIKELY(OB_INVALID_ID == database_id)) {
+      ret = OB_ERR_UNEXPECTED;
+      DDLOG(WARN, "invalid database_id", KR(ret), K(i), K(database_count), K(database_ids));
+    } else if (OB_FAIL(get_tenant_schema_guard_(schema_version, schema_guard, false/*is_force_fallback=false*/))) {
+      DDLOG(WARN, "get_tenant_schema_guard_ in lazy mode failed", KR(ret), K(schema_version), K(database_id));
+    } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, database_id, database_schema))) {
+      DDLOG(WARN, "get_database_schema failed", KR(ret), K(schema_version));
+    } else if (OB_ISNULL(database_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      DDLOG(WARN, "invalid database_schema", KR(ret), K(i), K(database_count), K(database_id), KP(database_schema));
+    } else if (OB_FAIL(db_meta.init(*database_schema))) {
+      DDLOG(WARN, "init database_meta failed", KR(ret), KPC(database_schema));
+    } else if (OB_FAIL(storage_.handle_dict_meta(db_meta, header))) {
+      DDLOG(WARN, "handle dict_db_meta failed", KR(ret), K(db_meta), K(header), KPC(database_schema));
+    } else {
+      DDLOG(TRACE, "handle dict_db_meta success", KR(ret), K(db_meta), K(header), KPC(database_schema));
     }
   }
 
@@ -533,63 +600,65 @@ int ObDataDictService::handle_database_metas_(
 }
 
 int ObDataDictService::handle_table_metas_(
-    const share::SCN &snapshot_scn,
-    schema::ObSchemaGetterGuard &schema_guard)
+    const int64_t schema_version,
+    const ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<const ObTableSchema*, 16> table_schemas;
+  ObArenaAllocator tb_meta_allocator("ObDatDictTbMeta");
+  schema::ObSchemaGetterGuard schema_guard; // will reset while getting schem_guard
+  static const int64_t batch_table_meta_size = 200;
 
-  if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id_, table_schemas))) {
-    DDLOG(WARN, "get_table_schemas_in_tenant failed", KR(ret), K(snapshot_scn));
-  } else {
-    ObArenaAllocator tb_meta_allocator("ObDatDictTbMeta");
-    static const int64_t batch_table_meta_size = 200;
+  for (int i = 0; OB_SUCC(ret) && ! stop_flag_ && i < table_ids.count(); i++) {
+    const ObTableSchema *table_schema = NULL;
+    uint64_t table_id = OB_INVALID_ID;
+    // NOTICE: get schema_guard for each table_meta in case of too much memory usage in schema_service.
+    bool is_filtered = false;
+    ObDictTableMeta table_meta(&tb_meta_allocator);
+    ObDictMetaHeader header(ObDictMetaType::TABLE_META);
 
-    for (int i = 0; OB_SUCC(ret) && ! stop_flag_ && i < table_schemas.count(); i++) {
-      if (i % batch_table_meta_size == 0) {
-        tb_meta_allocator.reset();
-      }
-      const ObTableSchema *table_schema = NULL;
-      bool is_filtered = false;
-      ObDictTableMeta table_meta(&tb_meta_allocator);
-      ObDictMetaHeader header(ObDictMetaType::TABLE_META);
+    if (i % batch_table_meta_size == 0) {
+      tb_meta_allocator.reset();
+    }
 
-      if (OB_FAIL(table_schemas.at(i, table_schema))) {
-        DDLOG(WARN, "get_table_schema failed", KR(ret), K(snapshot_scn), K(i));
-      } else if (OB_FAIL(filter_table_(table_schema, is_filtered))) {
-        DDLOG(WARN, "filter_table_ failed", KR(ret), K(is_filtered), KPC(table_schema));
-      } else if (is_filtered) {
-        DDLOG(DEBUG, "filter_table_",
-            "table_id", table_schema->get_table_id(),
-            "table_name", table_schema->get_table_name(),
-            "table_type", table_schema->get_table_type());
-        // ignore this table.
-      } else if (OB_FAIL(table_meta.init(*table_schema))) {
-        DDLOG(WARN, "init table_meta failed", KR(ret), K(snapshot_scn), K(i), KPC(table_schema));
-      } else if (OB_FAIL(storage_.handle_dict_meta(table_meta, header))) {
-        DDLOG(WARN, "handle dict_table_meta failed", KR(ret), K(table_meta), K(header), KPC(table_schema));
-      } else {
-        DDLOG(DEBUG, "handle dict_table_meta succ", KR(ret), K(table_meta), K(header), KPC(table_schema));
-      }
+    if (OB_FAIL(table_ids.at(i, table_id))) {
+      DDLOG(WARN, "get_table_id failed", KR(ret), K(schema_version), K(i), K(table_ids));
+    } else if (OB_FAIL(get_tenant_schema_guard_(schema_version, schema_guard, false/*is_force_fallback=false*/))) {
+      DDLOG(WARN, "get_tenant_schema_guard_ in lazy mode failed", KR(ret), K(schema_version), K(table_id));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
+      DDLOG(WARN, "get_table_schema failed", KR(ret), K(table_id), K(schema_version));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      DDLOG(WARN, "invalid table_schema", KR(ret), K(schema_version), K(table_id));
+    } else if (OB_FAIL(filter_table_(*table_schema, is_filtered))) {
+      DDLOG(WARN, "filter_table_ failed", KR(ret), K(is_filtered), KPC(table_schema));
+    } else if (is_filtered) {
+      DDLOG(DEBUG, "filter_table_",
+          K(schema_version),
+          "table_id", table_schema->get_table_id(),
+          "table_name", table_schema->get_table_name(),
+          "table_type", table_schema->get_table_type());
+      // ignore this table.
+    } else if (OB_FAIL(table_meta.init(*table_schema))) {
+      DDLOG(WARN, "init table_meta failed", KR(ret), K(schema_version), KPC(table_schema));
+    } else if (OB_FAIL(storage_.handle_dict_meta(table_meta, header))) {
+      DDLOG(WARN, "handle dict_table_meta failed", KR(ret), K(table_meta), K(header), KPC(table_schema));
+    } else {
+      DDLOG(DEBUG, "handle dict_table_meta succ", KR(ret), K(table_meta), K(header), KPC(table_schema));
     }
   }
 
   return ret;
 }
 
-int ObDataDictService::filter_table_(const share::schema::ObTableSchema *table_schema, bool &is_filtered)
+int ObDataDictService::filter_table_(const share::schema::ObTableSchema &table_schema, bool &is_filtered)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid table_schema", KR(ret));
-  } else {
-    is_filtered =
-      ! (table_schema->is_user_table()
-        || table_schema->is_unique_index()
-        || table_schema->is_tmp_table());
-  }
+  is_filtered =
+      ! (table_schema.has_tablet()
+      || table_schema.is_user_table()
+      || table_schema.is_unique_index()
+      || table_schema.is_tmp_table());
 
   return ret;
 }

@@ -403,7 +403,7 @@ class ObNoRetry : public ObIRetryPolicy
 {};
 
 /// consistency levels
-/// @see https://www.atatech.org/articles/102030
+/// @see
 enum class ObTableConsistencyLevel
 {
   STRONG = 0,
@@ -438,6 +438,8 @@ public:
   bool returning_rowkey() const { return returning_rowkey_; }
   void set_returning_affected_entity(bool returning) { returning_affected_entity_ = returning; }
   bool returning_affected_entity() const { return returning_affected_entity_; }
+  void set_batch_operation_as_atomic(bool atomic) { batch_operation_as_atomic_ = atomic; }
+  bool batch_operation_as_atomic() const { return batch_operation_as_atomic_; }
   void set_binlog_row_image_type(ObBinlogRowImageType type) { binlog_row_image_type_ = type; }
   ObBinlogRowImageType binlog_row_image_type() const { return binlog_row_image_type_; }
 private:
@@ -448,7 +450,7 @@ private:
   bool returning_affected_rows_;  // default: false
   bool returning_rowkey_;         // default: false
   bool returning_affected_entity_;  // default: false
-  // bool batch_operation_as_atomic_;  // default: false
+  bool batch_operation_as_atomic_;  // default: false
   // int route_policy
   ObBinlogRowImageType binlog_row_image_type_;  // default: FULL
 };
@@ -682,7 +684,7 @@ public:
   int64_t get_max_result_size() const { return max_result_size_; }
   int64_t get_range_count() const { return key_ranges_.count(); }
   uint64_t get_checksum() const;
-
+  const ObString &get_filter_string() const { return filter_string_; }
   void clear_scan_range() { key_ranges_.reset(); }
   void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_allocator_ = allocator; }
   int deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const;
@@ -774,6 +776,7 @@ public:
   void rewind();
   virtual int get_next_entity(const ObITableEntity *&entity) override;
   int add_property_name(const ObString &name);
+  int assign_property_names(const common::ObIArray<common::ObString> &other);
   void reset_property_names() { properties_names_.reset(); }
   int add_row(const common::ObNewRow &row);
   int add_all_property(const ObTableQueryResult &other);
@@ -784,6 +787,7 @@ public:
   int get_first_row(common::ObNewRow &row) const;
   bool reach_batch_size_or_result_size(const int32_t batch_count,
                                        const int64_t max_result_size);
+  const common::ObIArray<common::ObString>& get_select_columns() const { return properties_names_; };
 private:
   static const int64_t MAX_BUF_BLOCK_SIZE = common::OB_MAX_PACKET_BUFFER_LENGTH - (1024*1024LL);
   static const int64_t DEFAULT_BUF_BLOCK_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE - (1024*1024LL);

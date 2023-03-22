@@ -92,7 +92,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
             //  1. handling update operator and
             //  2. foreign key constraint is self reference
             // need to change %new_row and %old_row
-            //   (see https://aone.alibaba-inc.com/issue/17476162)
+            //   (see
             // xxx_row_res_info helps to restore row. restore row before get_next_row()
             //op.fk_self_ref_row_res_infos_.reset();
             for (int64_t i = 0; OB_SUCC(ret) && i < fk_arg.columns_.count(); i++) {
@@ -355,7 +355,7 @@ int ForeignKeyHandle::cascade(ObTableModifyOp &op,
       LOG_WARN("failed to begin nested session", K(ret));
     } else {
       // must call end_nested_session() if begin_nested_session() success.
-      // https://work.aone.alibaba-inc.com/issue/29621871
+      //
       // skip modify_ctx.set_foreign_key_cascade when cascade update and self ref.
       if (!(fk_arg.is_self_ref_ && !new_row.empty()) &&
           OB_FAIL(op.set_foreign_key_cascade(true))) {
@@ -535,7 +535,7 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
 {
   obj_print_params_ = CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
   obj_print_params_.need_cast_expr_ = true;
-  // bugfix:https://work.aone.alibaba-inc.com/issue/36658497
+  // bugfix:
   // in NO_BACKSLASH_ESCAPES, obj_print_sql<ObVarcharType> won't escape.
   // We use skip_escape_ to indicate this case. It will finally be passed to ObHexEscapeSqlStr.
   GET_SQL_MODE_BIT(IS_NO_BACKSLASH_ESCAPES, ctx_.get_my_session()->get_sql_mode(), obj_print_params_.skip_escape_);
@@ -1083,10 +1083,8 @@ int ObTableModifyOp::submit_all_dml_task()
       LOG_WARN("execute all dml das task failed", K(ret));
     } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
       LOG_WARN("close all das task failed", K(ret));
-    } else if (!execute_single_row_ && OB_FAIL(ObDMLService::handle_after_row_processing_batch(&get_dml_modify_row_list()))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &get_dml_modify_row_list()))) {
       LOG_WARN("perform batch foreign key constraints and after row trigger failed", K(ret));
-    } else if (execute_single_row_ && OB_FAIL(ObDMLService::handle_after_row_processing(&get_dml_modify_row_list()))) {
-      LOG_WARN("perform single row foreign key constraints and after row trigger failed", K(ret));
     } else {
       dml_modify_rows_.clear();
       dml_rtctx_.reuse();
@@ -1101,9 +1099,9 @@ int ObTableModifyOp::submit_all_dml_task()
 int ObTableModifyOp::discharge_das_write_buffer()
 {
   int ret = OB_SUCCESS;
-  if (dml_rtctx_.das_ref_.get_das_mem_used() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE || execute_single_row_) {
+  if (dml_rtctx_.get_cached_row_size() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE || execute_single_row_) {
     LOG_INFO("DASWriteBuffer full or need single row execution, now to write storage",
-             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(execute_single_row_));
+             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(execute_single_row_), K(dml_rtctx_.get_cached_row_size()));
     ret = submit_all_dml_task();
   }
   return ret;

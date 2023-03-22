@@ -262,7 +262,6 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_route_policy",
   "ob_safe_weak_read_snapshot",
   "ob_sql_audit_percentage",
-  "ob_sql_plan_memory_percentage",
   "ob_sql_work_area_percentage",
   "ob_statement_trace_id",
   "ob_tcp_invited_nodes",
@@ -488,7 +487,6 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ROUTE_POLICY,
   SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT,
   SYS_VAR_OB_SQL_AUDIT_PERCENTAGE,
-  SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE,
   SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE,
   SYS_VAR_OB_STATEMENT_TRACE_ID,
   SYS_VAR_OB_TCP_INVITED_NODES,
@@ -788,7 +786,6 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_strict_mode",
   "_windowfunc_optimization_settings",
   "ob_enable_rich_error_msg",
-  "ob_sql_plan_memory_percentage",
   "log_row_value_options",
   "ob_max_read_stale_time",
   "_optimizer_gather_stats_on_load",
@@ -1178,7 +1175,6 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarInnodbStrictMode)
         + sizeof(ObSysVarWindowfuncOptimizationSettings)
         + sizeof(ObSysVarObEnableRichErrorMsg)
-        + sizeof(ObSysVarObSqlPlanMemoryPercentage)
         + sizeof(ObSysVarLogRowValueOptions)
         + sizeof(ObSysVarObMaxReadStaleTime)
         + sizeof(ObSysVarOptimizerGatherStatsOnLoad)
@@ -3151,15 +3147,6 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_RICH_ERROR_MSG))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnableRichErrorMsg));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSqlPlanMemoryPercentage())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarObSqlPlanMemoryPercentage", K(ret));
-      } else {
-        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE))] = sys_var_ptr;
-        ptr = (void *)((char *)ptr + sizeof(ObSysVarObSqlPlanMemoryPercentage));
       }
     }
     if (OB_SUCC(ret)) {
@@ -5619,17 +5606,6 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableRichErrorMsg())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObEnableRichErrorMsg", K(ret));
-      }
-      break;
-    }
-    case SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE: {
-      void *ptr = NULL;
-      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObSqlPlanMemoryPercentage)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObSqlPlanMemoryPercentage)));
-      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSqlPlanMemoryPercentage())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarObSqlPlanMemoryPercentage", K(ret));
       }
       break;
     }

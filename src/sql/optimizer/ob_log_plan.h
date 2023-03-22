@@ -15,7 +15,6 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/string/ob_string.h"
 #include "sql/ob_sql_context.h"
-#include "sql/resolver/expr/ob_shared_expr_resolver.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
@@ -188,14 +187,6 @@ public:
 
   void set_max_op_id(uint64_t max_op_id) { max_op_id_ = max_op_id; }
   uint64_t get_max_op_id() const { return max_op_id_; }
-
-  int get_shared_expr(ObRawExpr *&expr);
-
-  int get_shared_expr(ObIArray<ObRawExpr *> &exprs);
-
-  int get_shared_expr(EqualSets &equal_sets);
-
-  int get_shared_expr(ObFdItemSet &fd_set);
 
   int make_candidate_plans(ObLogicalOperator *top);
   /**
@@ -496,6 +487,9 @@ public:
       can_rollup_pushdown_(false),
       force_use_hash_(false),
       force_use_merge_(false),
+      force_part_sort_(false),
+      force_normal_sort_(false),
+      is_scalar_group_by_(false),
       distinct_exprs_(),
       aggr_code_expr_(NULL),
       non_distinct_aggr_items_(),
@@ -514,6 +508,9 @@ public:
     bool can_rollup_pushdown_;
     bool force_use_hash_; // has use_hash_aggregation/use_hash_distinct hint
     bool force_use_merge_; // has no_use_hash_aggregation/no_use_hash_distinct hint
+    bool force_part_sort_;  // force use partition sort for merge group by
+    bool force_normal_sort_;  // disable use partition sort for merge group by
+    bool is_scalar_group_by_;
     ObSEArray<ObRawExpr*, 8> distinct_exprs_;
 
     // context for three stage group by push down
@@ -537,6 +534,7 @@ public:
                  K_(can_rollup_pushdown),
                  K_(force_use_hash),
                  K_(force_use_merge),
+                 K_(is_scalar_group_by),
                  K_(distinct_exprs));
   };
 
@@ -638,6 +636,9 @@ public:
                                                            const ObIArray<ObLogicalOperator*> &subquery_ops,
                                                            const ObIArray<ObExecParamRawExpr *> &params,
                                                            ObExchangeInfo &exch_info);
+
+  int find_base_sharding_table_scan(const ObLogicalOperator &op,
+                                    const ObLogTableScan *&tsc);
 
   int get_repartition_table_info(const ObLogicalOperator &op,
                                  ObString &table_name,
@@ -1097,7 +1098,6 @@ public:
   }
   int init_plan_info();
   int collect_subq_pushdown_filter_table_relids(const ObIArray<ObRawExpr*> &quals);
-  int init_shared_expr_set();
 
   EqualSets &get_equal_sets() { return equal_sets_; }
   const EqualSets &get_equal_sets() const { return equal_sets_; }
@@ -1854,7 +1854,6 @@ private:
   };
   common::ObSEArray<PartIdExpr, 8, common::ModulePageAllocator, true> cache_part_id_exprs_;
 
-  ObSharedExprResolver *expr_resv_ctx_;
   ObRawExprCopier *onetime_copier_;
   // all onetime expr in current query block
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> onetime_query_refs_;

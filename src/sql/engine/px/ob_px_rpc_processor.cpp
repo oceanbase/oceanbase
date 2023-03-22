@@ -93,6 +93,13 @@ int ObInitSqcP::process()
   } else {
     /*do nothing*/
   }
+
+#ifdef ERRSIM
+  if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_INIT_PROCESS_FAILED) OB_SUCCESS)) {
+    LOG_WARN("match sqc execute errism", K(ret));
+  }
+#endif
+
   if (OB_FAIL(ret) && OB_NOT_NULL(sqc_handler)) {
     if (unregister_interrupt_) {
       ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
@@ -103,7 +110,7 @@ int ObInitSqcP::process()
     arg_.sqc_handler_ = nullptr;
   }
 
-  // https://work.aone.alibaba-inc.com/issue/37723456
+  //
   if (OB_SUCCESS != ret && is_schema_error(ret)) {
     if (OB_NOT_NULL(sqc_handler)
         && GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
@@ -265,7 +272,8 @@ void ObFastInitSqcReportQCMessageCall::operator()(hash::HashMapPair<ObInterrupti
 {
   UNUSED(entry);
   if (OB_NOT_NULL(sqc_)) {
-    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS && err_ != OB_TIMEOUT) {
+    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS
+        && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(err_)) {
       // 当该SQC是虚拟表查询时, 调度RPC失败时需要忽略错误结果.
       // 并mock一个sqc finsh msg发送给正在轮询消息的PX算子
       // 此操作已确认是线程安全的.
@@ -309,6 +317,8 @@ int ObFastInitSqcReportQCMessageCall::mock_sqc_finish_msg()
           buffer->set_data_msg(false);
           buffer->timeout_ts() = timeout_ts_;
           buffer->set_msg_type(dtl::ObDtlMsgType::FINISH_SQC_RESULT);
+          const bool is_first_buffer_cached = false;
+          const bool inc_recv_buf_cnt = false;
           if (OB_FAIL(common::serialization::encode(buf, size, pos, header))) {
             LOG_WARN("fail to encode buffer", K(ret));
           } else if (OB_FAIL(common::serialization::encode(buf, size, pos, finish_msg))) {
@@ -316,7 +326,7 @@ int ObFastInitSqcReportQCMessageCall::mock_sqc_finish_msg()
           } else if (FALSE_IT(buffer->size() = pos)) {
           } else if (FALSE_IT(pos = 0)) {
           } else if (FALSE_IT(buffer->tenant_id() = ch->get_tenant_id())) {
-          } else if (OB_FAIL(ch->attach(buffer))) {
+          } else if (OB_FAIL(ch->attach(buffer, is_first_buffer_cached, inc_recv_buf_cnt))) {
             LOG_WARN("fail to feedup buffer", K(ret));
           } else if (FALSE_IT(ch->free_buffer_count())) {
           } else {
@@ -401,7 +411,7 @@ int ObInitFastSqcP::process()
     }
   }
 
-  // https://work.aone.alibaba-inc.com/issue/37723456
+  //
   if (OB_SUCCESS != ret && is_schema_error(ret)) {
     if (OB_NOT_NULL(sqc_handler)
         && GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
@@ -464,7 +474,7 @@ void ObFastInitSqcCB::on_timeout()
 
 int ObFastInitSqcCB::process()
 {
-  // https://work.aone.alibaba-inc.com/issue/26171617
+  //
   int ret = rcode_.rcode_;
   if (OB_FAIL(ret)) {
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
@@ -605,7 +615,9 @@ int ObPxTenantTargetMonitorP::process()
       if (OB_FAIL(ret)) {
         int tem_ret = OB_SUCCESS;
         if ((tem_ret = OB_PX_TARGET_MGR.reset_statistics(tenant_id, leader_version + 1)) != OB_SUCCESS) {
-          LOG_WARN("reset statistics failed", K(tem_ret));
+          LOG_WARN("reset statistics failed", K(tem_ret), K(tenant_id), K(leader_version));
+        } else {
+          LOG_INFO("reset statistics succeed", K(tenant_id), K(leader_version));
         }
       } else {
         const hash::ObHashMap<ObAddr, ServerTargetUsage> *global_target_usage = NULL;

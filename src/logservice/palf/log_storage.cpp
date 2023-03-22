@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX PALF
 #include "log_storage.h"
 #include "lib/ob_errno.h"            // OB_INVALID_ARGUMENT
-#include "share/rc/ob_tenant_base.h" // mtl_malloc
 #include "log_reader_utils.h"        // ReadBuf
 #include "share/scn.h"
 
@@ -98,15 +97,15 @@ int LogStorage::load_manifest_for_meta_storage(block_id_t &expected_next_block_i
 void LogStorage::destroy()
 {
   is_inited_ = false;
-  palf_id_ = INVALID_PALF_ID;
   logical_block_size_ = 0;
-  block_mgr_.destroy();
-  log_reader_.destroy();
-  log_tail_.reset();
-  readable_log_tail_.reset();
-  log_block_header_.reset();
-  curr_block_writable_size_ = 0;
+  palf_id_ = INVALID_PALF_ID;
   need_append_block_header_ = false;
+  curr_block_writable_size_ = 0;
+  log_block_header_.reset();
+  readable_log_tail_.reset();
+  log_tail_.reset();
+  log_reader_.destroy();
+  block_mgr_.destroy();
   PALF_LOG(INFO, "LogStorage destroy success");
 }
 
@@ -570,6 +569,7 @@ int LogStorage::do_init_(const char *base_dir,
                snprintf(log_dir, OB_MAX_FILE_NAME_LENGTH, "%s/%s", base_dir, sub_dir))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "LogStorage snprintf failed", K(ret), K(tmp_ret));
+  } else if (FALSE_IT(memset(block_header_serialize_buf_, '\0', MAX_INFO_BLOCK_SIZE))) {
   } else if (OB_FAIL(block_mgr_.init(log_dir,
                                      lsn_2_block(base_lsn, logical_block_size),
                                      align_size,
@@ -653,7 +653,6 @@ int LogStorage::update_block_header_(const block_id_t block_id,
                                      const SCN &block_min_scn)
 {
   int ret = OB_SUCCESS;
-  char *block_header_seria_buf = NULL;
   int64_t pos = 0;
 
   log_block_header_.update_lsn_and_scn(block_min_lsn, block_min_scn);
@@ -661,22 +660,16 @@ int LogStorage::update_block_header_(const block_id_t block_id,
       palf_id_, lsn_2_block(log_tail_, logical_block_size_));
   log_block_header_.calc_checksum();
 
-  if (OB_ISNULL(block_header_seria_buf =
-                    static_cast<char *>(mtl_malloc(MAX_INFO_BLOCK_SIZE, "LogStorage")))) {
-  } else if (FALSE_IT(memset(block_header_seria_buf, '\0', MAX_INFO_BLOCK_SIZE))) {
-  } else if (OB_FAIL(log_block_header_.serialize(block_header_seria_buf,
+  if (FALSE_IT(memset(block_header_serialize_buf_, '\0', MAX_INFO_BLOCK_SIZE))) {
+  } else if (OB_FAIL(log_block_header_.serialize(block_header_serialize_buf_,
                                                  MAX_INFO_BLOCK_SIZE, pos))) {
     PALF_LOG(ERROR, "serialize info block failed", K(ret));
-  } else if (OB_FAIL(block_mgr_.pwrite(block_id, 0, block_header_seria_buf,
+  } else if (OB_FAIL(block_mgr_.pwrite(block_id, 0, block_header_serialize_buf_,
                                        MAX_INFO_BLOCK_SIZE))) {
     PALF_LOG(ERROR, "write info block failed", K(ret), K(block_id), KPC(this));
   } else {
-    PALF_LOG(INFO, "append_block_header_ success", K(ret), K(block_id),
-             K(log_block_header_));
+    PALF_LOG(INFO, "append_block_header_ success", K(ret), K(block_id), K(log_block_header_));
     need_append_block_header_ = false;
-  }
-  if (NULL != block_header_seria_buf) {
-    mtl_free(block_header_seria_buf);
   }
   return ret;
 }
@@ -740,7 +733,10 @@ int LogStorage::read_block_header_(const block_id_t block_id,
   LSN log_tail = get_readable_log_tail_guarded_by_lock_();
   block_id_t max_block_id = lsn_2_block(log_tail, logical_block_size_);
   bool last_block_has_data = (0 == lsn_2_offset(log_tail, logical_block_size_) ? false : true);
-  if (block_id > max_block_id || (block_id == max_block_id && false == last_block_has_data)) {
+  if (!read_buf.is_valid()) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "allocate memory failed");
+  } else if (block_id > max_block_id || (block_id == max_block_id && false == last_block_has_data)) {
     ret = OB_ERR_OUT_OF_UPPER_BOUND;
     PALF_LOG(WARN, "block_id is large than max_block_id", K(ret), K(block_id),
              K(log_tail), K(max_block_id), K(log_block_header));
@@ -764,7 +760,7 @@ int LogStorage::read_block_header_(const block_id_t block_id,
       PALF_LOG(WARN, "this block has been deleted", K(ret), K(block_id));
     } else {
       ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(ERROR, "unexpected error, maybe deleted by human!!!", K(ret), K(block_id));
+      PALF_LOG(WARN, "unexpected error, maybe deleted by human or flashabck!!!", K(ret), K(block_id), KPC(this));
     }
   }
   return ret;

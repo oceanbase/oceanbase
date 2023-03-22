@@ -65,14 +65,14 @@ void ObInterruptChecker::clear_status()
   interrupted_ = false;
   array_pos_ = 0;
   ref_count_ = 0;
-  MEMSET(interrupt_code_array_, 0, T_ARRAY_SIZE);
+  for (int idx = 0; idx < T_ARRAY_SIZE; ++idx)
+  {
+    interrupt_code_array_[idx].reset();
+  }
 }
 
 void ObInterruptChecker::clear_interrupt_status()
 {
-  if (ref_count_ > 0) {
-    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invlid interrupt ref count");
-  }
   interrupted_ = false;
 }
 
@@ -179,6 +179,9 @@ int ObGlobalInterruptManager::unregister_checker(ObInterruptChecker *checker,
         int64_t rc = ATOMIC_AAF(&(checker_node->checker_->ref_count_), -1);
         if (0 == rc) {
           checker_node->checker_->clear_status();
+        } else {
+          // for nested interrupt, only clear interrupt status
+          checker_node->checker_->clear_interrupt_status();
         }
         ob_delete(checker_node);
       }

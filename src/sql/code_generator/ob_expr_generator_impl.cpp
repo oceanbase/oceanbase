@@ -717,7 +717,7 @@ inline int ObExprGeneratorImpl::visit_like_expr(ObOpRawExpr &expr, ObExprLike *&
       //对于nl_param及subplan filter中上层参数作为like pattern时,
 			//每次rescan, pattern都会变化, 因此认为不是literal；
       //这样可以避免like的优化导致出现pattern不变, 结果不对
-      //bug:https://work.aone.alibaba-inc.com/issue/21428253
+      //bug:
       like_op->set_pattern_is_literal(pattern_expr->is_static_const_expr());
       like_op->set_escape_is_literal(escape_expr->is_static_const_expr());
       if (!is_oracle_mode() && !like_op->is_escape_literal()) {

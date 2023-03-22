@@ -637,6 +637,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       // MySQL兼容: 对于对象不存在的错误，resolve阶段不报错,这里替换为一个single语句，在执行阶段报错
       // 由于对象的创建可能在sp的创建之后，因此这里不将加了single语句的function放入cache
       if ((OB_ERR_FUNCTION_UNKNOWN == ret
+           || OB_ERR_SP_WRONG_ARG_NUM == ret
            || OB_ERR_SP_DOES_NOT_EXIST == ret
            || OB_ERR_GET_STACKED_DIAGNOSTICS == ret
            || OB_ERR_RESIGNAL_WITHOUT_ACTIVE_HANDLER == ret)
@@ -1747,7 +1748,7 @@ int ObPLResolver::build_record_type_by_table_schema(common::ObIAllocator &alloca
     ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
     for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
       const ObColumnSchemaV2 &column_schema = **cs_iter;
-      if (!column_schema.is_hidden() && !column_schema.is_invisible_column()) {
+      if (!column_schema.is_hidden() && !(column_schema.is_invisible_column() && !with_rowid)) {
         ObDataType data_type;
         ObPLDataType pl_type;
         data_type.set_meta_type(column_schema.get_meta_type());
@@ -4719,7 +4720,8 @@ int ObPLResolver::resolve_using(const ObStmtNodeTree *using_node,
           CK (OB_NOT_NULL(user_type));
           OX (legal_extend = user_type->is_udt_type()
                           || user_type->is_package_type()
-                          || user_type->is_sys_refcursor_type());
+                          || user_type->is_sys_refcursor_type()
+                          || user_type->is_rowtype_type());
         }
         if (OB_SUCC(ret)
             && (T_NULL == using_param->children_[0]->type_
@@ -6752,15 +6754,16 @@ int ObPLResolver::convert_cursor_actual_params(
 {
   int ret = OB_SUCCESS;
   ObDataType *data_type = pl_data_type.get_data_type();
-  if (OB_NOT_NULL(data_type)) {
-    ObRawExpr *convert_expr = expr;
-    if (T_SP_CPARAM == expr->get_expr_type()) {
-      ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(expr);
-      CK (OB_NOT_NULL(call_expr));
-      CK (OB_NOT_NULL(call_expr->get_expr()));
-      OX (convert_expr = call_expr->get_expr());
-    }
-    CK (OB_NOT_NULL(convert_expr));
+  ObRawExpr *convert_expr = expr;
+  if (T_SP_CPARAM == expr->get_expr_type()) {
+    ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(expr);
+    CK (OB_NOT_NULL(call_expr));
+    CK (OB_NOT_NULL(call_expr->get_expr()));
+    OX (convert_expr = call_expr->get_expr());
+  }
+  CK (OB_NOT_NULL(convert_expr));
+  if (OB_FAIL(ret)) {
+  } else if (OB_NOT_NULL(data_type)) {
     OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
                                                expr_factory_,
                                                data_type->get_obj_type(),
@@ -6772,6 +6775,31 @@ int ObPLResolver::convert_cursor_actual_params(
                                                convert_expr));
     OZ (func.add_expr(convert_expr));
     OX (idx = func.get_exprs().count() - 1);
+  } else if (pl_data_type.is_cursor_type()) {
+    if (convert_expr->get_result_type().get_extend_type() != PL_CURSOR_TYPE
+        && convert_expr->get_result_type().get_extend_type() != PL_REF_CURSOR_TYPE) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("PLS-00382: expression is of wrong type",
+                  K(ret), K(pl_data_type.is_obj_type()), KPC(convert_expr),
+                  K(convert_expr->get_result_type().get_obj_meta().get_type()),
+                  K(pl_data_type.get_user_type_id()),
+                  K(convert_expr->get_result_type().get_udt_id()));
+    }
+  } else if (pl_data_type.get_user_type_id() != convert_expr->get_result_type().get_udt_id()) {
+    bool is_compatible = false;
+    CK (OB_NOT_NULL(current_block_));
+    OZ (check_composite_compatible(current_block_->get_namespace(),
+                                   pl_data_type.get_user_type_id(),
+                                   convert_expr->get_result_type().get_udt_id(),
+                                   is_compatible));
+    if (OB_SUCC(ret) && !is_compatible) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("PLS-00382: expression is of wrong type",
+                  K(ret), K(pl_data_type.is_obj_type()), KPC(convert_expr),
+                  K(convert_expr->get_result_type().get_obj_meta().get_type()),
+                  K(pl_data_type.get_user_type_id()),
+                  K(convert_expr->get_result_type().get_udt_id()));
+    }
   }
   return ret;
 }
@@ -10773,6 +10801,18 @@ int ObPLResolver::resolve_sf_clause(
           OX (routine_comment = ObString(child->str_len_, child->str_value_));
           OZ (dynamic_cast<ObRoutineInfo*>(routine_info)->set_comment(routine_comment));
         }
+      } else if (T_SP_DATA_ACCESS == child->type_) {
+        if (lib::is_mysql_mode()) {
+          if (SP_NO_SQL == child->value_) {
+            routine_info->set_no_sql();
+          } else if (SP_READS_SQL_DATA == child->value_) {
+            routine_info->set_reads_sql_data();
+          } else if (SP_MODIFIES_SQL_DATA == child->value_) {
+            routine_info->set_modifies_sql_data();
+          } else if (SP_CONTAINS_SQL == child->value_) {
+            routine_info->set_contains_sql();
+          }
+        }
       }
     }
   }
@@ -12799,6 +12839,7 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
   if (OB_SUCC(ret) && OB_INVALID_INDEX == index) {
     ObIAllocator &allocator = resolve_ctx_.allocator_;
     ObString sql;
+    ObString ps_sql;
     ObRecordType *row_desc = NULL;
     ObPLDataType cursor_type;
     if (OB_NOT_NULL(cursor.get_row_desc())) {
@@ -12812,6 +12853,7 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
     }
     OX (index = OB_INVALID_INDEX);
     OZ (ob_write_string(allocator, cursor.get_sql(), sql));
+    OZ (ob_write_string(allocator, cursor.get_ps_sql(), ps_sql));
     OZ (cursor_type.deep_copy(allocator, cursor.get_cursor_type()));
     ObSEArray<int64_t, 4> sql_params;
 
@@ -12841,7 +12883,7 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
                                           cursor.get_index(),
                                           sql,
                                           sql_params,
-                                          cursor.get_ps_sql(),
+                                          ps_sql,
                                           cursor.get_stmt_type(),
                                           cursor.is_for_update(),
                                           cursor.has_hidden_rowid(),

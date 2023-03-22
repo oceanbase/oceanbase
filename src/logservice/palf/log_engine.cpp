@@ -230,7 +230,7 @@ int LogEngine::load(const int64_t palf_id,
   } else if (FALSE_IT(guard.click("load log_storage"))
              || (0 != log_storage_block_size
                 && OB_FAIL(try_clear_up_holes_and_check_storage_integrity_(
-             last_group_entry_header_lsn, entry_header, expected_next_block_id)))) {
+             last_group_entry_header_lsn, expected_next_block_id, entry_header)))) {
     PALF_LOG(ERROR, "the last block may be deleted by human, restart failed!!!", K(ret),
         K_(palf_id), K_(is_inited));
   } else if (OB_FAIL(integrity_verify_(last_meta_entry_start_lsn, last_group_entry_header_lsn, is_integrity))) {
@@ -547,6 +547,9 @@ int LogEngine::read_group_entry_header(const LSN &lsn, LogGroupEntryHeader &log_
     ret = OB_NOT_INIT;
   } else if (false == lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (!read_buf.is_valid()) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "allocate memory failed", KPC(this), K(lsn));
   } else if (OB_FAIL(log_storage_.pread_without_block_header(lsn, in_read_size, read_buf, out_read_size))) {
     PALF_LOG(WARN, "LogStorage pread failed", K(ret));
   } else if (OB_FAIL(log_group_entry_header.deserialize(read_buf.buf_, in_read_size, pos))) {
@@ -777,7 +780,7 @@ int LogEngine::update_manifest(const block_id_t block_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(log_meta_storage_.update_manifest_used_for_meta_storage(block_id))) {
-    PALF_LOG(WARN, "append_log_meta_ failed", K(ret), K_(palf_id), K_(is_inited));
+    PALF_LOG(WARN, "update_manifest_used_for_meta_storage failed", K(ret), K_(palf_id), K_(is_inited));
   } else {
     PALF_LOG(INFO,
              "update_max_block_id_for_switch_block_cb success",
@@ -1150,6 +1153,9 @@ int LogEngine::construct_log_meta_(const LSN &lsn, block_id_t &expected_next_blo
   LogMetaEntry meta_entry;
   if (false == lsn.is_valid()) {
     PALF_LOG(INFO, "there is no meta entry, maybe create palf failed", K(ret), K_(palf_id), K_(is_inited));
+  } else if (!read_buf.is_valid()) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "allocate memory failed", KPC(this), K(lsn));
   } else if (OB_FAIL(log_meta_storage_.pread(lsn, buf_len, read_buf, out_read_size))) {
     PALF_LOG(WARN, "ObLogMetaStorage pread failed", K(ret), K_(palf_id), K_(is_inited));
     // NB: when lsn is invalid, means there is no data on disk.
@@ -1327,10 +1333,11 @@ int LogEngine::update_config_meta_guarded_by_lock_(const LogConfigMeta &config_m
   return ret;
 }
 
-// Background: https://yuque.antfin-inc.com/ob/log/vu9hqg/edit
+// Background:
 int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
-    const LSN &last_entry_begin_lsn, const LogGroupEntryHeader &last_group_entry_header,
-    const block_id_t &expected_next_block_id)
+    const LSN &last_entry_begin_lsn,
+    const block_id_t &expected_next_block_id,
+    LogGroupEntryHeader &last_group_entry_header)
 {
   int ret = OB_SUCCESS;
   const LSN base_lsn = log_meta_.get_log_snapshot_meta().base_lsn_;
@@ -1357,6 +1364,10 @@ int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
     } else {
       ret = OB_SUCCESS;
     }
+  } else if (!last_group_entry_header.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "unexpected error, LogStorage are not empty bus last log entry is invalid",
+        K(last_entry_begin_lsn), K(expected_next_block_id), K(last_group_entry_header));
   } else {
     // NB: assume before 'truncate_prefix_blocks' finish, there is not any new write opt!!!
     //
@@ -1399,16 +1410,25 @@ int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
 
     // Deleting holes before 'base_block_id'
     // NB: deleting holes only when 'prev_log_info' is valid. 'prev_log_info' is valid means that
-    // the rebuild option
-    //     has occured, and we can't known previous log which before 'base_lsn' whether has been
-    //     confirmed, therefore, delete these blocks.
-    if (OB_SUCC(ret) && true == prev_log_info_is_valid
-        && OB_FAIL(log_storage_.truncate_prefix_blocks(base_lsn))) {
-      PALF_LOG(ERROR, "clear_up_holes_ failed", K(ret), K(min_block_id), K(max_block_id),
-               K(base_block_id), K_(palf_id), K_(is_inited));
+    // the rebuild option has occured, and we can't known previous log which before 'base_lsn'
+    // whether has been confirmed, therefore, delete these blocks.
+    // if the tail of last entry (log_storage_tail) is smaller than or equal to base lsn, need
+    // reset last_group_entry_header, PalfHandleImpl will be inited with the prev log info saved
+    // snapshot meta.
+    if (OB_SUCC(ret) && true == prev_log_info_is_valid) {
+      if (OB_FAIL(log_storage_.truncate_prefix_blocks(base_lsn))) {
+        PALF_LOG(ERROR, "clear_up_holes_ failed", K(ret), K(min_block_id), K(max_block_id),
+            K(base_block_id), K_(palf_id), K_(is_inited));
+      } else if (base_lsn >= last_group_entry_header.get_committed_end_lsn()) {
+        PALF_LOG(WARN, "the max committed end lsn is smaller than or equal to base_lsn,"
+            " there is a rebuild operation before restart, and we will use prev_log_info"
+            " to construct PalfBaseInfo", K_(palf_id), K(base_lsn), K(last_group_entry_header),
+            K(prev_log_info));
+        last_group_entry_header.reset();
+      }
     }
   }
-  PALF_LOG(INFO, "try_clear_up_holes_and_check_storage_integrity_ finish", K(ret), K(min_block_id),
+  PALF_LOG(INFO, "try_clear_up_holes_and_check_storage_integrity_ finish", K(ret), K_(palf_id), K(min_block_id),
            K(max_block_id), K(base_block_id), K(expected_next_block_id), K(prev_log_info));
   return ret;
 }

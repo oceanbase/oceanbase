@@ -40,6 +40,7 @@ public:
   virtual ~ObTabletHandle();
   ObTabletHandle &operator = (const ObTabletHandle &other);
   virtual void reset() override;
+  virtual bool need_hold_time_check() const override { return true; }
   void set_wash_priority(WashTabletPriority priority) { wash_priority_ = priority; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
@@ -47,7 +48,6 @@ private:
 private:
   WashTabletPriority wash_priority_;
   DEFINE_OBJ_LEAK_DEBUG_NODE(node_);
-
 };
 
 class ObTabletTableIterator final

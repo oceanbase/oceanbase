@@ -162,7 +162,6 @@ int ObBlockManager::init(
   } else if (OB_ISNULL(io_device) || OB_UNLIKELY(block_size < ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, ", K(ret), KP(io_device), K(block_size));
-  } else if (FALSE_IT(timer_.set_run_wrapper(MTL_CTX()))) {
   } else if (OB_FAIL(timer_.init("BlkMgr"))) {
     LOG_WARN("fail to init timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT, ObLatchIds::BLOCK_MANAGER_LOCK))) {
@@ -500,7 +499,7 @@ int ObBlockManager::get_macro_block_info(const MacroBlockId &macro_id,
   } else {
     macro_block_info.is_free_ = !(block_info.mem_ref_cnt_ > 0 || block_info.disk_ref_cnt_ > 0 );
     macro_block_info.ref_cnt_ = block_info.mem_ref_cnt_ + block_info.disk_ref_cnt_;
-    macro_block_info.access_time_ = block_info.access_time_;
+    macro_block_info.access_time_ = block_info.last_write_time_;
   }
   return ret;
 }
@@ -770,6 +769,30 @@ int ObBlockManager::dec_disk_ref(const MacroBlockId &macro_id)
         LOG_ERROR("update block info fail", K(ret), K(macro_id), K(block_info));
       } else {
         LOG_DEBUG("debug ref_cnt: dec_ref in disk", K(ret), K(macro_id), K(block_info), K(lbt()));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBlockManager::update_write_time(const MacroBlockId &macro_id, const bool update_to_max_time)
+{
+  int ret = OB_SUCCESS;
+  BlockInfo block_info;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("not init", K(ret));
+  } else if (OB_UNLIKELY(!macro_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(macro_id));
+  } else {
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
+    if (OB_FAIL(block_map_.get(macro_id, block_info))) {
+      LOG_WARN("get block_info fail", K(ret), K(macro_id));
+    } else {
+      block_info.last_write_time_ = update_to_max_time ? INT64_MAX : ObTimeUtility::fast_current_time();
+      if (OB_FAIL(block_map_.insert_or_update(macro_id, block_info))) {
+        LOG_WARN("update block info fail", K(ret), K(macro_id), K(block_info));
       }
     }
   }
@@ -1414,11 +1437,6 @@ void ObBlockManager::InspectBadBlockTask::inspect_bad_block()
         std::max(GCONF._data_storage_io_timeout * 1,
                  max_check_count_per_round * DEFAULT_IO_WAIT_TIME_MS * 1000);
     const int64_t begin_time = ObTimeUtility::current_time();
-#ifdef ERRSIM
-    const int64_t access_time_interval = 0;
-#else
-    const int64_t access_time_interval = ACCESS_TIME_INTERVAL;
-#endif
     int64_t check_count = 0;
 
     for (int64_t i = 0;

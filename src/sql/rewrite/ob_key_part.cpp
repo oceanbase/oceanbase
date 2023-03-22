@@ -304,7 +304,7 @@ int ObKeyPart::intersect(ObKeyPart *other, bool contain_row)
     ret = OB_INVALID_ARGUMENT;
     SQL_REWRITE_LOG(WARN, "ObKeyPart not equal", K(*this), K(*other));
   } else {
-    //bug:https://work.aone.alibaba-inc.com/issue/41147694
+    //bug:
     ObObj &s1 = normal_keypart_->start_;
     ObObj &e1 = normal_keypart_->end_;
     ObObj &s2 = other->normal_keypart_->start_;
@@ -718,7 +718,6 @@ int ObKeyPart::deep_node_copy(const ObKeyPart &other)
 int InParamMeta::assign(const InParamMeta &other, ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
-  vals_.set_block_allocator(ModulePageAllocator(alloc));
   if (OB_UNLIKELY(other.vals_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid in keypart", K(ret));
@@ -745,6 +744,7 @@ InParamMeta* ObInKeyPart::create_param_meta(ObIAllocator &alloc)
   InParamMeta *new_param = NULL;
   if (OB_NOT_NULL(ptr = alloc.alloc(sizeof(InParamMeta)))) {
     new_param = new(ptr) InParamMeta();
+    new_param->vals_.set_block_allocator(ModulePageAllocator(alloc));
   }
   return new_param;
 }
@@ -1031,7 +1031,6 @@ OB_DEF_DESERIALIZE(ObKeyPart)
           LOG_WARN("callocate memory failed", K(ret));
         } else {
           param_meta->pos_ = key_pos;
-          param_meta->vals_.set_block_allocator(ModulePageAllocator(allocator_));
           for (int64_t j = 0; OB_SUCC(ret) && j < val_cnt; ++j) {
             ObObj val;
             OB_UNIS_DECODE(val);

@@ -36,7 +36,8 @@ public:
   ObTabletDDLKvMgr();
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
-  int ddl_start(ObTablet &tablet, const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t cluster_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
+  int ddl_start_nolock(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
+  int ddl_start(ObTablet &tablet, const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
   int ddl_commit(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
   int schedule_ddl_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool is_replay); // try wait build major sstable
   int wait_ddl_merge_success(const share::SCN &start_scn, const share::SCN &commit_scn);
@@ -57,6 +58,7 @@ public:
   share::SCN get_commit_scn(const ObTabletMeta &tablet_meta);
   int set_commit_success(const share::SCN &start_scn);
   bool is_commit_success();
+  void reset_commit_success();
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
   share::ObLSID get_ls_id() const { return ls_id_; }
   int cleanup();
@@ -69,16 +71,17 @@ public:
   int rdlock(const int64_t timeout_us, uint32_t &lock_tid);
   int wrlock(const int64_t timeout_us, uint32_t &lock_tid);
   void unlock(const uint32_t lock_tid);
+  int update_tablet(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   OB_INLINE void reset() { destroy(); }
-  bool can_schedule_major_compaction(const ObTabletMeta &tablet_meta);
   bool can_schedule_major_compaction_nolock(const ObTabletMeta &tablet_meta);
-  int get_ddl_major_merge_param(ObDDLTableMergeDagParam &merge_param);
+  int get_ddl_major_merge_param(const ObTabletMeta &tablet_meta, ObDDLTableMergeDagParam &merge_param);
   int get_rec_scn(share::SCN &rec_scn);
+  void prepare_info_for_checksum_report(const uint64_t table_id, const int64_t ddl_task_id) { table_id_ = table_id; ddl_task_id_ = ddl_task_id; }
   TO_STRING_KV(K_(is_inited), K_(success_start_scn), K_(ls_id), K_(tablet_id), K_(table_key),
-      K_(cluster_version), K_(start_scn), K_(commit_scn), K_(max_freeze_scn),
+      K_(data_format_version), K_(start_scn), K_(commit_scn), K_(max_freeze_scn),
       K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));
 
 private:
@@ -89,20 +92,21 @@ private:
   int get_active_ddl_kv_impl(ObTableHandleV2 &kv_handle);
   void try_get_ddl_kv_unlock(const share::SCN &scn, ObTableHandleV2 &kv_handle);
   int get_ddl_kvs_unlock(const bool frozen_only, ObTablesHandleArray &kv_handle_array);
-  int update_tablet(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
   int update_ddl_major_sstable();
   int create_empty_ddl_sstable(ObTableHandleV2 &table_handle);
   void cleanup_unlock();
   void destroy();
   bool is_commit_success_unlock() const;
+public:
+  static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 16;
+  static const int64_t TRY_LOCK_TIMEOUT = 1 * 1000000; // 1s
 private:
-  static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 64;
   bool is_inited_;
   share::SCN success_start_scn_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   ObITable::TableKey table_key_;
-  int64_t cluster_version_;
+  int64_t data_format_version_;
   share::SCN start_scn_;
   share::SCN commit_scn_;
   share::SCN max_freeze_scn_;

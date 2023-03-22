@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -187,11 +187,10 @@ int ObTableLoadMerger::build_merge_ctx()
   int ret = OB_SUCCESS;
   ObDirectLoadMergeParam merge_param;
   merge_param.table_id_ = param_.table_id_;
-  merge_param.target_table_id_ = param_.target_table_id_;
+  merge_param.target_table_id_ = store_ctx_->ctx_->ddl_param_.dest_table_id_;
   merge_param.rowkey_column_num_ = store_ctx_->ctx_->schema_.rowkey_column_count_;
-  merge_param.schema_column_count_ =
-    (store_ctx_->ctx_->schema_.is_heap_table_ ? store_ctx_->table_data_desc_.column_count_ + 1
-                                              : store_ctx_->table_data_desc_.column_count_);
+  merge_param.store_column_count_ = store_ctx_->ctx_->schema_.store_column_count_;
+  merge_param.snapshot_version_ = store_ctx_->ctx_->ddl_param_.snapshot_version_;
   merge_param.table_data_desc_ = store_ctx_->table_data_desc_;
   merge_param.datum_utils_ = &(store_ctx_->ctx_->schema_.datum_utils_);
   merge_param.col_descs_ = &(store_ctx_->ctx_->schema_.column_descs_);
@@ -224,6 +223,7 @@ int ObTableLoadMerger::build_merge_ctx()
       table_array = &empty_table_array;
     }
     if (!merge_param.is_heap_table_ && !table_array->empty()) {
+      // for optimize split range is too slow
       ObArray<ObDirectLoadMultipleSSTable *> multiple_sstable_array;
       ObDirectLoadMultipleMergeRangeSplitter range_splitter;
       for (int64_t i = 0; OB_SUCC(ret) && i < table_array->count(); ++i) {
@@ -246,6 +246,16 @@ int ObTableLoadMerger::build_merge_ctx()
         if (OB_FAIL(tablet_merge_ctx->build_merge_task_for_multiple_pk_table(
               multiple_sstable_array, range_splitter, param_.session_count_))) {
           LOG_WARN("fail to build merge task for multiple pk table", KR(ret));
+        }
+      }
+   } else if (merge_param.is_heap_table_ && !table_array->empty() &&
+               tablet_merge_ctxs.count() > param_.session_count_ * 2) {
+      // for optimize the super multi-partition heap table space serious enlargement
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_merge_ctxs.count(); ++i) {
+        ObDirectLoadTabletMergeCtx *tablet_merge_ctx = tablet_merge_ctxs.at(i);
+        if (OB_FAIL(
+              tablet_merge_ctx->build_aggregate_merge_task_for_multiple_heap_table(*table_array))) {
+          LOG_WARN("fail to build aggregate merge task for multiple heap table", KR(ret));
         }
       }
     } else {

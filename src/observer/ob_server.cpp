@@ -389,8 +389,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init table store stat mgr failed", KR(ret));
     } else if (OB_FAIL(ObCompatModeGetter::instance().init(&sql_proxy_))) {
       LOG_ERROR("init get compat mode server failed",KR(ret));
-    } else if (OB_FAIL(table_service_.init(gctx_))) {
-    LOG_ERROR("init table service failed", KR(ret));
+    } else if (OB_FAIL(table_service_.init())) {
+      LOG_ERROR("init table service failed", KR(ret));
     } else if (OB_FAIL(ObTimerMonitor::get_instance().init())) {
       LOG_ERROR("init timer monitor failed", KR(ret));
     } else if (OB_FAIL(ObBGThreadMonitor::get_instance().init())) {
@@ -534,6 +534,10 @@ void ObServer::destroy()
     disk_usage_report_task_.destroy();
     FLOG_INFO("tenant disk usage report task destroyed");
 
+    FLOG_INFO("begin to destroy tmp file manager");
+    ObTmpFileManager::get_instance().destroy();
+    FLOG_INFO("tmp file manager destroyed");
+
     FLOG_INFO("begin to destroy ob server block mgr");
     OB_SERVER_BLOCK_MGR.destroy();
     FLOG_INFO("ob server block mgr destroyed");
@@ -541,10 +545,6 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy store cache");
     OB_STORE_CACHE.destroy();
     FLOG_INFO("store cache destroyed");
-
-    FLOG_INFO("begin to destroy tmp file manager");
-    ObTmpFileManager::get_instance().destroy();
-    FLOG_INFO("tmp file manager destroyed");
 
     FLOG_INFO("begin to destroy ObDagWarningHistoryManager");
     ObDagWarningHistoryManager::get_instance().destroy();
@@ -970,6 +970,10 @@ int ObServer::stop()
     FLOG_INFO("begin to stop server blacklist");
     TG_STOP(lib::TGDefIDs::Blacklist);
     FLOG_INFO("server blacklist stopped");
+
+    FLOG_INFO("begin to stop ObNetKeepAlive");
+    ObNetKeepAlive::get_instance().stop();
+    FLOG_INFO("ObNetKeepAlive stopped");
 
     FLOG_INFO("begin to stop GDS");
     GDS.stop();
@@ -1550,7 +1554,6 @@ int ObServer::init_config()
       }
     }
   }
-  get_unis_global_compat_version() = GET_MIN_CLUSTER_VERSION();
   lib::g_runtime_enabled = true;
 
   return ret;

@@ -273,7 +273,7 @@ int ObPxMSCoordOp::free_allocator()
 {
   int ret = OB_SUCCESS;
   last_pop_row_ = nullptr;
-  //https://work.aone.alibaba-inc.com/issue/32934102
+  //
   //the heap shoud be empty before store_rows_.reset();
   while(OB_SUCC(ret) && row_heap_.count() > 0) {
      const ObChunkDatumStore::LastStoredRow *pop_row = nullptr;
@@ -514,7 +514,7 @@ int ObPxMSCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg)
         op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
       }
       all_rows_finish_ = true;
-      metric_.mark_last_out();
+      metric_.mark_eof();
     } else if (row_heap_.capacity() == row_heap_.count()) {
       const ObChunkDatumStore::LastStoredRow *pop_row = nullptr;
       if (OB_FAIL(row_heap_.pop(pop_row))) {
@@ -527,6 +527,7 @@ int ObPxMSCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg)
       }
       metric_.count();
       metric_.mark_first_out();
+      metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
     } else if (row_heap_.capacity() > row_heap_.count()) {
     } else {
       ret = OB_ERR_UNEXPECTED;

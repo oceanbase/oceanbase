@@ -146,6 +146,7 @@ TEST_F(TestBlockMetaTree, random_keybtree)
   for (int64_t i = 0; i < 10; ++i) {
     ASSERT_OK(meta_tree.block_tree_.init());
     meta_tree.is_inited_ = true;
+    ASSERT_OK(meta_tree.data_desc_.assign(data_desc_));
     for (int64_t j = 0; j < 10000; ++j) {
       void *buf = allocator_.alloc(sizeof(ObDatumRow));
       ASSERT_TRUE(nullptr != buf);
@@ -163,7 +164,7 @@ TEST_F(TestBlockMetaTree, random_keybtree)
       }
       ASSERT_EQ(OB_SUCCESS, meta_tree.insert_macro_block(
             macro_handle,
-            ObDatumRowkeyWrapper(rowkey, &data_desc_.datum_utils_),
+            rowkey,
             &meta)) << "i: " << i << ", j: " << j << "\n";
     }
     meta_tree.destroy();

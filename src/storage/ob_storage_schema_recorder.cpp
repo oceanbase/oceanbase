@@ -153,7 +153,8 @@ int ObStorageSchemaRecorder::inner_replay_clog(
       true/*for_replay*/, memtable::MemtableRefOp::NONE))) {
     LOG_WARN("failed to save storage schema", K(ret), K_(tablet_id), K(replay_storage_schema));
   } else {
-    LOG_INFO("success to replay schema clog", K(ret), K(replay_storage_schema.get_schema_version()), K(replay_storage_schema.compat_mode_));
+    LOG_INFO("success to replay schema clog", K(ret), K_(ls_id), K_(tablet_id),
+      K(replay_storage_schema.get_schema_version()), K(replay_storage_schema.compat_mode_));
   }
   replay_storage_schema.reset();
   tmp_tablet_handle.reset();

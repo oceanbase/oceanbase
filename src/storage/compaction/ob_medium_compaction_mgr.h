@@ -113,16 +113,20 @@ public:
   int add_medium_compaction_info(const ObMediumCompactionInfo &input_info);
 
   OB_INLINE const MediumInfoList &get_list() const { return medium_info_list_; }
-  OB_INLINE int64_t get_wait_check_medium_scn() const { return wait_check_medium_scn_; }
-  OB_INLINE bool need_check_finish() const { return 0 != wait_check_medium_scn_; }
+  OB_INLINE int64_t get_wait_check_medium_scn() const { return wait_check_flag_ ? last_medium_scn_ : 0; }
+  OB_INLINE bool need_check_finish() const { return wait_check_flag_; }
   // check status on serialized medium list
   OB_INLINE bool could_schedule_next_round() const
   {
-    return 0 == wait_check_medium_scn_ && medium_info_list_.is_empty();
+    return !wait_check_flag_ && medium_info_list_.is_empty();
   }
   OB_INLINE ObMediumCompactionInfo::ObCompactionType get_last_compaction_type() const
   {
     return (ObMediumCompactionInfo::ObCompactionType)last_compaction_type_;
+  }
+  OB_INLINE int64_t get_last_compaction_scn() const
+  {
+    return last_medium_scn_;
   }
   void get_schedule_scn(
     const int64_t major_compaction_scn,
@@ -156,7 +160,7 @@ public:
 
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
 
-  TO_STRING_KV(K_(is_inited), K_(info), K_(last_compaction_type), K_(wait_check_medium_scn),
+  TO_STRING_KV(K_(is_inited), K_(info), K_(last_compaction_type), K_(wait_check_flag), K_(last_medium_scn),
       "list_size", size(), K_(medium_info_list));
 
 private:
@@ -164,7 +168,7 @@ private:
   OB_INLINE bool inner_is_valid() const
   {
     return last_compaction_type_ < ObMediumCompactionInfo::COMPACTION_TYPE_MAX
-        && wait_check_medium_scn_ >= 0 && size() >= 0;
+        && last_medium_scn_ >= 0 && size() >= 0;
   }
   OB_INLINE int append_list_with_deep_copy(
       const int64_t finish_scn,
@@ -180,11 +184,17 @@ private:
     return ret;
   }
   int inner_deep_copy_node(const ObMediumCompactionInfo &medium_info);
+  OB_INLINE void set_basic_info(const ObMediumCompactionInfoList &input_list)
+  {
+    last_compaction_type_ = input_list.last_compaction_type_;
+    last_medium_scn_ = input_list.last_medium_scn_;
+    wait_check_flag_ = input_list.wait_check_flag_;
+  }
 
 private:
   static const int64_t MEDIUM_LIST_VERSION = 1;
   static const int64_t MAX_SERIALIZE_SIZE = 2;
-  static const int32_t MEDIUM_LIST_INFO_RESERVED_BITS = 52;
+  static const int32_t MEDIUM_LIST_INFO_RESERVED_BITS = 51;
 
 private:
   bool is_inited_;
@@ -192,14 +202,15 @@ private:
 
   // need serialize
   union {
-    int64_t info_;
+    uint64_t info_;
     struct {
-      int64_t compat_                  : 8;
-      int64_t last_compaction_type_    : 4; // check inner_table when last_compaction is major
-      int64_t reserved_                : MEDIUM_LIST_INFO_RESERVED_BITS;
+      uint64_t compat_                  : 8;
+      uint64_t last_compaction_type_    : 4; // check inner_table when last_compaction is major
+      uint64_t wait_check_flag_         : 1; // true: need check finish, false: don't need check
+      uint64_t reserved_                : MEDIUM_LIST_INFO_RESERVED_BITS;
     };
   };
-  int64_t wait_check_medium_scn_;
+  int64_t last_medium_scn_;
 
   MediumInfoList medium_info_list_;
 };

@@ -543,7 +543,7 @@ int ObTenantLSInfo::gather_stat(bool for_recovery)
       } else {
         //get max ls id and max ls group id
         share::ObMaxIdFetcher id_fetcher(*sql_proxy_);
-        if (OB_FAIL(id_fetcher.fetch_max_id(*sql_proxy_, tenant_id, 
+        if (OB_FAIL(id_fetcher.fetch_max_id(*sql_proxy_, tenant_id,
                 share::OB_MAX_USED_LS_GROUP_ID_TYPE, max_ls_group_id_))) {
           LOG_WARN("failed to fetch max ls group id", KR(ret), K(tenant_id));
         } else if (OB_FAIL(id_fetcher.fetch_max_id(*sql_proxy_, tenant_id,
@@ -1664,7 +1664,7 @@ int ObTenantLSInfo::adjust_user_tenant_primary_zone()
       LOG_WARN("failed to get tenant primary zone info array", KR(ret), K(tenant_id));
     }
   }
-  
+
   if (OB_SUCC(ret)) {
     uint64_t last_ls_group_id = OB_INVALID_ID;
     share::ObLSPrimaryZoneInfoArray tmp_info_array;
@@ -1694,7 +1694,7 @@ int ObTenantLSInfo::adjust_user_tenant_primary_zone()
       }
     }
   }
-  
+
   return ret;
 }
 
@@ -1746,7 +1746,7 @@ int ObTenantLSInfo::adjust_primary_zone_by_ls_group_(
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   const int64_t ls_count = primary_zone_infos.count();
   const int64_t primary_zone_count = primary_zone_array.count();
-  if (OB_UNLIKELY(0 == primary_zone_count 
+  if (OB_UNLIKELY(0 == primary_zone_count
         || 0 == ls_count || !tenant_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(primary_zone_infos),
@@ -1754,7 +1754,7 @@ int ObTenantLSInfo::adjust_primary_zone_by_ls_group_(
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
-  } else if (1 == ls_count 
+  } else if (1 == ls_count
       && primary_zone_infos.at(0).get_ls_id().is_sys_ls()) {
     //user sys ls is equal to meta sys ls
     share::ObLSStatusOperator status_op;
@@ -1769,11 +1769,11 @@ int ObTenantLSInfo::adjust_primary_zone_by_ls_group_(
     }
   } else {
     //Algorithm Description:
-    //Assumption: We have 5 ls, 3 primary_zones(z1, z2, z3). 
+    //Assumption: We have 5 ls, 3 primary_zones(z1, z2, z3).
     //1. Set the primary zone of ls to  tenant's primary zone,
     //choose the least number of log streams on the zone is selected for all zones
-    //2. After all the primary_zone of the ls are in the primary_zonw of the tenant, 
-    //choose the primary_zone with the most and least ls. Adjust a certain number of ls to the smallest zone without exceeding the balance 
+    //2. After all the primary_zone of the ls are in the primary_zonw of the tenant,
+    //choose the primary_zone with the most and least ls. Adjust a certain number of ls to the smallest zone without exceeding the balance
     //while guaranteeing that the number of the zone with the most is no less than the average.
     ObArray<ObZone> ls_primary_zone;//is match with primary_zone_infos
     ObSEArray<uint64_t, 3> count_group_by_zone;//ls count of each primary zone
@@ -1794,7 +1794,7 @@ int ObTenantLSInfo::adjust_primary_zone_by_ls_group_(
         LOG_WARN("failed to update ls primary zone", KR(ret), "primary_zone_info", primary_zone_infos.at(i),
             K(new_primary_zone), K(new_zone_priority));
       }
-    } 
+    }
   }
   return ret;
 }
@@ -1979,13 +1979,36 @@ void ObTenantThreadHelper::wait()
   LOG_INFO("[TENANT THREAD] thread wait finish", K(tg_id_), K(thread_name_));
 }
 
+void ObTenantThreadHelper::mtl_thread_stop()
+{
+  LOG_INFO("[TENANT THREAD] thread stop start", K(tg_id_), K(thread_name_));
+  if (-1 != tg_id_) {
+    TG_STOP(tg_id_);
+  }
+  LOG_INFO("[TENANT THREAD] thread stop finish", K(tg_id_), K(thread_name_));
+}
+
+void ObTenantThreadHelper::mtl_thread_wait()
+{
+  LOG_INFO("[TENANT THREAD] thread wait start", K(tg_id_), K(thread_name_));
+  if (-1 != tg_id_) {
+    {
+      ObThreadCondGuard guard(thread_cond_);
+      thread_cond_.broadcast();
+    }
+    TG_WAIT(tg_id_);
+    is_first_time_to_start_ = true;
+  }
+  LOG_INFO("[TENANT THREAD] thread wait finish", K(tg_id_), K(thread_name_));
+}
+
 void ObTenantThreadHelper::destroy()
 {
   LOG_INFO("[TENANT THREAD] thread destory start", K(tg_id_), K(thread_name_));
   if (-1 != tg_id_) {
     TG_STOP(tg_id_);
     {
-      ObThreadCondGuard guard(thread_cond_); 
+      ObThreadCondGuard guard(thread_cond_);
       thread_cond_.broadcast();
     }
     TG_WAIT(tg_id_);
@@ -2030,16 +2053,11 @@ void ObTenantThreadHelper::run1()
 }
 void ObTenantThreadHelper::idle(const int64_t idle_time_us)
 {
-  ObThreadCondGuard guard(thread_cond_); 
+  ObThreadCondGuard guard(thread_cond_);
   thread_cond_.wait_us(idle_time_us);
 }
 
 //////////////ObPrimaryLSService
-int ObPrimaryLSService::mtl_init(ObPrimaryLSService *&ka)
-{
-  return ka->init();
-}
-
 int ObPrimaryLSService::init()
 {
   int ret = OB_SUCCESS;

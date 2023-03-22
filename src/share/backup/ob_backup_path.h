@@ -112,7 +112,7 @@ struct ObBackupPathUtil
   static int get_ls_backup_dir_path(const share::ObBackupDest &backup_set_dest,
        const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, share::ObBackupPath &backup_path);
 
-  // file:///obbackup/backup_set_1_full_20211231/log_stream_1/meta_info_turn_1/tablet_info.obbak
+  // file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1/tablet_info.obbak
   static int get_ls_data_tablet_info_path(const share::ObBackupDest &backup_set_dest,
       const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id,
       share::ObBackupPath &backup_path);
@@ -191,7 +191,7 @@ struct ObBackupPathUtil
   static int get_tenant_backup_set_infos_path(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path);  
 
- // file:///obbackup/backup_set_1_full_20211231/single_backup_set_info.obbak
+ // file:///obbackup/backup_set_1_full/single_backup_set_info.obbak
   static int get_backup_set_info_path(const share::ObBackupDest &backup_set_dest,
       share::ObBackupPath &backup_path);  
 
@@ -212,12 +212,12 @@ struct ObBackupPathUtil
   static int get_locality_info_path(const share::ObBackupDest &backup_tenant_dest,
       share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path);  
 
-  // file:///obbackup/backup_set_1_full_20211231/log_stream_1/meta_info_turn_1_retry_0/ls_meta_info.obbak
+  // file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1_retry_0/ls_meta_info.obbak
   static int get_ls_meta_info_backup_path(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const int64_t turn_id,
       const int64_t retry_id, share::ObBackupPath &backup_path);
 
-  // file:///obbackup/backup_set_1_full_20211231/logstream_1/xxx_xxx_turn_1_retry_0/macro_range_index.obbak
+  // file:///obbackup/backup_set_1_full/logstream_1/xxx_xxx_turn_1_retry_0/macro_range_index.obbak
   static int get_tenant_macro_range_index_backup_path(const share::ObBackupDest &backup_set_dest,
       const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
       share::ObBackupPath &backup_path);
@@ -226,7 +226,7 @@ struct ObBackupPathUtil
       const share::ObBackupSetDesc &desc, const share::ObBackupDataType &backup_data_type, const int64_t turn_id,
       const int64_t retry_id, share::ObBackupPath &backup_path);
 
-  // file:///obbackup/backup_set_1_full_20211231/logstream_1/xxx_xxx_turn_1_retry_0/meta_index.obbak
+  // file:///obbackup/backup_set_1_full/logstream_1/xxx_xxx_turn_1_retry_0/meta_index.obbak
   static int get_tenant_meta_index_backup_path(const share::ObBackupDest &backup_set_dest,
       const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
       const bool is_sec_meta, share::ObBackupPath &backup_path);
@@ -235,7 +235,7 @@ struct ObBackupPathUtil
       const share::ObBackupSetDesc &desc, const share::ObBackupDataType &backup_data_type, const int64_t turn_id,
       const int64_t retry_id, const bool is_sec_meta, share::ObBackupPath &backup_path);
 
-  // file://obbackup/backup_set_1_full_20211231/infos/data_info_turn_1/tablet_log_stream_info.obbak
+  // file://obbackup/backup_set_1_full/infos/data_info_turn_1/tablet_log_stream_info.obbak
   static int get_backup_data_tablet_ls_info_path(const share::ObBackupDest &backup_set_dest,
       const uint64_t turn_id, share::ObBackupPath &path);
 

@@ -436,7 +436,7 @@ private:
   ObBucketLock bucket_lock_;
   TenantMetaAllocator allocator_;
   ObMetaPointerMap<ObTabletMapKey, ObTablet> tablet_map_;
-  common::ObTimer timer_;
+  int tg_id_;
   TableGCTask table_gc_task_;
   MinMinorSSTableGCTask min_minor_sstable_gc_task_;
   RefreshConfigTask refresh_config_task_;

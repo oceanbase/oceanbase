@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   yuya.yu <yuya.yu@oceanbase.com>
+//   yuya.yu <>
 
 #pragma once
 
@@ -38,6 +38,7 @@ public:
   int check_rowkey_order(int32_t session_id, const common::ObTabletID &tablet_id,
                          const blocksstable::ObDatumRow &datum_row);
   sql::ObLoadDupActionType get_action() const {return param_.dup_action_;}
+  uint64_t get_capacity() const { return capacity_; }
   TO_STRING_KV(K_(capacity), K_(error_row_cnt), K_(repeated_row_cnt), K_(session_cnt), K_(is_inited));
 private:
   int inner_append_error_row(const common::ObNewRow &row,

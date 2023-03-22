@@ -2,6 +2,7 @@
 
 #include "storage/direct_load/ob_direct_load_mem_context.h"
 #include "storage/direct_load/ob_direct_load_mem_loader.h"
+#include "storage/direct_load/ob_direct_load_mem_dump.h"
 
 namespace oceanbase
 {
@@ -55,7 +56,12 @@ int ObMemDumpQueue::pop(void *&p)
 
 ObMemDumpQueue::~ObMemDumpQueue()
 {
-  for (int64_t i = 0; i < queue_.size(); i ++) {
+  int ret = OB_SUCCESS;
+  int64_t queue_size = queue_.size();
+  if (queue_size > 0) {
+    STORAGE_LOG(ERROR, "mem dump queue should be empty", K(queue_size));
+  }
+  for (int64_t i = 0; i < queue_size; i ++) {
     void *tmp = nullptr;
     queue_.pop(tmp);
     if (tmp != nullptr) {
@@ -94,6 +100,17 @@ void ObDirectLoadMemContext::reset()
     if (chunk != nullptr) {
       chunk->~ObDirectLoadExternalMultiPartitionRowChunk();
       ob_free(chunk);
+    }
+  }
+
+  int64_t queue_size = mem_dump_queue_.size();
+  for (int64_t i = 0; i < queue_size; i ++) {
+    void *p = nullptr;
+    mem_dump_queue_.pop(p);
+    if (p != nullptr) {
+      ObDirectLoadMemDump *mem_dump = (ObDirectLoadMemDump *)p;
+      mem_dump->~ObDirectLoadMemDump();
+      ob_free(mem_dump);
     }
   }
 

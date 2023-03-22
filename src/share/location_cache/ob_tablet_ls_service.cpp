@@ -45,7 +45,7 @@ int ObTabletLSService::init(common::ObMySQLProxy &sql_proxy)
     LOG_WARN("init twice", KR(ret));
   } else if (OB_FAIL(inner_cache_.init())) {
     LOG_WARN("inner_cache init failed", KR(ret));
-  } else if (OB_FAIL(async_queue_.init(this, user_thread_cnt, user_queue_size))) {
+  } else if (OB_FAIL(async_queue_.init(this, user_thread_cnt, user_queue_size, "TbltLSSrv"))) {
     LOG_WARN("async_queue init failed",
         KR(ret), K(user_thread_cnt), K(user_queue_size));
   } else {

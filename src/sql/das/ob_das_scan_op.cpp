@@ -729,6 +729,14 @@ int ObDASScanResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
   return ret;
 }
 
+int ObDASScanResult::reuse()
+{
+  int ret = OB_SUCCESS;
+  result_iter_.reset();
+  datum_store_.reset();
+  return ret;
+}
+
 int ObDASScanResult::link_extra_result(ObDASExtraData &extra_result)
 {
   extra_result.set_output_info(output_exprs_, eval_ctx_);
@@ -776,8 +784,6 @@ int ObLocalIndexLookupOp::init(const ObDASScanCtDef *lookup_ctdef,
          .set_properties(lib::USE_TL_PAGE_OPTIONAL);
     if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(lookup_memctx_, param))) {
       LOG_WARN("create lookup mem context entity failed", K(ret));
-    } else {
-      lookup_rtdef_->scan_allocator_.set_alloc(&lookup_memctx_->get_arena_allocator());
     }
   }
   int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_LOOKUPOP_INIT_ERROR);
@@ -1020,11 +1026,15 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
       ObString func_name = ObString::make_string("check_lookup_row_cnt");
       LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
       LOG_ERROR("Fatal Error!!! Catch a defensive error!",
-                K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
-                "index_group_cnt", get_index_group_cnt(),
-                "lookup_group_cnt", get_lookup_group_cnt(),
-                "scan_range", scan_param_.key_ranges_,
-                KPC_(lookup_ctdef), KPC_(lookup_rtdef));
+                      K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
+                      "index_group_cnt", get_index_group_cnt(),
+                      "lookup_group_cnt", get_lookup_group_cnt(),
+                      "scan_range", scan_param_.key_ranges_,
+                      "index_table_id", index_ctdef_->ref_table_id_ ,
+                      "data_table_tablet_id", tablet_id_ ,
+                      KPC_(tx_desc));
+      LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+                K(ret), KPC_(lookup_ctdef), KPC_(lookup_rtdef));
     }
   }
   return ret;
@@ -1101,7 +1111,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.reserved_cell_count_ = lookup_ctdef_->access_column_ids_.count();
   scan_param_.allocator_ = &lookup_rtdef_->stmt_allocator_;
   scan_param_.sql_mode_ = lookup_rtdef_->sql_mode_;
-  scan_param_.scan_allocator_ = &lookup_rtdef_->scan_allocator_;
+  scan_param_.scan_allocator_ = &lookup_memctx_->get_arena_allocator();
   scan_param_.frozen_version_ = lookup_rtdef_->frozen_version_;
   scan_param_.force_refresh_lc_ = lookup_rtdef_->force_refresh_lc_;
   scan_param_.output_exprs_ = &(lookup_ctdef_->pd_expr_spec_.access_exprs_);

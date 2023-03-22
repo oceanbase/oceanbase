@@ -108,6 +108,7 @@ protected:
   int check_update_affected_row();
   virtual int write_row_to_das_buffer() override;
   virtual int write_rows_post_proc(int last_errno) override;
+  virtual int check_need_exec_single_row() override;
 
 protected:
   UpdRtDef2DArray upd_rtdefs_;  //see the comment of UpdCtDef2DArray

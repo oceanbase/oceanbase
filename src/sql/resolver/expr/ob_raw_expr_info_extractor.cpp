@@ -92,6 +92,8 @@ int ObRawExprInfoExtractor::visit(ObQueryRefRawExpr &expr)
     LOG_WARN("failed to pull info from child", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_SUB_QUERY))) {
     LOG_WARN("failed to add is sub query flag", K(ret));
+  } else if (ob_is_enumset_tc(expr.get_data_type()) && OB_FAIL(expr.add_flag(IS_ENUM_OR_SET))) {
+    LOG_WARN("failed to add flag IS_ENUM_OR_SET", K(expr), K(ret));
   }
   return ret;
 }
@@ -449,7 +451,7 @@ int ObRawExprInfoExtractor::visit(ObAggFunRawExpr &expr)
 int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  //bug:https://work.aone.alibaba-inc.com/issue/25110897
+  //bug:
   const bool is_inner_added = expr.has_flag(IS_INNER_ADDED_EXPR);
   if (OB_FAIL(clear_info(expr))) {
     LOG_WARN("fail to clear info", K(ret));

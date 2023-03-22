@@ -13,7 +13,7 @@
  *
  * Authors:
  *   Author Name <email address>
- *     RuDian<ryan.ly@alibaba-inc.com>
+ *     RuDian<>
  */
 
 #define USING_LOG_PREFIX SQL_RESV

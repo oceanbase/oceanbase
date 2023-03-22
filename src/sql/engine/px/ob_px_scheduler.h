@@ -49,6 +49,11 @@ public:
 
 };
 
+enum class TableAccessType {
+  NO_TABLE,
+  PURE_VIRTUAL_TABLE,
+  HAS_USER_TABLE
+};
 // 这些信息是调度时候需要用的变量，暂时统一叫做CoordInfo
 class ObPxCoordInfo
 {
@@ -65,7 +70,8 @@ public:
     interrupt_id_(interrupt_id),
     coord_(coord),
     batch_rescan_ctl_(NULL),
-    pruning_table_location_(NULL)
+    pruning_table_location_(NULL),
+    table_access_type_(TableAccessType::NO_TABLE)
   {}
   virtual ~ObPxCoordInfo() {}
   virtual void destroy()
@@ -89,6 +95,11 @@ public:
   {
     return NULL == batch_rescan_ctl_ ? 0 : batch_rescan_ctl_->cur_idx_;
   }
+  // if there is no physical op visits user table and at least one physical op visits virtual table, ignore error
+  OB_INLINE bool should_ignore_vtable_error()
+  {
+    return TableAccessType::PURE_VIRTUAL_TABLE == table_access_type_;
+  }
 public:
   ObDfoMgr dfo_mgr_;
   ObPieceMsgCtxMgr piece_msg_ctx_mgr_;
@@ -100,6 +111,7 @@ public:
   ObPxCoordOp &coord_;
   ObBatchRescanCtl *batch_rescan_ctl_;
   const common::ObIArray<ObTableLocation> *pruning_table_location_;
+  TableAccessType table_access_type_;
 };
 
 class ObDfoSchedulerBasic;

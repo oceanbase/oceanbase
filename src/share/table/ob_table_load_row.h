@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   yuya.yu <yuya.yu@oceanbase.com>
+//   yuya.yu <>
 
 #pragma once
 
@@ -31,6 +31,10 @@ public:
   void set_allocator(const ObTableLoadSharedAllocatorHandle &allocator_handle)
   {
     allocator_handle_ = allocator_handle;
+  }
+  ObTableLoadSharedAllocatorHandle& get_allocator_handler()
+  {
+    return allocator_handle_;
   }
   TO_STRING_KV(K_(count));
 

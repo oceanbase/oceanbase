@@ -24,6 +24,8 @@ SKIP { return SKIP; }
 WHILE { return WHILE; }
 AND { return AND; }
 OR { return OR; }
+"&&" { return T_AND; }
+"||" { return T_OR; }
 
 "="  { return EQUAL; }
 "!=" { return NOT_EQUAL; }
@@ -32,6 +34,8 @@ OR { return OR; }
 "<=" { return LESS_OR_EQUAL; }
 "<"  { return LESS; }
 NO_OP { return NO_OP; }
+IS { return IS; }
+IS_NOT { return IS_NOT; }
 
 TRUE {
 yylval->ival = 1;
@@ -88,6 +92,7 @@ PageFilter { return PageFilter; }
 ColumnCountGetFilter { return ColumnCountGetFilter; }
 CheckAndMutateFilter { return CheckAndMutateFilter; }
 PrefixFilter { return PrefixFilter; }
+TableCompareFilter { return TableCompareFilter; }
 
 [(),] {
     return yytext[0];

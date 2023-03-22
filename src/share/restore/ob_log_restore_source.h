@@ -18,8 +18,10 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/worker.h"
+#include "lib/allocator/page_arena.h"
 #include "share/scn.h"
 #include <cstdint>
+
 namespace oceanbase
 {
 namespace share
@@ -61,7 +63,7 @@ struct ObLogRestoreSourceItem
   ObLogRestoreSourceType type_;
   common::ObString value_;
   SCN until_scn_;
-  lib::ObArenaAllocator allocator_;
+  common::ObArenaAllocator allocator_;
   ObLogRestoreSourceItem() :
     tenant_id_(),
     id_(),

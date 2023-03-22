@@ -257,6 +257,11 @@ class ObTxSavePoint
 private:
   enum class T { INVL= 0, SAVEPOINT= 1, SNAPSHOT= 2, STASH= 3 } type_;
   int64_t scn_;
+  /* The savepoint should be unique to the session,
+    and the session id is required to distinguish the
+    savepoint for the multi-branch scenario of xa */
+  uint32_t session_id_;
+  bool user_create_;
   union {
     ObTxReadSnapshot *snapshot_;
     common::ObFixedLengthString<128> name_;
@@ -266,14 +271,20 @@ public:
   ~ObTxSavePoint();
   ObTxSavePoint(const ObTxSavePoint &s);
   ObTxSavePoint &operator=(const ObTxSavePoint &a);
+  bool operator==(const ObTxSavePoint &a) const;
   void release();
   void rollback();
-  int init(const int64_t scn, const ObString &name, const bool stash = false);
+  int init(const int64_t scn,
+           const ObString &name,
+           const uint32_t session_id,
+           const bool user_create,
+           const bool stash = false);
   void init(ObTxReadSnapshot *snapshot);
   bool is_savepoint() const { return type_ == T::SAVEPOINT || type_ == T::STASH; }
   bool is_snapshot() const { return type_ == T::SNAPSHOT; }
   bool is_stash() const { return type_ == T::STASH; }
   DECLARE_TO_STRING;
+  OB_UNIS_VERSION(1);
 };
 
 typedef ObSEArray<ObTxSavePoint, 4> ObTxSavePointList;
@@ -339,7 +350,8 @@ protected:
   share::SCN snapshot_version_;           // snapshot for RR | SERIAL Isolation
   int64_t snapshot_uncertain_bound_;   // uncertain bound of @snapshot_version_
   int64_t snapshot_scn_;               // the time of acquire @snapshot_version_
-  uint32_t sess_id_;                   // sesssion id
+  uint32_t sess_id_;                   // sesssion id of txn start, for XA it is XA_START session id
+  uint32_t assoc_sess_id_;             // the session which associated with
   ObGlobalTxType global_tx_type_;      // global trans type, i.e., xa or dblink
 
   uint64_t op_sn_;                     // Tx level operation sequence No
@@ -477,7 +489,8 @@ private:
   int update_parts_(const ObTxPartList &list);
   void implicit_start_tx_();
   bool acq_commit_cb_lock_if_need_();
-  bool in_tx_or_has_state_();
+  bool has_extra_state_() const;
+  bool in_tx_or_has_extra_state_() const;
   bool in_tx_for_free_route_();
   void print_trace_() const;
 public:
@@ -489,6 +502,7 @@ public:
                K_(addr),
                K_(tenant_id),
                "session_id", sess_id_,
+               "assoc_session_id", assoc_sess_id_,
                "xid", PC((!xid_.empty() ? &xid_ : (ObXATransID*)nullptr)),
                "xa_mode", xid_.empty() ? "" : (xa_tightly_couple_ ? "tightly" : "loosely"),
                K_(xa_start_addr),
@@ -543,6 +557,7 @@ public:
   ObTxAccessMode get_access_mode() const { return access_mode_; }
   bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY; }
   bool is_clean() const { return parts_.empty(); }
+  bool is_shadow() const  { return flags_.SHADOW_; }
   bool is_explicit() const { return flags_.EXPLICIT_; }
   void set_with_temporary_table() { flags_.WITH_TEMP_TABLE_ = true; }
   bool with_temporary_table() const { return flags_.WITH_TEMP_TABLE_; }
@@ -583,11 +598,13 @@ public:
   ObXACtx *get_xa_ctx() { return xa_ctx_; }
   void set_xid(const ObXATransID &xid) { xid_ = xid; }
   void set_sessid(const uint32_t session_id) { sess_id_ = session_id; }
+  void set_assoc_sessid(const uint32_t session_id) { assoc_sess_id_ = session_id; }
   const ObXATransID &get_xid() const { return xid_; }
   bool is_xa_trans() const { return !xid_.empty(); }
   bool is_xa_tightly_couple() const { return xa_tightly_couple_; }
+  void set_xa_start_addr(common::ObAddr &addr) { xa_start_addr_ = addr; }
   common::ObAddr xa_start_addr() const { return xa_start_addr_; }
-  void reset_for_xa() { xid_.reset(); xa_ctx_ = NULL; }
+  void reset_for_xa() { xa_ctx_ = NULL; }
   int trans_deep_copy(const ObTxDesc &x);
   int64_t get_active_ts() const { return active_ts_; }
   int64_t get_expire_ts() const;
@@ -595,7 +612,7 @@ public:
   bool is_in_tx() const { return state_ > State::IDLE; }
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
-  bool in_tx_or_has_state();
+  bool in_tx_or_has_extra_state();
   bool in_tx_for_free_route();
   const ObTransID &get_tx_id() const { return tx_id_; }
   ObITxCallback *get_end_tx_cb() { return commit_cb_; }
@@ -731,6 +748,7 @@ private:
 class ObTxInfo
 {
   friend class ObTransService;
+  friend class ObXACtx;
   OB_UNIS_VERSION(1);
 protected:
   uint64_t tenant_id_;
@@ -751,6 +769,7 @@ protected:
   int64_t active_scn_;
   ObTxPartList parts_;
   uint32_t session_id_ = 0;
+  ObTxSavePointList savepoints_;
 public:
   TO_STRING_KV(K_(tenant_id),
                K_(session_id),
@@ -766,7 +785,8 @@ public:
                K_(expire_ts),
                K_(parts),
                K_(cluster_id),
-               K_(cluster_version));
+               K_(cluster_version),
+               K_(savepoints));
   // TODO xa
   bool is_valid() const { return tx_id_.is_valid(); }
   const ObTransID &tid() const { return tx_id_; }
@@ -775,17 +795,20 @@ public:
 class ObTxStmtInfo
 {
   friend class ObTransService;
+  friend class ObXACtx;
   OB_UNIS_VERSION(1);
 protected:
   ObTransID tx_id_;
   uint64_t op_sn_;
   ObTxPartList parts_;
   ObTxDesc::State state_;
+  ObTxSavePointList savepoints_;
 public:
   TO_STRING_KV(K_(tx_id),
                K_(op_sn),
                K_(parts),
-               K_(state));
+               K_(state),
+               K_(savepoints));
   // TODO xa
   bool is_valid() const { return tx_id_.is_valid(); }
   const ObTransID &tid() const { return tx_id_; }

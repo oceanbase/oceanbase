@@ -79,7 +79,7 @@ int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const SCN &scn)
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*tablet_handle.get_obj(),
                                                             table_key,
                                                             scn,
-                                                            log.get_cluster_version(),
+                                                            log.get_data_format_version(),
                                                             log.get_execution_id(),
                                                             SCN::min_scn()/*checkpoint_scn*/))) {
     if (OB_TASK_EXPIRED != ret) {

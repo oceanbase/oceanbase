@@ -71,7 +71,7 @@
  *        memory, set ObFunction to a invalid state if alloc memory failed.
  *      + MAKE SURE ObFunction is valid before call it, or will CRASH.
  *
- *  - Contact xuwang.txw@antgroup.com for help.
+ *  - Contact  for help.
  */
 
 #ifndef OCEANBASE_LIB_FUNCTION_OB_FUNTION_H

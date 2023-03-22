@@ -1,8 +1,8 @@
 // Copyright 2015-2016 Alibaba Inc. All Rights Reserved.
 // Author:
-//     LuoFan luofan.zp@alibaba-inc.com
+//     LuoFan
 // Normalizer:
-//     LuoFan luofan.zp@alibaba-inc.com
+//     LuoFan
 
 #ifndef OCEANBASE_SRC_PL_SYS_PACKAGE_DBMS_QUERY_REWRITE_H_
 #define OCEANBASE_SRC_PL_SYS_PACKAGE_DBMS_QUERY_REWRITE_H_

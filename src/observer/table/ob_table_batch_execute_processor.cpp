@@ -32,7 +32,8 @@ ObTableBatchExecuteP::ObTableBatchExecuteP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
-     need_rollback_trans_(false)
+     need_rollback_trans_(false),
+     batch_ops_atomic_(false)
 {
 }
 
@@ -150,6 +151,7 @@ void ObTableBatchExecuteP::reset_ctx()
 int ObTableBatchExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
+  batch_ops_atomic_ = arg_.batch_operation_as_atomic_;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   uint64_t table_id = OB_INVALID_ID;
   bool is_index_supported = true;
@@ -329,9 +331,9 @@ int ObTableBatchExecuteP::htable_put()
       tb_ctx_.set_entity(&table_operation.entity());
       if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx_, spec, single_op_result))) {
         LOG_WARN("fail to process op with spec", K(ret));
-      } else {
-        affected_rows += single_op_result.get_affected_rows();
       }
+      table::ObTableApiUtil::replace_ret_code(ret);
+      affected_rows += single_op_result.get_affected_rows();
     }
   }
 
@@ -411,6 +413,8 @@ int ObTableBatchExecuteP::multi_get()
       op_result.set_type(tb_ctx_.get_opertion_type());
       if (OB_FAIL(result_.push_back(op_result))) {
         LOG_WARN("fail to push back op result", K(ret), K(i));
+      } else if (batch_ops_atomic_ && OB_FAIL(op_result.get_errno())) {
+        LOG_WARN("fail to execute one operation when batch execute as atomic", K(ret), K(table_operation));
       }
     }
   }
@@ -455,8 +459,13 @@ int ObTableBatchExecuteP::multi_delete()
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx_, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
+        table::ObTableApiUtil::replace_ret_code(ret);
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(result_.push_back(op_result))) {
         LOG_WARN("fail to push back result", K(ret));
+      } else if (batch_ops_atomic_ && OB_FAIL(op_result.get_errno())) {
+        LOG_WARN("fail to execute one operation when batch execute as atomic", K(ret), K(table_operation));
       }
     }
   }
@@ -577,8 +586,13 @@ int ObTableBatchExecuteP::multi_insert()
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx_, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
+        table::ObTableApiUtil::replace_ret_code(ret);
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(result_.push_back(op_result))) {
         LOG_WARN("fail to push back result", K(ret));
+      } else if (batch_ops_atomic_ && OB_FAIL(op_result.get_errno())) {
+        LOG_WARN("fail to execute one operation when batch execute as atomic", K(ret), K(table_operation));
       }
     }
   }
@@ -628,8 +642,13 @@ int ObTableBatchExecuteP::multi_replace()
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx_, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
+        table::ObTableApiUtil::replace_ret_code(ret);
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(result_.push_back(op_result))) {
         LOG_WARN("fail to push back result", K(ret));
+      } else if (batch_ops_atomic_ && OB_FAIL(op_result.get_errno())) {
+        LOG_WARN("fail to execute one operation when batch execute as atomic", K(ret), K(table_operation));
       }
     }
   }
@@ -726,12 +745,14 @@ int ObTableBatchExecuteP::batch_execute_internal(const ObTableBatchOperation &ba
             LOG_ERROR("unexpected operation type", "type", table_operation.type());
             break;
         }
-        ObTableRpcProcessorUtil::replace_ret_code(ret);
+        ObTableApiUtil::replace_ret_code(ret);
       }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(result.push_back(op_result))) {
         LOG_WARN("fail to push back result", K(ret));
+      } else if (batch_ops_atomic_ && OB_FAIL(op_result.get_errno())) {
+        LOG_WARN("fail to execute one operation when batch execute as atomic", K(ret), K(table_operation));
       }
     } else {
       LOG_WARN("fail to execute batch operation, ", K(ret), K(table_operation.type()), K(i));

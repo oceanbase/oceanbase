@@ -249,7 +249,6 @@ DEFINE_EQUAL(ObDictTenantMeta)
 {
   bool is_equal = true;
   LST_DO_CODE(IS_ARG_EQUAL,
-      tenant_id_,
       schema_version_,
       tenant_name_,
       compatibility_mode_,
@@ -270,7 +269,6 @@ DEFINE_SERIALIZE(ObDictTenantMeta)
   if (OB_FAIL(ret)) {
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE,
-      tenant_id_,
       schema_version_,
       tenant_name_,
       compatibility_mode_,
@@ -293,7 +291,6 @@ DEFINE_DESERIALIZE(ObDictTenantMeta)
   } else {
     ObString tmp_tenant_name;
     LST_DO_CODE(OB_UNIS_DECODE,
-      tenant_id_,
       schema_version_,
       tmp_tenant_name,
       compatibility_mode_,
@@ -317,7 +314,6 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictTenantMeta)
   int64_t len = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-      tenant_id_,
       schema_version_,
       tenant_name_,
       compatibility_mode_,
@@ -437,7 +433,6 @@ DEFINE_EQUAL(ObDictDatabaseMeta)
 {
   bool is_equal = true;
   LST_DO_CODE(IS_ARG_EQUAL,
-      tenant_id_,
       database_id_,
       schema_version_,
       database_name_,
@@ -456,7 +451,6 @@ DEFINE_SERIALIZE(ObDictDatabaseMeta)
   if (OB_FAIL(ret)) {
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE,
-      tenant_id_,
       database_id_,
       schema_version_,
       database_name_,
@@ -477,7 +471,6 @@ DEFINE_DESERIALIZE(ObDictDatabaseMeta)
   } else {
     ObString tmp_db_name;
     LST_DO_CODE(OB_UNIS_DECODE,
-      tenant_id_,
       database_id_,
       schema_version_,
       tmp_db_name,
@@ -499,7 +492,6 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictDatabaseMeta)
   int64_t len = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-      tenant_id_,
       database_id_,
       schema_version_,
       database_name_,
@@ -839,7 +831,6 @@ DEFINE_EQUAL(ObDictTableMeta)
 {
   bool is_equal = true;
   LST_DO_CODE(IS_ARG_EQUAL,
-      tenant_id_,
       database_id_,
       table_id_,
       schema_version_,
@@ -872,7 +863,6 @@ DEFINE_SERIALIZE(ObDictTableMeta)
   if (OB_FAIL(ret)) {
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE,
-        tenant_id_,
         database_id_,
         table_id_,
         schema_version_,
@@ -908,7 +898,6 @@ DEFINE_DESERIALIZE(ObDictTableMeta)
     ObString tmp_table_name;
 
     LST_DO_CODE(OB_UNIS_DECODE,
-        tenant_id_,
         database_id_,
         table_id_,
         schema_version_,
@@ -945,7 +934,6 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictTableMeta)
   int64_t len = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-      tenant_id_,
       database_id_,
       table_id_,
       schema_version_,
@@ -1071,18 +1059,8 @@ int ObDictTableMeta::build_index_info_(const schema::ObTableSchema &table_schema
   int ret = OB_SUCCESS;
   const common::ObIndexInfo &index_info = table_schema.get_index_info();
   const ObIArray<ObAuxTableMetaInfo> &simple_index_infos = table_schema.get_simple_index_infos();
-  index_column_count_ = index_info.get_size();
-  const int64_t alloc_size = sizeof(common::ObIndexColumn) * index_column_count_;
 
-  if (OB_ISNULL(allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid allocator_", KR(ret));
-  } else if (index_column_count_ <= 0) {
-    DDLOG(TRACE, "not found index_cols_, skip", KPC(this));
-  } else if (OB_ISNULL(index_cols_ = static_cast<ObIndexColumn*>(allocator_->alloc(alloc_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    DDLOG(WARN, "alloc for index_cols_ failed", KR(ret), K(alloc_size), KPC(this));
-  } else {
+  if (table_schema.is_user_table()) {
     // build index_table_id_arr
     for (int i = 0; OB_SUCC(ret) &&i < simple_index_infos.count(); i++) {
       ObAuxTableMetaInfo index_table_info;
@@ -1095,21 +1073,38 @@ int ObDictTableMeta::build_index_info_(const schema::ObTableSchema &table_schema
             KR(ret), K(i), K(simple_index_infos), K_(unique_index_tid_arr), KPC(this));
       }
     }
+  } else if (table_schema.is_unique_index()) {
+    // only build index column info for unique index table, cause OBCDC only use unique_index info.
+    index_column_count_ = index_info.get_size();
+    const int64_t alloc_size = sizeof(common::ObIndexColumn) * index_column_count_;
 
-    // build index_columns
-    for (int i = 0; OB_SUCC(ret) && i < index_column_count_; i++) {
-      ObIndexColumn *idx_col = new (index_cols_ + i) ObIndexColumn();
-      ObIndexColumn tmp_idx_col;
+    if (OB_ISNULL(allocator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      DDLOG(WARN, "invalid allocator_", KR(ret));
+    } else if (index_column_count_ <= 0) {
+      DDLOG(TRACE, "not found index_cols_, skip", KPC(this));
+    } else if (OB_ISNULL(index_cols_ = static_cast<ObIndexColumn*>(allocator_->alloc(alloc_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      DDLOG(WARN, "alloc for index_cols_ failed", KR(ret), K(alloc_size), KPC(this));
+    } else {
+      // build index_columns
+      for (int i = 0; OB_SUCC(ret) && i < index_column_count_; i++) {
+        ObIndexColumn *idx_col = new (index_cols_ + i) ObIndexColumn();
+        ObIndexColumn tmp_idx_col;
 
-      if (OB_FAIL(index_info.get_column(i, tmp_idx_col))) {
-        DDLOG(WARN, "get_index_column from ObIndexInfo failed", KR(ret), K(index_info), K(i), KPC(this));
-      } else if (OB_ISNULL(idx_col)) {
-        ret = OB_INVALID_DATA;
-        DDLOG(WARN, "expect valid index_column", KR(ret), K(index_info), K(i), KPC(this));
-      } else {
-        *idx_col = tmp_idx_col;
+        if (OB_FAIL(index_info.get_column(i, tmp_idx_col))) {
+          DDLOG(WARN, "get_index_column from ObIndexInfo failed", KR(ret), K(index_info), K(i), KPC(this));
+        } else if (OB_ISNULL(idx_col)) {
+          ret = OB_INVALID_DATA;
+          DDLOG(WARN, "expect valid index_column", KR(ret), K(index_info), K(i), KPC(this));
+        } else {
+          *idx_col = tmp_idx_col;
+        }
       }
     }
+  } else {
+    // ignore index info of other table type
+    // and other type of table exclude user table and unique index table
   }
 
   return ret;
@@ -1159,27 +1154,32 @@ int ObDictTableMeta::build_index_info_(const ObDictTableMeta &src_table_meta)
 int ObDictTableMeta::build_rowkey_info_(const schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  const common::ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
-  rowkey_column_count_ = rowkey_info.get_size();
-  const int64_t alloc_size = sizeof(common::ObRowkeyColumn) * rowkey_column_count_;
 
-  if (rowkey_column_count_ <= 0) {
-    DDLOG(TRACE, "not found rowkey cols, skip", KPC(this));
-  } else if (OB_ISNULL(rowkey_cols_ = static_cast<ObRowkeyColumn*>(allocator_->alloc(alloc_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    DDLOG(WARN, "alloc for rowkey_cols_ failed", KR(ret), K(alloc_size), KPC(this));
+  if (!table_schema.is_user_table()) {
+    // only record rowkey column info for user table.
   } else {
-    for (int i = 0; OB_SUCC(ret) && i < rowkey_column_count_; i++) {
-      ObRowkeyColumn *rowkey_col = new (rowkey_cols_ + i) ObRowkeyColumn();
-      ObRowkeyColumn tmp_rowkey_col;
+    const common::ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+    rowkey_column_count_ = rowkey_info.get_size();
+    const int64_t alloc_size = sizeof(common::ObRowkeyColumn) * rowkey_column_count_;
 
-      if (OB_FAIL(rowkey_info.get_column(i, tmp_rowkey_col))) {
-        DDLOG(WARN, "get_rowkey_column from ObRowkeyInfo failed", KR(ret), K(rowkey_info), K(i), KPC(this));
-      } else if (OB_ISNULL(rowkey_col)) {
-        ret = OB_INVALID_DATA;
-        DDLOG(WARN, "expect valid rowkey_column", KR(ret), K(rowkey_info), K(i), KPC(this));
-      } else {
-        *rowkey_col = tmp_rowkey_col;
+    if (rowkey_column_count_ <= 0) {
+      DDLOG(TRACE, "not found rowkey cols, skip", KPC(this));
+    } else if (OB_ISNULL(rowkey_cols_ = static_cast<ObRowkeyColumn*>(allocator_->alloc(alloc_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      DDLOG(WARN, "alloc for rowkey_cols_ failed", KR(ret), K(alloc_size), KPC(this));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < rowkey_column_count_; i++) {
+        ObRowkeyColumn *rowkey_col = new (rowkey_cols_ + i) ObRowkeyColumn();
+        ObRowkeyColumn tmp_rowkey_col;
+
+        if (OB_FAIL(rowkey_info.get_column(i, tmp_rowkey_col))) {
+          DDLOG(WARN, "get_rowkey_column from ObRowkeyInfo failed", KR(ret), K(rowkey_info), K(i), KPC(this));
+        } else if (OB_ISNULL(rowkey_col)) {
+          ret = OB_INVALID_DATA;
+          DDLOG(WARN, "expect valid rowkey_column", KR(ret), K(rowkey_info), K(i), KPC(this));
+        } else {
+          *rowkey_col = tmp_rowkey_col;
+        }
       }
     }
   }
@@ -1224,7 +1224,9 @@ int ObDictTableMeta::build_column_info_(const schema::ObTableSchema &table_schem
   int ret = OB_SUCCESS;
   common::ObArray<share::schema::ObColDesc> column_ids;
 
-  if (OB_ISNULL(allocator_)) {
+  if (!table_schema.is_user_table()) {
+    // only build_column_info_ for user table.
+  } else if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     DDLOG(WARN, "invalid allocator_", KR(ret));
   } else if (OB_FAIL(table_schema.get_column_ids(column_ids))) {

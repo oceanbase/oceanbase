@@ -306,7 +306,7 @@ void TestRawDecoder::SetUp()
   ctx_.column_cnt_ = COLUMN_CNT + extra_rowkey_cnt;
   ctx_.col_descs_ = &col_descs_;
 
-  int64_t column_encodings[ctx_.column_cnt_];
+  int64_t *column_encodings = reinterpret_cast<int64_t *>(allocator_.alloc(sizeof(int64_t) * ctx_.column_cnt_));
   ctx_.column_encodings_ = column_encodings;
   for (int64_t i = 0; i < ctx_.column_cnt_; ++i) {
     ctx_.column_encodings_[i] = ObColumnHeader::Type::RAW;

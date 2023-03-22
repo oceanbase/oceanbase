@@ -211,13 +211,13 @@ int ObFreezeInfoManager::get_global_broadcast_scn(SCN &global_broadcast_scn) con
   return ret;
 }
 
-int ObFreezeInfoManager::adjust_global_merge_info()
+int ObFreezeInfoManager::adjust_global_merge_info(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(merge_info_mgr_)) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("merge info mgr is null", KR(ret));
-  } else if (OB_FAIL(merge_info_mgr_->adjust_global_merge_info())) {
+  } else if (OB_FAIL(merge_info_mgr_->adjust_global_merge_info(expected_epoch))) {
     LOG_WARN("fail to adjust global merge info", KR(ret), K_(tenant_id));
   }
   return ret;
@@ -287,7 +287,7 @@ int ObFreezeInfoManager::set_freeze_info()
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
-  } else if (GCTX.schema_service_->get_tenant_refreshed_schema_version(tenant_id_, tenant_schema_version)) {
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_refreshed_schema_version(tenant_id_, tenant_schema_version))) {
     LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K_(tenant_id));
   } else {
     ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
@@ -416,6 +416,7 @@ int ObFreezeInfoManager::generate_frozen_scn(
 
   SCN tmp_frozen_scn;
   SCN local_max_frozen_scn;
+  uint64_t cur_min_data_version = 0;
 
   ObSimpleFrozenStatus max_frozen_status;
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
@@ -424,8 +425,26 @@ int ObFreezeInfoManager::generate_frozen_scn(
   } else if (OB_FAIL(freeze_info.get_latest_frozen_scn(local_max_frozen_scn))) {
     LOG_WARN("fail to get latest frozen_scn", KR(ret), K(freeze_info));
   } else if (max_frozen_status.frozen_scn_ != local_max_frozen_scn) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("max frozen_scn not same in cache and table", KR(ret), K(max_frozen_status), K(local_max_frozen_scn));
+    // after new leader updates epoch and reloads freeze_info, old leader generates one new
+    // frozen_scn and can add it into __all_freeze_info (cuz not checking epoch)
+    //
+    if (local_max_frozen_scn < max_frozen_status.frozen_scn_) {
+      ret = OB_EAGAIN;
+      LOG_WARN("max frozen_scn in cache is smaller than max frozen_scn in table, will try again",
+               KR(ret), K(local_max_frozen_scn), K(max_frozen_status));
+    } else { // local_max_frozen_scn > max_frozen_status.frozen_scn_
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("max frozen_scn in cache is larger than max frozen_scn in table", KR(ret),
+               K(local_max_frozen_scn), K(max_frozen_status));
+    }
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, cur_min_data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
+  } else if (cur_min_data_version < max_frozen_status.data_version_) {
+    // do not allow data_version of freeze_info rollback
+    ret = OB_MAJOR_FREEZE_NOT_ALLOW;
+    LOG_WARN("major freeze is not allowed now, please check and upgrade observer", KR(ret),
+             K_(tenant_id), K(cur_min_data_version), "last_min_data_version",
+             max_frozen_status.data_version_);
   } else if (OB_FAIL(get_gts(tmp_frozen_scn))) {
     LOG_WARN("fail to get gts", KR(ret));
   } else if ((tmp_frozen_scn <= snapshot_gc_scn)

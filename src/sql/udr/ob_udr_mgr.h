@@ -1,8 +1,8 @@
 // Copyright 2015-2016 Alibaba Inc. All Rights Reserved.
 // Author:
-//     LuoFan luofan.zp@alibaba-inc.com
+//     LuoFan
 // Normalizer:
-//     LuoFan luofan.zp@alibaba-inc.com
+//     LuoFan
 
 
 #ifndef OB_SQL_UDR_OB_UDR_MGR_H_
@@ -84,7 +84,8 @@ public:
     tg_id_(-1),
     rule_version_(OB_INIT_REWRITE_RULE_VERSION) {}
   ~ObUDRMgr();
-  static int mtl_init(ObUDRMgr* &node_list);
+  static int mtl_init(ObUDRMgr* &udr_mgr);
+  static void mtl_stop(ObUDRMgr* &udr_mgr);
   void destroy();
   int insert_rule(ObUDRInfo &arg);
   int remove_rule(ObUDRInfo &arg);

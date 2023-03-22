@@ -847,7 +847,7 @@ int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table
                                                                      gen_col_expr,
                                                                      schema_checker_))) {
         LOG_WARN("build generated column expr failed", K(ret));
-      } /*  https://work.aone.alibaba-inc.com/issue/29796289
+      } /*
         if gc column is partition key, then this is no restriction
         else {
         //check Expr Function for generated column whether allowed.
@@ -1548,6 +1548,10 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
     if (OB_ISNULL(select_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid select stmt", K(select_stmt));
+    } else if (OB_FAIL(params_.query_ctx_->query_hint_.init_query_hint(allocator_,
+                                                                       session_info_,
+                                                                       select_stmt))) {
+      LOG_WARN("failed to init query hint.", K(ret));
     } else {
       ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
       ObColumnSchemaV2 column;
@@ -1660,6 +1664,11 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             column.set_charset_type(table_schema.get_charset_type());
             column.set_collation_type(expr->get_collation_type());
             column.set_accuracy(expr->get_accuracy());
+            if (lib::is_mysql_mode() && ob_is_number_tc(expr->get_result_type().get_type())) {
+              // TODO@zuojiao.hzj: add decimal int type here
+              column.set_data_precision(MIN(OB_MAX_DECIMAL_PRECISION, expr->get_accuracy().get_precision()));
+              column.set_data_scale(MIN(OB_MAX_DECIMAL_SCALE, expr->get_accuracy().get_scale()));
+            }
             OZ (adjust_string_column_length_within_max(column, lib::is_oracle_mode()));
             LOG_DEBUG("column expr debug", K(*expr));
           }

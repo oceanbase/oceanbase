@@ -1,8 +1,8 @@
 // Copyright 2015-2016 Alibaba Inc. All Rights Reserved.
 // Author:
-//     LuoFan luofan.zp@alibaba-inc.com
+//     LuoFan
 // Normalizer:
-//     LuoFan luofan.zp@alibaba-inc.com
+//     LuoFan
 
 
 #define USING_LOG_PREFIX SQL_QRR
@@ -158,6 +158,14 @@ int ObUDRMgr::mtl_init(ObUDRMgr* &node_list)
     LOG_WARN("failed to init event list", K(ret));
   }
   return ret;
+}
+
+void ObUDRMgr::mtl_stop(ObUDRMgr* &udr_mgr)
+{
+  if (NULL != udr_mgr && udr_mgr->inited_) {
+    TG_CANCEL(udr_mgr->tg_id_, udr_mgr->refresh_task_);
+    TG_STOP(udr_mgr->tg_id_);
+  }
 }
 
 void ObUDRMgr::destroy()

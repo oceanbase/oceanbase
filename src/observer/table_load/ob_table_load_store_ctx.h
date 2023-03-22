@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #pragma once
 
@@ -36,57 +36,71 @@ class ObTableLoadErrorRowHandler;
 
 class ObTableLoadStoreCtx
 {
+static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
 public:
   ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadStoreCtx();
-  int init(int64_t ddl_task_id,
-           const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
-           const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
+  int init(
+    const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
+    const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
   TO_STRING_KV(K_(is_inited));
 public:
+  OB_INLINE obsys::ObRWLock &get_status_lock()
+  {
+    return status_lock_;
+  }
   OB_INLINE table::ObTableLoadStatusType get_status() const
   {
-    obsys::ObRLockGuard guard(rwlock_);
+    obsys::ObRLockGuard guard(status_lock_);
     return status_;
   }
   OB_INLINE int get_error_code() const
   {
-    obsys::ObRLockGuard guard(rwlock_);
+    obsys::ObRLockGuard guard(status_lock_);
     return error_code_;
   }
   OB_INLINE int set_status_inited()
   {
-    return advance_status(table::ObTableLoadStatusType::INITED);
+    obsys::ObWLockGuard guard(status_lock_);
+    return advance_status_unlock(table::ObTableLoadStatusType::INITED);
   }
   OB_INLINE int set_status_loading()
   {
-    return advance_status(table::ObTableLoadStatusType::LOADING);
+    obsys::ObWLockGuard guard(status_lock_);
+    return advance_status_unlock(table::ObTableLoadStatusType::LOADING);
   }
   OB_INLINE int set_status_frozen()
   {
-    return advance_status(table::ObTableLoadStatusType::FROZEN);
+    obsys::ObWLockGuard guard(status_lock_);
+    return advance_status_unlock(table::ObTableLoadStatusType::FROZEN);
   }
   OB_INLINE int set_status_merging()
   {
-    return advance_status(table::ObTableLoadStatusType::MERGING);
+    obsys::ObWLockGuard guard(status_lock_);
+    return advance_status_unlock(table::ObTableLoadStatusType::MERGING);
   }
   OB_INLINE int set_status_merged()
   {
-    return advance_status(table::ObTableLoadStatusType::MERGED);
+    obsys::ObWLockGuard guard(status_lock_);
+    return advance_status_unlock(table::ObTableLoadStatusType::MERGED);
   }
-  OB_INLINE int set_status_commit()
+  OB_INLINE int set_status_commit_unlock()
   {
-    return advance_status(table::ObTableLoadStatusType::COMMIT);
+    return advance_status_unlock(table::ObTableLoadStatusType::COMMIT);
   }
   int set_status_error(int error_code);
   int set_status_abort();
-  int check_status(table::ObTableLoadStatusType status) const;
-private:
-  int advance_status(table::ObTableLoadStatusType status);
   int check_status_unlock(table::ObTableLoadStatusType status) const;
+  OB_INLINE int check_status(table::ObTableLoadStatusType status) const
+  {
+    obsys::ObRLockGuard guard(status_lock_);
+    return check_status_unlock(status);
+  }
+private:
+  int advance_status_unlock(table::ObTableLoadStatusType status);
 public:
   int start_trans(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTrans *&trans);
   int commit_trans(ObTableLoadStoreTrans *trans);
@@ -103,7 +117,6 @@ public:
   int check_exist_trans(bool &exist) const;
   // release disk space
   void clear_committed_trans_stores();
-  int commit();
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTrans *&trans);
@@ -111,6 +124,7 @@ private:
   int init_session_ctx_array();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
+public:
   int commit_autoinc_value();
 public:
   ObTableLoadTableCtx * const ctx_;
@@ -157,10 +171,11 @@ private:
   typedef common::ObLinkHashMap<table::ObTableLoadSegmentID, SegmentCtx> SegmentCtxMap;
 private:
   ObTableLoadObjectAllocator<ObTableLoadStoreTrans> trans_allocator_; // 多线程安全
-  mutable obsys::ObRWLock rwlock_;
   common::ObArenaAllocator allocator_;
+  obsys::ObRWLock status_lock_;
   table::ObTableLoadStatusType status_;
   int error_code_;
+  mutable obsys::ObRWLock rwlock_;
   TransMap trans_map_;
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;

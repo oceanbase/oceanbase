@@ -26,6 +26,7 @@
 #include "storage/blocksstable/ob_sstable.h"
 #include "lib/container/ob_loser_tree.h"
 #include "storage/compaction/ob_partition_rows_merger.h"
+#include "storage/compaction/ob_compaction_trans_cache.h"
 
 namespace oceanbase
 {
@@ -73,6 +74,7 @@ protected:
   void set_base_iter(const MERGE_ITER_ARRAY &minimum_iters);
 protected:
   static const int64_t DEFAULT_ITER_ARRAY_SIZE = DEFAULT_ITER_COUNT * sizeof(ObPartitionMergeIter *);
+  static const int64_t CACHED_TRANS_STATE_MAX_CNT = 10 * 1024l;
 protected:
   common::ObArenaAllocator allocator_;
   ObTabletMergeCtx *merge_ctx_;
@@ -83,6 +85,7 @@ protected:
   blocksstable::ObMacroBlockWriter *macro_writer_;
   MERGE_ITER_ARRAY minimum_iters_;
   ObPartitionMergeIter *base_iter_;
+  ObCachedTransStateMgr trans_state_mgr_;
   int64_t task_idx_;
   bool check_macro_need_merge_;
   bool is_inited_;

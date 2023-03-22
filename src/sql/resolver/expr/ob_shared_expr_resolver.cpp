@@ -1,6 +1,6 @@
 // (C) Copyright 2021 Alibaba Inc. All Rights Reserved.
 //  Authors:
-//    link.zt <link.zt@antfin.com>
+//    link.zt <>
 //  Normalizer:
 //
 //
@@ -21,6 +21,9 @@ bool ObQuestionmarkEqualCtx::compare_const(const ObConstRawExpr &left,
   bool bret = false;
   if (left.get_expr_type() != right.get_expr_type() ||
       left.get_result_type() != right.get_result_type() ||
+      (left.get_result_type().is_ext()
+        && left.get_result_type().get_extend_type() > 0
+        && left.get_result_type().get_extend_type() < T_EXT_SQL_ARRAY) ||
       OB_SUCCESS != err_code_) {
     // do nothing
   } else if (left.get_expr_type() != T_QUESTIONMARK) {

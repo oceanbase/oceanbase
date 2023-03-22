@@ -26,6 +26,8 @@ public:
   ObPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts)
       : op_id_(op_id), task_cnt_(task_cnt), timeout_ts_(timeout_ts) {}
   virtual ~ObPieceMsgCtx() {}
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) { return OB_SUCCESS; };
+  virtual void reset_resource() = 0;
   VIRTUAL_TO_STRING_KV(K_(op_id), K_(task_cnt));
   virtual void destroy() {}
   uint64_t op_id_;    // 哪个算子使用 datahub 服务
@@ -47,12 +49,13 @@ public:
       }
     }
     ctxs_.reset();
+    types_.reset();
   }
-  int find_piece_ctx(uint64_t op_id, ObPieceMsgCtx *&ctx)
+  int find_piece_ctx(uint64_t op_id, dtl::ObDtlMsgType type, ObPieceMsgCtx *&ctx)
   {
     int ret = common::OB_ENTRY_NOT_EXIST;;
     for (int i = 0; i < ctxs_.count(); ++i) {
-      if (ctxs_.at(i)->op_id_ == op_id) {
+      if (ctxs_.at(i)->op_id_ == op_id && types_.at(i) == type) {
         ret = common::OB_SUCCESS;
         ctx = ctxs_.at(i);
         break;
@@ -60,12 +63,17 @@ public:
     }
     return ret;
   }
-  int add_piece_ctx(ObPieceMsgCtx *ctx)
+  int add_piece_ctx(ObPieceMsgCtx *ctx, dtl::ObDtlMsgType type)
   {
-    return ctxs_.push_back(ctx);
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ctxs_.push_back(ctx))) {
+    } else if (OB_FAIL(types_.push_back(type))) {
+    }
+    return ret;
   }
 private:
   common::ObSEArray<ObPieceMsgCtx *, 2> ctxs_;
+  common::ObSEArray<dtl::ObDtlMsgType, 2> types_;
 };
 
 }

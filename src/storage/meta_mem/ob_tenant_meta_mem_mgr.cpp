@@ -29,6 +29,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
+#include "share/ob_thread_define.h"
 
 namespace oceanbase
 {
@@ -86,7 +87,7 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     bucket_lock_(),
     allocator_(tenant_id, wash_func_),
     tablet_map_(),
-    timer_(),
+    tg_id_(-1),
     table_gc_task_(this),
     min_minor_sstable_gc_task_(this),
     refresh_config_task_(),
@@ -150,14 +151,11 @@ int ObTenantMetaMemMgr::init()
     LOG_WARN("fail to create last min minor sstable set", K(ret));
   } else if (pinned_tablet_set_.create(DEFAULT_BUCKET_NUM)) {
     LOG_WARN("fail to create pinned tablet set", K(ret));
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantMetaMemMgr, tg_id_))) {
+    LOG_WARN("fail to create thread for t3m", K(ret));
   } else {
-    timer_.set_run_wrapper(MTL_CTX());
-    if (OB_FAIL(timer_.init("T3mGC"))) {
-      LOG_WARN("fail to init itable gc timer", K(ret));
-    } else {
-      init_pool_arr();
-      is_inited_ = true;
-    }
+    init_pool_arr();
+    is_inited_ = true;
   }
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -184,31 +182,46 @@ void ObTenantMetaMemMgr::init_pool_arr()
 int ObTenantMetaMemMgr::start()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(timer_.schedule(table_gc_task_, TABLE_GC_INTERVAL_US, true/*repeat*/))) {
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been inited", K(ret));
+  } else if (OB_FAIL(TG_START(tg_id_))) {
+    LOG_WARN("fail to start thread for t3m", K(ret), K(tg_id_));
+  } else if (OB_FAIL(TG_SCHEDULE(tg_id_, table_gc_task_, TABLE_GC_INTERVAL_US, true/*repeat*/))) {
     LOG_WARN("fail to schedule itables gc task", K(ret));
-  } else if (OB_FAIL(timer_.schedule(min_minor_sstable_gc_task_, MIN_MINOR_SSTABLE_GC_INTERVAL_US,
-      true/*repeat*/))) {
+  } else if (OB_FAIL(TG_SCHEDULE(
+      tg_id_, min_minor_sstable_gc_task_, MIN_MINOR_SSTABLE_GC_INTERVAL_US, true/*repeat*/))) {
     LOG_WARN("fail to schedule min minor sstable gc task", K(ret));
-  } else if (OB_FAIL(timer_.schedule(refresh_config_task_, REFRESH_CONFIG_INTERVAL_US,
-      true/*repeat*/))) {
+  } else if (OB_FAIL(TG_SCHEDULE(
+      tg_id_, refresh_config_task_, REFRESH_CONFIG_INTERVAL_US, true/*repeat*/))) {
     LOG_WARN("fail to schedule refresh config task", K(ret));
+  } else {
+    LOG_INFO("successfully to start t3m's three tasks", K(ret), K(tg_id_));
   }
   return ret;
 }
 
 void ObTenantMetaMemMgr::stop()
 {
-  timer_.stop();
+  if (OB_LIKELY(is_inited_)) {
+    TG_STOP(tg_id_);
+    LOG_INFO("t3m's three tasks have been stopped", K(tg_id_));
+  }
 }
 
 void ObTenantMetaMemMgr::wait()
 {
-  timer_.wait();
+  if (OB_LIKELY(is_inited_)) {
+    TG_WAIT(tg_id_);
+    LOG_INFO("t3m's three tasks have finished wait", K(tg_id_));
+  }
 }
 
 void ObTenantMetaMemMgr::destroy()
 {
   int ret = OB_SUCCESS;
+  TG_DESTROY(tg_id_);
+  tg_id_ = -1;
   bool is_all_clean = false;
   tablet_map_.destroy();
   last_min_minor_sstable_set_.destroy();
@@ -216,7 +229,6 @@ void ObTenantMetaMemMgr::destroy()
   while (!is_all_clean && OB_SUCC(gc_tables_in_queue(is_all_clean)));
   bucket_lock_.destroy();
   allocator_.reset();
-  timer_.destroy();
   for (int64_t i = 0; i <= ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE; i++) {
     pool_arr_[i] = nullptr;
   }
@@ -255,7 +267,7 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
     if (OB_FAIL(free_tables_queue_.push((ObLink *)item))) {
       LOG_ERROR("fail to push back into free_tables_queue_", K(ret), KPC(item));
     } else {
-      FLOG_INFO("succeed to push table into gc queue", KP(table), K(table_type), K(lbt()));
+      LOG_DEBUG("succeed to push table into gc queue", KP(table), K(table_type), K(lbt()));
     }
   }
 
@@ -378,7 +390,8 @@ void ObTenantMetaMemMgr::gc_sstable(ObSSTable *sstable)
     }
     const int64_t end_time = ObTimeUtility::current_time();
     if (end_time - start_time > SSTABLE_GC_MAX_TIME) {
-      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "sstable gc costs too much time", K(start_time), K(end_time), K(block_cnt));
+      int ret = OB_ERR_TOO_MUCH_TIME;
+      LOG_DEBUG("sstable gc costs too much time", K(ret), K(start_time), K(end_time), K(block_cnt));
     }
   }
 }
@@ -1858,6 +1871,8 @@ int ObTenantTabletPtrWithInMemObjIterator::get_next_tablet_pointer(
           if (OB_ENTRY_NOT_EXIST != ret){
             LOG_WARN("fail to get in memory tablet handle", K(ret), K(key));
           }
+        } else if (success) {
+          in_memory_tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
         }
         if (OB_SUCC(ret) || ignore_err_code(ret)) {
           ++idx_;

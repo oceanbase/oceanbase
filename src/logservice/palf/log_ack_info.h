@@ -25,10 +25,12 @@ struct LsnTsInfo
 {
   LSN lsn_;
   int64_t last_ack_time_us_;
-  LsnTsInfo() : lsn_(), last_ack_time_us_(OB_INVALID_TIMESTAMP)
+  int64_t last_advance_time_us_;
+  LsnTsInfo()
+    : lsn_(), last_ack_time_us_(OB_INVALID_TIMESTAMP), last_advance_time_us_(OB_INVALID_TIMESTAMP)
   {}
   LsnTsInfo(const LSN &lsn, const int64_t ack_time_us)
-    : lsn_(lsn), last_ack_time_us_(ack_time_us)
+    : lsn_(lsn), last_ack_time_us_(ack_time_us), last_advance_time_us_(ack_time_us)
   {}
   bool is_valid() const {
     return (lsn_.is_valid() && OB_INVALID_TIMESTAMP != last_ack_time_us_);
@@ -37,13 +39,15 @@ struct LsnTsInfo
   {
     lsn_.reset();
     last_ack_time_us_ = OB_INVALID_TIMESTAMP;
+    last_advance_time_us_ = OB_INVALID_TIMESTAMP;
   }
   void operator=(const LsnTsInfo &val)
   {
     lsn_ = val.lsn_;
     last_ack_time_us_ = val.last_ack_time_us_;
+    last_advance_time_us_ = val.last_advance_time_us_;
   }
-  TO_STRING_KV(K_(lsn), K_(last_ack_time_us));
+  TO_STRING_KV(K_(lsn), K_(last_ack_time_us), K_(last_advance_time_us));
 };
 
 struct LogMemberAckInfo
@@ -78,7 +82,8 @@ struct LogMemberAckInfo
 
 typedef common::ObSEArray<LogMemberAckInfo, common::OB_MAX_MEMBER_NUMBER> LogMemberAckInfoList;
 
-inline int64_t ack_info_list_get_index(const LogMemberAckInfoList &list_a,
+template<typename T = LogMemberAckInfo>
+inline int64_t ack_info_list_get_index(const common::ObSEArray<T, common::OB_MAX_MEMBER_NUMBER> &list_a,
                                        const common::ObAddr &addr)
 {
   int64_t index = -1;
@@ -91,8 +96,9 @@ inline int64_t ack_info_list_get_index(const LogMemberAckInfoList &list_a,
   return index;
 }
 
+template<typename T = LogMemberAckInfo>
 inline bool ack_info_list_addr_equal(const common::GlobalLearnerList &list_a,
-                                     const LogMemberAckInfoList &list_b)
+                                     const common::ObSEArray<T, common::OB_MAX_MEMBER_NUMBER>  &list_b)
 {
   bool bool_ret = true;
   if (list_a.get_member_number() != list_b.count()) {
@@ -108,8 +114,9 @@ inline bool ack_info_list_addr_equal(const common::GlobalLearnerList &list_a,
   return bool_ret;
 }
 
-inline bool ack_info_list_addr_equal(const LogMemberAckInfoList &list_a,
-                                     const LogMemberAckInfoList &list_b)
+template<typename T = LogMemberAckInfo>
+inline bool ack_info_list_addr_equal(const common::ObSEArray<T, common::OB_MAX_MEMBER_NUMBER>  &list_a,
+                                     const common::ObSEArray<T, common::OB_MAX_MEMBER_NUMBER>  &list_b)
 {
   bool bool_ret = true;
   if (list_a.count() != list_b.count()) {

@@ -103,7 +103,8 @@ public:
                K_(cur_offset),
                "unfinished_data_size", get_log_fetch_size(),
                K_(max_scn),
-               K_(send_task));
+               K_(send_task),
+               KP(this));
 
 private:
   uint64_t tenant_id_;
@@ -204,7 +205,8 @@ public:
                K_(file_id),
                K_(file_offset),
                K_(data),
-               K_(data_len));
+               K_(data_len),
+               KP(this));
 private:
   static const int8_t INITAL_STATUS = 0;
   static const int8_t ISSUE_STATUS = 1;

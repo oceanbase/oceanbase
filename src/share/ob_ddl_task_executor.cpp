@@ -240,7 +240,7 @@ void ObDDLTaskExecutor::run1()
   int64_t executed_task_count = 0;
   ObIDDLTask *task = NULL;
   ObIDDLTask *first_retry_task = NULL;
-  (void)prctl(PR_SET_NAME, "DDLTaskExecutor", 0, 0, 0);
+  lib::set_thread_name("DDLTaskExecutor");
   while (!has_set_stop()) {
     while (!has_set_stop() && executed_task_count < BATCH_EXECUTE_COUNT) {
       if (OB_FAIL(task_queue_.get_next_task(task))) {

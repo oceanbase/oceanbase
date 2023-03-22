@@ -405,12 +405,6 @@ int ObJoinOrder::compute_sharding_info_for_base_path(const bool use_das,
                                   table_partition_info.get_ref_table_id(),
                                   table_partition_info.get_phy_tbl_location_info_for_update()))) {
       LOG_WARN("failed to set partition key", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(sharding_info->get_partition_keys()))) {
-      LOG_WARN("failed to get shared expr for partition keys", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(sharding_info->get_sub_partition_keys()))) {
-      LOG_WARN("failed to get shared expr for subpartition keys", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(sharding_info->get_partition_func()))) {
-      LOG_WARN("failed to get partition func", K(ret));
     } else {
       sharding_info->set_can_reselect_replica(can_reselect_replica);
       LOG_TRACE("succeed to compute base table sharding info", K(*sharding_info));
@@ -1276,6 +1270,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     bool hint_force_no_das = false;
     force_das_tsc = get_plan()->get_optimizer_context().in_nested_sql() ||
                     get_plan()->get_optimizer_context().has_pl_udf() ||
+                    get_plan()->get_optimizer_context().has_dblink() ||
                     get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
                     is_batch_update_table;
     //this sql force to use DAS TSC:
@@ -2574,7 +2569,7 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
  * @interest_column_ids 匹配索引前缀的列id
  * @const_column_info   interest_column_ids对应的每一个column是否为const
  * 具体的匹配规则可以看
- * https://aone.alibaba-inc.com/code/D170675
+ *
  * */
 int ObJoinOrder::check_all_interesting_order(const ObIArray<OrderItem> &ordering,
                                              const ObDMLStmt *stmt,
@@ -3181,6 +3176,19 @@ int ObJoinOrder::get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_co
   return ret;
 }
 
+double ObJoinOrder::calc_single_parallel_rows(double rows, int64_t parallel)
+{
+  double ret = rows;
+  if (rows < parallel) {
+    parallel = rows;
+
+  }
+  //at least one parallel
+  parallel = parallel < 1 ? 1: parallel;
+  ret = rows / parallel;
+  return ret;
+}
+
 int ObJoinOrder::compute_const_exprs_for_subquery(uint64_t table_id,
                                                   ObLogicalOperator *root)
 {
@@ -3205,8 +3213,6 @@ int ObJoinOrder::compute_const_exprs_for_subquery(uint64_t table_id,
                                         root->get_output_const_exprs(),
                                         output_const_exprs_))) {
       LOG_WARN("failed to convert subplan scan expr", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(output_const_exprs_))) {
-      LOG_WARN("failed to get shared expr", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::get_subplan_const_column(*parent_stmt,
                                                                  table_id,
                                                                  *child_stmt,
@@ -3356,8 +3362,6 @@ int ObJoinOrder::compute_equal_set_for_subquery(uint64_t table_id, ObLogicalOper
                 root->get_output_equal_sets(),
                 input_equal_sets))) {
       LOG_WARN("failed to generate subplan scan expr", K(ret));
-    } else if (OB_FAIL(get_plan()->get_shared_expr(input_equal_sets))) {
-      LOG_WARN("failed to get shared expr for input equal sets", K(ret));
     } else if (OB_FAIL(preds.assign(restrict_info_set_))) {
       LOG_WARN("failed to assign exprs", K(ret));
       // todo link.zt, the generated predicates is only used for deducing equal sets
@@ -3476,8 +3480,6 @@ int ObJoinOrder::convert_subplan_scan_order_item(ObLogPlan &plan,
       } else {
         break;
       }
-    } else if (OB_FAIL(plan.get_shared_expr(temp_expr))) {
-      LOG_WARN("failed to get shared expr", K(ret));
     } else if (OB_FAIL(output_order.push_back(OrderItem(temp_expr,
                                                         input_order.at(i).order_type_)))) {
       LOG_WARN("failed to push back order item", K(ret));
@@ -3565,8 +3567,6 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                                 input_sharding->get_partition_keys(),
                                                                 part_exprs))) {
     LOG_WARN("failed to convert subplan scan expr", K(ret));
-  } else if (OB_FAIL(plan.get_shared_expr(part_exprs))) {
-    LOG_WARN("failed to get shared exprs", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
                                                                 subplan_root.get_output_equal_sets(),
                                                                 table_id,
@@ -3576,8 +3576,6 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                                 input_sharding->get_sub_partition_keys(),
                                                                 subpart_exprs))) {
     LOG_WARN("failed to convert subplan scan expr", K(ret));
-  } else if (OB_FAIL(plan.get_shared_expr(subpart_exprs))) {
-    LOG_WARN("failed to get shared exprs", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
                                                                 subplan_root.get_output_equal_sets(),
                                                                 table_id,
@@ -3587,8 +3585,6 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                                 input_sharding->get_partition_func(),
                                                                 part_func))) {
     LOG_WARN("failed to convert subplan scan expr", K(ret));
-  } else if (OB_FAIL(plan.get_shared_expr(part_func))) {
-    LOG_WARN("failed to get shared exprs", K(ret));
   } else {
     bool is_converted = input_sharding->get_partition_keys().count() == part_exprs.count() &&
         input_sharding->get_sub_partition_keys().count() == subpart_exprs.count() &&
@@ -4514,6 +4510,8 @@ int JoinPath::compute_join_path_sharding()
                                               reselected_dup_pos,
                                               strong_sharding_))) {
         LOG_WARN("failed to compute basic sharding info", K(ret));
+      } else if (OB_FALSE_IT(inherit_sharding_index_ = 0)) {
+        //do nothing
       } else if (reselected_dup_pos.empty()) {
         /*no duplicated table, do nothing*/
       } else if (OB_UNLIKELY(2 != reselected_dup_pos.count())) {
@@ -4533,11 +4531,13 @@ int JoinPath::compute_join_path_sharding()
       strong_sharding_ = opt_ctx.get_local_sharding();
     } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
       strong_sharding_ = left_path_->strong_sharding_;
+      inherit_sharding_index_ = 0;
       if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
         LOG_WARN("failed to append weak sharding", K(ret));
       } else { /*do nothing*/ }
     } else if (DistAlgo::DIST_ALL_NONE == join_dist_algo_) {
       strong_sharding_ = right_path_->strong_sharding_;
+      inherit_sharding_index_ = 1;
       if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
         LOG_WARN("failed to append weak sharding", K(ret));
       } else { /*do nothing*/ }
@@ -4545,6 +4545,7 @@ int JoinPath::compute_join_path_sharding()
                DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo_) {
       if (LEFT_OUTER_JOIN == join_type_) {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_)) ||
             OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
@@ -4554,6 +4555,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else if (RIGHT_OUTER_JOIN == join_type_) {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_)) ||
             OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
@@ -4576,11 +4578,13 @@ int JoinPath::compute_join_path_sharding()
                  LEFT_ANTI_JOIN == join_type_ ||
                  INNER_JOIN == join_type_) {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4596,6 +4600,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4608,6 +4613,7 @@ int JoinPath::compute_join_path_sharding()
         strong_sharding_ = opt_ctx.get_distributed_sharding();		
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4623,6 +4629,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4634,6 +4641,7 @@ int JoinPath::compute_join_path_sharding()
         strong_sharding_ = opt_ctx.get_distributed_sharding();		
       } else {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4645,6 +4653,7 @@ int JoinPath::compute_join_path_sharding()
     } else if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
       if (right_path_->is_single()) {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
       } else {
         strong_sharding_ = opt_ctx.get_distributed_sharding();
       }
@@ -5457,7 +5466,7 @@ int JoinPath::cost_nest_loop_join(double left_output_rows,
       right_part_cnt = right_path_->get_sharding()->get_part_cnt();
     }
     if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
-      left_rows = left_rows * server_cnt_ / in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel/server_cnt_);
       right_cost = right_cost * right_out_parallel / server_cnt_;
       right_rows /= server_cnt_;
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo_ ||
@@ -5465,11 +5474,11 @@ int JoinPath::cost_nest_loop_join(double left_output_rows,
       right_rows /= in_parallel;
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_ ||
                DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
-      left_rows /= in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
     } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
       /* do nothing */
     } else {
-      left_rows /= in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
       right_rows /= right_part_cnt;
       right_cost = right_cost * right_out_parallel / right_part_cnt;
     }
@@ -10632,13 +10641,15 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
   ObSEArray<ObColumnRefRawExpr*, 16> column_exprs;
   ObSEArray<uint64_t, 16> column_ids;
   ObSQLSessionInfo *session_info = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id) ||
       OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table id", K(table_id), K(ref_table_id), K(ret));
   } else if (OB_ISNULL(get_plan()) ||
              OB_ISNULL(table_partition_info_) ||
-             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
+             OB_ISNULL(schema_guard = OPT_CTX.get_schema_guard())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid params", K(get_plan()),  K(ret));
   } else if (OB_FAIL(get_plan()->get_column_exprs(table_id, column_exprs))) {
@@ -10650,12 +10661,15 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
               table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list();
     for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
       const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
-      if (OB_FAIL(all_used_part_id.push_back(part_loc.get_partition_id()))) {
+      int64_t part_id = (!table_schema.is_partitioned_table() && is_virtual_table(ref_table_id))
+                                                       ? ref_table_id : part_loc.get_partition_id();
+      if (OB_FAIL(all_used_part_id.push_back(part_id))) {
         LOG_WARN("failed to push back partition id", K(ret));
       } else if (OB_FAIL(all_used_tablet_id.push_back(part_loc.get_tablet_id()))) {
         LOG_WARN("failed to push back tablet id", K(ret));
       }
     }
+    LOG_TRACE("init_est_sel_info_for_access_path", K(all_used_part_id), K(all_used_tablet_id), K(ref_table_id));
     if (OB_SUCC(ret)) {
       // 1. try with statistics
       int64_t table_row_count = 0;
@@ -10683,7 +10697,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
       } else if (use_global) {
         has_opt_stat = true;
         stat_type = 1;
-      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(session_info->get_effective_tenant_id(),
+      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(*schema_guard,
+                                                                            session_info->get_effective_tenant_id(),
                                                                             ref_table_id,
                                                                             all_used_part_id,
                                                                             total_part_cnt,
@@ -10722,15 +10737,14 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
         }
       }
 
-      // 2. try to estimate the whole memtable
+      // 2. if the table row count is 0, we try refine it.
       if (OB_SUCC(ret) && table_meta_info_.table_row_count_ <= 0) {
-        if (origin_part_cnt > 1) {
-          // do nothing
-        } else if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(
-                      OPT_CTX, *table_partition_info_, table_meta_info_))) {
+        if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(OPT_CTX,
+                                                                         *table_partition_info_,
+                                                                         table_meta_info_))) {
           LOG_WARN("failed to estimate full table rowcount", K(ret));
         } else {
-          LOG_TRACE("total rowcount, mem-table without stats", K(table_meta_info_.table_row_count_));
+          LOG_TRACE("succeed to estimate full table rowcount", K(table_meta_info_.table_row_count_));
         }
       }
 
@@ -10779,9 +10793,11 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
   int ret = OB_SUCCESS;
   has_opt_stat = false;
   ObSQLSessionInfo *session_info = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
   if (OB_UNLIKELY(OB_INVALID_ID == index_id) ||
       OB_ISNULL(table_partition_info) ||
-      OB_ISNULL(session_info = OPT_CTX.get_session_info())) {
+      OB_ISNULL(session_info = OPT_CTX.get_session_info()) ||
+      OB_ISNULL(schema_guard = OPT_CTX.get_schema_guard())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid index id", K(index_id), K(ret));
   } else {
@@ -10821,7 +10837,8 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
       } else if (use_global) {
         has_opt_stat = true;
         stat_type = 1;
-      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(session_info->get_effective_tenant_id(),
+      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(*schema_guard,
+                                                                            session_info->get_effective_tenant_id(),
                                                                             index_id,
                                                                             all_used_part_id,
                                                                             total_part_cnt,
@@ -10868,8 +10885,10 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
   ObArray<int64_t> part_ids;
   can_use = false;
   ObSQLSessionInfo *session_info = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
   if (OB_ISNULL(get_plan()) ||
-      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
+      OB_ISNULL(schema_guard = OPT_CTX.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (all_used_parts.count() <= 1) {
@@ -10880,7 +10899,8 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
     if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(OPT_CTX.get_opt_stat_manager()));
-    } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(session_info->get_effective_tenant_id(),
+    } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(*schema_guard,
+                                                                          session_info->get_effective_tenant_id(),
                                                                           ref_table_id,
                                                                           global_part_id,
                                                                           last_analyzed))) {
@@ -10904,7 +10924,8 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
         } else if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(OPT_CTX.get_opt_stat_manager()));
-        } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(session_info->get_effective_tenant_id(),
+        } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(*schema_guard,
+                                                                              session_info->get_effective_tenant_id(),
                                                                               ref_table_id,
                                                                               part_id,
                                                                               last_analyzed))) {
@@ -11594,8 +11615,6 @@ int ObJoinOrder::compute_fd_item_set_for_subquery(const uint64_t table_id,
                        subplan_root->get_fd_item_set(),
                        fd_item_set_))) {
     LOG_WARN("failed to convert subplan scan fd item sets", K(ret));
-  } else if (OB_FAIL(get_plan()->get_shared_expr(fd_item_set_))) {
-    LOG_WARN("failed to get shared expr for fd item set", K(ret));
   } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set())) {
     LOG_WARN("failed to deduce fd item set", K(ret));
   } else {
@@ -12528,7 +12547,7 @@ int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
         LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
       } else if (T_OP_LIKE == expr->get_expr_type()) {
         /*
-        https://work.aone.alibaba-inc.com/issue/33030027
+
         err1: should add const expr for expr2
         err2: if expr2 is 'a%d' deduce is error
               c1 like 'a%d' DOESN'T MEAN:

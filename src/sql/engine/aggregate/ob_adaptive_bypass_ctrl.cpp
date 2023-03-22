@@ -40,6 +40,7 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt, int64_t row_cnt,
       state_ = STATE_ANALYZE;
     }
   } else if (STATE_ANALYZE == state_) {
+    probe_cnt_ += probe_cnt;
     double ratio = MIN_RATIO_FOR_L3;
     if (static_cast<double> (exists_cnt_) / probe_cnt_ >=
                       std::max(ratio, 1 - (1 / static_cast<double> (cut_ratio_)))) {
@@ -62,7 +63,7 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt, int64_t row_cnt,
       state_ = STATE_PROCESS_HT;
     }
     LOG_TRACE("get new state", K(state_), K(processed_cnt_), K(exists_cnt_),
-                              K(probe_cnt_), K(rebuild_times_), K(cut_ratio_), K(mem_size), K(op_id_));
+                              K(probe_cnt_), K(rebuild_times_), K(cut_ratio_), K(mem_size), K(op_id_), K(row_cnt));
     probe_cnt_ = 0;
     exists_cnt_ = 0;
   }

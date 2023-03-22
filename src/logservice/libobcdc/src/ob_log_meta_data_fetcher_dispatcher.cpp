@@ -24,6 +24,7 @@ namespace libobcdc
 {
 
 ObLogMetaDataFetcherDispatcher::ObLogMetaDataFetcherDispatcher() :
+    IObLogFetcherDispatcher(FetcherDispatcherType::DATA_DICT_DIS_TYPE),
     is_inited_(false),
     log_meta_data_replayer_(nullptr),
     checkpoint_seq_(0)
@@ -86,7 +87,7 @@ int ObLogMetaDataFetcherDispatcher::dispatch(PartTransTask &task, volatile bool 
         ret = dispatch_to_log_meta_data_replayer_(task, stop_flag);
         break;
 
-      case PartTransTask::TASK_TYPE_LS_TABLE:
+      case PartTransTask::TASK_TYPE_LS_OP_TRANS:
         ret = dispatch_to_log_meta_data_replayer_(task, stop_flag);
         break;
 

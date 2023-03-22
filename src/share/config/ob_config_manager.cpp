@@ -84,7 +84,7 @@ int ObConfigManager::reload_config()
     LOG_WARN("reload ssl config for net frame fail", K(ret));
   } else if (OB_FAIL(OBSERVER.get_rl_mgr().reload_config())) {
     LOG_WARN("reload config for ratelimit manager fail", K(ret));
-  } else if (OB_FAIL(OBSERVER.get_net_frame().reload_mysql_login_thread_config())) {
+  } else if (OB_FAIL(OBSERVER.get_net_frame().reload_sql_thread_config())) {
     LOG_WARN("reload config for mysql login thread count failed", K(ret));
   } else if (OB_FAIL(ObTdeEncryptEngineLoader::get_instance().reload_config())) {
     LOG_WARN("reload config for tde encrypt engine fail", K(ret));
@@ -145,7 +145,7 @@ int ObConfigManager::load_config(const char *path)
     buf = NULL;
   }
 
-  // https://work.aone.alibaba-inc.com/issue/28094065
+  //
   // 为了避免和 got_version 有并发问题，
   // 必须等到 load_config 调用后， got_version 才工作
   init_config_load_ = true;
@@ -268,7 +268,7 @@ int ObConfigManager::dump2file(const char* path) const
         LOG_WARN("fail to backup history config file", KERRMSG, K(ret));
       }
       // 运行到这里的时候可能掉电，导致没有 conf 文件，需要 DBA 手工拷贝  tmp 文件到这里
-      if (0 != ::rename(tmp_path, path)) {
+      if (0 != ::rename(tmp_path, path) && errno != ENOENT) {
         ret = OB_ERR_SYS;
         LOG_WARN("fail to move tmp config file", KERRMSG, K(ret));
       }

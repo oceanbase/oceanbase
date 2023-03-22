@@ -58,19 +58,10 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
   } else if (origin_plan != cur_plan) {
     // switch plan，reset 原来plan下对应directive的io资源
     ObResourceManagerProxy proxy;
-    ObPlanDirectiveSet directives;
-    if (OB_FAIL(proxy.get_all_plan_directives(tenant_id, origin_plan.get_value(), directives))) {
-      LOG_WARN("fail get plan directive", K(tenant_id), K(origin_plan), K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
-        const ObPlanDirective &cur_directive = directives.at(i);
-        if (OB_FAIL(GCTX.cgroup_ctrl_->reset_group_iops(
-                         tenant_id,
-                         1,
-                         cur_directive.group_name_))) {
-          LOG_ERROR("reset old plan group directive failed", K(cur_directive), K(ret));
-        }
-      }
+    if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(
+                      tenant_id,
+                      1))) {
+      LOG_ERROR("reset old plan group directive failed", K(tenant_id), K(ret));
     }
     if (OB_SUCC(ret) && plan_name.empty()) {
       // reset user and function hashmap

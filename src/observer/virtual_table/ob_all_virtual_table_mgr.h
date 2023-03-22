@@ -52,7 +52,9 @@ class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator,
     LINKED_BLOCK_CNT,
     REF,
     IS_ACTIVE,
-    CONTAIN_UNCOMMITTED_ROW
+    CONTAIN_UNCOMMITTED_ROW,
+    NESTED_OFFSET,
+    NESTED_SIZE
   };
 public:
   ObAllVirtualTableMgr();
@@ -75,6 +77,7 @@ private:
 private:
   common::ObAddr addr_;
   storage::ObTenantTabletIterator *tablet_iter_;
+  common::ObArenaAllocator tablet_allocator_;
   ObTabletHandle tablet_handle_;
   int64_t ls_id_;
   char ip_buf_[common::OB_IP_STR_BUFF];

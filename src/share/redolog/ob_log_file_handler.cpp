@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "common/ob_clock_generator.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_tracepoint.h"
@@ -393,7 +392,7 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
   } else {
     int64_t retry_cnt = 0;
     int64_t write_size = 0;
-    const int64_t start_ts = ObClockGenerator::getClock();
+    const int64_t start_ts = ObTimeUtility::current_time();
     ATOMIC_STORE(&pwrite_ts_, start_ts);
     do {
       if (OB_FAIL(THE_IO_DEVICE->pwrite(io_fd_, offset, size, buf, write_size))) {

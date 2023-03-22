@@ -108,14 +108,8 @@ private:
       const ObSqlString &sql,
       const uint64_t tenant_id,
       ObIArray<uint64_t> &batch_tablet_ids,
-      ObIArray<ObColDesc> &column_ids,
       common::ObMySQLProxy &sql_proxy,
-      common::hash::ObHashMap<uint64_t, ObArray<int64_t>> &tablet_columns_map,
       common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_status_map);
-  static int construct_tablet_column_map(
-      const uint64_t tablet_id,
-      const int64_t column_id,
-      common::hash::ObHashMap<uint64_t, ObArray<int64_t>> &tablet_columns_map);
 };
 
 }  // end namespace share

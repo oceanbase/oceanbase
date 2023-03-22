@@ -938,6 +938,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 }
 <hint>NO_GATHER_OPTIMIZER_STATISTICS  { return NO_GATHER_OPTIMIZER_STATISTICS; }
 <hint>GATHER_OPTIMIZER_STATISTICS  { return GATHER_OPTIMIZER_STATISTICS; }
+<hint>DBMS_STATS  { return DBMS_STATS; }
 <hint>LOG_LEVEL  { return LOG_LEVEL; }
 <hint>LEADING  { return LEADING_HINT; }
 <hint>ORDERED  { return ORDERED; }
@@ -950,6 +951,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>USE_PLAN_CACHE  { return USE_PLAN_CACHE; }
 <hint>USE_HASH_AGGREGATION  { return USE_HASH_AGGREGATION; }
 <hint>NO_USE_HASH_AGGREGATION  { return NO_USE_HASH_AGGREGATION; }
+<hint>PARTITION_SORT  { return PARTITION_SORT; }
+<hint>NO_PARTITION_SORT  { return NO_PARTITION_SORT; }
 <hint>USE_LATE_MATERIALIZATION  { return USE_LATE_MATERIALIZATION; }
 <hint>NO_USE_LATE_MATERIALIZATION  { return NO_USE_LATE_MATERIALIZATION; }
 <hint>TRACE_LOG { return TRACE_LOG; }
@@ -1435,7 +1438,7 @@ BEGIN(in_c_comment);
     if (NULL != node->str_value_
     		&& *(yytext + 2) == *(yytext + 1 + node->str_len_)
     		&& (*(yytext + 2) == '`')) {
-      // bugfix: https://work.aone.alibaba-inc.com/issue/36863983
+      // bugfix:
       // support "select @@`xxx`;" as "select @@xxx;"
 			node->str_value_ += 1;
 			node->str_len_ -= 2;

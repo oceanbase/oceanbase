@@ -36,6 +36,14 @@ using namespace oceanbase::share;
 namespace storage
 {
 
+#ifdef OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
+#define TX_DATA_MEM_LEAK_DEBUG_CODE slice_allocator_.enable_leak_debug();
+#else
+#define TX_DATA_MEM_LEAK_DEBUG_CODE
+#endif
+
+
+
 int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
 {
   int ret = OB_SUCCESS;
@@ -43,25 +51,22 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
   STATIC_ASSERT(sizeof(ObUndoAction) == UNDO_ACTION_SZIE, "Size of ObUndoAction Overflow.");
   STATIC_ASSERT(sizeof(ObUndoStatusNode) <= TX_DATA_SLICE_SIZE, "Size of ObUndoStatusNode Overflow");
 
-  ObMemAttr mem_attr;
-  mem_attr.label_ = "TX_DATA_TABLE";
-  mem_attr.tenant_id_ = MTL_ID();
-  mem_attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
   ObMemtableMgrHandle memtable_mgr_handle;
   if (OB_ISNULL(ls) || OB_ISNULL(tx_ctx_table)) {
     ret = OB_ERR_NULL_VALUE;
     STORAGE_LOG(WARN, "ls tablet service or tx ctx table is nullptr", KR(ret));
-  } else if (OB_FAIL(slice_allocator_.init(TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE,
-                                           common::default_blk_alloc, mem_attr))) {
+  } else if (OB_FAIL(init_slice_allocator_())) {
     STORAGE_LOG(ERROR, "slice_allocator_ init fail");
   } else if (FALSE_IT(ls_tablet_svr_ = ls->get_tablet_svr())) {
   } else if (OB_FAIL(ls_tablet_svr_->get_tx_data_memtable_mgr(memtable_mgr_handle))) {
     STORAGE_LOG(WARN, "get tx data memtable mgr fail.", KR(ret), K(tablet_id_));
-  } else if (FALSE_IT(arena_allocator_.set_attr(mem_attr))) {
+  } else if (OB_FAIL(init_arena_allocator_())) {
+    STORAGE_LOG(ERROR, "slice_allocator_ init fail");
   } else if (OB_FAIL(init_tx_data_read_schema_())) {
     STORAGE_LOG(WARN, "init tx data read ctx failed.", KR(ret), K(tablet_id_));
   } else {
     slice_allocator_.set_nway(ObTxDataTable::TX_DATA_MAX_CONCURRENCY);
+    TX_DATA_MEM_LEAK_DEBUG_CODE
 
     ls_ = ls;
     memtable_mgr_ = static_cast<ObTxDataMemtableMgr *>(memtable_mgr_handle.get_memtable_mgr());
@@ -73,6 +78,27 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
     FLOG_INFO("tx data table init success", K(sizeof(ObTxData)), K(sizeof(ObTxDataLinkNode)), KPC(this));
   }
   return ret;
+}
+
+int ObTxDataTable::init_slice_allocator_()
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  mem_attr.label_ = "TX_DATA_SLICE";
+  mem_attr.tenant_id_ = MTL_ID();
+  mem_attr.ctx_id_ = ObCtxIds::TX_DATA_TABLE;
+  ret = slice_allocator_.init(TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, mem_attr);
+  return ret;
+}
+
+int ObTxDataTable::init_arena_allocator_()
+{
+  ObMemAttr mem_attr;
+  mem_attr.label_ = "TX_DATA_ARENA";
+  mem_attr.tenant_id_ = MTL_ID();
+  mem_attr.ctx_id_ = ObCtxIds::TX_DATA_TABLE;
+  arena_allocator_.set_attr(mem_attr);
+  return OB_SUCCESS;
 }
 
 int ObTxDataTable::init_tx_data_read_schema_()
@@ -284,6 +310,8 @@ int ObTxDataTable::deep_copy_undo_status_list_(const ObUndoStatusList &in_list,
       STORAGE_LOG(WARN, "alloc undo status node failed.", KR(ret));
     } else {
       *new_node = *cur_in_node;
+      // reset next pointer to avoid invalid free
+      new_node->next_ = nullptr;
       if (nullptr == pre_node) {
         out_list.head_ = new_node;
       } else {
@@ -301,7 +329,11 @@ int ObTxDataTable::alloc_undo_status_node(ObUndoStatusNode *&undo_status_node)
 {
   int ret = OB_SUCCESS;
   void *slice_ptr = nullptr;
+#ifdef OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
+  if (OB_ISNULL(slice_ptr = slice_allocator_.alloc(true /*record_alloc_lbt*/))) {
+#else
   if (OB_ISNULL(slice_ptr = slice_allocator_.alloc())) {
+#endif
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "allocate memory fail.", KR(ret), KP(this), K(tablet_id_));
   } else {
@@ -335,7 +367,6 @@ void ObTxDataTable::free_undo_status_list_(ObUndoStatusNode *node_ptr)
 int ObTxDataTable::insert(ObTxData *&tx_data)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard tg("tx_data_table::insert", 100 * 1000);
   ObTxDataMemtableWriteGuard write_guard;
   ObTransID tx_id = tx_data->tx_id_;
 
@@ -349,20 +380,13 @@ int ObTxDataTable::insert(ObTxData *&tx_data)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "trying to insert an invalid tx data into tx data table", KR(ret),
                 KP(tx_data), KPC(tx_data));
-  } else if (FALSE_IT(tg.click())) {
-    // do nothing
   } else if (OB_FAIL(get_memtable_mgr_()->get_all_memtables_for_write(write_guard))) {
     STORAGE_LOG(WARN, "get all memtables for write fail.", KR(ret), KPC(get_memtable_mgr_()));
-  } else if (FALSE_IT(tg.click())) {
-    // do nothing
   } else if (OB_FAIL(insert_(tx_data, write_guard))) {
     STORAGE_LOG(WARN, "insert tx data failed.", KR(ret), KPC(tx_data), KP(this), K(tablet_id_));
   } else {
     // successfully insert
     // TODO : @gengli do not dec ref and set nullptr after insert
-  }
-  if (tg.get_diff() > 100000) {
-    STORAGE_LOG(INFO, "ObTxDataTable insert cost too much time", K(tx_id), K(tg));
   }
 
   return ret;
@@ -370,11 +394,10 @@ int ObTxDataTable::insert(ObTxData *&tx_data)
 
 // In order to support the commit log without undo actions, the tx data related to a single
 // transaction may be inserted multiple times. For more details, see
-// https://yuque.antfin.com/ob/transaction/cdn5ez
+//
 int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write_guard)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard tg("tx_data_table::insert_", 100 * 1000);
   bool inserted = false;
   ObTxDataMemtable *tx_data_memtable = nullptr;
   ObTableHandleV2 (&memtable_handles)[MAX_TX_DATA_MEMTABLE_CNT] = write_guard.handles_;
@@ -389,11 +412,8 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "tx data memtable is nullptr.", KR(ret), KP(this), K(tablet_id_),
                   K(memtable_handles[i]));
-    } else if (FALSE_IT(tg.click())) {
-      // do nothing
     } else if (tx_data_memtable->get_start_scn() < tx_data->end_scn_
                && tx_data_memtable->get_end_scn() >= tx_data->end_scn_) {
-      tg.click();
       if (OB_FAIL(tx_data_memtable->insert(tx_data))) {
         STORAGE_LOG(WARN,
                     "insert tx data into tx data memtable failed",
@@ -409,7 +429,6 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
       STORAGE_LOG(DEBUG, "skip this tx data memtable", KPC(tx_data), KPC(tx_data_memtable));
     }
   }
-  tg.click();
 
   // If this tx data can not be inserted into all memtables, check if it should be filtered.
   // We use the start log ts of the first memtable as the filtering time stamp
@@ -419,16 +438,11 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
       // Filter this tx data. The part trans ctx need to handle this error code because the memory
       // of tx data need to be freed.
       STORAGE_LOG(DEBUG, "This tx data is filtered.", K(clog_checkpoint_scn), KPC(tx_data));
-      tg.click();
-
     } else {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "cannot find the correct tx data memtable to insert", KR(ret),
                   KPC(tx_data), K(clog_checkpoint_scn), K(memtable_handles));
     }
-  }
-  if (tg.get_diff() > 100000) {
-    STORAGE_LOG(INFO, "ObTxDataTable insert_ cost too much time", K(tg));
   }
 
   return ret;
@@ -822,7 +836,7 @@ int ObTxDataTable::self_freeze_task()
 }
 
 // The main steps in calculating upper_trans_version. For more details, see :
-// https://yuque.antfin-inc.com/ob/transaction/lurtok
+//
 int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_version)
 {
   int ret = OB_SUCCESS;

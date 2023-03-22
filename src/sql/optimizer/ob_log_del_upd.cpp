@@ -1192,6 +1192,22 @@ int ObLogDelUpd::generate_old_calc_partid_expr(IndexDMLInfo &index_info)
   return ret;
 }
 
+// for replace and insert_up conflict scene, generate lookup_part_id_expr.
+int ObLogDelUpd::generate_lookup_part_id_expr(IndexDMLInfo &index_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan is null", K(ret));
+  } else if (OB_FAIL(get_plan()->gen_calc_part_id_expr(index_info.loc_table_id_,
+                                                      index_info.ref_table_id_,
+                                                      CALC_PARTITION_TABLET_ID,
+                                                      index_info.lookup_part_id_expr_))) {
+    LOG_WARN("failed to gen calc part id expr", K(ret));
+  }
+  return ret;
+}
+
 int ObLogDelUpd::generate_insert_new_calc_partid_expr(IndexDMLInfo &index_dml_info)
 {
   int ret = OB_SUCCESS;

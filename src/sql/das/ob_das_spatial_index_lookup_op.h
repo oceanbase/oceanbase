@@ -6,7 +6,7 @@
  * ob_das_group_scan_op.h is for …
  *
  * Authors:
- *     xiaoyi.xy<xiaoyi.xy@alibaba-inc.com>
+ *     xiaoyi.xy<>
  */
 #ifndef OBDEV_SRC_SQL_DAS_OB_DAS_SPATIAL_INDEX_LOOKUP_OP_H_
 #define OBDEV_SRC_SQL_DAS_OB_DAS_SPATIAL_INDEX_LOOKUP_OP_H_
@@ -38,7 +38,7 @@ public:
                              is_sorted_(false),
                              is_whole_range_(false),
                              is_inited_(false) {}
-  virtual ~ObSpatialIndexLookupOp() {}
+  virtual ~ObSpatialIndexLookupOp();
 
   int init(const ObDASScanCtDef *lookup_ctdef,
            ObDASScanRtDef *lookup_rtdef,

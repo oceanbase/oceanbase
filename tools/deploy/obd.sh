@@ -41,11 +41,14 @@ function variables_parpare {
     DEP_PATH=$BASE_DIR/rpm/.dep_create/var
   fi
 
-  OBCLIENT_BIN=$DEP_PATH/u01/obclient/bin/obclient
-  MYSQLTEST_BIN=$DEP_PATH/u01/obclient/bin/mysqltest
+  export LD_LIBRARY_PATH=$DEP_PATH/u01/obclient/lib:$LD_LIBRARY_PATH
 
-  export OBD_HOME=$DEPLOY_PATH
-  export OBD_INSTALL_PRE=$DEP_PATH
+  OBCLIENT_BIN=$DEP_PATH/u01/obclient/bin/obclient
+  OBCLIENT_BIN_ARGS="--obclient-bin=$OBCLIENT_BIN"
+  MYSQLTEST_BIN=$DEP_PATH/u01/obclient/bin/mysqltest
+  MYSQLTEST_BIN_ARGS="--mysqltest-bin=$MYSQLTEST_BIN"
+  CLIENT_BIN_ARGS="$OBCLIENT_BIN_ARGS $MYSQLTEST_BIN_ARGS"
+
   DEFAULT_DEPLOY_NAME_FILE=$OBD_HOME/.obd/.default_deploy
 }
 
@@ -284,7 +287,7 @@ function deploy_cluster {
   then
     config_yaml=$YAML_CONF
   else
-    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml && "$(grep config_status .data | awk '{print $2}')" == "UNCHNAGE" ]]
+    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml && "$(grep config_status .data | awk '{print $2}')" != "UNCHNAGE" ]]
     then
       config_yaml=$OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml
     else
@@ -578,7 +581,8 @@ function main() {
   then 
     NEED_REBOOT="1"
   fi
-  if [[ ! -f $DEPLOY_PATH/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
+  export OBD_FORCE_UPDATE_PLUGINS=1
+  if [[ ! -f $OBD_HOME/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $OBD_HOME/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)
   obd env set OBD_LOCK_MODE 1

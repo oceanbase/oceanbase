@@ -1039,7 +1039,7 @@ bool ObSelectStmt::is_expr_in_groupings_sets_item(const ObRawExpr *expr) const
     const ObIArray<ObGroupbyExpr> &grouping_sets_exprs =
                                                     grouping_sets_items_.at(i).grouping_sets_exprs_;
     for (int64_t j = 0; !is_true && j < grouping_sets_exprs.count(); ++j) {
-      is_true = ObOptimizerUtil::find_equal_expr(grouping_sets_exprs.at(j).groupby_exprs_, expr);
+      is_true = ObOptimizerUtil::find_item(grouping_sets_exprs.at(j).groupby_exprs_, expr);
     }
     if (!is_true) {
       const ObIArray<ObMultiRollupItem> &multi_rollup_items =
@@ -1048,7 +1048,7 @@ bool ObSelectStmt::is_expr_in_groupings_sets_item(const ObRawExpr *expr) const
         const ObIArray<ObGroupbyExpr> &rollup_list_exprs =
                                                        multi_rollup_items.at(j).rollup_list_exprs_;
         for (int64_t k = 0; !is_true && k < rollup_list_exprs.count(); ++k) {
-          is_true = ObOptimizerUtil::find_equal_expr(rollup_list_exprs.at(k).groupby_exprs_, expr);
+          is_true = ObOptimizerUtil::find_item(rollup_list_exprs.at(k).groupby_exprs_, expr);
         }
       }
     }
@@ -1158,7 +1158,7 @@ bool ObSelectStmt::is_expr_in_multi_rollup_items(const ObRawExpr *expr) const
   for (int64_t i = 0; !is_true && i < multi_rollup_items_.count(); ++i) {
     const ObIArray<ObGroupbyExpr> &rollup_list_exprs = multi_rollup_items_.at(i).rollup_list_exprs_;
     for (int64_t j = 0; !is_true && j < rollup_list_exprs.count(); ++j) {
-      is_true = ObOptimizerUtil::find_equal_expr(rollup_list_exprs.at(j).groupby_exprs_, expr);
+      is_true = ObOptimizerUtil::find_item(rollup_list_exprs.at(j).groupby_exprs_, expr);
     }
   }
   return is_true;

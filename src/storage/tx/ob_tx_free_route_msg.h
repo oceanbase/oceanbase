@@ -11,9 +11,7 @@ struct ObTxFreeRouteMsg
   const int type_;
   virtual bool is_valid() const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
-  virtual SERIALIZE_SIGNATURE(serialize) = 0;
-  virtual DESERIALIZE_SIGNATURE(deserialize) = 0;
-  virtual GET_SERIALIZE_SIZE_SIGNATURE(get_serialize_size) = 0;
+  PURE_VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 };
 
 struct ObTxFreeRoutePushState

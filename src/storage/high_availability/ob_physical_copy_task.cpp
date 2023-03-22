@@ -1300,7 +1300,7 @@ int ObTabletCopyFinishTask::create_new_table_store_with_major_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("major tablet should only has one sstable", K(ret), "major_sstable_count", major_tables_handle_.get_count(), K(major_tables_handle_));
   } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(ls_,
-      tablet_id_, major_tables_handle_, src_tablet_meta_->storage_schema_))) {
+      tablet_id_, major_tables_handle_, src_tablet_meta_->storage_schema_, src_tablet_meta_->medium_info_list_))) {
     LOG_WARN("failed to build tablet with major tables", K(ret), K(tablet_id_), K(major_tables_handle_), KPC(src_tablet_meta_));
   }
   return ret;

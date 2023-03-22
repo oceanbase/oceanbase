@@ -9,7 +9,7 @@ function(oblib_addtest mainfile)
   add_executable(${testname} ${ARGV})
   add_test(${testname} ${testname})
   target_link_libraries(${testname} PRIVATE objit oblib oblib_testbase -static-libgcc -static-libstdc++
-      -Wl,-znorelro -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
+      ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 endfunction()
 
 add_subdirectory(lib)

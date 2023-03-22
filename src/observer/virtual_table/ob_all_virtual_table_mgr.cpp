@@ -26,6 +26,7 @@ ObAllVirtualTableMgr::ObAllVirtualTableMgr()
     : ObVirtualTableScannerIterator(),
       addr_(),
       tablet_iter_(nullptr),
+      tablet_allocator_("VTTable"),
       tablet_handle_(),
       ls_id_(share::ObLSID::INVALID_LS_ID),
       all_tables_(),
@@ -54,6 +55,7 @@ void ObAllVirtualTableMgr::reset()
   }
 
   tablet_handle_.reset();
+  tablet_allocator_.reset();
 
   ObVirtualTableScannerIterator::reset();
 }
@@ -93,6 +95,7 @@ void ObAllVirtualTableMgr::release_last_tenant()
     tablet_iter_->~ObTenantTabletIterator();
     tablet_iter_ = nullptr;
   }
+  tablet_allocator_.reset();
 }
 
 bool ObAllVirtualTableMgr::is_need_process(uint64_t tenant_id)
@@ -108,10 +111,12 @@ int ObAllVirtualTableMgr::get_next_tablet()
 {
   int ret = OB_SUCCESS;
 
+  tablet_handle_.reset();
+  tablet_allocator_.reuse();
   if (nullptr == tablet_iter_) {
+    tablet_allocator_.set_tenant_id(MTL_ID());
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m, *allocator_);
-    if (OB_ISNULL(tablet_iter_)) {
+    if (OB_ISNULL(tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m, tablet_allocator_))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "fail to new tablet_iter_", K(ret));
     }
@@ -205,6 +210,8 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "table shouldn't NULL here", K(ret), K(table));
   } else {
+    const int64_t nested_offset = table->is_sstable() ? static_cast<ObSSTable *>(table)->get_macro_offset() : 0;
+    const int64_t nested_size = table->is_sstable() ? static_cast<ObSSTable *>(table)->get_macro_read_size() : 0;
     const ObITable::TableKey &table_key = table->get_key();
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -301,6 +308,12 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
+        case NESTED_OFFSET:
+          cur_row_.cells_[i].set_int(nested_offset);
+          break;
+        case NESTED_SIZE:
+          cur_row_.cells_[i].set_int(nested_size);
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

@@ -57,6 +57,7 @@ public:
   int reload_ssl_config();
   static int extract_expired_time(const char *const cert_file, int64_t &expired_time);
   static uint64_t get_ssl_file_hash(const char *intl_file[3], const char *sm_file[5], bool &file_exist);
+  ObSMHandler &get_mysql_handler() { return mysql_handler_; }
   ObSrvDeliver& get_deliver() { return deliver_; }
   int get_proxy(obrpc::ObRpcProxy &proxy);
   rpc::frame::ObReqTransport *get_req_transport();
@@ -65,6 +66,9 @@ public:
   inline rpc::frame::ObReqTranslator &get_xlator();
   rpc::frame::ObNetEasy *get_net_easy();
   void set_ratelimit_enable(int ratelimit_enabled);
+  int reload_sql_thread_config();
+  int reload_tenant_sql_thread_config(const uint64_t tenant_id);
+
   int reload_mysql_login_thread_config() {
     int cnt = deliver_.get_mysql_login_thread_count_to_set(static_cast<int32_t>(GCONF.sql_login_thread_count));
     return deliver_.set_mysql_login_thread_count(cnt);
@@ -98,6 +102,25 @@ inline
 rpc::frame::ObReqTranslator &
 ObSrvNetworkFrame::get_xlator() {
   return xlator_;
+}
+
+static int get_default_net_thread_count()
+{
+  int cnt = 1;
+  int cpu_num = static_cast<int>(get_cpu_num());
+
+  if (cpu_num <= 4) {
+    cnt = 2;
+  } else if (cpu_num <= 8) {
+    cnt = 3;
+  } else if (cpu_num <= 16) {
+    cnt = 5;
+  } else if (cpu_num <= 32) {
+    cnt = 7;
+  } else {
+    cnt = max(8, static_cast<int>(get_cpu_num()) / 6);
+  }
+  return cnt;
 }
 
 } // end of namespace observer

@@ -37,8 +37,9 @@ ObDailyMajorFreezeLauncher::ObDailyMajorFreezeLauncher()
     already_launch_(false),
     config_(nullptr),
     gc_freeze_info_last_timestamp_(0),
-    gc_tablet_ckm_last_timestamp_(0),
-    freeze_info_mgr_(nullptr)
+    freeze_info_mgr_(nullptr),
+    last_check_tablet_ckm_us_(0),
+    tablet_ckm_gc_compaction_scn_(SCN::invalid_scn())
 {
 }
 
@@ -56,8 +57,9 @@ int ObDailyMajorFreezeLauncher::init(
     tenant_id_ = tenant_id;
     config_ = &config;
     gc_freeze_info_last_timestamp_ = ObTimeUtility::current_time();
-    gc_tablet_ckm_last_timestamp_ = ObTimeUtility::current_time();
     freeze_info_mgr_ = &freeze_info_manager;
+    last_check_tablet_ckm_us_ = ObTimeUtility::current_time();
+    tablet_ckm_gc_compaction_scn_ = SCN::invalid_scn();
     sql_proxy_ = &proxy;
     already_launch_ = false;
     is_inited_ = true;
@@ -197,42 +199,57 @@ int ObDailyMajorFreezeLauncher::try_gc_freeze_info()
 int ObDailyMajorFreezeLauncher::try_gc_tablet_checksum()
 {
   int ret = OB_SUCCESS;
+  // keep 30 days for tablet_checksum whose (tablet_id, ls_id) is (1, 1)
+  const int64_t MAX_KEEP_INTERVAL_NS =  30 * 24 * 60 * 60 * 1000L * 1000L * 1000L; // 30 day
   const int64_t MIN_RESERVED_COUNT = 8;
+  SCN cur_gts_scn;
+  SCN min_keep_compaction_scn;
   int64_t now = ObTimeUtility::current_time();
-  
-  if (OB_UNLIKELY(IS_NOT_INIT || OB_ISNULL(sql_proxy_))) {
+  const static int64_t BATCH_DELETE_CNT = 2000;
+  if (OB_UNLIKELY(IS_NOT_INIT || OB_ISNULL(sql_proxy_) || OB_ISNULL(freeze_info_mgr_))) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(is_inited));
-  } else if ((now - gc_tablet_ckm_last_timestamp_) < MODIFY_GC_INTERVAL) {
-    // nothing
+    LOG_WARN("not init", KR(ret), K_(is_inited), KP(sql_proxy_), KP(freeze_info_mgr_));
   } else {
-    ObMySQLTransaction trans;
     SMART_VAR(ObArray<SCN>, all_compaction_scn) {
-      if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
-        LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id));
-      } else if (OB_FAIL(ObTabletChecksumOperator::load_all_compaction_scn(trans,
-                tenant_id_, all_compaction_scn))) {
+      // 1. load all distinct compaction_scn, when reach 30 min interval time and no valid
+      // tablet_ckm_gc_compaction_scn exists
+      if (((now - last_check_tablet_ckm_us_) < TABLET_CKM_CHECK_INTERVAL_US)
+          || tablet_ckm_gc_compaction_scn_.is_valid()) {
+        // do nothing, so as to decrease the frequency of load all distinct compaction_scn
+      } else if (OB_FAIL(ObTabletChecksumOperator::load_all_compaction_scn(*sql_proxy_,
+                        tenant_id_, all_compaction_scn))) {
         LOG_WARN("fail to load all compaction scn", KR(ret), K_(tenant_id));
-      } else if (all_compaction_scn.count() > MIN_RESERVED_COUNT) {
-        const int64_t snapshot_ver_cnt = all_compaction_scn.count();
-        const SCN &gc_snapshot_scn = all_compaction_scn.at(snapshot_ver_cnt - MIN_RESERVED_COUNT - 1);
-
-        if (OB_FAIL(ObTabletChecksumOperator::delete_tablet_checksum_items(trans, tenant_id_, gc_snapshot_scn))) {
-          LOG_WARN("fail to delete tablet checksum items", KR(ret), K_(tenant_id), K(gc_snapshot_scn));
+      } else {
+        last_check_tablet_ckm_us_ = now;
+        // 2. check if need gc tablet_checksum
+        if (all_compaction_scn.count() > MIN_RESERVED_COUNT) {
+          const int64_t compaction_scn_cnt = all_compaction_scn.count();
+          tablet_ckm_gc_compaction_scn_ = all_compaction_scn.at(compaction_scn_cnt - MIN_RESERVED_COUNT - 1);
+          if (OB_FAIL(freeze_info_mgr_->get_gts(cur_gts_scn))) {
+            LOG_WARN("fail to get_gts", KR(ret), K_(tenant_id));
+          } else {
+            min_keep_compaction_scn = SCN::minus(cur_gts_scn, MAX_KEEP_INTERVAL_NS);
+            const SCN special_tablet_ckm_gc_compaction_scn = MIN(min_keep_compaction_scn, tablet_ckm_gc_compaction_scn_);
+            if (OB_FAIL(ObTabletChecksumOperator::delete_special_tablet_checksum_items(*sql_proxy_,
+                        tenant_id_, special_tablet_ckm_gc_compaction_scn))) {
+              LOG_WARN("fail to delete special tablet checksum items", KR(ret), K_(tenant_id),
+                       K(special_tablet_ckm_gc_compaction_scn));
+            }
+          }
         }
       }
-    }
 
-    if (trans.is_started()) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-        ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-        LOG_WARN("fail to end trans", "is_commit", OB_SUCCESS == ret, KR(tmp_ret));
+      // 3. gc tablet_checksum if need
+      if (OB_SUCC(ret) && tablet_ckm_gc_compaction_scn_.is_valid()) {
+        int64_t affected_rows = 0;
+        if (OB_FAIL(ObTabletChecksumOperator::delete_tablet_checksum_items(*sql_proxy_, tenant_id_,
+                    tablet_ckm_gc_compaction_scn_, BATCH_DELETE_CNT, affected_rows))) {
+          LOG_WARN("fail to delete tablet checksum items", KR(ret), K_(tenant_id), K_(tablet_ckm_gc_compaction_scn));
+        } else if (0 == affected_rows) {
+          // already delete all tablet_checksum with comapction_scn <= tablet_ckm_gc_compaction_scn_
+          tablet_ckm_gc_compaction_scn_.set_invalid();
+        }
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      gc_tablet_ckm_last_timestamp_ = now;
     }
   }
   return ret;

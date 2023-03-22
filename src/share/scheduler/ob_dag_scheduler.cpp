@@ -1380,7 +1380,7 @@ int ObTenantDagWorker::set_dag_resource()
     LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(group_id));
   } else if (group_id == group_id_) {
     // group not change, do nothing
-  } else if (OB_FAIL(GCTX.cgroup_ctrl_->add_thread_to_group(static_cast<pid_t>(GETTID()), MTL_ID(), group_id))) {
+  } else if (OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), group_id))) {
     LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
   } else {
     ATOMIC_SET(&group_id_, group_id);
@@ -1619,7 +1619,7 @@ void ObTenantDagScheduler::destroy()
     wait();
 
     destroy_all_workers();
-
+    is_inited_ = false; // avoid alloc dag/dag_net
     int tmp_ret = OB_SUCCESS;
     for (int64_t j = 0; j < DAG_LIST_MAX; ++j) {
       for (int64_t i = 0; i < PriorityDagList::PRIO_CNT; ++i) {
@@ -1646,6 +1646,10 @@ void ObTenantDagScheduler::destroy()
       dag_map_.destroy();
     }
     if (dag_net_map_[RUNNING_DAG_NET_MAP].created()) {
+      for (DagNetMap::iterator iter = dag_net_map_[RUNNING_DAG_NET_MAP].begin(); iter != dag_net_map_[RUNNING_DAG_NET_MAP].end(); ++iter) {
+        iter->second->~ObIDagNet();
+        allocator_.free(iter->second);
+      } // end of for
       dag_net_map_[RUNNING_DAG_NET_MAP].destroy();
     }
     if (dag_net_id_map_.created()) {
@@ -1664,7 +1668,6 @@ void ObTenantDagScheduler::destroy()
     MEMSET(dag_net_cnts_, 0, sizeof(dag_net_cnts_));
     waiting_workers_.reset();
     running_workers_.reset();
-    is_inited_ = false;
     COMMON_LOG(INFO, "ObTenantDagScheduler destroyed");
     TG_DESTROY(tg_id_);
   }
@@ -1764,6 +1767,7 @@ int ObTenantDagScheduler::add_dag_into_list_and_map_(
 int ObTenantDagScheduler::add_dag_net(ObIDagNet *dag_net)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
@@ -1781,7 +1785,7 @@ int ObTenantDagScheduler::add_dag_net(ObIDagNet *dag_net)
       }
     } else if (OB_FAIL(dag_net_id_map_.set_refactored(dag_net->dag_id_, dag_net))) {
       COMMON_LOG(WARN, "failed to add dag net id into map", K(ret), KPC(dag_net));
-      int tmp_ret = OB_SUCCESS;
+
       if (OB_HASH_EXIST == ret) {
         const ObIDagNet *exist_dag_net = nullptr;
         if (OB_TMP_FAIL(dag_net_id_map_.get_refactored(dag_net->dag_id_, exist_dag_net))) {
@@ -1798,7 +1802,6 @@ int ObTenantDagScheduler::add_dag_net(ObIDagNet *dag_net)
     } else if (!blocking_dag_net_list_.add_last(dag_net)) {// add into blocking_dag_net_list
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "failed to add into blocking_dag_net_list", K(ret), KPC(dag_net));
-      int tmp_ret = OB_SUCCESS;
 
       if (OB_TMP_FAIL(dag_net_id_map_.erase_refactored(dag_net->dag_id_))) {
         COMMON_LOG(ERROR, "failed to erase from dag net id from map", K(tmp_ret), KPC(dag_net));
@@ -2163,6 +2166,7 @@ int ObTenantDagScheduler::diagnose_minor_exe_dag(
     ObThreadCondGuard guard(scheduler_sync_);
     ObIDag *head = dag_list_[READY_DAG_LIST].get_head(ObDagPrio::DAG_PRIO_COMPACTION_MID);
     ObIDag *cur = head->get_next();
+    bool find = false;
     while (head != cur && OB_SUCC(ret)) {
       if (cur->get_type() == ObDagType::DAG_TYPE_MERGE_EXECUTE) {
         compaction::ObTabletMergeExecuteDag *exe_dag = static_cast<compaction::ObTabletMergeExecuteDag *>(cur);
@@ -2170,12 +2174,16 @@ int ObTenantDagScheduler::diagnose_minor_exe_dag(
           if (OB_FAIL(exe_dag->diagnose_compaction_info(progress))) {
             LOG_WARN("failed to diagnose compaction dag", K(ret), K(exe_dag));
           } else {
+            find = true;
             break;
           }
         }
       }
       cur = cur->get_next();
     } // end of while
+    if (OB_SUCC(ret) && !find) {
+      ret = OB_HASH_NOT_EXIST;
+    }
   }
   return ret;
 }
@@ -3068,7 +3076,7 @@ void ObTenantDagScheduler::update_work_thread_num()
   for (int64_t i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
    threads_sum += up_limits_[i];
   }
-  work_thread_num_ = threads_sum; 
+  work_thread_num_ = threads_sum;
 }
 
 int ObTenantDagScheduler::set_thread_score(const int64_t priority, const int64_t score)

@@ -12,12 +12,10 @@
 
 #ifndef _OB_TABLE_EXECUTE_PROCESSOR_H
 #define _OB_TABLE_EXECUTE_PROCESSOR_H 1
-#include "ob_table_rpc_processor_util.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
-#include "ob_table_service.h"
 #include "ob_table_context.h"
 #include "ob_table_executor.h"
 #include "ob_table_cache.h"
@@ -74,7 +72,7 @@ private:
     }
 
     result_.set_errno(ret);
-    ObTableRpcProcessorUtil::replace_ret_code(ret);
+    table::ObTableApiUtil::replace_ret_code(ret);
     int tmp_ret = ret;
     if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
       SERVER_LOG(WARN, "fail to end trans", K(ret));

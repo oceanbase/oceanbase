@@ -50,6 +50,7 @@ public:
    * but ignore affected_rows
    */
   int execute_update();
+  bool is_need_disconnect_error(const int ret);
 
   /*
    * ! Deprecated

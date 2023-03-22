@@ -66,7 +66,7 @@ int ObExprOrahash::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-//算法详见 https://yuque.antfin-inc.com/ob-public/sql/sfaedg
+//算法详见
 uint64_t ObExprOrahash::hash_mod_oracle(uint64_t val, uint64_t buckets) const
 {
   uint64_t N = 1;

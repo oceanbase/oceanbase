@@ -46,6 +46,8 @@ private:
   virtual void release_last_tenant() override;
   int get_next_ls(ObLS *&ls);
   int generate_memtables_info();
+  int get_next_freeze_stat(ObFreezerStat &freeze_stat);
+  void append_memtable_info_string(const char *name, const char *str, int64_t &size);
 private:
   common::ObAddr addr_;
   int64_t ls_id_;
@@ -54,6 +56,17 @@ private:
   ObStringHolder diagnose_info_;
   common::ObSArray<ObFrozenMemtableInfo> memtables_info_;
   char memtables_info_string_[OB_MAX_CHAR_LENGTH];
+private:
+  // dont forget update this if add more member of memtable_info
+  static constexpr const char *const MEMTABLE_INFO_MEMBER[] = {
+      "tablet_id",
+      "start_scn",
+      "end_scn",
+      "write_ref_cnt",
+      "unsubmitted_cnt",
+      "unsynced_cnt",
+      "current_right_boundary"
+  };
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualMinorFreezeInfo);
 };

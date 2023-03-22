@@ -212,7 +212,7 @@ int ObExprLike::calc_with_non_instr_mode(T &result,
 {
   // convert escape char
    // escape use its own collation,
-   // @see http://k3.alibaba-inc.com/issue/6594393?versionId=1043693&companyId=0&toPage=1
+   // @see
    // try this query in MySQL:
    // mysql>  select 'a%' like 'A2%' ESCAPE X'32', X'32';
    // +------------------------------+-------+

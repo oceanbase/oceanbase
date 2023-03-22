@@ -409,7 +409,7 @@ protected:
     lib::MemoryContext &entify_;
   };
   //Optimize mem usage/performance of top-n sort:
-  //https://aone.alibaba-inc.com/project/81079/issue/8572633
+  //
   //Record buf_len of each allocated row. When old row pop-ed out of the heap
   //and has enough space for new row, use the space of old row to store new row
   //instead of allocating space for new row.

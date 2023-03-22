@@ -216,6 +216,12 @@ int PalfHandle::get_begin_scn(SCN &scn) const
   return palf_handle_impl_->get_begin_scn(scn);
 }
 
+int PalfHandle::get_base_lsn(LSN &lsn) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_base_lsn(lsn);
+}
+
 int PalfHandle::get_base_info(const LSN &lsn,
                               PalfBaseInfo &palf_base_info)
 {
@@ -301,6 +307,11 @@ int PalfHandle::change_replica_num(const common::ObMemberList &member_list,
 {
   CHECK_VALID;
   return palf_handle_impl_->change_replica_num(member_list, curr_replica_num, new_replica_num, timeout_us);
+}
+int PalfHandle::force_set_as_single_replica()
+{
+  CHECK_VALID;
+  return palf_handle_impl_->force_set_as_single_replica();
 }
 int PalfHandle::get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                                    common::GlobalLearnerList &degraded_list) const
@@ -399,6 +410,15 @@ int PalfHandle::disable_vote()
   CHECK_VALID;
   ret = palf_handle_impl_->disable_vote();
   return ret;
+}
+
+bool PalfHandle::is_vote_enabled() const
+{
+  int ret = OB_SUCCESS;
+  bool bool_ret = false;
+  CHECK_VALID;
+  bool_ret = palf_handle_impl_->is_vote_enabled();
+  return bool_ret;
 }
 
 int PalfHandle::enable_vote()

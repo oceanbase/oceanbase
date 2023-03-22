@@ -1125,9 +1125,10 @@ int ObPartitionMergePolicy::generate_parallel_minor_interval(
    * 1. If compact_trigger is small, minor merge should be easier to schedule, we should lower the threshold;
    * 2. If compact_trigger is big, we should upper the threshold to prevent the creation of dag frequently.
    */
-  int64_t table_count_threshold = minor_range_mgr.exe_range_array_.empty()
+  int64_t exist_dag_cnt = minor_range_mgr.exe_range_array_.count();
+  int64_t table_count_threshold = (0 == exist_dag_cnt)
                                 ? minor_compact_trigger
-                                : MIN(OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG / 2, minor_compact_trigger * 2);
+                                : OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG + (OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG / 2) * (exist_dag_cnt - 1);
   for (int64_t i = 0; OB_SUCC(ret) && i < input_result_array.count(); ++i) {
     if (OB_FAIL(split_parallel_minor_range(table_count_threshold, input_result_array.at(i), parallel_result))) {
       LOG_WARN("failed to split parallel minor range", K(ret), K(input_result_array.at(i)));
@@ -1326,21 +1327,32 @@ int ObAdaptiveMergePolicy::find_meta_major_tables(
     if (OB_FAIL(ret)) {
     } else if (tx_determ_table_cnt < 2) {
       ret = OB_NO_NEED_MERGE;
-      LOG_INFO("no enough table for meta merge", K(ret), K(result), K(table_store));
+      if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000/*60s*/)) {
+        LOG_INFO("no enough table for meta merge", K(ret), K(result), K(table_store));
+      }
     } else if (inc_row_cnt < TRANS_STATE_DETERM_ROW_CNT_THRESHOLD
       || inc_row_cnt < INC_ROW_COUNT_PERCENTAGE_THRESHOLD * base_row_cnt) {
       ret = OB_NO_NEED_MERGE;
-      LOG_INFO("found sstable could merge is not enough", K(ret), K(inc_row_cnt), K(base_row_cnt));
+      if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000/*60s*/)) {
+        LOG_INFO("found sstable could merge is not enough", K(ret), K(inc_row_cnt), K(base_row_cnt));
+      }
     } else if (result.version_range_.snapshot_version_ < tablet.get_multi_version_start()) {
       ret = OB_NO_NEED_MERGE;
-      LOG_INFO("chosen snapshot is abandoned", K(ret), K(result), K(tablet.get_multi_version_start()));
+      if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000/*60s*/)) {
+        LOG_INFO("chosen snapshot is abandoned", K(ret), K(result), K(tablet.get_multi_version_start()));
+      }
     }
 
 #ifdef ERRSIM
-  ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
-  if (OB_FAIL(ret) && tablet.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
-    FLOG_INFO("set schedule medium with errsim", "tablet_id", tablet.get_tablet_meta().tablet_id_);
-    ret = OB_SUCCESS;
+  if (OB_NO_NEED_MERGE == ret) {
+    if (tablet.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+      ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
+      LOG_INFO("errsim", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+      if (OB_FAIL(ret)) {
+        FLOG_INFO("set schedule medium with errsim", "tablet_id", tablet.get_tablet_meta().tablet_id_);
+        ret = OB_SUCCESS;
+      }
+    }
   }
 #endif
 

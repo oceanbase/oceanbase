@@ -112,6 +112,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
                                           obj_print_params,
                                           param_store,
                                           true);
+  select_stmt_printer.set_is_root(true);  // print hint as root stmt
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed");
@@ -562,7 +563,7 @@ int ObAlterTableExecutor::refresh_schema_for_table(
 
 /* 从 3100 开始的版本 alter table 逻辑是将建索引和其他操作放到同一个 rpc 里发到 rs，返回后对每个创建的索引进行同步等，如果一个索引创建失败，则回滚全部索引
    mysql 模式下支持 alter table 同时做建索引操作和其他操作，需要保证 rs 在处理 drop index 之后再处理 add index
-   否则前缀索引会有问题：https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/1907077
+   否则前缀索引会有问题：
 */
 int ObAlterTableExecutor::alter_table_rpc_v2(
     obrpc::ObAlterTableArg &alter_table_arg,
@@ -1695,19 +1696,37 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       //impossible
     } else if (!stmt.is_truncate_oracle_temp_table()) {
       int64_t foreign_key_checks = 0;
+      share::schema::ObSchemaGetterGuard schema_guard;
       my_session->get_foreign_key_checks(foreign_key_checks);
       const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks);
       const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode()
         ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
       int64_t affected_rows = 0;
       uint64_t compat_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(truncate_table_arg.tenant_id_, compat_version))) {
-        LOG_WARN("get min data_version failed", K(ret), K(truncate_table_arg.tenant_id_));
-      } else if (compat_version < DATA_VERSION_4_1_0_0) {
+      const ObTableSchema *table_schema = NULL;
+      const uint64_t tenant_id = truncate_table_arg.tenant_id_;
+      const ObString table_name = truncate_table_arg.table_name_;
+      const ObString database_name = truncate_table_arg.database_name_;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+      } else if (OB_ISNULL(GCTX.schema_service_)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("GCTX schema_service not init", K(ret));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+      } else if (FALSE_IT(schema_guard.set_session_id(truncate_table_arg.session_id_))) {
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_name, table_name, false, table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), K(database_name), K(table_name));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table is not exist", K(ret), K(database_name), K(table_name));
+      // Avoiding the impact of new_truncate_table on mysql auotinc, then we need to execute the old logic
+      } else if (compat_version < DATA_VERSION_4_1_0_0
+                || table_schema->get_autoinc_column_id() != 0) {
         if (OB_FAIL(common_rpc_proxy->truncate_table(truncate_table_arg, res))) {
           LOG_WARN("rpc proxy alter table failed", K(ret));
         } else if (res.is_valid()
-          && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(res.tenant_id_, res.task_id_, *my_session, common_rpc_proxy, affected_rows))) {
+          && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(tenant_id, res.task_id_, *my_session, common_rpc_proxy, affected_rows))) {
           LOG_WARN("wait ddl finish failed", K(ret));
         }
       } else {
@@ -1720,7 +1739,8 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
           while (OB_SUCC(ret)) {
             if (OB_FAIL(common_rpc_proxy->truncate_table_v2(truncate_table_arg, res))) {
               LOG_WARN("rpc proxy truncate table failed", K(ret));
-              if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TIMEOUT == ret) && ctx.get_timeout() > 0) {
+              if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TIMEOUT == ret || OB_NOT_MASTER == ret
+                    || OB_RS_NOT_MASTER == ret || OB_RS_SHUTDOWN == ret || OB_TENANT_NOT_IN_SERVER == ret) && ctx.get_timeout() > 0) {
                 ob_usleep(1 * 1000 * 1000);
                 // retry
                 ret = OB_SUCCESS;

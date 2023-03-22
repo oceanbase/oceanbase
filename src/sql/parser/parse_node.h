@@ -48,8 +48,8 @@ enum SelectParserOffset
   PARSE_SELECT_DYNAMIC_CBY_SW, // connect by node or start with node
   PARSE_SELECT_DYNAMIC_GROUP,
   PARSE_SELECT_DYNAMIC_HAVING,
+  PARSE_SELECT_NAMED_WINDOWS,
   PARSE_SELECT_SET,
-  PARSE_SELECT_ALL,
   PARSE_SELECT_FORMER,
   PARSE_SELECT_LATER,
   PARSE_SELECT_ORDER,
@@ -57,7 +57,6 @@ enum SelectParserOffset
   PARSE_SELECT_FOR_UPD,
   PARSE_SELECT_HINTS,
   PARSE_SELECT_WHEN,
-  PARSE_SELECT_NAMED_WINDOWS,
   PARSE_SELECT_FETCH,
   PARSE_SELECT_FETCH_TEMP, //use to temporary store fetch clause in parser
   PARSE_SELECT_WITH_CHECK_OPTION,
@@ -144,7 +143,7 @@ typedef struct _ParseNode
       uint32_t is_empty_ : 1; // 表示是否缺省该节点，1表示缺省，0表示没有缺省, opt_asc_desc节点中使用到
       uint32_t is_multiset_ : 1; // for cast(multiset(...) as ...)
       uint32_t is_forbid_anony_parameter_ : 1; // 1 表示禁止匿名块参数化
-      uint32_t is_input_quoted : 1; // indicate name_ob input whether with double quote
+      uint32_t is_input_quoted_ : 1; // indicate name_ob input whether with double quote
       uint32_t reserved_;
     };
   };
@@ -273,6 +272,7 @@ typedef struct _InsMultiValuesResult
   ParenthesesOffset *tail_parentheses_;
   int values_col_;
   int values_count_;
+  int on_duplicate_pos_; // the start position of on duplicate key in insert ... on duplicate key update statement
   int ret_code_;
 } InsMultiValuesResult;
 

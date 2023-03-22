@@ -1599,6 +1599,7 @@
 #'-h, --host=name     Connect to host.\n' +\
 #'-P, --port=name     Port number to use for connection.\n' +\
 #'-u, --user=name     User for login.\n' +\
+#'-t, --timeout=name  Cmd/Query/Inspection execute timeout(s).\n' +\
 #'-p, --password=name Password to use when connecting to server. If password is\n' +\
 #'                    not given it\'s empty string "".\n' +\
 #'-m, --module=name   Modules to run. Modules should be a string combined by some of\n' +\
@@ -1661,6 +1662,7 @@
 #Option('h', 'host', True, False),\
 #Option('P', 'port', True, False),\
 #Option('u', 'user', True, False),\
+#Option('t', 'timeout', True, False, 0),\
 #Option('p', 'password', True, False, ''),\
 ## 要跑哪个模块，默认全跑
 #Option('m', 'module', True, False, 'all'),\
@@ -1757,6 +1759,12 @@
 #  global g_opts
 #  for opt in g_opts:
 #    if 'password' == opt.get_long_name():
+#      return opt.get_value()
+#
+#def get_opt_timeout():
+#  global g_opts
+#  for opt in g_opts:
+#    if 'timeout' == opt.get_long_name():
 #      return opt.get_value()
 #
 #def get_opt_module():
@@ -1897,13 +1905,38 @@
 #
 ## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
 #def check_tenant_status(query_cur):
-#  (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
-#  if len(results) != 1 or len(results[0]) != 1:
-#    fail_list.append('results len not match')
-#  elif 0 != results[0][0]:
-#    fail_list.append('has abnormal tenant, should stop')
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
 #  else:
-#    logging.info('check tenant status success')
+#    min_cluster_version = get_version(results[0][0])
+#
+#    # check tenant schema
+#    (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
+#    if len(results) != 1 or len(results[0]) != 1:
+#      fail_list.append('results len not match')
+#    elif 0 != results[0][0]:
+#      fail_list.append('has abnormal tenant, should stop')
+#    else:
+#      logging.info('check tenant status success')
+#
+#    # check tenant info
+#    # 1. don't support standby tenant upgrade from 4.0.0.0
+#    # 2. don't support restore tenant upgrade
+#    sub_sql = ''
+#    if min_cluster_version >= get_version("4.1.0.0"):
+#      sub_sql = """ and tenant_role != 'STANDBY'"""
+#    (desc, results) = query_cur.exec_query("""select count(*) as count from oceanbase.__all_virtual_tenant_info where tenant_role != 'PRIMARY' {0}""".format(sub_sql))
+#    if len(results) != 1 or len(results[0]) != 1:
+#      fail_list.append('results len not match')
+#    elif 0 != results[0][0]:
+#      fail_list.append('has abnormal tenant info, should stop')
+#    else:
+#      logging.info('check tenant info success')
 #
 ## 6. 检查无恢复任务
 #def check_restore_job_exist(query_cur):
@@ -1913,7 +1946,6 @@
 #  elif results[0][0] != 0:
 #      fail_list.append("""still has restore job, upgrade is not allowed temporarily""")
 #  logging.info('check restore job success')
-#
 #
 #def check_is_primary_zone_distributed(primary_zone_str):
 #  semicolon_pos = len(primary_zone_str)
@@ -1952,14 +1984,52 @@
 #    fail_list.append("There are DDL task in progress")
 #  logging.info('check ddl task execut status success')
 #
+## 10. 检查无备份任务
+#def check_backup_job_exist(query_cur):
+#  # Backup jobs cannot be in-progress during upgrade.
+#  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_BACKUP_JOBS""")
+#  if len(results) != 1 or len(results[0]) != 1:
+#    fail_list.append('failed to backup job cnt')
+#  elif results[0][0] != 0:
+#    fail_list.append("""still has backup job, upgrade is not allowed temporarily""")
+#  else:
+#    logging.info('check backup job success')
+#
+## 11. 检查无归档任务
+#def check_archive_job_exist(query_cur):
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#
+#    # Archive jobs cannot be in-progress before upgrade from 4.0.
+#    if min_cluster_version < get_version("4.1.0.0"):
+#      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_ARCHIVELOG where status!='STOP'""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        fail_list.append('failed to archive job cnt')
+#      elif results[0][0] != 0:
+#        fail_list.append("""still has archive job, upgrade is not allowed temporarily""")
+#      else:
+#        logging.info('check archive job success')
+#
 ## last check of do_check, make sure no function execute after check_fail_list
 #def check_fail_list():
 #  if len(fail_list) != 0 :
 #     error_msg ="upgrade checker failed with " + str(len(fail_list)) + " reasons: " + ", ".join(['['+x+"] " for x in fail_list])
 #     raise MyError(error_msg)
 #
+#def set_query_timeout(query_cur, timeout):
+#  if timeout != 0:
+#    sql = """set @@session.ob_query_timeout = {0}""".format(timeout * 1000 * 1000)
+#    query_cur.exec_sql(sql)
+#
 ## 开始升级前的检查
-#def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
+#def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
 #  try:
 #    conn = mysql.connector.connect(user = my_user,
 #                                   password = my_passwd,
@@ -1971,6 +2041,7 @@
 #    cur = conn.cursor(buffered=True)
 #    try:
 #      query_cur = Cursor(cur)
+#      set_query_timeout(query_cur, timeout)
 #      check_observer_version(query_cur, upgrade_params)
 #      check_data_version(query_cur)
 #      check_paxos_replica(query_cur)
@@ -1980,9 +2051,11 @@
 #      check_restore_job_exist(query_cur)
 #      check_tenant_primary_zone(query_cur)
 #      check_ddl_task_execute(query_cur)
+#      check_backup_job_exist(query_cur)
+#      check_archive_job_exist(query_cur)
 #      # all check func should execute before check_fail_list
 #      check_fail_list()
-#      #modify_server_permanent_offline_time(cur)
+#      modify_server_permanent_offline_time(cur)
 #    except Exception, e:
 #      logging.exception('run error')
 #      raise e
@@ -2013,9 +2086,10 @@
 #      port = int(get_opt_port())
 #      user = get_opt_user()
 #      password = get_opt_password()
-#      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\"',\
+#      timeout = int(get_opt_timeout())
+#      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
 #          host, port, user, password, log_filename)
-#      do_check(host, port, user, password, upgrade_params)
+#      do_check(host, port, user, password, timeout, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
 #      raise e
@@ -2345,11 +2419,8 @@
 #
 ## 3. 检查schema是否刷新成功
 #def check_schema_status(query_cur, timeout):
-#  sql = """select count(*) from __all_server a left join __all_virtual_server_schema_info b on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port where b.svr_ip is null"""
-#  check_until_timeout(query_cur, sql, 0, timeout)
-#
-#  sql = """select count(*) from __all_virtual_server_schema_info a join __all_virtual_server_schema_info b on a.tenant_id = b.tenant_id where a.refreshed_schema_version != b.refreshed_schema_version or a.refreshed_schema_version <= 1"""
-#  check_until_timeout(query_cur, sql, 0, timeout)
+#  sql = """select if (a.cnt = b.cnt, 1, 0) as passed from (select count(*) as cnt from oceanbase.__all_virtual_server_schema_info where refreshed_schema_version > 1 and refreshed_schema_version % 8 = 0) as a join (select count(*) as cnt from oceanbase.__all_server join oceanbase.__all_tenant) as b"""
+#  check_until_timeout(query_cur, sql, 1, timeout)
 #
 #def check_until_timeout(query_cur, sql, value, timeout):
 #  times = timeout / 10
@@ -2362,7 +2433,7 @@
 #      logging.info("check value is {0} success".format(value))
 #      break
 #    else:
-#      logging.info("value is {0}, expected value is {0}, not matched".format(results[0][0], value))
+#      logging.info("value is {0}, expected value is {1}, not matched".format(results[0][0], value))
 #
 #    times -= 1
 #    if times == -1:
@@ -2453,11 +2524,8 @@
 #
 ## 2 检查租户版本号
 #def check_data_version(cur, query_cur, timeout):
-#  # check compatible
-#  current_data_version = actions.get_current_data_version()
-#  actions.wait_parameter_sync(cur, True, "compatible", current_data_version, 10)
 #
-#  # check target_data_version/current_data_version except standby tenant
+#  # get tenant except standby tenant
 #  sql = "select tenant_id from oceanbase.__all_tenant except select tenant_id from oceanbase.__all_virtual_tenant_info where tenant_role = 'STANDBY'"
 #  (desc, results) = query_cur.exec_query(sql)
 #  if len(results) == 0:
@@ -2468,6 +2536,39 @@
 #  for index, row in enumerate(results):
 #    tenant_ids_str += """{0}{1}""".format((',' if index > 0 else ''), row[0])
 #
+#  # get server cnt
+#  sql = "select count(*) from oceanbase.__all_server";
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1 or len(results[0]) != 1:
+#    logging.warn('result cnt not match')
+#    raise e
+#  server_count = results[0][0]
+#
+#  # check compatible sync
+#  parameter_count = int(server_count) * int(tenant_count)
+#  current_data_version = actions.get_current_data_version()
+#  sql = """select count(*) as cnt from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value = '{0}' and tenant_id in ({1})""".format(current_data_version, tenant_ids_str)
+#  times = (timeout if timeout > 0 else 60) / 5
+#  while times >= 0:
+#    logging.info(sql)
+#    cur.execute(sql)
+#    result = cur.fetchall()
+#    if len(result) != 1 or len(result[0]) != 1:
+#      logging.exception('result cnt not match')
+#      raise e
+#    elif result[0][0] == parameter_count:
+#      logging.info("""'compatible' is sync, value is {0}""".format(current_data_version))
+#      break
+#    else:
+#      logging.info("""'compatible' is not sync, value should be {0}, expected_cnt should be {1}, current_cnt is {2}""".format(current_data_version, parameter_count, result[0][0]))
+#
+#    times -= 1
+#    if times == -1:
+#      logging.exception("""check compatible:{0} sync timeout""".format(current_data_version))
+#      raise e
+#    time.sleep(5)
+#
+#  # check target_data_version/current_data_version from __all_core_table
 #  int_current_data_version = actions.get_version(current_data_version)
 #  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
 #  (desc, results) = query_cur.exec_query(sql)

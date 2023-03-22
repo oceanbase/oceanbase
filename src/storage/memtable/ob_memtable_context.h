@@ -342,7 +342,7 @@ public:
   virtual void set_read_only();
   virtual void inc_ref();
   virtual void dec_ref();
-  void set_replay();
+  void wait_pending_write();
   virtual int write_auth(const bool exclusive);
   virtual int write_done();
   virtual int trans_begin();

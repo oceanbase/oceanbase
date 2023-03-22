@@ -20,6 +20,10 @@
 
 namespace oceanbase
 {
+namespace compaction
+{
+struct ObCachedTransStateMgr;
+}
 namespace common
 {
 class ObIOCallback;
@@ -161,6 +165,7 @@ public:
   ObStoreRowIterPool *iter_pool_;
   ObBlockRowStore *block_row_store_;
   common::ObIOCallback *io_callback_;
+  compaction::ObCachedTransStateMgr *trans_state_mgr_;
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckRecordExtend defensive_check_record_;
 #endif

@@ -260,7 +260,7 @@ public:
   int create_operator(ObExecContext &exec_ctx, ObOperator *&op) const;
   int create_op_input(ObExecContext &exec_ctx) const;
   // 将算子注册到 datahub，用于并行计算场景
-  // https://yuque.antfin-inc.com/ob/sql/cnr75l
+  //
   virtual int register_to_datahub(ObExecContext &exec_ctx) const
     { UNUSED(exec_ctx); return common::OB_SUCCESS; }
   // register init channel msg to sqc_ctx, used for px
@@ -565,6 +565,8 @@ private:
   int submit_op_monitor_node();
   bool match_rt_monitor_condition(int64_t rows);
   int check_stack_once();
+  int output_expr_sanity_check();
+  int output_expr_sanity_check_batch();
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;

@@ -1005,7 +1005,10 @@ int ObXAService::xa_start(const ObXATransID &xid,
     ret = OB_TRANS_XA_INVAL;
     TRANS_LOG(WARN, "invalid flags for xa start", K(ret), K(xid), K(flags));
   }
-
+  // set xa_start_addr for txn-free-route
+  if (OB_SUCC(ret) && OB_NOT_NULL(tx_desc)) {
+    tx_desc->set_xa_start_addr(GCONF.self_addr_);
+  }
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start failed", K(ret), K(xid), K(flags), K(timeout_seconds));
   } else {
@@ -1108,6 +1111,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       TRANS_LOG(WARN, "rollback lock record failed", K(tmp_ret), K(xid));
     }
     if (is_first_xa_start) {
+      if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+        ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+        TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(trans_id), K(xid));
+      }
       MTL(ObTransService *)->release_tx(*tx_desc);
       tx_desc = NULL;
     }
@@ -1140,6 +1147,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
         if (OB_FAIL(trans.end(true))) {
           TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
           const bool need_decrease_ref = true;
+          if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+            ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+            TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(trans_id), K(xid));
+          }
           xa_ctx->try_exit(need_decrease_ref);
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
           tx_desc = NULL;
@@ -1154,6 +1165,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
         }
         // since tx_desc is not set into xa ctx, release tx desc explicitly
+        if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
+          ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+          TRANS_LOG(WARN, "fail to abort transaction", K(tmp_ret), K(trans_id), K(xid));
+        }
         MTL(ObTransService *)->release_tx(*tx_desc);
         tx_desc = NULL;
       }
@@ -1242,6 +1257,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       // xa_start on new session, adjust tx_desc.sess_id_
       if (OB_SUCC(ret)) {
         tx_desc->set_sessid(session_id);
+        tx_desc->set_assoc_sessid(session_id);
       }
     }
   }
@@ -1358,6 +1374,7 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
   // xa_join/resume on new session, adjust tx_desc.sess_id_
   if (OB_SUCC(ret)) {
     tx_desc->set_sessid(session_id);
+    tx_desc->set_assoc_sessid(session_id);
   }
   return ret;
 }
@@ -1378,11 +1395,6 @@ int ObXAService::xa_end(const ObXATransID &xid,
   } else if (!tx_desc->is_xa_trans()) {
     ret = OB_TRANS_XA_PROTO;
     TRANS_LOG(WARN, "Routine invoked in an improper context", K(ret), K(xid));
-  } else if (!xid.gtrid_equal_to(tx_desc->get_xid())) {
-    // tx->get_xid().gtrid != xid.gtrid
-    // oracle returns 0
-    ret = OB_TRANS_XA_NOTA;
-    TRANS_LOG(WARN, "xid not match", K(ret), K(xid));
   } else if (NULL == (xa_ctx = tx_desc->get_xa_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "transaction context is null", K(ret), K(xid));
@@ -1402,21 +1414,21 @@ int ObXAService::xa_end(const ObXATransID &xid,
   return ret;
 }
 
-int ObXAService::start_stmt(const ObXATransID &xid, ObTxDesc &tx_desc)
+int ObXAService::start_stmt(const ObXATransID &xid, const uint32_t session_id, ObTxDesc &tx_desc)
 {
   int ret = OB_SUCCESS;
   const ObTransID &tx_id = tx_desc.tid();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa service not inited", K(ret));
-  } else if (tx_desc.is_xa_tightly_couple()) {
+  } else if (tx_desc.is_xa_tightly_couple() || tx_desc.xa_start_addr() == GCONF.self_addr_) {
     ObXACtx *xa_ctx = tx_desc.get_xa_ctx();
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected trans descriptor", K(ret), K(tx_id), K(xid));
-    } else if (OB_FAIL(xa_ctx->start_stmt(xid))) {
+    } else if (OB_FAIL(xa_ctx->start_stmt(xid, session_id))) {
       TRANS_LOG(WARN, "xa trans start stmt failed", K(ret), K(tx_id), K(xid));
-    } else if (OB_FAIL(xa_ctx->wait_start_stmt())) {
+    } else if (OB_FAIL(xa_ctx->wait_start_stmt(session_id))) {
       TRANS_LOG(WARN, "fail to wait start stmt", K(ret), K(tx_id), K(xid));
     } else {
       TRANS_LOG(INFO, "xa trans start stmt", K(ret), K(tx_id), K(xid));
@@ -1632,10 +1644,17 @@ int ObXAService::xa_rollback_for_pending_trans_(const ObXATransID &xid,
       TRANS_LOG(WARN, "xa ctx init failed", K(ret), K(xid), K(tx_id));
     } else {
       if (OB_FAIL(xa_ctx->two_phase_end_trans(xid, coord, true/*is_rollback*/, timeout_us, request_id))) {
-        TRANS_LOG(WARN, "xa rollback failed", K(ret), K(xid), K(tx_id));
+        if (OB_TRANS_ROLLBACKED != ret) {
+          TRANS_LOG(WARN, "xa rollback failed", K(ret), K(xid), K(tx_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
       } else if (OB_FAIL(xa_ctx->wait_two_phase_end_trans(xid, true/*is_rollback*/, timeout_us))) {
         TRANS_LOG(WARN, "wait xa rollback failed", K(ret), K(xid), K(tx_id));
       } else {
+        // do nothing
+      }
+      if (OB_SUCC(ret)) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = delete_xa_pending_record(tenant_id, tx_id))) {
           TRANS_LOG(WARN, "fail to delete xa record from pending trans", K(ret), K(xid), K(tx_id));
@@ -1734,7 +1753,12 @@ int ObXAService::two_phase_xa_rollback_(const ObXATransID &xid,
       TRANS_LOG(WARN, "xa ctx init failed", K(ret), K(xid), K(tx_id));
     } else {
       if (OB_FAIL(xa_ctx->two_phase_end_trans(xid, coord, true/*is_rollback*/, timeout_us, request_id))) {
-        TRANS_LOG(WARN, "two phase xa rollback failed", K(ret), K(xid), K(tx_id));
+        if (OB_TRANS_ROLLBACKED != ret) {
+          TRANS_LOG(WARN, "two phase xa rollback failed", K(ret), K(xid), K(tx_id));
+        } else {
+          ret = OB_SUCCESS;
+          TRANS_LOG(INFO, "two phase xa rollback success", K(ret), K(xid), K(tx_id));
+        }
       } else if (OB_FAIL(xa_ctx->wait_two_phase_end_trans(xid, true/*is_rollback*/, timeout_us))) {
         TRANS_LOG(WARN, "wait two phase xa rollback failed", K(ret), K(xid), K(tx_id));
       } else {
@@ -1799,7 +1823,11 @@ int ObXAService::one_phase_xa_rollback_(const ObXATransID &xid,
   } else {
     // if there exists xa ctx, one phase xa rollback is required
     if (OB_FAIL(xa_ctx->one_phase_end_trans(xid, true/*is_rollback*/, timeout_us, request_id))) {
-      TRANS_LOG(WARN, "one phase xa rollback failed", K(ret), K(tx_id));
+      if (OB_TRANS_ROLLBACKED != ret) {
+        TRANS_LOG(WARN, "one phase xa rollback failed", K(ret), K(tx_id));
+      } else {
+        ret = OB_SUCCESS;
+      }
     } else if (OB_FAIL(xa_ctx->wait_one_phase_end_trans(true/*is_rollback*/, timeout_us))) {
       TRANS_LOG(WARN, "fail to wait one phase xa end trans", K(ret), K(xid), K(tx_id));
     }
@@ -1841,16 +1869,8 @@ int ObXAService::xa_rollback_remote_(const ObXATransID &xid,
 
   if (OB_SUCC(ret)) {
     switch (result) {
-      case OB_TRANS_XA_PROTO:
-      case OB_TRANS_COMMITED: {
-        ret = OB_TRANS_XA_PROTO;
-        TRANS_LOG(WARN, "xa rollback failed", KR(ret), K(result), K(sche_addr));
-        break;
-      }
-      case OB_SUCCESS:
-      case OB_TRANS_ROLLBACKED: {
-        ret = OB_SUCCESS;
-        TRANS_LOG(WARN, "xa rollback success", KR(ret), K(result), K(sche_addr));
+      case OB_SUCCESS: {
+        // do nothing
         break;
       }
       case OB_TIMEOUT:
@@ -2195,7 +2215,7 @@ int ObXAService::xa_rollback_all_changes(const ObXATransID &xid, ObTxDesc *&tx_d
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(tx_desc), K(xid), K(stmt_expired_time));
   } else {
-    if (OB_FAIL(start_stmt(xid, *tx_desc))) {
+    if (OB_FAIL(start_stmt(xid, 0/*unused session id*/, *tx_desc))) {
       TRANS_LOG(WARN, "xa start stmt fail", K(ret), K(tx_desc), K(xid));
     } else if (OB_FAIL(MTL(transaction::ObTransService *)->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expired_time, NULL))) {
       TRANS_LOG(WARN, "do savepoint rollback error", K(ret), K(tx_desc));

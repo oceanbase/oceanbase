@@ -218,17 +218,17 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     if (OB_SUCC(ret)) {
        ADD_COLUMN_WITH_VALUE(job_info, restore_type, (int64_t)(job_info.get_restore_type()));
     }
-    // post_cluster_version
+    // post_data_version
     if (OB_SUCC(ret)) {
-      uint64_t post_cluster_version = job_info.get_post_cluster_version();
+      uint64_t post_data_version = job_info.get_post_data_version();
       int64_t len = ObClusterVersion::print_version_str(
-          version, common::OB_CLUSTER_VERSION_LENGTH, post_cluster_version);
+          version, common::OB_CLUSTER_VERSION_LENGTH, post_data_version);
       if (len < 0) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid post_cluster_version", K(ret),
-                 K(post_cluster_version));
+        LOG_WARN("invalid post_data_version", K(ret),
+                 K(post_data_version));
       } else {
-        ADD_COLUMN_WITH_VALUE(job_info, post_cluster_version, ObString(len, version));
+        ADD_COLUMN_WITH_VALUE(job_info, post_data_version, ObString(len, version));
       }
     }
     // status
@@ -271,6 +271,18 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
          LOG_WARN("invalid source_cluster_version", K(ret), K(source_cluster_version));
        } else {
          ADD_COLUMN_WITH_VALUE(job_info, source_cluster_version, ObString(len, version));
+       }
+     }
+     // source_data_version
+     if (OB_SUCC(ret)) {
+       uint64_t source_data_version = job_info.get_source_data_version();
+       int64_t len = ObClusterVersion::print_version_str(
+                     version, common::OB_CLUSTER_VERSION_LENGTH, source_data_version);
+       if (len < 0) {
+         ret = OB_INVALID_ARGUMENT;
+         LOG_WARN("invalid source_data_version", K(ret), K(source_data_version));
+       } else {
+         ADD_COLUMN_WITH_VALUE(job_info, source_data_version, ObString(len, version));
        }
      }
      // while_list/b_while_list
@@ -532,7 +544,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     }
 
     if (OB_SUCC(ret)) {
-      if (name == "post_cluster_version") {
+      if (name == "post_data_version") {
         ObString version_str;
         uint64_t version = 0;
         EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", version_str);
@@ -540,7 +552,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         } else if (OB_FAIL(ObClusterVersion::get_version(version_str, version))) {
           LOG_WARN("fail to parser version", K(ret), K(version_str));
         } else {
-          job.set_post_cluster_version(version);
+          job.set_post_data_version(version);
         }
       }
     }
@@ -554,6 +566,20 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
           LOG_WARN("fail to parser version", K(ret), K(version_str));
         } else {
           job.set_source_cluster_version(version);
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (name == "source_data_version") {
+        ObString version_str;
+        uint64_t version = 0;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", version_str);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ObClusterVersion::get_version(version_str, version))) {
+          LOG_WARN("fail to parser version", K(ret), K(version_str));
+        } else {
+          job.set_source_data_version(version);
         }
       }
     }

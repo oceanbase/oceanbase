@@ -54,7 +54,7 @@ ObTxIsolationLevel tx_isolation_from_str(const ObString &s)
 }
 
 ObTxSavePoint::ObTxSavePoint()
-  : type_(T::INVL), scn_(0), name_() {}
+  : type_(T::INVL), scn_(0), session_id_(0), user_create_(false), name_() {}
 
 ObTxSavePoint::ObTxSavePoint(const ObTxSavePoint &a)
 {
@@ -67,11 +67,33 @@ ObTxSavePoint &ObTxSavePoint::operator=(const ObTxSavePoint &a)
   scn_ = a.scn_;
   switch(type_) {
   case T::SAVEPOINT:
-  case T::STASH: name_ = a.name_; break;
+  case T::STASH: {
+    name_ = a.name_;
+    session_id_ = a.session_id_;
+    user_create_ = a.user_create_;
+    break;
+  }
   case T::SNAPSHOT: snapshot_ = a.snapshot_; break;
   default: break;
   }
   return *this;
+}
+
+bool ObTxSavePoint::operator==(const ObTxSavePoint &a) const
+{
+  bool is_equal = false;
+  if (type_ == a.type_ && scn_== a.scn_) {
+    switch(type_) {
+    case T::SAVEPOINT:
+    case T::STASH: {
+      is_equal = name_ == a.name_ && session_id_ == a.session_id_ && user_create_ == a.user_create_;
+      break;
+    }
+    case T::SNAPSHOT: is_equal = snapshot_ == a.snapshot_; break;
+    default: break;
+    }
+  }
+  return is_equal;
 }
 
 ObTxSavePoint::~ObTxSavePoint()
@@ -84,6 +106,8 @@ void ObTxSavePoint::release()
   type_ = T::INVL;
   snapshot_ = NULL;
   scn_ = 0;
+  session_id_ = 0;
+  user_create_ = false;
 }
 
 void ObTxSavePoint::rollback()
@@ -101,7 +125,7 @@ void ObTxSavePoint::init(ObTxReadSnapshot *snapshot)
   scn_ = snapshot->core_.scn_;
 }
 
-int ObTxSavePoint::init(int64_t scn, const ObString &name, const bool stash)
+int ObTxSavePoint::init(int64_t scn, const ObString &name, const uint32_t session_id, const bool user_create, const bool stash)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(name_.assign(name))) {
@@ -113,6 +137,8 @@ int ObTxSavePoint::init(int64_t scn, const ObString &name, const bool stash)
   } else {
     type_ = stash ? T::STASH : T::SAVEPOINT;
     scn_ = scn;
+    session_id_ = session_id;
+    user_create_ = user_create;
   }
   return ret;
 }
@@ -129,6 +155,8 @@ DEF_TO_STRING(ObTxSavePoint)
   }
   J_COMMA();
   J_KV(K_(scn));
+  J_KV(K_(session_id));
+  J_KV(K_(user_create));
   J_OBJ_END();
   return pos;
 }
@@ -161,6 +189,12 @@ OB_SERIALIZE_MEMBER(ObTxParam,
                     access_mode_,
                     isolation_,
                     cluster_id_);
+OB_SERIALIZE_MEMBER(ObTxSavePoint,
+                    type_,
+                    scn_,
+                    session_id_,
+                    user_create_,
+                    name_);
 
 OB_SERIALIZE_MEMBER(ObTxInfo,
                     tenant_id_,
@@ -179,12 +213,14 @@ OB_SERIALIZE_MEMBER(ObTxInfo,
                     expire_ts_,
                     active_scn_,
                     parts_,
-                    session_id_);
+                    session_id_,
+                    savepoints_);
 OB_SERIALIZE_MEMBER(ObTxStmtInfo,
                     tx_id_,
                     op_sn_,
                     parts_,
-                    state_);
+                    state_,
+                    savepoints_);
 
 int ObTxDesc::trans_deep_copy(const ObTxDesc &x)
 {
@@ -208,6 +244,7 @@ ObTxDesc::ObTxDesc()
     snapshot_uncertain_bound_(0),
     snapshot_scn_(0),
     sess_id_(0),
+    assoc_sess_id_(0),
     global_tx_type_(ObGlobalTxType::PLAIN),
     op_sn_(0),                          // default is from 0
     state_(State::INVL),
@@ -377,9 +414,6 @@ void ObTxDesc::reset()
   xa_ctx_ = NULL;
   tlog_.reset();
   xa_ctx_ = NULL;
-#ifndef NDEBUG
-  alloc_link_.reset();
-#endif
 }
 
 const ObString &ObTxDesc::get_tx_state_str() const {
@@ -426,17 +460,19 @@ void ObTxDesc::print_trace()
   }
 }
 
-bool ObTxDesc::in_tx_or_has_state()
+bool ObTxDesc::in_tx_or_has_extra_state()
 {
   ObSpinLockGuard guard(lock_);
-  return in_tx_or_has_state_();
+  return in_tx_or_has_extra_state_();
 }
 
-bool ObTxDesc::in_tx_or_has_state_()
+bool ObTxDesc::in_tx_or_has_extra_state_() const
 {
-  if (is_in_tx()) {
-    return true;
-  }
+  return is_in_tx() || has_extra_state_();
+}
+
+bool ObTxDesc::has_extra_state_() const
+{
   if (snapshot_version_.is_valid()) {
     return true;
   }
@@ -458,7 +494,7 @@ bool ObTxDesc::in_tx_for_free_route()
 bool ObTxDesc::in_tx_for_free_route_()
 {
   return (addr_.is_valid() && (addr_ != GCONF.self_addr_)) // txn free route temporary node
-    || in_tx_or_has_state_();
+    || in_tx_or_has_extra_state_();
 }
 
 bool ObTxDesc::contain_savepoint(const ObString &sp)

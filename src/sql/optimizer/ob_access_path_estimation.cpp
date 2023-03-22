@@ -18,6 +18,7 @@
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "ob_opt_est_parameter_normal.h"
+#include "observer/ob_sql_client_decorator.h"
 namespace oceanbase {
 using namespace share::schema;
 using namespace share;
@@ -39,10 +40,10 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
   // but it has serveral limitations, hence we check its usage here
   for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
     RowCountEstMethod method;
-    bool is_vt = false;
-    if (OB_FAIL(choose_best_estimation_method(paths.at(i), meta, method, is_vt))) {
+    bool use_default_vt = false;
+    if (OB_FAIL(choose_best_estimation_method(paths.at(i), meta, method, use_default_vt))) {
       LOG_WARN("failed to choose best estimation method", K(ret));
-    } else if (is_vt) {
+    } else if (use_default_vt) {
       if (OB_FAIL(process_vtable_estimation(paths.at(i)))) {
         LOG_WARN("failed to process virtual table estimation", K(ret));
       }
@@ -66,7 +67,7 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
 int ObAccessPathEstimation::choose_best_estimation_method(const AccessPath *path,
                                                           const ObTableMetaInfo &meta,
                                                           RowCountEstMethod &method,
-                                                          bool &is_vt)
+                                                          bool &use_default_vt)
 {
   int ret = OB_SUCCESS;
   const ObTablePartitionInfo *part_info = NULL;
@@ -75,8 +76,8 @@ int ObAccessPathEstimation::choose_best_estimation_method(const AccessPath *path
     LOG_WARN("access path is invalid", K(ret), K(path));
   } else if (is_virtual_table(path->ref_table_id_) &&
              !share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
-    method = RowCountEstMethod::DEFAULT_STAT;
-    is_vt = true;
+    use_default_vt = !meta.has_opt_stat_;
+    method = meta.has_opt_stat_ ? RowCountEstMethod::BASIC_STAT : RowCountEstMethod::DEFAULT_STAT;
   } else {
     if (meta.is_empty_table_) {
       method = RowCountEstMethod::BASIC_STAT;
@@ -173,20 +174,23 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(tmp_part_info.assign(*table_part_info))) {
         LOG_WARN("failed to assign table part info", K(ret));
+      } else if (OB_UNLIKELY(1 != tmp_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list().count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("access path is invalid", K(ret), K(tmp_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list()));
       } else if (!ap->is_global_index_ && ap->ref_table_id_ != ap->index_id_ &&
                 OB_FAIL(tmp_part_info.replace_final_location_key(tmp_exec_ctx,
                                                                  ap->index_id_,
                                                                  true))) {
         LOG_WARN("failed to replace final location key", K(ret));
       } else if (OB_FAIL(ObSQLUtils::choose_best_replica_for_estimation(
-                          tmp_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list(),
+                          tmp_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list().at(0),
                           ctx.get_local_server_addr(),
                           prefer_addrs,
                           !ap->can_use_remote_estimate(),
                           best_index_part))) {
         LOG_WARN("failed to choose best partition for estimation", K(ret));
       } else if (force_leader_estimation &&
-                 OB_FAIL(choose_leader_replica(tmp_part_info,
+                 OB_FAIL(choose_leader_replica(tmp_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list().at(0),
                                                ap->can_use_remote_estimate(),
                                                ctx.get_local_server_addr(),
                                                best_index_part))) {
@@ -272,17 +276,14 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
   return ret;
 }
 
-int ObAccessPathEstimation::choose_leader_replica(const ObTablePartitionInfo &table_part_info,
+int ObAccessPathEstimation::choose_leader_replica(const ObCandiTabletLoc &part_loc_info,
                                                   const bool can_use_remote,
                                                   const ObAddr &local_addr,
                                                   EstimatedPartition &best_partition)
 {
   int ret = OB_SUCCESS;
-  const ObCandiTabletLoc &part_loc_info = 
-      table_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list().at(0);
-  const ObIArray<ObRoutePolicy::CandidateReplica> &replica_loc_array = 
+  const ObIArray<ObRoutePolicy::CandidateReplica> &replica_loc_array =
       part_loc_info.get_partition_location().get_replica_locations();
-  
   for (int64_t i = 0; i < replica_loc_array.count(); ++i) {
     if (replica_loc_array.at(i).is_strong_leader() &&
         (can_use_remote || local_addr == replica_loc_array.at(i).get_server())) {
@@ -888,14 +889,58 @@ int ObAccessPathEstimation::estimate_full_table_rowcount(ObOptimizerContext &ctx
                                                          ObTableMetaInfo &meta)
 {
   int ret = OB_SUCCESS;
+  const ObCandiTabletLocIArray &part_loc_info_array =
+              table_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
+  //if the part loc infos is only 1, we can use the storage estimate rowcount to get real time stat.
+  if (is_virtual_table(meta.ref_table_id_) &&
+      !share::is_oracle_mapping_real_virtual_table(meta.ref_table_id_)) {
+    //do nothing
+  } else if (part_loc_info_array.count() == 1) {
+    if (OB_FAIL(storage_estimate_full_table_rowcount(ctx, part_loc_info_array.at(0), meta))) {
+      LOG_WARN("failed to storage estimate full table rowcount", K(ret));
+    } else {
+      LOG_TRACE("succeed to storage estimate full table rowcount", K(meta));
+    }
+  //if the part loc infos more than 1, we see the dml info inner table and storage inner table.
+  } else if (part_loc_info_array.count() > 1) {
+    ObSEArray<ObTabletID, 64> all_tablet_ids;
+    ObSEArray<ObLSID, 64> all_ls_ids;
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
+      const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
+      if (OB_FAIL(all_tablet_ids.push_back(part_loc.get_tablet_id()))) {
+        LOG_WARN("failed to push back tablet id", K(ret));
+      } else if (OB_FAIL(all_ls_ids.push_back(part_loc.get_ls_id()))) {
+        LOG_WARN("failed to push back tablet id", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(estimate_full_table_rowcount_by_meta_table(ctx, all_tablet_ids,
+                                                             all_ls_ids, meta))) {
+        LOG_WARN("failed to estimate full table rowcount by meta table", K(ret));
+      } else {
+        LOG_TRACE("succeed to estimate full table rowcount", K(meta));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(part_loc_info_array));
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
+                                                                 const ObCandiTabletLoc &part_loc_info,
+                                                                 ObTableMetaInfo &meta)
+{
+  int ret = OB_SUCCESS;
   ObSEArray<ObAddr, 1> prefer_addrs;
   EstimatedPartition best_index_part;
   ObArenaAllocator arena("CardEstimation");
   bool force_leader_estimation = false;
-  
+
   force_leader_estimation = OB_FAIL(OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS);
   ret = OB_SUCCESS;
-  
+
   HEAP_VAR(ObBatchEstTasks, task) {
     obrpc::ObEstPartArg &arg = task.arg_;
     obrpc::ObEstPartRes &res = task.res_;
@@ -908,14 +953,14 @@ int ObAccessPathEstimation::estimate_full_table_rowcount(ObOptimizerContext &ctx
         !share::is_oracle_mapping_real_virtual_table(meta.ref_table_id_)) {
       // do nothing
     } else if (OB_FAIL(ObSQLUtils::choose_best_replica_for_estimation(
-                table_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list(),
+                part_loc_info,
                 ctx.get_local_server_addr(),
                 prefer_addrs,
                 false,
                 best_index_part))) {
       LOG_WARN("failed to choose best partition", K(ret));
-    } else if (force_leader_estimation && 
-               OB_FAIL(choose_leader_replica(table_part_info,
+    } else if (force_leader_estimation &&
+               OB_FAIL(choose_leader_replica(part_loc_info,
                                              true,
                                              ctx.get_local_server_addr(),
                                              best_index_part))) {
@@ -951,8 +996,7 @@ int ObAccessPathEstimation::estimate_full_table_rowcount(ObOptimizerContext &ctx
         LOG_WARN("storage estimation result size is unexpected", K(ret));
       } else if (res.index_param_res_.at(0).reliable_) {
         int64_t logical_row_count = res.index_param_res_.at(0).logical_row_count_;
-        int64_t part_count = table_part_info.get_phy_tbl_location_info().get_partition_cnt();
-        meta.table_row_count_ = logical_row_count * part_count;
+        meta.table_row_count_ = logical_row_count;
         meta.average_row_size_ = static_cast<double>(ObOptStatManager::get_default_avg_row_size());
         meta.part_size_ = logical_row_count * meta.average_row_size_;
       }
@@ -1158,6 +1202,32 @@ int ObAccessPathEstimation::convert_physical_rowid_ranges(ObOptimizerContext &ct
   }
   return ret;
 }
+
+int ObAccessPathEstimation::estimate_full_table_rowcount_by_meta_table(ObOptimizerContext &ctx,
+                                                                       const ObIArray<ObTabletID> &all_tablet_ids,
+                                                                       const ObIArray<ObLSID> &all_ls_ids,
+                                                                       ObTableMetaInfo &meta)
+{
+  int ret = OB_SUCCESS;
+  if (all_tablet_ids.empty()) {
+    //do nothing
+  } else if (OB_ISNULL(ctx.get_session_info()) || OB_ISNULL(ctx.get_opt_stat_manager())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx.get_session_info()), K(ctx.get_opt_stat_manager()));
+  } else if (OB_FAIL(ctx.get_opt_stat_manager()->get_table_rowcnt(ctx.get_session_info()->get_effective_tenant_id(),
+                                                                  meta.ref_table_id_,
+                                                                  all_tablet_ids,
+                                                                  all_ls_ids,
+                                                                  meta.table_row_count_))) {
+    LOG_WARN("failed to get table rowcnt", K(ret));
+   } else {
+    meta.average_row_size_ = static_cast<double>(ObOptStatManager::get_default_avg_row_size());
+    meta.part_size_ = meta.table_row_count_ * meta.average_row_size_;
+    LOG_TRACE("succeed to estimate full table rowcount by meta table", K(meta));
+  }
+  return ret;
+}
+
 
 } // end of sql
 } // end of oceanbase

@@ -1615,7 +1615,7 @@ int ObGeoTypeUtil::get_mbr_polygon(ObIAllocator &allocator,
   return ret;
 }
 
-// fix https://aone.alibaba-inc.com/v2/project/81079/bug/41675080
+// fix
 int ObGeoTypeUtil::eval_point_box_intersects(const ObSrsItem *srs_item,
                                              const ObGeometry *geo1,
                                              const ObGeometry *geo2,

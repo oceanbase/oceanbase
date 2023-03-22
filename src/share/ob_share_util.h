@@ -18,6 +18,7 @@ namespace oceanbase
 namespace common
 {
 class ObTimeoutCtx;
+class ObISQLClient;
 }
 namespace share
 {
@@ -42,6 +43,15 @@ public:
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       int64_t &arb_replica_num);
+
+  static int fetch_current_cluster_version(
+             common::ObISQLClient &client,
+             uint64_t &cluster_version);
+
+  static int fetch_current_data_version(
+             common::ObISQLClient &client,
+             const uint64_t tenant_id,
+             uint64_t &data_version);
 };
 }//end namespace share
 }//end namespace oceanbase

@@ -24,7 +24,12 @@ namespace oceanbase
 namespace obrpc
 {
 class ObSrvRpcProxy;
-class ObAlterTableArg;
+struct ObAlterTableArg;
+struct ObDropDatabaseArg;
+struct ObDropTableArg;
+struct ObDropIndexArg;
+struct ObTruncateTableArg;
+struct ObCreateIndexArg;
 }
 namespace sql
 {
@@ -72,7 +77,8 @@ enum ObDDLType
   DDL_ADD_COLUMN_OFFLINE = 1008, // only add columns
   DDL_COLUMN_REDEFINITION = 1009, // only add/drop columns
   DDL_TABLE_REDEFINITION = 1010,
-  DDL_DIRECT_LOAD = 1011,
+  DDL_DIRECT_LOAD = 1011, // load data
+  DDL_DIRECT_LOAD_INSERT = 1012, // insert into select
 
 
   // @note new normal ddl type to be defined here !!!
@@ -323,10 +329,17 @@ public:
   static int64_t get_default_ddl_rpc_timeout();
   static int64_t get_default_ddl_tx_timeout();
 
-  static int get_ddl_cluster_version(
+  static int get_data_format_version(
      const uint64_t tenant_id,
      const uint64_t task_id,
-     int64_t &ddl_cluster_version);
+     int64_t &data_format_version);
+
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObAlterTableArg &alter_table_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropDatabaseArg &drop_db_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropTableArg &drop_table_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropIndexArg &drop_index_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObTruncateTableArg &trucnate_table_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObCreateIndexArg &create_index_arg);
 
 private:
   static int generate_column_name_str(
@@ -367,6 +380,11 @@ public:
       const int64_t schema_version,
       const int64_t scn,
       bool &need_exec_new_inner_sql);
+  static int check_finish_report_checksum(
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const int64_t execution_id,
+      const uint64_t ddl_task_id);
 
 private:
 

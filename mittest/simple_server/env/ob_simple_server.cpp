@@ -141,6 +141,7 @@ int ObSimpleServer::simple_init()
   opts.use_ipv6_ = false;
 
   char *curr_dir = get_current_dir_name();
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
 
 
   if (ObSimpleServerRestartHelper::is_restart_) {

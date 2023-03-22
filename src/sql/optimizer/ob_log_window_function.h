@@ -32,6 +32,7 @@ namespace sql
         single_part_parallel_(false),
         range_dist_parallel_(false),
         role_type_(WindowFunctionRoleType::NORMAL),
+        rd_sort_keys_cnt_(0),
         rd_pby_sort_cnt_(0),
         wf_aggr_status_expr_(NULL)
     {}
@@ -69,14 +70,16 @@ namespace sql
     bool is_push_down() { return PARTICIPATOR == role_type_|| CONSOLIDATOR == role_type_; }
     bool is_participator() { return PARTICIPATOR == role_type_; }
     bool is_consolidator() { return CONSOLIDATOR == role_type_; }
-    int set_rd_sort_keys(const common::ObIArray<OrderItem> &sort_keys)
+    int get_rd_sort_keys(common::ObIArray<OrderItem> &rd_sort_keys);
+    int set_sort_keys(const common::ObIArray<OrderItem> &sort_keys)
     {
-      return rd_sort_keys_.assign(sort_keys);
+      return sort_keys_.assign(sort_keys);
     }
-    const common::ObIArray<OrderItem> &get_rd_sort_keys() const
+    const common::ObIArray<OrderItem> &get_sort_keys() const
     {
-      return rd_sort_keys_;
+      return sort_keys_;
     }
+    void set_rd_sort_keys_cnt(const int64_t cnt) { rd_sort_keys_cnt_ = cnt; }
     int set_pushdown_info(const common::ObIArray<bool> &pushdown_info)
     {
       return pushdown_info_.assign(pushdown_info);
@@ -118,11 +121,13 @@ namespace sql
     // 3. Only the following functions supported: rank,dense_rank,sum,count,min,max
     bool range_dist_parallel_;
 
-    // https://yuque.antfin.com/ob/sql/wf_adaptive_parallel_execution#69270e6f
+    //
     WindowFunctionRoleType role_type_;
 
-    // sort keys for range distributed parallel.
-    common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> rd_sort_keys_;
+    // sort keys needed for window function
+    common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
+    // sort keys count for range distributed parallel.
+    int64_t rd_sort_keys_cnt_;
     // the first %rd_pby_sort_cnt_ of %rd_sort_keys_ is the partition by of window function.
     int64_t rd_pby_sort_cnt_;
 

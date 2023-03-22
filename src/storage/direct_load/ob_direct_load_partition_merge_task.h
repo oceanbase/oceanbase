@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #pragma once
 
@@ -203,6 +203,57 @@ private:
   };
 private:
   ObDirectLoadMultipleHeapTable *heap_table_;
+  share::ObTabletCacheInterval pk_interval_;
+};
+
+class ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask
+  : public ObDirectLoadPartitionMergeTask
+{
+public:
+  ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask();
+  virtual ~ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask();
+  int init(const ObDirectLoadMergeParam &merge_param, ObDirectLoadTabletMergeCtx *merge_ctx,
+           ObDirectLoadOriginTable *origin_table,
+           const common::ObIArray<ObDirectLoadMultipleHeapTable *> &heap_table_array,
+           const share::ObTabletCacheInterval &pk_interval);
+protected:
+  int construct_row_iter(common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter) override;
+private:
+  class RowIterator : public ObIStoreRowIterator
+  {
+  public:
+    RowIterator();
+    virtual ~RowIterator();
+    int init(const ObDirectLoadMergeParam &merge_param, const common::ObTabletID &tablet_id,
+             ObDirectLoadOriginTable *origin_table,
+             const common::ObIArray<ObDirectLoadMultipleHeapTable *> *heap_table_array,
+             const share::ObTabletCacheInterval &pk_interval);
+    int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+  private:
+    int switch_next_heap_table();
+  private:
+    // for iter origin table
+    common::ObArenaAllocator allocator_;
+    blocksstable::ObDatumRange range_;
+    ObIStoreRowIterator *origin_iter_;
+    int64_t rowkey_column_num_;
+    int64_t store_column_count_;
+    // for iter multiple heap table
+    common::ObTabletID tablet_id_;
+    ObDirectLoadTableDataDesc table_data_desc_;
+    const common::ObIArray<ObDirectLoadMultipleHeapTable *> *heap_table_array_;
+    int64_t pos_;
+    ObDirectLoadMultipleHeapTableTabletWholeScanner scanner_;
+    blocksstable::ObDatumRow datum_row_;
+    blocksstable::ObStorageDatum *deserialize_datums_;
+    int64_t deserialize_datum_cnt_;
+    share::ObTabletCacheInterval pk_interval_;
+    table::ObTableLoadResultInfo *result_info_;
+    bool is_inited_;
+  };
+private:
+  ObDirectLoadOriginTable *origin_table_;
+  const common::ObIArray<ObDirectLoadMultipleHeapTable *> *heap_table_array_;
   share::ObTabletCacheInterval pk_interval_;
 };
 

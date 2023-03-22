@@ -42,6 +42,7 @@ public:
       const ObTableSchema &orig_table_schema,
       const AlterTableSchema &alter_table_schema,
       const ObTimeZoneInfoWrap &tz_info_wrap);
+  ObDDLTaskID get_ddl_task_id() { return ObDDLTaskID(tenant_id_, task_id_); }
   virtual ~ObDDLRedefinitionSSTableBuildTask() = default;
   virtual int process() override;
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
@@ -126,7 +127,12 @@ public:
   virtual void flt_set_task_span_tag() const = 0;
   virtual void flt_set_status_span_tag() const = 0;
   virtual int cleanup_impl() override;
-  int try_reap_old_replica_build_task();
+  int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
+  INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask,
+      K(wait_trans_ctx_), K(sync_tablet_autoinc_seq_ctx_), K(build_replica_request_time_),
+      K(complete_sstable_job_ret_code_), K(snapshot_held_), K(has_synced_autoincrement_),
+      K(has_synced_stats_info_), K(update_autoinc_job_ret_code_), K(update_autoinc_job_time_),
+      K(check_table_empty_job_ret_code_), K(check_table_empty_job_time_));
 protected:
   int prepare(const share::ObDDLTaskStatus next_task_status);
   int lock_table(const share::ObDDLTaskStatus next_task_status);

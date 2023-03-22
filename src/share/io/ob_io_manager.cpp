@@ -280,6 +280,29 @@ int ObIOManager::pwrite(ObIOInfo &info, int64_t &write_size)
   return ret;
 }
 
+int ObIOManager::detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms)
+{
+  int ret = OB_SUCCESS;
+  ObRefHolder<ObTenantIOManager> tenant_holder;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("io manager not inited", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_working_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("io manager not working", K(ret), K(is_working_));
+  } else if (OB_UNLIKELY(!info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(info), K(lbt()));
+  } else if (OB_FAIL(get_tenant_io_manager(info.tenant_id_, tenant_holder))) {
+    LOG_WARN("get tenant io manager failed", K(ret), K(info.tenant_id_));
+  } else if (OB_FAIL(tenant_holder.get_ptr()->detect_aio(info, handle))) {
+    LOG_WARN("tenant io manager do aio failed", K(ret), K(info), KPC(tenant_holder.get_ptr()));
+  } else if (OB_FAIL(handle.wait(timeout_ms))) {
+    LOG_WARN("io handle wait failed", K(ret), K(info), K(timeout_ms));
+  }
+  return ret;
+}
+
 int ObIOManager::tenant_aio(const ObIOInfo &info, ObIOHandle &handle)
 {
   int ret = OB_SUCCESS;
@@ -701,6 +724,8 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   int ret = OB_SUCCESS;
   handle.reset();
   ObIORequest *req = nullptr;
+  bool data_hang = false;
+  bool slog_hang = false;
   const int64_t callback_size = nullptr == info.callback_ ? 0 : info.callback_->size();
   logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
   if (OB_UNLIKELY(!is_inited_)) {
@@ -710,9 +735,10 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
   } else if (NULL != detector &&
-             detector->is_data_disk_has_fatal_error()) { // also consider slog writer hung
-    ret = OB_DISK_CORRUPTED;
-    LOG_WARN("data disk has fatal error", K(ret));
+             detector->is_data_disk_has_fatal_error(slog_hang, data_hang)) { // also consider slog writer hung
+    ret = OB_DISK_HUNG;
+    // for temporary positioning issue, get lbt of log replay
+    LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk or slog disk has fatal error", K(slog_hang), K(data_hang));
   } else if (OB_FAIL(alloc_io_request(io_allocator_, callback_size, req))) {
     LOG_WARN("alloc io request failed", K(ret), KP(req));
   } else if (FALSE_IT(req->tenant_io_mgr_.hold(this))) {
@@ -720,11 +746,61 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
     LOG_WARN("fail to set master to handle", K(ret), KP(req));
   } else if (OB_FAIL(req->init(info))) {
     LOG_WARN("init request failed", K(ret), K(info), KPC(req));
-  } else if (OB_FAIL(io_scheduler_->schedule_request(*io_clock_, *req))) {
+  } else if (OB_FAIL(io_scheduler_->schedule_request(*req))) {
     LOG_WARN("schedule request failed", K(ret), KPC(req));
   }
   if (OB_FAIL(ret)) {
     handle.reset();
+  }
+  return ret;
+}
+
+int ObTenantIOManager::detect_aio(const ObIOInfo &info, ObIOHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  handle.reset();
+  ObIORequest *req = nullptr;
+  ObDeviceChannel *device_channel = nullptr;
+  ObTimeGuard time_guard("detect_aio_request", 100000); //100ms
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_working())) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("tenant not working", K(ret), K(tenant_id_));
+  } else if (OB_UNLIKELY(info.callback_ != nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("callback should be nullptr", K(ret), K(info.callback_));
+  } else if (OB_FAIL(alloc_io_request(io_allocator_, 0 /*callback = null*/, req))) {
+    LOG_WARN("alloc io request failed", K(ret), KP(req));
+  } else if (FALSE_IT(req->tenant_io_mgr_.hold(this))) {
+  } else if (OB_FAIL(handle.set_request(*req))) { // not safe, unless handle is only used after this function.
+    LOG_WARN("fail to set master to handle", K(ret), KP(req));
+  } else if (OB_FAIL(req->init(info))) {
+    LOG_WARN("init request failed", K(ret), K(info), KPC(req));
+  } else if (OB_FAIL(req->prepare())) {
+    LOG_WARN("prepare io request failed", K(ret), K(req));
+  } else if (FALSE_IT(time_guard.click("prepare_detect_req"))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req->io_info_.fd_.device_handle_, device_channel))) {
+    LOG_WARN("get device channel failed", K(ret), K(req));
+  } else {
+    ObThreadCondGuard guard(req->cond_);
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_ERROR("fail to guard master condition", K(ret));
+    } else if (req->is_canceled_) {
+      ret = OB_CANCELED;
+    } else if (OB_FAIL(device_channel->submit(*req))) {
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("submit io request failed", K(ret), K(*req), KPC(device_channel));
+      }
+    } else {
+      time_guard.click("device_submit_detect");
+    }
+  }
+  if (time_guard.get_diff() > 100000) {// 100ms
+    //print req
+    LOG_INFO("submit_detect_request cost too much time", K(ret), K(time_guard), K(req));
   }
   return ret;
 }
@@ -771,7 +847,11 @@ int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
         if (!io_config.enable_io_tracer_) {
           io_tracer_.reuse();
         }
-        LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_));
+        if (OB_FAIL(io_clock_->update_io_clocks(io_config_))) {
+          LOG_WARN("refresh io clock failed", K(ret), K(io_config_));
+        } else {
+          LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_), K(io_config));
+        }
       }
     }
   }

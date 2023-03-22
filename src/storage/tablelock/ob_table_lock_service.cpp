@@ -1661,6 +1661,7 @@ int ObTableLockService::start_tx_(ObTableLockCtx &ctx)
 int ObTableLockService::end_tx_(ObTableLockCtx &ctx, const bool is_rollback)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   if (!ctx.trans_state_.is_start_trans_executed()
       || !ctx.trans_state_.is_start_trans_success()) {
@@ -1677,15 +1678,15 @@ int ObTableLockService::end_tx_(ObTableLockCtx &ctx, const bool is_rollback)
       LOG_WARN("fail end trans when session terminate",
                K(ret), KPC(ctx.tx_desc_), K(stmt_timeout_ts));
     }
-    if (OB_FAIL(txs->release_tx(*ctx.tx_desc_))) {
-      LOG_ERROR("release tx failed", K(ret), KPC(ctx.tx_desc_));
+    if (OB_TMP_FAIL(txs->release_tx(*ctx.tx_desc_))) {
+      LOG_ERROR("release tx failed", K(ret), K(tmp_ret), KPC(ctx.tx_desc_));
     }
     ctx.tx_desc_ = NULL;
     ctx.trans_state_.clear_start_trans_executed();
   }
 
   ctx.trans_state_.reset();
-  LOG_DEBUG("ObTableLockService::end_tx_", K(ret), K(ctx), K(is_rollback));
+  LOG_DEBUG("ObTableLockService::end_tx_", K(ret), K(tmp_ret), K(ctx), K(is_rollback));
 
   return ret;
 }

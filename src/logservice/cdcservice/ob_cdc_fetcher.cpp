@@ -159,6 +159,8 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
     EVENT_ADD(CLOG_EXTLOG_FETCH_LOG_COUNT, fetch_log_count);
   }
 
+  LOG_INFO("fetch_log done", K(req), K(resp));
+
   resp.set_err(ret);
   return ret;
 }
@@ -221,6 +223,8 @@ int ObCdcFetcher::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
     ObCdcServiceMonitor::fetch_log_count(fetch_log_count);
     EVENT_ADD(CLOG_EXTLOG_FETCH_LOG_COUNT, fetch_log_count);
   }
+
+  LOG_INFO("fetch_missing_log done", K(req), K(resp));
 
   resp.set_err(ret);
   return ret;
@@ -360,7 +364,13 @@ int ObCdcFetcher::fetch_log_in_archive_(
       if (OB_ITER_END != ret) {
         LOG_WARN("iterate remote log failed", KR(ret), K(need_init_iter), K(ls_id));
       }
-    } else { }
+    } else if (start_lsn != lsn) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("remote iterator returned unexpected log entry lsn", K(start_lsn), K(lsn), K(log_entry), K(ls_id),
+          K(remote_iter));
+    } else {
+
+    }
   }
   return ret;
 }
@@ -381,7 +391,7 @@ int ObCdcFetcher::set_fetch_mode_before_fetch_log_(const ObLSID &ls_id,
       ctx.set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "LSNotExistInPalf");
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("logstream in sys tenant doesn't exist, unexpected", KR(ret));
+      LOG_WARN("logstream in sys tenant doesn't exist, unexpected", KR(ret), K(ls_id));
     }
   } else if (FetchMode::FETCHMODE_ARCHIVE == ctx.get_fetch_mode()) {
     int64_t end_ts_ns = OB_INVALID_TIMESTAMP;
@@ -451,9 +461,14 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
   PalfGroupBufferIterator palf_iter;
   PalfHandleGuard palf_guard;
   // use cached remote_iter
-  ObRemoteLogGroupEntryIterator &remote_iter = ctx.get_remote_iter();
+  ObCdcGetSourceFunctor get_source_func(ctx);
+  ObCdcUpdateSourceFunctor update_source_func(ctx);
+  ObRemoteLogGroupEntryIterator remote_iter(get_source_func, update_source_func);
   bool ls_exist_in_palf = true;
+  // always reset remote_iter when need_init_iter is true
+  // always set need_init_inter=true when switch fetch_mode
   bool need_init_iter = true;
+  bool log_exist_in_palf = true;
   int64_t retry_count = 0;
   const bool fetch_archive_only = ObCdcRpcTestFlag::is_fetch_archive_only(fetch_flag);
   // test switch fetch mode requires that the fetch mode should be FETCHMODE_ARCHIVE at first, and then
@@ -486,7 +501,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
     int64_t start_fetch_ts = ObTimeUtility::current_time();
     bool fetch_log_succ = false;
     const int64_t MAX_RETRY_COUNT = 3;
-    if (is_time_up_(fetched_log_count, end_tstamp)) { // time up, stop fetching logs globally
+    if (is_time_up_(scan_round_count, end_tstamp)) { // time up, stop fetching logs globally
       frt.stop("TimeUP");
       LOG_INFO("fetch log quit in time", K(end_tstamp), K(frt), K(fetched_log_count));
     } // time up
@@ -499,62 +514,63 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
           need_init_iter = false;
           ret = OB_SUCCESS;
         } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-          need_init_iter = true;
-          ctx.set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "PalfOutOfLowerBound");
-          ret = OB_SUCCESS;
+          // switch to fetchmode_archive, when in FETCHMODE_ONLINE, remote_iter is not inited
+          if (OB_SYS_TENANT_ID != tenant_id_) {
+            need_init_iter = true;
+            log_exist_in_palf = false;
+            ctx.set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "PalfOutOfLowerBound");
+            ret = OB_SUCCESS;
+          } else {
+            LOG_INFO("log in sys tenant may be recycled", KR(ret), K(ls_id), K(resp));
+          }
         } else {
           LOG_WARN("fetching log in palf failed", KR(ret));
         }
       } else {
+        log_exist_in_palf = true;
         need_init_iter = false;
         fetch_log_succ = true;
       } // fetch log succ
     } // fetch palf log
     else if (FetchMode::FETCHMODE_ARCHIVE == fetch_mode) {
-      // trust the iter_next_lsn_ in ctx, binding the iter_next_lsn_ in ctx with the iter_ in ctx,
-      // so some of the defensive conditional statements could be omitted
-      // 1. set iter_next_lsn_ to LOG_INVALID_LSN_VAL when initializing a ctx.
-      // 2. when a log is fetched in archive, update the iter_next_lsn_
-      // 3. so if iter_next_lsn_ is valid, the iter_ must be initialized.
-      // 4. finally, we only check the lsn continuity here
-      if (ctx.get_iter_next_lsn() == resp.get_next_req_lsn()) {
-        need_init_iter = false;
-      } else {
-        need_init_iter = true;
-        remote_iter.update_source_cb();
-        remote_iter.reset();
-      }
       if (OB_FAIL(fetch_log_in_archive_(ls_id, remote_iter, resp.get_next_req_lsn(),
               need_init_iter, log_group_entry, lsn, ctx))) {
         if (OB_ITER_END == ret) {
           // when fetch to the end, the iter become invalid even if the new log is archived later,
-          // so just reset iter and iter_next_lsn
-          ctx.set_iter_next_lsn(LSN(LOG_INVALID_LSN_VAL));
+          // cdcservice would continue to fetch log in palf or return result to cdc-connector,
+          // reset remote_iter in either condition.
+          remote_iter.update_source_cb();
+          remote_iter.reset();
           if (ls_exist_in_palf) {
-            // switch to palf
-            need_init_iter = true;
-            ctx.set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "ArchiveIterEnd");
-            ret = OB_SUCCESS;
+            if (log_exist_in_palf) {
+              // switch to palf, reset remote_iter
+              need_init_iter = true;
+              ctx.set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "ArchiveIterEnd");
+              ret = OB_SUCCESS;
+            } else {
+              ret = OB_ERR_OUT_OF_LOWER_BOUND;
+            }
           } else {
             // exit
             reach_max_lsn = true;
           }
-        } else if (OB_ENTRY_NOT_EXIST == ret) {
+        } else if (OB_ALREADY_IN_NOARCHIVE_MODE == ret) {
           // archive is not on
           ret = OB_ERR_OUT_OF_LOWER_BOUND;
         } else {
+          // other error code, retry because various error code would be returned, retry could fix some problem
+          // TODO: process the error code with clear semantic
           LOG_WARN("fetching log in archive failed", KR(ret), K(remote_iter), K(ls_id), K(resp));
+          remote_iter.reset();
           if (retry_count < MAX_RETRY_COUNT) {
             LOG_TRACE("retry on fetching remote log failure", KR(ret), K(retry_count), K(ctx));
             retry_count++;
-            ctx.set_iter_next_lsn(LSN(LOG_INVALID_LSN_VAL));
             need_init_iter = true;
             ret = OB_SUCCESS;
           }
         }
-      } else {
-        LSN remote_iter_next_lsn = lsn + log_group_entry.get_serialize_size();
-        ctx.set_iter_next_lsn(remote_iter_next_lsn);
+      } else { // OB_SUCCESS
+        log_exist_in_palf = true;
         need_init_iter = false;
         fetch_log_succ = true;
       } // fetch log succ
@@ -564,12 +580,14 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
       LOG_WARN("fetch mode is invalid", KR(ret), K(fetch_mode));
     } // unexpected branch
 
+    // inc log fetch time in any condition
+    resp.inc_log_fetch_time(ObTimeUtility::current_time() - start_fetch_ts);
+
     // retry on OB_ITER_END (when fetching logs in archive), OB_ALLOCATE_MEMORY_FAILED and
     // OB_ERR_OUT_OF_LOWER_BOUND (when fetching logs in palf), thus some return codes are blocked and the
     // return code is unable to be used for determine whether logEntry is successfully fetched.
     // update the resp/frt/ctx when the logentry is successfully fetched
     if (OB_SUCC(ret) && fetch_log_succ) {
-      resp.inc_log_fetch_time(ObTimeUtility::current_time() - start_fetch_ts);
       check_next_group_entry_(lsn, log_group_entry, fetched_log_count, resp, frt, reach_upper_limit, ctx);
       resp.set_progress(ctx.get_progress());
       if (frt.is_stopped()) {
@@ -589,6 +607,12 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
       }
     }
   } // while
+
+  // update source back when remote_iter is valid, needn't reset remote iter,
+  // because it won't be used afterwards
+  if (remote_iter.is_init()) {
+    remote_iter.update_source_cb();
+  }
 
   if (OB_SUCCESS == ret) {
     // do nothing
@@ -976,7 +1000,7 @@ int ObCdcFetcher::prepare_berfore_fetch_missing_(const ObLSID &ls_id,
     }
 
     if (OB_SUCC(ret) && OB_ISNULL(ctx.get_source()) && OB_FAIL(init_archive_source_(ctx, ls_id))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
+      if (OB_ALREADY_IN_NOARCHIVE_MODE == ret) {
         ret = OB_SUCCESS;
         archive_is_on = false;
       }

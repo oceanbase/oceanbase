@@ -80,7 +80,7 @@ class ObDDLStartClogCb : public logservice::AppendCb
 public:
   ObDDLStartClogCb();
   virtual ~ObDDLStartClogCb() = default;
-  int init(const uint32_t lock_tid, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int init(const ObITable::TableKey &table_key, const int64_t data_format_version, const int64_t execution_id, const uint32_t lock_tid, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   virtual int on_success() override;
   virtual int on_failure() override;
   inline bool is_success() const { return status_.is_success(); }
@@ -88,10 +88,13 @@ public:
   inline bool is_finished() const { return status_.is_finished(); }
   int get_ret_code() const { return status_.get_ret_code(); }
   void try_release();
-  TO_STRING_KV(K(is_inited_), K(status_), K_(lock_tid));
+  TO_STRING_KV(K(is_inited_), K(status_), K_(table_key), K_(data_format_version), K_(execution_id), K_(lock_tid));
 private:
   bool is_inited_;
   ObDDLClogCbStatus status_;
+  ObITable::TableKey table_key_;
+  int64_t data_format_version_;
+  int64_t execution_id_;
   uint32_t lock_tid_;
   ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };
@@ -104,7 +107,6 @@ public:
   int init(const share::ObLSID &ls_id,
            const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
            const blocksstable::MacroBlockId &macro_block_id,
-           const uint32_t lock_tid,
            ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   virtual int on_success() override;
   virtual int on_failure() override;
@@ -122,7 +124,6 @@ private:
   ObArenaAllocator arena_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
-  uint32_t lock_tid_;
   ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };
 
@@ -175,15 +176,15 @@ class ObDDLStartLog final
 public:
   ObDDLStartLog();
   ~ObDDLStartLog() = default;
-  int init(const ObITable::TableKey &table_key, const int64_t cluster_version, const int64_t execution_id);
-  bool is_valid() const { return table_key_.is_valid() && cluster_version_ >= 0 && execution_id_ >= 0; }
+  int init(const ObITable::TableKey &table_key, const int64_t data_format_version, const int64_t execution_id);
+  bool is_valid() const { return table_key_.is_valid() && data_format_version_ >= 0 && execution_id_ >= 0; }
   ObITable::TableKey get_table_key() const { return table_key_; }
-  int64_t get_cluster_version() const { return cluster_version_; }
+  int64_t get_data_format_version() const { return data_format_version_; }
   int64_t get_execution_id() const { return execution_id_; }
-  TO_STRING_KV(K_(table_key), K_(cluster_version), K_(execution_id));
+  TO_STRING_KV(K_(table_key), K_(data_format_version), K_(execution_id));
 private:
   ObITable::TableKey table_key_;
-  int64_t cluster_version_; // used for compatibility
+  int64_t data_format_version_; // used for compatibility
   int64_t execution_id_;
 };
 

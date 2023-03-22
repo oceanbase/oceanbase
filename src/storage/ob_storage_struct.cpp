@@ -215,7 +215,7 @@ ObDDLTableStoreParam::ObDDLTableStoreParam()
     ddl_checkpoint_scn_(SCN::min_scn()),
     ddl_snapshot_version_(0),
     ddl_execution_id_(-1),
-    ddl_cluster_version_(0)
+    data_format_version_(0)
 {
 
 }
@@ -227,7 +227,7 @@ bool ObDDLTableStoreParam::is_valid() const
     && ddl_checkpoint_scn_.is_valid()
     && ddl_snapshot_version_ >= 0
     && ddl_execution_id_ >= 0
-    && ddl_cluster_version_ >= 0;
+    && data_format_version_ >= 0;
 }
 
 ObUpdateTableStoreParam::ObUpdateTableStoreParam(

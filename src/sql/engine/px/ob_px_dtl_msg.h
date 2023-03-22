@@ -467,7 +467,7 @@ class ObPxBloomFilterData: public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_BLOOM_
 public:
    ObPxBloomFilterData() : filter_(), tenant_id_(common::OB_INVALID_TENANT_ID),
        filter_id_(common::OB_INVALID_ID), server_id_(common::OB_INVALID_ID),
-       execution_id_(common::OB_INVALID_ID), bloom_filter_count_(0) {}
+       px_sequence_id_(common::OB_INVALID_ID), bloom_filter_count_(0) {}
   virtual ~ObPxBloomFilterData() = default;
   void reset()
   {
@@ -475,16 +475,16 @@ public:
     tenant_id_ = OB_INVALID_TENANT_ID;
     filter_id_ = OB_INVALID_ID;
     server_id_ = OB_INVALID_ID;
-    execution_id_ = OB_INVALID_ID;
+    px_sequence_id_ = OB_INVALID_ID;
     bloom_filter_count_ = 0;
   }
-  TO_STRING_KV(K_(filter), K_(server_id), K_(execution_id));
+  TO_STRING_KV(K_(filter), K_(server_id), K_(px_sequence_id));
 public:
   ObPxBloomFilter filter_;
   int64_t tenant_id_;
   int64_t filter_id_;
   int64_t server_id_;
-  int64_t execution_id_;
+  int64_t px_sequence_id_;
   int64_t bloom_filter_count_;
 };
 

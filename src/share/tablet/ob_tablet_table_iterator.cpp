@@ -87,7 +87,7 @@ int ObTenantTabletMetaIterator::next(ObTabletInfo &tablet_info)
         if (OB_FAIL(tablet_info.assign(prefetched_tablets_.at(prefetch_tablet_idx_)))) {
           LOG_WARN("fail to assign tablet_info", KR(ret), K_(prefetch_tablet_idx));
         } else if (tablet_info.replica_count() > 0) {
-          // https://work.aone.alibaba-inc.com/issue/43496533
+          //
           if (OB_FAIL(tablet_info.filter(filters_))) {
             LOG_WARN("fail to filter tablet_info", KR(ret), K(tablet_info));
           } else {

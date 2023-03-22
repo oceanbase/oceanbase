@@ -3264,7 +3264,7 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
         LOG_WARN("fail to extract info child 3 of between node", K(ret));
       } else if (btw_params[1]->has_flag(CNT_PL_UDF)
                  || btw_params[2]->has_flag(CNT_PL_UDF)) {
-        // skip rewrite, relevant issue : https://work.aone.alibaba-inc.com/issue/35465473
+        // skip rewrite, relevant issue :
       } else if (btw_params[1]->is_const_expr()
                  && btw_params[2]->is_const_expr()) {
         // We will transform if the second and the third param are both const value or const expr
@@ -3422,8 +3422,12 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
           LOG_WARN("invalid escape char length, expect 1, get 0", K(ret));
         }
       } else if (escape_node->value_ < 0 || escape_node->value_ >= ctx_.param_list_->count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("index is out of range", K(escape_node->value_), K(ctx_.param_list_->count()));
+        if (OB_NOT_NULL(ctx_.session_info_) && ctx_.session_info_->is_ps_prepare_stage()) {
+          // skip check question mark about escape node in prepare statement
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index is out of range", K(escape_node->value_), K(ctx_.param_list_->count()));
+        }
         // c1 like '123' escape null is illegal in oracle mode, but legal in mysql mode
       } else if (ctx_.param_list_->at(escape_node->value_).is_null() && lib::is_oracle_mode()) {
         ret = OB_ERR_INVALID_ESCAPE_CHAR_LENGTH;
@@ -3466,7 +3470,7 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
       escape_node.raw_text_ = NULL;
 
       /*
-      bugfix:https://work.aone.alibaba-inc.com/issue/36691548
+      bugfix:
       in NO_BACKSLASH_ESCAPES mode, 'like BINARY xxx' stmt should also set the escapes as null, instead of '\' 
       */
       bool no_escapes = false;
@@ -4022,11 +4026,15 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
     } else if (T_FUN_ORA_JSON_OBJECTAGG == node->type_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
         sub_expr = NULL;
+        ObString def_val(7, "default");
         if (OB_ISNULL(node->children_[i])) {
           // do nothing
         } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[i], sub_expr)))) {
           LOG_WARN("fail to recursive resolve expr list item", K(ret));
-        } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
+        } else if ((i == 4) && (0 == def_val.case_compare(node->children_[i]->raw_text_))) {
+          (static_cast<ObConstRawExpr *>(sub_expr))->set_scale(1);
+        }
+        if (OB_SUCC(ret) && OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
           LOG_WARN("fail to add param expr to agg expr", K(ret));
         }
       } // end for
@@ -5371,7 +5379,7 @@ int ObRawExprResolverImpl::process_json_exists_node(const ParseNode *node, ObRaw
           ObRawExpr *para_expr = NULL;
           CK(OB_NOT_NULL(node->children_[i]->children_[name_idx]));
           OZ(SMART_CALL(recursive_resolve(node->children_[i]->children_[name_idx], para_expr)));
-          if (name_idx % 2 == 0 && para_expr->get_expr_type() == T_REF_QUERY) {
+          if (OB_NOT_NULL(para_expr) && name_idx % 2 == 0 && para_expr->get_expr_type() == T_REF_QUERY) {
             ret = OB_ERR_INVALID_VARIABLE_IN_JSON_PATH;
             LOG_USER_ERROR(OB_ERR_INVALID_VARIABLE_IN_JSON_PATH);
           } else {
@@ -5826,7 +5834,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
           }
         } //end for
 
-        // https://work.aone.alibaba-inc.com/issue/37807086
+        //
         // check param count
         if (ret != OB_SUCCESS) {
           int temp_ret = ret;
@@ -5898,7 +5906,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
 
   //mark expr is deterministic or not(default deterministic)
   if (OB_SUCC(ret)) {
-    //bug:https://work.aone.alibaba-inc.com/issue/32921493
+    //bug:
     //maybe have more exprs, can be added below in the future.
     if (lib::is_oracle_mode() && expr->get_expr_type() == T_FUN_SYS_REGEXP_REPLACE) {
       expr->set_is_deterministic(false);

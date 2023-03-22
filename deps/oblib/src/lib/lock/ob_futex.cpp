@@ -22,7 +22,12 @@ static struct timespec make_timespec(int64_t us)
   return ts;
 }
 
-
+extern "C" {
+int __attribute__((weak)) futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespec* timeout)
+{
+  return syscall(SYS_futex, uaddr, futex_op, val, timeout);
+}
+}
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

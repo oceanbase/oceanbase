@@ -81,6 +81,8 @@ enum ObLogBaseType
   MAX_LOG_BASE_TYPE,
 };
 
+// Define the maximum length of ObLogBaseType string
+static constexpr int64_t OB_LOG_BASE_TYPE_STR_MAX_LEN = 128;
 static inline
 int log_base_type_to_string(const ObLogBaseType log_type,
                             char *str,

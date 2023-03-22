@@ -1215,6 +1215,7 @@ bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
   int64_t max_pos = -1;
   int64_t depth = ignore_head ? key_part_head.pos_.offset_ - 1 : -1;
   bool is_terminated = false;
+  bool is_phy_rowid_key_part = false;
   for (const ObKeyPart *cur = &key_part_head; !is_terminated && NULL != cur; cur = cur->and_next_) {
     if (cur->is_in_key()) {
       if (cur->in_keypart_->is_strict_in_ &&
@@ -1238,7 +1239,7 @@ bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
     } else if (!cur->is_equal_condition()) {
       is_precise_get = false;
     } else {
-      // do nothing
+      is_phy_rowid_key_part = cur->is_phy_rowid_key_part();
     }
     if (!is_terminated) {
       if (is_strict_in_graph(cur)) {
@@ -1256,7 +1257,7 @@ bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
   }
 
   max_precise_pos = is_terminated ? max_pos : depth + 1;
-  if (is_precise_get && depth != column_count_ - 1) {
+  if (is_precise_get && depth != column_count_ - 1 && !is_phy_rowid_key_part) {
     is_precise_get = false;
   }
   return is_precise_get;
@@ -1925,7 +1926,6 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
   } else {
     bool row_is_precise = true;
     if (T_OP_EQ != cmp_type) {
-      contain_row_ = true;
       row_is_precise = false;
     }
     ObKeyPartList key_part_list;
@@ -1959,6 +1959,7 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
     ObArenaAllocator alloc;
     ObExprResType res_type(alloc);
     ObKeyPart *tmp_key_part = NULL;
+    int64_t normal_key_cnt = 0;
     for (int i = 0; OB_SUCC(ret) && !b_flag && i < num; ++i) {
       res_type.set_calc_meta(result_type.get_row_calc_cmp_types().at(i));
       tmp_key_part = NULL;
@@ -2003,6 +2004,7 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
           out_key_part = tmp_key_part;
         }
         row_tail = tmp_key_part;
+        normal_key_cnt += (tmp_key_part->is_always_true() ? 0 : 1);
       }
     }
     if (OB_SUCC(ret)) {
@@ -2010,12 +2012,17 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
         GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
       }
       if (OB_FAIL(ret)) {
-      } else if (out_key_part->is_always_true() || out_key_part->is_always_false()) {
-        contain_row_ = false;
+      } else if (out_key_part->is_always_true() || out_key_part->is_always_false() ||
+                 (normal_key_cnt <= 1 && T_OP_EQ != cmp_type)) {
         query_range_ctx_->cur_expr_is_precise_ = false;
       } else {
+        if (!contain_row_ && T_OP_EQ != cmp_type) {
+          contain_row_ = true;
+        }
         query_range_ctx_->cur_expr_is_precise_ = row_is_precise;
       }
+      LOG_TRACE("succeed to get row key part",
+          K(contain_row_), K(b_flag), K(row_is_precise), K(normal_key_cnt), K(*out_key_part));
     }
   }
   return ret;
@@ -2955,7 +2962,6 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
             LOG_WARN("failed to push back param", K(ret));
           } else {
             new_param_meta->pos_ = *key_pos;
-            new_param_meta->vals_.set_block_allocator(ModulePageAllocator(allocator_));
           }
         }
       }
@@ -3102,7 +3108,6 @@ int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
       tmp_key_part->in_keypart_->table_id_ = col_expr->get_table_id();
       tmp_key_part->in_keypart_->is_strict_in_ = true;
       new_param_meta->pos_ = *key_pos;
-      new_param_meta->vals_.set_block_allocator(ModulePageAllocator(allocator_));
       ObSEArray<int64_t, 4> invalid_val_idx;
       bool always_true = false;
       for (int64_t i = 0; OB_SUCC(ret) && !always_true && i < r_expr->get_param_count(); ++i) {
@@ -4276,6 +4281,10 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
     res_gt = r_gt;
   } else if (NULL == r_gt) {
     res_gt = l_gt;
+  } else if (l_gt->is_in_key() && r_gt->is_in_key()) {
+    res_gt = l_gt->in_keypart_->get_min_offset() <= r_gt->in_keypart_->get_min_offset() ? l_gt : r_gt;
+    // if in key do and with normal key here,
+    // the result is in key
   } else if (l_gt->pos_.offset_ < r_gt->pos_.offset_) {
     res_gt = l_gt; //两个向量做and，右边向量前缀缺失，直接用左边向量的结果
   } else if (r_gt->pos_.offset_ < l_gt->pos_.offset_) {
@@ -5146,7 +5155,7 @@ int ObQueryRange::definite_key_part(ObKeyPart *&key_part, ObExecContext &exec_ct
       } else if (cur->is_always_false()) { // set key_part false
         key_part->normal_keypart_ = cur->normal_keypart_;
         key_part->key_type_ = T_NORMAL_KEY;
-        // key_part = cur; cause bug -> https://aone.alibaba-inc.com/issue/9827308?spm=0.0.0.0.PlJXuW
+        // key_part = cur; cause bug ->
         break;
       } else if (cur->is_always_true()) {
         // do nothing
@@ -6257,6 +6266,7 @@ int ObQueryRange::generate_single_range(ObSearchState &search_state,
     LOG_ERROR("alloc memory for end_obj failed", K(ret));
   } else {
     int64_t max_pred_index = search_state.max_exist_index_;
+    column_num = search_state.is_phy_rowid_range_ ? 1 : column_num;//physcial rowid range just use only one column
     for (int i = 0; OB_SUCC(ret) && i < column_num; i++) {
       new(start + i) ObObj();
       new(end + i) ObObj();
@@ -6513,7 +6523,7 @@ int ObQueryRange::and_first_in_key(ObSearchState &search_state,
     for (int64_t or_depth = 0; OB_SUCC(ret) && or_depth < param_val_cnt; ++or_depth) {
       int copy_depth = search_state.depth_;
       bool copy_produce_range = search_state.produce_range_;
-      bool copy_max_exist_index = search_state.max_exist_index_;
+      int64_t copy_max_exist_index = search_state.max_exist_index_;
       for (int64_t i = 0; OB_SUCC(ret) && i < cur->in_keypart_->in_params_.count(); ++i) {
         const InParamMeta *param_meta = cur->in_keypart_->in_params_.at(i);
         const ObObj &val = param_meta->vals_.at(or_depth);

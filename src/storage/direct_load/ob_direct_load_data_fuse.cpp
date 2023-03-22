@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   yiren.ly <yiren.ly@oceanbase.com>
+//   yiren.ly <>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -21,7 +21,10 @@ using namespace sql;
  */
 
 ObDirectLoadDataFuseParam::ObDirectLoadDataFuseParam()
-  : datum_utils_(nullptr), error_row_handler_(nullptr), result_info_(nullptr)
+  : store_column_count_(0),
+    datum_utils_(nullptr),
+    error_row_handler_(nullptr),
+    result_info_(nullptr)
 {
 }
 
@@ -31,8 +34,8 @@ ObDirectLoadDataFuseParam::~ObDirectLoadDataFuseParam()
 
 bool ObDirectLoadDataFuseParam::is_valid() const
 {
-  return tablet_id_.is_valid() && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
-         nullptr != error_row_handler_ && nullptr != result_info_;
+  return tablet_id_.is_valid() && store_column_count_ > 0 && table_data_desc_.is_valid() &&
+         nullptr != datum_utils_ && nullptr != error_row_handler_ && nullptr != result_info_;
 }
 
 /**
@@ -186,6 +189,9 @@ int ObDirectLoadDataFuse::supply_consume()
       } else {
         ret = OB_SUCCESS;
       }
+    } else if (OB_UNLIKELY(item.datum_row_->count_ != param_.store_column_count_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected column count", KR(ret), K(item.datum_row_->count_), K(param_.store_column_count_));
     } else {
       item.iter_idx_ = iter_idx;
       if (OB_FAIL(rows_merger_.push(item))) {
@@ -232,7 +238,11 @@ int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
           } else {
             ObTableLoadErrorRowHandler *error_row_handler = param_.error_row_handler_;
             if (OB_FAIL(error_row_handler->append_error_row(*item->datum_row_))) {
-              LOG_WARN("fail to append row to error row handler", KR(ret), K(item->datum_row_));
+              if ((OB_ERR_TOO_MANY_ROWS == ret)
+                  && (0 == param_.error_row_handler_->get_capacity())){
+                ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
+              }
+              LOG_WARN("fail to append row to error row handler", KR(ret), KPC(item->datum_row_));
             }
           }
         } else if (ObLoadDupActionType::LOAD_IGNORE == param_.dup_action_) {

@@ -82,6 +82,12 @@ int ObPhysicalRestoreTenantExecutor::execute(
           LOG_WARN("failed to remove user variable", KR(tmp_ret));
         }
       }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sync_wait_tenant_created_(ctx, restore_tenant_arg.tenant_name_))) {
+        LOG_WARN("failed to sync wait tenant created", K(ret));
+      }
+
     } else {
   // TODO:  fix restore preview later.
       ret = OB_NOT_SUPPORTED;
@@ -89,6 +95,88 @@ int ObPhysicalRestoreTenantExecutor::execute(
       // if (OB_FAIL(physical_restore_preview(ctx, stmt))) {
       //  LOG_WARN("failed to do physical restore preview", K(ret));
       // }
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(ObExecContext &ctx, const ObString &tenant_name)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout = 10 * 60 * 1000 * 1000; // 10min
+  const int64_t abs_timeout = ObTimeUtility::current_time() + timeout;
+  const int64_t cur_time_us = ObTimeUtility::current_time();
+  ObTimeoutCtx timeout_ctx;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  ctx.get_physical_plan_ctx()->set_timeout_timestamp(abs_timeout);
+  LOG_INFO("sync wait tenant created start", K(timeout), K(abs_timeout), K(tenant_name));
+  if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not be null", K(ret));
+  } else if (OB_FALSE_IT(THIS_WORKER.set_timeout_ts(abs_timeout))) {
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
+    LOG_WARN("failed to set trx timeout us", K(ret), K(timeout));
+  } else if (OB_FAIL(timeout_ctx.set_abs_timeout(abs_timeout))) {
+    LOG_WARN("failed to set abs timeout", K(ret));
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    ObSchemaGetterGuard meta_tenant_scheam_guard;
+    uint64_t user_tenant_id = 0;
+    uint64_t meta_tenant_id = 0;
+    while (OB_SUCC(ret)) {
+      schema_guard.reset();
+      meta_tenant_scheam_guard.reset();
+      const ObTenantSchema *tenant_info = nullptr;
+      if (ObTimeUtility::current_time() > abs_timeout) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("wait restore tenant timeout", K(ret), K(tenant_name), K(abs_timeout), "cur_time_us", ObTimeUtility::current_time());
+      } else if (OB_FAIL(ctx.check_status())) {
+        LOG_WARN("check exec ctx failed", K(ret));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+        LOG_WARN("failed to get_tenant_schema_guard", KR(ret));
+      } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, user_tenant_id))) {
+          LOG_WARN("failed to get tenant id from schema guard", KR(ret), K(tenant_name));
+      } else if (!is_user_tenant(user_tenant_id)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid user tenant id", K(ret), K(user_tenant_id));
+      } else if (OB_FALSE_IT(meta_tenant_id = gen_meta_tenant_id(user_tenant_id))) {
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(meta_tenant_id, meta_tenant_scheam_guard))) {
+        LOG_WARN("failed to get tenant schema guard", K(ret), K(meta_tenant_id));
+      } else if (OB_FAIL(meta_tenant_scheam_guard.get_tenant_info(meta_tenant_id, tenant_info))) {
+        LOG_WARN("failed to get meta tenant schema guard", K(ret), K(meta_tenant_id));
+      } else if (OB_ISNULL(tenant_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant schema must not be null", K(ret), K(meta_tenant_id));
+      } else if (!tenant_info->is_normal()) {
+        ret = OB_EAGAIN;
+        LOG_DEBUG("tenant status not normal, wait later", K(ret), K(meta_tenant_id));
+      } else {
+        break;
+      }
+
+      if (OB_ERR_INVALID_TENANT_NAME == ret || OB_EAGAIN == ret) {
+        bool is_failed = false;
+        bool is_finish = false;
+        if (OB_FAIL(ObRestoreUtil::check_physical_restore_finish(*sql_proxy, user_tenant_id, is_finish, is_failed))) {
+          LOG_WARN("failed to check physical restore finish", K(ret), K(user_tenant_id));
+        } else if (!is_finish) {
+          sleep(1);
+          LOG_DEBUG("restore not finish, wait later", K(ret), K(user_tenant_id));
+        } else if (is_failed) {
+          ret = OB_TASK_STATE_FAILED;
+          LOG_WARN("created tenant failed when restore.", K(ret), K(tenant_name));
+        } else {
+          break;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      int cost_ts = (ObTimeUtility::current_time() - cur_time_us) / 1000000;
+      LOG_INFO("sync wait tenant created finished", K(cost_ts), K(tenant_name));
+    } else {
+      int cost_ts = (ObTimeUtility::current_time() - cur_time_us) / 1000000;
+      LOG_WARN("sync wait tenant created failed", K(ret), K(cost_ts), K(tenant_name));
     }
   }
   return ret;

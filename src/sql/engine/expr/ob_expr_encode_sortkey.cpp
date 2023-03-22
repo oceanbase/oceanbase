@@ -29,7 +29,7 @@ namespace sql
 ObExprEncodeSortkey::ObExprEncodeSortkey(ObIAllocator &alloc)
   : ObExprOperator(
       alloc, T_FUN_SYS_ENCODE_SORTKEY, N_ENCODE_SORTKEY, MORE_THAN_TWO, NOT_ROW_DIMENSION,
-      false, false)
+      INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {}
 
 ObExprEncodeSortkey::~ObExprEncodeSortkey()
@@ -150,7 +150,7 @@ int ObExprEncodeSortkey::eval_encode_sortkey(const ObExpr &expr, ObEvalCtx &ctx,
       unsigned char *buf
         = reinterpret_cast<unsigned char *>(expr.get_str_res_mem(ctx, encode_ctx->max_len_));
       if (OB_ISNULL(buf)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("invalid argument", K(ret), K(encode_ctx->max_len_));
       }
       // encode
@@ -292,7 +292,7 @@ int ObExprEncodeSortkey::eval_encode_sortkey_batch(const ObExpr &expr,
       unsigned char *buf
         = reinterpret_cast<unsigned char *>(expr.get_str_res_mem(ctx, encode_ctx->max_len_, i));
       if (OB_ISNULL(buf)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("invalid argument", K(ret), K(buf));
       }
       bool has_invalid_uni = false;

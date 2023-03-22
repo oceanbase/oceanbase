@@ -105,6 +105,8 @@ public:
                  const KeyType2 &parent_key);
   template<typename KeyType>
   int set_timeout(const KeyType &key, const int64_t timeout);
+  template<typename KeyType>
+  int check_detector_exist(const KeyType &key, bool &exist);
   // ungister resource operation
   template<typename KeyType>
   int unregister_key(const KeyType &key);
@@ -126,6 +128,8 @@ public:
   template<typename T>
   int replace_block_list(const T &src_key,
                                 const common::ObIArray<ObDependencyResource> &new_list);
+  template<typename T>
+  int get_block_list(const T &src_key, common::ObIArray<ObDependencyResource> &cur_list);
   // remove directed dependency relationship between two detector
   template<typename T1, typename T2>
   int activate(const T1 &src_key, const T2 &dest_key);
@@ -279,6 +283,28 @@ int ObDeadLockDetectorMgr::register_key(const KeyType &key,
   return ret;
   #undef PRINT_WRAPPER
 }
+template<typename KeyType>
+int ObDeadLockDetectorMgr::check_detector_exist(const KeyType &key, bool &exist)
+{
+  CHECK_INIT();
+  CHECK_ARGS(key);
+  #define PRINT_WRAPPER KR(ret), K(key)
+  int ret = common::OB_SUCCESS;
+  UserBinaryKey user_key;
+  DetectorRefGuard ref_guard;
+  if (OB_FAIL(user_key.set_user_key(key))) {
+    DETECT_LOG(WARN, "user key serialization failed", PRINT_WRAPPER);
+  } else if (OB_FAIL(get_detector_(user_key, ref_guard))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      exist = false;
+      ret = OB_SUCCESS;
+    }
+  } else {
+    exist = true;
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
 // unregister a user specified key
 // unregister action means:
 // 1. the detector instance associated with user specified key will be released
@@ -293,7 +319,6 @@ template<typename KeyType>
 int ObDeadLockDetectorMgr::unregister_key(const KeyType &key)
 {
   CHECK_INIT();
-  CHECK_ENABLED();
   CHECK_ARGS(key);
   #define PRINT_WRAPPER KR(ret), K(key)
   int ret = common::OB_SUCCESS;
@@ -443,6 +468,30 @@ int ObDeadLockDetectorMgr::replace_block_list(const T &src_key,
     DETECT_LOG(WARN, "get_detector failed", PRINT_WRAPPER);
   } else if (OB_FAIL(ref_guard.get_detector()->replace_block_list(new_list))) {
     // DETECT_LOG(WARN, "replace block list failed", PRINT_WRAPPER);
+  } else {
+    // DETECT_LOG(INFO, "replace block list success", PRINT_WRAPPER);
+  }
+
+  return ret;
+  #undef PRINT_WRAPPER
+}
+template<typename T>
+int ObDeadLockDetectorMgr::get_block_list(const T &src_key,
+                                          common::ObIArray<ObDependencyResource> &cur_list)
+{
+  CHECK_INIT();
+  CHECK_ENABLED();
+  #define PRINT_WRAPPER KR(ret), K(src_key), K(cur_list)
+  int ret = common::OB_SUCCESS;
+  DetectorRefGuard ref_guard;
+  UserBinaryKey src_user_key;
+
+  if (OB_FAIL(src_user_key.set_user_key(src_key))) {
+    DETECT_LOG(WARN, "src_key serialzation failed", PRINT_WRAPPER);
+  } else if (OB_FAIL(get_detector_(src_user_key, ref_guard))) {
+    DETECT_LOG(WARN, "get_detector failed", PRINT_WRAPPER);
+  } else if (OB_FAIL(ref_guard.get_detector()->get_block_list(cur_list))) {
+    DETECT_LOG(WARN, "get block list failed", PRINT_WRAPPER);
   } else {
     // DETECT_LOG(INFO, "replace block list success", PRINT_WRAPPER);
   }

@@ -800,6 +800,8 @@ show create procedure chistics|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% PROCEDURE `test`.`chistics`
 ()
+
+MODIFIES SQL DATA
 COMMENT `Characteristics procedure test`
  insert into t1 values ("chistics", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 call chistics()|
@@ -812,6 +814,9 @@ show create procedure chistics|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% PROCEDURE `test`.`chistics`
 ()
+
+MODIFIES SQL DATA
+INVOKER
 COMMENT `Characteristics procedure test`
  insert into t1 values ("chistics", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure chistics|
@@ -828,6 +833,7 @@ chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% FUNCTION `test`.`chistics`
 ()
  RETURNS int(11)
 DETERMINISTIC
+INVOKER
 COMMENT `Characteristics procedure test`
  return 42	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 select chistics()|
@@ -842,6 +848,7 @@ chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% FUNCTION `test`.`chistics`
 ()
  RETURNS int(11)
 DETERMINISTIC
+INVOKER
 COMMENT `Characteristics procedure test`
  return 42	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop function chistics|
@@ -1364,7 +1371,8 @@ Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Da
 bar		CREATE DEFINER = admin@% PROCEDURE `test`.`bar`
 (
  IN `x` char(16), IN `y` int(11)
-)COMMENT `111111111111`
+)
+COMMENT `111111111111`
  insert into test.t1 values (x, y)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show procedure status like 'bar'|
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
@@ -2232,6 +2240,7 @@ show create procedure bug2564_1|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 bug2564_1		CREATE DEFINER = admin@% PROCEDURE `test`.`bug2564_1`
 ()
+
 COMMENT `Joe's procedure`
  insert into `t1` values ("foo", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create procedure bug2564_2|
@@ -6992,7 +7001,7 @@ CALL p1(1);
 ERROR HY000: The target table t1 of the INSERT is not insertable-into
 CREATE TEMPORARY TABLE t1 (f1 INT);
 # t1 still refers to the view since it was inlined
-# https://work.aone.alibaba-inc.com/issue/32172786
+#
 CALL p1(2);
 DROP VIEW t1;
 # t1 now refers to the temporary table

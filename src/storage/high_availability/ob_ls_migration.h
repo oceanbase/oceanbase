@@ -418,10 +418,12 @@ private:
   int build_tablet_group_info_();
   int generate_tablet_group_dag_();
   int try_remove_unneeded_tablets_();
+  int try_offline_ls_();
   int record_server_event_();
 
 private:
   static const int64_t MAX_TABLET_GROUP_SIZE = 2 * 1024L * 1024L * 1024L; //2G
+  static const int64_t MAX_TABLET_COUNT = 100;
   bool is_inited_;
   ObLSHandle ls_handle_;
   ObMigrationCtx *ctx_;

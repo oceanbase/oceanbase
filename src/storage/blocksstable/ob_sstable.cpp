@@ -93,7 +93,7 @@ int ObSSTable::init(const ObTabletCreateSSTableParam &param, common::ObIAllocato
 
 void ObSSTable::reset()
 {
-  FLOG_INFO("reset sstable.", KP(this), K(key_));
+  LOG_DEBUG("reset sstable.", KP(this), K(key_));
   // dec ref first, then reset sstable meta
   if (hold_macro_ref_) {
     dec_macro_ref();
@@ -875,7 +875,7 @@ int ObSSTable::deserialize(common::ObIAllocator &allocator,
     LOG_WARN("sstable meta is not valid", K(ret), K_(meta));
   } else {
     pos = new_pos;
-    FLOG_INFO("succeed to deserialize sstable", KPC(this));
+    LOG_DEBUG("succeed to deserialize sstable", KPC(this));
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to deserialize sstable", K(ret), K(*this));
@@ -895,7 +895,7 @@ int ObSSTable::deserialize_post_work()
   } else if (SSTABLE_WRITE_BUILDING != meta_.get_basic_meta().status_ && OB_FAIL(check_valid_for_reading())) {
     LOG_WARN("fail to check state", K(ret));
   } else {
-    FLOG_INFO("succeed to do post work for sstable deserialize", KPC(this));
+    LOG_DEBUG("succeed to do post work for sstable deserialize", KPC(this));
   }
   return ret;
 }

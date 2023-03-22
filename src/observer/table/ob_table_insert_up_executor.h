@@ -14,7 +14,6 @@
 #define OCEANBASE_OBSERVER_OB_TABLE_INSERT_UP_EXECUTOR_H
 #include "ob_table_modify_executor.h"
 #include "ob_table_context.h"
-#include "sql/engine/dml/ob_conflict_checker.h"
 
 namespace oceanbase
 {
@@ -58,7 +57,8 @@ public:
         upd_rtctx_(eval_ctx_, exec_ctx_, get_fake_modify_op()),
         conflict_checker_(allocator_, eval_ctx_, spec.get_conflict_checker_ctdef()),
         is_duplicated_(false),
-        cur_idx_(0)
+        cur_idx_(0),
+        is_row_changed_(false)
   {
   }
   virtual ~ObTableApiInsertUpExecutor()
@@ -82,7 +82,6 @@ public:
     return is_duplicated_;
   }
 private:
-  static const int64_t DEFAULT_INSERT_UP_BATCH_ROW_COUNT = 1000L;
   OB_INLINE bool is_duplicated()
   {
     is_duplicated_ = insert_up_rtdef_.ins_rtdef_.das_rtdef_.is_duplicated_;
@@ -109,12 +108,10 @@ private:
   void set_need_fetch_conflict();
   int refresh_exprs_frame(const ObTableEntity *entity);
   int get_next_row_from_child();
-  int insert_constraint_row_to_das(const ObRowkey &constraint_rowkey,
-                                   const ObConflictValue &constraint_value);
-  int load_insert_up_rows(bool &is_iter_end, int64_t &insert_rows);
-  int post_das_task(sql::ObDMLRtCtx &dml_rtctx, bool del_task_ahead);
+  int try_insert_row(bool &is_iter_end, int64_t &insert_rows);
+  int try_update_row();
+  int execute_das_task(sql::ObDMLRtCtx &dml_rtctx, bool del_task_ahead);
   int fetch_conflict_rowkey();
-  int get_next_conflict_rowkey(sql::DASTaskIter &task_iter);
   int reset_das_env();
   int do_insert_up_cache();
   int prepare_final_insert_up_task();
@@ -134,6 +131,9 @@ private:
   // for htable
   int modify_htable_timestamp();
 
+  int check_whether_row_change(const ObChunkDatumStore::StoredRow &upd_old_row,
+                               const ObChunkDatumStore::StoredRow &upd_new_row);
+
 private:
   common::ObArenaAllocator allocator_;
   const ObTableApiInsertUpSpec &insert_up_spec_;
@@ -144,6 +144,7 @@ private:
   sql::ObConflictChecker conflict_checker_;
   bool is_duplicated_;
   int64_t cur_idx_;
+  bool is_row_changed_;
 };
 
 } // end namespace table

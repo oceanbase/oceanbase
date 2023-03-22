@@ -245,6 +245,10 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
   int ret = OB_SUCCESS;
   extra_info_kvs_.reset();
   extra_info_ecds_.reset();
+  bool need_sync_sys_var = true;
+  if (pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_ERR) {
+    need_sync_sys_var = false;
+  }
   if (!conn_valid_) {
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection already disconnected", K(ret));
@@ -260,7 +264,7 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
     proto20_context_.txn_free_route_ = session->can_txn_free_route();
     if (OB_FAIL(ObMPUtils::append_modfied_sess_info(session->get_extra_info_alloc(),
                                                     *session, &extra_info_kvs_, &extra_info_ecds_,
-                                                    conn_->proxy_cap_flags_.is_new_extra_info_support()))) {
+                                                    conn_->proxy_cap_flags_.is_new_extra_info_support(), need_sync_sys_var))) {
       SERVER_LOG(WARN, "fail to add modified session info", K(ret));
     } else {
       // do nothing
@@ -459,12 +463,13 @@ int ObMPPacketSender::send_error_packet(int err,
             ok_param.take_trace_id_to_client_ = true;
           }
           if (OB_ERR_PROXY_REROUTE == err) {
-            ok_param.reroute_info_ = static_cast<ObFeedbackRerouteInfo *>(extra_err_info);
+            ObFeedbackRerouteInfo *rt_info = static_cast<ObFeedbackRerouteInfo *>(extra_err_info);
+            ok_param.reroute_info_ = rt_info;
           }
           if (OB_FAIL(send_ok_packet(*session, ok_param, &epacket))) {
             LOG_WARN("failed to send ok packet", K(ok_param), K(ret));
           }
-          LOG_INFO("dump txn free route audit_record", "value", session->get_txn_free_route_flag());
+          LOG_INFO("dump txn free route audit_record", "value", session->get_txn_free_route_flag(), K(session->get_sessid()), K(session->get_proxy_sessid()));
         }
       } else {  // just a basic ok packet contain nothing
         OMPKOK okp;
@@ -606,6 +611,7 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
               }
             } else if (conn_->is_driver_client()) {
               // will not track session variables, do nothing
+              okp.set_use_standard_serialize(true);
             } else {
               if (OB_FAIL(ObMPUtils::add_changed_session_info(okp, session))) {
                 SERVER_LOG(WARN, "fail to add changed session info", K(ret));
@@ -845,7 +851,7 @@ int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
         } else {
           // try again with larger buf size
           const int64_t new_alloc_size = TRY_EZ_BUF_SIZES[try_steps++];
-          // refer to doc: https://work.aone.alibaba-inc.com/issue/46055888
+          // refer to doc:
           if (OB_SIZE_OVERFLOW != last_ret && OB_BUF_NOT_ENOUGH != last_ret) {
             ret = last_ret;
             LOG_WARN("last_ret is not size overflow, need check code", K(last_ret));

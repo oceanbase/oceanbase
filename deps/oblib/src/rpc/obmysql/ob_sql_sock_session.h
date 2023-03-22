@@ -39,7 +39,7 @@ private:
 class ObSqlSockSession
 {
 public:
-  ObSqlSockSession(ObISMConnectionCallback& conn_cb, ObSqlNio& nio);
+  ObSqlSockSession(ObISMConnectionCallback& conn_cb, ObSqlNio* nio);
   ~ObSqlSockSession();
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
   int init();
@@ -61,7 +61,9 @@ public:
   void set_sql_session_info(void* sess);
   int set_ssl_enabled();
   SSL* get_ssl_st();
-  ObSqlNio& nio_;
+  bool is_inited() const { return is_inited_; }
+  int write_hanshake_packet(const char *buf, int64_t sz);
+  ObSqlNio* nio_;
   ObISMConnectionCallback& sm_conn_cb_;
   rpc::ObRequest sql_req_;
   ObSqlSessionMemPool pool_;
@@ -70,6 +72,8 @@ public:
   const char* pending_write_buf_;
   int64_t pending_write_sz_;
   common::ObAddr client_addr_;
+private:
+  bool is_inited_;
 };
 
 }; // end namespace obmysql

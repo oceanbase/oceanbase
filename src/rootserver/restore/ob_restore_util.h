@@ -69,6 +69,8 @@ public:
   static int get_restore_ls_palf_base_info(const share::ObPhysicalRestoreJob &job_info,
                                            const share::ObLSID &ls_id,
                                            palf::PalfBaseInfo &palf_base_info);
+  static int check_physical_restore_finish(common::ObISQLClient &proxy, uint64_t tenant_id, bool &is_finish, bool &is_failed);
+
 private:
   static int fill_backup_info_(
              const obrpc::ObPhysicalRestoreTenantArg &arg,
@@ -106,6 +108,7 @@ private:
   static int do_fill_backup_info_(
              const share::ObBackupSetPath & backup_set_path,
              share::ObPhysicalRestoreJob &job);
+  static int check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc);
   static int get_encrypt_backup_dest_format_str(
       const ObArray<ObString> &original_dest_list,
       common::ObArenaAllocator &allocator,

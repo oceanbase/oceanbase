@@ -1,6 +1,6 @@
 // (C) Copyright 2020 Alibaba Inc. All Rights Reserved.
 //  Authors:
-//    zhenling.zzg <zhenling.zzg@antfin.com>
+//    zhenling.zzg <>
 //  Normalizer:
 //
 //
@@ -14,7 +14,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "share/stat/ob_dbms_stats_preferences.h"
 #include "sql/monitor/ob_sql_plan.h"
-#include "sql/monitor/ob_plan_real_info_manager.h"
+#include "sql/monitor/ob_plan_info_manager.h"
 
 namespace oceanbase
 {

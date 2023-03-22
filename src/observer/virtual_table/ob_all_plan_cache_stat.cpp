@@ -197,7 +197,7 @@ int ObAllPlanCacheStat::fill_cells(ObPlanCache &plan_cache)
       break;
     }
     case ASYN_BASELINE: {
-      SET_REF_HANDLE_COL(ASYN_BASELINE_HANDLE);
+      SET_REF_HANDLE_COL(CHECK_EVOLUTION_PLAN_HANDLE);
       break;
     }
     case LOAD_BASELINE: {

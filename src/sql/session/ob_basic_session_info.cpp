@@ -91,7 +91,9 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       trans_flags_(),
       sql_scope_flags_(),
       base_sys_var_alloc_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
-      inc_sys_var_alloc_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
+      inc_sys_var_alloc1_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
+      inc_sys_var_alloc2_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
+      current_buf_index_(0),
       bucket_allocator_wrapper_(&block_allocator_),
       user_var_val_map_(SMALL_BLOCK_SIZE, ObWrapperAllocator(&block_allocator_)),
       influence_plan_var_indexs_(),
@@ -151,6 +153,8 @@ ObBasicSessionInfo::ObBasicSessionInfo()
   CHAR_CARRAY_INIT(trace_id_buff_);
   ssl_cipher_buff_[0] = '\0';
   sess_bt_buff_[0] = '\0';
+  inc_sys_var_alloc_[0] = &inc_sys_var_alloc1_;
+  inc_sys_var_alloc_[1] = &inc_sys_var_alloc2_;
 }
 
 ObBasicSessionInfo::~ObBasicSessionInfo()
@@ -411,7 +415,9 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   // 最后再重置所有allocator
   // 否则thread_data_.user_name_之类的属性会有野指针，在session_mgr的foreach接口遍历时可能core掉。
   name_pool_.reset();
-  inc_sys_var_alloc_.reset();
+  inc_sys_var_alloc1_.reset();
+  inc_sys_var_alloc2_.reset();
+  current_buf_index_ = 0;
   if (!skip_sys_var) {
     base_sys_var_alloc_.reset();
     sys_var_fac_.destroy();
@@ -533,7 +539,7 @@ int ObBasicSessionInfo::switch_tenant(uint64_t effective_tenant_id)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(ret), K(effective_tenant_id));
   } else if (OB_NOT_NULL(tx_desc_) && effective_tenant_id != effective_tenant_id_) {
-    if (tx_desc_->in_tx_or_has_state()) {
+    if (tx_desc_->in_tx_or_has_extra_state()) {
       ret = OB_NOT_SUPPORTED;
       // only inner-SQL goes switch_tenant and may fall into such state
       // print out error to easy trouble-shot
@@ -1741,7 +1747,7 @@ int ObBasicSessionInfo::deep_copy_sys_variable(ObBasicSysVar &sys_var,
       sys_var.set_value(dest_val);
     }
   } else {
-    if (OB_FAIL(inc_sys_var_alloc_.write_obj(src_val, &dest_val))) {
+    if (OB_FAIL(inc_sys_var_alloc_[current_buf_index_]->write_obj(src_val, &dest_val))) {
       LOG_WARN("fail to write obj", K(src_val), K(ret));
     } else {
       if (ob_is_string_type(src_val.get_type())) {
@@ -1754,24 +1760,33 @@ int ObBasicSessionInfo::deep_copy_sys_variable(ObBasicSysVar &sys_var,
     }
 
     // defragment.
-    // https://work.aone.alibaba-inc.com/issue/39958139
+    //
+    // Double buffer optimization
+    //
+    // Double buffer optimization uses two buffers to cyclically store
+    // system variable values. If the currently used buffer reaches the
+    // upper limit, the variable value will be defragmented and stored
+    // in another buffer, which can avoid the failure of using one buffer
+    // to store in the temporary buffer and cause wild pointer problem.
     if (OB_SUCC(ret)) {
-      if (inc_sys_var_alloc_.used() > next_frag_mem_point_) {
-        // Note: this defrag impl. algrothim is not efficient.
-        // howerver, considering it is not the common path, we don't expect to be here very often.
-        // for an efficient impl. please refer https://yuque.antfin-inc.com/xiaochu.yh/doc/oa9az6
-        common::ObStringBuf tmp_buf(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE);
-        if (OB_FAIL(defragment_sys_variable_to(tmp_buf))) {
+      if (inc_sys_var_alloc_[current_buf_index_]->used() > next_frag_mem_point_) {
+        // Double buffer optimization
+        // tmp_value storage tmp dest_val.
+        ObArray<std::pair<int64_t, ObObj>> tmp_value;
+        if (OB_FAIL(defragment_sys_variable_from(tmp_value))) {
           LOG_WARN("fail to defrag sys variable memory to temp alloc", K(ret));
         } else {
+          int32_t next_index = (current_buf_index_ == 0 ? 1 : 0);
           LOG_INFO("Too much memory used for system variable values. do defragment",
-                    "before", inc_sys_var_alloc_.used(), "after", tmp_buf.used());
-          inc_sys_var_alloc_.reset();
-          if (OB_FAIL(defragment_sys_variable_to(inc_sys_var_alloc_))) {
-            LOG_WARN("fail to defrag sys variable memory to base sys var alloc", K(ret));
-          } else {
-            next_frag_mem_point_ = std::max(2 * inc_sys_var_alloc_.used(), OB_MALLOC_NORMAL_BLOCK_SIZE);
-          }
+                    "before", inc_sys_var_alloc_[current_buf_index_]->used(),
+                    "after", inc_sys_var_alloc_[next_index]->used(),
+                    "ids", sys_var_inc_info_.get_all_sys_var_ids(),
+                    K(sessid_), K(proxy_sessid_));
+          defragment_sys_variable_to(tmp_value);
+          inc_sys_var_alloc_[current_buf_index_]->reset();
+          current_buf_index_ = next_index;
+          next_frag_mem_point_ = std::max(2 * inc_sys_var_alloc_[next_index]->used(),
+                                          OB_MALLOC_NORMAL_BLOCK_SIZE);
         }
       }
     }
@@ -1779,11 +1794,13 @@ int ObBasicSessionInfo::deep_copy_sys_variable(ObBasicSysVar &sys_var,
   return ret;
 }
 
-int ObBasicSessionInfo::defragment_sys_variable_to(common::ObStringBuf &allocator)
+// buf2 write_obj for defragment_sys_variable and push dest_val into tmp_value.
+int ObBasicSessionInfo::defragment_sys_variable_from(ObArray<std::pair<int64_t, ObObj>> &tmp_value)
 {
   int ret = OB_SUCCESS;
   const SysVarIds &all_sys_var_ids = sys_var_inc_info_.get_all_sys_var_ids();
-  for (int i = 0; OB_SUCC(ret) && i < all_sys_var_ids.count(); i++) {
+  int32_t next_index = (current_buf_index_ == 0 ? 1 : 0);
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_sys_var_ids.count(); i++) {
     int64_t store_idx = -1;
     ObSysVarClassType sys_var_id = all_sys_var_ids.at(i);
     OZ (ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx));
@@ -1793,15 +1810,30 @@ int ObBasicSessionInfo::defragment_sys_variable_to(common::ObStringBuf &allocato
       const ObObj &src_val = sys_vars_[store_idx]->get_value();
       if (ob_is_string_type(src_val.get_type()) || ob_is_number_tc(src_val.get_type())) {
         ObObj dest_val;
-        if (OB_FAIL(allocator.write_obj(src_val, &dest_val))) {
+        if (OB_FAIL(inc_sys_var_alloc_[next_index]->write_obj(src_val, &dest_val))) {
           LOG_WARN("fail to write obj", K(src_val), K(ret));
+        } else if (OB_FAIL(tmp_value.push_back(std::pair<int64_t, ObObj>(store_idx, dest_val)))){
+          LOG_WARN("fail to push back tmp_value", K(ret));
         } else {
-          sys_vars_[store_idx]->set_value(dest_val);
+          LOG_DEBUG("success to push back tmp value", K(ret), K(store_idx), K(dest_val));
         }
       }
     }
+    if (OB_FAIL(ret)) {
+      inc_sys_var_alloc_[next_index]->reset();
+    }
   }
   return ret;
+}
+
+// sys_vars_ set value.
+void ObBasicSessionInfo::defragment_sys_variable_to(ObArray<std::pair<int64_t, ObObj>> &tmp_value)
+{
+
+  for (int64_t i = 0; i < tmp_value.count(); i++) {
+    sys_vars_[tmp_value.at(i).first]->set_value(tmp_value.at(i).second);
+  }
+
 }
 
 int ObBasicSessionInfo::update_session_sys_variable(ObExecContext &ctx,
@@ -3409,7 +3441,7 @@ int ObBasicSessionInfo::get_user_variable(const ObString &var, ObSessionVariable
 {
   int ret = OB_SUCCESS;
   if (var.empty()) {
-   /* bugfix:https://work.aone.alibaba-inc.com/issue/37171897
+   /* bugfix:
     * select @; return NULL;
     * select @""; select @''; select @``; return NULL;
     */
@@ -3534,6 +3566,8 @@ int ObBasicSessionInfo::replace_new_session_label(uint64_t policy_id, const ObLa
 int64_t ObBasicSessionInfo::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
+  bool ac = false;
+  get_autocommit(ac),
   J_OBJ_START();
   J_KV(KP(this), "id", sessid_,
        N_TENANT, get_tenant_name(), "tenant_id", tenant_id_,
@@ -3542,6 +3576,7 @@ int64_t ObBasicSessionInfo::to_string(char *buf, const int64_t buf_len) const
        N_USER, (lib::is_oracle_mode() ? get_user_name() : get_user_at_host()),
        "consistency_level", consistency_level_,
        "session_state", thread_data_.state_,
+       "autocommit", ac,
        "tx", OB_P(tx_desc_));
   J_OBJ_END();
   return pos;
@@ -3710,6 +3745,9 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         }
       } else if (OB_FAIL(create_sys_var(sys_var_id, store_idx, sys_var))) {
         LOG_WARN("fail to create sys var", K(sys_var_id), K(ret));
+      } else if (!sys_var_inc_info_.all_has_sys_var_id(sys_var_id) &&
+                OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
+        LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       } else if (OB_ISNULL(sys_var)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("create sys var is NULL", K(ret));
@@ -3724,50 +3762,61 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         LOG_TRACE("deserialize sync sys var", K(sys_var_id), K(*sys_var),
                    K(sessid_), K(proxy_sessid_));
       }
-
-      // update the current session's array if there is no updated deserialization sys_var.
-      if (!sys_var_inc_info_.all_has_sys_var_id(sys_var_id)) {
-        if (OB_SUCC(ret) && OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
-          LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
-        }
-      }
       // add all deserialize sys_var id.
       if (OB_SUCC(ret) && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
         LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       }
     }
-    const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
-    int64_t store_idx = -1;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ids.count(); ++i) {
-      ObBasicSysVar *sys_var = NULL;
-      if (!is_sync_sys_var(ids.at(i))
-          && !tmp_sys_var_inc_info.all_has_sys_var_id(ids.at(i))) {
-        // need set default values
-        if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(ids.at(i), store_idx))) {
-          LOG_WARN("fail to calc sys var store idx", K(ret));
-        } else {
-          if (OB_FAIL(create_sys_var(ids.at(i), store_idx, sys_var))) {
-            LOG_WARN("fail to create sys var", K(ids.at(i)), K(ret));
-          } else if (OB_ISNULL(sys_var)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create sys var is NULL", K(ret));
-          } else {
-            ObObj tmp_obj = ObSysVariables::get_default_value(store_idx);
-            sys_vars_[store_idx]->set_value(tmp_obj);
-            LOG_TRACE("sync sys var set default value", K(ids.at(i)), K(tmp_obj),
-                     K(sessid_), K(proxy_sessid_));
-          }
-        }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sync_default_sys_vars(sys_var_inc_info_, tmp_sys_var_inc_info))) {
+        LOG_WARN("fail to sync default sys vars",K(ret));
+      } else if (OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
+        LOG_WARN("fail to assign sys var delta info",K(ret));
+      } else {
+        //do nothing.
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
-      LOG_WARN("fail to assign sys var delta info",K(ret));
-    } else {
-      //do nothing.
-    }
-    LOG_TRACE("after deserialize sync sys vars", "inc var ids", sys_var_inc_info_.get_all_sys_var_ids(),
-                                          K(sessid_), K(proxy_sessid_));
+    LOG_TRACE("after deserialize sync sys vars", "inc var ids",
+                      sys_var_inc_info_.get_all_sys_var_ids(),
+                      K(sessid_), K(proxy_sessid_));
   }
+  return ret;
+}
+
+// Deserialization scenario, synchronization of default system variables
+int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_,
+                                              SysVarIncInfo tmp_sys_var_inc_info)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
+  int64_t store_idx = -1;
+  ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ids.count(); ++i) {
+    ObBasicSysVar *sys_var = NULL;
+    sys_var_id = ids.at(i);
+    if (!is_sync_sys_var(sys_var_id)
+        && !tmp_sys_var_inc_info.all_has_sys_var_id(sys_var_id)) {
+      // need set default values
+      if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
+        LOG_WARN("fail to calc sys var store idx", K(ret));
+      } else if (OB_FAIL(create_sys_var(ids.at(i), store_idx, sys_var))) {
+        LOG_WARN("fail to create sys var", K(ids.at(i)), K(ret));
+      } else if (OB_ISNULL(sys_var)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("create sys var is NULL", K(ret));
+      } else if (FALSE_IT(sys_vars_[store_idx]->set_value(
+                          ObSysVariables::get_default_value(store_idx)))) {
+        // do nothing.
+      } else if (OB_FAIL(process_session_variable(sys_var_id, sys_vars_[store_idx]->get_value(),
+                                                  false))) {
+        LOG_WARN("process system variable error", K(ret), K(sys_var_id));
+      } else {
+        LOG_TRACE("sync sys var set default value", K(sys_var_id),
+        K(sessid_), K(proxy_sessid_));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -4420,7 +4469,9 @@ int ObBasicSessionInfo::clean_all_sys_vars()
     }
   }
   OX (base_sys_var_alloc_.reset());
-  OX (inc_sys_var_alloc_.reset());
+  OX (inc_sys_var_alloc1_.reset());
+  OX (inc_sys_var_alloc2_.reset());
+  current_buf_index_ = 0;
   return ret;
 }
 

@@ -459,6 +459,13 @@ typedef struct ObJtColBaseInfo
   ObDataType data_type_;
   int32_t parent_id_;
   int32_t id_;
+  union {
+    int32_t value_;
+    struct {
+      int32_t is_name_quoted_ : 1;
+      int32_t reserved_ : 31;
+    };
+  };
 
   int deep_copy(const ObJtColBaseInfo& src, ObIAllocator* allocator);
   int assign(const ObJtColBaseInfo& src);

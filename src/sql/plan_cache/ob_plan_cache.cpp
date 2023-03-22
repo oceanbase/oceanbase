@@ -188,6 +188,7 @@ struct ObGetPcvSetByTabNameOp : public ObKVEntryTraverseOp
   common::ObString tab_name_;
 };
 
+
 struct ObGetTableIdOp
 {
   explicit ObGetTableIdOp(uint64_t table_id)
@@ -1035,37 +1036,6 @@ int ObPlanCache::cache_evict()
              "mem_limit", get_mem_limit(),
              "cache_obj_num", get_cache_obj_size(),
              "cache_node_num", cache_key_node_map_.size());
-  return ret;
-}
-
-int ObPlanCache::asyn_update_baseline()
-{
-  int ret = OB_SUCCESS;
-  ObGlobalReqTimeService::check_req_timeinfo();
-  SMART_VAR(PlanIdArray, plan_ids) {
-    ObGetAllPlanIdOp plan_id_op(&plan_ids);
-    if (OB_FAIL(co_mgr_.foreach_cache_obj(plan_id_op))) {
-      LOG_WARN("fail to traverse id2stat_map", K(ret));
-    } else {
-      ObPhysicalPlan *plan = NULL;
-      for (int64_t i = 0; i < plan_ids.count(); i++) {
-        uint64_t plan_id= plan_ids.at(i);
-        ObCacheObjGuard guard(ASYN_BASELINE_HANDLE);
-        int tmp_ret = ref_plan(plan_id, guard); //plan引用计数加1
-        plan = static_cast<ObPhysicalPlan*>(guard.cache_obj_);
-
-        if (OB_HASH_NOT_EXIST == tmp_ret) {
-          //do nothing;
-        } else if (OB_SUCCESS != tmp_ret || NULL == plan) {
-          if (OB_SUCCESS == tmp_ret && NULL == plan) {
-            LOG_DEBUG("get plan failed", K(tmp_ret), KP(plan), K(plan_id));
-          } else {
-            LOG_WARN("get plan failed", K(tmp_ret), KP(plan), K(plan_id));
-          }
-        }
-      } // for loop ends
-    }
-  }
   return ret;
 }
 
@@ -2070,9 +2040,6 @@ void ObPlanCacheEliminationTask::run_plan_cache_task()
   }
   if (OB_FAIL(plan_cache_->cache_evict())) {
     SQL_PC_LOG(ERROR, "Plan cache evict failed, please check", K(ret));
-  }
-  if (OB_FAIL(plan_cache_->asyn_update_baseline())) {
-    SQL_PC_LOG(ERROR, "asyn replace plan baseline failed", K(ret));
   }
 }
 

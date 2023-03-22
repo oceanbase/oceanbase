@@ -504,16 +504,13 @@ int ObTransformTempTable::inner_extract_common_subquery_as_cte(ObDMLStmt &root_s
     //对每组相似stmt创建temp table
     for (int64_t i = 0; OB_SUCC(ret) && i < compare_info.count(); ++i) {
       StmtCompareHelper &helper = compare_info.at(i);
-      bool is_valid = false;
       OPT_TRACE("try to materialize:", helper.stmt_);
       if (!helper.hint_force_stmt_set_.empty() &&
           !helper.hint_force_stmt_set_.is_equal(helper.similar_stmts_)) {
         //hint forbid, do nothing
         OPT_TRACE("hint reject transform");
-      } else if (OB_FAIL(check_stmt_can_materialize(helper.stmt_, is_valid))) {
-        LOG_WARN("failed to check stmt is valid", K(ret));
       } else if (helper.hint_force_stmt_set_.empty() && 
-                (helper.similar_stmts_.count() < 2 || !is_valid)) {
+                (helper.similar_stmts_.count() < 2)) {
         //do nothing
       } else if (OB_FAIL(create_temp_table(helper))) {
         LOG_WARN("failed to create temp table", K(ret));
@@ -700,6 +697,7 @@ int ObTransformTempTable::remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts)
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 8> new_stmts;
   bool has_rownum = false;
+  bool is_valid = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
     ObSelectStmt *subquery = stmts.at(i);
     if (OB_ISNULL(subquery)) {
@@ -710,6 +708,10 @@ int ObTransformTempTable::remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts)
     } else if (has_rownum) {
       //do nothing
     } else if (ObOptimizerUtil::find_item(ctx_->temp_table_ignore_stmts_, subquery)) {
+      //do nothing
+    } else if (OB_FAIL(check_stmt_can_materialize(subquery, is_valid))) {
+      LOG_WARN("failed to check stmt is valid", K(ret));
+    } else if (!is_valid) {
       //do nothing
     } else if (OB_FAIL(new_stmts.push_back(subquery))) {
       LOG_WARN("failed to push back stmt", K(ret));
@@ -980,7 +982,7 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (parent_stmt->is_set_stmt()) {
-    if (OB_FAIL(create_spj(parent_stmt))) {
+    if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, parent_stmt))) {
       LOG_WARN("failed to create temp table for set stmt", K(ret));
     } else {
       LOG_TRACE("succeed to create temp table", KPC(parent_stmt));
@@ -1062,72 +1064,6 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
     } else if (OB_FAIL(view_table->ref_query_->formalize_stmt(ctx_->session_info_))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     }
-  }
-  return ret;
-}
-
-/**
- * @brief create_spj
- * 如果相似stmt是set stmt，要求set stmt完全相同
- * 创建temp table时，需要把整个set查询下压到temp table中
- */
-int ObTransformTempTable::create_spj(ObSelectStmt *parent_stmt)
-{
-  int ret = OB_SUCCESS;
-  ObSelectStmt *dummy_stmt = NULL;
-  ObSelectStmt *child_stmt = NULL;
-  TableItem *new_table_item = NULL;
-  ObSEArray<ObRawExpr *, 8> column_exprs;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) ||
-      OB_ISNULL(ctx_->allocator_) || OB_ISNULL(parent_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ctx_), K(parent_stmt), K(ret));
-  } else if (OB_FAIL(ctx_->stmt_factory_->create_stmt<ObSelectStmt>(child_stmt))) {
-    LOG_WARN("failed to create stmt", K(ret));
-  } else if (OB_ISNULL(child_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  } else if (OB_FAIL(ctx_->stmt_factory_->create_stmt<ObSelectStmt>(dummy_stmt))) {
-    LOG_WARN("failed to create stmt", K(ret));
-  } else if (OB_ISNULL(dummy_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  } else if (OB_FAIL(child_stmt->assign(*parent_stmt))) {
-    LOG_WARN("failed to assign stmt", K(ret));
-  } else if (OB_FAIL(parent_stmt->assign(*dummy_stmt))) {
-    LOG_WARN("failed to assign stmt", K(ret));
-  } else if (OB_FAIL(parent_stmt->ObStmt::assign(*child_stmt))) {
-    LOG_WARN("failed to assign stmt", K(ret));
-  } else if (OB_FAIL(parent_stmt->get_stmt_hint().assign(child_stmt->get_stmt_hint()))) {
-    LOG_WARN("failed to assign stmt hint", K(ret));
-  } else if (OB_FAIL(child_stmt->adjust_statement_id(ctx_->allocator_,
-                                                     ctx_->src_qb_name_,
-                                                     ctx_->src_hash_val_))) {
-    LOG_WARN("failed to adjust statement id", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_,
-                                                          parent_stmt,
-                                                          child_stmt,
-                                                          new_table_item))) {
-    LOG_WARN("failed to add new table item", K(ret));
-  } else if (OB_ISNULL(new_table_item)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(parent_stmt->add_from_item(new_table_item->table_id_, false))) {
-    LOG_WARN("failed to add from item", K(ret));
-  } else if (OB_FAIL(parent_stmt->rebuild_tables_hash())) {
-    LOG_WARN("failed to rebuild table hash", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
-                                                               *new_table_item,
-                                                               parent_stmt,
-                                                               column_exprs))) {
-    LOG_WARN("failed to create column items", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
-                                                          column_exprs,
-                                                          parent_stmt))) {
-    LOG_WARN("failed to create select item", K(ret));
-  } else {
-    parent_stmt->set_select_into(child_stmt->get_select_into());
-    child_stmt->set_select_into(NULL);
   }
   return ret;
 }
@@ -1941,7 +1877,7 @@ int ObTransformTempTable::inner_push_down_filter(TempTableInfo& info)
     LOG_WARN("unexpect null param", K(info), K(expr_factory), K(ret));
   } else if (info.temp_table_query_->is_spj()) {
     //do nothing
-  } else if (OB_FAIL(create_spj(info.temp_table_query_))) {
+  } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, info.temp_table_query_))) {
     LOG_WARN("failed to create spj", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < info.table_infos_.count(); ++i) {

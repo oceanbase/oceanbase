@@ -52,6 +52,8 @@ public:
 
   void reset();
 
+  bool is_valid() const;
+
   int get_piece(const share::SCN &pre_scn,
       const palf::LSN &start_lsn,
       int64_t &dest_id,
@@ -230,11 +232,11 @@ private:
   // 如果round不满足数据需求, 支持切round
   int switch_round_if_need_(const share::SCN &scn, const palf::LSN &lsn);
 
-  void check_if_switch_round_(const palf::LSN &lsn, RoundOp &op);
+  void check_if_switch_round_(const share::SCN &scn, const palf::LSN &lsn, RoundOp &op);
   bool is_max_round_done_(const palf::LSN &lsn) const;
   bool need_backward_round_(const palf::LSN &lsn) const;
   bool need_forward_round_(const palf::LSN &lsn) const;
-  bool need_load_round_info_(const palf::LSN &lsn) const;
+  bool need_load_round_info_(const share::SCN &scn, const palf::LSN &lsn) const;
 
   // 获取指定round元信息
   virtual int load_round_(const int64_t round_id, RoundContext &round_context, bool &exist);
@@ -279,20 +281,23 @@ private:
       bool &done,
       bool &to_newest);
 
-  int get_max_archive_log_(palf::LSN &lsn, share::SCN &scn);
+  int get_max_archive_log_(const ObLogArchivePieceContext &origin, palf::LSN &lsn, share::SCN &scn);
 
-  int get_max_log_in_round_(const int64_t round_id,
+  int get_max_log_in_round_(const ObLogArchivePieceContext &origin,
+      const int64_t round_id,
       palf::LSN &lsn,
       share::SCN &scn,
       bool &exist);
 
-  int get_max_log_in_piece_(const int64_t round_id,
+  int get_max_log_in_piece_(const ObLogArchivePieceContext &origin,
+      const int64_t round_id,
       const int64_t piece_id,
       palf::LSN &lsn,
       share::SCN &scn,
       bool &exist);
 
-  int get_max_log_in_file_(const int64_t round_id,
+  int get_max_log_in_file_(const ObLogArchivePieceContext &origin,
+      const int64_t round_id,
       const int64_t piece_id,
       const int64_t file_id,
       palf::LSN &lsn,
@@ -306,11 +311,14 @@ private:
   int read_part_file_(const int64_t round_id,
       const int64_t piece_id,
       const int64_t file_id,
+      const int64_t file_offset,
       char *buf,
       const int64_t buf_size,
-      int64_t &read_size,
-      palf::LSN &base_lsn);
+      int64_t &read_size);
 
+  int extract_file_base_lsn_(const char *buf,
+      const int64_t buf_size,
+      palf::LSN &base_lsn);
   int get_ls_meta_data_(const share::ObArchiveLSMetaType &meta_type,
       const share::SCN &timestamp,
       const bool fuzzy_match,

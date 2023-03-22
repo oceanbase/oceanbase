@@ -29,26 +29,26 @@ public:
   ~ObDataDictPersistCallback() { reset(); }
   void reset()
   {
-    is_callback_invoked_ = false;
-    is_success_ = false;
+    ATOMIC_SET(&is_callback_invoked_, false);
+    ATOMIC_SET(&is_success_, false);
   }
 public:
   virtual int on_success() override
   {
-    is_success_ = true;
+    ATOMIC_SET(&is_success_, true);
     MEM_BARRIER();
-    is_callback_invoked_ = true;
+    ATOMIC_SET(&is_callback_invoked_, true);
     return OB_SUCCESS;
   }
   virtual int on_failure() override
   {
-    is_callback_invoked_ = true;
+    ATOMIC_SET(&is_callback_invoked_, true);
     return OB_SUCCESS;
   }
 public:
   TO_STRING_KV(K_(is_callback_invoked), K_(is_success));
-  OB_INLINE bool is_invoked() const { return is_callback_invoked_; }
-  OB_INLINE bool is_success() const { return is_success_; }
+  OB_INLINE bool is_invoked() const { return ATOMIC_LOAD(&is_callback_invoked_); }
+  OB_INLINE bool is_success() const { return ATOMIC_LOAD(&is_success_); }
 private:
   bool is_callback_invoked_;
   bool is_success_;

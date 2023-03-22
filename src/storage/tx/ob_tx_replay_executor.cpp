@@ -238,18 +238,25 @@ int ObTxReplayExecutor::try_get_tx_ctx_(int64_t tx_id, int64_t tenant_id, const 
 
   ObTransID trans_id(tx_id);
   // replay ls log without part_ctx
-  if (trans_id.is_valid() && nullptr == ctx_) {
+  if (ctx_ != nullptr) {
+    first_created_ctx_ = false;
+  } else if (trans_id.is_valid() && nullptr == ctx_) {
 
     if (OB_FAIL(ls_tx_srv_->get_tx_ctx(tx_id, true, ctx_)) && OB_TRANS_CTX_NOT_EXIST != ret) {
       TRANS_LOG(WARN, "[Replay Tx] get tx ctx from ctx_mgr failed", K(ret), K(tx_id), KP(ctx_));
     } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       bool tx_ctx_existed = false;
-      common::ObAddr scheduler;
-      ObTxCreateArg arg(true, /* for_replay */
-                        tenant_id, tx_id, ls_id, log_block_header_.get_org_cluster_id(),
-                        GET_MIN_CLUSTER_VERSION(), 0, /*session_id*/
-                        scheduler, INT64_MAX,         /*trans_expired_time_*/
+      common::ObAddr scheduler = log_block_header_.get_scheduler();
+      ObTxCreateArg arg(true,  /* for_replay */
+                        tenant_id,
+                        tx_id,
+                        ls_id,
+                        log_block_header_.get_org_cluster_id(),
+                        GET_MIN_CLUSTER_VERSION(),
+                        0, /*session_id*/
+                        scheduler,
+                        INT64_MAX, /*trans_expired_time_*/
                         ls_tx_srv_->get_trans_service());
       if (OB_FAIL(ls_tx_srv_->create_tx_ctx(arg, tx_ctx_existed, ctx_))) {
         TRANS_LOG(WARN, "get_tx_ctx error", K(ret), K(tx_id), KP(ctx_));

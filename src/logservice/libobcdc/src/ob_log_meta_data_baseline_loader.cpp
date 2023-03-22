@@ -196,6 +196,7 @@ int ObLogMetaDataBaselineLoader::read(
               LOG_ERROR("data_dict_iterator next_dict_entry for tenant_meta failed", K(ret), K(tenant_id),
                   K(tenant_meta));
             } else {
+              tenant_meta.set_tenant_id(tenant_id);
               // TODO debug
               LOG_INFO("tenant_meta", K(tenant_id), K(tenant_meta));
             }

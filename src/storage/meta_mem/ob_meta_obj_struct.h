@@ -145,18 +145,21 @@ public:
   OB_INLINE virtual void get_obj(ObMetaObj<T> &obj) const;
 
   virtual bool is_valid() const;
+  virtual bool need_hold_time_check() const;
 
   ObMetaObjGuard<T> &operator = (const ObMetaObjGuard<T> &other);
 
   VIRTUAL_TO_STRING_KV(KP_(obj), KP_(obj_pool), KP_(allocator));
 
 protected:
+  static const int64_t HOLD_OBJ_MAX_TIME = 2 * 60 * 60 * 1000 * 1000L; // 2h
   virtual void reset_obj();
 
 protected:
   T *obj_;
   ObTenantMetaObjPool<T> *obj_pool_;
   common::ObIAllocator *allocator_;
+  int64_t hold_start_time_;
 };
 
 template <typename T>
@@ -168,13 +171,19 @@ ObMetaObj<T>::ObMetaObj()
 
 template <typename T>
 ObMetaObjGuard<T>::ObMetaObjGuard()
-  : obj_(nullptr), obj_pool_(nullptr), allocator_(nullptr)
+  : obj_(nullptr),
+    obj_pool_(nullptr),
+    allocator_(nullptr),
+    hold_start_time_(INT64_MAX)
 {
 }
 
 template <typename T>
 ObMetaObjGuard<T>::ObMetaObjGuard(const ObMetaObjGuard<T> &other)
-  : obj_(nullptr), obj_pool_(nullptr), allocator_(nullptr)
+  : obj_(nullptr),
+    obj_pool_(nullptr),
+    allocator_(nullptr),
+    hold_start_time_(INT64_MAX)
 {
   *this = other;
 }
@@ -197,6 +206,7 @@ void ObMetaObjGuard<T>::set_obj(ObMetaObj<T> &obj)
     } else {
       obj_ = obj.ptr_;
       obj_->inc_ref();
+      hold_start_time_ = ObTimeUtility::current_time();
     }
   }
 }
@@ -213,6 +223,7 @@ void ObMetaObjGuard<T>::set_obj(T *obj, common::ObIAllocator *allocator)
    } else {
      obj_ = obj;
      obj_->inc_ref();
+     hold_start_time_ = ObTimeUtility::current_time();
    }
   }
 }
@@ -233,6 +244,12 @@ OB_INLINE bool ObMetaObjGuard<T>::is_valid() const
 }
 
 template <typename T>
+OB_INLINE bool ObMetaObjGuard<T>::need_hold_time_check() const
+{
+  return false;
+}
+
+template <typename T>
 ObMetaObjGuard<T> &ObMetaObjGuard<T>::operator = (const ObMetaObjGuard<T> &other)
 {
   if (this != &other) {
@@ -245,6 +262,7 @@ ObMetaObjGuard<T> &ObMetaObjGuard<T>::operator = (const ObMetaObjGuard<T> &other
         ob_abort();
       } else {
         obj_ = other.obj_;
+        hold_start_time_ = ObTimeUtility::current_time();
         other.obj_->inc_ref();
         if (OB_UNLIKELY(other.obj_->get_ref() < 2)) {
           STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj guard may be accessed by multiple threads or ref cnt leak", KP(obj_), KP(obj_pool_));
@@ -283,11 +301,17 @@ void ObMetaObjGuard<T>::reset_obj()
       ob_abort();
     } else {
       const int64_t ref_cnt = obj_->dec_ref();
+      const int64_t hold_time = ObTimeUtility::current_time() - hold_start_time_;
+      if (OB_UNLIKELY(hold_time > HOLD_OBJ_MAX_TIME && need_hold_time_check())) {
+        int ret = OB_ERR_TOO_MUCH_TIME;
+        STORAGE_LOG(WARN, "The meta obj reference count was held for more "
+            "than two hours ", K(ref_cnt), KP(this), K(hold_time), K(hold_start_time_), KPC(this), K(common::lbt()));
+      }
       if (0 == ref_cnt) {
         if (nullptr != obj_pool_) {
           obj_pool_->release(obj_);
         } else {
-          STORAGE_LOG(INFO, "release obj from allocator", KP(obj_), KP(allocator_));
+          STORAGE_LOG(DEBUG, "release obj from allocator", KP(obj_), KP(allocator_));
           obj_->reset();
           obj_->~T();
           allocator_->free(obj_);
@@ -298,6 +322,7 @@ void ObMetaObjGuard<T>::reset_obj()
       obj_ = nullptr;
     }
   }
+  hold_start_time_ = INT64_MAX;
 }
 
 } // end namespace storage

@@ -37,7 +37,8 @@ int64_t ObTxDataMemtable::PERIODICAL_SELECT_INTERVAL_NS = 1000LL * 1000LL * 1000
 
 int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
                            SliceAllocator *slice_allocator,
-                           ObTxDataMemtableMgr *memtable_mgr)
+                           ObTxDataMemtableMgr *memtable_mgr,
+                           const int64_t buckets_cnt)
 {
   int ret = OB_SUCCESS;
 
@@ -50,7 +51,7 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
   } else if (OB_FAIL(ObITable::init(table_key))) {
     STORAGE_LOG(WARN, "ObITable::init fail", KR(ret), K(table_key), KPC(memtable_mgr));
   } else if (FALSE_IT(init_arena_allocator_())) {
-  } else if (OB_FAIL(init_tx_data_map_())) {
+  } else if (OB_FAIL(init_tx_data_map_(buckets_cnt))) {
     STORAGE_LOG(WARN, "init tx data map failed.", KR(ret), K(table_key), KPC(memtable_mgr));
   } else if (OB_FAIL(buf_.reserve(common::OB_MAX_VARCHAR_LENGTH))) {
     STORAGE_LOG(WARN, "reserve space for tx data memtable failed.", KR(ret), K(table_key), KPC(memtable_mgr));
@@ -81,7 +82,7 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
   return ret;
 }
 
-int ObTxDataMemtable::init_tx_data_map_()
+int ObTxDataMemtable::init_tx_data_map_(const int64_t buckets_cnt)
 {
   int ret = OB_SUCCESS;
 
@@ -90,7 +91,13 @@ int ObTxDataMemtable::init_tx_data_map_()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "allocate memory of tx_data_map_ failed", KR(ret));
   } else {
-    tx_data_map_ = new (data_map_ptr) TxDataMap(1 << 20/*2097152*/);
+    int64_t real_buckets_cnt = buckets_cnt;
+    if (real_buckets_cnt < ObTxDataHashMap::MIN_BUCKETS_CNT) {
+      real_buckets_cnt = ObTxDataHashMap::MIN_BUCKETS_CNT;
+    } else if (real_buckets_cnt > ObTxDataHashMap::MAX_BUCKETS_CNT) {
+      real_buckets_cnt = ObTxDataHashMap::MAX_BUCKETS_CNT;
+    }
+    tx_data_map_ = new (data_map_ptr) TxDataMap(arena_allocator_, real_buckets_cnt);
     if (OB_FAIL(tx_data_map_->init())) {
       STORAGE_LOG(WARN, "tx_data_map_ init failed", KR(ret));
     }
@@ -102,8 +109,8 @@ void ObTxDataMemtable::init_arena_allocator_()
 {
   ObMemAttr attr;
   attr.tenant_id_ = MTL_ID();
-  attr.label_ = "TX_DATA_TABLE";
-  attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
+  attr.label_ = "MEMTABLE_ARENA";
+  attr.ctx_id_ = ObCtxIds::TX_DATA_TABLE;
   arena_allocator_.set_attr(attr);
 }
 
@@ -143,7 +150,6 @@ void ObTxDataMemtable::reset()
 
 int ObTxDataMemtable::insert(ObTxData *tx_data)
 {
-  common::ObTimeGuard tg("tx_data_memtable::insert", 100 * 1000);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
@@ -165,15 +171,10 @@ int ObTxDataMemtable::insert(ObTxData *tx_data)
     STORAGE_LOG(ERROR, "insert the tx data into tx_data_map_ fail.", KP(tx_data), KPC(tx_data),
                   KR(ret), KP(tx_data_map_));
   } else {
-    tg.click();
     // insert_and_get success
     max_tx_scn_.inc_update(tx_data->end_scn_);
     atomic_update_(tx_data);
     ATOMIC_INC(&inserted_cnt_);
-    tg.click();
-  }
-  if (tg.get_diff() > 100000) {
-    STORAGE_LOG(INFO, "tx data memtable insert cost too much time", K(tg));
   }
 
   return ret;
@@ -484,7 +485,7 @@ int ObTxDataMemtable::merge_cur_and_past_commit_verisons_(const SCN recycle_scn,
 
   // here we merge the past commit versions and current commit versions. To keep merged array correct, the node in past
   // array whose start_scn is larger than the minimum start_scn in current array will be dropped. The reason is in this
-  // issue: https://work.aone.alibaba-inc.com/issue/43389863
+  // issue:
   SCN cur_min_start_scn = cur_arr.count() > 0 ? cur_arr.at(0).start_scn_ : SCN::max_scn();
   SCN max_commit_version = SCN::min_scn();
   if (OB_FAIL(merge_pre_process_node_(
@@ -1139,7 +1140,7 @@ void ObTxDataMemtable::TEST_reset_tx_data_map_()
 {
   int ret = OB_SUCCESS;
   tx_data_map_ = nullptr;
-  init_tx_data_map_();
+  init_tx_data_map_(ObTxDataHashMap::DEFAULT_BUCKETS_CNT);
 }
 
 

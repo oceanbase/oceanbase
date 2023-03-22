@@ -309,7 +309,9 @@ int ObLogSet::compute_sharding_info()
                                     dup_table_pos_,
                                     strong_sharding_))) {
       LOG_WARN("failed to compute basic sharding info", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      inherit_sharding_index_ = 0;
+    }
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == set_dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
   } else if (DistAlgo::DIST_SET_RANDOM == set_dist_algo_) {
@@ -325,15 +327,19 @@ int ObLogSet::compute_sharding_info()
   } else if (DistAlgo::DIST_NONE_HASH == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = first_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
   } else if (DistAlgo::DIST_HASH_NONE == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = second_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::second_child;
   } else if (DistAlgo::DIST_NONE_ALL == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = first_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
   } else if (DistAlgo::DIST_ALL_NONE == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = second_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::second_child;
   } else if (OB_FAIL(ObLogicalOperator::compute_sharding_info())) {
     LOG_WARN("failed to compute sharding info", K(ret));
   } else { /*do nothing*/ }
@@ -809,7 +815,7 @@ int ObLogSet::print_outline_data(PlanText &plan_text)
     LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(construct_pq_set_hint(hint))) {
     LOG_WARN("fail to construct pq set hint", K(ret));
-  } else if (hint.get_dist_methods().empty()) {
+  } else if (hint.get_dist_methods().empty() && hint.get_left_branch().empty()) {
     /*do nothing*/
   } else if (OB_FALSE_IT(hint.set_qb_name(qb_name))) {
   } else if (hint.print_hint(plan_text)) {

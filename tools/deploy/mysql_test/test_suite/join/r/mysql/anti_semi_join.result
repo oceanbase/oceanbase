@@ -630,7 +630,7 @@ select /*+ USE_HASH(xy_t1, xy_t2)*/ c1, c2, c1, c2 from xy_t1 where exists (sele
 # ************** end ********
 drop table xy_t1, xy_t2;
 
-## bug:https://aone.alibaba-inc.com/issue/15280254?spm=a2o8d.corp_prod_issue_list.0.0.3f6630500agegh&stat=1.5.0&toPage=1&versionId=1043693
+## bug:
 drop table if exists xy_x_t, xy_y_t;
 create table xy_x_t(x1 int, x2 varchar(100));
 create table xy_y_t(y1 int, y2 varchar(100));

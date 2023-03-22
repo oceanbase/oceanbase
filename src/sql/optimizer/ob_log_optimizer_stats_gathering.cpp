@@ -4,7 +4,7 @@
  *  ob_log_optimizer_stats_gathering.cpp
  *
  *  Author:
- *    liuqifan.lqf@oceanbase.com
+ *
  *
  *  Created Time: Fri 12 Aug 2022 10:01:10 AM CST
  *

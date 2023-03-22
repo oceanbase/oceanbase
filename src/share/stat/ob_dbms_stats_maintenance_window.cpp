@@ -276,7 +276,7 @@ int ObDbmsStatsMaintenanceWindow::get_dummy_guard_job_sql(const uint64_t tenant_
    * FRIDAY_WINDOW                freq=daily;byday=FRI;byhour=22;          4 hours
    * SATURDAY_WINDOW              freq=daily;byday=SAT;byhour=6;           20 hours
    * SUNDAY_WINDOW                freq=daily;byday=SUN;byhour=6;           20 hours
-   * https://yuque.antfin-inc.com/docs/share/05d01692-f9e6-42de-99cf-365fccc45974?# 《统计信息maintenance window设计与实现》
+   *
    */
 int ObDbmsStatsMaintenanceWindow::get_window_job_info(const int64_t current_time,
                                                       const int64_t nth_window,

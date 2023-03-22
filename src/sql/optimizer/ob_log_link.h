@@ -38,6 +38,7 @@ public:
   virtual ~ObLogLink() {}
   virtual int est_cost() override;
   virtual int compute_sharding_info() override;
+  virtual int compute_op_parallel_and_server_info() override;
   inline const common::ObIArray<ObParamPosIdx> &get_param_infos() const { return param_infos_; }
   inline const char *get_stmt_fmt_buf() const { return stmt_fmt_buf_; }
   inline int32_t get_stmt_fmt_len() const { return stmt_fmt_len_; }

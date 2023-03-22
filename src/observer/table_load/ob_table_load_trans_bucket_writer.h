@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #pragma once
 
@@ -16,6 +16,7 @@ namespace oceanbase
 namespace observer
 {
 class ObTableLoadParam;
+class ObTableLoadStoreCtx;
 class ObTableLoadTransCtx;
 class ObTableLoadCoordinatorCtx;
 
@@ -27,7 +28,7 @@ public:
   int init();
   int advance_sequence_no(int32_t session_id, uint64_t sequence_no, ObTableLoadMutexGuard &guard);
   // 只在对应工作线程中调用, 串行执行
-  int write(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
+  int write(int32_t session_id, table::ObTableLoadObjRowArray &obj_rows);
   int flush(int32_t session_id);
 public:
   void set_is_flush() { is_flush_ = true; }
@@ -38,6 +39,14 @@ public:
 private:
   class SessionContext;
   int init_session_ctx_array();
+  int handle_partition_with_autoinc_identity(SessionContext &session_ctx,
+                                             table::ObTableLoadObjRowArray &obj_rows,
+                                             const uint64_t &sql_mode, int32_t session_id);
+  int handle_autoinc_column(blocksstable::ObStorageDatum &datum, const ObObjTypeClass &tc,
+                            int32_t session_id, const uint64_t &sql_mode);
+  int handle_identity_column(const share::schema::ObColumnSchemaV2 *column_schema,
+                             blocksstable::ObStorageDatum &datum,
+                             common::ObArenaAllocator &cast_allocator);
   // 非分区表
   int write_for_non_partitioned(SessionContext &session_ctx,
                                 const table::ObTableLoadObjRowArray &obj_rows);

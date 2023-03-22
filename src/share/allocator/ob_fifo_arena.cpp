@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX COMMON
 #include "ob_fifo_arena.h"
 #ifdef OB_USE_ASAN
 #include <malloc.h>
@@ -73,7 +74,8 @@ int ObFifoArena::ObWriteThrottleInfo::check_and_calc_decay_factor(int64_t memsto
   int ret = OB_SUCCESS;
   if (memstore_threshold != memstore_threshold_
       || trigger_percentage != trigger_percentage_
-      ||  alloc_duration != alloc_duration_) {
+      || alloc_duration != alloc_duration_
+      || decay_factor_ <= 0) {
     memstore_threshold_ = memstore_threshold;
     trigger_percentage_ = trigger_percentage;
     alloc_duration_ = alloc_duration;
@@ -335,13 +337,7 @@ void ObFifoArena::advance_clock()
     int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
     int64_t trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100;
     int64_t cur_mem_hold = ATOMIC_LOAD(&hold_);
-    bool need_speed_limit = false;
-    if (trigger_percentage < 100) {
-      need_speed_limit = cur_mem_hold > trigger_mem_limit;
-    }
-    int64_t mem_limit =
-      (need_speed_limit ? calc_mem_limit(cur_mem_hold, trigger_mem_limit, ADVANCE_CLOCK_INTERVAL) :
-                          trigger_mem_limit - cur_mem_hold);
+    int64_t mem_limit = calc_mem_limit(cur_mem_hold, trigger_mem_limit, ADVANCE_CLOCK_INTERVAL);
     int64_t clock = ATOMIC_LOAD(&clock_);
     int64_t max_seq = ATOMIC_LOAD(&max_seq_);
     ATOMIC_SET(&clock_, min(max_seq, clock + mem_limit));
@@ -360,30 +356,72 @@ int64_t ObFifoArena::expected_wait_time(const int64_t seq) const
   int64_t can_assign_in_next_period = calc_mem_limit(hold_, trigger_mem_limit, ADVANCE_CLOCK_INTERVAL);
   int64_t clock = ATOMIC_LOAD(&clock_);
   if (seq > clock) {
-    expected_wait_time = (seq - clock) * ADVANCE_CLOCK_INTERVAL / can_assign_in_next_period;
+    if (can_assign_in_next_period != 0) {
+      expected_wait_time = (seq - clock) * ADVANCE_CLOCK_INTERVAL / can_assign_in_next_period;
+    } else {
+      expected_wait_time = ADVANCE_CLOCK_INTERVAL;
+    }
   }
   return expected_wait_time;
 }
 
+// how much memory we can get after dt time.
 int64_t ObFifoArena::calc_mem_limit(const int64_t cur_mem_hold, const int64_t trigger_mem_limit, const int64_t dt) const
 {
-  double cur_chunk_seq = static_cast<double>(((cur_mem_hold - trigger_mem_limit) + MEM_SLICE_SIZE - 1)/ (MEM_SLICE_SIZE));
+  int ret = OB_SUCCESS;
   int64_t mem_can_be_assigned = 0;
 
-  int64_t allocate_size_in_the_page = MEM_SLICE_SIZE - (cur_mem_hold - trigger_mem_limit) % MEM_SLICE_SIZE;
-  int64_t accumulate_interval = 0;
-  int64_t the_page_interval = 0;
-  while (accumulate_interval < dt) {
-    the_page_interval = static_cast<int64_t>(throttle_info_.decay_factor_ * cur_chunk_seq * cur_chunk_seq * cur_chunk_seq) * allocate_size_in_the_page / MEM_SLICE_SIZE;
-    accumulate_interval += the_page_interval;
+  int64_t init_seq = 0;
+  int64_t init_page_left_size = 0;
+  double init_page_left_interval = 0;
+  double past_interval = 0;
+  double last_page_interval = 0;
+  double mid_result = 0;
+  double approx_max_chunk_seq = 0;
+  int64_t max_seq = 0;
+  double accumulate_interval = 0;
+  if (cur_mem_hold < trigger_mem_limit) {
+    // there is no speed limit now
+    // we can get all the memory before speed limit
+    mem_can_be_assigned = trigger_mem_limit - cur_mem_hold;
+  } else if (throttle_info_.decay_factor_ <= 0) {
+    mem_can_be_assigned = 0;
+    LOG_WARN("we should limit speed, but the decay factor not calculate now", K(cur_mem_hold), K(trigger_mem_limit), K(dt));
+  } else {
+    init_seq = ((cur_mem_hold - trigger_mem_limit) + MEM_SLICE_SIZE - 1) / (MEM_SLICE_SIZE);
+    init_page_left_size = MEM_SLICE_SIZE - (cur_mem_hold - trigger_mem_limit) % MEM_SLICE_SIZE;
+    init_page_left_interval =  (1.0 * throttle_info_.decay_factor_ * pow(init_seq, 3) *
+                                init_page_left_size / MEM_SLICE_SIZE);
+    past_interval = throttle_info_.decay_factor_ * pow(init_seq, 2) * pow(init_seq + 1, 2) / 4;
+    // there is speed limit
+    if (init_page_left_interval > dt) {
+      last_page_interval = throttle_info_.decay_factor_ * pow(init_seq, 3);
+      mem_can_be_assigned = dt / last_page_interval * MEM_SLICE_SIZE;
+    } else {
+      mid_result = 4.0 * (dt + past_interval - init_page_left_interval) / throttle_info_.decay_factor_;
+      approx_max_chunk_seq = pow(mid_result, 0.25);
+      max_seq = floor(approx_max_chunk_seq);
+      for (int i = 0; i < 2; i++) {
+        if (pow(max_seq, 2) * pow(max_seq + 1, 2) < mid_result) {
+          max_seq = max_seq + 1;
+        }
+      }
+      accumulate_interval = pow(max_seq, 2) * pow(max_seq + 1, 2) * throttle_info_.decay_factor_ / 4 - past_interval + init_page_left_interval;
+      mem_can_be_assigned = init_page_left_size + (max_seq - init_seq) * MEM_SLICE_SIZE;
+      if (accumulate_interval > dt) {
+        last_page_interval = throttle_info_.decay_factor_ * pow(max_seq, 3);
+        mem_can_be_assigned -= (accumulate_interval - dt) / last_page_interval * MEM_SLICE_SIZE;
+      }
+    }
 
-    mem_can_be_assigned += (accumulate_interval > dt ?
-                            allocate_size_in_the_page - (accumulate_interval - dt) * allocate_size_in_the_page / the_page_interval :
-                            allocate_size_in_the_page);
-    allocate_size_in_the_page = MEM_SLICE_SIZE;
-    cur_chunk_seq += double(1);
+    // defensive code
+    if (pow(max_seq, 2) * pow(max_seq + 1, 2) < mid_result) {
+      LOG_ERROR("unexpected result", K(max_seq), K(mid_result));
+    }
   }
-
+  if (mem_can_be_assigned == 0) {
+    LOG_WARN("we can not get memory now", K(mem_can_be_assigned), K(throttle_info_.decay_factor_), K(cur_mem_hold), K(trigger_mem_limit), K(dt));
+  }
   return mem_can_be_assigned;
 }
 

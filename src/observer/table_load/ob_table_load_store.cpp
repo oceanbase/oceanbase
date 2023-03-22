@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -15,6 +15,7 @@
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 
 namespace oceanbase
 {
@@ -28,22 +29,22 @@ ObTableLoadStore::ObTableLoadStore(ObTableLoadTableCtx *ctx)
 {
 }
 
-int ObTableLoadStore::init_ctx(ObTableLoadTableCtx *ctx,
-    int64_t ddl_task_id,
-                               const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
-                               const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
+int ObTableLoadStore::init_ctx(
+  ObTableLoadTableCtx *ctx,
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret));
-  } else if (OB_FAIL(ctx->init_store_ctx(ddl_task_id, partition_id_array, target_partition_id_array))) {
+  } else if (OB_FAIL(ctx->init_store_ctx(partition_id_array, target_partition_id_array))) {
     LOG_WARN("fail to init store ctx", KR(ret));
   }
   return ret;
 }
 
-int ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx)
+void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ctx->is_valid())) {
@@ -58,11 +59,10 @@ int ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx)
       LOG_WARN("fail to set store status abort", KR(ret));
     }
     // 2. mark all active trans abort
-    else if (OB_FAIL(abort_active_trans(ctx))) {
+    if (OB_FAIL(abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(ret));
     }
   }
-  return ret;
 }
 
 int ObTableLoadStore::abort_active_trans(ObTableLoadTableCtx *ctx)
@@ -283,14 +283,18 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store commit");
-    if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
+    obsys::ObWLockGuard guard(store_ctx_->get_status_lock());
+    if (OB_FAIL(store_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
-    } else if (OB_FAIL(store_ctx_->commit())) {
-      LOG_WARN("fail to commit store", KR(ret));
-    } else if (OB_FAIL(store_ctx_->set_status_commit())) {
-      LOG_WARN("fail to set store status commit", KR(ret));
-    } else if (param_.online_opt_stat_gather_ && OB_FAIL(store_ctx_->merger_->collect_sql_statistics(sql_statistics))){
+    } else if (OB_FAIL(store_ctx_->insert_table_ctx_->commit())) {
+      LOG_WARN("fail to commit insert table", KR(ret));
+    } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
+      LOG_WARN("fail to commit sync auto increment value", KR(ret));
+    } else if (param_.online_opt_stat_gather_ &&
+               OB_FAIL(store_ctx_->merger_->collect_sql_statistics(sql_statistics))) {
       LOG_WARN("fail to collect sql stats", KR(ret));
+    } else if (OB_FAIL(store_ctx_->set_status_commit_unlock())) {
+      LOG_WARN("fail to set store status commit", KR(ret));
     } else {
       result_info = store_ctx_->result_info_;
     }

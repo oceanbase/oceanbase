@@ -27,7 +27,7 @@ insert into t1 values(1, 2,
 alter system flush plan cache global;
 explain_protocol: 2
 set @@ob_enable_plan_cache = 0;
-## bug: https://work.aone.alibaba-inc.com/issue/31722560
+## bug:
 ##  timestampadd(second, c14/c16, c19/c20)四种情况结果有误
 EXPLAIN select timestampadd(second, null, c1) from t1;
 Query Plan

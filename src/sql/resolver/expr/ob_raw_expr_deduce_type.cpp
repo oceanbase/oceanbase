@@ -485,7 +485,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     //这里是一个验证：
     //新框架oracle模式string类型的结果的字符集与session上定义的charset一致
     //不一致可能是表达式推导有问题
-    //参考 https://yuque.antfin-inc.com/ob/sql/twnrwt 实现推导
+    //参考
     //
     //
     //新引擎稳定后，去掉这里的判断，改为trace日志用于调试
@@ -744,7 +744,7 @@ int ObRawExprDeduceType::check_param_expr_op_row(ObRawExpr *param_expr, int64_t 
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null param expr", K(ret));
       } else if (T_OP_ROW == param_expr->get_param_expr(i)->get_expr_type()) {
-        // refer https://work.aone.alibaba-inc.com/issue/31512204
+        // refer
         ret = OB_ERR_INVALID_COLUMN_NUM;
         LOG_WARN("invalid relational operator", K(ret));
         LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, column_count);
@@ -815,7 +815,7 @@ int ObRawExprDeduceType::check_expr_param(ObOpRawExpr &expr)
             ret = OB_ERR_INVALID_COLUMN_NUM;
             LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, column_count);
           } else if (OB_FAIL(check_param_expr_op_row(expr.get_param_expr(1)->get_param_expr(i), column_count))) {
-            // refer https://work.aone.alibaba-inc.com/issue/31512204
+            // refer
             LOG_WARN("failed to check param expr op row", K(ret));
           }
         } else {//如果expr(1)的孩子不为T_OP_ROW,那么expr(0)只能输出1列数据，否则报错
@@ -1237,9 +1237,11 @@ int ObRawExprDeduceType::set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprR
         } else {
           ParseNode parse_node;
           parse_node.value_ = static_cast<ObConstRawExpr *>(return_type_expr)->get_value().get_int();
+          ObScale scale = static_cast<ObConstRawExpr *>(return_type_expr)->get_accuracy().get_scale();
+          bool is_json_type = (scale == 1) && (col_type.get_type_class() == ObJsonTC);
           ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
           result_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
-          if (ob_is_string_type(obj_type)) {
+          if (ob_is_string_type(obj_type) && !is_json_type) {
             result_type.set_type(obj_type);
             result_type.set_length(OB_MAX_SQL_LENGTH);
             result_type.set_length_semantics(my_session_->get_actual_nls_length_semantics());
@@ -1258,7 +1260,7 @@ int ObRawExprDeduceType::set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprR
             result_type.set_calc_collation_type(my_session_->get_nls_collation());
             result_type.set_collation_level(CS_LEVEL_IMPLICIT);
             expr.set_result_type(result_type);
-          } else if (ob_is_json(obj_type)) {
+          } else if (ob_is_json(obj_type) || is_json_type) {
             result_type.set_json();
             result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
           } else if (ob_is_raw(obj_type)) {
@@ -1296,7 +1298,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
     bool need_add_cast = false;
     switch (expr.get_expr_type()) {
       //count_sum是在分布式的count(*)中上层为了避免select a, count(a) from t1这种语句a出现NULL这种非期望值
-      //而生成的内部表达式https://aone.alibaba-inc.com/issue/5144318
+      //而生成的内部表达式
       case T_FUN_COUNT:
       case T_FUN_REGR_COUNT:
       case T_FUN_COUNT_SUM:
@@ -1328,7 +1330,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           result_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][ObLobType]);
           // should set result_type to longtext type after enabled lob locator v2,
           // However, ObLobType is used for compatiablity, refer to static_engine.subplan_scan_oracle
-          // bug: https://work.aone.alibaba-inc.com/issue/38448577
+          // bug:
           result_type.set_collation_type(my_session_->get_nls_collation());
           result_type.set_calc_collation_type(my_session_->get_nls_collation());
           result_type.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -1949,7 +1951,7 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                 && !expr.is_need_deserialize_row()
                 && !(T_FUN_PL_AGG_UDF == expr.get_expr_type() && !expr.is_param_distinct())
                 && !(T_FUN_WM_CONCAT == expr.get_expr_type() && !expr.is_param_distinct()))) {
-      ret = ob_is_json(param_expr->get_data_type()) ?
+      ret = (ob_is_json(param_expr->get_data_type()) && !(expr.get_expr_type() == T_FUN_SUM || expr.get_expr_type() == T_FUN_AVG)) ?
               OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("lob or json type parameter not expected", K(ret));
     }
@@ -2367,7 +2369,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
     }
   } else if (T_WIN_FUN_NTH_VALUE == expr.get_func_type()) {
     // nth_value函数的返回类型可以为null. lead和lag也是
-    // bug: https://work.aone.alibaba-inc.com/issue/24000824
+    // bug:
     expr.set_result_type(func_params.at(0)->get_result_type());
     expr.set_enum_set_values(func_params.at(0)->get_enum_set_values());
     expr.unset_result_flag(NOT_NULL_FLAG);
@@ -2450,7 +2452,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
       expr.set_enum_set_values(func_params.at(0)->get_enum_set_values());
     }
     // lead和lag函数的第三个参数，应当转换为第一个参数的类型，加cast，这里不能在执行层转。
-    // bug: https://work.aone.alibaba-inc.com/issue/24115140
+    // bug:
     if (OB_SUCC(ret) && func_params.count() == 3) {
       ObRawExpr *cast_expr = NULL;
       ObCastMode def_cast_mode = CM_NONE;

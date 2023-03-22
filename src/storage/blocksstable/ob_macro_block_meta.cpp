@@ -48,7 +48,7 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     snapshot_version_(0),
     logic_id_(),
     macro_id_(),
-    column_checksums_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("MacroMetaChksum", MTL_ID())),
+    column_checksums_(sizeof(int64_t), ModulePageAllocator("MacroMetaChksum", MTL_ID())),
     has_string_out_row_(false),
     all_lob_in_row_(false)
 {
@@ -84,7 +84,7 @@ ObDataBlockMetaVal::ObDataBlockMetaVal(ObIAllocator &allocator)
     snapshot_version_(0),
     logic_id_(),
     macro_id_(),
-    column_checksums_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "MacroMetaChksum")),
+    column_checksums_(sizeof(int64_t), ModulePageAllocator(allocator, "MacroMetaChksum")),
     has_string_out_row_(false),
     all_lob_in_row_(false)
 {

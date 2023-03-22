@@ -132,10 +132,12 @@ int ObSimpleLogServer::simple_init(
   }
   tenant_base_->init();
   tenant_base_->set(&log_service_);
+  tenant_base_->set(&detector_);
   ObTenantEnv::set_tenant(tenant_base_);
   assert(&log_service_ == MTL(logservice::ObLogService*));
   guard.click("init tenant_base");
   node_id_ = node_id;
+
   if (is_bootstrap && OB_FAIL(init_memory_dump_timer_())) {
     SERVER_LOG(ERROR, "init_memory_dump_timer_ failed", K(ret), K_(node_id));
   } else if (FALSE_IT(guard.click("init_memory_dump_timer_"))

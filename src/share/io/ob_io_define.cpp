@@ -151,9 +151,19 @@ void ObIOFlag::set_unlimited(const bool is_unlimited)
   is_unlimited_ = is_unlimited;
 }
 
+void ObIOFlag::set_detect(const bool is_detect)
+{
+  is_detect_ = is_detect;
+}
+
 bool ObIOFlag::is_unlimited() const
 {
   return is_unlimited_;
+}
+
+bool ObIOFlag::is_detect() const
+{
+  return is_detect_;
 }
 
 /******************             IOCallback              **********************/
@@ -525,7 +535,7 @@ int ObIORequest::alloc_aligned_io_buf()
 int ObIORequest::prepare()
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard tg("prepare");
+  ObTimeGuard tg("prepare", 100000); //100ms
   if (OB_ISNULL(control_block_)
       && (OB_ISNULL(io_info_.fd_.device_handle_) || OB_ISNULL(control_block_ = io_info_.fd_.device_handle_->alloc_iocb()))) {
     ret = OB_ERR_UNEXPECTED;

@@ -109,6 +109,7 @@ public:
   // build a directed dependency relationship to other
   int block(const ObDependencyResource &) override;
   int block(const BlockCallBack &) override;
+  int get_block_list(common::ObIArray<ObDependencyResource> &cur_list) const override;
   // releace block list
   int replace_block_list(const common::ObIArray<ObDependencyResource> &) override;
   // remove a directed dependency relationship to other
@@ -119,9 +120,9 @@ public:
   int process_collect_info_message(const ObDeadLockCollectInfoMessage &) override;
   // handle message for scheme LCL
   int process_lcl_message(const ObLCLMessage &) override;
-  TO_STRING_KV(KP(this), K_(self_key), K_(parent_key), K_(timeout_ts), K_(lclv), K_(private_label),
+  TO_STRING_KV(KP(this), K_(self_key), K_(parent_key), KTIME_(timeout_ts), K_(lclv), K_(private_label),
                K_(public_label), K_(detect_callback),
-               K_(auto_activate_when_detected), K_(created_time), K_(allow_detect_time),
+               K_(auto_activate_when_detected), KTIME_(created_time), KTIME_(allow_detect_time),
                K_(is_timer_task_canceled), K_(block_list), K_(parent_list),
                K_(lcl_period), K_(last_send_collect_info_period), K(block_callback_list_.count()))
 private:

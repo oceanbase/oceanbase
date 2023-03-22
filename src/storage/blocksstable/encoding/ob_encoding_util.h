@@ -82,6 +82,12 @@ OB_INLINE bool store_class_might_contain_lob_locator(const ObObjTypeStoreClass s
   return (sc == ObTextSC || sc == ObLobSC || sc == ObJsonSC || sc == ObGeometrySC);
 }
 
+OB_INLINE bool is_var_length_type(const ObObjTypeStoreClass sc)
+{
+  return (sc == ObNumberSC || sc == ObStringSC || sc == ObTextSC
+      || sc == ObLobSC || sc == ObJsonSC || sc == ObGeometrySC);
+}
+
 OB_INLINE ObObjTypeStoreClass *get_store_class_map()
 {
   static ObObjTypeStoreClass store_class_map[] = {

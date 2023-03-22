@@ -1391,7 +1391,6 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate composite memory failed", K(ret));
       }
-      LOG_INFO("src size is: ", K(src.get_init_size()), K(src));
       OX (new(composite)ObPLRecord(src.get_id(), static_cast<ObPLRecord&>(src).get_count()));
     } else {
       OX (composite = static_cast<ObPLRecord*>(dest));
@@ -1608,7 +1607,7 @@ int ObPLRecord::deep_copy(ObPLRecord &src,
   const ObRecordType *record_type = NULL;
   if (NULL != ns) {
     OZ (ns->get_user_type(get_id(), user_type, NULL));
-    CK (OB_NOT_NULL(user_type));
+    OV (OB_NOT_NULL(user_type), OB_ERR_UNEXPECTED, K(get_id()), K(src.get_id()));
     CK (user_type->is_record_type());
     OX (record_type = static_cast<const ObRecordType*>(user_type));
   }
@@ -1728,8 +1727,16 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
       CK (OB_NOT_NULL(new_objs = reinterpret_cast<ObObj*>(data)));
       CK (OB_NOT_NULL(old_objs = reinterpret_cast<ObObj*>(src->get_data())));
       for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
+        ObObj old_obj = old_objs[i];
         new (&new_objs[i])ObObj();
-        OZ (ObPLComposite::copy_element(old_objs[i], new_objs[i], *coll_allocator));
+        if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
+          old_obj.set_type(ObExtendType);
+          CK (old_obj.is_pl_extend());
+        }
+        OZ (ObPLComposite::copy_element(old_obj, new_objs[i], *coll_allocator));
+        if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
+          new_objs[i].set_type(ObMaxType);
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -1826,7 +1833,11 @@ int ObPLCollection::delete_collection_elem(int64_t index)
     ObObj *obj = static_cast<ObObj *>(get_data());
     // data的type设置为max表示被delete
     if (index < get_count()) {
-      obj[index].set_type(ObMaxType);
+      if (OB_FAIL(ObUserDefinedType::destruct_obj(obj[index], NULL))) {
+        LOG_WARN("failed to destruct obj", K(ret), K(obj[index]), K(index));
+      } else {
+        obj[index].set_type(ObMaxType);
+      }
     } else {
       ret = OB_ARRAY_OUT_OF_RANGE;
       LOG_WARN("type with step large than 1 is oversize", K(index), K(get_count()));
@@ -2022,6 +2033,8 @@ void ObPLCollection::print() const
       OX (composite->print());
     } else if (obj.is_varchar_or_char() && obj.get_data_length() > 100) {
       LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K("xxx...xxx"));
+    } else if (obj.is_invalid_type()) {
+      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K("deleted element"), K(obj));
     } else {
       LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K(obj));
     }

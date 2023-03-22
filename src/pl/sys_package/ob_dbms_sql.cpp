@@ -279,6 +279,7 @@ int ObDbmsCursorInfo::parse(const ObString &sql_stmt, ObSQLSessionInfo &session)
   OZ (prepare_entity(session), sql_stmt);
   OV (OB_NOT_NULL(get_dbms_entity()), OB_ALLOCATE_MEMORY_FAILED, sql_stmt);
   OV (OB_NOT_NULL(get_cursor_entity()), OB_ALLOCATE_MEMORY_FAILED, sql_stmt);
+  OX (set_spi_cursor(NULL));
   if (OB_SUCC(ret)) {
     ObIAllocator &alloc = get_dbms_entity()->get_arena_allocator();
     ObParser parser(alloc, session.get_sql_mode(), session.get_local_collation_connection());

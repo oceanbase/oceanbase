@@ -16,27 +16,9 @@ namespace oceanbase
 namespace lib
 {
 
-ObLibConfig::ObLibConfig()
-  : enable_diagnose_info_(true),
-    enable_trace_log_(true)
-{
-}
-
-ObLibConfig &ObLibConfig::get_instance()
-{
-  static ObLibConfig instance_;
-  return instance_;
-}
-
-void ObLibConfig::reload_diagnose_info_config(const bool enable_diagnose_info)
-{
-  ATOMIC_SET(&enable_diagnose_info_, enable_diagnose_info);
-}
-
-void ObLibConfig::reload_trace_log_config(const bool enable_trace_log)
-{
-  ATOMIC_SET(&enable_trace_log_, enable_trace_log);
-}
+volatile bool ObLibConfig::enable_diagnose_info_ = true;
+volatile bool ObLibConfig::enable_trace_log_ = true;
+thread_local bool ObDisableDiagnoseGuard::in_disable_diagnose_guard_ = false;
 
 } //lib
 } //oceanbase

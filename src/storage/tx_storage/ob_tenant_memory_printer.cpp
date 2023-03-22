@@ -90,20 +90,14 @@ int ObTenantMemoryPrinter::print_tenant_usage()
           LOG_WARN("print mtl tenant usage failed", K(tmp_ret), K(tenant_id));
         }
       }
-      static int64_t last_print_ts = 0;
-      const int64_t now = ObTimeUtility::current_time();
-      const int64_t INTERVAL = 10 * 60 * 1000000L;
-      if (now - last_print_ts >= INTERVAL) {
-        int tenant_cnt = 0;
-        static uint64_t all_tenant_ids[OB_MAX_SERVER_TENANT_CNT] = {0};
-        lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
-        mallocator->get_unrecycled_tenant_ids(all_tenant_ids, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
-        for (int64_t i = 0; OB_SUCC(ret) && i < tenant_cnt; ++i) {
-          uint64_t id = all_tenant_ids[i];
-          mallocator->print_tenant_memory_usage(id);
-          mallocator->print_tenant_ctx_memory_usage(id);
-        }
-        last_print_ts = now;
+      int tenant_cnt = 0;
+      static uint64_t all_tenant_ids[OB_MAX_SERVER_TENANT_CNT] = {0};
+      lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
+      mallocator->get_unrecycled_tenant_ids(all_tenant_ids, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_cnt; ++i) {
+        uint64_t id = all_tenant_ids[i];
+        mallocator->print_tenant_memory_usage(id);
+        mallocator->print_tenant_ctx_memory_usage(id);
       }
     }
 

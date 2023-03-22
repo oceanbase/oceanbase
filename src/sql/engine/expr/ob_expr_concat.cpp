@@ -123,8 +123,9 @@ int ObExprConcat::calc_text(common::ObObj &result,
       }
       if (OB_FAIL(ret)) {
       } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state));
+        ret = (str_iter1.get_inner_ret() != OB_SUCCESS) ?
+              str_iter1.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter1));
       }
       while (OB_SUCC(ret)
              && (state = str_iter2.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
@@ -134,8 +135,9 @@ int ObExprConcat::calc_text(common::ObObj &result,
       }
       if (OB_FAIL(ret)) {
       } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state));
+        ret = (str_iter2.get_inner_ret() != OB_SUCCESS) ?
+              str_iter2.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter2));
       }
     }
     if (OB_SUCC(ret)) {
@@ -384,8 +386,9 @@ static int eval_concat_text(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
         }
         if (OB_FAIL(ret)) {
         } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-          ret = OB_INVALID_DATA;
-          LOG_WARN("iter state invalid", K(ret), K(state));
+          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                input_iter.get_inner_ret() : OB_INVALID_DATA;
+          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
         }
       }
     }
@@ -440,7 +443,7 @@ int ObExprConcat::eval_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
     }
     if (ob_is_text_tc(res_type)) {
       // FIXME bin.lb: mysql mode can not reach here, since result type is always varchar.
-      // Seem to be a bug: https://work.aone.alibaba-inc.com/issue/24653475
+      // Seem to be a bug:
       max_len = OB_MAX_PACKET_LENGTH;
     }
     // mysql mode: all param calc types are varchar;

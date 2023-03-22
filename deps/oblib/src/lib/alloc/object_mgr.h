@@ -59,7 +59,7 @@ public:
   OB_INLINE int64_t get_hold() { return bs_.get_total_hold(); }
   OB_INLINE int64_t get_payload() { return bs_.get_total_payload(); }
   OB_INLINE int64_t get_used() { return bs_.get_total_used(); }
-  OB_INLINE bool check_has_unfree(const char **first_label) { return os_.check_has_unfree(first_label); }
+  OB_INLINE bool check_has_unfree() { return bs_.check_has_unfree(); }
 private:
 #ifndef ENABLE_SANITY
   lib::ObMutex mutex_;
@@ -101,7 +101,7 @@ public:
   void print_usage() const;
   int64_t sync_wash(int64_t wash_size) override;
   Stat get_stat();
-  bool check_has_unfree(const char **first_label);
+  bool check_has_unfree();
 private:
   SubObjectMgr *create_sub_mgr();
   void destroy_sub_mgr(SubObjectMgr *sub_mgr);

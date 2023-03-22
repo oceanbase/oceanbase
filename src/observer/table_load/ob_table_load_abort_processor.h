@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #pragma once
 
@@ -30,6 +30,7 @@ private:
 private:
   const ObGlobalContext &gctx_;
   table::ObTableApiCredential credential_;
+  sql::ObSQLSessionInfo session_info_;
 };
 
 class ObTableLoadAbortPeerP : public obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LOAD_ABORT_PEER> >

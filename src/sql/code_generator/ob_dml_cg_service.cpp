@@ -565,6 +565,10 @@ int ObDmlCgService::get_table_unique_key_exprs(ObLogDelUpd &op,
     }
   }
 
+  // The reason why batch optimization adds stmt_id to unique_key is
+  // For multi_update/multi_delete statements that need to be deduplicated,
+  // if different stmt_id statements exist to process duplicate rows,
+  // Will be regarded as duplicate rows by deduplication logic, adding stmt_id to unique_key can avoid this problem
   if (OB_SUCC(ret) && op.get_plan()->get_optimizer_context().is_batched_multi_stmt()) {
     ObRawExpr *stmt_id_expr = nullptr;
     if (op.get_stmt_id_expr() == nullptr) {
@@ -574,6 +578,34 @@ int ObDmlCgService::get_table_unique_key_exprs(ObLogDelUpd &op,
       // do nothing
     } else if (OB_FAIL(unique_key_exprs.push_back(stmt_id_expr))) {
       LOG_WARN("fail to push_back stmt_id_expr", K(ret), KPC(stmt_id_expr));
+    }
+  }
+  return ret;
+}
+
+// This function is only used for insert_up qualified replace_into
+// When generating an insert to generate a primary key conflict,
+//    the conflicting column information needs to be returned
+// For a partitioned table without primary key, return hidden primary key + partition key
+// The partition key is a generated column, and there is no need to replace
+//    it with a real generated column calculation expression here, for the following reasons:
+// 1. The generated columns on the main table are not used as primary keys,
+//      and the generated columns on the index table are actually stored, and can be read directly
+// 2. For non-primary key partition tables (generated columns are used as partition keys),
+//      primary table writing will not cause primary key conflicts, unless it is a bug
+int ObDmlCgService::table_unique_key_for_conflict_checker(ObLogDelUpd &op,
+                                                          const IndexDMLInfo &index_dml_info,
+                                                          ObIArray<ObRawExpr*> &rowkey_exprs)
+{
+  int ret = OB_SUCCESS;
+  bool is_heap_table = false;
+  if (OB_FAIL(check_is_heap_table(op, index_dml_info.ref_table_id_, is_heap_table))) {
+    LOG_WARN("check is heap table failed", K(ret));
+  } else if (OB_FAIL(index_dml_info.get_rowkey_exprs(rowkey_exprs))) {
+    LOG_WARN("get table rowkey failed", K(ret), K(index_dml_info));
+  } else if (is_heap_table) {
+    if (OB_FAIL(get_heap_table_part_exprs(op, index_dml_info, rowkey_exprs))) {
+      LOG_WARN("get heap table part exprs failed", K(ret), K(index_dml_info));
     }
   }
   return ret;
@@ -639,10 +671,11 @@ int ObDmlCgService::convert_data_table_rowkey_info(ObLogDelUpd &op,
   ObSEArray<uint64_t, 8> rowkey_column_ids;
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
   ObSEArray<ObObjMeta, 8> rowkey_column_types;
+  // rowkey_exprs的类型一定是column_ref表达式
   if (OB_ISNULL(primary_dml_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("primary_index_dml_info is null", K(ret));
-  } else if (OB_FAIL(get_table_unique_key_exprs(op, *primary_dml_info, rowkey_exprs))) {
+  } else if (OB_FAIL(table_unique_key_for_conflict_checker(op, *primary_dml_info, rowkey_exprs))) {
     LOG_WARN("get table unique key exprs failed", K(ret), KPC(primary_dml_info));
   }
 
@@ -735,19 +768,25 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
-
-  if (OB_FAIL(get_table_unique_key_exprs(op, index_dml_info, rowkey_exprs))) {
+  bool is_heap_table = false;
+  // When the partition key is a virtual generated column,
+  // the table with the primary key needs to be replaced,
+  // and the table without the primary key does not need to be replaced
+  if (OB_FAIL(table_unique_key_for_conflict_checker(op, index_dml_info, rowkey_exprs))) {
     LOG_WARN("get table unique key exprs failed", K(ret), K(index_dml_info));
+  } else if (OB_FAIL(check_is_heap_table(op, index_dml_info.ref_table_id_, is_heap_table))) {
+    LOG_WARN("check is heap table failed", K(ret));
+  } else if (!is_heap_table && OB_FAIL(adjust_unique_key_exprs(rowkey_exprs))) {
+    LOG_WARN("fail to replace generated column exprs", K(ret), K(rowkey_exprs));
+  } else if (OB_FAIL(cg_.generate_rt_exprs(rowkey_exprs, conflict_checker_ctdef.data_table_rowkey_expr_))) {
+    LOG_WARN("fail to generate data_table rowkey_expr", K(ret), K(rowkey_exprs));
   } else if (OB_FAIL(generate_scan_ctdef(op, index_dml_info, conflict_checker_ctdef.das_scan_ctdef_))) {
     LOG_WARN("fail to generate das_scan_ctdef", K(ret));
   } else if (OB_FAIL(generate_constraint_infos(op,
                                                index_dml_info,
                                                conflict_checker_ctdef.cst_ctdefs_))) {
     LOG_WARN("fail to generate constraint_infos", K(ret));
-  } else if (OB_FAIL(cg_.generate_rt_exprs(rowkey_exprs,
-                                           conflict_checker_ctdef.data_table_rowkey_expr_))) {
-    LOG_WARN("fail to generate data_table rowkey_expr", K(ret), K(rowkey_exprs));
-  } else if (OB_FAIL(cg_.generate_rt_exprs(index_dml_info.column_old_values_exprs_,
+  }  else if (OB_FAIL(cg_.generate_rt_exprs(index_dml_info.column_old_values_exprs_,
                                            conflict_checker_ctdef.table_column_exprs_))) {
     LOG_WARN("fail to generate table columns rt exprs ", K(ret));
   } else {
@@ -1905,7 +1944,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       int64_t total_count = is_instead_of ? expectd_col_cnt : table_schema->get_column_count();
       for (i = 0; OB_SUCC(ret) && i < total_count; i++) {
         // how to calc cell_idx and proj_idx ?
-        // see https://work.aone.alibaba-inc.com/issue/22572027
+        // see
         ObExpr *new_expr = nullptr;
         ObExpr *old_expr = nullptr;
         bool need_add = false;
@@ -2527,7 +2566,7 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
     } else if (fk_arg.is_self_ref_
         && !var_exist_in_array(column_ids, name_column_ids.at(i), fk_column.name_idx_)) {
       /**
-       * https://workitem.aone.alibaba-inc.com/issue/18132630
+       * issue/18132630
        * fk_column.name_idx_ is used only for self ref row, that is to say name table and
        * value table is same table.
        * otherwise name_column_ids.at(i) will indicate columns in name table, not value table,

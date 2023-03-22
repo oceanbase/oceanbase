@@ -519,6 +519,8 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
     // do nothing
   } else if (from == to) {
     found = true;
+  } else if (!from->is_generalized_column() && from->same_as(*to)) {
+    found = true;
   } else if (equal_sets.empty()) {
     // do nothing
   } else if (ObRawExprUtils::expr_is_order_consistent(from, to, is_consistent)
@@ -534,6 +536,20 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
         found = true;
       }
     }
+  }
+  return found;
+}
+
+bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
+                                         const ObRawExpr *to)
+{
+  bool found = false;
+  if (OB_ISNULL(from) || OB_ISNULL(to)) {
+    // do nothing
+  } else if (from == to) {
+    found = true;
+  } else if (!from->is_generalized_column() && from->same_as(*to)) {
+    found = true;
   }
   return found;
 }
@@ -1117,6 +1133,21 @@ bool ObOptimizerUtil::find_equal_expr(const ObIArray<ObRawExpr*> &exprs,
      }
    }
    return found;
+}
+
+bool ObOptimizerUtil::find_equal_expr(const ObIArray<ObRawExpr *> &exprs,
+                                      const ObRawExpr *expr,
+                                      int64_t &idx)
+{
+  bool found = false;
+  int64_t N = exprs.count();
+  for (int64_t i = 0; !found && i < N; ++i) {
+    if (is_expr_equivalent(exprs.at(i), expr)) {
+      found = true;
+      idx = i;
+    }
+  }
+  return found;
 }
 
 int ObOptimizerUtil::find_stmt_expr_direction(const ObDMLStmt &stmt,
@@ -3271,7 +3302,8 @@ int ObOptimizerUtil::try_add_fd_item(const ObDMLStmt *stmt,
       || OB_ISNULL(table = stmt->get_table_item_by_id(table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(index_schema));
-  } else if (is_virtual_table(table->ref_id_)) {
+  } else if (OB_ALL_VIRTUAL_TENANT_INFO_TID != table->ref_id_ &&
+             is_virtual_table(table->ref_id_)) {
     /*虚拟表不产生 fd 及 not null 信息*/
   } else if (!index_schema->get_rowkey_info().is_valid()) {
     // do nothing
@@ -4070,22 +4102,35 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
                                                      ObSQLSessionInfo *session_info,
                                                      const ObItemType filter_type,
                                                      ObRawExpr *const_expr,
-                                                     ObRawExpr *&offset_int_expr)
+                                                     ObRawExpr *&offset_int_expr,
+                                                     ObRawExpr *zero_expr,
+                                                     bool &offset_is_not_neg,
+                                                     ObTransformerCtx *ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(const_expr) || OB_ISNULL(session_info)
+  if (OB_ISNULL(const_expr) || OB_ISNULL(session_info) || OB_ISNULL(ctx) || OB_ISNULL(zero_expr)
       || OB_UNLIKELY(filter_type != T_OP_GE && filter_type != T_OP_GT)
       || OB_UNLIKELY(!const_expr->get_result_type().is_integer_type()
                      && !const_expr->get_result_type().is_number())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(const_expr), K(session_info), K(filter_type));
   } else if (T_OP_GT == filter_type) {
-    if (OB_FAIL(floor_number_as_limit_offset_value(expr_factory, session_info,
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GE,
+                                                                    0, offset_is_not_neg))) {
+      LOG_WARN("offset value is negative calc failed", K(ret));
+    } else if (!offset_is_not_neg) {
+      offset_int_expr = zero_expr;
+    } else if (OB_FAIL(floor_number_as_limit_offset_value(expr_factory, session_info,
                                                    const_expr, offset_int_expr))) {
       LOG_WARN("failed to floor number as offset value", K(ret));
     }
   } else if (T_OP_GE == filter_type) {
-    if (OB_FAIL(ceil_number_as_limit_offset_value(expr_factory, session_info,
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GE,
+                                                                    0, offset_is_not_neg))) {
+      LOG_WARN("offset value is negative calc failed", K(ret));
+    } else if (!offset_is_not_neg) {
+      offset_int_expr = zero_expr;
+    } else if (OB_FAIL(ceil_number_as_limit_offset_value(expr_factory, session_info,
                                                   const_expr, offset_int_expr))) {
       LOG_WARN("failed to ceil number as offset value", K(ret));
     }
@@ -4867,6 +4912,15 @@ int ObOptimizerUtil::convert_subplan_scan_expr(ObRawExprCopier &copier,
     LOG_WARN("failed to check subplan scan expr validity", K(ret));
   } else if (!is_valid) {
     /*do nothing*/
+  } else if (OB_FAIL(get_parent_stmt_expr(equal_sets,
+                                          table_id,
+                                          parent_stmt,
+                                          child_stmt,
+                                          input_expr,
+                                          output_expr))) {
+    LOG_WARN("failed to get parent stmt expr", K(ret));
+  } else if (NULL != output_expr) {
+    // do nothing
   } else if (OB_FAIL(copier.copy_on_replace(input_expr,
                                             output_expr,
                                             &replacer))) {
@@ -5614,12 +5668,10 @@ int ret = OB_SUCCESS;
           }
         }
       } else if (ObFloatTC == child_tc || ObDoubleTC == child_tc) {
-        if (child_tc == dst_tc || ObDoubleTC == dst_tc) {
+        if (child_tc == dst_tc) {
           ObAccuracy lossless_acc = child_type.get_accuracy();
-          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
-            is_lossless = true;
-          } else if (dst_acc.get_precision() >= lossless_acc.get_precision() &&
-                     dst_acc.get_scale() >= lossless_acc.get_scale()) {
+          if (dst_acc.get_precision() >= lossless_acc.get_precision() &&
+                dst_acc.get_scale() == lossless_acc.get_scale()) {
             is_lossless = true;
           }
         }
@@ -5723,8 +5775,9 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
           }
         }
       } else if (ObFloatTC == child_tc || ObDoubleTC == child_tc) {
-        if (child_tc == dst_tc || ObDoubleTC == dst_tc) {
-          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+        if (child_tc == dst_tc) {
+          ObAccuracy lossless_acc = child_type.get_accuracy();
+          if (lossless_acc.get_scale() == dst_acc.get_scale()) {
             is_lossless = true;
           }
         }
@@ -6402,57 +6455,58 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(const ObSelectStmt &parent_st
                                                    ObIArray<ObRawExpr*> &remain_filters)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 4> child_select_list;
-  ObSEArray<ObRawExpr *, 4> parent_select_list;
-  if (OB_FAIL(subquery.get_select_exprs(child_select_list))) {
-    LOG_WARN("get child stmt select exprs failed", K(ret));
-  } else if (OB_FAIL(parent_stmt.get_select_exprs(parent_select_list))) {
-    LOG_WARN("get parent stmt select exprs failed", K(ret));
-  } else if (child_select_list.count() != parent_select_list.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child stmt select exprs size is incorrect", K(child_select_list.count()),
-                                                          K(parent_select_list.count()), K(ret));
-  }
+  ObSEArray<ObRawExpr *, 4> view_column_exprs;
+  ObSEArray<ObRawExpr *, 4> set_op_exprs;
+  ObSEArray<ObRawExpr *, 4> select_exprs;
   for (int64_t i = 0; OB_SUCC(ret) && i < pushdown_filters.count(); ++i) {
-    ObSEArray<ObRawExpr *, 4> view_column_exprs;
-    ObRawExpr *expr = pushdown_filters.at(i);
-    if (OB_ISNULL(expr)) {
+    ObRawExpr *pred = NULL;
+    bool is_simple_expr = true;
+    bool pushed = false;
+    set_op_exprs.reuse();
+    select_exprs.reuse();
+    view_column_exprs.reuse();
+    if (OB_ISNULL(pred = pushdown_filters.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::replace_expr(parent_select_list,
-                                                      child_select_list,
-                                                      expr))) {
-      SQL_LOG(WARN, "failed to replace expr", K(ret));
-    } else if (OB_FAIL(expr->extract_info())) {
-      LOG_WARN("failed to extract info", K(ret), K(*expr));
-    } else if (expr->has_flag(CNT_WINDOW_FUNC) ||
-               expr->has_flag(CNT_AGG) ||
-               expr->has_flag(CNT_SUB_QUERY) ||
-               expr->has_flag(CNT_ONETIME)) {
-      ret = remain_filters.push_back(expr);
-    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, view_column_exprs))) {
-      LOG_WARN("failed to extract column exprs", K(ret));
-    } else if (!common_exprs.empty() &&
-               !subset_exprs(view_column_exprs, common_exprs)) {
-      //common_exprs为空，说明既没有windown func，也没有group by
-      ret = remain_filters.push_back(expr);
-    } else if (OB_FAIL(candi_filters.push_back(expr))) {
-      LOG_WARN("failed to push back predicate", K(ret));
+      LOG_WARN("predicate is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_set_op_exprs(pred, set_op_exprs))) {
+      LOG_WARN("failed to extract set op exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::convert_set_op_expr_to_select_expr(set_op_exprs,
+                                                                            subquery,
+                                                                            select_exprs))) {
+      LOG_WARN("failed to convert set op exprs to select exprs", K(ret));
+    } else if (set_op_exprs.count() != select_exprs.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect set op expr count", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && is_simple_expr && j < select_exprs.count(); ++j) {
+      ObRawExpr *expr = select_exprs.at(j);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (expr->has_flag(CNT_WINDOW_FUNC) ||
+                  expr->has_flag(CNT_AGG) ||
+                  expr->has_flag(CNT_SUB_QUERY) ||
+                  expr->has_flag(CNT_ONETIME)) {
+        is_simple_expr = false;
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, view_column_exprs))) {
+        LOG_WARN("failed to extract column exprs", K(ret));
+      }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObTransformUtils::replace_expr(child_select_list,
-                                                      parent_select_list,
-                                                      expr))) {
-      SQL_LOG(WARN, "failed to replace expr", K(ret));
-    } else if (OB_FAIL(expr->extract_info())) {
-      LOG_WARN("failed to extract info", K(ret), K(*expr));
+    } else if (!is_simple_expr) {
+      //can not push down
+    } else if (!common_exprs.empty() &&
+                !subset_exprs(view_column_exprs, common_exprs)) {
+      //common_exprs为空，说明既没有windown func，也没有group by
+    } else if (OB_FAIL(candi_filters.push_back(pred))) {
+      LOG_WARN("failed to push back predicate", K(ret));
     } else {
-      pushdown_filters.at(i) = expr;
+      pushed = true;
     }
-  }
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("success to check_pushdown_filter_for_set", K(pushdown_filters), K(candi_filters),
-                                                          K(remain_filters));
+    if (OB_SUCC(ret) && !pushed &&
+        OB_FAIL(remain_filters.push_back(pred))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
   }
   return ret;
 }
@@ -7971,6 +8025,36 @@ int ObOptimizerUtil::expr_calculable_by_exprs(const ObRawExpr *src_expr,
   return ret;
 }
 
+int ObOptimizerUtil::check_contain_my_exec_param(ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  contain = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (!expr->has_flag(CNT_DYNAMIC_PARAM)) {
+    //do nothing
+  } else if (expr->is_exec_param_expr()) {
+    const ObExecParamRawExpr *exec_expr = static_cast<const ObExecParamRawExpr*>(expr);
+    contain = find_exec_param(my_exec_params, exec_expr);
+  } else if (expr->is_set_op_expr() || expr->is_query_ref_expr() || expr->is_column_ref_expr()) {
+    //do nothing
+  } else {
+    for (int64_t i = 0; !contain && OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_contain_my_exec_param(expr->get_param_expr(i), my_exec_params, contain)))) {
+        LOG_WARN("failed to check contain batch stmt parameter", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 /* get the smallest set from which all exprs can be evaluated */
 int ObOptimizerUtil::get_minset_of_exprs(const ObIArray<ObRawExpr *> &src_exprs, ObIArray<ObRawExpr *> &min_set) {
   int ret = OB_SUCCESS;
@@ -8537,6 +8621,47 @@ int ObOptimizerUtil::replace_gen_column(ObLogPlan *log_plan, ObRawExpr *part_exp
         LOG_WARN("failed to copy on replace expr", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::truncate_string_for_opt_stats(const ObObj *old_obj,
+                                                   ObIAllocator &alloc,
+                                                   const ObObj *&new_obj)
+{
+  int ret = OB_SUCCESS;
+  bool is_truncated = false;
+  if (old_obj->is_string_type()) {
+    ObString str;
+    if (OB_FAIL(old_obj->get_string(str))) {
+      LOG_WARN("failed to get string", K(ret), K(str));
+    } else {
+      int64_t mb_len = ObCharset::strlen_char(old_obj->get_collation_type(), str.ptr(), str.length());
+      if (mb_len <= OPT_STATS_MAX_VALUE_CHAR_LEN) {
+      } else {
+        //need truncate string, because the opt stats is gathered after truncate string, such as: max_value、min_value、histogram.
+        ObObj *tmp_obj = NULL;
+        if (OB_ISNULL(tmp_obj = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc buf", K(ret));
+        } else {
+          int64_t valid_len = ObCharset::charpos(old_obj->get_collation_type(), str.ptr(),
+                                                 str.length(), OPT_STATS_MAX_VALUE_CHAR_LEN);
+          if (OB_UNLIKELY(valid_len <= 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error", K(ret), K(valid_len), K(str), K(OPT_STATS_MAX_VALUE_CHAR_LEN));
+          } else {
+            tmp_obj->set_varchar(str.ptr(), valid_len);
+            tmp_obj->set_meta_type(old_obj->get_meta());
+            new_obj = tmp_obj;
+            is_truncated = true;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_truncated) {
+    new_obj = old_obj;
   }
   return ret;
 }

@@ -90,7 +90,7 @@ int ObDropIndexTask::init(
     ret_code_ = task_record.ret_code_;
     if (nullptr != task_record.message_.ptr()) {
       int64_t pos = 0;
-      if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
+      if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
         LOG_WARN("deserialize params from message failed", K(ret));
       }
     }
@@ -289,7 +289,8 @@ int ObDropIndexTask::cleanup_impl()
   }
 
   if (OB_SUCC(ret) && parent_task_id_ > 0) {
-    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id_, get_task_key(), ret_code_, trace_id_);
+    const ObDDLTaskID parent_task_id(tenant_id_, parent_task_id_);
+    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id, get_task_key(), ret_code_, trace_id_);
   }
   LOG_INFO("clean task finished", K(ret), K(*this));
   return ret;
@@ -412,38 +413,36 @@ int ObDropIndexTask::serialize_params_to_message(char *buf, const int64_t buf_si
   if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), KP(buf), K(buf_size));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_size, pos))) {
+    LOG_WARN("ObDDLTask serialize failed", K(ret));
   } else if (OB_FAIL(drop_index_arg_.serialize(buf, buf_size, pos))) {
     LOG_WARN("serialize failed", K(ret));
-  } else if (OB_FAIL(ddl_tracing_.serialize(buf, buf_size, pos))) {
-    LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
   }
   return ret;
 }
 
-int ObDropIndexTask::deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos)
+int ObDropIndexTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   obrpc::ObDropIndexArg tmp_drop_index_arg;
-  if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), KP(buf), K(buf_size));
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), KP(buf), K(buf_size));
+  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, buf_size, pos))) {
+    LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_drop_index_arg.deserialize(buf, buf_size, pos))) {
     LOG_WARN("deserialize failed", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_drop_index_arg))) {
+    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_drop_index_arg));
   } else if (OB_FAIL(deep_copy_index_arg(allocator_, tmp_drop_index_arg, drop_index_arg_))) {
     LOG_WARN("deep copy drop index arg failed", K(ret));
-  } else {
-    if (pos < buf_size) {
-      if (OB_FAIL(ddl_tracing_.deserialize(buf, buf_size, pos))) {
-        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
-      }
-    }
   }
   return ret;
 }
 
 int64_t ObDropIndexTask::get_serialize_param_size() const
 {
-  return drop_index_arg_.get_serialize_size() + ddl_tracing_.get_serialize_size();
+  return drop_index_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size();
 }
 
 void ObDropIndexTask::flt_set_task_span_tag() const

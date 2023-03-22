@@ -22,6 +22,7 @@ namespace palf
 {
 LogLoopThread::LogLoopThread()
     : palf_env_impl_(NULL),
+      run_interval_(DEFAULT_PALF_LOG_LOOP_INTERVAL_US),
       is_inited_(false)
 {
 }
@@ -31,7 +32,7 @@ LogLoopThread::~LogLoopThread()
   destroy();
 }
 
-int LogLoopThread::init(IPalfEnvImpl *palf_env_impl)
+int LogLoopThread::init(const bool is_normal_mode, IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -43,6 +44,9 @@ int LogLoopThread::init(IPalfEnvImpl *palf_env_impl)
   } else {
     palf_env_impl_ = palf_env_impl;
     share::ObThreadPool::set_run_wrapper(MTL_CTX());
+    if (false == is_normal_mode) {
+      run_interval_ = PALF_LOG_LOOP_INTERVAL_US_UPPER_BOUND;
+    }
     is_inited_ = true;
   }
 
@@ -108,13 +112,13 @@ void LogLoopThread::log_loop_()
     }
 
     const int64_t round_cost_time = ObTimeUtility::current_time() - start_ts;
-    int32_t sleep_ts = PALF_LOG_LOOP_INTERVAL_US - static_cast<const int32_t>(round_cost_time);
+    int32_t sleep_ts = run_interval_ - static_cast<const int32_t>(round_cost_time);
     if (sleep_ts < 0) {
       sleep_ts = 0;
     }
     ob_usleep(sleep_ts);
 
-    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000)) {
       PALF_LOG(INFO, "LogLoopThread round_cost_time", K(round_cost_time));
     }
   }

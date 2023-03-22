@@ -87,6 +87,7 @@ struct ObLSVTInfo
   //TODO SCN
   int64_t checkpoint_lsn_;
   int64_t rebuild_seq_;
+  share::SCN tablet_change_checkpoint_scn_;
 };
 
 // 诊断虚表统计信息

@@ -221,7 +221,7 @@ public:
       const int64_t &major_snapshot_version,
       ObTabletTableIterator &iter);
   int get_all_sstables(common::ObIArray<ObITable *> &sstables) const;
-  int get_sstables_size(int64_t &used_size) const;
+  int get_sstables_size(int64_t &used_size, const bool ignore_shared_block = false) const;
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
   int get_ddl_memtables(common::ObIArray<ObITable *> &ddl_memtables) const;
   int check_need_remove_old_table(const int64_t multi_version_start, bool &need_remove) const;
@@ -287,7 +287,8 @@ public:
 
   // migration section
   // used for migration source generating create tablet rpc argument
-  int build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_param) const;
+  int build_migration_tablet_param(
+      ObMigrationTabletParam &mig_tablet_param) const;
   int build_migration_sstable_param(
       const ObITable::TableKey &table_key,
       blocksstable::ObMigrationSSTableParam &mig_sstable_param) const;
@@ -389,6 +390,9 @@ public:
       const ObMigrationTabletParam *tablet_meta);
   int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
   int remove_memtables_from_data_checkpoint();
+  // different from the is_valid() function
+  // typically used for check valid for migration or restore
+  int check_valid() const;
   TO_STRING_KV(KP(this), K_(wash_score), K_(ref_cnt), K_(tablet_meta), K_(table_store), K_(storage_schema),
       K_(medium_info_list));
 private:
@@ -484,6 +488,7 @@ private:
       const bool is_callback = false);
   int set_tx_data_in_tablet_pointer(const ObTabletTxMultiSourceDataUnit &tx_data);
   int check_max_sync_schema_version() const;
+  int check_medium_list() const;
   int check_sstable_column_checksum() const;
 
   template<class T>
@@ -528,7 +533,7 @@ private:
 
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
-  // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
+  // yuque :
 
   bool is_inited_;
 };

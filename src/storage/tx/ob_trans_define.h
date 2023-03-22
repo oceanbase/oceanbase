@@ -1722,6 +1722,7 @@ enum class TxEndAction : int8_t
 {
   COMMIT_TX,
   ABORT_TX,
+  DELAY_ABORT_TX,
   KILL_TX_FORCEDLY
 };
 

@@ -1,6 +1,6 @@
 // Copyright 1999-2022 Alibaba Inc. All Rights Reserved.
 // Author:
-//   liuqifan.lqf@oceanbase.com
+//
 //
 
 #ifndef __OB_SQL_ENG_PX_DH_OPT_STATS_GATHER_H__
@@ -107,6 +107,7 @@ public:
   ObOptStatsGatherPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts)
     : ObPieceMsgCtx(op_id, task_cnt, timeout_ts), received_(0), osg_info_() {}
   ~ObOptStatsGatherPieceMsgCtx() = default;
+  virtual void reset_resource() {};
   static int alloc_piece_msg_ctx(const ObOptStatsGatherPieceMsg &pkt,
                                  ObPxCoordInfo &coord_info,
                                  ObExecContext &ctx,

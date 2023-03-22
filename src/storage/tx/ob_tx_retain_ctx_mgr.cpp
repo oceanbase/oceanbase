@@ -240,13 +240,16 @@ int ObTxRetainCtxMgr::force_gc_retain_ctx()
   SpinWLockGuard guard(retain_ctx_lock_);
   tg.click();
 
-  const int64_t before_remove_count = retain_ctx_list_.size();
-  if (OB_FAIL(for_each_remove_(&ObTxRetainCtxMgr::force_gc_, nullptr, INT64_MAX))) {
-    TRANS_LOG(WARN, "[RetainCtxMgr] force gc all retain ctx faild", K(ret));
+  int64_t retry_force_gc_times = 0;
+  while (retain_ctx_list_.size() > 0) {
+    const int64_t before_remove_count = retain_ctx_list_.size();
+    if (OB_FAIL(for_each_remove_(&ObTxRetainCtxMgr::force_gc_, nullptr, INT64_MAX))) {
+      TRANS_LOG(WARN, "[RetainCtxMgr] force gc all retain ctx faild", K(ret));
+    }
+    TRANS_LOG(INFO, "[RetainCtxMgr] try to force gc all retain ctx", K(ret),
+              K(retry_force_gc_times), K(before_remove_count), KPC(this));
+    retry_force_gc_times++;
   }
-
-  TRANS_LOG(INFO, "[RetainCtxMgr] force gc all retain ctx", K(ret), K(before_remove_count),
-            KPC(this));
 
   return ret;
 }
@@ -363,7 +366,7 @@ int ObTxRetainCtxMgr::for_each_remove_(RetainFuncHandler remove_handler,
     }
     const int64_t use_ts = ObTimeUtility::current_time() - start_ts;
     if (use_ts > max_run_us) {
-      TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "remove retain ctx use too much time", K(use_ts), K(remove_count));
+      TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "[RetainCtxMgr] remove retain ctx use too much time", K(use_ts), K(remove_count));
       break;
     }
 

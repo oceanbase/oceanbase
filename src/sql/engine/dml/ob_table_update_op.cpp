@@ -113,6 +113,19 @@ ObTableUpdateOp::ObTableUpdateOp(ObExecContext &exec_ctx, const ObOpSpec &spec,
 {
 }
 
+int ObTableUpdateOp::check_need_exec_single_row()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.upd_ctdefs_.count() && !execute_single_row_; ++i) {
+    const ObTableUpdateSpec::UpdCtDefArray &ctdefs = MY_SPEC.upd_ctdefs_.at(i);
+    const ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
+    if (has_before_row_trigger(upd_ctdef) || has_after_row_trigger(upd_ctdef)) {
+      execute_single_row_ = true;
+    }
+  }
+  return ret;
+}
+
 int ObTableUpdateOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -438,7 +451,7 @@ int ObTableUpdateOp::write_rows_post_proc(int last_errno)
         //update rows across partitions, need to add das delete op's affected rows
         changed_rows += upd_rtdef.ddel_rtdef_->affected_rows_;
         //insert new row to das after old row has been deleted in storage
-        //reference to: https://work.aone.alibaba-inc.com/issue/31915604
+        //reference to:
       }
       LOG_DEBUG("update rows post proc", K(ret), K(found_rows), K(changed_rows), K(upd_rtdef));
     }

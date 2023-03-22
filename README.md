@@ -1,11 +1,12 @@
 # What is OceanBase Database
+
 OceanBase Database is a native distributed relational database. It is developed entirely by Ant Group. OceanBase Database is built on a common server cluster. Based on the Paxos protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
 ## Core features
 
 - Scalable OLTP
    - Linear scalability by adding nodes to the cluster
-   - Partition-level leader distribution and transparent data shuffling 
+   - Partition-level leader distribution and transparent data shuffling
    - Optimized performance for distributed transaction through "table group" technology
    - High concurrency updates on hot row through early lock release (ELR)
    - 80000+ connections per node and unlimited connections in one instance through multi threads and coroutines
@@ -24,6 +25,7 @@ OceanBase Database is a native distributed relational database. It is developed 
    - Improve management efficiency and reduce costs without compromising performance and availability
 
 ## Quick start
+
 See [Quick start](https://open.oceanbase.com/quickStart) to try out OceanBase Database.
 
 ## System architecture
@@ -35,15 +37,18 @@ See [Quick start](https://open.oceanbase.com/quickStart) to try out OceanBase Da
 ![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873613-44957682-76fe-42c2-b4c7-9356ed5b35f0.png)
 
 ## Case study
+
 For our success stories, see [Success stories](https://www.oceanbase.com/en/customer/home).
 
 ## Contributing
+
 Your contributions to our code will be highly appreciated. For details about how to contribute to OceanBase, see [Contribute to OceanBase](https://github.com/oceanbase/oceanbase/wiki/Contribute-to-OceanBase).
 
 
 
 ## Licensing
-OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPubL-2.0) license. You can freely copy and use the source code. When you modify or distribute the source code, please follow the MulanPubL - 2.0 license.
+
+OceanBase Database is licensed under the Mulan Public License, Version 2. See the [LICENSE](LICENSE) file for more info.
 
 ## Community
 

@@ -206,9 +206,9 @@ int ObLSRestoreHandler::handle_execute_over(
       state_handler_->set_retry_flag();
       result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
       LOG_WARN("restore sys tablets dag failed, need retry", K(ret));
-    } else if (OB_TABLET_NOT_EXIST == result && status.is_quick_restore()) {
+    } else if (OB_TABLET_NOT_EXIST == result) {
   // TODO: Transfer sequence in 4.1 needs to be compared when result is OB_TABLET_NOT_EXIST
-      LOG_WARN("tablet has been deleted, no need to record err info", K(restore_failed_tablets));
+      LOG_INFO("tablet has been deleted, no need to record err info", K(restore_failed_tablets));
     } else if (common::ObRole::FOLLOWER == role && result_mgr_.can_retrieable_err(result)) {
       LOG_INFO("follower met retrieable err, no need to record", K(result));
     } else {
@@ -293,6 +293,12 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   } else if (OB_FAIL(ls_->get_restore_status(restore_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
   } else if (restore_status.is_restore_none()) {
+    lib::ObMutexGuard guard(mtx_);
+    if (OB_NOT_NULL(state_handler_)) {
+      state_handler_->~ObILSRestoreState();
+      allocator_.free(state_handler_);
+      state_handler_ = nullptr;
+    }
   } else if (restore_status.is_restore_failed()) {
     if (REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000)) {
       LOG_WARN("ls restore failed, tenant restore can't continue", K(result_mgr_));
@@ -971,7 +977,7 @@ int ObILSRestoreState::reload_tablet_()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls_tablet_svr is nullptr", K(ret));
   } else {
-    ObLSTabletIterator iterator(ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US);
+    ObLSTabletIterator iterator(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
     if (OB_FAIL(ls_tablet_svr->build_tablet_iter(iterator))) {
       LOG_WARN("fail to build tablet iterator", K(ret), KPC(ls_));
     }
@@ -1063,7 +1069,7 @@ int ObILSRestoreState::upload_wait_restore_tablet_()
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObLSTabletService *ls_tablet_svr = nullptr;
-  ObLSTabletIterator iterator(ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US); // restore only needs to see the created tabelts
+  ObLSTabletIterator iterator(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
   ObTablet *tablet = nullptr;
   ObSArray<ObTabletID> tablet_ids;
 

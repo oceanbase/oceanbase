@@ -14,6 +14,7 @@
 
 #include "ob_lob_seq.h"
 #include <netinet/in.h>
+#include "deps/oblib/src/lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -398,6 +399,48 @@ int ObLobSeqId::parse()
   }
 
   return ret;
+}
+
+int64_t ObLobSeqId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  ObString tmp_seq = seq_id_;
+  size_t len = tmp_seq.length();
+  uint32_t ori_len = static_cast<uint32_t>(len / sizeof(uint32_t)); //TODO(yuanzhi.zy): check is len int32 enough
+  uint32_t cur_pos = 0;
+  common::databuff_printf(buf, buf_len, pos, "seq_id:[");
+  while (cur_pos < ori_len && tmp_seq.ptr() != nullptr) {
+    uint32_t val = ObLobSeqId::load32be(tmp_seq.ptr() + sizeof(uint32_t) * cur_pos);
+    common::databuff_printf(buf, buf_len, pos, "%u.", val);
+    cur_pos++;
+  } // end while
+  common::databuff_printf(buf, buf_len, pos, "], ");
+  oceanbase::common::databuff_print_kv(buf, buf_len, pos, K_(read_only), K_(parsed));
+
+  common::databuff_printf(buf, buf_len, pos, ", seq_id_in_buff:[");
+  ori_len = static_cast<uint32_t>(len_ / sizeof(uint32_t));
+  cur_pos = 0;
+  while (cur_pos < ori_len && buf_ != nullptr) {
+    uint32_t val = ObLobSeqId::load32be(buf_ + sizeof(uint32_t) * cur_pos);
+    common::databuff_printf(buf, buf_len, pos, "%u.", val);
+    cur_pos++;
+  } // end while
+  common::databuff_printf(buf, buf_len, pos, "], ");
+  oceanbase::common::databuff_print_kv(buf, buf_len, pos, K_(len), K_(cap));
+
+  common::databuff_printf(buf, buf_len, pos, ", seq_id_in_digits:[");
+  ori_len = dig_len_;
+  cur_pos = 0;
+  while (cur_pos < ori_len && digits_ != nullptr) {
+    common::databuff_printf(buf, buf_len, pos, "%u.", digits_[cur_pos]);
+    cur_pos++;
+  } // end while
+  common::databuff_printf(buf, buf_len, pos, "], ");
+  oceanbase::common::databuff_print_kv(buf, buf_len, pos, K_(dig_len), K_(dig_cap));
+
+  J_OBJ_END();
+  return pos;
 }
 
 } // storage

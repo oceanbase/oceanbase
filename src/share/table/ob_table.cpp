@@ -544,6 +544,7 @@ ObTableRequestOptions::ObTableRequestOptions()
      returning_affected_rows_(false),
      returning_rowkey_(false),
      returning_affected_entity_(false),
+     batch_operation_as_atomic_(false),
      binlog_row_image_type_(ObBinlogRowImageType::FULL)
 {}
 
@@ -883,8 +884,7 @@ bool ObTableQuery::is_valid() const
 {
   return (limit_ == -1 || limit_ > 0)
       && (offset_ >= 0)
-      && key_ranges_.count() > 0
-      && select_columns_.count() > 0;
+      && key_ranges_.count() > 0;
 }
 
 int ObTableQuery::add_scan_range(common::ObNewRange &scan_range)
@@ -926,8 +926,8 @@ int ObTableQuery::set_scan_index(const ObString &index_name)
 
 int ObTableQuery::set_filter(const ObString &filter)
 {
-  LOG_WARN_RET(OB_NOT_SUPPORTED, "general filter not supported", K(filter));
-  return OB_NOT_SUPPORTED;
+  filter_string_ = filter;
+  return OB_SUCCESS;
 }
 
 int ObTableQuery::set_limit(int32_t limit)
@@ -1373,6 +1373,11 @@ int ObTableQueryResult::add_property_name(const ObString &name)
   return ret;
 }
 
+int ObTableQueryResult::assign_property_names(const ObIArray<ObString> &other)
+{
+  return properties_names_.assign(other);
+}
+
 int ObTableQueryResult::alloc_buf_if_need(const int64_t need_size)
 {
   int ret = OB_SUCCESS;
@@ -1600,7 +1605,8 @@ uint64_t ObTableQueryAndMutate::get_checksum()
 
 OB_SERIALIZE_MEMBER(ObTableQueryAndMutate,
                     query_,
-                    mutations_);
+                    mutations_,
+                    return_affected_entity_);
 
 OB_SERIALIZE_MEMBER(ObTableQueryAndMutateResult,
                     affected_rows_,

@@ -171,8 +171,8 @@ int ObCreateTenantExecutor::wait_user_ls_valid_(const uint64_t tenant_id)
     LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
   } else {
     bool user_ls_valid = false;
-    ObLSAttrOperator ls_op(tenant_id, GCTX.sql_proxy_);
-    ObLSAttrArray ls_array;
+    ObLSStatusOperator status_op;
+    ObLSStatusInfoArray ls_array;
     ObLSID ls_id;
     //wait user ls create success
     while (OB_SUCC(ret) && !user_ls_valid) {
@@ -180,14 +180,14 @@ int ObCreateTenantExecutor::wait_user_ls_valid_(const uint64_t tenant_id)
       if (THIS_WORKER.is_timeout()) {
         ret = OB_TIMEOUT;
         LOG_WARN("failed to wait user ls valid", KR(ret));
-      } else if (OB_FAIL(ls_op.get_all_ls_by_order(ls_array))) {
+      } else if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id, ls_array, *GCTX.sql_proxy_))) {
         LOG_WARN("failed to get ls status", KR(ret), K(tenant_id));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < ls_array.count() && !user_ls_valid; ++i) {
-          const ObLSAttr &ls_attr = ls_array.at(i);
-          if (!ls_attr.get_ls_id().is_sys_ls() && !ls_attr.ls_is_creating()) {
+          const ObLSStatusInfo &ls_status = ls_array.at(i);
+          if (!ls_status.ls_id_.is_sys_ls() && ls_status.ls_is_normal()) {
             user_ls_valid = true;
-            ls_id = ls_attr.get_ls_id();
+            ls_id = ls_status.ls_id_;
           }
         }//end for
       }

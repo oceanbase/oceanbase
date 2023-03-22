@@ -33,7 +33,6 @@ TEST(TestThreadPool, DISABLED_Submit1)
     }
   } tp;
   tp.init();
-  tp.set_thread_max_tasks(1);
   tp.start();
 
   // submit would success since there's no tasks.
@@ -81,7 +80,6 @@ TEST(TestThreadPool, DISABLED_SubmitX)
     }
   } tp;
   tp.init();
-  tp.set_thread_max_tasks(1);
   tp.start();
 
   TIME_LESS(100*1000L, [&tp] {
@@ -109,7 +107,6 @@ TEST(TestThreadPool, DISABLED_Submit2)
     }
   } tp;
   tp.init();
-  tp.set_thread_max_tasks(2);
   tp.start();
 
   // submit would success since there's no tasks.
@@ -153,7 +150,6 @@ TEST(TestThreadPool, DISABLED_SubmitN)
   } tp;
   tp.init();
   tp.set_thread_count(4);
-  tp.set_thread_max_tasks(2);
   tp.start();
 
   int ret = OB_SUCCESS;
@@ -202,7 +198,6 @@ TEST(TestThreadPool, DISABLED_LoopCheckConcurrency)
 
   tp.init();
   tp.set_thread_count(4);
-  tp.set_thread_max_tasks(1);
   tp.start();
 
   for (int i = 0; i < 1000; i++) {

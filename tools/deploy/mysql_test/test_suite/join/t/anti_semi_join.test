@@ -77,7 +77,7 @@ select /*+ USE_HASH(xy_t1, xy_t2)*/ c1, c2, c1, c2 from xy_t1 where exists (sele
 drop table xy_t1, xy_t2;
 
 
-## bug:https://aone.alibaba-inc.com/issue/15280254?spm=a2o8d.corp_prod_issue_list.0.0.3f6630500agegh&stat=1.5.0&toPage=1&versionId=1043693
+## bug:
 --disable_warnings
 drop table if exists xy_x_t, xy_y_t;
 --enable_warnings
@@ -246,7 +246,7 @@ select /*+ no_rewrite*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 wher
 --echo //两边唯一有序, 改写为inner join
 select /*+ use_hash(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
 select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
-# bug: https://work.aone.alibaba-inc.com/issue/27311279
+# bug:
 # select /*+ use_nl(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
 select /*+ no_rewrite*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
 

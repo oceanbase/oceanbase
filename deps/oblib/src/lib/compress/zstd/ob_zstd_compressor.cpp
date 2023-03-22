@@ -82,8 +82,8 @@ int ObZstdCompressor::compress(const char *src_buffer,
   int ret = OB_SUCCESS;
   int64_t max_overflow_size = 0;
   size_t compress_ret_size = 0;
-  ObZstdCtxAllocator *zstd_allocator = GET_TSI_MULT(ObZstdCtxAllocator, 1);
-  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, zstd_allocator};
+  ObZstdCtxAllocator &zstd_allocator = ObZstdCtxAllocator::get_thread_local_instance();
+  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, &zstd_allocator};
   dst_data_size = 0;
 
   if (NULL == src_buffer
@@ -105,14 +105,13 @@ int ObZstdCompressor::compress(const char *src_buffer,
                                           dst_buffer,
                                           static_cast<size_t>(dst_buffer_size),
                                           compress_ret_size))) {
-    LIB_LOG(WARN, "failed to compress zstd", K(ret), K(compress_ret_size));
+    LIB_LOG(WARN, "failed to compress zstd", K(ret), K(compress_ret_size),
+        KP(src_buffer), K(src_data_size), KP(dst_buffer), K(dst_buffer_size));
   } else {
     dst_data_size = compress_ret_size;
   }
 
-  if (NULL != zstd_allocator) {
-    zstd_allocator->reuse();
-  }
+  zstd_allocator.reuse();
   return ret;
 }
 
@@ -124,8 +123,8 @@ int ObZstdCompressor::decompress(const char *src_buffer,
 {
   int ret = OB_SUCCESS;
   size_t decompress_ret_size = 0;
-  ObZstdCtxAllocator *zstd_allocator = GET_TSI_MULT(ObZstdCtxAllocator, 1);
-  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, zstd_allocator};
+  ObZstdCtxAllocator &zstd_allocator = ObZstdCtxAllocator::get_thread_local_instance();
+  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, &zstd_allocator};
   dst_data_size = 0;
 
   if (NULL == src_buffer
@@ -141,23 +140,19 @@ int ObZstdCompressor::decompress(const char *src_buffer,
                                               dst_buffer,
                                               dst_buffer_size,
                                               decompress_ret_size))) {
-    LIB_LOG(WARN, "failed to decompress zstd", K(ret), K(decompress_ret_size));
+    LIB_LOG(WARN, "failed to decompress zstd", K(ret), K(decompress_ret_size),
+        KP(src_buffer), K(src_data_size), KP(dst_buffer), K(dst_buffer_size));
   } else {
     dst_data_size = decompress_ret_size;
   }
-  
-  if (NULL != zstd_allocator) {
-    zstd_allocator->reuse();
-  }
+  zstd_allocator.reuse();
   return ret;
 }
 
 void ObZstdCompressor::reset_mem()
 {
-  ObZstdCtxAllocator *zstd_allocator = GET_TSI_MULT(ObZstdCtxAllocator, 1);
-  if (NULL != zstd_allocator) {
-    zstd_allocator->reset();
-  }
+  ObZstdCtxAllocator &zstd_allocator = ObZstdCtxAllocator::get_thread_local_instance();
+  zstd_allocator.reset();
 }
 
 const char *ObZstdCompressor::get_compressor_name() const

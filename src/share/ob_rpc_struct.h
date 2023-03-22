@@ -1736,11 +1736,12 @@ public:
   uint64_t tenant_id_;
 };
 
-struct ObCreateHiddenTableArg final
+struct ObCreateHiddenTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  TO_STRING_KV(K_(tenant_id),
+  TO_STRING_KV(K_(exec_tenant_id),
+               K_(tenant_id),
                K_(table_id),
                K_(dest_tenant_id),
                K_(session_id),
@@ -1751,6 +1752,7 @@ public:
                K_(tz_info_wrap),
                "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
   ObCreateHiddenTableArg() :
+    ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
     table_id_(common::OB_INVALID_ID),
     dest_tenant_id_(common::OB_INVALID_ID),
@@ -6112,6 +6114,32 @@ public:
   common::ObClusterRole cluster_role_;
 };
 
+struct ObForceSetLSAsSingleReplicaArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObForceSetLSAsSingleReplicaArg(): tenant_id_(OB_INVALID_TENANT_ID), ls_id_() {}
+  ~ObForceSetLSAsSingleReplicaArg() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  int assign(const ObForceSetLSAsSingleReplicaArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  share::ObLSID get_ls_id() const
+  {
+    return ls_id_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObForceSetLSAsSingleReplicaArg);
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
 struct ObGetLSSyncScnArg
 {
   OB_UNIS_VERSION(1);
@@ -6354,18 +6382,19 @@ public:
     const share::SCN &recovery_until_scn);
   bool is_valid() const {
     return OB_INVALID_TENANT_ID != exec_tenant_id_
-           && is_valid_(type_, recovery_until_scn_);
+           && is_valid(type_, recovery_until_scn_);
   }
+  static bool is_valid(const RecoverType &type, const share::SCN &recovery_until_scn) {
+    return ((RecoverType::UNTIL == type && recovery_until_scn.is_valid_and_not_min())
+               || (RecoverType::CANCEL == type && recovery_until_scn.is_min()));
+  }
+
   int assign(const ObRecoverTenantArg &other);
   void set_stmt_str(const ObString &stmt_str) { stmt_str_ = stmt_str; }
 
   TO_STRING_KV(K_(exec_tenant_id), K_(tenant_name), K_(type), K_(recovery_until_scn), K_(stmt_str));
 
 private:
-  bool is_valid_(const RecoverType type, const share::SCN &recovery_until_scn) const {
-    return ((RecoverType::UNTIL == type && recovery_until_scn.is_valid_and_not_min())
-               || (RecoverType::CANCEL == type && recovery_until_scn.is_min()));
-  }
 
 #define Property_declare_var(variable_type, variable_name)\
 private:\
@@ -7785,16 +7814,16 @@ public:
   ObDDLBuildSingleReplicaRequestArg() : tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(),
                                         source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
                                         schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0),
-                                        parallelism_(0), execution_id_(-1), tablet_task_id_(0), cluster_version_(0) {}
+                                        parallelism_(0), execution_id_(-1), tablet_task_id_(0), data_format_version_(0) {}
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
            && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && schema_version_ > 0 && snapshot_version_ > 0
-           && task_id_ > 0 && parallelism_ > 0 && tablet_task_id_ > 0 && cluster_version_ > 0;
+           && task_id_ > 0 && parallelism_ > 0 && tablet_task_id_ > 0 && data_format_version_ > 0;
   }
   int assign(const ObDDLBuildSingleReplicaRequestArg &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id),
     K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(snapshot_version),
-    K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(cluster_version));
+    K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(data_format_version));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -7809,7 +7838,7 @@ public:
   int64_t parallelism_;
   int64_t execution_id_;
   int64_t tablet_task_id_;
-  int64_t cluster_version_;
+  int64_t data_format_version_;
 };
 
 struct ObDDLBuildSingleReplicaRequestResult final

@@ -128,6 +128,8 @@ protected:
   int delete_backup_set_ls_files_(const share::ObBackupPath &path); 
   int get_set_ls_path_(share::ObBackupPath &path);
   int get_piece_ls_path(share::ObBackupPath &path);
+  int delete_piece_ls_meta_files_(const share::ObBackupPath &path);
+  int delete_piece_log_files_(const share::ObBackupPath &path);
   int delete_complement_log_(const share::ObBackupPath &path);
   int delete_sys_data_(const share::ObBackupPath &path);
   int delete_major_data_(const share::ObBackupPath &path);

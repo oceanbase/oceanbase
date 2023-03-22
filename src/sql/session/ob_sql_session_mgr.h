@@ -268,7 +268,7 @@ private:
   //ObNullEndTransCallback null_callback_;
   // used for manage ObSQLSessionInfo
   HashMap sessinfo_map_;
-  // design doc: https://yuque.antfin-inc.com/docs/share/820fa006-f85a-4530-8e2b-fe3c90271404
+  // design doc:
   // |<---------------------------------32bit---------------------------->|
   // 31b 30b   29b                18b  16b                              0b
   // +----+------------------------------+--------------------------------+

@@ -37,8 +37,10 @@ ObRsReentrantThread::~ObRsReentrantThread()
 
 void ObRsReentrantThread::update_last_run_timestamp() 
 {
+  auto time = ObTimeUtility::current_time();
+  IGNORE_RETURN lib::Thread::update_loop_ts(time);
   if (ATOMIC_LOAD(&last_run_timestamp_) != -1) {
-    ATOMIC_STORE(&last_run_timestamp_, ObTimeUtility::current_time());
+    ATOMIC_STORE(&last_run_timestamp_, time);
   }
 }
 
@@ -124,7 +126,7 @@ int64_t ObRsReentrantThread::get_last_run_timestamp() const
 void ObRsReentrantThread::check_alert(const ObRsReentrantThread &thread)
 { 
   if (thread.need_monitor_check()) {
-    const pid_t thread_id = thread.get_tid();
+    const pid_t thread_id = syscall(__NR_gettid); // only called by thread self
     const char *thread_name = thread.get_thread_name();
     int64_t last_run_timestamp = thread.get_last_run_timestamp();
     int64_t last_run_interval = ObTimeUtility::current_time() - last_run_timestamp;

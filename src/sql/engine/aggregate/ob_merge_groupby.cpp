@@ -215,7 +215,7 @@ int ObMergeGroupBy::rollup_and_calc_results(const int64_t group_id, ObMergeGroup
     ObSQLSessionInfo *my_session = groupby_ctx->exec_ctx_.get_my_session();
     const ObTimeZoneInfo *tz_info = (my_session != NULL) ? my_session->get_timezone_info() : NULL;
     //for: SELECT GROUPING(z0_test0) FROM Z0CASE GROUP BY z0_test0, ROLLUP(z0_test0);
-    //issue:https://work.aone.alibaba-inc.com/issue/33780805
+    //issue:
     bool set_grouping = true;
     if (group_id > group_col_idxs_.count()) {
       int64_t rollup_id = rollup_col_idxs_[group_id - group_col_idxs_.count() - 1].index_;

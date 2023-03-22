@@ -2106,7 +2106,7 @@ int ObSqlPlanSet::get_plan_type(const ObIArray<ObTableLocation> &table_locations
     LOG_WARN("failed to calcute physical plan type", K(ret));
   } else {
     // Lookup算子支持压到远程去执行:
-    //   https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/2127600
+    //
     // Select的sql如果包含uncertain算子，不能将类型改为分布式计划
     if (is_contain_uncertain_op && plan_type != OB_PHY_PLAN_LOCAL
         && stmt::T_SELECT != stmt_type_) {
@@ -2143,6 +2143,7 @@ bool ObSqlPlanSet::is_sql_planset()
 {
   return true;
 }
+
 
 }
 }

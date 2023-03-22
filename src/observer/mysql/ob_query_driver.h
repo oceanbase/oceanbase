@@ -81,7 +81,7 @@ public:
                                          bool is_use_lob_locator,
                                          bool is_support_outrow_locator_v2,
                                          common::ObIAllocator *allocator,
-                                         sql::ObSQLSessionInfo *session_info);
+                                         const sql::ObSQLSessionInfo *session_info);
   static int convert_string_charset(const common::ObString &in_str, 
                                     const common::ObCollationType in_cs_type,
                                     const common::ObCollationType out_cs_type, 

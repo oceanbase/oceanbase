@@ -51,6 +51,7 @@ public:
       share_info_(),
       is_local_create_(true),
       task_id_(0),
+      px_sequence_id_(OB_INVALID_ID),
       bf_idx_at_sqc_proxy_(-1)
   {}
   virtual ~ObJoinFilterOpInput() {}
@@ -82,10 +83,13 @@ public:
   inline void set_bf_idx_at_sqc_proxy(int64_t idx) { bf_idx_at_sqc_proxy_ = idx; }
 
   inline int64_t get_bf_idx_at_sqc_proxy() { return bf_idx_at_sqc_proxy_; }
+  void set_px_sequence_id(int64_t id) { px_sequence_id_ = id; }
+  int64_t get_px_sequence_id() { return px_sequence_id_; }
 public:
   ObJoinFilterShareInfo share_info_; //bloom filter共享内存
   bool is_local_create_;  //用于标记create算子是否是local的.
   int64_t task_id_; //在pwj join场景中会用到此task_id作为bf_key
+  int64_t px_sequence_id_;
   int64_t bf_idx_at_sqc_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObJoinFilterOpInput);
 };

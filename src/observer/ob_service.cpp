@@ -494,7 +494,7 @@ int ObService::get_min_sstable_schema_version(
     for (int i = 0; OB_SUCC(ret) && i < arg.tenant_id_arg_list_.size(); ++i) {
       // The minimum schema_version used by storage will increase with the major version,
       // storage only need to keep schema history used by a certain number major version.
-      // For storage, there is no need to the server level statistics: https://yuque.antfin-inc.com/ob/rootservice/feqqfr
+      // For storage, there is no need to the server level statistics.
       // min_schema_version = scheduler.get_min_schema_version(arg.tenant_id_arg_list_.at(i));
       int tmp_ret = OB_SUCCESS;
       const uint64_t tenant_id = arg.tenant_id_arg_list_.at(i);
@@ -1328,15 +1328,32 @@ int ObService::switch_schema(
         }
       } while (OB_SUCC(ret));
       */
+      // To set the received_schema_version period in advance,
+      // let refresh_schema can execute before analyze_dependencies logic;
+      int64_t LEFT_TIME = 200 * 1000;// 200ms
+      int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+      if (INT64_MAX != origin_timeout_ts
+          && origin_timeout_ts >= ObTimeUtility::current_time() + LEFT_TIME) {
+        THIS_WORKER.set_timeout_ts(origin_timeout_ts - LEFT_TIME);
+      }
       if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version))) {
         LOG_WARN("fail to async schema version", KR(ret), K(tenant_id), K(schema_version));
       }
+      THIS_WORKER.set_timeout_ts(origin_timeout_ts);
       int64_t tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = schema_service->set_tenant_received_broadcast_version(tenant_id, schema_version))) {
         LOG_WARN("failt to update received schema version", KR(tmp_ret), K(tenant_id), K(schema_version));
         ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
-
+      if (THIS_WORKER.is_timeout_ts_valid()
+          && !THIS_WORKER.is_timeout()
+          && OB_TIMEOUT == ret) {
+        // To set set_tenant_received_broadcast_version in advance, we reduce the abs_time,
+        // if not timeout after first async_refresh_schema, we should execute async_refresh_schema again and overwrite the ret code
+        if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version))) {
+          LOG_WARN("fail to async schema version", KR(ret), K(tenant_id), K(schema_version));
+        }
+      }
       if (OB_FAIL(ret)) {
       } else if (schema_info.get_schema_version() <= 0) {
         // skip
@@ -1840,7 +1857,8 @@ int ObService::detect_master_rs_ls(
     }
   } else if (replica.is_strong_leader()) {
     // case 2 : replica is leader, do not use in_service to check whether it is leader or not
-    //          use in_service could lead to bad case: https://yuque.antfin.com/ob/rootservice/pbw2qw
+    //          use in_service could lead to bad case:
+    //          For more info, to see docs on yuque rootservice/pbw2qw
     if (OB_FAIL(generate_master_rs_ls_info_(replica, ls_info))) {
       LOG_WARN("generate master rs ls info failed", KR(ret), K(replica), K(ls_info));
     } else if (OB_FAIL(result.init(ObRole::LEADER, master_rs, replica, ls_info))) {
@@ -2578,6 +2596,51 @@ int ObService::get_ls_sync_scn(
     }
   }
   LOG_INFO("finish get_ls_sync_scn", KR(ret), K(cur_sync_scn), K(cur_restore_source_max_scn), K(arg), K(result));
+  return ret;
+}
+
+int ObService::force_set_ls_as_single_replica(
+    const ObForceSetLSAsSingleReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_svr = nullptr;
+  LOG_INFO("force_set_ls_as_single_replica", K(arg));
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    ls_svr = MTL(ObLSService*);
+    logservice::ObLogService *log_ls_svr = MTL(logservice::ObLogService*);
+    ObLS *ls = nullptr;
+    ObLSHandle handle;
+    logservice::ObLogHandler *log_handler = NULL;
+    logservice::ObLogRestoreHandler *restore_handler = NULL;
+    ObLSID ls_id = arg.get_ls_id();
+    if (OB_ISNULL(ls_svr) || OB_ISNULL(log_ls_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "should not be null", KR(ret), KP(ls_svr), KP(log_ls_svr));
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+      COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "ls should not be null", KR(ret), K(ls_id));
+    } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log_handler is null", KR(ret), K(ls_id), KP(ls));
+    } else if (OB_FAIL(log_handler->force_set_as_single_replica())) {
+      LOG_WARN("failed to force_set_as_single_replica", KR(ret), K(ls_id), KPC(ls));
+    }
+  }
+  LOG_INFO("finish force_set_ls_as_single_replica", KR(ret), K(arg));
   return ret;
 }
 

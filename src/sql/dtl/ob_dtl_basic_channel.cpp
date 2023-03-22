@@ -30,8 +30,8 @@
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
 #include "sql/dtl/ob_dtl_channel_watcher.h"
-#include "share/ob_server_blacklist.h"
 #include "observer/omt/ob_th_worker.h"
+#include "sql/engine/px/ob_px_util.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
@@ -328,8 +328,9 @@ int ObDtlBasicChannel::send(const ObDtlMsg &msg, int64_t timeout_ts,
   if (is_data_msg_) {
     metric_.mark_first_in();
     if (channel_is_eof_) {
-      metric_.mark_last_in();
+      metric_.mark_eof();
     }
+    metric_.set_last_in_ts(::oceanbase::common::ObTimeUtility::current_time());
   }
   if (OB_FAIL(write_msg(msg, timeout_ts, eval_ctx, is_eof))) {
     if (OB_ITER_END != ret) {
@@ -391,7 +392,8 @@ int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
   return ret;
 }
 
-int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_buffer_cached)
+int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_buffer_cached,
+                              bool inc_recv_buf_cnt)
 {
   int ret = OB_SUCCESS;
   ObDtlMsgHeader header;
@@ -404,7 +406,9 @@ int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_b
     LOG_WARN("failed to deserialize msg header", K(ret));
   } else if (header.is_drain()) {
     alloc_buffer_count();
-    inc_recv_buffer_cnt();
+    if (inc_recv_buf_cnt) {
+      inc_recv_buffer_cnt();
+    }
     dfc_->set_drain(this);
     LOG_TRACE("transmit receive drain cmd", KP(linked_buffer), K(this), KP(id_), KP(peer_id_),
         K(recv_list_.is_empty()));
@@ -423,12 +427,15 @@ int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_b
     linked_buffer = nullptr;
     // 将attach收到的是自己申请的，因为释放权交给了当前channel，所以认为这次申请也是自己，与free保持一致，方便统计
     alloc_buffer_count();
-    inc_recv_buffer_cnt();
+    if (inc_recv_buf_cnt) {
+      inc_recv_buffer_cnt();
+    }
     if (is_data_msg) {
       metric_.mark_first_in();
       if (is_eof) {
-        metric_.mark_last_in();
+        metric_.mark_eof();
       }
+      metric_.set_last_in_ts(::oceanbase::common::ObTimeUtility::current_time());
     }
     if (is_first_buffer_cached) {
       set_first_buffer();
@@ -598,11 +605,14 @@ int ObDtlBasicChannel::process1(
           bool transferred = false;
           ret = proc->process(*buffer, transferred);
           LOG_DEBUG("process buffer", K(ret), KP(buffer), K(transferred));
+          if (buffer->is_data_msg()) {
+            metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
+          }
           if (OB_ITER_END == ret || transferred) {
             inc_processed_buffer_cnt();
             if (buffer->is_eof()) {
               if (buffer->is_data_msg()) {
-                metric_.mark_last_out();
+                metric_.mark_eof();
               }
               if (!is_eof()) {
                 if (NULL != channel_loop_) {
@@ -840,9 +850,8 @@ int ObDtlBasicChannel::wait_unblocking()
                 LOG_WARN("worker interrupt", K(tmp_ret), K(ret));
                 break;
               }
-              if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
-                    share::ObCascadMember(peer_, GCONF.cluster_id), true,
-                    channel_loop_->get_process_query_time()))) {
+              if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(peer_,
+                              channel_loop_->get_process_query_time()))) {
                 ret = OB_RPC_CONNECT_ERROR;
                 LOG_WARN("peer no in communication, maybe crashed", K(ret), K(peer_),
                          K(static_cast<int64_t>(GCONF.cluster_id)));

@@ -90,9 +90,9 @@ private:
   
   ObStorageUtil            util_;
   /*obj ctx pool: use to create fd ctx(reader/writer)*/
-  common::ObPooledAllocator<ObStorageReader> reader_ctx_pool_;
-  common::ObPooledAllocator<ObStorageAppender> appender_ctx_pool_;
-  common::ObPooledAllocator<ObStorageWriter> overwriter_ctx_pool_;
+  common::ObPooledAllocator<ObStorageReader, ObMalloc, ObSpinLock> reader_ctx_pool_;
+  common::ObPooledAllocator<ObStorageAppender, ObMalloc, ObSpinLock> appender_ctx_pool_;
+  common::ObPooledAllocator<ObStorageWriter, ObMalloc, ObSpinLock> overwriter_ctx_pool_;
   void* base_info_;
   bool is_started_;
   char storage_info_[OB_MAX_URI_LENGTH];

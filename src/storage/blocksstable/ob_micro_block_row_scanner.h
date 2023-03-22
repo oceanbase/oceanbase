@@ -269,6 +269,7 @@ public:
       is_row_queue_ready_(false),
       scan_state_(SCAN_START),
       committed_trans_version_(INT64_MAX),
+      last_trans_state_(INT64_MAX),
       read_trans_id_(),
       last_trans_id_(),
       first_rowkey_flag_(true),
@@ -367,6 +368,7 @@ private:
   bool is_row_queue_ready_;
   ScanState scan_state_;
   int64_t committed_trans_version_;
+  int64_t last_trans_state_;
   transaction::ObTransID read_trans_id_;
   transaction::ObTransID last_trans_id_;
   bool first_rowkey_flag_;

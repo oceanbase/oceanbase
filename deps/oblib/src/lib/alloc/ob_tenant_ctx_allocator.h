@@ -165,7 +165,7 @@ public:
   int iter_label(VisitFunc func) const;
   int64_t sync_wash(int64_t wash_size);
   int64_t sync_wash();
-  bool check_has_unfree(const char **first_label) { return obj_mgr_.check_has_unfree(first_label); }
+  bool check_has_unfree() { return obj_mgr_.check_has_unfree(); }
   void update_wash_stat(int64_t related_chunks, int64_t blocks, int64_t size);
 private:
   int64_t inc_ref_cnt(int64_t cnt) { return ATOMIC_FAA(&ref_cnt_, cnt); }
@@ -184,6 +184,19 @@ private:
     }
     return ret;
   }
+
+public:
+  template <typename T>
+  static void* common_alloc(const int64_t size, const ObMemAttr &attr,
+                            ObTenantCtxAllocator& ta, T &allocator);
+
+  template <typename T>
+  static void* common_realloc(const void *ptr, const int64_t size,
+                              const ObMemAttr &attr, ObTenantCtxAllocator& ta,
+                              T &allocator);
+
+  static void common_free(void *ptr);
+
 private:
   ObTenantResourceMgrHandle resource_handle_;
   int64_t ref_cnt_;

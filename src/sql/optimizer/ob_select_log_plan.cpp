@@ -332,19 +332,25 @@ int ObSelectLogPlan::candi_allocate_three_stage_group_by(const ObIArray<ObRawExp
                                                                   is_partition_wise))) {
         LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
       } else if (!candidate_plan.plan_tree_->is_distributed() || is_partition_wise) {
+        bool part_sort_valid = !groupby_helper.force_normal_sort_ && !group_by_exprs.empty();
+        bool normal_sort_valid = !groupby_helper.force_part_sort_;
         bool can_ignore_merge_plan = !(groupby_plans.empty() || groupby_helper.force_use_merge_);
-        if (OB_FAIL(create_merge_group_plan(reduce_exprs,
-                                            group_by_exprs,
-                                            group_directions,
-                                            rollup_exprs,
-                                            rollup_directions,
-                                            aggr_items,
-                                            having_exprs,
-                                            is_from_povit,
-                                            groupby_helper,
-                                            candidate_plan,
-                                            groupby_plans,
-                                            can_ignore_merge_plan))) {
+        if (OB_FAIL(update_part_sort_method(part_sort_valid, normal_sort_valid))) {
+          LOG_WARN("fail to update part sort method", K(ret));
+        } else if (OB_FAIL(create_merge_group_plan(reduce_exprs,
+                                                  group_by_exprs,
+                                                  group_directions,
+                                                  rollup_exprs,
+                                                  rollup_directions,
+                                                  aggr_items,
+                                                  having_exprs,
+                                                  is_from_povit,
+                                                  groupby_helper,
+                                                  candidate_plan,
+                                                  groupby_plans,
+                                                  part_sort_valid,
+                                                  normal_sort_valid,
+                                                  can_ignore_merge_plan))) {
           LOG_WARN("failed to create merge group by plan", K(ret));
         }
       } else {
@@ -370,22 +376,66 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
                                          const GroupingOpHelper &groupby_helper,
                                          const bool ignore_hint,
                                          bool &use_hash_valid,
-                                         bool &use_merge_valid)
+                                         bool &use_merge_valid,
+                                         bool &part_sort_valid,
+                                         bool &normal_sort_valid)
 {
   int ret = OB_SUCCESS;
-  use_hash_valid = ignore_hint ? true : !groupby_helper.force_use_merge_;
-  use_merge_valid = ignore_hint ? true : !groupby_helper.force_use_hash_;
-  ObSQLSessionInfo *session = get_optimizer_context().get_session_info();
-  ObObj val;
-  if (OB_ISNULL(get_stmt()) || OB_ISNULL(session)) {
+  if (ignore_hint) {
+    use_hash_valid = true;
+    use_merge_valid = true;
+    part_sort_valid = true;
+    normal_sort_valid = true;
+  } else {
+    use_hash_valid = !groupby_helper.force_use_merge_;
+    use_merge_valid = !groupby_helper.force_use_hash_;
+    part_sort_valid = !groupby_helper.force_normal_sort_;
+    normal_sort_valid = !groupby_helper.force_part_sort_;
+  }
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(optimizer_context_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_stmt()), K(session), K(ret));
+    LOG_WARN("get unexpected null", K(get_stmt()), K(optimizer_context_.get_query_ctx()), K(ret));
   } else if (get_stmt()->has_rollup()
              || group_by_exprs.empty()
              || get_stmt()->has_distinct_or_concat_agg()) {
     //group_concat and distinct aggregation hold all input rows temporary,
     //too much memory consumption for hash aggregate.
     use_hash_valid = false;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!use_merge_valid) {
+    part_sort_valid = false;
+    normal_sort_valid = false;
+  } else if (group_by_exprs.empty()) {
+    part_sort_valid = false;
+    /* if normal_sort_valid set as false by hint, will retry by ignore hint */
+  } else if (OB_FAIL(update_part_sort_method(part_sort_valid, normal_sort_valid))) {
+    LOG_WARN("fail to update part sort method", K(ret));
+  }
+  return ret;
+}
+
+//  update partition sort method with opt_param hint
+int ObSelectLogPlan::update_part_sort_method(bool &part_sort_valid,
+                                             bool &normal_sort_valid)
+{
+  int ret = OB_SUCCESS;
+  if (!part_sort_valid || !normal_sort_valid) {
+    /* has sort method in no_use_hash_aggregation hint, ignore opt_param hint */
+  } else {
+    bool use_part_sort = false;
+    bool is_exists_opt = false;
+    if (OB_FAIL(optimizer_context_.get_query_ctx()->get_global_hint()
+                        .opt_params_.get_bool_opt_param(
+                        ObOptParamHint::USE_PART_SORT_MGB, use_part_sort, is_exists_opt))) {
+      LOG_WARN("fail to check partition sort merge group by enabled", K(ret));
+    } else if (!is_exists_opt) {
+      /* has no opt_param hint */
+    } else {
+      part_sort_valid = use_part_sort;
+      normal_sort_valid = !use_part_sort;
+    }
   }
   return ret;
 }
@@ -406,8 +456,11 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
   CandidatePlan candidate_plan;
   bool use_hash_valid = false;
   bool use_merge_valid = false;
+  bool part_sort_valid = false;
+  bool normal_sort_valid = false;
   if (OB_FAIL(get_valid_aggr_algo(group_by_exprs, groupby_helper, ignore_hint,
-                                  use_hash_valid, use_merge_valid))) {
+                                  use_hash_valid, use_merge_valid,
+                                  part_sort_valid, normal_sort_valid))) {
     LOG_WARN("failed to get valid aggr algo", K(ret));
   }
   // create hash group by plans
@@ -436,7 +489,7 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
   }
   // create merge group by plans
   if (OB_SUCC(ret) && use_merge_valid) {
-    bool can_ignore_merge_plan = !(groupby_plans.empty() || (!ignore_hint && groupby_helper.force_use_merge_));
+    bool can_ignore_merge_plan = !groupby_plans.empty();
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
       candidate_plan = candidates_.candidate_plans_.at(i);
       bool is_needed = false;
@@ -469,6 +522,8 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
                                                  groupby_helper,
                                                  candidate_plan,
                                                  groupby_plans,
+                                                 part_sort_valid,
+                                                 normal_sort_valid,
                                                  can_ignore_merge_plan))) {
         LOG_WARN("failed to create merge group by plan", K(ret));
       }
@@ -628,6 +683,8 @@ int ObSelectLogPlan::create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &gro
   } else if (rollup_collector->set_rollup_info(ObRollupStatus::ROLLUP_COLLECTOR,
                                                         groupby_helper.rollup_id_expr_)) {
     LOG_WARN("failed to set rollup id expr", K(ret));
+  } else {
+    rollup_collector->set_group_by_outline_info(false, true);
   }
   return ret;
 }
@@ -665,6 +722,7 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
                                          is_partition_wise))) {
       LOG_WARN("failed to allocate group by as top", K(ret));
     }
+    static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(true, false);
   } else {
     // allocate push down group by
     if (groupby_helper.can_basic_pushdown_) {
@@ -719,7 +777,9 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
                                           groupby_helper.group_ndv_,
                                           origin_child_card))) {
       LOG_WARN("failed to allocate scala group by as top", K(ret));
-      } else { /*do nothing*/ }
+      } else {
+        static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(true, groupby_helper.can_basic_pushdown_);
+      }
     }
   }
   return ret;
@@ -865,65 +925,45 @@ int ObSelectLogPlan::create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_
                                              GroupingOpHelper &groupby_helper,
                                              CandidatePlan &candidate_plan,
                                              ObIArray<CandidatePlan> &candidate_plans,
+                                             bool part_sort_valid,
+                                             bool normal_sort_valid,
                                              bool can_ignore_merge_plan)
 {
   int ret = OB_SUCCESS;
-  bool use_part_sort = true;
-  bool is_exists_opt = false;
-  bool is_plan_valid = true;
-  bool gen_part_sort_mgb_plan = false;
-  const int64_t group_by_expr_cnt = group_by_exprs.count();
   CandidatePlan part_sort_mgb_plan = candidate_plan;
-  if (OB_ISNULL(optimizer_context_.get_query_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(optimizer_context_.get_query_ctx()->get_global_hint()
-                    .opt_params_.get_bool_opt_param(
-                    ObOptParamHint::USE_PART_SORT_MGB, use_part_sort, is_exists_opt))) {
-    LOG_WARN("fail to check partition sort merge group by enabled", K(ret));
-  } else if (group_by_expr_cnt > 0 &&
-            (!is_exists_opt || use_part_sort) &&
-            OB_FAIL(inner_create_merge_group_plan(reduce_exprs,
-                                                  group_by_exprs,
-                                                  group_directions,
-                                                  rollup_exprs,
-                                                  rollup_directions,
-                                                  aggr_items,
-                                                  having_exprs,
-                                                  is_from_povit,
-                                                  groupby_helper,
-                                                  part_sort_mgb_plan.plan_tree_,
-                                                  is_plan_valid,
-                                                  can_ignore_merge_plan,
-                                                  use_part_sort))) {
-    LOG_WARN("failed to create partition sort merge group by plan", K(ret));
-  } else if (group_by_expr_cnt > 0 &&
-            NULL != part_sort_mgb_plan.plan_tree_ &&
-            is_plan_valid &&
-            (!is_exists_opt || use_part_sort) &&
-            FALSE_IT(gen_part_sort_mgb_plan = true)) {
-  } else if (gen_part_sort_mgb_plan &&
-            OB_FAIL(candidate_plans.push_back(part_sort_mgb_plan))) {
+  bool can_ignore_no_part_sort_plan = can_ignore_merge_plan;
+  if (part_sort_valid && OB_FAIL(inner_create_merge_group_plan(reduce_exprs,
+                                                              group_by_exprs,
+                                                              group_directions,
+                                                              rollup_exprs,
+                                                              rollup_directions,
+                                                              aggr_items,
+                                                              having_exprs,
+                                                              is_from_povit,
+                                                              groupby_helper,
+                                                              part_sort_mgb_plan.plan_tree_,
+                                                              true,
+                                                              can_ignore_merge_plan))) {
+        LOG_WARN("failed to create partition sort merge group by plan", K(ret));
+  } else if (part_sort_valid && NULL != part_sort_mgb_plan.plan_tree_
+             && OB_FAIL(candidate_plans.push_back(part_sort_mgb_plan))) {
     LOG_WARN("failed to push merge group by", K(ret));
-  } else if (FALSE_IT(can_ignore_merge_plan = can_ignore_merge_plan ? true : gen_part_sort_mgb_plan)) {
-  } else if (is_plan_valid &&
-            (!is_exists_opt || !use_part_sort) &&
-            OB_FAIL(inner_create_merge_group_plan(reduce_exprs,
-                                                  group_by_exprs,
-                                                  group_directions,
-                                                  rollup_exprs,
-                                                  rollup_directions,
-                                                  aggr_items,
-                                                  having_exprs,
-                                                  is_from_povit,
-                                                  groupby_helper,
-                                                  candidate_plan.plan_tree_,
-                                                  is_plan_valid,
-                                                  can_ignore_merge_plan))) {
+  } else if (OB_FALSE_IT(can_ignore_no_part_sort_plan |= part_sort_valid && NULL != part_sort_mgb_plan.plan_tree_)) {
+  } else if (normal_sort_valid && OB_FAIL(inner_create_merge_group_plan(reduce_exprs,
+                                                                        group_by_exprs,
+                                                                        group_directions,
+                                                                        rollup_exprs,
+                                                                        rollup_directions,
+                                                                        aggr_items,
+                                                                        having_exprs,
+                                                                        is_from_povit,
+                                                                        groupby_helper,
+                                                                        candidate_plan.plan_tree_,
+                                                                        false,
+                                                                        can_ignore_no_part_sort_plan))) {
     LOG_WARN("failed to create merge group by plan", K(ret));
-  } else if (is_plan_valid &&
-            (!is_exists_opt || !use_part_sort) &&
-            OB_FAIL(candidate_plans.push_back(candidate_plan))) {
+  } else if (normal_sort_valid && NULL != candidate_plan.plan_tree_ &&
+             OB_FAIL(candidate_plans.push_back(candidate_plan))) {
     LOG_WARN("failed to push merge group by", K(ret));
   }
   return ret;
@@ -939,9 +979,8 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                    const bool is_from_povit,
                                                    GroupingOpHelper &groupby_helper,
                                                    ObLogicalOperator *&top,
-                                                   bool &is_plan_valid,
-                                                   bool can_ignore_merge_plan,
-                                                   bool use_part_sort)
+                                                   bool use_part_sort,
+                                                   bool can_ignore_merge_plan)
 {
   int ret = OB_SUCCESS;
   int64_t prefix_pos = 0;
@@ -950,8 +989,7 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
   bool push_need_sort = false;
   bool is_partition_wise = false;
   bool is_fetch_with_ties = false;
-  is_plan_valid = true;
-  int64_t part_cnt = 0;
+  int64_t part_cnt = use_part_sort ? group_by_exprs.count() : 0;
   OrderItem hash_sortkey;
   ObSEArray<ObRawExpr*, 1> dummy_exprs;
   ObSEArray<ObAggFunRawExpr*, 1> dummy_aggrs;
@@ -963,9 +1001,9 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
   ObSEArray<ObOrderDirection, 4> adjusted_group_directions;
   int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
   double origin_child_card = 0.0;
-  if (OB_ISNULL(top)) {
+  if (OB_ISNULL(top) || OB_UNLIKELY(0 == part_cnt && use_part_sort)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected params", K(top), K(part_cnt), K(use_part_sort), K(ret));
   } else if (OB_FALSE_IT(origin_child_card = top->get_card())) {
   } else if (OB_FAIL(adjusted_group_by_exprs.assign(group_by_exprs)) ||
              OB_FAIL(adjusted_group_directions.assign(group_directions))) {
@@ -996,7 +1034,6 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                     OrderingCheckScope::CHECK_ALL & (~OrderingCheckScope::CHECK_GROUP),
                                                     interesting_order_info))) {
     LOG_WARN("failed to compute stmt interesting order", K(ret));
-  } else if (FALSE_IT(part_cnt = use_part_sort ? group_by_exprs.count() : 0)) {
   } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(sort_exprs,
                                                       &sort_directions,
                                                       top->get_op_ordering(),
@@ -1009,9 +1046,12 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                       prefix_pos,
                                                       part_cnt))) {
     LOG_WARN("failed to check if need sort", K(ret));
-  } else if (need_sort && can_ignore_merge_plan && OrderingFlag::NOT_MATCH == interesting_order_info) {
-    // if need sort and no further op needs the output order, not generate merge groupby
-    is_plan_valid = false;
+  } else if ((!need_sort && use_part_sort) ||
+             (need_sort && can_ignore_merge_plan &&
+              OrderingFlag::NOT_MATCH == interesting_order_info)) {
+    // 1. need generate partition sort plan, but need not sort
+    // 2. if need sort and no further op needs the output order, not generate merge groupby
+    top = NULL;
   } else if (top->is_distributed() &&
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
@@ -1030,8 +1070,10 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                 origin_child_card,
                                                 is_partition_wise))) {
       LOG_WARN("failed to allocate group by as top", K(ret));
+    } else {
+      static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(false, false, use_part_sort);
     }
-  } else if (need_sort && part_cnt > 0 &&
+  } else if (use_part_sort &&
             OB_FAIL(create_hash_sortkey(part_cnt, sort_keys, hash_sortkey))) {
     LOG_WARN("failed to create hash sort key", K(ret), K(part_cnt), K(sort_keys));
   } else {
@@ -1063,7 +1105,7 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                               !need_sort && top_is_local_order,
                                               nullptr,
                                               is_fetch_with_ties,
-                                              (need_sort && part_cnt > 0) ? &hash_sortkey : NULL))) {
+                                              use_part_sort ? &hash_sortkey : NULL))) {
         LOG_WARN("failed to allcoate sort as top", K(ret));
       } else if (OB_FAIL(allocate_group_by_as_top(top,
                                                   MERGE_AGGREGATE,
@@ -1101,7 +1143,7 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                            top->get_is_local_order(),
                                                            nullptr,
                                                            is_fetch_with_ties,
-                                                           (need_sort && part_cnt > 0) ? &hash_sortkey : NULL))) {
+                                                           use_part_sort ? &hash_sortkey : NULL))) {
         LOG_WARN("failed to allocate sort as top", K(ret));
       } else if (OB_FAIL(allocate_group_by_as_top(top,
                                                   MERGE_AGGREGATE,
@@ -1113,7 +1155,10 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                   groupby_helper.group_ndv_,
                                                   origin_child_card))) {
         LOG_WARN("failed to allocate group by as top", K(ret));
-      } else { /*do nothing*/ }
+      } else {
+        static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(false,
+                                         groupby_helper.can_basic_pushdown_, use_part_sort);
+      }
     }
   }
   return ret;
@@ -1226,7 +1271,8 @@ int ObSelectLogPlan::allocate_window_function_as_top(const ObIArray<ObWinFunRawE
                                                      const bool match_parallel,
                                                      const bool is_partition_wise,
                                                      const int32_t role_type,
-                                                     const ObIArray<OrderItem> &range_dist_keys,
+                                                     const ObIArray<OrderItem> &sort_keys,
+                                                     const int64_t range_dist_keys_cnt,
                                                      const int64_t range_dist_pby_prefix,
                                                      ObLogicalOperator *&top,
                                                      ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
@@ -1243,16 +1289,15 @@ int ObSelectLogPlan::allocate_window_function_as_top(const ObIArray<ObWinFunRawE
     LOG_ERROR("allocate memory for ObLogWindowFunction failed", K(ret));
   } else if (OB_FAIL(append(window_function->get_window_exprs(), win_exprs))) {
     LOG_WARN("failed to add window expr", K(ret));
-
-  } else if (!range_dist_keys.empty()
-         && OB_FAIL(window_function->set_rd_sort_keys(range_dist_keys))) {
+  } else if (OB_FAIL(window_function->set_sort_keys(sort_keys))) {
     LOG_WARN("set range distribution sort keys failed", K(ret));
   } else {
+    window_function->set_rd_sort_keys_cnt(range_dist_keys_cnt);
     window_function->set_single_part_parallel(match_parallel);
     window_function->set_is_partition_wise(is_partition_wise);
     window_function->set_child(ObLogicalOperator::first_child, top);
     window_function->set_role_type(ObLogWindowFunction::WindowFunctionRoleType(role_type));
-    if (!range_dist_keys.empty()) {
+    if (range_dist_keys_cnt > 0) {
       window_function->set_ragne_dist_parallel(true);
       window_function->set_rd_pby_sort_cnt(range_dist_pby_prefix);
     }
@@ -2142,21 +2187,48 @@ int ObSelectLogPlan::check_if_union_all_match_partition_wise(const ObIArray<ObLo
                                                              bool &is_partition_wise)
 {
   int ret = OB_SUCCESS;
+  EqualSets equal_sets;
+  EqualSets first_equal_sets;
   ObShardingInfo *first_sharding = NULL;
   ObShardingInfo *child_sharding = NULL;
+  const ObSelectStmt *child_stmt = NULL;
+  ObSEArray<ObRawExpr*, 4> first_select_exprs;
+  ObSEArray<ObRawExpr*, 4> child_select_exprs;
   is_partition_wise = true;
   for (int64_t i = 0; OB_SUCC(ret) && is_partition_wise && i < child_ops.count(); i++) {
+    equal_sets.reset();
+    child_select_exprs.reset();
     if (OB_ISNULL(child_ops.at(i)) ||
-        OB_ISNULL(child_sharding = child_ops.at(i)->get_sharding())) {
+        OB_ISNULL(child_sharding = child_ops.at(i)->get_sharding()) ||
+        OB_ISNULL(child_ops.at(i)->get_plan()) ||
+        OB_ISNULL(child_ops.at(i)->get_plan()->get_stmt()) ||
+        !child_ops.at(i)->get_plan()->get_stmt()->is_select_stmt() ||
+        OB_ISNULL(child_stmt = static_cast<const ObSelectStmt*>(child_ops.at(i)->get_plan()->get_stmt()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(child_ops.at(i)), K(child_sharding), K(ret));
     } else if (child_ops.at(i)->is_exchange_allocated()) {
       is_partition_wise = false;
     } else if (i == 0) {
       first_sharding = child_sharding;
-    } else if (OB_FAIL(ObShardingInfo::is_physically_equal_partitioned(*first_sharding,
-                                                                       *child_sharding,
-                                                                       is_partition_wise))) {
+      first_equal_sets = child_ops.at(i)->get_output_equal_sets();
+      if (OB_FAIL(child_stmt->get_select_exprs(first_select_exprs))) {
+        LOG_WARN("failed to get select exprs", K(ret));
+      }
+    } else if (OB_FAIL(child_stmt->get_select_exprs(child_select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (first_select_exprs.count() != child_select_exprs.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select exprs count doesn't match", K(first_select_exprs), K(child_select_exprs));
+    } else if (OB_FAIL(append(equal_sets, first_equal_sets))) {
+      LOG_WARN("failed to append equal sets", K(ret));
+    } else if (OB_FAIL(append(equal_sets, child_ops.at(i)->get_output_equal_sets()))) {
+      LOG_WARN("failed to append equal sets", K(ret));
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_partition_wise(equal_sets,
+                                                                     first_select_exprs,
+                                                                     child_select_exprs,
+                                                                     first_sharding,
+                                                                     child_sharding,
+                                                                     is_partition_wise))) {
       LOG_WARN("failed to check if union all match strict partition-wise", K(ret));
     } else {
       LOG_TRACE("succ to check union all matching pw", K(is_partition_wise));
@@ -5158,7 +5230,7 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
   bool single_part_parallel = false;
   bool is_partition_wise = false;
   double pby_ndv = 1.0;
-  ObSEArray<OrderItem, 8> range_dist_keys;
+  int64_t range_dist_keys_cnt = 0;
   int64_t range_dist_pby_prefix = 0;
   bool range_distribution = false;
   LOG_DEBUG("try create merge distribute function plan", K(dist_method), K(sort_keys), K(winfunc_exprs));
@@ -5170,6 +5242,7 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
     if (WinDistAlgo::RANGE == dist_method
         || WinDistAlgo::LIST == dist_method) {
       int64_t pby_oby_prefix = 0;
+      ObSEArray<OrderItem, 8> range_dist_keys;
       // al range distribute window function has the same pby, pby+oby sort prefix
       OZ(get_winfunc_pby_oby_sort_prefix(top,
                                          winfunc_exprs.at(0),
@@ -5179,6 +5252,7 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
       for (int64_t i = 0; OB_SUCC(ret) && i < pby_oby_prefix; i++) {
         OZ(range_dist_keys.push_back(sort_keys.at(i)));
       }
+      range_dist_keys_cnt = pby_oby_prefix;
       need_sort = false;
       prefix_pos = 0;
       OZ(ObOptimizerUtil::check_need_sort(range_dist_keys,
@@ -5228,7 +5302,8 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
                                          single_part_parallel,
                                          is_partition_wise,
                                          ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
-                                         range_dist_keys,
+                                         sort_keys,
+                                         range_dist_keys_cnt,
                                          range_dist_pby_prefix,
                                          top,
                                          wf_aggr_status_expr,
@@ -5242,7 +5317,8 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
                                            single_part_parallel,
                                            is_partition_wise,
                                            ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
-                                           range_dist_keys,
+                                           sort_keys,
+                                           range_dist_keys_cnt,
                                            range_dist_pby_prefix,
                                            top,
                                            wf_aggr_status_expr,
@@ -5261,7 +5337,8 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
                                            single_part_parallel,
                                            is_partition_wise,
                                            ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
-                                           range_dist_keys,
+                                           sort_keys,
+                                           range_dist_keys_cnt,
                                            range_dist_pby_prefix,
                                            top,
                                            wf_aggr_status_expr,
@@ -5291,7 +5368,8 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
                                          single_part_parallel,
                                          is_partition_wise,
                                          ObLogWindowFunction::WindowFunctionRoleType::PARTICIPATOR,
-                                         range_dist_keys,
+                                         sort_keys,
+                                         range_dist_keys_cnt,
                                          range_dist_pby_prefix,
                                          top,
                                          wf_aggr_status_expr,
@@ -5320,7 +5398,8 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
                                          single_part_parallel,
                                          is_partition_wise,
                                          ObLogWindowFunction::WindowFunctionRoleType::CONSOLIDATOR,
-                                         range_dist_keys,
+                                         sort_keys,
+                                         range_dist_keys_cnt,
                                          range_dist_pby_prefix,
                                          top,
                                          wf_aggr_status_expr,
@@ -5349,7 +5428,8 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
                                          single_part_parallel,
                                          is_partition_wise,
                                          ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
-                                         range_dist_keys,
+                                         sort_keys,
+                                         range_dist_keys_cnt,
                                          range_dist_pby_prefix,
                                          top,
                                          wf_aggr_status_expr,
@@ -5382,7 +5462,7 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
   ObExchangeInfo exch_info;
   OrderItem hash_sortkey;
   bool is_partition_wise = false;
-  const ObArray<OrderItem> range_dist_keys;
+  const int64_t range_dist_keys_cnt = 0;
   const int64_t range_dist_pby_prefix = 0;
   LOG_DEBUG("create hash window function plan", K(part_cnt), K(sort_keys), K(adjusted_winfunc_exprs));
   if (OB_ISNULL(top) || OB_UNLIKELY(partition_exprs.empty())) {
@@ -5410,7 +5490,8 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
                                                false, /* match_parallel */
                                                is_partition_wise,
                                                ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
-                                               range_dist_keys,
+                                               sort_keys,
+                                               range_dist_keys_cnt,
                                                range_dist_pby_prefix,
                                                top,
                                                wf_aggr_status_expr,
@@ -5436,7 +5517,8 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
                                                false, /* match_parallel */
                                                is_partition_wise,
                                                ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
-                                               range_dist_keys,
+                                               sort_keys,
+                                               range_dist_keys_cnt,
                                                range_dist_pby_prefix,
                                                top,
                                                wf_aggr_status_expr,
@@ -5471,7 +5553,8 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
                                           false, /* match_parallel */
                                           is_partition_wise,
                                           ObLogWindowFunction::WindowFunctionRoleType::PARTICIPATOR,
-                                          range_dist_keys,
+                                          sort_keys,
+                                          range_dist_keys_cnt,
                                           range_dist_pby_prefix,
                                           top,
                                           wf_aggr_status_expr,
@@ -5509,7 +5592,8 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
                                          false, /* match_parallel */
                                          is_partition_wise,
                                          ObLogWindowFunction::WindowFunctionRoleType::CONSOLIDATOR,
-                                         range_dist_keys,
+                                         sort_keys,
+                                         range_dist_keys_cnt,
                                          range_dist_pby_prefix,
                                          top,
                                          wf_aggr_status_expr,

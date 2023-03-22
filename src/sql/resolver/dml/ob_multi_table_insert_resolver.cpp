@@ -939,7 +939,7 @@ int ObMultiTableInsertResolver::refine_table_check_constraint(ObInsertAllTableIn
     //需要重新设置一下check_constraint_exprs中的列的真实的table id,eg:
     //  CREATE TABLE test2(id int CHECK(id BETWEEN 2 AND 5));
     //  INSERT ALL into test2 values(3) into test2 values(4) select 1 from dual;
-    //具体见bug:https://work.aone.alibaba-inc.com/issue/31884582
+    //具体见bug:
     if (OB_FAIL(ObRawExprUtils::extract_column_exprs(check_cst_expr, old_column_exprs))) {
       LOG_WARN("failed to extract column exprs", K(ret));
     } else if (OB_FAIL(get_new_columns_exprs(table_info,

@@ -152,11 +152,13 @@ public:
   bool is_update_unique_key_;
   bool is_update_part_key_;
   DistinctType distinct_algo_;
-  ObRawExpr *lookup_part_id_expr_;
+  ObRawExpr *lookup_part_id_expr_; // for replace and insert_up conflict scene
   ObRawExpr *old_part_id_expr_;
   ObRawExpr *new_part_id_expr_;
   ObRawExpr *old_rowid_expr_;
   ObRawExpr *new_rowid_expr_;
+  // for generated column, the diff between column_exprs_ and column_old_values_exprs_
+  // is virtual generated column is replaced.
   common::ObSEArray<ObRawExpr*, 64, common::ModulePageAllocator, true> column_old_values_exprs_;
   // local index id related to current dml
   TableIDArray related_index_ids_;
@@ -245,7 +247,7 @@ public:
   { is_index_maintenance_ = is_index_maintenance; }
   bool is_index_maintenance() const { return is_index_maintenance_; }
   // update 拆成 del+ins 时，ins 的 table location 是 uncertain 的，需要全表更新
-  // https://work.aone.alibaba-inc.com/issue/32013820
+  //
   void set_table_location_uncertain(bool uncertain) { table_location_uncertain_ = uncertain; }
   bool is_table_location_uncertain() const { return table_location_uncertain_; }
   void set_pdml_update_split(bool is_pdml_update_split) { is_pdml_update_split_ = is_pdml_update_split; }
@@ -311,6 +313,7 @@ protected:
   int generate_update_new_rowid_expr(IndexDMLInfo &table_dml_info);
   int generate_insert_new_rowid_expr(IndexDMLInfo &table_dml_info);
   int generate_old_calc_partid_expr(IndexDMLInfo &index_info);
+  int generate_lookup_part_id_expr(IndexDMLInfo &index_info);
   int generate_insert_new_calc_partid_expr(IndexDMLInfo &index_dml_info);
   int generate_update_new_calc_partid_expr(IndexDMLInfo &index_dml_info);
 
@@ -380,7 +383,7 @@ protected:
   bool need_barrier_; // row movement 场景下为了避免 insert、delete 同时操作同一行，需要加入 barrier
   bool is_first_dml_op_; // 第一个 dml op 可以和 tsc 形成 partition wise 结构，可少分配一个 exchange
   // update 拆成 del+ins 时，ins 的 table location 是 uncertain 的，需要全表更新
-  // https://work.aone.alibaba-inc.com/issue/32013820
+  //
   bool table_location_uncertain_;
   bool is_pdml_update_split_; // 标记delete, insert op是否由update拆分而来
 private:

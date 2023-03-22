@@ -70,6 +70,7 @@
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_store.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -240,6 +241,14 @@ int ObLSTabletService::prepare_for_safe_destroy()
   if (OB_FAIL(delete_all_tablets())) {
     LOG_WARN("fail to delete all tablets", K(ret));
   }
+#ifdef ERRSIM
+  if (!ls_->get_ls_id().is_sys_ls()) {
+    SERVER_EVENT_SYNC_ADD("ls_tablet_service", "after_delete_all_tablets",
+                          "tenant_id", MTL_ID(),
+                          "ls_id", ls_->get_ls_id().id());
+    DEBUG_SYNC(AFTER_LS_GC_DELETE_ALL_TABLETS);
+  }
+#endif
   return ret;
 }
 
@@ -1304,7 +1313,7 @@ int ObLSTabletService::update_medium_compaction_info(
     ObMetaDiskAddr disk_addr;
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
 
-    if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle))) {
+    if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle, true/*only acquire*/))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_TABLET_NOT_EXIST;
       } else {
@@ -1717,6 +1726,9 @@ int ObLSTabletService::get_tablet_with_timeout(
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
+  int64_t check_timeout_us = get_timeout_us;
+  const int64_t timeout_step_us = 100 * 1000; // 100 ms
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -1724,16 +1736,27 @@ int ObLSTabletService::get_tablet_with_timeout(
       || get_timeout_us < ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(get_timeout_us));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, get_timeout_us))) {
-    while (OB_ALLOCATE_MEMORY_FAILED == ret && ObClockGenerator::getClock() < retry_timeout_us) {
-      ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, get_timeout_us);
-    }
-    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+  } else if (ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US != get_timeout_us
+      && ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US != get_timeout_us) {
+    check_timeout_us = MIN(retry_timeout_us - ObTimeUtil::current_time(), timeout_step_us);
+    if (check_timeout_us <= 0) {
       ret = OB_TIMEOUT;
-      LOG_WARN("retry until reaching the timeout", K(ret), K(retry_timeout_us));
-    } else if (OB_FAIL(ret)) {
-      LOG_WARN("fail to check and get tablet", K(ret), K(key));
+      LOG_WARN("get tablet timeout", K(ret), K(retry_timeout_us), K(ObTimeUtil::current_time()), K(get_timeout_us));
     }
+  }
+
+  // Because ObTabletStatusChecker doesn't refresh tablet when memstore retired. The on demand refresh is
+  // executed by caller. From 4.2 after adapt to new MDS, ObTabletStatusChecker can be removed.
+  if (OB_SUCC(ret)) {
+    do {
+      if (OB_FAIL(ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, check_timeout_us))) {
+        if (OB_ALLOCATE_MEMORY_FAILED == ret || OB_TIMEOUT == ret) {
+          ret = OB_TIMEOUT;
+        } else {
+          LOG_WARN("fail to check and get tablet", K(ret), K(key), K(check_timeout_us));
+        }
+      }
+    } while (OB_TIMEOUT == ret && retry_timeout_us > ObTimeUtil::current_time());
   }
   return ret;
 }
@@ -3127,7 +3150,7 @@ int ObLSTabletService::rebuild_create_tablet(
       OB_FAIL(migrate_update_tablet(mig_tablet_param))) {
     LOG_WARN("failed to rebuild create tablet", K(ret), K(tablet_id), K(mig_tablet_param));
   } else if (b_exist && keep_old) {
-    if (OB_FAIL(check_and_get_tablet(tablet_id, old_tablet_handle))) {
+    if (OB_FAIL(check_and_get_tablet(tablet_id, old_tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
       LOG_WARN("failed to check and get tablet", K(ret), K(tablet_id));
     } else if (OB_UNLIKELY(old_tablet_handle.get_obj()->get_tablet_meta().has_next_tablet_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3452,7 +3475,7 @@ int ObLSTabletService::need_check_old_row_legitimacy(ObDMLRunningCtx &run_ctx,
     need_check = true;
     ret = OB_E(EventTable::EN_INS_MULTI_VALUES_BATCH_OPT) OB_SUCCESS;
     // no need to check old row, just for bmsql performance optimization
-    // TODO yuchen.ywc https://aone.alibaba-inc.com/project/81079/task/45910845
+    // TODO yuchen.ywc
     if (OB_SUCCESS != ret) {
       LOG_INFO("error sim when current statement is batch update", K(ret), K(is_udf));
       need_check = false;

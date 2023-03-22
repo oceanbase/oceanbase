@@ -197,9 +197,8 @@ int ObLogBR::init_data(const RecordType type,
     // set OBTraceID
     data_->putFilterRuleVal(trace_id.ptr(), trace_id.length());
 
-    // TODO setObTraceInfo has bug, relay on drc message support in new release
-    UNUSED(trace_info);
-    // data_->setObTraceInfo(trace_info.ptr());
+    // set ObTraceInfo
+    data_->setObTraceInfo(trace_info.ptr());
 
     // put major version(from int32_t to char*) to the forth field
     if (EBEGIN == type) {

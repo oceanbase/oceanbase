@@ -143,7 +143,9 @@ public:
   int acquire_task_execution_resource();
   int get_aggregated_tasks_count() const { return aggregated_tasks_.get_size(); }
   int wait_all_tasks();
-  int allocate_async_das_cb(ObRpcDasAsyncAccessCallBack *&async_cb, const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops);
+  int allocate_async_das_cb(ObRpcDasAsyncAccessCallBack *&async_cb,
+                            const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops,
+                            int64_t timeout_ts);
   void remove_async_das_cb(ObRpcDasAsyncAccessCallBack *das_async_cb);
 private:
   DISABLE_COPY_ASSIGN(ObDASRef);

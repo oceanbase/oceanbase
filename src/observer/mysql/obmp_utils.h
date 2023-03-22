@@ -47,7 +47,8 @@ public:
                                       sql::ObSQLSessionInfo &sess,
                                       ObIArray<obmysql::ObObjKV> *extra_info,
                                       ObIArray<obmysql::Obp20Encoder*> *extra_info_ecds,
-                                      bool is_new_extra_info);
+                                      bool is_new_extra_info,
+                                      bool need_sync_sys_var = true);
   static int sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObString &sess_infos);
   static int add_session_info_on_connect(obmysql::OMPKOK &okp, sql::ObSQLSessionInfo &session);
   static int add_min_cluster_version(obmysql::OMPKOK &okp, sql::ObSQLSessionInfo &session);

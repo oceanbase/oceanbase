@@ -49,7 +49,8 @@ struct ObQueryFlag
 #define OBSF_BIT_IS_SSTABLE_CUT       1
 #define OBSF_BIT_IS_SHOW_SEED         1
 #define OBSF_BIT_SKIP_READ_LOB        1
-#define OBSF_BIT_RESERVED             32
+#define OBSF_BIT_IS_LOOKUP            1
+#define OBSF_BIT_RESERVED             31
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
   static const uint64_t OBSF_MASK_DAILY_MERGE =  (0x1UL << OBSF_BIT_DAILY_MERGE) - 1;
@@ -132,6 +133,7 @@ struct ObQueryFlag
       uint64_t is_sstable_cut_ : OBSF_BIT_IS_SSTABLE_CUT; //0:sstable no need cut, 1: sstable need cut
       uint64_t is_show_seed_   : OBSF_BIT_IS_SHOW_SEED;
       uint64_t skip_read_lob_   : OBSF_BIT_SKIP_READ_LOB;
+      uint64_t is_lookup_      : OBSF_BIT_IS_LOOKUP;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -174,6 +176,7 @@ struct ObQueryFlag
   }
   void reset() { flag_ = 0; }
   inline bool is_reverse_scan() const { return scan_order_ == Reverse; }
+  inline bool is_ordered_scan() const { return scan_order_ == ObQueryFlag::Forward || scan_order_ == ObQueryFlag::Reverse; }
   inline bool is_daily_merge() const { return daily_merge_; }
   inline bool is_rmmb_optimized() const { return rmmb_optimize_; }
   inline bool is_whole_macro_scan() const { return whole_macro_scan_; }
@@ -182,6 +185,7 @@ struct ObQueryFlag
   inline bool is_query_stat() const { return query_stat_; }
   inline bool is_mysql_mode() const { return sql_mode_ == MysqlMode; }
   inline bool is_read_latest() const { return read_latest_; }
+  inline bool is_lookup() const { return is_lookup_; }
   inline bool is_prewarm() const { return prewarm_; }
   inline bool is_index_invalid() const { return index_invalid_; }
   inline bool is_use_row_cache() const { return !is_whole_macro_scan() && use_row_cache_ == UseCache; }
@@ -245,6 +249,7 @@ struct ObQueryFlag
                "is_large_query", is_large_query_,
                "is_sstable_cut", is_sstable_cut_,
                "skip_read_lob", skip_read_lob_,
+               "is_lookup", is_lookup_,
                "reserved", reserved_);
   OB_UNIS_VERSION(1);
 };

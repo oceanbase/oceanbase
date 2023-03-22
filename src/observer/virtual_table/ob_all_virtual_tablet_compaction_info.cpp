@@ -24,6 +24,7 @@ ObAllVirtualTabletCompactionInfo::ObAllVirtualTabletCompactionInfo()
       ObMultiTenantOperator(),
       addr_(),
       tablet_iter_(nullptr),
+      tablet_allocator_("VTTable"),
       tablet_handle_(),
       ls_id_(share::ObLSID::INVALID_LS_ID),
       iter_buf_(nullptr),
@@ -51,6 +52,7 @@ void ObAllVirtualTabletCompactionInfo::reset()
     iter_buf_ = nullptr;
   }
   tablet_handle_.reset();
+  tablet_allocator_.reset();
   ObVirtualTableScannerIterator::reset();
 }
 
@@ -91,6 +93,8 @@ void ObAllVirtualTabletCompactionInfo::release_last_tenant()
     tablet_iter_->~ObTenantTabletIterator();
     tablet_iter_ = nullptr;
   }
+  tablet_handle_.reset();
+  tablet_allocator_.reset();
 }
 
 bool ObAllVirtualTabletCompactionInfo::is_need_process(uint64_t tenant_id)
@@ -106,10 +110,12 @@ int ObAllVirtualTabletCompactionInfo::get_next_tablet()
 {
   int ret = OB_SUCCESS;
 
+  tablet_handle_.reset();
+  tablet_allocator_.reuse();
   if (nullptr == tablet_iter_) {
+    tablet_allocator_.set_tenant_id(MTL_ID());
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m);
-    if (OB_ISNULL(tablet_iter_)) {
+    if (OB_ISNULL(tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m, tablet_allocator_))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "fail to new tablet_iter_", K(ret));
     }
@@ -191,7 +197,7 @@ int ObAllVirtualTabletCompactionInfo::process_curr_tenant(common::ObNewRow *&row
           }
           break;
         case SERIALIZE_SCN_LIST:
-          if (medium_info_list.size() > 0) {
+          if (medium_info_list.size() > 0 || compaction::ObMediumCompactionInfo::MAJOR_COMPACTION == medium_info_list.get_last_compaction_type()) {
             int64_t pos = 0;
             medium_info_list.gene_info(medium_info_buf_, OB_MAX_VARCHAR_LENGTH, pos);
             cur_row_.cells_[i].set_varchar(medium_info_buf_);

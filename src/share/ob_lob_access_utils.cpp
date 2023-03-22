@@ -86,7 +86,7 @@ int ObTextStringIter::init(uint32_t buffer_len,
     } else if (!locator.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN,"Lob: invalid lob", K(ret));
-    } else if (FALSE_IT(is_outrow_ = !locator.is_inrow())) {
+    } else if (FALSE_IT(is_outrow_ = !locator.has_inrow_data())) {
     } else if (!is_outrow_) { // inrow lob always get full data, no need ctx_
     } else if (OB_ISNULL(allocator)) {
       ret = OB_INVALID_ARGUMENT;
@@ -111,7 +111,8 @@ int ObTextStringIter::init(uint32_t buffer_len,
 
 static int init_lob_access_param(storage::ObLobAccessParam &param,
                                  ObLobTextIterCtx *lob_iter_ctx,
-                                 ObCollationType cs_type)
+                                 ObCollationType cs_type,
+                                 ObIAllocator *allocator = nullptr)
 {
   int ret = OB_SUCCESS;
   int64_t query_timeout = 0;
@@ -156,7 +157,10 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
     param.sql_mode_ = (lob_iter_ctx->session_ == NULL) ? SMO_DEFAULT : lob_iter_ctx->session_->get_sql_mode();
 
     param.tablet_id_ = ObTabletID(location_info->tablet_id_);
-    param.allocator_ = lob_iter_ctx->alloc_;
+    if (allocator == nullptr) {
+      allocator = lob_iter_ctx->alloc_;
+    }
+    param.allocator_ = allocator;
     int64_t disk_loc_handle_size = disk_loc_str.length();
     param.lob_common_ = disk_loc;
     param.handle_size_ = disk_loc_handle_size;
@@ -176,7 +180,7 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
   return ret;
 }
 
-int ObTextStringIter::get_outrow_lob_full_data()
+int ObTextStringIter::get_outrow_lob_full_data(ObIAllocator *allocator /*nullptr*/ )
 {
   int ret = OB_SUCCESS;
   storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
@@ -190,7 +194,7 @@ int ObTextStringIter::get_outrow_lob_full_data()
     COMMON_LOG(WARN, "Lob: get lob manager failed.", K(ret));
   } else { // outrow persist lob
     storage::ObLobAccessParam param;
-    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_))) {
+    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_, allocator))) {
       param.len_ = (ctx_->total_access_len_ == 0 ? param.byte_size_ : ctx_->total_access_len_);
 
       if (!param.ls_id_.is_valid() || !param.tablet_id_.is_valid()) {
@@ -291,7 +295,7 @@ int ObTextStringIter::get_current_block(ObString &str)
   return ret;
 }
 
-int ObTextStringIter::get_full_data(ObString &data_str)
+int ObTextStringIter::get_full_data(ObString &data_str, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (!is_init_ || state_ != TEXTSTRING_ITER_INIT) {
@@ -309,7 +313,7 @@ int ObTextStringIter::get_full_data(ObString &data_str)
     }
   } else {
     // outrow lob, read full data into a inrow local tmp lob currently
-    if (OB_FAIL(get_outrow_lob_full_data())) {
+    if (OB_FAIL(get_outrow_lob_full_data(allocator))) {
       COMMON_LOG(WARN, "Lob: get lob outrow data failed", K(ret));
     } else {
       data_str.assign_ptr(ctx_->buff_, ctx_->content_byte_len_);
@@ -556,7 +560,7 @@ ObTextStringIterState ObTextStringIter::get_next_block(ObString &str)
   str.reset();
   if (!is_init_ || state_ < TEXTSTRING_ITER_INIT) {
     state_ = TEXTSTRING_ITER_INVALID;
-    COMMON_LOG(WARN, "Lob: iter not initiated", K(ret));
+    COMMON_LOG(WARN, "Lob: iter not initiated", K(ret), K(*this));
   } else if (!is_lob_ || !is_outrow_ || !has_lob_header_) { // if not outrow lob, get full data
     switch (state_) {
       case TEXTSTRING_ITER_INIT: {
@@ -588,12 +592,13 @@ ObTextStringIterState ObTextStringIter::get_next_block(ObString &str)
       }
     }
   } else {
-    COMMON_LOG(WARN, "Lob: error case in of iter", K(*this));
+    COMMON_LOG(WARN, "Lob: error case in of iter", K(ret), K(*this));
     state_ = TEXTSTRING_ITER_INVALID;
   }
   if (OB_FAIL(ret)) {
-    COMMON_LOG(WARN, "Lob: iter get_next_block failed", K(*this));
+    COMMON_LOG(WARN, "Lob: iter get_next_block failed", K(ret), K(*this));
     state_ = TEXTSTRING_ITER_INVALID;
+    err_ret_ = ret;
   }
   return state_;
 }
@@ -1014,7 +1019,7 @@ int ObTextStringResult::calc_buffer_len(int64_t res_len)
       res_len += sizeof(ObLobCommon);
       buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), false);
     } else {
-      ret = OB_SIZE_OVERFLOW;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("Lob: out row temp lob not implemented, not support length bigger than 512M",
         K(ret), K(this), K(pos_), K(buff_len_), K(res_len));
     }
@@ -1133,7 +1138,7 @@ int ObTextStringResult::fill(int64_t pos, int c, int64_t len)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Lob: append content length too long", K(this), K(pos), K(len), K(ret));
     } else {
-      MEMSET(buffer_ + pos, c, len);
+      MEMSET(buffer_ + pos_ + pos, c, len);
     }
   } else {
     ret = OB_NOT_IMPLEMENT;

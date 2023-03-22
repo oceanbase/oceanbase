@@ -45,6 +45,7 @@ class ObReqQDeliver
 {
 public:
   explicit ObReqQDeliver(ObiReqQHandler &qhandler);
+  ObiReqQHandler &get_qhandler() { return qhandler_; }
 
 protected:
   ObiReqQHandler &qhandler_;

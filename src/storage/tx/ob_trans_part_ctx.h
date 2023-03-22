@@ -253,6 +253,12 @@ private:
   int init_memtable_ctx_(const uint64_t tenant_id, const share::ObLSID &ls_id);
   bool is_in_2pc_() const;
   bool is_logging_() const;
+
+  // force abort but not submit abort log
+  bool need_force_abort_() const;
+  // force abort but wait abort log_cb
+  bool is_force_abort_logging_() const;
+
   bool need_record_log_() const;
   void reset_redo_lsns_();
   void set_prev_record_lsn_(const LogOffSet &prev_record_lsn);
@@ -535,6 +541,7 @@ private:
   int return_log_cb_(ObTxLogCb *log_cb);
   int get_max_submitting_log_info_(palf::LSN &lsn, share::SCN &log_ts);
   int get_prev_log_lsn_(const ObTxLogBlock &log_block, ObTxLogType prev_log_type, palf::LSN &lsn);
+  int set_start_scn_in_commit_log_(ObTxCommitLog &commit_log);
 
   // int init_tx_data_(const share::ObLSID&ls_id, const ObTransID &tx_id);
 
@@ -705,6 +712,8 @@ private:
   void handle_trans_ask_state_(const SCN &snapshot);
   int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id);
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
+  int check_and_submit_redo_log_(bool &try_submit);
+  int submit_redo_log_for_freeze_(bool &try_submit);
 protected:
   // for xa
   virtual bool is_sub2pc() const override

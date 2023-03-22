@@ -51,6 +51,7 @@ class ObTablePartitionInfo;
 class ObPhyOperatorMonnitorInfo;
 struct ObAuditRecordData;
 class ObOpSpec;
+class ObEvolutionPlan;
 
 //class ObPhysicalPlan: public common::ObDLinkBase<ObPhysicalPlan>
 typedef common::ObFixedArray<common::ObFixedArray<int64_t, common::ObIAllocator>, common::ObIAllocator> PhyRowParamMap;
@@ -355,6 +356,9 @@ public:
   {
     return ob_write_string(allocator_, rule_name, stat_.rule_name_);
   }
+  inline int64_t get_plan_error_cnt() { return stat_.evolution_stat_.error_cnt_; }
+  inline void update_plan_error_cnt() { ATOMIC_INC(&(stat_.evolution_stat_.error_cnt_)); }
+
 public:
   int inc_concurrent_num();
   void dec_concurrent_num();
@@ -526,7 +530,7 @@ private:
   int16_t regexp_op_count_;
   // for like expression's optimization
   int16_t like_op_count_;
-  // for px fast path https://yuque.antfin-inc.com/ob/sql/xzrw9m
+  // for px fast path
   int16_t px_exchange_out_op_count_;
   bool is_sfu_;
   //if the stmt  contains user variable assignment

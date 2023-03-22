@@ -598,6 +598,33 @@ int ObLogHandler::change_replica_num(const common::ObMemberList &member_list,
   return ret;
 }
 
+// @desc: force_set_as_single_replica interface
+//        | 1.force_set_as_single_replica()
+//        V
+//  [any_member]  -----  2.one_stage_config_change_(FORCE_SINGLE_MEMBER)
+int ObLogHandler::force_set_as_single_replica()
+{
+  int ret = OB_SUCCESS;
+  common::ObSpinLockGuard deps_guard(deps_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    common::ObMember dummy_member;
+    common::ObMemberList dummy_member_list;
+    int64_t dummy_replica_num = -1, new_replica_num = 1;
+    const int64_t timeout_us = 10 * 1000 * 1000L;
+    LogConfigChangeCmd req(self_, id_, dummy_member_list, dummy_replica_num, new_replica_num,
+        FORCE_SINGLE_MEMBER_CMD, timeout_us);
+    ConfigChangeCmdHandler cmd_handler(&palf_handle_);
+    if (OB_FAIL(cmd_handler.handle_config_change_cmd(req))) {
+      CLOG_LOG(WARN, "handle_config_change_cmd failed", KR(ret), K_(id));
+    }
+  }
+  return ret;
+}
+
 // @desc: add_member interface
 //        | 1.add_member()
 //        V

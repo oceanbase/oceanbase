@@ -149,6 +149,7 @@ private:
   int get_need_flush_tablets_(const share::SCN recycle_scn,
                               common::ObIArray<ObTabletID> &flush_tablets);
   int freeze_base_on_needs_(share::SCN recycle_scn);
+  int decide_freeze_clock_(ObFreezeCheckpoint *ob_freeze_checkpoint);
 
   static const int64_t LOOP_TRAVERSAL_INTERVAL_US = 1000L * 50;  // 50ms
   // when freeze memtable base on needs less than TABLET_FREEZE_PERCENT,

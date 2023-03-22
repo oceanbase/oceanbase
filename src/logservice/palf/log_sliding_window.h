@@ -105,14 +105,26 @@ class UpdateMatchLsnFunc
 {
 public:
   UpdateMatchLsnFunc(const LSN &end_lsn, const int64_t new_ack_time_us)
-      : new_end_lsn_(end_lsn), new_ack_time_us_(new_ack_time_us)
+      : new_end_lsn_(end_lsn), old_end_lsn_(), new_ack_time_us_(new_ack_time_us), old_advance_time_us_(OB_INVALID_TIMESTAMP)
   {}
   ~UpdateMatchLsnFunc() {}
   bool operator()(const common::ObAddr &server, LsnTsInfo &value);
-  TO_STRING_KV(K_(new_end_lsn), K_(new_ack_time_us));
+  bool is_advance_delay_too_long() const {
+    bool bool_ret = false;
+    if (old_end_lsn_ < new_end_lsn_
+        && (new_ack_time_us_ - old_advance_time_us_) > MATCH_LSN_ADVANCE_DELAY_THRESHOLD_US) {
+      // Return true when advance delay exceeds 1s.
+      bool_ret = true;
+    }
+    return bool_ret;
+  }
+  TO_STRING_KV(K_(old_end_lsn), K_(new_end_lsn), K_(old_advance_time_us), K_(new_ack_time_us),
+      "advance delay(us)", new_ack_time_us_ - old_advance_time_us_);
 private:
   LSN new_end_lsn_;
+  LSN old_end_lsn_;
   int64_t new_ack_time_us_;
+  int64_t old_advance_time_us_;
 };
 
 class GetLaggedListFunc
@@ -261,7 +273,7 @@ private:
   int leader_wait_sw_slot_ready_(const int64_t log_id);
   bool can_receive_larger_log_(const int64_t log_id) const;
   bool leader_can_submit_larger_log_(const int64_t log_id) const;
-  bool leader_can_submit_new_log_(const int64_t valid_log_size);
+  bool leader_can_submit_new_log_(const int64_t valid_log_size, LSN &lsn_upper_bound);
   bool leader_can_submit_group_log_(const LSN &lsn, const int64_t group_log_size);
   void get_committed_end_lsn_(LSN &out_lsn) const;
   int get_max_flushed_log_info_(LSN &lsn,
@@ -326,7 +338,8 @@ private:
   int generate_group_entry_header_(const int64_t log_id,
                                    LogTask *log_task,
                                    LogGroupEntryHeader &header,
-                                   int64_t &group_log_checksum);
+                                   int64_t &group_log_checksum,
+                                   bool &is_accum_checksum_acquired);
   int gen_committed_end_lsn_(LSN &new_committed_end_lsn);
   int gen_committed_end_lsn_with_memberlist_(
     const ObMemberList &member_list,
@@ -382,6 +395,7 @@ private:
                                 const LSN &prev_lsn,
                                 const LSN &lsn,
                                 const LogWriteBuf &log_write_buf);
+  bool need_execute_fetch_(const FetchTriggerType &fetch_trigger_type);
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
@@ -454,6 +468,8 @@ private:
   int64_t last_slide_log_pid_;
   int64_t last_slide_log_accum_checksum_;
   // ---------------- fetch log info begin --------------------------
+  // last_fetch_req_time_:
+  //    record the request time of the last fetch operation.
   // last_fetch_end_lsn_:
   //    记录本轮fetch的lsn终点，根据group_buffer容量算出
   // last_fetch_max_log_id_:
@@ -470,9 +486,11 @@ private:
   //    下一轮fetch的起点是(last_submit_log_id + 1).
   //
   mutable common::ObSpinLock fetch_info_lock_;
+  int64_t last_fetch_req_time_;
   LSN last_fetch_end_lsn_;
   int64_t last_fetch_max_log_id_;
   LSN last_fetch_committed_end_lsn_;
+  FetchTriggerType last_fetch_trigger_type_;
   // ---------------- fetch log info end --------------------------
   // used to record synchronization points for each replica
   mutable common::ObSpinLock match_lsn_map_lock_;
@@ -484,7 +502,7 @@ private:
   mutable int64_t larger_log_warn_time_;
   mutable int64_t log_life_long_warn_time_;
   mutable int64_t lc_cb_get_warn_time_;
-  mutable int64_t fetch_dst_invalid_warn_time_;
+  mutable int64_t fetch_failure_print_time_;
   common::ObThreadLease commit_log_handling_lease_;  // thread lease for handling committed logs
   common::ObThreadLease submit_log_handling_lease_;  // thread lease for handling committed logs
   // last_renew_leader_ts in fetch_log

@@ -227,8 +227,9 @@ public:
   static int get_nested_dup_table_ctx(const uint64_t table_id,
                                       DASDelCtxList& del_ctx_list,
                                       SeRowkeyDistCtx* &rowkey_dist_ctx);
-  static int handle_after_row_processing(ObDMLModifyRowsList *dml_modify_rows);
+  static int handle_after_row_processing_single(ObDMLModifyRowsList *dml_modify_rows);
   static int handle_after_row_processing_batch(ObDMLModifyRowsList *dml_modify_rows);
+  static int handle_after_row_processing(bool execute_single_row, ObDMLModifyRowsList *dml_modify_rows);
   static int init_ob_rowkey( ObIAllocator &allocator, const int64_t rowkey_cnt, ObRowkey &table_rowkey);
 private:
   template <int N>

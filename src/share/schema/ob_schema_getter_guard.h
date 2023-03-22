@@ -203,6 +203,8 @@ public:
       bool is_hidden = false);
 	int get_table_schemas_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObSimpleTableSchemaV2 *> &table_schemas);
+  int get_database_schemas_in_tenant(const uint64_t tenant_id,
+      common::ObIArray<const ObSimpleDatabaseSchema *> &database_schemas);
 	int get_tablegroup_schemas_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObTablegroupSchema*> &tablegroup_schemas);
 
@@ -467,8 +469,7 @@ public:
                                 bool only_global = false);
 
   // for readonly
-  int verify_read_only(const uint64_t tenant_id,
-                       const ObStmtNeedPrivs &stmt_need_privs);
+  int verify_read_only(const uint64_t tenant_id, const ObStmtNeedPrivs &stmt_need_privs);
   int check_user_access(const ObUserLoginInfo &login_info,
                         ObSessionPrivInfo &s_priv,
                         SSL *ssl_st,
@@ -730,7 +731,8 @@ public:
                               uint64_t &synonym_id,
                               common::ObString &obj_table_name,
                               bool &do_exist,
-                              bool search_public_schema = true) const;
+                              bool search_public_schema = true,
+                              bool *is_public = NULL) const;
   int get_outline_info_with_sql_id(const uint64_t tenant_id,
                                       const uint64_t database_id,
                                       const common::ObString &sql_id,

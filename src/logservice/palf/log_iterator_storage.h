@@ -37,14 +37,14 @@ public:
   void destroy();
   void reuse(const LSN &start_lsn);
   inline const LSN get_lsn(const offset_t pos) const
-  { return start_lsn_ + pos - (read_buf_has_log_block_header_ == true ? MAX_INFO_BLOCK_SIZE : 0); }
+  { return start_lsn_ + pos; }
   inline bool check_iterate_end(const offset_t pos) const
   { return start_lsn_ + pos > get_file_end_lsn_(); }
   int pread(const int64_t pos,
             const int64_t in_read_size,
             char *&buf,
             int64_t &out_read_size);
-  VIRTUAL_TO_STRING_KV(K_(start_lsn), K_(end_lsn), K_(read_buf), K_(block_size), KP(log_storage_), K_(read_buf_has_log_block_header));
+  VIRTUAL_TO_STRING_KV(K_(start_lsn), K_(end_lsn), K_(read_buf), K_(block_size), KP(log_storage_));
 protected:
   inline int64_t get_valid_data_len_()
   { return end_lsn_ - start_lsn_; }
@@ -62,7 +62,6 @@ protected:
   int64_t block_size_;
   ILogStorage *log_storage_;
   GetFileEndLSN get_file_end_lsn_;
-  bool read_buf_has_log_block_header_;
   bool is_inited_;
 };
 

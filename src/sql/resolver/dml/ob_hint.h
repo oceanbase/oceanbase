@@ -133,6 +133,7 @@ struct ObGlobalHint {
   int merge_dop_hint(uint64_t dfo, uint64_t dop);
   int merge_dop_hint(const ObIArray<ObDopHint> &dop_hints);
   void merge_query_timeout_hint(int64_t hint_time);
+  void reset_query_timeout_hint() { query_timeout_ = -1; }
   void merge_dblink_info_hint(int64_t tx_id, int64_t tm_sessid);
   void reset_dblink_info_hint();
   void merge_max_concurrent_hint(int64_t max_concurrent);
@@ -162,6 +163,8 @@ struct ObGlobalHint {
   { return MIN_OUTLINE_ENABLE_VERSION <= version && CLUSTER_CURRENT_VERSION >= version; }
   bool disable_query_transform() const { return disable_transform_; }
   bool disable_cost_based_transform() const { return disable_cost_based_transform_; }
+  inline bool has_dbms_stats_hint() const { return has_dbms_stats_hint_; }
+  inline void set_dbms_stats() { has_dbms_stats_hint_ = true; }
   bool has_append() const {
     return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT) ? true : false;
   }
@@ -216,7 +219,8 @@ struct ObGlobalHint {
                K_(enable_append),
                K_(opt_params),
                K_(ob_ddl_schema_versions),
-               K_(osg_hint));
+               K_(osg_hint),
+               K_(has_dbms_stats_hint));
   int64_t frozen_version_;
   int64_t topk_precision_;
   int64_t sharding_minimum_row_count_;
@@ -243,6 +247,7 @@ struct ObGlobalHint {
   ObOptParamHint opt_params_;
   common::ObSArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
   ObOptimizerStatisticsGatheringHint osg_hint_;
+  bool has_dbms_stats_hint_;
 };
 
 // used in physical plan
@@ -929,6 +934,31 @@ public:
 private:
   typedef common::ObSEArray<WinDistAlgo, 3,  common::ModulePageAllocator, true> Algos;
   Algos algos_;
+};
+
+class ObAggHint : public ObOptHint
+{
+public:
+  ObAggHint(ObItemType hint_type)
+    : ObOptHint(hint_type),
+      sort_method_valid_(false),
+      use_partition_sort_(false)
+  {
+  }
+  int assign(const ObAggHint &other);
+  virtual ~ObAggHint() {}
+
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  void set_use_partition_sort(bool use_part_sort) { sort_method_valid_ = is_disable_hint(); use_partition_sort_ = sort_method_valid_ && use_part_sort; }
+  void reset_use_partition_sort() { sort_method_valid_ = false; use_partition_sort_ = false; }
+  bool force_partition_sort()  const { return is_disable_hint() && sort_method_valid_ && use_partition_sort_; }
+  bool force_normal_sort()  const { return is_disable_hint() && sort_method_valid_ && !use_partition_sort_; }
+
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(sort_method_valid), K_(use_partition_sort));
+
+private:
+  bool sort_method_valid_;
+  bool use_partition_sort_;
 };
 
 struct ObDDLSchemaVersionHint

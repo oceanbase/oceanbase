@@ -57,7 +57,7 @@ ObTabletMeta::ObTabletMeta()
     ddl_snapshot_version_(OB_INVALID_TIMESTAMP),
     max_sync_storage_schema_version_(0),
     ddl_execution_id_(-1),
-    ddl_cluster_version_(0),
+    ddl_data_format_version_(0),
     max_serialized_medium_scn_(0),
     ddl_commit_scn_(SCN::min_scn()),
     is_inited_(false)
@@ -119,7 +119,7 @@ int ObTabletMeta::init(
     max_sync_storage_schema_version_ = max_sync_storage_schema_version;
     max_serialized_medium_scn_ = max_serialized_medium_scn;
     ddl_execution_id_ = -1;
-    ddl_cluster_version_ = 0;
+    ddl_data_format_version_ = 0;
 
     report_status_.merge_snapshot_version_ = snapshot_version;
     report_status_.cur_report_version_ = snapshot_version;
@@ -194,7 +194,7 @@ int ObTabletMeta::init(
     ddl_checkpoint_scn_ = SCN::max(old_tablet_meta.ddl_checkpoint_scn_, ddl_info.ddl_checkpoint_scn_);
     ddl_snapshot_version_ = MAX(old_tablet_meta.ddl_snapshot_version_, ddl_info.ddl_snapshot_version_);
     ddl_execution_id_ = MAX(old_tablet_meta.ddl_execution_id_, ddl_info.ddl_execution_id_);
-    ddl_cluster_version_ = MAX(old_tablet_meta.ddl_cluster_version_, ddl_info.ddl_cluster_version_);
+    ddl_data_format_version_ = MAX(old_tablet_meta.ddl_data_format_version_, ddl_info.data_format_version_);
     is_inited_ = true;
   }
 
@@ -235,7 +235,7 @@ int ObTabletMeta::init(
     snapshot_version_ = param.snapshot_version_;
     multi_version_start_ = param.multi_version_start_;
     compat_mode_ = param.compat_mode_;
-    report_status_ = param.report_status_;
+    report_status_.reset();
     tx_data_ = param.tx_data_;
     table_store_flag_ = param.table_store_flag_;
     ddl_start_scn_ = param.ddl_start_scn_;
@@ -244,7 +244,7 @@ int ObTabletMeta::init(
     max_sync_storage_schema_version_ = param.max_sync_storage_schema_version_;
     max_serialized_medium_scn_ = param.max_serialized_medium_scn_;
     ddl_execution_id_ = param.ddl_execution_id_;
-    ddl_cluster_version_ = param.ddl_cluster_version_;
+    ddl_data_format_version_ = param.ddl_data_format_version_;
     is_inited_ = true;
   }
 
@@ -293,7 +293,7 @@ int ObTabletMeta::init(
     max_sync_storage_schema_version_ = old_tablet_meta.max_sync_storage_schema_version_;
     max_serialized_medium_scn_ = old_tablet_meta.max_serialized_medium_scn_;
     ddl_execution_id_ = old_tablet_meta.ddl_execution_id_;
-    ddl_cluster_version_ = old_tablet_meta.ddl_cluster_version_;
+    ddl_data_format_version_ = old_tablet_meta.ddl_data_format_version_;
     is_inited_ = true;
   }
 
@@ -377,7 +377,7 @@ int ObTabletMeta::init(
     max_serialized_medium_scn_ = MAX(old_tablet_meta.max_serialized_medium_scn_,
         OB_ISNULL(tablet_meta) ? 0 : tablet_meta->max_serialized_medium_scn_);
     ddl_execution_id_ = old_tablet_meta.ddl_execution_id_;
-    ddl_cluster_version_ = old_tablet_meta.ddl_cluster_version_;
+    ddl_data_format_version_ = old_tablet_meta.ddl_data_format_version_;
 
     if (OB_SUCC(ret)) {
       is_inited_ = true;
@@ -417,7 +417,7 @@ void ObTabletMeta::reset()
   max_sync_storage_schema_version_ = 0;
   max_serialized_medium_scn_ = 0;
   ddl_execution_id_ = -1;
-  ddl_cluster_version_ = 0;
+  ddl_data_format_version_ = 0;
   is_inited_ = false;
 }
 
@@ -513,8 +513,8 @@ int ObTabletMeta::serialize(char *buf, const int64_t len, int64_t &pos)
     LOG_WARN("failed to serialize max_sync_storage_schema_version", K(ret), K(len), K(new_pos), K_(max_sync_storage_schema_version));
   } else if (new_pos - pos < length_ && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_execution_id_))) {
     LOG_WARN("failed to serialize ddl execution id", K(ret), K(len), K(new_pos), K_(ddl_execution_id));
-  } else if (new_pos - pos < length_ && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_cluster_version_))) {
-    LOG_WARN("failed to serialize ddl cluster version", K(ret), K(len), K(new_pos), K_(ddl_cluster_version));
+  } else if (new_pos - pos < length_ && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_data_format_version_))) {
+    LOG_WARN("failed to serialize ddl data format version", K(ret), K(len), K(new_pos), K_(ddl_data_format_version));
   } else if (new_pos - pos < length_ && OB_FAIL(serialization::encode_i64(buf, len, new_pos, max_serialized_medium_scn_))) {
     LOG_WARN("failed to serialize max_serialized_medium_scn", K(ret), K(len), K(new_pos), K_(max_serialized_medium_scn));
   } else if (new_pos - pos < length_ && OB_FAIL(ddl_commit_scn_.fixed_serialize(buf, len, new_pos))) {
@@ -601,8 +601,8 @@ int ObTabletMeta::deserialize(
       LOG_WARN("failed to deserialize max_sync_storage_schema_version", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_execution_id_))) {
       LOG_WARN("failed to deserialize ddl execution id", K(ret), K(len), K(new_pos));
-    } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_cluster_version_))) {
-      LOG_WARN("failed to deserialize ddl cluster version", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_data_format_version_))) {
+      LOG_WARN("failed to deserialize ddl data format version", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &max_serialized_medium_scn_))) {
       LOG_WARN("failed to deserialize max_serialized_medium_scn", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(ddl_commit_scn_.fixed_deserialize(buf, len, new_pos))) {
@@ -650,7 +650,7 @@ int64_t ObTabletMeta::get_serialize_size() const
   size += serialization::encoded_length_i64(ddl_snapshot_version_);
   size += serialization::encoded_length_i64(max_sync_storage_schema_version_);
   size += serialization::encoded_length_i64(ddl_execution_id_);
-  size += serialization::encoded_length_i64(ddl_cluster_version_);
+  size += serialization::encoded_length_i64(ddl_data_format_version_);
   size += serialization::encoded_length_i64(max_serialized_medium_scn_);
   size += ddl_commit_scn_.get_fixed_serialize_size();
   return size;
@@ -749,7 +749,7 @@ int ObTabletMeta::update(const ObMigrationTabletParam &param)
     max_sync_storage_schema_version_ = param.max_sync_storage_schema_version_;
     max_serialized_medium_scn_ = param.max_serialized_medium_scn_;
     ddl_execution_id_ = param.ddl_execution_id_;
-    ddl_cluster_version_ = param.ddl_cluster_version_;
+    ddl_data_format_version_ = param.ddl_data_format_version_;
   }
 
   return ret;
@@ -826,7 +826,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     ddl_snapshot_version_(OB_INVALID_TIMESTAMP),
     max_sync_storage_schema_version_(0),
     ddl_execution_id_(-1),
-    ddl_cluster_version_(0),
+    ddl_data_format_version_(0),
     max_serialized_medium_scn_(0),
     ddl_commit_scn_(SCN::min_scn()),
     allocator_()
@@ -925,8 +925,8 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
     LOG_WARN("failed to serialize max_sync_storage_schema_version", K(ret), K(len), K(new_pos), K_(max_sync_storage_schema_version));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_execution_id_))) {
     LOG_WARN("failed to serialize ddl execution id", K(ret), K(len), K(new_pos), K_(ddl_execution_id));
-  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_cluster_version_))) {
-    LOG_WARN("failed to serialize ddl cluster version", K(ret), K(len), K(new_pos), K_(ddl_cluster_version));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_data_format_version_))) {
+    LOG_WARN("failed to serialize ddl data format version", K(ret), K(len), K(new_pos), K_(ddl_data_format_version));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, max_serialized_medium_scn_))) {
     LOG_WARN("failed to serialize max_serialized_medium_scn", K(ret), K(len), K(new_pos), K_(max_serialized_medium_scn));
   } else if (new_pos - pos < length && OB_FAIL(ddl_commit_scn_.fixed_serialize(buf, len, new_pos))) {
@@ -995,8 +995,8 @@ int ObMigrationTabletParam::deserialize_old(const char *buf, const int64_t len, 
     LOG_WARN("failed to deserialize max sync storage schema version", K(ret), K(len), K(new_pos));
   } else if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_execution_id_))) {
     LOG_WARN("failed to deserialize ddl execution id", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_cluster_version_))) {
-    LOG_WARN("failed to deserialize ddl cluster version", K(ret), K(len), K(new_pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_data_format_version_))) {
+    LOG_WARN("failed to deserialize ddl data format version", K(ret), K(len), K(new_pos));
   } else if (OB_FAIL(ddl_commit_scn_.fixed_deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize ddl commit scn", K(ret), K(len), K(new_pos));
   } else {
@@ -1081,8 +1081,8 @@ int ObMigrationTabletParam::deserialize(const char *buf, const int64_t len, int6
       LOG_WARN("failed to deserialize max sync storage schema version", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_execution_id_))) {
       LOG_WARN("failed to deserialize ddl execution id", K(ret), K(len), K(new_pos));
-    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_cluster_version_))) {
-      LOG_WARN("failed to deserialize ddl cluster version", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_data_format_version_))) {
+      LOG_WARN("failed to deserialize ddl data format version", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &max_serialized_medium_scn_))) {
       LOG_WARN("failed to deserialize max sync medium snapshot", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length && OB_FAIL(ddl_commit_scn_.fixed_deserialize(buf, len, new_pos))) {
@@ -1135,7 +1135,7 @@ int64_t ObMigrationTabletParam::get_serialize_size() const
   size += serialization::encoded_length_i64(ddl_snapshot_version_);
   size += serialization::encoded_length_i64(max_sync_storage_schema_version_);
   size += serialization::encoded_length_i64(ddl_execution_id_);
-  size += serialization::encoded_length_i64(ddl_cluster_version_);
+  size += serialization::encoded_length_i64(ddl_data_format_version_);
   size += serialization::encoded_length_i64(max_serialized_medium_scn_);
   size += ddl_commit_scn_.get_fixed_serialize_size();
   return size;
@@ -1166,7 +1166,7 @@ void ObMigrationTabletParam::reset()
   ddl_snapshot_version_ = OB_INVALID_TIMESTAMP;
   max_sync_storage_schema_version_ = 0;
   ddl_execution_id_ = -1;
-  ddl_cluster_version_ = 0;
+  ddl_data_format_version_ = 0;
   max_serialized_medium_scn_ = 0;
   ddl_commit_scn_.set_min();
   allocator_.reset();
@@ -1201,7 +1201,7 @@ int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
     max_sync_storage_schema_version_ = param.max_sync_storage_schema_version_;
     max_serialized_medium_scn_ = param.max_serialized_medium_scn_;
     ddl_execution_id_ = param.ddl_execution_id_;
-    ddl_cluster_version_ = param.ddl_cluster_version_;
+    ddl_data_format_version_ = param.ddl_data_format_version_;
     ddl_commit_scn_ = param.ddl_commit_scn_;
 
     if (OB_FAIL(ddl_data_.assign(param.ddl_data_))) {

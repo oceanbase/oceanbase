@@ -31,7 +31,7 @@ DEF_STR(redundancy_level, OB_CLUSTER_PARAMETER, "NORMAL",
         "HIGH: tolerate two disk failure if disk count is enough",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 // background information about disk space configuration
-// https://yuque.antfin-inc.com/ob/rootservice/buzmfz
+// ObServerUtils::get_data_disk_info_in_config()
 DEF_CAP(datafile_size, OB_CLUSTER_PARAMETER, "0", "[0M,)", "size of the data file. Range: [0, +∞)",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(datafile_disk_percentage, OB_CLUSTER_PARAMETER, "0", "[0,99]",
@@ -72,7 +72,7 @@ DEF_INT(high_priority_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
 DEF_INT(rdma_io_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,8]",
         "the number of RDMA I/O threads for Libreasy. Range: [0, 8] in integer, 0 stands for RDMA being disabled.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "8192", "[1024,]",
+DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "16384", "[1024,]",
         "the size of the task queue for each tenant. Range: [1024,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 _DEF_PARAMETER_SCOPE_CHECKER_EASY(private, Capacity, memory_limit, OB_CLUSTER_PARAMETER, "0",
@@ -237,11 +237,11 @@ DEF_CAP(_hash_area_size, OB_TENANT_PARAMETER, "100M", "[4M,]",
         "size of maximum memory that could be used by HASH JOIN. Range: [4M,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-//https://yuque.antfin-inc.com/ob/product_functionality_review/gxmqcg
+//
 DEF_BOOL(_enable_partition_level_retry, OB_CLUSTER_PARAMETER, "True",
          "specifies whether allow the partition level retry when the leader changes",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-//https://yuque.antfin-inc.com/ob/product_functionality_review/zlp56c
+//
 DEF_INT_WITH_CHECKER(_enable_defensive_check, OB_CLUSTER_PARAMETER, "1",
                      common::ObConfigEnableDefensiveChecker,
                      "specifies whether allow to do some defensive checks when the query is executed, "
@@ -250,6 +250,16 @@ DEF_INT_WITH_CHECKER(_enable_defensive_check, OB_CLUSTER_PARAMETER, "1",
                      "2 means more strict defensive check is enabled, such as check partition id validity",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(_min_malloc_sample_interval, OB_CLUSTER_PARAMETER, "16", "[1, 10000]",
+        "the min malloc times between two samples, "
+        "which is not more than _max_malloc_sample_interval. "
+        "10000 means not to sample any malloc, Range: [1, 10000]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_max_malloc_sample_interval, OB_CLUSTER_PARAMETER, "256", "[1, 10000]",
+        "the max malloc times between two samples, "
+        "which is not less than _min_malloc_sample_interval. "
+        "1 means to sample all malloc, Range: [1, 10000]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// tenant config
 DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, "5s",
                       common::ObConfigStaleTimeChecker,
@@ -257,7 +267,7 @@ DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, 
                       "the max data stale time that cluster weak read version behind current timestamp,"
                       "no smaller than weak_read_version_refresh_interval, range: [5s, +∞)",
                       ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_monotonic_weak_read, OB_TENANT_PARAMETER, "false",
+DEF_BOOL(enable_monotonic_weak_read, OB_TENANT_PARAMETER, "true",
          "specifies observer supportting atomicity and monotonic order read",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(tenant_cpu_variation_per_server, OB_CLUSTER_PARAMETER, "50", "[0,100]",
@@ -331,7 +341,9 @@ DEF_STR_WITH_CHECKER(_ctx_memory_limit, OB_TENANT_PARAMETER, "",
 DEF_BOOL(_enable_convert_real_to_decimal, OB_TENANT_PARAMETER, "False",
          "specifies whether convert column type float(M,D), double(M,D) to decimal(M,D) in DDL",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_BOOL(_ob_enable_dynamic_worker, OB_TENANT_PARAMETER, "True",
+         "specifies whether worker count increases when all workers were in blocking.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "50", "(0, 100)",
@@ -679,6 +691,14 @@ DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
 DEF_TIME(rpc_timeout, OB_CLUSTER_PARAMETER, "2s",
          "the time during which a RPC request is permitted to execute before it is terminated",
          ObParameterAttr(Section::RPC, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_pkt_nio, OB_CLUSTER_PARAMETER, "False",
+         "enable pkt-nio, the new RPC framework"
+         "Value:  True:turned on;  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(rpc_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
+         "maximum memory for rpc in a tenant, as a percentage of total tenant memory, "
+         "and 0 means no limit to rpc memory",
+        ObParameterAttr(Section::RPC, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //// location cache config
 DEF_TIME(virtual_table_location_cache_expire_time, OB_CLUSTER_PARAMETER, "8s", "[1s,)",
@@ -1306,6 +1326,19 @@ DEF_INT(sql_login_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,32]",
         "the number of threads for sql login request. Range: [0, 32] in integer, 0 stands for use default thread count defined in TG."
         "the default thread count for login request in TG is normal:6 mini-mode:2",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(tenant_sql_login_thread_count, OB_TENANT_PARAMETER, "0", "[0,32]",
+        "the number of threads for sql login request of each tenant. Range: [0, 32] in integer, 0 stands for unit_min_cpu",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(tenant_sql_net_thread_count, OB_TENANT_PARAMETER, "0", "[0, 64]",
+        "the number of mysql I/O threads for a tenant. Range: [0, 64] in integer, 0 stands for unit_min_cpu",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(sql_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
+        "the number of global mysql I/O threads. Range: [0, 64] in integer, "
+        "default value is 0, 0 stands for old value GCONF.net_thread_count",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_tenant_sql_net_thread, OB_CLUSTER_PARAMETER, "True",
+        "Dispatch mysql request to each tenant with True, or disable with False",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #ifndef ENABLE_SANITY
 #else
 DEF_STR_LIST(sanity_whitelist, OB_CLUSTER_PARAMETER, "", "vip who wouldn't leading to coredump",
@@ -1363,4 +1396,7 @@ DEF_BOOL(_enable_transaction_internal_routing, OB_TENANT_PARAMETER, "True",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(_load_tde_encrypt_engine, OB_CLUSTER_PARAMETER, "NONE",
         "load the engine that meet the security classification requirement to encrypt data.  default NONE",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_pipelined_table_function_memory_limit, OB_TENANT_PARAMETER, "524288000", "[1024,18446744073709551615]",
+        "pipeline table function result set memory size limit. default 524288000 (500M), Range: [1024,18446744073709551615]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

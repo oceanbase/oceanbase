@@ -33,7 +33,7 @@ namespace common
 // All objects have common ID Type, including Table/Partition and so on.
 // Define 'uint64_t' as Object ID Type for code-compatibility temporarily.
 // TODO: Use 'int64_t' instead when all objects are ready.
-// See: https://yuque.antfin-inc.com/ob/rootservice/lvnlgi
+// See: docs on yuque rootservice/lvnlgi
 
 // Common Object ID Type
 typedef uint64_t ObObjectID;
@@ -459,7 +459,6 @@ const int64_t OB_MYSQL_COMPRESSED_HEADER_SIZE = OB_MYSQL_HEADER_LENGTH + 3;  /* 
 
 
 //-----------------------------------oceanbase 2.0 c/s protocol----------------------//
-// https://lark.alipay.com/quanwei.wqw/aap9pg/wrga61
 const uint16_t OB20_PROTOCOL_MAGIC_NUM = 0x20AB;
 const int64_t OB20_PROTOCOL_HEADER_LENGTH = 24;
 const int64_t OB20_PROTOCOL_TAILER_LENGTH = 4;  // for CRC32
@@ -518,7 +517,7 @@ const int64_t OB_TRACE_STAT_BUFFER_SIZE= 200; //200
 
 
 const int64_t OB_MAX_VERSION_COUNT = 32;// max version count
-const int64_t OB_MAX_VERSION_COUNT_FOR_MERGE = 16;
+const int64_t OB_MAX_VERSION_COUNT_FOR_MERGE = 4;
 const int64_t OB_EASY_HANDLER_COST_TIME = 10 * 1000; // 10ms
 const int64_t OB_EASY_MEMORY_LIMIT = 4L << 30; // 4G
 
@@ -781,7 +780,7 @@ const char *const OB_FAKE_TENANT_NAME = "fake_tenant";
 const char *const OB_GTS_TENANT_NAME = "gts";
 const char *const OB_SYS_HOST_NAME = "%";
 const char *const OB_DEFAULT_HOST_NAME = "%";
-const char *const OB_MONITOR_TENANT_NAME = "monitor";
+// const char *const OB_MONITOR_TENANT_NAME = "monitor";
 const char *const OB_DIAG_TENANT_NAME = "diag";
 //for sync ddl (ClusterID_TenantID_SchemaVersion)
 const char *const OB_DDL_ID_VAR_NAME = "__oceanbase_ddl_id";
@@ -810,7 +809,6 @@ const double OB_DIAG_CPU = 1.0;
 const double OB_DATA_CPU = 2.5;
 const double OB_RS_CPU = 1.0;
 const double OB_SVR_BLACKLIST_CPU = 1.0;
-const int64_t OB_DIAG_MEMORY = 2L << 30;
 const int64_t OB_RS_MEMORY = 2L << 30;
 
 const uint64_t OB_INVALID_TENANT_ID = 0;
@@ -819,13 +817,12 @@ const uint64_t OB_GTS_TENANT_ID = 2;
 const uint64_t OB_SERVER_TENANT_ID = 500;
 const uint64_t OB_ELECT_TENANT_ID = 501;
 const uint64_t OB_EXT_LOG_TENANT_ID = 506;
-const uint64_t OB_MONITOR_TENANT_ID = 507;
+// const uint64_t OB_MONITOR_TENANT_ID = 507;
 const uint64_t OB_DTL_TENANT_ID = 508;
 const uint64_t OB_DATA_TENANT_ID = 509;
 const uint64_t OB_RS_TENANT_ID = 510;
 const uint64_t OB_GTS_SOURCE_TENANT_ID = 511;
 const uint64_t OB_SVR_BLACKLIST_TENANT_ID = 512;
-const uint64_t OB_DIAG_TENANT_ID = 999;
 const uint64_t OB_MAX_RESERVED_TENANT_ID = 1000;
 const uint64_t OB_USER_TENANT_ID = 1000;
 
@@ -854,7 +851,7 @@ const int64_t OB_SCHEMA_CODE_VERSION = 1;
  *
  * OBJECT_ID FOR INNER OBJECTS (0, 500000)
  *
- * For more details: https://yuque.antfin-inc.com/ob/product_functionality_review/fgcxak
+ * For more details: see docs on yuque product_functionality_review/fgcxak
  *
  * To avolid confict, border for each range should not be used.
  *
@@ -1450,7 +1447,7 @@ OB_INLINE uint64_t combine_sequence_id(int64_t rootservice_epoch, uint64_t pure_
  * 1) If tenant_id = OB_SYS_TENANT_ID, it's sys tenant.
  * 2) If tenant_id is odd, it's meta tenant.
  * 3) If tenant_id is even, it't user tenant.
- * https://yuque.antfin-inc.com/ob/rootservice/cnxdv7#pIAUC
+ * see more docs on yuque rootservice/cnxdv7#pIAUC
  */
 OB_INLINE bool is_sys_tenant(const uint64_t tenant_id)
 {
@@ -1855,8 +1852,7 @@ OB_INLINE bool is_virtual_tenant_for_memory(const uint64_t tenant_id)
 {
   return is_virtual_tenant_id(tenant_id) &&
        (OB_EXT_LOG_TENANT_ID == tenant_id ||
-        OB_RS_TENANT_ID == tenant_id ||
-        OB_DIAG_TENANT_ID == tenant_id);
+        OB_RS_TENANT_ID == tenant_id);
 }
 
 enum ObNameCaseMode
@@ -2166,7 +2162,6 @@ enum ObTraceGranularity
 #define DIO_ALIGN_SIZE 4096
 #define DIO_READ_ALIGN_SIZE 4096
 #define DIO_ALLOCATOR_CACHE_BLOCK_SIZE (OB_DEFAULT_MACRO_BLOCK_SIZE + DIO_READ_ALIGN_SIZE)
-#define CORO_INIT_PRIORITY 120
 #define MALLOC_INIT_PRIORITY 128
 #define NORMAL_INIT_PRIORITY (MALLOC_INIT_PRIORITY + 1)
 
@@ -2343,22 +2338,22 @@ OB_INLINE int64_t ob_gettid()
   return tid;
 }
 
-OB_INLINE uint64_t &ob_get_tenant_id()
+OB_INLINE uint64_t& ob_get_tenant_id()
 {
-  RLOCAL_INLINE(uint64_t, tenant_id);
+  thread_local uint64_t tenant_id = 0;;
   return tenant_id;
 }
 
-OB_INLINE char *ob_get_tname()
+OB_INLINE char* ob_get_tname()
 {
-  struct TNameBuf {
-    TNameBuf() {
-      snprintf(v_, oceanbase::OB_THREAD_NAME_BUF_LEN, "%s", "");
-    }
-    char v_[oceanbase::OB_THREAD_NAME_BUF_LEN];
-  };
-  RLOCAL_INLINE(TNameBuf, tname);
-  return tname.v_;
+  thread_local char tname[oceanbase::OB_THREAD_NAME_BUF_LEN] = {0};
+  return tname;
+}
+
+OB_INLINE const char*& ob_get_origin_thread_name()
+{
+  thread_local const char* tname = nullptr;
+  return tname;
 }
 
 // There are many clusters in arbitration server, we need a field identify the different clusters.
@@ -2404,5 +2399,14 @@ inline bool is_x86() {
 #define DISABLE_WARNING_GCC(option) DO_PRAGMA(GCC diagnostic ignored option)
 #define DISABLE_WARNING_GCC_POP _Pragma("GCC diagnostic pop")
 #define DISABLE_WARNING_GCC_ATTRIBUTES DISABLE_WARNING_GCC("-Wattributes")
+
+extern "C" {
+extern int ob_pthread_cond_wait(pthread_cond_t *__restrict __cond,
+                                pthread_mutex_t *__restrict __mutex);
+extern int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
+                                     pthread_mutex_t *__restrict __mutex,
+                                     const struct timespec *__restrict __abstime);
+}
+
 
 #endif // OCEANBASE_COMMON_DEFINE_H_

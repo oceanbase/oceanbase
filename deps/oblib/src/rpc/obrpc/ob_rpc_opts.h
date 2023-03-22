@@ -26,7 +26,6 @@ struct ObRpcOpts
   ObRpcPriority pr_;    // priority of this RPC packet
   mutable bool is_stream_; // is this RPC packet a stream packet?
   mutable bool is_stream_last_; // is this RPC packet the last packet in stream?
-  uint64_t unis_version_;
   common::ObAddr local_addr_;
   common::ObString ssl_invited_nodes_;
 
@@ -38,7 +37,6 @@ struct ObRpcOpts
         local_addr_(),
         ssl_invited_nodes_()
   {
-    unis_version_ = lib::get_unis_global_compat_version();
   }
 };
 

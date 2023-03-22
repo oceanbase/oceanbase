@@ -34,9 +34,11 @@ namespace sql
 
 #define PRINT_TABLE_NAME_NORMAL(table_item)                                 \
   do {                                                                		  \
-    ObString database_name = table_item->synonym_name_.empty() ?            \
-                              table_item->database_name_ :                  \
-                              table_item->synonym_db_name_;                 \
+    ObString database_name = table_item->synonym_name_.empty() ?         \
+                            ( table_item->is_link_table() ?                 \
+                              table_item->link_database_name_ :             \
+                              table_item->database_name_ ) :                 \
+                             table_item->synonym_db_name_;                  \
     ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
     int64_t temp_buf_len = (table_name.length() + database_name.length()) * 4;  \
     char temp_buf[temp_buf_len];                                                \

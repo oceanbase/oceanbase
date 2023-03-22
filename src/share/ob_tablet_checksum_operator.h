@@ -99,11 +99,19 @@ public:
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
       common::ObIArray<ObTabletChecksumItem> &items);
-  // delete all records whose 'snapshot_version' <= min_snapshot_version
+  // delete records whose compaction_scn <= @gc_compaction_scn and (tablet_id, ls_id) is (1, 1)
+  static int delete_special_tablet_checksum_items(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const SCN &gc_compaction_scn);
+  // delete limited records whose compaction_scn <= @gc_compaction_scn
+  // , while the record of whose (tablet_id, ls_id) is (1, 1) can't be deleted.
   static int delete_tablet_checksum_items(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
-      const SCN &gc_compaction_scn);
+      const SCN &gc_compaction_scn,
+      const int64_t limit_cnt,
+      int64_t &affected_rows);
   static int delete_tablet_checksum_items(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
@@ -137,6 +145,14 @@ private:
       const uint64_t tenant_id,
       common::ObIArray<ObTabletChecksumItem> &items,
       const bool is_update);
+  static int get_tablet_cnt(
+      ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      int64_t &tablet_cnt);
+  static int get_estimated_timeout_us(
+      ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      int64_t &estimated_timeout_us);
 
 private:
   const static int64_t MAX_BATCH_COUNT = 99;

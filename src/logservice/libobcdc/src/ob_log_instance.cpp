@@ -828,7 +828,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  // init ObClockGenerator  https://work.aone.alibaba-inc.com/issue/31189414
+  // init ObClockGenerator
   if (OB_SUCC(ret)) {
     if (OB_FAIL(common::ObClockGenerator::init())) {
       LOG_ERROR("failed to init ob clock generator", KR(ret));
@@ -2236,7 +2236,9 @@ void ObLogInstance::global_flow_control_()
       int64_t dml_parser_part_trans_task_count = 0;
       int64_t br_queue_part_trans_task_count = br_queue_.get_part_trans_task_count();
       int64_t out_part_trans_task_count = get_out_part_trans_task_count_();
-      int64_t resource_collector_part_trans_task_count = resource_collector_->get_part_trans_task_count();
+      int64_t resource_collector_part_trans_task_count = 0;
+      int64_t resource_collector_br_count = 0;
+      resource_collector_->get_task_count(resource_collector_part_trans_task_count, resource_collector_br_count);
       int64_t committer_ddl_part_trans_task_count = 0;
       int64_t committer_dml_part_trans_task_count = 0;
       committer_->get_part_trans_task_count(committer_ddl_part_trans_task_count,
@@ -2521,7 +2523,9 @@ int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
       int64_t sys_ls_handle_part_trans_task_count = sys_ls_handler_->get_part_trans_task_count();
       int64_t br_queue_part_trans_task_count = br_queue_.get_part_trans_task_count();
       int64_t out_part_trans_task_count = get_out_part_trans_task_count_();
-      int64_t resource_collector_part_trans_task_count = resource_collector_->get_part_trans_task_count();
+      int64_t resource_collector_part_trans_task_count = 0;
+      int64_t resource_collector_br_count = 0;
+      resource_collector_->get_task_count(resource_collector_part_trans_task_count, resource_collector_br_count);
       int64_t dml_br_count_in_user_queue = br_queue_.get_dml_br_count();
       int64_t dml_br_count_output = output_dml_br_count_;
 
@@ -2558,8 +2562,8 @@ int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
             dml_br_count_in_user_queue);
         _LOG_INFO("[TASK_COUNT_STAT] [OUT] [PART_TRANS_TASK=%ld] [DDL_BR=%ld] [DML_BR=%ld]", out_part_trans_task_count,
             ddl_br_count_output, dml_br_count_output);
-        _LOG_INFO("[TASK_COUNT_STAT] [RESOURCE_COLLECTOR] [PART_TRANS_TASK=%ld]",
-            resource_collector_part_trans_task_count);
+        _LOG_INFO("[TASK_COUNT_STAT] [RESOURCE_COLLECTOR] [PART_TRANS_TASK=%ld] [BR=%ld]",
+            resource_collector_part_trans_task_count, resource_collector_br_count);
       }
     }
   }

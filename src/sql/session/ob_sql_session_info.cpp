@@ -169,7 +169,6 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       is_table_name_hidden_(false),
       piece_cache_(NULL),
       is_load_data_exec_session_(false),
-      is_registered_to_deadlock_(false),
       pl_exact_err_msg_(),
       is_ps_prepare_stage_(false),
       got_conn_res_(false),
@@ -197,7 +196,6 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
   UNUSED(tenant_id);
   int ret = OB_SUCCESS;
   static const int64_t PS_BUCKET_NUM = 64;
-  set_registered_to_deadlock(false);
   if (OB_FAIL(ObBasicSessionInfo::init(sessid, proxy_sessid, bucket_allocator, tz_info))) {
     LOG_WARN("fail to init basic session info", K(ret));
   } else if (!is_acquire_from_pool() &&
@@ -325,7 +323,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     prelock_ = false;
     proxy_version_ = 0;
     min_proxy_version_ps_ = 0;
-    set_registered_to_deadlock(false);
     if (OB_NOT_NULL(mem_context_)) {
       destroy_contexts_map(contexts_map_, mem_context_->get_malloc_allocator());
       DESTROY_CONTEXT(mem_context_);
@@ -346,11 +343,12 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     optimizer_tracer_.reset();
     sql_plan_manager_ = NULL;
     destroy_session_plan_mgr();
-    txn_free_route_ctx_.reset();
     expect_group_id_ = OB_INVALID_ID;
     group_id_not_expected_ = false;
     //call at last time
+    dblink_context_.reset(); // need reset before ObBasicSessionInfo::reset(skip_sys_var);
     ObBasicSessionInfo::reset(skip_sys_var);
+    txn_free_route_ctx_.reset();
   }
 }
 
@@ -377,7 +375,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     }
 
     // 反序列化出来的 session 不应该做 end_trans 等清理工作
-    // bug: https://aone.alibaba-inc.com/issue/17438593
+    // bug:
     if (false == get_is_deserialized()) {
       if (false == ObSchemaService::g_liboblog_mode_) {
         //session断开时调用ObTransService::end_trans回滚事务，
@@ -760,7 +758,7 @@ ObMySQLRequestManager* ObSQLSessionInfo::get_request_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == request_manager_) {
-    MTL_SWITCH(get_priv_tenant_id()) {
+    MTL_SWITCH(get_effective_tenant_id()) {
       request_manager_ = MTL(obmysql::ObMySQLRequestManager*);
     }
   }
@@ -2437,15 +2435,25 @@ int ObSQLSessionInfo::on_user_disconnect()
   return ret;
 }
 
+// prepare baseline for the following `calc_txn_free_route` to get the diff
+void ObSQLSessionInfo::prep_txn_free_route_baseline(bool reset_audit)
+{
+#define RESET_TXN_STATE_ENCODER_CHANGED_(x) txn_##x##_info_encoder_.is_changed_ = false
+#define RESET_TXN_STATE_ENCODER_CHANGED(x) RESET_TXN_STATE_ENCODER_CHANGED_(x)
+  LST_DO(RESET_TXN_STATE_ENCODER_CHANGED, (;), static, dynamic, participants, extra);
+#undef RESET_TXN_STATE_ENCODER_CHANGED
+#undef RESET_TXN_STATE_ENCODER_CHANGED_
+  if (reset_audit) {
+    txn_free_route_ctx_.reset_audit_record();
+  }
+  txn_free_route_ctx_.init_before_handle_request(tx_desc_);
+}
+
 void ObSQLSessionInfo::post_sync_session_info()
 {
   if (!get_is_in_retry()) {
-#define RESET_TXN_STATE_ENCODER_CHANGED_(x) txn_##x##_info_encoder_.is_changed_ = false
-#define RESET_TXN_STATE_ENCODER_CHANGED(x) RESET_TXN_STATE_ENCODER_CHANGED_(x)
-    LST_DO(RESET_TXN_STATE_ENCODER_CHANGED, (;), static, dynamic, participants, extra);
-#undef RESET_TXN_STATE_ENCODER_CHANGED
-#undef RESET_TXN_STATE_ENCODER_CHANGED_
-    txn_free_route_ctx_.init_before_handle_request(tx_desc_);
+    // preapre baseline for the following executing stmt/cmd
+    prep_txn_free_route_baseline(false);
   }
 }
 

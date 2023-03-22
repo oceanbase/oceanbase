@@ -136,11 +136,19 @@ class ObTableBatchOperationRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableBatchOperationRequest() : credential_(), table_name_(), table_id_(common::OB_INVALID_ID),
-      tablet_id_(), entity_type_(), batch_operation_(),
-      consistency_level_(), returning_rowkey_(false), returning_affected_entity_(false),
-      returning_affected_rows_(false),
-      binlog_row_image_type_(ObBinlogRowImageType::FULL)
+  ObTableBatchOperationRequest()
+      : credential_(),
+        table_name_(),
+        table_id_(common::OB_INVALID_ID),
+        tablet_id_(),
+        entity_type_(),
+        batch_operation_(),
+        consistency_level_(),
+        returning_rowkey_(false),
+        returning_affected_entity_(false),
+        returning_affected_rows_(false),
+        batch_operation_as_atomic_(false),
+        binlog_row_image_type_(ObBinlogRowImageType::FULL)
       {}
   ~ObTableBatchOperationRequest() {}
 
@@ -153,7 +161,8 @@ public:
                K_(consistency_level),
                K_(returning_rowkey),
                K_(returning_affected_entity),
-               K_(returning_affected_rows));
+               K_(returning_affected_rows),
+               K_(batch_operation_as_atomic));
 public:
   ObString credential_;
   ObString table_name_;
@@ -170,6 +179,8 @@ public:
   bool returning_affected_entity_;
   /// whether return affected_rows
   bool returning_affected_rows_;
+  // batch oepration suppoert atomic operation
+  bool batch_operation_as_atomic_;
   /// Whether record the full row in binlog of modification
   ObBinlogRowImageType binlog_row_image_type_;
 };
@@ -204,26 +215,6 @@ public:
   // only support STRONG
   ObTableConsistencyLevel consistency_level_;
   ObTableQuery query_;
-};
-
-class ObTableQueryResultIterator
-{
-public:
-  ObTableQueryResultIterator(const ObTableQuery *query = nullptr)
-      : query_(query),
-        is_query_sync_(false)
-  {
-  }
-  virtual ~ObTableQueryResultIterator() {}
-  virtual int get_next_result(ObTableQueryResult *&one_result) = 0;
-  virtual bool has_more_result() const = 0;
-  virtual void set_one_result(ObTableQueryResult *result){ UNUSED(result); }
-  virtual ObTableQueryResult *get_one_result() { return nullptr; }
-  virtual void set_query(const ObTableQuery *query) { query_ = query; };
-  virtual void set_query_sync() { is_query_sync_ = true; }
-protected:
-  const ObTableQuery *query_;
-  bool is_query_sync_;
 };
 
 class ObTableQueryAndMutateRequest final

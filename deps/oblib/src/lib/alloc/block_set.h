@@ -73,6 +73,7 @@ public:
   void reset();
   void set_locker(ISetLocker *locker) { locker_ = locker; }
   int64_t sync_wash(int64_t wash_size=INT64_MAX);
+  bool check_has_unfree();
 
 private:
   DISALLOW_COPY_AND_ASSIGN(BlockSet);
@@ -105,11 +106,13 @@ private:
 
 void BlockSet::lock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->lock();
 }
 
 void BlockSet::unlock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->unlock();
 }
 

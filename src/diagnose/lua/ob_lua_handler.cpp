@@ -60,7 +60,7 @@ void *ObLuaHandler::realloc_functor(void *userdata, void *ptr, size_t osize, siz
     // do nothing
   } else if (OB_NOT_NULL(ret = diagnose::alloc(nsize))) {
     if (OB_NOT_NULL(ptr)) {
-      MEMCPY(ret, ptr, std::min(*(uint64_t *)((char *)ptr - 8), nsize));
+      memmove(ret, ptr, std::min(osize, nsize));
     }
   }
   if (OB_NOT_NULL(ptr)) {

@@ -199,7 +199,8 @@ public:
   static int stmt_setup_savepoint_(ObSQLSessionInfo *session,
                                    ObDASCtx &das_ctx,
                                    ObPhysicalPlanCtx *plan_ctx,
-                                   transaction::ObTransService* txs);
+                                   transaction::ObTransService* txs,
+                                   const int64_t nested_level);
   static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback);
   static int kill_query_session(ObSQLSessionInfo &session, const ObSQLSessionState &status);
   static int kill_tx(ObSQLSessionInfo *session, int cause);
@@ -219,7 +220,7 @@ public:
     using namespace oceanbase::transaction;
     return kill_tx(session, static_cast<int>(ObTxAbortCause::SESSION_DISCONNECT));
   }
-  static int create_savepoint(ObExecContext &exec_ctx, const common::ObString &sp_name);
+  static int create_savepoint(ObExecContext &exec_ctx, const common::ObString &sp_name, const bool user_create = false);
   static int rollback_savepoint(ObExecContext &exec_ctx, const common::ObString &sp_name);
   static int release_savepoint(ObExecContext &exec_ctx, const common::ObString &sp_name);
   static int xa_rollback_all_changes(ObExecContext &exec_ctx);
@@ -237,7 +238,7 @@ public:
   static int check_ls_readable(const uint64_t tenant_id,
                                const share::ObLSID &ls_id,
                                const common::ObAddr &addr,
-                               const int64_t max_stale_time_ns,
+                               const int64_t max_stale_time_us,
                                bool &can_read);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlTransControl);
@@ -247,6 +248,10 @@ private:
                                            const ObSQLSessionInfo &session);
   static int inc_session_ref(const ObSQLSessionInfo *session);
   static int acquire_tx_if_need_(transaction::ObTransService *txs, ObSQLSessionInfo &session);
+  static int start_hook_if_need_(ObSQLSessionInfo &session,
+                                 transaction::ObTransService *txs,
+                                 bool &start_hook);
+  static uint32_t get_real_session_id(ObSQLSessionInfo &session);
 public:
   /*
    * create a savepoint without name

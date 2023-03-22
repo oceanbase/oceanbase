@@ -2714,6 +2714,8 @@ int ObTabletFinishRestoreTask::process()
     LOG_WARN("failed to update data status", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(update_restore_status_())) {
     LOG_WARN("failed to update restore status", K(ret), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(check_tablet_valid_())) {
+    LOG_WARN("failed to check tablet valid", K(ret), KPC(tablet_restore_ctx_));
   }
 
   if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
@@ -2792,6 +2794,26 @@ int ObTabletFinishRestoreTask::update_restore_status_()
         K(tablet_restore_ctx_->action_), K(tablet_restore_status));
   }
 
+  return ret;
+}
+
+int ObTabletFinishRestoreTask::check_tablet_valid_()
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  const int64_t timeout_us = ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet finish restore task do not init", K(ret));
+  } else if (OB_FAIL(ls_->get_tablet(tablet_restore_ctx_->tablet_id_, tablet_handle, timeout_us))) {
+    LOG_WARN("failed to get tablet", K(ret), KPC(tablet_restore_ctx_), K(timeout_us));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(tablet->check_valid())) {
+    LOG_WARN("failed to check valid", K(ret), KPC(tablet));
+  }
   return ret;
 }
 

@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2022 Alipay Inc. All Rights Reserved.
  * Authors:
- *     Danling <fengjingkun.fjk@antgroup.com>
+ *     Danling <>
  */
 
 #ifndef OCEANBASE_STORAGE_TENANT_TABLET_STAT_MGR_H_

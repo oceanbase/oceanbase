@@ -362,6 +362,7 @@ static const NonReservedKeyword Oracle_non_reserved_keywords[] =
   {"approx_count_distinct_synopsis_merge", APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE},
   {"ascii", ASCII},
   {"asensitive", ASENSITIVE},
+  {"asis", ASIS},
   {"at", AT},
   {"authors", AUTHORS},
   {"auto", AUTO},

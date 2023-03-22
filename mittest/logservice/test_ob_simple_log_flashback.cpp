@@ -171,6 +171,15 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_basic_func)
   // 3. do flashback
   flashback_srv = get_cluster()[0]->get_flashback_service();
   const int64_t TIMEOUT_US = 10 * 1000 * 1000;
+
+  // 4. test a follower blocknet
+  block_net(leader_idx1, (leader_idx1+1) % 3);
+  int64_t mode_version;
+  flashback_srv = get_cluster()[0]->get_flashback_service();
+  EXPECT_EQ(OB_OP_NOT_ALLOW, flashback_srv->flashback(MTL_ID(), flashback_scn, 5 * 1000 * 1000));
+  unblock_net(leader_idx1, (leader_idx1+1) % 3);
+
+  // 5. test basic flashback
   EXPECT_EQ(OB_SUCCESS, flashback_srv->flashback(MTL_ID(), flashback_scn, TIMEOUT_US));
   LSN new_log_tail1 = leader1.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
   EXPECT_EQ(new_log_tail1, leader1.palf_handle_impl_->sw_.committed_end_lsn_);

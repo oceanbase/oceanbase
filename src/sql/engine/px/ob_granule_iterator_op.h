@@ -56,6 +56,8 @@ public:
   void set_parallelism(int64_t parallelism) { parallelism_ = parallelism; }
   void set_worker_id(int64_t worker_id) { worker_id_ = worker_id; }
   int64_t get_worker_id() { return worker_id_; }
+  int64_t get_px_sequence_id() { return px_sequence_id_; }
+  void set_px_sequence_id(int64_t id) { px_sequence_id_ = id; }
   int add_table_location_keys(common::ObIArray<const ObTableScanSpec*> &tscs);
 private:
   int deep_copy_range(ObIAllocator *allocator, const ObNewRange &src, ObNewRange &dst);
@@ -69,6 +71,7 @@ public:
   ObGranulePump *pump_;
   //for partition pruning
   common::ObSEArray<uint64_t, 2> table_location_keys_;
+  int64_t px_sequence_id_;
 private:
   common::ObIAllocator *deserialize_allocator_;
 };

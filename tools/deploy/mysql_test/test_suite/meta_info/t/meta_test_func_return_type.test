@@ -101,7 +101,6 @@ select str_to_date('04/30/2004 ', '%m/%d/%Y ');
 #select cast(1.1234 as decimal(12,2));
 select date_add(str_to_date(substr('2014-06-05 16:24:54.270374',1,8),'%Y%m%d'),interval 2 day);
 select str_to_date('2014-06-','%Y%m%d');
-###ADD CASE about http://rb.corp.taobao.com/r/94323/
 select '+' + 1;
 select '-' + 1;
 select '.' + 1;

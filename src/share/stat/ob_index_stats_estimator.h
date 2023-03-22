@@ -25,7 +25,7 @@ namespace common
 class ObIndexStatsEstimator : public ObBasicStatsEstimator
 {
 public:
-  ObIndexStatsEstimator(ObExecContext &ctx);
+  explicit ObIndexStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator);
 
   int estimate(const ObTableStatParam &param,
                const ObExtraParam &extra,

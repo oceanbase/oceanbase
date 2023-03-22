@@ -73,7 +73,7 @@ int ObCreateSavePointExecutor::execute(ObExecContext &ctx,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid param", K(ret), K(session));
-  } else if (OB_FAIL(ObSqlTransControl::create_savepoint(ctx, stmt.get_sp_name()))) {
+  } else if (OB_FAIL(ObSqlTransControl::create_savepoint(ctx, stmt.get_sp_name(), true))) {
     LOG_WARN("fail create savepoint", K(ret), K(stmt.get_sp_name()));
   } else if (!session->has_explicit_start_trans()) {
     if (OB_FAIL(session->get_autocommit(ac))) {

@@ -820,6 +820,7 @@ int ObNestedLoopJoinOp::rescan_right_op()
     // NOTE: left batch is ALWAYS continous, NO need to check skip for
     // left_brs under px batch rescan
     batch_info_guard.set_batch_idx(l_idx_);
+    left_batch_.to_exprs(eval_ctx_, l_idx_, l_idx_);
     if (OB_FAIL(fill_cur_row_rescan_param())) {
       LOG_WARN("fail to fill cur row rescan param", K(ret));
     } else if (OB_FAIL(right_->rescan())) {

@@ -2261,7 +2261,7 @@ int ObOptSelectivity::get_like_sel(const OptTableMetas &table_metas,
              ObOptEstUtils::is_calculable_expr(*pattern, params->count()) &&
              ObOptEstUtils::is_calculable_expr(*escape, params->count())) {
     bool is_start_with = false;
-    if (static_cast<const ObColumnRefRawExpr *>(variable)->is_lob_column()) {
+    if (is_lob_storage(variable->get_data_type())) {
       // no statistics for lob type, use default selectivity
       selectivity = DEFAULT_CLOB_LIKE_SEL;
     } else if (OB_FAIL(ObOptEstUtils::if_expr_start_with_patten_sign(params, pattern, escape,
@@ -4103,40 +4103,10 @@ int ObOptSelectivity::convert_valid_obj_for_opt_stats(const ObObj *old_obj,
                                                       const ObObj *&new_obj)
 {
   int ret = OB_SUCCESS;
-  ObObj tmp_obj;
-  if (OB_ISNULL(old_obj)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(old_obj));
-  } else if (old_obj->is_string_type()) {
-    ObString str;
-    if (OB_FAIL(old_obj->get_string(str))) {
-      LOG_WARN("failed to get string", K(ret), K(str));
-    } else {
-      int64_t mb_len = ObCharset::strlen_char(old_obj->get_collation_type(), str.ptr(), str.length());
-      if (mb_len <= OPT_STATS_MAX_VALUE_CAHR_LEN) {
-        new_obj = old_obj;
-      } else {
-        //need truncate string, because the opt stats is gathered after truncate string, such as: max_value、min_value、histogram.
-        ObObj *tmp_obj = NULL;
-        if (OB_ISNULL(tmp_obj = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj))))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc buf", K(ret));
-        } else {
-          int64_t valid_len = ObCharset::charpos(old_obj->get_collation_type(), str.ptr(),
-                                                 str.length(), OPT_STATS_MAX_VALUE_CAHR_LEN);
-          if (OB_UNLIKELY(valid_len <= 0)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected error", K(ret), K(valid_len), K(str), K(OPT_STATS_MAX_VALUE_CAHR_LEN));
-          } else {
-            tmp_obj->set_varchar(str.ptr(), valid_len);
-            tmp_obj->set_meta_type(old_obj->get_meta());
-            new_obj = tmp_obj;
-          }
-        }
-      }
-    }
-  } else {
-    new_obj = old_obj;
+  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(old_obj,
+                                                             alloc,
+                                                             new_obj))) {
+    LOG_WARN("fail to truncated string", K(ret));
   }
   LOG_TRACE("Succeed to convert valid obj for opt stats", KPC(old_obj), KPC(new_obj));
   return ret;

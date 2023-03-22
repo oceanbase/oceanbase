@@ -725,7 +725,7 @@ int ObDDLUtil::generate_build_replica_sql(
 
       if (OB_FAIL(ret)) {
       } else if (oracle_mode) {
-        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) use_px */INTO \"%.*s\".\"%.*s\"(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" as of scn %ld %.*s",
+        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */INTO \"%.*s\".\"%.*s\"(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" as of scn %ld %.*s",
             real_parallelism, execution_id, task_id,
             static_cast<int>(dest_database_name.length()), dest_database_name.ptr(), static_cast<int>(dest_table_name.length()), dest_table_name.ptr(),
             static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
@@ -737,7 +737,7 @@ int ObDDLUtil::generate_build_replica_sql(
           LOG_WARN("fail to assign sql string", K(ret));
         }
       } else {
-        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) use_px */INTO `%.*s`.`%.*s`(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` as of snapshot %ld %.*s",
+        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */INTO `%.*s`.`%.*s`(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` as of snapshot %ld %.*s",
             real_parallelism, execution_id, task_id,
             static_cast<int>(dest_database_name.length()), dest_database_name.ptr(), static_cast<int>(dest_table_name.length()), dest_table_name.ptr(),
             static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
@@ -1001,7 +1001,10 @@ int ObDDLUtil::get_ddl_rpc_timeout(const int64_t tenant_id, const int64_t table_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(get_tablet_count(tenant_id, table_id, tablet_count))) {
-    LOG_WARN("get tablet count failed", K(ret));
+    ret = OB_SUCCESS; // force succ
+    tablet_count = 0;
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_ddl_rpc_timeout(tablet_count, ddl_rpc_timeout_us))) {
     LOG_WARN("get ddl rpc timeout failed", K(ret));
   }
@@ -1035,10 +1038,10 @@ int64_t ObDDLUtil::get_default_ddl_tx_timeout()
 }
 
 
-int ObDDLUtil::get_ddl_cluster_version(
+int ObDDLUtil::get_data_format_version(
     const uint64_t tenant_id,
     const uint64_t task_id,
-    int64_t &ddl_cluster_version)
+    int64_t &data_format_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0
@@ -1067,18 +1070,18 @@ int ObDDLUtil::get_ddl_cluster_version(
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "message_unhex", task_message);
         if (ObDDLType::DDL_CREATE_INDEX == ddl_type) {
           SMART_VAR(rootserver::ObIndexBuildTask, task) {
-            if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
+            if (OB_FAIL(task.deserlize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
-              ddl_cluster_version = task.get_cluster_version();
+              data_format_version = task.get_data_format_version();
             }
           }
         } else {
           SMART_VAR(rootserver::ObTableRedefinitionTask, task) {
-            if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
+            if (OB_FAIL(task.deserlize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
-              ddl_cluster_version = task.get_cluster_version();
+              data_format_version = task.get_data_format_version();
             }
           }
         }
@@ -1087,6 +1090,75 @@ int ObDDLUtil::get_ddl_cluster_version(
   }
   return ret;
 }
+
+static inline void try_replace_user_tenant_id(const uint64_t user_tenant_id, uint64_t &check_tenant_id)
+{
+  check_tenant_id = !is_user_tenant(check_tenant_id) ? check_tenant_id : user_tenant_id;
+}
+
+int ObDDLUtil::replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObAlterTableArg &alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id)) {
+    LOG_TRACE("not user tenant, no need to replace", K(tenant_id));
+  } else {
+    try_replace_user_tenant_id(tenant_id, alter_table_arg.exec_tenant_id_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_arg.index_arg_list_.count(); ++i) {
+      obrpc::ObIndexArg *index_arg = alter_table_arg.index_arg_list_.at(i);
+      try_replace_user_tenant_id(tenant_id, index_arg->exec_tenant_id_);
+      try_replace_user_tenant_id(tenant_id, index_arg->tenant_id_);
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_arg.foreign_key_arg_list_.count(); ++i) {
+      obrpc::ObCreateForeignKeyArg &fk_arg = alter_table_arg.foreign_key_arg_list_.at(i);
+      try_replace_user_tenant_id(tenant_id, fk_arg.exec_tenant_id_);
+      try_replace_user_tenant_id(tenant_id, fk_arg.tenant_id_);
+    }
+    if (is_user_tenant(alter_table_arg.alter_table_schema_.get_tenant_id())) {
+      alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id);
+    }
+    try_replace_user_tenant_id(tenant_id, alter_table_arg.sequence_ddl_arg_.exec_tenant_id_);
+    if (is_user_tenant(alter_table_arg.sequence_ddl_arg_.seq_schema_.get_tenant_id())) {
+      alter_table_arg.sequence_ddl_arg_.seq_schema_.set_tenant_id(tenant_id);
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObCreateIndexArg &create_index_arg)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id)) {
+    LOG_TRACE("not user tenant, no need to replace", K(tenant_id));
+  } else {
+    try_replace_user_tenant_id(tenant_id, create_index_arg.exec_tenant_id_);
+    try_replace_user_tenant_id(tenant_id, create_index_arg.tenant_id_);
+    if (is_user_tenant(create_index_arg.index_schema_.get_tenant_id())) {
+      create_index_arg.index_schema_.set_tenant_id(tenant_id);
+    }
+  }
+  return ret;
+}
+
+#define REPLACE_DDL_ARG_FUNC(ArgType) \
+int ObDDLUtil::replace_user_tenant_id(const uint64_t tenant_id, ArgType &ddl_arg) \
+{ \
+  int ret = OB_SUCCESS; \
+  if (!is_user_tenant(tenant_id)) { \
+    LOG_TRACE("not user tenant, no need to replace", K(tenant_id)); \
+  } else { \
+    try_replace_user_tenant_id(tenant_id, ddl_arg.exec_tenant_id_); \
+    try_replace_user_tenant_id(tenant_id, ddl_arg.tenant_id_); \
+  } \
+  return ret; \
+}
+
+REPLACE_DDL_ARG_FUNC(obrpc::ObDropDatabaseArg)
+REPLACE_DDL_ARG_FUNC(obrpc::ObDropTableArg)
+REPLACE_DDL_ARG_FUNC(obrpc::ObDropIndexArg)
+REPLACE_DDL_ARG_FUNC(obrpc::ObTruncateTableArg)
+
+#undef REPLACE_DDL_ARG_FUNC
+
 
 /******************           ObCheckTabletDataComplementOp         *************/
 
@@ -1106,7 +1178,7 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("fail to get sql proxy, root service is null.!");
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || trace_id.is_invalid() || !inner_sql_exec_addr.is_valid())) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || trace_id.is_invalid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(trace_id), K(inner_sql_exec_addr));
   } else {
@@ -1168,8 +1240,6 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
         while (OB_SUCC(ret)) {
           if (OB_FAIL(result->next())) {
             if (OB_ITER_END == ret) {
-              LOG_INFO("success to get result, and no inner sql task", K(ret), K(sql_string.ptr()),
-                K(ip_str), K(trace_id_str), K(tenant_id), K(sql_string));
               ret = OB_SUCCESS;
               break;
             } else {
@@ -1178,8 +1248,6 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
           } else {
             is_old_task_session_exist =  true;
             EXTRACT_UINT_FIELD_MYSQL(*result, "session_id", session_id, uint64_t);
-            LOG_INFO("succ to match inner sql session in trace id", K(ret), K(sql_string.ptr()),
-              K(session_id), K(tenant_id), K(ip_str), K(trace_id_str), K(sql_string));
           }
         }
       }
@@ -1540,10 +1608,10 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
   const uint64_t ddl_task_id,
   const int64_t execution_id,
   ObIArray<ObTabletID> &tablet_ids,
-  bool &tablet_checksum_status)
+  bool &is_checksums_all_report)
 {
   int ret = OB_SUCCESS;
-  tablet_checksum_status = false;
+  is_checksums_all_report = false;
   common::hash::ObHashMap<uint64_t, bool> tablet_checksum_status_map;
   int64_t tablet_count = tablet_ids.count();
 
@@ -1565,6 +1633,7 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
     LOG_WARN("fail to get tablet checksum status",
       K(ret), K(tenant_id), K(execution_id), K(index_table_id), K(ddl_task_id));
   } else {
+    int64_t report_checksum_cnt = 0;
     int64_t tablet_idx = 0;
     for (tablet_idx = 0; OB_SUCC(ret) && tablet_idx < tablet_count; ++tablet_idx) {
       const ObTabletID &tablet_id = tablet_ids.at(tablet_idx);
@@ -1572,16 +1641,23 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
       bool status = false;
       if (OB_FAIL(tablet_checksum_status_map.get_refactored(tablet_id_id, status))) {
         LOG_WARN("fail to get tablet checksum record from map", K(ret), K(tablet_id_id));
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          break;
+        }
       } else if (!status) {
         break;
+      } else {
+        report_checksum_cnt++;
       }
     }
     if (OB_SUCC(ret)) {
-      if (tablet_idx == tablet_count) {
-        tablet_checksum_status = true;
+      if (report_checksum_cnt == tablet_count) {
+        is_checksums_all_report = true;
       } else {
-        ret = OB_EAGAIN;
-        LOG_INFO("not all tablet has update checksum, will re-check", K(ret), K(tablet_idx), K(tablet_count));
+        is_checksums_all_report = false;
+        LOG_INFO("not all tablet has update checksum",
+          K(ret), K(tablet_idx), K(tablet_count), K(is_checksums_all_report));
       }
     }
   }
@@ -1607,7 +1683,7 @@ int ObCheckTabletDataComplementOp::check_all_tablet_sstable_status(
 {
   int ret = OB_SUCCESS;
   ObArray<ObTabletID> dest_tablet_ids;
-  bool tablet_checksum_status = false;
+  bool is_checksums_all_report = false;
   is_all_sstable_build_finished = false;
 
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == index_table_id || OB_INVALID_TIMESTAMP == snapshot_version ||
@@ -1620,11 +1696,36 @@ int ObCheckTabletDataComplementOp::check_all_tablet_sstable_status(
     LOG_WARN("fail to check tablet merge status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(snapshot_version));
   } else {
     if (is_all_sstable_build_finished) {
-      if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, index_table_id, ddl_task_id, execution_id, dest_tablet_ids, tablet_checksum_status))) {
+      if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, index_table_id, ddl_task_id, execution_id, dest_tablet_ids, is_checksums_all_report))) {
         LOG_WARN("fail to check tablet checksum update status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
       }
-      is_all_sstable_build_finished &= tablet_checksum_status;
+      is_all_sstable_build_finished &= is_checksums_all_report;
     }
+  }
+  return ret;
+}
+
+int ObCheckTabletDataComplementOp::check_finish_report_checksum(
+  const uint64_t tenant_id,
+  const uint64_t index_table_id,
+  const int64_t execution_id,
+  const uint64_t ddl_task_id)
+{
+  int ret = OB_SUCCESS;
+  bool is_checksums_all_report = false;
+  ObArray<ObTabletID> dest_tablet_ids;
+
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == index_table_id ||
+      ddl_task_id == OB_INVALID_ID || execution_id < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to check report checksum finished", K(ret), K(tenant_id), K(index_table_id), K(execution_id), K(ddl_task_id));
+  } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, index_table_id, dest_tablet_ids))) {
+    LOG_WARN("fail to get tablets", K(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, index_table_id, ddl_task_id, execution_id, dest_tablet_ids, is_checksums_all_report))) {
+    LOG_WARN("fail to check tablet checksum update status, maybe EAGAIN", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
+  } else if (!is_checksums_all_report) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tablets checksum not all report!", K(is_checksums_all_report), K(ret));
   }
   return ret;
 }
@@ -1649,43 +1750,48 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
 {
   int ret = OB_SUCCESS;
   need_exec_new_inner_sql = true; // default need execute new inner sql
-  bool is_old_task_session_exist = false;
-  bool is_all_sstable_build_finished = false;
-  bool need_wait = false;
+  bool is_old_task_session_exist = true;
+  bool is_dst_checksums_all_report = false;
 
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to check and wait complement task", K(ret), K(tenant_id), K(table_id));
   } else {
-    LOG_INFO("start to check and wait complement task", K(tenant_id), K(table_id), K(inner_sql_exec_addr), K(trace_id));
-    do {
-      if (OB_FAIL(check_all_tablet_sstable_status(tenant_id, table_id, scn, execution_id, ddl_task_id, is_all_sstable_build_finished))) {
-        LOG_WARN("fail to check task tablet sstable status", K(ret), K(tenant_id), K(table_id), K(scn), K(execution_id), K(ddl_task_id));
-      } else if (is_all_sstable_build_finished) {
-        LOG_INFO("all tablet sstable has build finished");
-      } else {
-        if (OB_FAIL(check_task_inner_sql_session_status(inner_sql_exec_addr, trace_id, tenant_id, execution_id, scn, is_old_task_session_exist))) {
-          LOG_WARN("fail check task inner sql session status", K(ret), K(trace_id), K(inner_sql_exec_addr));
-        } else if (!is_old_task_session_exist) {
-          LOG_WARN("old inner sql session is not exist.", K(ret));
-        } else {
-          usleep(10 * 1000); // sleep 10ms
-        }
-      }
-      if (OB_EAGAIN == ret) { // retry
-        ret = OB_SUCCESS;
-      }
-      need_wait = !is_all_sstable_build_finished && is_old_task_session_exist;
-    } while (OB_SUCC(ret) && need_wait); // TODO: time out
-    ///// end
-    /* Only in table all sstables not finished case, we will do retry */
-    if (is_all_sstable_build_finished) {
+    if (OB_FAIL(check_task_inner_sql_session_status(inner_sql_exec_addr, trace_id, tenant_id, execution_id, scn, is_old_task_session_exist))) {
+      LOG_WARN("fail check task inner sql session status", K(ret), K(trace_id), K(inner_sql_exec_addr));
+    } else if (is_old_task_session_exist) {
+      ret = OB_EAGAIN;
+    } else {
+      LOG_INFO("old inner sql session is not exist.", K(ret));
+    }
+
+    // After old session exits, the rule of retry is specified as follows
+    //
+    // A. for dst table merge checksums of this execution,
+    // - if complete, goto B (need_exec_new_inner_sql = false)
+    // - else if all tablets has been merged, this means some checksum report failed, retry
+    // - else old session must fail/crash, retry
+    //
+    // B. do checksum validation against src table scan checksums of this execution,
+    // - if src checksums are complete, this is exactly a validation
+    // - else old session must fail/crash "unexpectedly" (because complete dst checksum in A
+    //   guarantees at least one preivous execution has successfully finished table scan),
+    //   the validation may returns error due to lack of src checksum records
+
+    ObArray<ObTabletID> dest_tablet_ids;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, table_id, dest_tablet_ids))) {
+      LOG_WARN("fail to get tablets", K(ret), K(tenant_id), K(table_id));
+    } else if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, table_id, ddl_task_id, execution_id, dest_tablet_ids, is_dst_checksums_all_report))) {
+      LOG_WARN("fail to check tablet checksum update status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
+    } else if (is_dst_checksums_all_report) {
       need_exec_new_inner_sql = false;
-      LOG_INFO("no need to execute inner sql to do complement.", K(need_exec_new_inner_sql));
+      LOG_INFO("no need execute because all tablet sstable has build finished", K(need_exec_new_inner_sql));
     }
   }
-  LOG_INFO("end to check and wait complement task", K(ret),
-    K(table_id), K(is_old_task_session_exist), K(is_all_sstable_build_finished), K(need_exec_new_inner_sql));
-
+  if (OB_EAGAIN != ret) {
+    LOG_INFO("end to check and wait complement task", K(ret),
+      K(table_id), K(is_old_task_session_exist), K(is_dst_checksums_all_report), K(need_exec_new_inner_sql));
+  }
   return ret;
 }

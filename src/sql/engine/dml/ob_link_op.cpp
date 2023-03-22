@@ -161,7 +161,7 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
     } else {
       dblink_conn_ = dblink_conn;
       in_xa_trascaction_ = true; //to tell link scan op don't release dblink_conn_
-      LOG_INFO("link op get connection from xa trasaction", KP(dblink_conn_), K(lbt()));
+      LOG_TRACE("link op get connection from xa trasaction", K(dblink_id), KP(dblink_conn_));
     }
     if (OB_SUCC(ret)) {
       dblink_id_ = dblink_id;
@@ -195,7 +195,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
 {
   // combine link_stmt_fmt and parameter strings to final link stmt.
   int ret = OB_SUCCESS;
-  // reserve head_comment_length_ byte length for head comment https://yuque.antfin.com/ob/sql/hcdi1o
+  // reserve head_comment_length_ byte length for head comment
   int64_t link_stmt_pos = head_comment_length_;
   int64_t reserve_proxy_route_space = 0;
   int64_t next_param = 0;
@@ -269,7 +269,11 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
                K(stmt_fmt_pos), K(stmt_fmt_next_param_pos));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (link_stmt_pos >= stmt_buf_len_ && OB_FAIL(extend_stmt_buf(link_stmt_pos + 1))) {
+      LOG_WARN("failed to extend stmt buf", K(ret), K(link_stmt_pos), K(stmt_buf_len_));
+  } else {
     stmt_buf_[link_stmt_pos++] = 0;
     LOG_DEBUG("succ to combine link sql", K(stmt_buf_), K(link_stmt_pos));
     if (DBLINK_DRV_OB == link_type_) {

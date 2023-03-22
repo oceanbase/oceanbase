@@ -122,12 +122,13 @@ static int calc_instrb_text(ObTextStringIter &haystack_iter,
     bool not_first_search = false;
     if (pos_int > 0) {
       int64_t count = 0;
-      while (count < occ_int && (state = haystack_iter.get_next_block(haystack_data)) == TEXTSTRING_ITER_NEXT) {
+      while (OB_SUCC(ret) && count < occ_int &&
+             (state = haystack_iter.get_next_block(haystack_data)) == TEXTSTRING_ITER_NEXT) {
         if (not_first_search) {
           ret_idx = -1;
           pos_int = 1;
         }
-        for (; count < occ_int; ++count) {
+        for (; count < occ_int && OB_SUCC(ret); ++count) {
           if (OB_FAIL(kmp_ctx->instrb_search(haystack_data, pos_int, 1, ret_idx))) {
             LOG_WARN("search needle in haystack failed", K(ret), K(haystack_data), K(needle_data));
           } else {
@@ -140,9 +141,11 @@ static int calc_instrb_text(ObTextStringIter &haystack_iter,
         }
         not_first_search = true;
       }
-      if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = OB_INVALID_DATA;
-        LOG_WARN("get_calc_cs_type failed", K(ret), K(state));
+      if (OB_FAIL(ret)) {
+      } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+              haystack_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
       } else {
         if (ret_idx != 0) { // add accessed length by get_next_block()
           ret_idx += haystack_iter.get_last_accessed_byte_len() + haystack_iter.get_start_offset();
@@ -172,7 +175,7 @@ static int calc_instrb_text(ObTextStringIter &haystack_iter,
           ret_idx = -1;
           pos_int = -1;
         }
-        for (; count < occ_int; ++count) {
+        for (; count < occ_int && OB_SUCC(ret); ++count) {
           if (OB_FAIL(kmp_ctx->instrb_search(haystack_data, pos_int, 1, ret_idx))) {
             LOG_WARN("search needle in haystack failed", K(ret), K(haystack_data), K(needle_data));
           } else {
@@ -187,8 +190,9 @@ static int calc_instrb_text(ObTextStringIter &haystack_iter,
       }
       if (OB_FAIL(ret)) {
       } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = OB_INVALID_DATA;
-        LOG_WARN("get_calc_cs_type failed", K(ret), K(state));
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+              haystack_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
       } else {
         if (ret_idx != 0) { // add accessed length by get_next_block()
           ret_idx += (max_access_byte_len - static_cast<int64_t>(haystack_iter.get_accessed_byte_len()));

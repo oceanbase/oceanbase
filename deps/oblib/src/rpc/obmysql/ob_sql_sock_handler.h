@@ -29,7 +29,7 @@ class ObSqlSockHandler: public ObISqlSockHandler
 {
 public:
   ObSqlSockHandler(ObISMConnectionCallback& conn_cb, ObSqlSockProcessor& sock_processor, ObSqlNio& nio):
-      conn_cb_(conn_cb), sock_processor_(sock_processor), deliver_(nullptr), nio_(nio) {}
+      conn_cb_(conn_cb), sock_processor_(sock_processor), deliver_(nullptr), nio_(&nio) {}
   virtual ~ObSqlSockHandler() {}
   int init(rpc::frame::ObReqDeliver* deliver);
   virtual int on_readable(void* sess) override;
@@ -40,7 +40,7 @@ private:
   ObISMConnectionCallback& conn_cb_;
   ObSqlSockProcessor& sock_processor_;
   rpc::frame::ObReqDeliver* deliver_;
-  ObSqlNio& nio_;
+  ObSqlNio* nio_;
 };
 
 }; // end namespace obmysql

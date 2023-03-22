@@ -140,6 +140,9 @@ public:
                                  const ObRawExpr *to,
                                  const EqualSets &equal_sets);
 
+  static bool is_expr_equivalent(const ObRawExpr *from,
+                                 const ObRawExpr *to);
+
   static int is_const_expr(const ObRawExpr* expr,
                            const EqualSets &equal_sets,
                            const common::ObIArray<ObRawExpr *> &const_exprs,
@@ -263,15 +266,13 @@ public:
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr)
   {
-    return find_item(exprs, expr);
+    int64_t idx = -1;
+    return find_equal_expr(exprs, expr, idx);
   }
 
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr,
-                              int64_t &idx)
-  {
-    return find_item(exprs, expr ,&idx);
-  }
+                              int64_t &idx);
 
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr,
@@ -775,7 +776,10 @@ public:
                                              ObSQLSessionInfo *session_info,
                                              const ObItemType filter_type,
                                              ObRawExpr *const_expr,
-                                             ObRawExpr *&offset_int_expr);
+                                             ObRawExpr *&offset_int_expr,
+                                             ObRawExpr *zero_expr,
+                                             bool &offset_is_not_neg,
+                                             ObTransformerCtx *ctx);
 
   static int convert_rownum_filter_as_limit(ObRawExprFactory &expr_factory,
                                             ObSQLSessionInfo *session_info,
@@ -1432,6 +1436,12 @@ public:
   static int replace_column_with_select_for_partid(const ObInsertStmt *stmt,
                                                    ObOptimizerContext &opt_ctx,
                                                    ObRawExpr *&calc_part_id_expr);
+
+  static int check_contain_my_exec_param(ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain);
+
+  static int truncate_string_for_opt_stats(const ObObj *old_obj,
+                                           ObIAllocator &alloc,
+                                           const ObObj *&new_obj);
 
 private:
   //disallow construct

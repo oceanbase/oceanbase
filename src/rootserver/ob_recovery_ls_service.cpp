@@ -53,10 +53,6 @@ using namespace palf;
 namespace rootserver
 {
 
-int ObRecoveryLSService::mtl_init(ObRecoveryLSService*&ka)
-{
-  return ka->init();
-}
 int ObRecoveryLSService::init()
 {
   int ret = OB_SUCCESS;
@@ -103,7 +99,7 @@ void ObRecoveryLSService::do_work()
       uint64_t thread_idx = get_thread_idx();
       ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
       ObAllTenantInfo tenant_info;
-      //two thread for seed log and recovery_ls_manager 
+      //two thread for seed log and recovery_ls_manager
       if (!is_user_tenant(tenant_id_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls recovery thread must run on user tenant", KR(ret), K(tenant_id_));
@@ -114,7 +110,7 @@ void ObRecoveryLSService::do_work()
         LOG_WARN("failed to get tenant info", KR(ret));
       } else if (OB_FAIL(check_can_do_recovery_(tenant_info))) {
         LOG_WARN("failed to check do recovery", KR(ret), K(tenant_info));
-      } else if (0 == thread_idx) { 
+      } else if (0 == thread_idx) {
         if (OB_SUCCESS != (tmp_ret = process_recovery_ls_manager())) {
           ret = OB_SUCC(ret) ? tmp_ret : ret;
           LOG_WARN("failed to process recovery ls manager", KR(ret), KR(tmp_ret));

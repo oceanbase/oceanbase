@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -262,14 +262,11 @@ public:
   }
   void callback(int ret_code, ObTableLoadTask *task) override
   {
-    int ret = ret_code;
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(compactor_->handle_compact_task_finish(ret_code))) {
-        LOG_WARN("fail to handle_compact_task_finish", KR(ret));
-      }
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(compactor_->handle_compact_task_finish(ret_code))) {
+      LOG_WARN("fail to handle compact task finish", KR(ret));
     }
     if (OB_FAIL(ret)) {
-      compactor_->set_has_error();
       ctx_->store_ctx_->set_status_error(ret);
     }
     ctx_->free_task(task);
@@ -467,9 +464,10 @@ int ObTableLoadMultipleHeapTableCompactor::handle_compact_task_finish(int ret_co
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ret_code)) {
+    set_has_error();
   } else {
+    const int64_t task_to_wait = param_->session_count_;
     const int64_t finish_task_count = ATOMIC_AAF(&finish_task_count_, 1);
-    int64_t task_to_wait = param_->session_count_;
     if (task_to_wait == finish_task_count) {
       if (OB_LIKELY(!(mem_ctx_.has_error_)) && OB_FAIL(finish())) {
         LOG_WARN("fail to start finish", KR(ret));

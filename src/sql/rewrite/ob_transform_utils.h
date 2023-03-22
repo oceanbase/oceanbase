@@ -443,7 +443,8 @@ public:
   
   static int is_const_expr_not_null(ObNotNullContext &ctx,
                                     const ObRawExpr *expr,
-                                    bool &is_not_null);
+                                    bool &is_not_null,
+                                    bool &is_null);
 
   static int is_general_expr_not_null(ObNotNullContext &ctx,
                                       const ObRawExpr *expr,
@@ -1201,7 +1202,6 @@ public:
                                 ObRawExpr *upper_offset,
                                 ObRawExpr *&limit_expr,
                                 ObRawExpr *&offset_expr);
-
   static int compare_const_expr_result(ObTransformerCtx *ctx,
                                       ObRawExpr *expr,
                                       ObItemType op_type,
@@ -1226,6 +1226,10 @@ public:
                                ObPCConstParamInfo &const_param_info);
 
   static int convert_column_expr_to_select_expr(const common::ObIArray<ObRawExpr*> &column_exprs,
+                                                const ObSelectStmt &inner_stmt,
+                                                common::ObIArray<ObRawExpr*> &select_exprs);
+
+  static int convert_set_op_expr_to_select_expr(const common::ObIArray<ObRawExpr*> &set_op_exprs,
                                                 const ObSelectStmt &inner_stmt,
                                                 common::ObIArray<ObRawExpr*> &select_exprs);
 
@@ -1625,8 +1629,6 @@ public:
                                             ObWinFunRawExpr &win_expr,
                                             ObRawExpr* order_expr);
 
-  static int check_stmt_from_one_dblink(ObDMLStmt *stmt, bool &from_one_dblink);
-
   static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
                                              bool &is_valid);
 
@@ -1665,6 +1667,12 @@ public:
                                 ObIArray<ObRawExpr *> *rollup_exprs = NULL,
                                 ObIArray<ObRawExpr *> *having_exprs = NULL,
                                 ObIArray<OrderItem> *order_items = NULL);
+
+  /* Push all content of the parent stmt into an inline view,
+     and keep the ptr of the parent stmt  */
+  static int pack_stmt(ObTransformerCtx *ctx,
+                       ObSelectStmt *parent_stmt,
+                       ObSelectStmt **child_stmt_ptr = NULL);
 
   static int generate_select_list(ObTransformerCtx *ctx,
                                   ObDMLStmt *stmt,

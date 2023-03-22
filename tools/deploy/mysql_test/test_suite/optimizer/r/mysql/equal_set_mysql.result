@@ -6568,11 +6568,13 @@ Query Plan
 |3 |   EXCHANGE IN DISTR         |        |1       |26          |
 |4 |    EXCHANGE OUT DISTR (HASH)|:EX10000|1       |26          |
 |5 |     HASH DISTINCT           |        |1       |26          |
-|6 |      PX PARTITION ITERATOR  |        |3       |26          |
-|7 |       UNION ALL             |        |3       |26          |
+|6 |      UNION ALL              |        |3       |26          |
+|7 |       PX PARTITION ITERATOR |        |1       |9           |
 |8 |        TABLE SCAN           |t1      |1       |9           |
-|9 |        TABLE SCAN           |t2      |1       |9           |
-|10|        TABLE SCAN           |t3      |1       |9           |
+|9 |       PX PARTITION ITERATOR |        |1       |9           |
+|10|        TABLE SCAN           |t2      |1       |9           |
+|11|       PX PARTITION ITERATOR |        |1       |9           |
+|12|        TABLE SCAN           |t3      |1       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -6587,17 +6589,21 @@ Outputs & filters:
   5 - output([UNION([1])]), filter(nil), rowset=256
       distinct([UNION([1])])
   6 - output([UNION([1])]), filter(nil), rowset=256
-      partition wise, force partition granule
-  7 - output([UNION([1])]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
   8 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t2.a]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+ 10 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
- 10 - output([t3.b]), filter(nil), rowset=256
+ 11 - output([t3.b]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+ 12 - output([t3.b]), filter(nil), rowset=256
       access([t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -6968,13 +6974,15 @@ Query Plan
 |7 |       EXCHANGE IN DISTR         |        |1       |26          |
 |8 |        EXCHANGE OUT DISTR (HASH)|:EX10000|1       |26          |
 |9 |         HASH DISTINCT           |        |1       |26          |
-|10|          PX PARTITION ITERATOR  |        |3       |26          |
-|11|           UNION ALL             |        |3       |26          |
+|10|          UNION ALL              |        |3       |26          |
+|11|           PX PARTITION ITERATOR |        |1       |9           |
 |12|            TABLE SCAN           |t1      |1       |9           |
-|13|            TABLE SCAN           |t2      |1       |9           |
-|14|            TABLE SCAN           |t3      |1       |9           |
-|15|   PX PARTITION ITERATOR         |        |1       |9           |
-|16|    TABLE SCAN                   |t5      |1       |9           |
+|13|           PX PARTITION ITERATOR |        |1       |9           |
+|14|            TABLE SCAN           |t2      |1       |9           |
+|15|           PX PARTITION ITERATOR |        |1       |9           |
+|16|            TABLE SCAN           |t3      |1       |9           |
+|17|   PX PARTITION ITERATOR         |        |1       |9           |
+|18|    TABLE SCAN                   |t5      |1       |9           |
 =====================================================================
 Outputs & filters:
 -------------------------------------
@@ -6996,23 +7004,27 @@ Outputs & filters:
   9 - output([UNION([1])]), filter(nil), rowset=256
       distinct([UNION([1])])
  10 - output([UNION([1])]), filter(nil), rowset=256
-      partition wise, force partition granule
- 11 - output([UNION([1])]), filter(nil), rowset=256
+ 11 - output([t1.a]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
  12 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t2.a]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+ 14 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
- 14 - output([t3.b]), filter(nil), rowset=256
+ 15 - output([t3.b]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+ 16 - output([t3.b]), filter(nil), rowset=256
       access([t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
- 15 - output([t5.a], [t5.b], [t5.c]), filter(nil), rowset=256
+ 17 - output([t5.a], [t5.b], [t5.c]), filter(nil), rowset=256
       affinitize, force partition granule
- 16 - output([t5.a], [t5.b], [t5.c]), filter(nil), rowset=256
+ 18 - output([t5.a], [t5.b], [t5.c]), filter(nil), rowset=256
       access([t5.a], [t5.b], [t5.c]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
@@ -7367,34 +7379,40 @@ Outputs & filters:
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select a from t1 union all select a from t2 union all select b from t3;
 Query Plan
-===========================================================
-|ID|OPERATOR               |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------
-|0 |PX COORDINATOR         |        |3       |27          |
-|1 | EXCHANGE OUT DISTR    |:EX10000|3       |27          |
-|2 |  PX PARTITION ITERATOR|        |3       |26          |
-|3 |   UNION ALL           |        |3       |26          |
-|4 |    TABLE SCAN         |t1      |1       |9           |
-|5 |    TABLE SCAN         |t2      |1       |9           |
-|6 |    TABLE SCAN         |t3      |1       |9           |
-===========================================================
+============================================================
+|ID|OPERATOR                |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |PX COORDINATOR          |        |3       |27          |
+|1 | EXCHANGE OUT DISTR     |:EX10000|3       |27          |
+|2 |  UNION ALL             |        |3       |26          |
+|3 |   PX PARTITION ITERATOR|        |1       |9           |
+|4 |    TABLE SCAN          |t1      |1       |9           |
+|5 |   PX PARTITION ITERATOR|        |1       |9           |
+|6 |    TABLE SCAN          |t2      |1       |9           |
+|7 |   PX PARTITION ITERATOR|        |1       |9           |
+|8 |    TABLE SCAN          |t3      |1       |9           |
+============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(UNION([1]))]), filter(nil), rowset=256
   1 - output([INTERNAL_FUNCTION(UNION([1]))]), filter(nil), rowset=256
       dop=1
   2 - output([UNION([1])]), filter(nil), rowset=256
-      partition wise, force partition granule
-  3 - output([UNION([1])]), filter(nil), rowset=256
+  3 - output([t1.a]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
   4 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t2.a]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+  6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([t3.b]), filter(nil), rowset=256
+  7 - output([t3.b]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+  8 - output([t3.b]), filter(nil), rowset=256
       access([t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -7742,11 +7760,13 @@ Query Plan
 |5 |   EXCHANGE IN DISTR         |        |3       |27          |
 |6 |    EXCHANGE OUT DISTR (PKEY)|:EX10000|3       |27          |
 |7 |     SUBPLAN SCAN            |t4      |3       |26          |
-|8 |      PX PARTITION ITERATOR  |        |3       |26          |
-|9 |       UNION ALL             |        |3       |26          |
+|8 |      UNION ALL              |        |3       |26          |
+|9 |       PX PARTITION ITERATOR |        |1       |9           |
 |10|        TABLE SCAN           |t1      |1       |9           |
-|11|        TABLE SCAN           |t2      |1       |9           |
-|12|        TABLE SCAN           |t3      |1       |9           |
+|11|       PX PARTITION ITERATOR |        |1       |9           |
+|12|        TABLE SCAN           |t2      |1       |9           |
+|13|       PX PARTITION ITERATOR |        |1       |9           |
+|14|        TABLE SCAN           |t3      |1       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -7767,17 +7787,21 @@ Outputs & filters:
   7 - output([t4.a]), filter(nil), rowset=256
       access([t4.a])
   8 - output([UNION([1])]), filter(nil), rowset=256
-      partition wise, force partition granule
-  9 - output([UNION([1])]), filter(nil), rowset=256
+  9 - output([t1.a]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
  10 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
  11 - output([t2.a]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+ 12 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
- 12 - output([t3.b]), filter(nil), rowset=256
+ 13 - output([t3.b]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+ 14 - output([t3.b]), filter(nil), rowset=256
       access([t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true

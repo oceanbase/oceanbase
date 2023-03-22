@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -424,6 +424,7 @@ int ObTableLoadGeneralTableCompactor::start_compact()
   int ret = OB_SUCCESS;
   const int64_t thread_count = store_ctx_->task_scheduler_->get_thread_count();
   ObTableLoadTableCtx *ctx = store_ctx_->ctx_;
+  running_thread_count_ = thread_count;
   for (int32_t thread_idx = 0; OB_SUCC(ret) && thread_idx < thread_count; ++thread_idx) {
     ObTableLoadTask *task = nullptr;
     // 1. 分配task
@@ -441,10 +442,6 @@ int ObTableLoadGeneralTableCompactor::start_compact()
     // 4. 把task放入调度器
     else if (OB_FAIL(store_ctx_->task_scheduler_->add_task(thread_idx, task))) {
       LOG_WARN("fail to add task", KR(ret), K(thread_idx), KPC(task));
-    }
-    // 5. inc running_thread_count_
-    else {
-      ATOMIC_INC(&running_thread_count_);
     }
     if (OB_FAIL(ret)) {
       if (nullptr != task) {

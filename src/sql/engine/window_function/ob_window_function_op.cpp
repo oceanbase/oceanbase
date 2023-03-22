@@ -654,7 +654,7 @@ int ObWindowFunctionOp::NonAggrCellLeadOrLag::eval(RowsReader &row_reader,
           lead_lag_params[VALUE_EXPR] = *tmp_result;
           if (wf_info_.is_ignore_null_
               && tmp_result->is_null()) {
-            //bug: https://work.aone.alibaba-inc.com/issue/24124629
+            //bug:
             //row_idx为null的时候，非ignore nulls下漏掉step++;
             step = (j == row_idx) ? step+1 : step;
           } else if (step++ == offset) {
@@ -2368,7 +2368,7 @@ int ObWindowFunctionOp::rd_fetch_patch()
 
     const ObRDWFWholeMsg *whole_msg = NULL;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(handler->get_sqc_proxy().get_dh_msg(
+    } else if (OB_FAIL(handler->get_sqc_proxy().get_dh_msg_sync(
                 MY_SPEC.id_, dtl::DH_RANGE_DIST_WF_PIECE_MSG, piece_msg, whole_msg,
                 ctx_.get_physical_plan_ctx()->get_timeout_timestamp()))) {
       LOG_WARN("get range distribute window function msg failed", K(ret));
@@ -3169,7 +3169,7 @@ int ObWindowFunctionOp::get_participator_whole_msg(
     piece.target_dfo_id_ = proxy.get_dfo_id();
     piece.pby_hash_value_array_ = pby_hash_value_array;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(proxy.get_dh_msg(MY_SPEC.id_, dtl::DH_SECOND_STAGE_REPORTING_WF_WHOLE_MSG,
+      if (OB_FAIL(proxy.get_dh_msg_sync(MY_SPEC.id_, dtl::DH_SECOND_STAGE_REPORTING_WF_WHOLE_MSG,
                   piece, temp_whole_msg, ctx_.get_physical_plan_ctx()->get_timeout_timestamp()))) {
         LOG_WARN("fail to get reporting wf whole msg", K(ret), K(piece), KPC(temp_whole_msg));
       } else if (OB_ISNULL(temp_whole_msg)) {
@@ -3223,6 +3223,8 @@ int ObWindowFunctionOp::participator_coordinate(
   return ret;
 }
 
+// Store from store_begin_idx to store_begin_idx + store_num
+// Skip rows of beginning that have been stored already but haven't been restore
 int ObWindowFunctionOp::store_all_expr_datums(int64_t store_begin_idx, int64_t store_num)
 {
   int ret = OB_SUCCESS;
@@ -3231,14 +3233,14 @@ int ObWindowFunctionOp::store_all_expr_datums(int64_t store_begin_idx, int64_t s
     LOG_WARN("backup interval not continuous", K(ret), K(store_begin_idx), K(restore_row_cnt_));
   } else if (restore_row_cnt_ < store_begin_idx + store_num) {
     const ObIArray<ObExpr *> &all_expr = get_all_expr();
-    int64_t memcpy_length = store_num * sizeof(ObDatum);
+    int64_t memcpy_length = (store_begin_idx + store_num - restore_row_cnt_) * sizeof(ObDatum);
     if (OB_LIKELY(memcpy_length > 0)) {
       ObIArray<ObDatum*> &src_datums = all_expr_datums_;
       ObIArray<ObDatum*> &dest_datums = all_expr_datums_copy_;
       for (int64_t i = 0; i < all_expr_datums_.count(); i++) {
         const bool expr_batch_result = all_expr.at(i)->is_batch_result();
-        ObDatum *src_datum = src_datums.at(i) + store_begin_idx;
-        ObDatum *dest_datum = dest_datums.at(i) + store_begin_idx;
+        ObDatum *src_datum = src_datums.at(i) + restore_row_cnt_;
+        ObDatum *dest_datum = dest_datums.at(i) + restore_row_cnt_;
         if (expr_batch_result) {
           MEMCPY(dest_datum, src_datum, memcpy_length);
         } else if (0 == store_begin_idx && store_num >= 1) {

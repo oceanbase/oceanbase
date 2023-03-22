@@ -69,7 +69,6 @@ public:
   inline int64_t get_normal_hold() const;
   inline int64_t get_normal_used() const;
   inline int64_t get_normal_alloc() const;
-  bool check_has_unfree(const char **first_label=NULL);
 
 private:
   AObject *alloc_normal_object(const uint32_t cls, const ObMemAttr &attr);
@@ -92,9 +91,9 @@ private:
 
   void do_free_object(AObject *obj);
   void do_free_dirty_list();
+  bool check_has_unfree(const char **first_label=NULL);
 
 private:
-  bool check_unfree_;
   __MemoryContext__ *mem_context_;
   ISetLocker *locker_;
   IBlockMgr *blk_mgr_;
@@ -127,11 +126,13 @@ private:
 
 inline void ObjectSet::lock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->lock();
 }
 
 inline void ObjectSet::unlock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->unlock();
 }
 

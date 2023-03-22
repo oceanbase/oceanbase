@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SQL_ENG
 
@@ -1241,7 +1241,7 @@ int ObLoadDataDirectImpl::FileLoadExecutor::handle_all_task_result()
 {
   int ret = OB_SUCCESS;
   TaskHandle *handle = nullptr;
-  while (handle_reserve_queue_.count() > 0) {
+  while (OB_SUCC(ret) && handle_reserve_queue_.count() > 0) {
     if (OB_FAIL(handle_reserve_queue_.pop(handle))) {
       LOG_WARN("fail to pop handle", KR(ret));
     } else if (OB_ISNULL(handle)) {

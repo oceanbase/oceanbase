@@ -23,6 +23,7 @@
 #include "common/ob_smart_call.h"
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/engine/cmd/ob_table_direct_insert_service.h"
+#include "sql/dblink/ob_dblink_utils.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -400,7 +401,7 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
                                     const ObSQLSessionInfo &session,
                                     bool &is_use_pdml)
 {
-  // https://yuque.antfin-inc.com/xiaochu.yh/doc/ii6elo
+  //
   // 1. pdml: force parallel dml & no DISABLE_PARALLEL_DML hint
   // 2. enable parallel query: parallel hint | sess enable_parallel_query
   //    pdml: enable parallel dml + enable parallel query
@@ -481,6 +482,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt &stmt,
   const ObDelUpdStmt &pdml_stmt = static_cast<const ObDelUpdStmt &>(stmt);
   ObSEArray<const ObDmlTableInfo*, 2> table_infos;
   bool enable_all_pdml_feature = false; // 默认非注入错误情况下，关闭PDML不稳定feature
+  bool stmt_has_dblink = false;
   // 目前通过注入错误的方式来打开PDML不稳定功能，用于PDML全部功能的case回归
   // 对应的event注入任何类型的错误，都会打开PDML非稳定功能
   ret = OB_E(EventTable::EN_ENABLE_PDML_ALL_FEATURE) OB_SUCCESS;
@@ -511,6 +513,12 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt &stmt,
              static_cast< const ObInsertStmt &>(stmt).is_insert_up()) {
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_INSERT_UP);
+  } else if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(&stmt, stmt_has_dblink, true))) {
+    LOG_WARN("failed to find dblink in stmt", K(ret));
+  } else if (stmt_has_dblink) {
+    is_use_pdml = false;
+    ctx_.add_plan_note(PARALLEL_DISABLED_BY_DBLINK);
+    ctx_.set_has_dblink(true);
   } else if (ctx_.contain_user_nested_sql()) {
     //user nested sql can't use PDML plan, force to use DAS plan
     //if online ddl has pl udf, only this way, allow it use PDML plan
@@ -521,7 +529,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt &stmt,
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_NESTED_SQL);
   } else if (stmt::T_DELETE == stmt.get_stmt_type()) {
-    // https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/5345309
+    //
     // if no trigger, no foreign key, delete can do pdml, even if with local unique index
     is_use_pdml = true;
   } else if (!ctx_.is_online_ddl()) {
@@ -615,6 +623,7 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   bool session_enable_parallel = false;
   bool has_var_assign = false;
   bool is_var_assign_only_in_root_stmt = false;
+  bool stmt_has_dblink = false;
   uint64_t session_force_parallel_dop = 1;
   int64_t max_table_dop = 1;
   int64_t max_table_hint = 1;
@@ -671,10 +680,16 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
       ctx_.set_parallel(ObGlobalHint::DEFAULT_PARALLEL);
     }
     //following above rule, but if stmt contain pl_udf, force das, parallel should be 1
-    if (parallel > 1 && ctx_.has_pl_udf()) {
+    if (ctx_.get_parallel() > 1 && ctx_.has_pl_udf()) {
       ctx_.set_parallel_rule(PXParallelRule::PL_UDF_DAS_FORCE_SERIALIZE);
       ctx_.set_parallel(1);
       ctx_.add_plan_note(PARALLEL_DISABLED_BY_PL_UDF_DAS, 1);
+    }
+    if (ctx_.has_dblink()) {
+      //if stmt contain dblink, force das, parallel should be 1
+      ctx_.set_parallel_rule(PXParallelRule::DBLINK_FORCE_SERIALIZE);
+      ctx_.set_parallel(1);
+      ctx_.add_plan_note(PARALLEL_DISABLED_BY_DBLINK, 1);
     }
     bool is_direct_insert = false;
     if (OB_FAIL(ObTableDirectInsertService::check_direct_insert(ctx_, stmt, is_direct_insert))) {

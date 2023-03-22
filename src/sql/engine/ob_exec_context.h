@@ -429,7 +429,10 @@ public:
   const ObIArray<ObPxTabletRange> &get_partition_ranges() const { return part_ranges_; }
   int set_partition_ranges(const ObIArray<ObPxTabletRange> &part_ranges);
   int add_partition_range(ObPxTabletRange &part_range);
-  int fill_px_batch_info(ObBatchRescanParams &params, int64_t batch_id);
+  int fill_px_batch_info(
+      ObBatchRescanParams &params,
+      int64_t batch_id,
+      sql::ObExpr::ObExprIArray &array);
   int64_t get_px_batch_id() { return px_batch_id_; }
 
   ObDmlEventType get_dml_event() const { return dml_event_; }
@@ -459,6 +462,8 @@ public:
     eval_tmp_allocator_.set_attr(attr);
   }
   ObTableDirectInsertCtx &get_table_direct_insert_ctx() { return table_direct_insert_ctx_; }
+  void set_errcode(const int errcode) { ATOMIC_STORE(&errcode_, errcode); }
+  int get_errcode() const { return ATOMIC_LOAD(&errcode_); }
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -631,6 +636,8 @@ protected:
   // -------------------
   // for direct insert
   ObTableDirectInsertCtx table_direct_insert_ctx_;
+  // for deadlock detect, set in do_close_plan
+  int errcode_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

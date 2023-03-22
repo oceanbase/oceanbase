@@ -140,7 +140,7 @@ public:
       ret = common::OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "target_monitor is null", K(ret), K(px_tenant_info));
     } else if (OB_FAIL(px_res_info->get_target_monitor()->refresh_statistics(need_refresh_all_))) {
-      COMMON_LOG(WARN, "target monitor refresh statistics failed", K(ret), KPC(px_res_info->get_target_monitor()));
+      COMMON_LOG(WARN, "target monitor refresh statistics failed", K(ret), K(px_tenant_info), KPC(px_res_info->get_target_monitor()));
     }
     //外面需要遍历所有的租户，此处不能返回false
     return true;

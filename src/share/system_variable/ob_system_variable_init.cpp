@@ -2866,67 +2866,53 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[218].info_ = "The limited percentage of tenant memory for sql plan" ;
-      ObSysVars[218].name_ = "ob_sql_plan_memory_percentage" ;
-      ObSysVars[218].data_type_ = ObIntType ;
-      ObSysVars[218].value_ = "5" ;
-      ObSysVars[218].min_val_ = "0" ;
-      ObSysVars[218].max_val_ = "80" ;
-      ObSysVars[218].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[218].id_ = SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE] = 218 ;
-    ObSysVars[218].alias_ = "OB_SV_SQL_PLAN_MEMORY_PERCENTAGE" ;
-    }();
-
-    [&] (){
-      ObSysVars[219].info_ = "control whether lob use partial update" ;
-      ObSysVars[219].name_ = "log_row_value_options" ;
-      ObSysVars[219].data_type_ = ObVarcharType ;
-      ObSysVars[219].value_ = "" ;
-      ObSysVars[219].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[219].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid" ;
-      ObSysVars[219].id_ = SYS_VAR_LOG_ROW_VALUE_OPTIONS ;
+      ObSysVars[218].info_ = "control whether lob use partial update" ;
+      ObSysVars[218].name_ = "log_row_value_options" ;
+      ObSysVars[218].data_type_ = ObVarcharType ;
+      ObSysVars[218].value_ = "" ;
+      ObSysVars[218].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[218].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid" ;
+      ObSysVars[218].id_ = SYS_VAR_LOG_ROW_VALUE_OPTIONS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_ROW_VALUE_OPTIONS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_ROW_VALUE_OPTIONS] = 219 ;
-    ObSysVars[219].alias_ = "OB_SV_LOG_ROW_VALUE_OPTIONS" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_ROW_VALUE_OPTIONS] = 218 ;
+    ObSysVars[218].alias_ = "OB_SV_LOG_ROW_VALUE_OPTIONS" ;
     }();
 
     [&] (){
-      ObSysVars[220].info_ = "max stale time(us) for weak read query " ;
-      ObSysVars[220].name_ = "ob_max_read_stale_time" ;
-      ObSysVars[220].data_type_ = ObIntType ;
-      ObSysVars[220].value_ = "5000000" ;
-      ObSysVars[220].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[220].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
-      ObSysVars[220].id_ = SYS_VAR_OB_MAX_READ_STALE_TIME ;
+      ObSysVars[219].info_ = "max stale time(us) for weak read query " ;
+      ObSysVars[219].name_ = "ob_max_read_stale_time" ;
+      ObSysVars[219].data_type_ = ObIntType ;
+      ObSysVars[219].value_ = "5000000" ;
+      ObSysVars[219].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[219].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
+      ObSysVars[219].id_ = SYS_VAR_OB_MAX_READ_STALE_TIME ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_MAX_READ_STALE_TIME)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_MAX_READ_STALE_TIME] = 220 ;
-    ObSysVars[220].alias_ = "OB_SV_MAX_READ_STALE_TIME" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_MAX_READ_STALE_TIME] = 219 ;
+    ObSysVars[219].alias_ = "OB_SV_MAX_READ_STALE_TIME" ;
     }();
 
     [&] (){
-      ObSysVars[221].info_ = "control wether we need to gather optimizer stats on insert into select/create table as select" ;
-      ObSysVars[221].name_ = "_optimizer_gather_stats_on_load" ;
-      ObSysVars[221].data_type_ = ObIntType ;
-      ObSysVars[221].value_ = "1" ;
-      ObSysVars[221].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[221].id_ = SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD ;
+      ObSysVars[220].info_ = "control wether we need to gather optimizer stats on insert into select/create table as select" ;
+      ObSysVars[220].name_ = "_optimizer_gather_stats_on_load" ;
+      ObSysVars[220].data_type_ = ObIntType ;
+      ObSysVars[220].value_ = "1" ;
+      ObSysVars[220].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[220].id_ = SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD] = 221 ;
-    ObSysVars[221].alias_ = "OB_SV__OPTIMIZER_GATHER_STATS_ON_LOAD" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD] = 220 ;
+    ObSysVars[220].alias_ = "OB_SV__OPTIMIZER_GATHER_STATS_ON_LOAD" ;
     }();
 
     [&] (){
-      ObSysVars[222].info_ = "used in the dblink write transaction, the TM side informs the RM side of the necessary information about establishing a reverse dblink by setting system variables" ;
-      ObSysVars[222].name_ = "_set_reverse_dblink_infos" ;
-      ObSysVars[222].data_type_ = ObVarcharType ;
-      ObSysVars[222].value_ = "" ;
-      ObSysVars[222].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[222].id_ = SYS_VAR__SET_REVERSE_DBLINK_INFOS ;
+      ObSysVars[221].info_ = "used in the dblink write transaction, the TM side informs the RM side of the necessary information about establishing a reverse dblink by setting system variables" ;
+      ObSysVars[221].name_ = "_set_reverse_dblink_infos" ;
+      ObSysVars[221].data_type_ = ObVarcharType ;
+      ObSysVars[221].value_ = "" ;
+      ObSysVars[221].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[221].id_ = SYS_VAR__SET_REVERSE_DBLINK_INFOS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SET_REVERSE_DBLINK_INFOS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__SET_REVERSE_DBLINK_INFOS] = 222 ;
-    ObSysVars[222].alias_ = "OB_SV__SET_REVERSE_DBLINK_INFOS" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__SET_REVERSE_DBLINK_INFOS] = 221 ;
+    ObSysVars[221].alias_ = "OB_SV__SET_REVERSE_DBLINK_INFOS" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -2935,7 +2921,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 223;
+static int64_t var_amount = 222;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

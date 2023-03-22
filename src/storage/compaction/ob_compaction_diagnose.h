@@ -22,6 +22,10 @@ namespace storage
 {
 class ObPGPartition;
 }
+namespace rootserver
+{
+  class ObMajorFreezeService;
+}
 using namespace storage;
 using namespace share;
 namespace compaction
@@ -88,6 +92,9 @@ struct ObCompactionDiagnoseInfo
     DIA_STATUS_NOT_SCHEDULE = 0,
     DIA_STATUS_RUNNING = 1,
     DIA_STATUS_FAILED = 2,
+    DIA_STATUS_FINISH = 3,
+    DIA_STATUS_RS_UNCOMPACTED = 4, // RS diagnose
+    DIA_STATUS_DIA_FAILED = 5,
     DIA_STATUS_MAX
   };
   const static char *ObDiagnoseStatusStr[DIA_STATUS_MAX];
@@ -113,6 +120,7 @@ public:
   int init(ObCompactionDiagnoseInfo *info_array, const int64_t max_cnt);
   int diagnose_all_tablets(const int64_t tenant_id);
   int diagnose_tenant_tablet();
+  int diagnose_tenant_major_merge();
   int64_t get_cnt() { return idx_; }
   static int diagnose_dag(
       const storage::ObMergeType merge_type,
@@ -131,7 +139,8 @@ private:
   int diagnose_tablet_major_merge(
       const int64_t compaction_scn,
       const ObLSID &ls_id,
-      ObTablet &tablet);
+      ObTablet &tablet,
+      bool &tablet_major_finish);
   int diagnose_tablet_merge(
       ObTabletMergeDag &dag,
       const ObMergeType type,
@@ -157,10 +166,14 @@ private:
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
       ObScheduleSuspectInfo &ret_info);
+  int check_if_need_diagnose(rootserver::ObMajorFreezeService *&major_freeze_service,
+                             bool &need_diagnose) const;
+  int do_tenant_major_merge_diagnose(rootserver::ObMajorFreezeService *major_freeze_service);
 
 private:
   static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 120L; // 120 seconds
   static const int64_t SUSPECT_INFO_WARNING_THRESHOLD = 1000L * 1000L * 60L * 5; // 5 mins
+  static const int64_t MAX_LS_TABLET_CNT = 10 * 10000; // TODO(@jingshui): tmp solution
   bool is_inited_;
   ObCompactionDiagnoseInfo *info_array_;
   int64_t max_cnt_;

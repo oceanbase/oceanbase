@@ -383,6 +383,8 @@ const char *const OB_STR_BACKUP_SET_LIST = "backup_set_list";
 const char *const OB_STR_BACKUP_PIECE_LIST = "backup_piece_list";
 const char *const OB_STR_LOG_PATH_LIST = "log_path_list";
 const char *const OB_STR_LS_META_INFOS = "ls_meta_infos";
+const char *const OB_STR_BACKUP_DATA_VERSION = "backup_data_version";
+const char *const OB_STR_CLUSTER_VERSION = "cluster_version";
 const char *const OB_BACKUP_SUFFIX=".obbak";
 const char *const OB_ARCHIVE_SUFFIX=".obarc";
 
@@ -996,6 +998,8 @@ public:
   static bool can_backup_pieces_be_deleted(const ObBackupPieceStatus::STATUS &status);
   static int check_passwd(const char *passwd_array, const char *passwd);
   static int check_is_tmp_file(const common::ObString &file_name, bool &is_tmp_file);
+  static int get_backup_scn(const uint64_t &tenant_id, share::SCN &scn);
+  static int check_tenant_data_version_match(const uint64_t tenant_id, const uint64_t data_version);
 private:
   static const int64_t  RETRY_INTERVAL = 10 * 1000 * 1000;
   static const int64_t  MAX_RETRY_TIMES = 3;
@@ -1417,6 +1421,8 @@ public:
   enum Compatible : int64_t
   {
     COMPATIBLE_VERSION_1 = 1, // 4.0
+
+    COMPATIBLE_VERSION_2,     // 4.1
     MAX_COMPATIBLE_VERSION,
   };
 
@@ -1442,7 +1448,8 @@ public:
   TO_STRING_KV(K_(backup_set_id), K_(incarnation), K_(tenant_id), K_(dest_id), K_(backup_type), K_(plus_archivelog),
       K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time),
       K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
-      K_(min_restore_scn), K_(tenant_compatible), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id));
+      K_(min_restore_scn), K_(tenant_compatible), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id),
+      K_(cluster_version));
 
   int64_t backup_set_id_;
   int64_t incarnation_;
@@ -1468,6 +1475,7 @@ public:
   Compatible backup_compatible_;
   int64_t data_turn_id_;
   int64_t meta_turn_id_;
+  uint64_t cluster_version_;
 };
 
 struct ObBackupSkippedType;

@@ -127,7 +127,7 @@ public:
                       const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans);
   /*
-   * description: for  standby cluster set ls to offline 
+   * description: for  standby cluster set ls to offline
    * */
   int set_ls_offline_in_trans(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,

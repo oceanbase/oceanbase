@@ -62,6 +62,7 @@ public:
   int start();
   void stop();
   void wait();
+  int64_t get_shared_block_cnt();
   int write_block(const char* buf, const int64_t size, ObBlockInfo &block_info, ObMacroBlocksWriteCtx &write_ctx);
   int add_block(const MacroBlockId &block_id, const int64_t block_size);
   int free_block(const MacroBlockId &block_id, const int64_t block_size);
@@ -181,7 +182,7 @@ private:
   lib::ObMutex blocks_mutex_; // protect block_used_size_
   ObLinearHashMap<MacroBlockId, int32_t> block_used_size_;
   ObBlockDefragmentationTask defragmentation_task_;
-  common::ObTimer timer_;
+  int tg_id_;
   bool is_inited_;
 };
 

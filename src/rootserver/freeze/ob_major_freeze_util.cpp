@@ -16,6 +16,7 @@
 
 #include "lib/time/ob_time_utility.h"
 #include "share/ob_define.h"
+#include "share/ob_service_epoch_proxy.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 
 namespace oceanbase
@@ -37,7 +38,8 @@ int ObMajorFreezeUtil::get_major_freeze_service(
   } else {
     bool is_primary_service_paused = primary_major_freeze_service->is_paused();
     bool is_restore_service_paused = restore_major_freeze_service->is_paused();
-    if (0 == (is_primary_service_paused ^ is_restore_service_paused)) {
+    if ((is_primary_service_paused && is_restore_service_paused)
+        || (!is_primary_service_paused && !is_restore_service_paused)) {
       ret = OB_LEADER_NOT_EXIST;
       RS_LOG(WARN, "both primary and restore major_freeze_service are paused or not paused, may be "
              "switching leader", KR(ret), K(is_primary_service_paused), K(is_restore_service_paused));
@@ -47,6 +49,30 @@ int ObMajorFreezeUtil::get_major_freeze_service(
     } else if (!is_restore_service_paused) {
       major_freeze_service = restore_major_freeze_service;
       is_primary_service = false;
+    }
+  }
+  return ret;
+}
+
+int ObMajorFreezeUtil::check_epoch_periodically(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const int64_t expected_epoch,
+    int64_t &last_check_us)
+{
+  int ret = OB_SUCCESS;
+  int64_t now_us = ObTimeUtil::fast_current_time();
+  if ((now_us - last_check_us) > CHECK_EPOCH_INTERVAL_US) {
+    bool is_match = true;
+    if (OB_FAIL(share::ObServiceEpochProxy::check_service_epoch(sql_proxy, tenant_id,
+                share::ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
+      LOG_WARN("fail to check freeze service epoch", KR(ret), K(tenant_id), K(expected_epoch));
+    } else {
+      last_check_us = now_us;
+      if (!is_match) {
+        ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
+        LOG_WARN("freeze_service_epoch mismatch", K(tenant_id), K(expected_epoch));
+      }
     }
   }
   return ret;

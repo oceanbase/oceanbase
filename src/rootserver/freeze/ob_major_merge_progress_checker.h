@@ -25,6 +25,7 @@ namespace share
 {
 class ObTabletTableOperator;
 class ObLSInfo;
+class ObLSID;
 class ObLSTableOperator; 
 class ObIServerTrace;
 struct ObTabletInfo;
@@ -137,7 +138,8 @@ public:
 
   int check_merge_progress(const volatile bool &stop,
                            const share::SCN &global_broadcast_scn,
-                           share::ObAllZoneMergeProgress &all_progress);
+                           share::ObAllZoneMergeProgress &all_progress,
+                           const int64_t expected_epoch);
 
   int check_verification(const volatile bool &stop,
                          const bool is_primary_service,
@@ -154,6 +156,8 @@ public:
                                                const int64_t expected_epoch);
 
   void set_major_merge_start_time(const int64_t major_merge_start_us);
+  int get_uncompacted_tablets(common::ObArray<share::ObTabletReplica> &uncompacted_tablets) const;
+  void reset_uncompacted_tablets();
 
 public:
   ObMergeTimeStatistics merge_time_statistics_;
@@ -168,21 +172,8 @@ private:
                                   const share::SCN &global_broadcast_scn,
                                   const share::ObTabletInfo &tablet,
                                   const share::ObLSInfo &ls_info);
-  int check_majority_integrated(share::schema::ObSchemaGetterGuard &schema_guard, 
-                                const share::ObTabletInfo &tablet_info,
-                                const share::ObLSInfo &ls_info);
-
-  int get_associated_replica_num(share::schema::ObSchemaGetterGuard &schema_guard,
-                                 int64_t &paxos_replica_num,
-                                 int64_t &full_replica_num,
-                                 int64_t &all_replica_num,
-                                 int64_t &majority);
-  // get member_list of ls leader replica
-  int get_member_list(const share::ObLSInfo &ls_info,
-                      share::ObLSReplica::MemberList &member_list) const;
-  int is_replica_in_ls_member_list(const share::ObTabletReplica &replica,
-                                   const share::ObLSReplica::MemberList &member_list,
-                                   bool &is_in_member_list) const;
+  int mark_uncompacted_tables_as_verified(const common::ObIArray<share::ObTableCompactionInfo> &uncompacted_tables);
+  int refresh_ls_infos();
 
 private:
   bool is_inited_;
@@ -202,6 +193,10 @@ private:
   ObTabletChecksumValidator tablet_validator_;
   ObIndexChecksumValidator index_validator_;
   ObCrossClusterTabletChecksumValidator cross_cluster_validator_;
+  common::ObArray<share::ObTabletReplica> uncompacted_tablets_; // record for diagnose
+  common::SpinRWLock diagnose_rw_lock_;
+  // cache of ls_infos in __all_ls_meta_table
+  common::hash::ObHashMap<share::ObLSID, share::ObLSInfo> ls_infos_map_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeProgressChecker);
 };

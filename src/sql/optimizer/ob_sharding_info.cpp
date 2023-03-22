@@ -725,31 +725,6 @@ int ObShardingInfo::check_if_match_repart_or_rehash(const EqualSets &equal_sets,
   return ret;
 }
 
-int ObShardingInfo::is_physically_equal_partitioned(const ObShardingInfo &left_sharding,
-                                                    const ObShardingInfo &right_sharding,
-                                                    bool &is_equal_partition)
-{
-  int ret = OB_SUCCESS;
-  is_equal_partition = false;
-  PwjTable l_table;
-  PwjTable r_table;
-  ObStrictPwjComparer pwj_comparer;
-  if (OB_FAIL(l_table.init(left_sharding))) {
-    LOG_WARN("failed to init pwj table with sharding info", K(ret));
-  } else if (OB_FAIL(r_table.init(right_sharding))) {
-    LOG_WARN("failed to init pwj table with sharding info", K(ret));
-  } else if (OB_FAIL(pwj_comparer.add_table(l_table, is_equal_partition))) {
-    LOG_WARN("failed to add table", K(ret));
-  } else if (!is_equal_partition) {
-    // do nothing
-  } else if (OB_FAIL(pwj_comparer.add_table(r_table, is_equal_partition))) {
-    LOG_WARN("failed to add table", K(ret));
-  } else {
-    // do nothing
-  }
-  return ret;
-}
-
 int ObShardingInfo::is_physically_equal_serverlist(ObIArray<ObAddr> &left_server_list,
                                                    ObIArray<ObAddr> &right_server_list,
                                                    bool &is_equal_serverlist)

@@ -24,7 +24,6 @@
 #include "storage/ob_i_store.h"
 #include "storage/access/ob_table_read_info.h"
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
-#include "share/leak_checker/obj_leak_checker.h"
 #include "share/ob_table_range.h"
 #include "share/scn.h"
 
@@ -403,7 +402,6 @@ private:
   ObTenantMetaMemMgr *t3m_;
   common::ObIAllocator *allocator_;
   ObITable::TableType table_type_;
-  DEFINE_OBJ_LEAK_DEBUG_NODE(node_);
 };
 
 class ObTablesHandleArray final

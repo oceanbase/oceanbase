@@ -108,7 +108,8 @@ public:
   virtual int send(const ObDtlMsg &msg, int64_t timeout_ts,
       ObEvalCtx *eval_ctx = nullptr, bool is_eof = false) = 0;
   virtual int feedup(ObDtlLinkedBuffer *&buffer) = 0;
-  virtual int attach(ObDtlLinkedBuffer *&linked_buffer, bool is_firt_buffer_cached = false) = 0;
+  virtual int attach(ObDtlLinkedBuffer *&linked_buffer, bool is_firt_buffer_cached = false,
+                     bool inc_recv_buf_cnt = true) = 0;
   virtual int flush(bool wait=true, bool wait_response = true) = 0;
 
   virtual bool is_empty() const = 0;

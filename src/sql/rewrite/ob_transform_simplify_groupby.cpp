@@ -620,7 +620,7 @@ int ObTransformSimplifyGroupby::remove_group_by_duplicates(ObDMLStmt *&stmt, boo
     ObArray<ObRawExpr*> new_group_exprs;
     ObIArray<ObRawExpr*> &group_exprs = select_stmt->get_group_exprs();
     for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs.count(); ++i) {
-      if (ObOptimizerUtil::find_equal_expr(new_group_exprs, group_exprs.at(i))) {
+      if (ObOptimizerUtil::find_item(new_group_exprs, group_exprs.at(i))) {
         /*do nothing*/
       } else if (OB_FAIL(new_group_exprs.push_back(group_exprs.at(i)))) {
         LOG_WARN("new group exprs push back failed", K(ret), K(group_exprs.at(i)));
@@ -1425,18 +1425,12 @@ int ObTransformSimplifyGroupby::transform_const_aggr(ObDMLStmt *stmt, bool &tran
   trans_happened = false;
   ObSelectStmt *select_stmt = NULL;
   ObSelectStmt *view_stmt = NULL;
-  bool from_one_dblink = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is NULL", K(ret), K(stmt));
   } else if (!stmt->is_select_stmt() ||
              FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt))) {
     //do nothing
-  } else if (OB_FAIL(ObTransformUtils::check_stmt_from_one_dblink(stmt, from_one_dblink))) {
-    LOG_WARN("failed to check if all tables from one dblink", K(ret));
-  } else if (from_one_dblink) {
-    // do not transform,
-    // for compatibility with Oracle before 12c
   } else if (OB_FAIL(is_valid_const_aggregate(select_stmt, is_valid))) {
     LOG_WARN("failed to check is valid const aggregate", K(ret));
   } else if (!is_valid) {
@@ -1730,11 +1724,11 @@ int ObTransformSimplifyGroupby::is_first_rollup_with_duplicates(ObSelectStmt *st
     LOG_WARN("invalid rollup expr idx", K(rollup_expr_idx), K(ret));
   } else if (FALSE_IT(rollup_expr = stmt->get_rollup_exprs().at(rollup_expr_idx))) {
     // do nothing
-  } else if (ObOptimizerUtil::find_equal_expr(stmt->get_group_exprs(), rollup_expr)) {
+  } else if (ObOptimizerUtil::find_item(stmt->get_group_exprs(), rollup_expr)) {
     is_first = false;
-  } else if (OB_UNLIKELY(!ObOptimizerUtil::find_equal_expr(stmt->get_rollup_exprs(),
-                                                           rollup_expr,
-                                                           idx))) {
+  } else if (OB_UNLIKELY(!ObOptimizerUtil::find_item(stmt->get_rollup_exprs(),
+                                                     rollup_expr,
+                                                     &idx))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to find rollup expr in rollup exprs", K(ret));
   } else {
@@ -1789,7 +1783,7 @@ int ObTransformSimplifyGroupby::do_prune_rollup(ObSelectStmt *stmt, const int64_
   return ret;
 }
 
-//bug:https://work.aone.alibaba-inc.com/issue/43889458
+//bug:
 // create table t1(c1 int, c2 int);
 // select sum(c1) from t1 group by c1,c2 with rollup having sum(c1) > 1 ==> can't prune
 int ObTransformSimplifyGroupby::get_valid_having_exprs_contain_aggr(

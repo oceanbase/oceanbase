@@ -747,7 +747,7 @@ TEST_F(ObHashJoinDumpTest, test_anti_right_join)
   ASSERT_FALSE(HasFatalFailure());
 }
 
-// see https://aone.alibaba-inc.com/project/81079/issue/17944328
+// see
 TEST_F(ObHashJoinDumpTest, test_file_leak)
 {
   int ret = OB_SUCCESS;

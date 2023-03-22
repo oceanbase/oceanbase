@@ -196,12 +196,10 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
     ObObjType val_type = opt_expr->datum_meta_.type_;
     ObCollationType cs_type = opt_expr->datum_meta_.cs_type_;
     if (OB_UNLIKELY(OB_FAIL(opt_expr->eval(ctx, opt_datum)))) {
-      SET_COVER_ERROR(ret);
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || opt_datum->is_null()) {
     } else if (!ob_is_integer_type(val_type)) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      SET_COVER_ERROR(ret);
       LOG_WARN("input type error", K(val_type));
     } else {
       opt_array[i-2] = opt_datum->get_int();
@@ -216,15 +214,12 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
 
   // some constraint check
   ObObjType dst_type;
-  int32_t dst_len; // bugfix: https://work.aone.alibaba-inc.com/issue/47046350
+  int32_t dst_len; // bugfix:
   if (OB_FAIL(ret)) {
   } else if (return_type == 0) {
     dst_type = expr.args_[0]->datum_meta_.type_;
     const ObAccuracy &default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[dst_type];
-    dst_len = expr.args_[0]->max_length_ > 0 ? expr.args_[0]->max_length_ : default_accuracy.get_length();
-    if (dst_len == 0 && dst_type == ObVarcharType) {
-      dst_len = OB_MAX_ORACLE_VARCHAR_LENGTH;
-    }
+    dst_len = dst_type == ObVarcharType ? OB_MAX_ORACLE_VARCHAR_LENGTH : default_accuracy.get_length();
   } else if (OB_FAIL(ObJsonExprHelper::eval_and_check_res_type(return_type, dst_type, dst_len))) {
     LOG_WARN("fail to check returning type", K(ret));
   } else if ((expr.datum_meta_.cs_type_ == CS_TYPE_BINARY || dst_type == ObJsonType) && (opt_array[OPT_PRETTY_ID] > 0 || opt_array[OPT_ASCII_ID] > 0)) {
@@ -245,12 +240,13 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
   }
 
   ObIJsonBase *j_patch_node = NULL;
-  if (OB_FAIL(ret) || has_null) {
+  int tmp_ret = OB_SUCCESS;
+  if ((!is_cover_error && OB_FAIL(ret)) || has_null) {
     // do nothing
-  } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 1, j_patch_node, has_null, true, false))) {
-    if (ret == OB_ERR_JSON_SYNTAX_ERROR) {
+  } else if ((tmp_ret = ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 1, j_patch_node, has_null, true, false)) != OB_SUCCESS) {
+    if (tmp_ret == OB_ERR_JSON_SYNTAX_ERROR) {
       ret = OB_ERR_JSON_PATCH_INVALID;
-      LOG_USER_ERROR(OB_ERR_JSON_PATCH_INVALID);
+      is_cover_error = false;
     }
     LOG_WARN("get_json_doc failed", K(ret));
   } else if (has_null) {
@@ -258,6 +254,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
     LOG_USER_ERROR(OB_ERR_JSON_PATCH_INVALID);
   } else if (j_patch_node->json_type() != ObJsonNodeType::J_OBJECT) {
     j_base = j_patch_node;
+  } else if (OB_FAIL(ret)) {
   } else {
     ObJsonObject *j_obj = NULL;
     if (j_base->json_type() == ObJsonNodeType::J_OBJECT) {
@@ -326,7 +323,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
                                                           tmp_val.length(), dst_len, char_len);
 
               tmp_val.assign_ptr(tmp_val.ptr(), real_dst_len);
-              // compact with oracle: https://work.aone.alibaba-inc.com/issue/46640577
+              // compact with oracle:
               if (real_dst_len != dst_len && real_dst_len > 0) {
                 // get last char
                 // must be utf8

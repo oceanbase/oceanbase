@@ -511,7 +511,7 @@ int64_t ObConfigReadableIntParser::get(const char *str, bool &valid)
     } else if (value < 0) {
       valid = false;
     } else if ('\0' == *p_unit) {
-      // https://aone.alibaba-inc.com/req/23558382
+      //
       // without any unit, do nothing
     } else if (0 == STRCASECMP("k", p_unit)) {
       value *= UNIT_K;

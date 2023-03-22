@@ -436,12 +436,14 @@ public:
     return ctx.frames_[frame_idx_] + res_buf_off_;
   }
 
-
   // locate expr datum && reset ptr_ to reserved buf
   OB_INLINE ObDatum &locate_datum_for_write(ObEvalCtx &ctx) const;
 
   // locate batch datums and reset datum ptr_ to reserved buf
   inline ObDatum *locate_datums_for_update(ObEvalCtx &ctx, const int64_t size) const;
+
+  // reset ptr in ObDatum to reserved buf
+  OB_INLINE void reset_ptr_in_datum(ObEvalCtx &ctx, const int64_t datum_idx) const;
 
   OB_INLINE ObDatum &locate_param_datum(ObEvalCtx &ctx, int param_index) const
   {
@@ -913,7 +915,7 @@ typedef ObToStringDatum DATUM2STR;
 // 因为实现的eval_func中, 打印日志时, 如果调用ObToStringExpr(ctx, expr),
 // 该函数又会调用eval_func计算, 不断循环调用, 且一直没走到设置evaluated_
 // 标记为true的逻辑, 最终会导致爆栈;
-// bug:https://work.aone.alibaba-inc.com/issue/29459333
+// bug:
 struct ObToStringExpr
 {
   ObToStringExpr(ObEvalCtx &ctx, const ObExpr &e) : c_(ctx), e_(e) {}
@@ -970,6 +972,16 @@ inline ObDatum *ObExpr::locate_datums_for_update(ObEvalCtx &ctx,
     d++;
   }
   return datums;
+}
+
+OB_INLINE void ObExpr::reset_ptr_in_datum(ObEvalCtx &ctx, const int64_t datum_idx) const
+{
+  OB_ASSERT(datum_idx >= 0);
+  char *frame = ctx.frames_[frame_idx_];
+  OB_ASSERT(NULL != frame);
+  ObDatum *expr_datum = reinterpret_cast<ObDatum *>(frame + datum_off_) + datum_idx;
+  char *data_pos = frame + res_buf_off_ + res_buf_len_ * datum_idx;
+  expr_datum->ptr_ = data_pos;
 }
 
 template <typename ...TS>
@@ -1101,24 +1113,25 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
                                           int64_t index)
 {
   char *buffer = NULL;
-  int64_t pos = 0;
-  CStringBufMgr *mgr = GET_TSI(CStringBufMgr);
-  mgr->inc_level();
-  CStringBufMgr::BufNode *node = mgr->acquire();
-  if (OB_ISNULL(node)) {
+  int64_t str_len = 0;
+  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
+  mgr.inc_level();
+  buffer = mgr.acquire();
+  if (OB_ISNULL(buffer)) {
     LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    buffer = node->buf_;
-    databuff_printf(buffer, CStringBufMgr::BUF_SIZE, pos, "vectorized_rows(%ld)=", index);
-    pos += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + pos, CStringBufMgr::BUF_SIZE -1);
-    if (pos >= 0 && pos < CStringBufMgr::BUF_SIZE) {
-      buffer[pos] = '\0';
+    int64_t pos = mgr.get_pos();
+    const int64_t buf_len = CStringBufMgr::BUF_SIZE - pos;
+    databuff_printf(buffer, buf_len, str_len, "vectorized_rows(%ld)=", index);
+    str_len += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + str_len, buf_len - str_len - 1);
+    if (str_len >= 0 && str_len < buf_len) {
+      buffer[str_len] = '\0';
     } else {
       buffer[0] = '\0';
     }
   }
-  mgr->try_clear_list();
-  mgr->dec_level();
+  mgr.try_clear_list();
+  mgr.dec_level();
   return buffer;
 }
 

@@ -333,7 +333,8 @@ int ObPLPackageState::convert_changed_info_to_string_kvs(ObPLExecCtx &pl_ctx, Ob
   OZ (pl_ctx.exec_ctx_->get_sql_ctx()->schema_guard_->get_package_info(tenant_id, package_id_, package_info));
   if (OB_NOT_NULL(package_info)) {
     for (int64_t i = 0; i < vars_.count() && OB_SUCCESS == ret; ++i) {
-      if (changed_vars_.has_member(i)) {
+      if (changed_vars_.has_member(i)
+          && vars_.at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
         key_str.reset();
         value_obj.reset();
         if (OB_FAIL(convert_info_to_string_kv(pl_ctx, i, VARIABLE, key_str, value_obj))) {

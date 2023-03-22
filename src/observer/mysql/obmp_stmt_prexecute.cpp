@@ -219,7 +219,7 @@ int ObMPStmtPrexecute::before_process()
                   get_ctx().is_prepare_stage_ = true;
                   if (OB_FAIL(result.init())) {
                     LOG_WARN("result set init failed", K(ret));
-                  } else if (OB_FAIL(ObMPBase::set_session_active(sql_, *session,
+                  } else if (OB_FAIL(ObMPBase::set_session_active(sql_, *session, ObTimeUtil::current_time(),
                                   obmysql::ObMySQLCmd::COM_STMT_PREPARE))) {
                     LOG_WARN("fail to set session active", K(ret));
                   }
@@ -285,7 +285,7 @@ int ObMPStmtPrexecute::before_process()
               LOG_WARN("prepare-execute protocol get params request failed", K(ret));
             } else {
               ObMySQLUtil::get_uint4(pos, exec_mode_);
-              // https://yuque.antfin.com/docs/share/a5705d97-1d74-4b90-8be2-6e500249345f?#
+              //
               // is_commit_on_success_ is not use yet
               // other exec_mode set use ==
               is_commit_on_success_ = exec_mode_ & OB_OCI_COMMIT_ON_SUCCESS;

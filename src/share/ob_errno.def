@@ -1,4 +1,4 @@
-// @see http://oceanbase.alibaba-inc.com/wiki/index.php?title=%E9%94%99%E8%AF%AF%E7%A0%81%E7%9A%84%E8%A7%84%E8%8C%83
+// @see
 // 错误码总数不超过10000个
 // 不能使用的值域[-1, -4000)，这一段值为兼容MySQL目的使用。MySQL Server端错误码范围1000-3000，客户端错误码2000-3000, 1-1000预留。实际上，Oracle的常用错误码的范围大约在这个范围内。
 // 通用错误码值域[-4000, -4500)，含sstable等
@@ -440,7 +440,7 @@ DEFINE_ERROR_DEP(OB_UNEXPECT_INTERNAL_ERROR, -4388, -1, "HY000", "Unexpected int
 DEFINE_ERROR_DEP(OB_ERR_TOO_MUCH_TIME, -4389, -1, "HY000", "Porcessing time is too long");
 DEFINE_ERROR(OB_ERR_REMOTE_SCHEMA_NOT_FULL, -4390, -1, "HY000", "Schema of remote server is not refreshed yet");
 DEFINE_ERROR(OB_DDL_SSTABLE_RANGE_CROSS, -4391, -1, "HY000", "ddl sstable version range cross");
-DEFINE_ERROR(OB_DISK_CORRUPTED, -4392, -1, "HY000", "disk is corrupted");
+DEFINE_ERROR(OB_DISK_HUNG, -4392, -1, "HY000", "disk is hung");
 DEFINE_ERROR(OB_ERR_OBSERVER_START, -4393, -1, "HY000", "observer start process failure");
 DEFINE_ERROR(OB_ERR_OBSERVER_STOP, -4394, -1, "HY000", "observer stop process failure");
 DEFINE_ERROR(OB_ERR_OBSERVICE_START, -4395, -1, "HY000", "observice start process has failure");
@@ -639,6 +639,7 @@ DEFINE_ERROR(OB_ERR_ROOTSERVICE_START, -4752, -1, "HY000", "rootservice start pr
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_STOP, -4753, -1, "HY000", "rootservice stop process has failure");
 DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not passed");
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice backgroud thread may be hung");
+DEFINE_ERROR(OB_MIGRATE_NOT_COMPATIBLE, -4756, -1, "HY000", "Migration src and dest version is not compatible.");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -752,6 +753,7 @@ DEFINE_ERROR(OB_SQL_OPT_JOIN_ORDER_FAILED, -5121, -1,  "HY000", "fail to generat
 DEFINE_ERROR(OB_SQL_OPT_ERROR, -5122, -1,  "HY000", "optimizer general error");
 DEFINE_ORACLE_ERROR(OB_ERR_OCI_INIT_TIMEZONE, -5123, -1, "HY000", "failure to initialize timezone information", 1804, "failure to initialize timezone information");
 DEFINE_ERROR(OB_ERR_ZLIB_DATA, -5124, ER_ZLIB_Z_DATA_ERROR, "HY000", "ZLIB: Input data corrupted");
+DEFINE_ORACLE_ERROR(OB_ERR_DBLINK_SESSION_KILLED, -5125, -1, "HY000", "your session has been killed", 28, "your session has been killed");
 DEFINE_ERROR(OB_SQL_RESOLVER_NO_MEMORY, -5130, -1, "HY000", "sql resolver no memory");
 DEFINE_ERROR(OB_SQL_DML_ONLY, -5131, -1, "HY000", "plan cache support dml only");
 DEFINE_ERROR(OB_ERR_NO_GRANT, -5133, -1, "42000", "No such grant defined");
@@ -1100,7 +1102,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED, -5486, -1, "42000", "
 DEFINE_ORACLE_ERROR(OB_ERR_PATH_EXPRESSION_NOT_LITERAL, -5487, -1, "42000", "path expression not a literal", 40454, "path expression not a literal");
 DEFINE_PLS_ERROR_EXT(OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL, -5488, -1, "HY000", "invalid argument for JSON call", "invalid argument for %s call", 185, "invalid argument for JSON call", "invalid argument for %s call");
 DEFINE_ERROR(OB_ERR_SCHEMA_HISTORY_EMPTY, -5489, -1, "HY000", "Schema history is empty");
-
+DEFINE_ORACLE_ERROR(OB_ERR_TABLE_NAME_NOT_IN_LIST, -5490, -1, "42000", "table name not in FROM list", 964, "table name not in FROM list"));
+DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART, -5491, -1, "42000", "DEFAULT partition must be last partition specified", 14318, "DEFAULT partition must be last partition specified");
 
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");
@@ -1853,6 +1856,7 @@ DEFINE_ERROR(OB_SERVER_IS_INIT, -8001, -1, "08004", "Server is initializing");
 DEFINE_ERROR(OB_SERVER_IS_STOPPING, -8002, -1, "08004", "Server is stopping");
 DEFINE_ERROR(OB_PACKET_CHECKSUM_ERROR, -8003, -1, "08004", "Packet checksum error");
 DEFINE_ERROR_DEP(OB_PACKET_CLUSTER_ID_NOT_MATCH, -8004, -1, "08004", "Packet cluster_id not match");
+DEFINE_ERROR_DEP(OB_TENANT_ID_NOT_MATCH, -8005, -1, "08005", "Tenant id not match");
 
 ////////////////////////////////////////////////////////////////
 // backup and restore error codes 9000 - 9099
@@ -2222,6 +2226,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_ATTRIBUTE_ASSOCIATION, -9741, -1, "HY000", "Attribute
 DEFINE_ORACLE_ERROR(OB_ERR_MERGE_INTO_WITH_POLICY, -9742, -1, "HY000", "The MERGE INTO syntax does not support the security policy", 28132, "The MERGE INTO syntax does not support the security policy");
 DEFINE_ERROR_EXT(OB_ERR_SP_NO_DROP_SP, -9743, ER_SP_NO_DROP_SP, "HY000", "Can't drop or alter a procedure/function from within another stored routine.", "Can't drop or alter a '%s' from within another stored routine.");
 DEFINE_ORACLE_ERROR(OB_ERR_RECOMPILATION_OBJECT, -9744, -1, "HY000", "errors during recompilation/revalidation of object", 4045, "errors during recompilation/revalidation of %.*s.%.*s");
+DEFINE_ORACLE_ERROR(OB_ERR_VARIABLE_NOT_IN_SELECT_LIST, -9745, -1, "HY000", "variable not in select list", 1007, "variable not in select list");
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

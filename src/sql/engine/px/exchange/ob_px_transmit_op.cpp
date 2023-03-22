@@ -114,7 +114,7 @@ ObPxTransmitSpec::ObPxTransmitSpec(ObIAllocator &alloc, const ObPhyOperatorType 
       sampling_saving_row_(alloc),
       repartition_table_id_(0),
       wf_hybrid_aggr_status_expr_(NULL),
-      wf_hybrid_pby_exprs_cnt_array_()
+      wf_hybrid_pby_exprs_cnt_array_(alloc)
 {
 }
 
@@ -332,6 +332,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
     loop_.register_processor(dfc_unblock_msg_proc_)
         .register_interrupt_processor(interrupt_proc_);
     loop_.set_process_query_time(ctx_.get_my_session()->get_process_query_time());
+    loop_.set_query_timeout_ts(ctx_.get_physical_plan_ctx()->get_timeout_timestamp());
     bool use_interm_result = false;
     int64_t px_batch_id = ctx_.get_px_batch_id();
     ObPxSQCProxy *sqc_proxy = NULL;
@@ -1024,7 +1025,7 @@ int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePiec
     bool send_piece = true;
     if (OB_FAIL(proxy.make_sqc_sample_piece_msg(piece_msg, send_piece))) {
       LOG_WARN("fail to make sqc sample piece msg", K(ret));
-    } else if (OB_FAIL(proxy.get_dh_msg(op_id,
+    } else if (OB_FAIL(proxy.get_dh_msg_sync(op_id,
         DH_DYNAMIC_SAMPLE_WHOLE_MSG,
         proxy.get_piece_sample_msg(),
         temp_whole_msg,

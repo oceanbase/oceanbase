@@ -147,7 +147,7 @@ int ObStoreRowIterPool::get_iter(const std::type_info &type, ObStoreRowIterator 
 {
   int ret = OB_SUCCESS;
   iter = nullptr;
-  for (int64_t i = 0; i < table_iters_array_.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_iters_array_.count(); ++i) {
     TableTypedIters *typed_iters = table_iters_array_.at(i);
     if (OB_NOT_NULL(typed_iters) && typed_iters->is_type(type)) {
       if (typed_iters->iters_.count() > 0) {

@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -25,7 +25,8 @@ using namespace share;
  */
 
 ObDirectLoadFastHeapTableBuildParam::ObDirectLoadFastHeapTableBuildParam()
-  : col_descs_(nullptr),
+  : snapshot_version_(0),
+    col_descs_(nullptr),
     insert_table_ctx_(nullptr),
     fast_heap_table_ctx_(nullptr),
     result_info_(nullptr),
@@ -39,8 +40,9 @@ ObDirectLoadFastHeapTableBuildParam::~ObDirectLoadFastHeapTableBuildParam()
 
 bool ObDirectLoadFastHeapTableBuildParam::is_valid() const
 {
-  return tablet_id_.is_valid() && table_data_desc_.is_valid() && nullptr != col_descs_ &&
-         nullptr != insert_table_ctx_ && nullptr != fast_heap_table_ctx_ && nullptr != result_info_;
+  return tablet_id_.is_valid() && snapshot_version_ > 0 && table_data_desc_.is_valid() &&
+         nullptr != col_descs_ && nullptr != insert_table_ctx_ && nullptr != fast_heap_table_ctx_ &&
+         nullptr != result_info_;
 }
 
 /**
@@ -140,7 +142,7 @@ int ObDirectLoadFastHeapTableBuilder::init(const ObDirectLoadFastHeapTableBuildP
     } else {
       datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[HIDDEN_ROWKEY_COLUMN_NUM].set_int(-1); // fill trans_version
+      datum_row_.storage_datums_[HIDDEN_ROWKEY_COLUMN_NUM].set_int(-param_.snapshot_version_); // fill trans_version
       datum_row_.storage_datums_[HIDDEN_ROWKEY_COLUMN_NUM + 1].set_int(0); // fill sql_no
       is_inited_ = true;
     }

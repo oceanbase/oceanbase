@@ -74,6 +74,8 @@ public:
 
   int clear_merge_error();
 
+  int get_uncompacted_tablets(common::ObArray<share::ObTabletReplica> &uncompacted_tablets) const;
+
 private:
   // major merge one by one
   static const int64_t UNMERGED_VERSION_LIMIT = 1;

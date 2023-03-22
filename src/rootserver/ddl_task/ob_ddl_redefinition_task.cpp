@@ -156,6 +156,9 @@ int ObDDLRedefinitionSSTableBuildTask::process()
         if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
                 oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
           LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+        } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+          LOG_WARN("fail to check sstable checksum_report_finish",
+            K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
         }
       }
     }
@@ -985,7 +988,7 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
       && dst_column_schema->is_autoincrement()) {
         // Worker timeout ts here is default value, i.e., INT64_MAX,
         // which leads to RPC-receiver worker timeout due to overflow when select val from __ALL_AUTO_INCREMENT.
-        // More details, refer to comments in https://work.aone.alibaba-inc.com/issue/42761282.
+        // More details, refer to comments in
         const int64_t save_timeout_ts = THIS_WORKER.get_timeout_ts();
         THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + max(GCONF.rpc_timeout, 1000 * 1000 * 20L));
         ObAutoincrementService &auto_inc_service = ObAutoincrementService::get_instance();
@@ -1218,6 +1221,7 @@ int ObDDLRedefinitionTask::finish()
   alter_table_arg_.ddl_task_type_ = share::CLEANUP_GARBAGE_TASK;
   alter_table_arg_.table_id_ = object_id_;
   alter_table_arg_.hidden_table_id_ = target_object_id_;
+  alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
   ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1233,16 +1237,21 @@ int ObDDLRedefinitionTask::finish()
     LOG_WARN("get schema guard failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
     LOG_WARN("get data table schema failed", K(ret), K(tenant_id_), K(object_id_));
-  } else if (OB_FAIL(get_orig_all_index_tablet_count(schema_guard, all_orig_index_tablet_count))) {
-    LOG_WARN("get orig all tablet count failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(max(all_orig_index_tablet_count, data_table_schema->get_all_part_num()), rpc_timeout))) {
-    LOG_WARN("get ddl rpc timeout failed", K(ret));
-  } else if (nullptr != data_table_schema && data_table_schema->get_association_table_id() != OB_INVALID_ID &&
-            OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
-                execute_ddl_task(alter_table_arg_, objs))) {
-    LOG_WARN("cleanup garbage failed", K(ret));
-  } else if (OB_FAIL(cleanup())) {
-    LOG_WARN("clean up failed", K(ret));
+  } else if (nullptr != data_table_schema) {
+    if (OB_FAIL(get_orig_all_index_tablet_count(schema_guard, all_orig_index_tablet_count))) {
+      LOG_WARN("get orig all tablet count failed", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(max(all_orig_index_tablet_count, data_table_schema->get_all_part_num()), rpc_timeout))) {
+      LOG_WARN("get ddl rpc timeout failed", K(ret));
+    } else if (data_table_schema->get_association_table_id() != OB_INVALID_ID &&
+        OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+                  execute_ddl_task(alter_table_arg_, objs))) {
+      LOG_WARN("cleanup garbage failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(cleanup())) {
+      LOG_WARN("clean up failed", K(ret));
+    }
   }
   return ret;
 }
@@ -1410,7 +1419,9 @@ int ObDDLRedefinitionTask::sync_stats_info()
   if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (has_synced_stats_info_) {
+  } else if (has_synced_stats_info_ || task_type_ == DDL_DIRECT_LOAD) {
+    // bugfix:
+    // shouldn't sync stats if the ddl task is from load data's direct_load
   } else {
     ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
     ObMySQLTransaction trans;
@@ -2229,7 +2240,7 @@ int ObSyncTabletAutoincSeqCtx::call_and_process_all_tablet_autoinc_seqs(P &proxy
   return ret;
 }
 
-int ObDDLRedefinitionTask::try_reap_old_replica_build_task()
+int ObDDLRedefinitionTask::reap_old_replica_build_task(bool &need_exec_new_inner_sql)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -2252,17 +2263,19 @@ int ObDDLRedefinitionTask::try_reap_old_replica_build_task()
     const ObTabletID unused_tablet_id;
     const ObDDLTaskInfo unused_addition_info;
     const int old_ret_code = OB_SUCCESS;
-    bool need_exec_new_inner_sql = true;
     ObAddr invalid_addr;
-    (void)ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_, dest_table_id,
+    if (old_execution_id < 0) {
+      need_exec_new_inner_sql = true;
+    } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_, dest_table_id,
         task_id_, old_execution_id, invalid_addr, trace_id_,
-        table_schema->get_schema_version(), snapshot_version_, need_exec_new_inner_sql);
-    if (!need_exec_new_inner_sql) {
-      if (OB_FAIL(update_complete_sstable_job_status(unused_tablet_id, snapshot_version_, old_execution_id, old_ret_code, unused_addition_info))) {
-        LOG_INFO("succ to wait and complete old task finished!", K(ret));
+        table_schema->get_schema_version(), snapshot_version_, need_exec_new_inner_sql))) {
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("failed to check and wait old complement task", K(ret));
       }
-    } else {
-      ret = OB_ENTRY_NOT_EXIST;
+    } else if (!need_exec_new_inner_sql) {
+      if (OB_FAIL(update_complete_sstable_job_status(unused_tablet_id, snapshot_version_, old_execution_id, old_ret_code, unused_addition_info))) {
+        LOG_WARN("failed to wait and complete old task finished!", K(ret));
+      }
     }
   }
   return ret;

@@ -1414,7 +1414,6 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
-  ObTimeGuard time_guard(__func__, 5 * 1000 * 1000); // 5s
 
   // TODO(bowen.gbw): optimize this logic, refactor ObTabletStatusChecker
   if (OB_FAIL(get_tablet(key, tablet_handle, timeout_us))) {
@@ -1423,14 +1422,12 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
     } else {
       LOG_WARN("failed to get tablet", K(ret), K(key), K(timeout_us));
     }
-  } else if (FALSE_IT(time_guard.click("DirectGet"))) {
   } else if (tablet_handle.get_obj()->is_ls_inner_tablet()) {
     // no need to check ls inner tablet, do nothing
   } else if (ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US == timeout_us) {
     // no checking
   } else if (OB_FAIL(tablet_handle.get_obj()->get_tablet_status(tablet_status))) {
     LOG_WARN("failed to get tablet status", K(ret));
-  } else if (FALSE_IT(time_guard.click("GetTxData"))) {
   } else if (ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US == timeout_us) {
     if (ObTabletStatus::NORMAL != tablet_status) {
       ret = OB_TABLET_NOT_EXIST;
@@ -1445,7 +1442,6 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
       if (OB_FAIL(checker.check(timeout_us))) {
         LOG_WARN("failed to check tablet status", K(ret), K(timeout_us), K(tablet_handle));
       }
-      time_guard.click("CheckStatus");
     }
   }
 
@@ -1755,20 +1751,44 @@ int ObTabletCreateDeleteHelper::ensure_skip_create_all_tablets_safe(
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
+  ObSArray<int64_t> skip_idx;
+
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablets_.count(); ++i) {
     const ObCreateTabletInfo &info = arg.tablets_.at(i);
     const ObTabletID &data_tablet_id = info.data_tablet_id_;
-    if (is_mixed_tablets(info) || is_pure_data_tablets(info)) {
+    if (is_contain(skip_idx, i)) {
+      // do nothing
+      LOG_INFO("pure aux tablet info should be skipped", K(ret), K(info));
+    } else if (is_mixed_tablets(info) || is_pure_data_tablets(info)) {
       // data tablet already checked, can ignore
-    } else if (OB_FAIL(ls_.replay_get_tablet(data_tablet_id, scn, tablet_handle))) {
-      if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
-        LOG_WARN("failed to replay get tablet", K(ret), K(data_tablet_id), K(scn));
-      } else if (OB_TABLET_NOT_EXIST == ret) {
-        // data tablet is deleted after log_ts of this transaction, safe to skip creation
-        ret = OB_SUCCESS;
+    } else if (is_pure_aux_tablets(info) || is_pure_hidden_tablets(info)) {
+      if (is_pure_hidden_tablets(info)) {
+        // If hidden tablets and related lob tablets are created simultaneously,
+        // upper layer ensures that hidden tablet info occurs before lob tablets(as aux tablet info).
+        // So here we only need to find aux info which is related to hidden tablets,
+        // and the related aux tablet info will be skipped later.
+        for (int64_t j = 0; OB_SUCC(ret) && j < info.tablet_ids_.count(); ++j) {
+          int64_t aux_idx = -1;
+          if (find_related_aux_info(arg, info.tablet_ids_.at(j), aux_idx)) {
+            if (OB_FAIL(skip_idx.push_back(aux_idx))) {
+              LOG_WARN("failed to push back skip idx", K(ret), K(aux_idx));
+            }
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ls_.replay_get_tablet(data_tablet_id, scn, tablet_handle))) {
+        if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
+          LOG_WARN("failed to replay get tablet", K(ret), K(data_tablet_id), K(scn));
+        } else if (OB_TABLET_NOT_EXIST == ret) {
+          // data tablet is deleted after log_ts of this transaction, safe to skip creation
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
+
   return ret;
 }
 

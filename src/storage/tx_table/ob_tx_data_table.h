@@ -45,11 +45,11 @@ struct TxDataReadSchema
 
 // In Ob4.0, transaction state table is divided into tx data table and tx
 // context table. See details :
-// https://yuque.antfin.com/docs/share/127d0836-8931-4c9e-8e68-64b900ba91f4?#
+//
 //
 // All operatitons related to tx_data are implemented by ObTxDataTable.
 // See details ::
-// https://yuque.antfin-inc.com/ob/transaction/skxugn
+//
 class ObTxDataTable
 {
 public:
@@ -107,10 +107,10 @@ public:
   // cache cleaning task will delete at least 11w tx data.
   static const int64_t DEFAULT_CACHE_RETAINED_TIME = 100_ms; // 100ms
 
-  // The tx data memtable cannot freeze it self if its memory use is less than 1%
+  // The tx data memtable do not need freeze it self if its memory use is less than 1%
   static constexpr double TX_DATA_FREEZE_TRIGGER_MIN_PERCENTAGE = 1;
 
-  // The tx data memtable will trigger a freeze if its memory use is more than 5%
+  // The tx data memtable will trigger a freeze if its memory use is more than 10%
   static constexpr double TX_DATA_FREEZE_TRIGGER_MAX_PERCENTAGE = 5;
 
   enum COLUMN_ID_LIST
@@ -248,7 +248,12 @@ private:
 
   int get_ls_min_end_scn_in_latest_tablets_(share::SCN &min_end_ts);
 
+  int init_slice_allocator_();
+
+  int init_arena_allocator_();
+
   int init_sstable_cache_();
+
 
   int register_clean_cache_task_();
 

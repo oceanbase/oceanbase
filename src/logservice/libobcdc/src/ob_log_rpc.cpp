@@ -51,7 +51,7 @@
           int64_t max_rpc_proc_time = \
                   ATOMIC_LOAD(&ObLogRpc::g_rpc_process_handler_time_upper_limit); \
           proxy.set_server((SVR)); \
-          if (OB_FAIL(proxy.by(tenant_id).trace_time(true).timeout((TIMEOUT))\
+          if (OB_FAIL(proxy.by(tenant_id).group_id(share::OBCG_CDCSERVICE).trace_time(true).timeout((TIMEOUT))\
               .max_process_handler_time(static_cast<int32_t>(max_rpc_proc_time))\
               .RPC((REQ), (ARG)))) { \
             LOG_ERROR("rpc fail: " #RPC, "tenant_id", tenant_id, "svr", (SVR), "rpc_ret", ret, \

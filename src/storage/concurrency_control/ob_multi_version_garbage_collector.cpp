@@ -262,7 +262,7 @@ void ObMultiVersionGarbageCollector::repeat_reclaim()
 }
 
 // According to the requirement of the multi-version garbage collector and the
-// document https://yuque.antfin-inc.com/ob/transaction/pqhlx4. We need collect
+// document
 // four timestamp from each OceanBase node:
 // 1. The timestamp of the minimum unallocation GTS
 // 2. The timestamp of the minimum unallocation WRS
@@ -1180,16 +1180,11 @@ int ObMultiVersionGCSnapshotCalculator::operator()(const share::SCN snapshot_ver
         current_ts - create_time > 2 * ObMultiVersionGarbageCollector::GARBAGE_COLLECT_RECLAIM_DURATION &&
         // for mock or test that change GARBAGE_COLLECT_EXEC_INTERVAL to a small value
         current_ts - create_time > 2 * 3 * 10_min) {
-      if (REACH_COUNT_INTERVAL(10L)) {
-        // we report error here for long time warning
-        MVCC_LOG(ERROR, "ignore too old version too long", K(snapshot_version),
-                 K(snapshot_type), K(current_ts), K(create_time), K(addr));
-      } else {
-        // we report WARN here because there may be servers offline and online
-        // suddenly and report a stale txn
-        MVCC_LOG(WARN, "ignore too old version", K(snapshot_version),
-                 K(snapshot_type), K(current_ts), K(create_time), K(addr));
-      }
+      // we report WARN here because there may be servers offline and online
+      // suddenly and report a stale txn or there may be tenant being dropped
+      // and alived server may fetch the tenant info
+      MVCC_LOG(WARN, "ignore too old version", K(snapshot_version),
+               K(snapshot_type), K(current_ts), K(create_time), K(addr));
     } else {
       reserved_snapshot_version_ = snapshot_version;
       reserved_snapshot_type_ = snapshot_type;
@@ -1342,7 +1337,17 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
       }
     }
 
-    if (OB_SUCC(ret) && snapshot_version < min_active_snapshot_version_) {
+    if (OB_SUCC(ret)
+        && share::SCN::min_scn() != snapshot_version
+        && snapshot_version < min_active_snapshot_version_) {
+      const int64_t current_timestamp = ObClockGenerator::getRealClock();
+      const int64_t snapshot_version_ts = snapshot_version.get_val_for_tx() / 1000;
+      if (snapshot_version_ts < current_timestamp
+          && current_timestamp - snapshot_version_ts > 100 * 1_min) {
+        MVCC_LOG(INFO, "GetMinActiveSnapshotVersionFunctor find a small snapshot txn",
+                 K(MTL_ID()), KPC(sess_info), K(snapshot_version),
+                 K(current_timestamp), K(min_active_snapshot_version_));
+      }
       min_active_snapshot_version_ = snapshot_version;
     }
   }

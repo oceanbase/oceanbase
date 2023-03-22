@@ -313,7 +313,7 @@ private:
   int last_query_retry_err_;
   // this value include local retry & packet retry
   int64_t retry_cnt_;
-  // for fast fail, https://yuque.antfin-inc.com/ob/product_functionality_review/xdiwhw
+  // for fast fail,
   int64_t query_switch_leader_retry_timeout_ts_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRetryInfo);
@@ -379,7 +379,7 @@ public:
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
 private:
   share::schema::ObSchemaGetterGuard *schema_guard_;
-  common::ModulePageAllocator allocator_;
+  common::ObArenaAllocator allocator_;
   common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_;
   uint64_t next_link_table_id_;
 };
@@ -435,15 +435,24 @@ public:
   void reset();
 
   bool handle_batched_multi_stmt() const { return multi_stmt_item_.is_batched_multi_stmt(); }
-  share::ObFeedbackRerouteInfo *get_reroute_info()
+  void reset_reroute_info() {
+    if (nullptr != reroute_info_) {
+      op_reclaim_free(reroute_info_);
+    }
+    reroute_info_ = NULL;
+  }
+  share::ObFeedbackRerouteInfo *get_or_create_reroute_info()
   {
     if (nullptr == reroute_info_) {
       reroute_info_ = op_reclaim_alloc(share::ObFeedbackRerouteInfo);
     }
     return reroute_info_;
   }
+  share::ObFeedbackRerouteInfo *get_reroute_info() {
+    return reroute_info_;
+  }
   // release dynamic allocated memory
-  // https://aone.alibaba-inc.com/issue/19749534
+  //
   void clear();
 public:
   ObMultiStmtItem multi_stmt_item_;

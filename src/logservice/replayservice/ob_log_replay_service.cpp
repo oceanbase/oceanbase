@@ -181,6 +181,8 @@ int ObLogReplayService::init(PalfEnv *palf_env,
 {
   int ret = OB_SUCCESS;
   const uint64_t MAP_TENANT_ID = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MAP_TENANT_ID));
+  int64_t thread_quota = std::max(1L, static_cast<int64_t>(tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4));
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -192,7 +194,7 @@ int ObLogReplayService::init(PalfEnv *palf_env,
     CLOG_LOG(WARN, "invalid argument", K(ret), KP(palf_env), KP(ls_adapter), KP(allocator));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::ReplayService, tg_id_))) {
     CLOG_LOG(WARN, "fail to create thread group", K(ret));
-  } else if (OB_FAIL(MTL_REGISTER_THREAD_DYNAMIC(1, tg_id_))) {
+  } else if (OB_FAIL(MTL_REGISTER_THREAD_DYNAMIC(thread_quota, tg_id_))) {
     CLOG_LOG(WARN, "MTL_REGISTER_THREAD_DYNAMIC failed", K(ret), K(tg_id_));
   } else if (OB_FAIL(replay_status_map_.init("REPLAY_STATUS", MAP_TENANT_ID))) {
     CLOG_LOG(WARN, "replay_status_map_ init error", K(ret));
@@ -775,6 +777,9 @@ void ObLogReplayService::process_replay_ret_code_(const int ret_code,
                                  replay_task.replay_hint_, false, cur_ts, ret_code);
       LOG_DBA_ERROR(OB_LOG_REPLAY_ERROR, "msg", "replay task encountered fatal error", "ret", ret_code,
                     K(replay_status), K(replay_task));
+#ifdef ENABLE_DEBUG_LOG
+      ob_abort();
+#endif
     } else {/*do nothing*/}
 
     if (OB_SUCCESS == task_queue.get_err_info_ret_code()) {
@@ -895,18 +900,12 @@ int ObLogReplayService::check_can_submit_log_replay_task_(ObLogReplayTask *repla
                                                           ObReplayStatus *replay_status)
 {
   int ret = OB_SUCCESS;
-  SCN current_replayable_point;
-  current_replayable_point.atomic_set(replayable_point_);
 
-  bool is_wait_replayable_point = false;
   bool is_wait_barrier = false;
   bool is_tenant_out_of_mem = false;
   if (NULL == replay_task || NULL == replay_status) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "check_can_submit_log_replay_task_ invalid argument", KPC(replay_status), KPC(replay_task));
-  } else if (replay_task->is_raw_write_ && replay_task->scn_ > current_replayable_point) {
-    ret = OB_EAGAIN;
-    is_wait_replayable_point = true;
   } else if (OB_FAIL(replay_status->check_submit_barrier())) {
     if (OB_EAGAIN != ret) {
       CLOG_LOG(ERROR, "failed to check_submit_barrier", K(ret), KPC(replay_status));
@@ -918,8 +917,8 @@ int ObLogReplayService::check_can_submit_log_replay_task_(ObLogReplayTask *repla
     is_tenant_out_of_mem = true;
   }
   if (OB_EAGAIN == ret && REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-    CLOG_LOG(INFO, "submit replay task need retry", K(ret), KPC(replay_status), KPC(replay_task), K(current_replayable_point),
-             K(is_wait_replayable_point), K(is_wait_barrier), K(is_tenant_out_of_mem));
+    CLOG_LOG(INFO, "submit replay task need retry", K(ret), KPC(replay_status), KPC(replay_task),
+             K(is_wait_barrier), K(is_tenant_out_of_mem));
   }
   return ret;
 }

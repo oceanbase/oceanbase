@@ -51,7 +51,8 @@ public:
                                ObIArray<ObOptColumnStat*> &column_stats,
                                const bool is_index_stat = false,
                                const bool is_history_stat = false,
-                               const bool is_online_stat = false);
+                               const bool is_online_stat = false,
+                               const ObObjPrintParams &print_params = ObObjPrintParams());
 
   static int batch_write_history_stats(sql::ObExecContext &ctx,
                                        ObIArray<ObOptTableStatHandle> &history_tab_handles,
@@ -61,7 +62,19 @@ public:
 
   static int check_table_read_write_valid(const uint64_t tenant_id, bool &is_valid);
 
-  static bool is_stat_sys_table(const uint64_t tenant_id, const int64_t table_id);
+  static int check_is_stat_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const uint64_t tenant_id,
+                                 const int64_t table_id,
+                                 bool &is_valid);
+
+  static int check_is_sys_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                                   const uint64_t tenant_id,
+                                   const int64_t table_id,
+                                   bool &is_valid);
+
+  static bool is_no_stat_virtual_table(const int64_t table_id);
+
+  static bool is_virtual_index_table(const int64_t table_id);
 
   static int parse_granularity(const ObString &granularity,
                                bool &need_global,
@@ -107,7 +120,8 @@ private:
                          const int64_t current_time,
                          const bool is_index_stat,
                          const bool is_history_stat,
-                         const bool is_online_stat = false);
+                         const bool is_online_stat = false,
+                         const ObObjPrintParams &print_params = ObObjPrintParams());
 
 };
 

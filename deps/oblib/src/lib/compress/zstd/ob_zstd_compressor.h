@@ -28,6 +28,11 @@ class ObZstdCtxAllocator
 public:
   ObZstdCtxAllocator();
   virtual ~ObZstdCtxAllocator();
+  static ObZstdCtxAllocator &get_thread_local_instance()
+  {
+    thread_local ObZstdCtxAllocator allocator;
+    return allocator;
+  }
   void *alloc(size_t size);
   void free(void *addr);
   void reuse();

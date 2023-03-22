@@ -42,22 +42,22 @@ namespace common
 TEST(ObDiagnoseSessionInfo, guard)
 {
   EVENT_INC(ELECTION_CHANGE_LEAER_COUNT);
-  EXPECT_EQ(1, ObDITls<ObSessionDIBuffer>::get_instance()->get_tenant_id());
+  EXPECT_EQ(1, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
   EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::ELECTION_CHANGE_LEAER_COUNT));
   {
     ObTenantStatEstGuard tenant_guard(2);
     EVENT_INC(ELECTION_CHANGE_LEAER_COUNT);
-    EXPECT_EQ(2, ObDITls<ObSessionDIBuffer>::get_instance()->get_tenant_id());
+    EXPECT_EQ(2, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
     EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::ELECTION_CHANGE_LEAER_COUNT));
     {
       ObTenantStatEstGuard tenant_guard(3);
       EVENT_INC(ELECTION_CHANGE_LEAER_COUNT);
-      EXPECT_EQ(3, ObDITls<ObSessionDIBuffer>::get_instance()->get_tenant_id());
+      EXPECT_EQ(3, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
       EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::ELECTION_CHANGE_LEAER_COUNT));
     }
-    EXPECT_EQ(2, ObDITls<ObSessionDIBuffer>::get_instance()->get_tenant_id());
+    EXPECT_EQ(2, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
   }
-  EXPECT_EQ(1, ObDITls<ObSessionDIBuffer>::get_instance()->get_tenant_id());
+  EXPECT_EQ(1, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
 }
 
 TEST(ObDISessionCache, multithread)

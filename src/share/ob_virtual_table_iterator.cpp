@@ -415,7 +415,7 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
         && is_lob_storage(col_schema->get_data_type())
         && !cur_row->cells_[i].has_lob_header()) { // cannot be json type;
         ObObj &obj_convert = cur_row->cells_[i];
-      if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj_convert, *allocator_))) {
+      if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj_convert, row_calc_buf_))) {
         LOG_WARN("fail to add lob header", KR(ret), "object", cur_row->cells_[i]);
       }
     }
@@ -489,6 +489,8 @@ int ObVirtualTableIterator::get_next_row()
                  OB_FAIL(ob_adjust_lob_datum(row->cells_[i], expr->obj_meta_,
                                              expr->obj_datum_map_, *allocator_, datum))) {
         LOG_WARN("adjust lob datum failed", K(ret), K(i), K(row->cells_[i].get_meta()), K(expr->obj_meta_));
+      } else {
+        SANITY_CHECK_RANGE(datum.ptr_, datum.len_);
       }
     }
   }

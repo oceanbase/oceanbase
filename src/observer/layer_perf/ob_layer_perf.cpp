@@ -129,13 +129,13 @@ int ObLayerPerf::do_clog_layer_perf()
     char *buf = (char*)"clog layer perf test";
     PerfLogCb *cb = nullptr;
     palf::LSN lsn;
-    int64_t ts_ns;
+    share::SCN zero, ts_ns;
     LOG_INFO("perf layer append", KP(r_), KP(buf));
     if (nullptr == (cb = static_cast<PerfLogCb*>(ob_malloc(sizeof(PerfLogCb))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("allo mem", K(ret));
     } else if (FALSE_IT(new (cb) PerfLogCb(r_))) {
-    } else if (OB_FAIL(ls->get_log_handler()->append(buf, strlen(buf), 0, true, cb, lsn, ts_ns))) {
+    } else if (OB_FAIL(ls->get_log_handler()->append(buf, strlen(buf), zero, true, cb, lsn, ts_ns))) {
       LOG_ERROR("append fail", K(ret));
     }
   }

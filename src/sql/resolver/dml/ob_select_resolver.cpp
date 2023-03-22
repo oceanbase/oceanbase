@@ -1002,6 +1002,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   const ParseNode *group_by = NULL;
   const ParseNode *having = NULL;
   ObSelectStmt *select_stmt = get_select_stmt();
+  bool has_rollup = false;
   CK(OB_NOT_NULL(select_stmt),
      OB_NOT_NULL(session_info_),
      OB_NOT_NULL(select_stmt->get_query_ctx()));
@@ -1023,6 +1024,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   OZ( search_connect_group_by_clause(parse_tree, start_with, connect_by, group_by, having) );
   if (OB_SUCC(ret) && OB_NOT_NULL(group_by)) {
     set_has_group_by_clause();
+    OZ (check_rollup_clause(group_by, has_rollup));
   }
   if (OB_SUCC(ret) && (start_with != NULL || connect_by != NULL)) {
     select_stmt->set_hierarchical_query(true);
@@ -1044,11 +1046,19 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   if (!is_oracle_mode()) {
     // mysql resolve: from->where->select_item->group by->having->order by
     count_name_win_expr = select_stmt->get_window_func_count();
+    if (has_rollup) {
+      expr_resv_ctx_.set_new_scope();
+    }
     OZ( resolve_field_list(*(parse_tree.children_[PARSE_SELECT_SELECT])));
   }
 
   /* resolve group by clause */
   OZ( resolve_group_clause(group_by) );
+
+  if (has_rollup && is_oracle_mode()) {
+    expr_resv_ctx_.set_new_scope();
+  }
+
   /* resolve having clause */
   OZ( resolve_having_clause(having) );
 
@@ -1087,7 +1097,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   }
   OZ( resolve_hints(parse_tree.children_[PARSE_SELECT_HINTS]) );
 
-  //bug:https://work.aone.alibaba-inc.com/issue/28716121
+  //bug:
   //由于支持mysql模式下的name window,需要提前解析name window保存下来，然后再解析引用的win expr的表达式,当前实现
   //方式是保存在select stmt中,但是在全部解析完之后没有把那些name window的对应win_expr去除掉,导致生成的计划有问题
   //因此，这里在全部解析完stmt各个部分之后需要根据之前记录的name winexpr个数去除stmt中无用的name win expr
@@ -1673,7 +1683,7 @@ int ObSelectResolver::resolve_order_item(const ParseNode &sort_node, OrderItem &
     ObSEArray<ObRawExpr*, 4> select_exprs;
     if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
       LOG_WARN("failed to get select exprs", K(ret));
-    } else if (ObOptimizerUtil::find_equal_expr(select_exprs, order_item.expr_)) {
+    } else if (ObOptimizerUtil::find_item(select_exprs, order_item.expr_)) {
       /*do nothing*/
     } else {
       ret = OB_ERR_ORDER_BY_ITEM_NOT_IN_SELECT_LIST;
@@ -2001,6 +2011,25 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
             }
           } else {
             //invalid name, do nothing
+          }
+        } else if (is_oracle_mode()
+                    && T_QUESTIONMARK == sel_expr->get_expr_type()
+                    && T_OBJ_ACCESS_REF == project_node->type_) {
+          while (OB_SUCC(ret) && NULL != project_node->children_[1]) {
+            project_node = project_node->children_[1];
+          }
+          if (OB_FAIL(ret)) {
+          } else if (T_OBJ_ACCESS_REF != project_node->type_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected select item type", K(select_item), K(project_node->type_), K(ret));
+          } else {
+            alias_node = project_node->children_[0];
+            select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
+                                                static_cast<int32_t>(alias_node->str_len_));
+            if (OB_UNLIKELY(alias_node->str_len_ > OB_MAX_COLUMN_NAME_LENGTH)) {
+              ret = OB_ERR_TOO_LONG_IDENT;
+              LOG_WARN("alias name too long", K(ret), K(select_item.alias_name_));
+            }
           }
         } else {
           if (params_.is_prepare_protocol_
@@ -2451,7 +2480,7 @@ int ObSelectResolver::resolve_all_generated_table_columns(
     /* 这里进行一次重复列名检测是原因是oracle支持generated table含有重复列名的不引用重复列名的查询，比如：
     *  select 1 from (select c1,c1 from t1)；因此在oracle模式resolve generated table时会跳过检查重复列
     *  但是对于select * from(select c1,c1 from t1)；这样的查询肯定引用了，因此必须在展开*对应的查询时进行一次
-    *  检查，如果存在重复列是不允许的；https://work.aone.alibaba-inc.com/issue/29799516
+    *  检查，如果存在重复列是不允许的；
      */
     // if the select item is a duplicable column in generated table, skip the check.
     // else we should set the skip_join_dup parameter to true. 
@@ -2491,6 +2520,7 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *select_stmt = get_select_stmt();
+  const share::schema::ObTableSchema *table_schema = NULL;
 
   if (OB_ISNULL(node) || OB_ISNULL(session_info_)
       || OB_ISNULL(select_stmt) || OB_ISNULL(params_.expr_factory_)) {
@@ -2546,6 +2576,9 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
     }
   } else if (node->type_ == T_COLUMN_REF && node->children_[2]->type_ == T_STAR) {
     ObQualifiedName column_ref;
+    bool is_json_wildcard_column = false;  // special input : tab_name.column_name.*
+    bool is_column_name_equal = false;
+    const TableItem* tab_item = NULL;
     ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
     if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
       LOG_WARN("fail to get name case mode", K(ret));
@@ -2558,30 +2591,57 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
                                                            column_ref.tbl_name_, table_items))) {
         LOG_WARN("get all matched table failed", K(ret));
       } else if (table_items.count() <= 0) {
-        ret = OB_ERR_BAD_TABLE;
-        ObString table_name = concat_table_name(column_ref.database_name_, column_ref.tbl_name_);
-        LOG_USER_ERROR(OB_ERR_BAD_TABLE, table_name.length(), table_name.ptr());
+        ret = OB_SUCCESS;
+        ObString db_name;
+        if (lib::is_oracle_mode() && OB_FAIL(select_stmt->get_all_table_item_by_tname(session_info_, db_name,
+                                                                      column_ref.database_name_, table_items))) {
+          LOG_WARN("get all matched table failed", K(ret));
+        } else if (lib::is_mysql_mode() || table_items.count() <= 0) {
+          ret = OB_ERR_BAD_TABLE;
+        } else {
+          is_json_wildcard_column = true;
+        }
+        if (ret != 0) {  // according to oracle , need cover error code
+          ret = OB_ERR_BAD_TABLE;
+          ObString table_name = concat_table_name(column_ref.database_name_, column_ref.tbl_name_);
+          LOG_USER_ERROR(OB_ERR_BAD_TABLE, table_name.length(), table_name.ptr());
+        }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
         target_list.reset();
-        if (OB_ISNULL(table_items.at(i))) {
+        tab_item = table_items.at(i);
+        if (OB_ISNULL(tab_item)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(table_items.at(i)), K(ret));
-        } else if (OB_FAIL(expand_target_list(*table_items.at(i), target_list))) {
-          LOG_WARN("resolve table columns failed", K(ret), K(table_items.at(i)), K(i));
+          LOG_WARN("get unexpected null", K(tab_item), K(ret));
+        } else if (OB_FAIL(expand_target_list(*tab_item, target_list))) {
+          LOG_WARN("resolve table columns failed", K(ret), K(tab_item), K(i));
+        } else if (is_json_wildcard_column) {
+          if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tab_item->ref_id_, table_schema))) {
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("get table schema failed", K_(tab_item->table_name), K(tab_item->ref_id_), K(ret));
+          } else if (OB_ISNULL(table_schema)) {
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("get table schema failed", K_(tab_item->table_name), K(tab_item->ref_id_), K(ret));
+          } else if (OB_NOT_NULL(table_schema->get_column_schema(column_ref.tbl_name_))
+                      && !table_schema->get_column_schema(column_ref.tbl_name_)->is_json()) {
+            ret = OB_ERR_TABLE_NAME_NOT_IN_LIST;
+            LOG_WARN("table name not in from list", K(ret), K(column_ref.tbl_name_));
+          }
         }
         for (int64_t j = 0; OB_SUCC(ret) && j < target_list.count(); ++j) {
-          if (OB_FAIL(select_stmt->add_select_item(target_list.at(j)))) {
+          is_column_name_equal = is_json_wildcard_column & (0 != column_ref.tbl_name_.case_compare(target_list.at(j).alias_name_));
+          if (!is_column_name_equal && OB_FAIL(select_stmt->add_select_item(target_list.at(j)))) {
             LOG_WARN("add select item to select stmt failed", K(ret));
           } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
             //如果是only full group by，所有target list中的列都必须检查是否满足group约束
-            if (OB_FAIL(standard_group_checker_.add_unsettled_column(target_list.at(j).expr_))) {
+            if (is_column_name_equal) {    // target column not equal with current column without judge
+            } else if (OB_FAIL(standard_group_checker_.add_unsettled_column(target_list.at(j).expr_))) {
               LOG_WARN("add unsettled column failed", K(ret));
             } else if (OB_FAIL(standard_group_checker_.add_unsettled_expr(target_list.at(j).expr_))) {
               LOG_WARN("add unsettled expr to standard group checker failed", K(ret));
             }
           }
-          if (OB_SUCC(ret)) {
+          if (OB_SUCC(ret) && !is_column_name_equal) {
             ret = column_namespace_checker_.check_column_existence_in_using_clause(
                     table_items.at(i)->table_id_, target_list.at(j).expr_name_);
           }
@@ -3574,6 +3634,30 @@ int ObSelectResolver::resolve_group_clause(const ParseNode *node)
   return ret;
 }
 
+int ObSelectResolver::check_rollup_clause(const ParseNode *node, bool &has_rollup)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node) || OB_ISNULL(node->children_) ||
+      OB_UNLIKELY(T_GROUPBY_CLAUSE != node->type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid resolver arguments", K(ret), K(node));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      const ParseNode *child_node = node->children_[i];
+      if (OB_ISNULL(child_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(child_node));
+      } else if (child_node->type_ == T_ROLLUP_LIST ||
+                 child_node->type_ == T_CUBE_LIST ||
+                 child_node->type_ == T_GROUPING_SETS_LIST ||
+                 child_node->type_ == T_WITH_ROLLUP_CLAUSE) {
+        has_rollup = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSelectResolver::resolve_group_by_list(const ParseNode *node,
                                             common::ObIArray<ObRawExpr*> &groupby_exprs,
                                             common::ObIArray<ObRawExpr*> &rollup_exprs,
@@ -4100,7 +4184,7 @@ int ObSelectResolver::check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&exp
   int ret = OB_SUCCESS;
   bool find = false;
   /*
-   * bugfix: https://work.aone.alibaba-inc.com/issue/38935701
+   * bugfix:
    * for grouping/grouping_id:
    * select grouping(1+1) from t1 group by rollup(1+1). 
    */

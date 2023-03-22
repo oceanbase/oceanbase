@@ -17,6 +17,7 @@
 #include "share/ob_freeze_info_proxy.h"
 #include "share/ob_zone_merge_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
+#include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "observer/ob_server_struct.h"
 #include "share/ob_cluster_version.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
@@ -900,28 +901,45 @@ int ObZoneMergeManagerBase::try_update_zone_merge_info(const int64_t expected_ep
   return ret;
 }
 
-int ObZoneMergeManagerBase::adjust_global_merge_info()
+int ObZoneMergeManagerBase::adjust_global_merge_info(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   ObSimpleFrozenStatus max_frozen_status;
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
+  SCN min_compaction_scn;
+  SCN max_frozen_scn;
+  // 1. get min{compaction_scn} of all tablets in __all_tablet_meta_table
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(freeze_info_proxy.get_max_freeze_info(*proxy_, max_frozen_status))) {
-    LOG_WARN("fail to get freeze info with max frozen_scn", KR(ret), K_(tenant_id));
-  } else if (OB_UNLIKELY(max_frozen_status.frozen_scn_ < SCN::base_scn())) {
+  } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::get_min_compaction_scn(tenant_id_, min_compaction_scn))) {
+    LOG_WARN("fail to get min_compaction_scn", KR(ret), K_(tenant_id));
+  } else if (min_compaction_scn < SCN::base_scn()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected frozen_scn", KR(ret), K(max_frozen_status), K_(tenant_id));
-  } else {
-    // Adjust global_merge_info in memory with (max_frozen_status.frozen_scn_ - 1).
-    // So as to launch one major freeze with max_frozen_status.frozen_scn_.
-    // Note: only launch major freezes with frozen_scn > 1
-    if (max_frozen_status.frozen_scn_ > SCN::base_scn()) {
-      inner_adjust_global_merge_info(SCN::minus(max_frozen_status.frozen_scn_, 1));
-      LOG_INFO("succ to adjust global merge info", K_(tenant_id), "max_frozen_scn",
-               max_frozen_status.frozen_scn_, K_(global_merge_info));
+    LOG_WARN("unexpected min_compaction_scn", KR(ret), K_(tenant_id), K(min_compaction_scn));
+  } else if (min_compaction_scn == SCN::base_scn()) {
+    // do nothing. no need to adjust global_merge_info
+  } else if (min_compaction_scn > SCN::base_scn()) {
+    // 2. if min{compaction_scn} > 1, get max{frozen_scn} <= min{compaction_scn} from __all_freeze_info
+    // case 1: if min{compaction_scn} is medium_compaction_scn, return the max frozen_scn which is
+    //         smaller than this medium_compaction_scn from __all_freeze_info
+    // case 2: if min{compaction_scn} is major_compaction_scn, return this major_compaction_scn
+    if (OB_FAIL(freeze_info_proxy.get_max_frozen_scn_smaller_or_equal_than(*proxy_,
+                min_compaction_scn, max_frozen_scn))) {
+      LOG_WARN("fail to get max frozen_scn smaller than or equal to min_compaction_scn", KR(ret),
+               K_(tenant_id), K(min_compaction_scn));
+    } else if (max_frozen_scn < SCN::base_scn()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected max_frozen_scn", KR(ret), K_(tenant_id), K(max_frozen_scn));
+    } else if (max_frozen_scn == SCN::base_scn()) {
+      // do nothing. no need to adjust global_merge_info
+    } else if (max_frozen_scn > SCN::base_scn()) {
+      // 3. if max{frozen_scn} > 1, update __all_merge_info and global_merge_info with max{frozen_scn}
+      if (OB_FAIL(inner_adjust_global_merge_info(max_frozen_scn, expected_epoch))) {
+        LOG_WARN("fail to inner adjust global merge info", KR(ret), K_(tenant_id), K(max_frozen_scn));
+      }
     }
   }
+  FLOG_INFO("finish to adjust global merge info", K_(tenant_id), K(max_frozen_scn), K_(global_merge_info));
   return ret;
 }
 
@@ -1127,16 +1145,48 @@ int ObZoneMergeManagerBase::handle_zone_merge_info_to_insert(
   return ret;
 }
 
-void ObZoneMergeManagerBase::inner_adjust_global_merge_info(const SCN &min_compaction_scn)
+int ObZoneMergeManagerBase::inner_adjust_global_merge_info(
+    const SCN &frozen_scn,
+    const int64_t expected_epoch)
 {
-  // Here, only adjust global_merge_info in memory, not adjust global_merge_info in table.
-  // The next round of major freeze would update global_merge_info in table.
-  // Note that, here not only adjust last_merged_scn, but also adjust global_broadcast_scn and
-  // frozen_scn. So as to avoid error in ObMajorMergeScheduler::do_work(), which works based on
-  // these global_merge_info in memory.
-  global_merge_info_.last_merged_scn_.set_scn(min_compaction_scn, false);
-  global_merge_info_.global_broadcast_scn_.set_scn(min_compaction_scn, false);
-  global_merge_info_.frozen_scn_.set_scn(min_compaction_scn, false);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!frozen_scn.is_valid() || expected_epoch < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(frozen_scn), K(expected_epoch));
+  } else {
+    // 1. adjust global_merge_info in memory to control the frozen_scn of the next major compaction.
+    // 2. adjust global_merge_info in table for background thread to update report_scn.
+    //
+    // Note that, here not only adjust last_merged_scn, but also adjust global_broadcast_scn and
+    // frozen_scn. So as to avoid error in ObMajorMergeScheduler::do_work(), which works based on
+    // these global_merge_info in memory.
+    ObMySQLTransaction trans;
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+    if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
+      LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(meta_tenant_id));
+    } else if (OB_FAIL(check_freeze_service_epoch(trans, expected_epoch))) {
+      LOG_WARN("fail to check freeze_service_epoch", KR(ret), K(expected_epoch));
+    } else {
+      ObGlobalMergeInfo tmp_global_info;
+      if (OB_FAIL(tmp_global_info.assign_value(global_merge_info_))) {
+        LOG_WARN("fail to assign global merge info", KR(ret), K_(global_merge_info));
+      } else {
+        tmp_global_info.frozen_scn_.set_scn(frozen_scn, true);
+        tmp_global_info.global_broadcast_scn_.set_scn(frozen_scn, true);
+        tmp_global_info.last_merged_scn_.set_scn(frozen_scn, true);
+        if (OB_FAIL(ObGlobalMergeTableOperator::update_partial_global_merge_info(trans, tenant_id_, tmp_global_info))) {
+          LOG_WARN("fail to update partial global merge info", KR(ret), K(tmp_global_info));
+        }
+        handle_trans_stat(trans, ret);
+        if (FAILEDx(global_merge_info_.assign_value(tmp_global_info))) {
+          LOG_WARN("fail to assign global_merge_info", KR(ret), K(tmp_global_info), K_(global_merge_info));
+        } else {
+          LOG_INFO("succ to update global_merge_info", K_(tenant_id), K(tmp_global_info), K_(global_merge_info));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 // only used for copying data to/from shadow_
@@ -1458,7 +1508,7 @@ int ObZoneMergeManager::try_update_zone_merge_info(const int64_t expected_epoch)
   return ret;
 }
 
-int ObZoneMergeManager::adjust_global_merge_info()
+int ObZoneMergeManager::adjust_global_merge_info(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(write_lock_);
@@ -1468,7 +1518,7 @@ int ObZoneMergeManager::adjust_global_merge_info()
     ObZoneMergeMgrGuard shadow_guard(lock_,
       *(static_cast<ObZoneMergeManagerBase *> (this)), shadow_, ret);
     if (OB_SUCC(ret)) {
-      ret = shadow_.adjust_global_merge_info();
+      ret = shadow_.adjust_global_merge_info(expected_epoch);
     }
   }
   return ret;

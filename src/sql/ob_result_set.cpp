@@ -114,8 +114,10 @@ OB_INLINE int ObResultSet::open_plan()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObPxAdmission::enter_query_admission(my_session_,
                                                        get_exec_context(),
+                                                       get_stmt_type(),
                                                        *get_physical_plan()))) {
         // query is not admitted to run
+        // Note: explain statement's phy plan is target query's plan, don't enable admission test
         LOG_DEBUG("Query is not admitted to run, try again", K(ret));
       } else if (THIS_WORKER.is_timeout()) {
         // packet有可能在队列里面呆的时间过长，到这里已经超时，
@@ -442,7 +444,7 @@ bool ObResultSet::transaction_set_violation_and_retry(int &err, int64_t &retry_t
       LOG_WARN("failed to close plan", K(err), K(ret));
     } else {
       // OB_SNAPSHOT_DISCARDED should not retry now, see:
-      // https://aone.alibaba-inc.com/req/21981135
+      //
       // so we remove this condition: OB_TRANSACTION_SET_VIOLATION == err
       if (/*OB_TRANSACTION_SET_VIOLATION == err &&*/ is_isolation_RR_or_SE) {
         // rewrite err in ObQueryRetryCtrl::test_and_save_retry_state().
@@ -717,7 +719,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
       SQL_LOG(WARN, "fail to close executor", K(ret), K(close_ret));
     }
 
-    ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), *get_physical_plan());
+    ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), get_stmt_type(), *get_physical_plan());
     // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
     if ((OB_SUCCESS == close_ret)
         && (OB_SUCCESS == errcode || OB_ITER_END == errcode)
@@ -743,6 +745,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
       err_ignored = plan_ctx->is_error_ignored();
     }
     bool rollback = need_rollback(ret, errcode, err_ignored);
+    get_exec_context().set_errcode(errcode);
     sret = end_stmt(rollback || OB_SUCCESS != pret);
     // SQL_LOG(INFO, "end_stmt err code", K_(errcode), K(ret), K(pret), K(sret));
     // if branch fail is returned from end_stmt, then return it first
@@ -830,6 +833,13 @@ int ObResultSet::close()
   if (OB_SUCC(ret)) {
     ret = ins_ret;
   }
+
+  if (OB_SUCC(ret)) {
+    if (!get_exec_context().get_das_ctx().is_partition_hit()) {
+      my_session_.partition_hit().try_set_bool(false);
+    }
+  }
+
   int prev_ret = ret;
   bool async = false; // for debug purpose
   if (OB_TRANS_XA_BRANCH_FAIL == ret) {
@@ -841,15 +851,31 @@ int ObResultSet::close()
       my_session_.disassociate_xa();
     }
   } else if (OB_NOT_NULL(physical_plan_)) {
+    //Because of the async close result we need set the partition_hit flag
+    //to the call back param, than close the result.
+    //But the das framwork set the patition_hit after result is closed.
+    //So we need to set the partition info at here.
+    if (is_end_trans_async()) {
+      ObCurTraceId::TraceId *cur_trace_id = NULL;
+      if (OB_ISNULL(cur_trace_id = ObCurTraceId::get_trace_id())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("current trace id is NULL", K(ret));
+        set_end_trans_async(false);
+      } else {
+        observer::ObSqlEndTransCb &sql_end_cb = my_session_.get_mysql_end_trans_cb();
+        ObEndTransCbPacketParam pkt_param;
+        int fill_ret = OB_SUCCESS;
+        fill_ret = sql_end_cb.set_packet_param(pkt_param.fill(*this, my_session_, *cur_trace_id));
+        if (OB_SUCCESS != fill_ret) {
+          LOG_WARN("fail set packet param", K(ret));
+          set_end_trans_async(false);
+        }
+      }
+    }
     ret = auto_end_plan_trans(*physical_plan_, ret, async);
   }
   //NG_TRACE_EXT(result_set_close, OB_ID(ret), ret, OB_ID(arg1), prev_ret,
                //OB_ID(arg2), ins_ret, OB_ID(arg3), errcode_, OB_ID(async), async);
-  if (OB_SUCC(ret)) {
-    if (!get_exec_context().get_das_ctx().is_partition_hit()) {
-      my_session_.partition_hit().try_set_bool(false);
-    }
-  }
   return ret;  // 后面所有的操作都通过callback来完成
 }
 

@@ -709,6 +709,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           if (OB_UNLIKELY(parse_tree.num_child_ != 2 || NULL == parse_tree.children_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
+          } else if (!session_info_->get_control_info().is_valid()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "If full link tracing is not enabled, show trace is");
           } else {
             show_resv_ctx.condition_node_ = parse_tree.children_[0];
             show_resv_ctx.stmt_type_ = stmt::T_SHOW_TRACE;
@@ -2737,8 +2740,8 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_INDEXES,
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE,
                        NULL,
-                       "SELECT span_name as `Operation`, start_ts as `StartTime`, concat(elapse, ' µs')  as `ElapseTime` from %s.%s",
-                       R"(SELECT span_name as "OPERATION", to_char(start_ts,'yyyy/mm/dd hh24:mi:ss') as "START_TIME", concat(elapse, ' µs') as "ELAPSE_TIME" FROM %s.%s)",
+                       "SELECT span_name as `Operation`, start_ts as `StartTime`, concat(cast(elapse/1000 as number(20, 3)), ' ms')  as `ElapseTime` from %s.%s",
+                       R"(SELECT span_name as "OPERATION", to_char(start_ts,'yyyy/mm/dd hh24:mi:ss') as "START_TIME", concat(cast(elapse/1000 as number(20, 3)), ' ms') as "ELAPSE_TIME" FROM %s.%s)",
                        NULL);
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE_JSON,

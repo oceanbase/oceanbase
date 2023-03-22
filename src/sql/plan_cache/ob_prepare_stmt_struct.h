@@ -4,7 +4,7 @@
  *  Version: $Id: ob_prepare_stmt_struct.h 10/27/2016 04:13:54 PM
  *
  *  Authors:
- *     hualong <shaohang.lsh@alibaba-inc.com>
+ *     hualong <>
  */
 
 #ifndef OCEANBASE_SQL_PLAN_CACHE_OB_PREPARE_STMT_STRUCT_H_

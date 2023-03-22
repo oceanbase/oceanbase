@@ -477,9 +477,10 @@ int ObTxNode::read(ObTxDesc &tx, const int64_t key, int64_t &value, const ObTxIs
   ObTxReadSnapshot snapshot;
   OZ(get_read_snapshot(tx,
                        iso,
-                       ts_after_ms(5),
+                       ts_after_ms(50),
                        snapshot));
-  return read(snapshot, key, value);
+  OZ(read(snapshot, key, value));
+  return ret;
 }
 int ObTxNode::read(const ObTxReadSnapshot &snapshot,
                    const int64_t key,
@@ -567,7 +568,7 @@ int ObTxNode::write(ObTxDesc &tx, const int64_t key, const int64_t value)
   ObTxReadSnapshot snapshot;
    OZ(get_read_snapshot(tx,
                        tx.isolation_,
-                       ts_after_ms(5),
+                       ts_after_ms(50),
                        snapshot));
   OZ(write(tx, snapshot, key, value));
   return ret;

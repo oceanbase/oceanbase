@@ -710,7 +710,8 @@ struct EstimateCostInfo {
         contain_normal_nl_(false),
         can_use_batch_nlj_(false),
         is_naaj_(false),
-        is_sna_(false)
+        is_sna_(false),
+        inherit_sharding_index_(-1)
       {
       }
     virtual ~JoinPath() {}
@@ -894,7 +895,8 @@ struct EstimateCostInfo {
                  K_(contain_normal_nl),
                  K_(can_use_batch_nlj),
                  K_(is_naaj),
-                 K_(is_sna));
+                 K_(is_sna),
+                 K_(inherit_sharding_index));
   public:
     const Path *left_path_;
     const Path *right_path_;
@@ -926,6 +928,8 @@ struct EstimateCostInfo {
     bool can_use_batch_nlj_;
     bool is_naaj_; // is null aware anti join
     bool is_sna_; // is single null aware anti join
+    //Used to indicate which child node the current sharding inherits from
+    int64_t inherit_sharding_index_;
   private:
       DISALLOW_COPY_AND_ASSIGN(JoinPath);
   };
@@ -2207,6 +2211,7 @@ struct NullAwareAntiJoinInfo {
     inline uint64_t get_total_path_num() const { return total_path_num_; }
     int get_join_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
     int get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_conditions);
+    static double calc_single_parallel_rows(double rows, int64_t parallel);
   private:
     static int check_and_remove_is_null_qual(ObLogPlan *plan,
                                              const ObJoinType join_type,

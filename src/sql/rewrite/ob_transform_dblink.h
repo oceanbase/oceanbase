@@ -131,6 +131,8 @@ private:
 
   int get_from_item_idx(ObDMLStmt *stmt, ObRawExpr *expr, ObIArray<int64_t> &idxs);
 
+  int check_can_pushdown(ObDMLStmt *stmt, const LinkTableHelper &helper, bool &can_push);
+
   int collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<LinkTableHelper> &helpers);
 
   int has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs,
@@ -150,6 +152,8 @@ private:
   int formalize_column_item(ObDMLStmt *stmt);
 
   int formalize_select_item(ObDMLStmt *stmt);
+
+  int extract_limit(ObDMLStmt *stmt, ObDMLStmt *&dblink_stmt);
 
   virtual int need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
                              const int64_t current_level,

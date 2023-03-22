@@ -518,7 +518,7 @@ protected:
   // for ObServerBalancer
   IdPoolMap& get_id_pool_map() { return id_pool_map_; }
   TenantPoolsMap& get_tenant_pools_map() { return tenant_pools_map_; }
-  // bug#11873101 https://workitem.aone.alibaba-inc.com/issue/11873101
+  // bug#11873101 issue/11873101
   // Before attempting to migrate the unit,
   // check whether the target unit space is sufficient,
   // if it is insufficient, do not migrate,
@@ -1012,6 +1012,13 @@ protected:
       const share::ObUnit &unit,
       const bool if_not_grant,
       const bool skip_offline_server);
+  int rollback_persistent_units(
+      const common::ObArray<share::ObUnit> &units,
+      const share::ObResourcePool &pool,
+      const lib::Worker::CompatMode compat_mode,
+      const bool if_not_grant,
+      const bool skip_offline_server,
+      ObNotifyTenantServerResourceProxy &notify_proxy);
   int sum_servers_resources(ObUnitPlacementStrategy::ObServerResource &server_resource,
                             const share::ObUnitConfig &unit_config);
 protected:

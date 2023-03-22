@@ -305,8 +305,6 @@ int ObUpgradeExecutor::execute(
     LOG_WARN("unsupported version to run upgrade job", KR(ret), K(arg));
   } else if (OB_FAIL(set_execute_mark_())) {
     LOG_WARN("fail to set execute mark", KR(ret));
-  } else if (OB_FAIL(construct_tenant_ids_(arg.tenant_ids_, tenant_ids))) {
-    LOG_WARN("fail to construct tenant_ids", KR(ret), K(arg));
   } else {
     int64_t job_id = OB_INVALID_ID;
     ObString extra_info;
@@ -324,6 +322,8 @@ int ObUpgradeExecutor::execute(
     } else if (job_id <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("job_id is invalid", KR(ret), K(job_id));
+    } else if (OB_FAIL(construct_tenant_ids_(arg.tenant_ids_, tenant_ids))) {
+      LOG_WARN("fail to construct tenant_ids", KR(ret), K(arg));
     } else {
       switch (action) {
         case obrpc::ObUpgradeJobArg::UPGRADE_POST_ACTION: {
@@ -1087,14 +1087,15 @@ int ObUpgradeExecutor::construct_tenant_ids_(
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> standby_tenants;
+  bool is_standby = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::get_standby_tenants(sql_proxy_, standby_tenants))) {
-    LOG_WARN("fail to get standby tenants", KR(ret));
   } else if (src_tenant_ids.count() > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < src_tenant_ids.count(); i++) {
       const uint64_t tenant_id = src_tenant_ids.at(i);
-      if (has_exist_in_array(standby_tenants, tenant_id)) {
+      if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id, is_standby))) {
+        LOG_WARN("fail to check is standby tenant", KR(ret), K(tenant_id));
+      } else if (is_standby) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support to upgrade a standby tenant", KR(ret), K(tenant_id));
       }
@@ -1110,7 +1111,9 @@ int ObUpgradeExecutor::construct_tenant_ids_(
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
       const uint64_t tenant_id = tenant_ids.at(i);
-      if (has_exist_in_array(standby_tenants, tenant_id)) {
+      if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id, is_standby))) {
+        LOG_WARN("fail to check is standby tenant", KR(ret), K(tenant_id));
+      } else if (is_standby) {
         // skip
       } else if (OB_FAIL(dst_tenant_ids.push_back(tenant_id))) {
         LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));

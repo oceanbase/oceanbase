@@ -357,7 +357,8 @@ public:
   virtual int send(const ObDtlMsg &msg, int64_t timeout_ts,
       ObEvalCtx *eval_ctx = nullptr, bool is_eof = false) override;
   virtual int feedup(ObDtlLinkedBuffer *&buffer) override;
-  virtual int attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_buffer_cached = false);
+  virtual int attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_buffer_cached = false,
+                     bool inc_recv_buf_cnt = true);
   // don't call send&flush in different threads.
   virtual int flush(bool wait=true, bool wait_response = true) override;
 

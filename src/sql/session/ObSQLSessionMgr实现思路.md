@@ -48,7 +48,7 @@ observer采用16位递增id表示当前server分配的sessid_seq。分配策略�
 
 #### session_key
 
-为了解决ObServer在接收客户端断连接请求后，未能及时释放sessid的问题([详情](http://review.alibaba-inc.com/r/29086/))，引入了session_key的概念;
+为了解决ObServer在接收客户端断连接请求后，未能及时释放sessid的问题，引入了session_key的概念;
 - session_key为含有version和sessid两个成员变量的结构体，session_key作为ObSQLSessionInfo在session map中的key；通过session_key对ObSQLSessioInfo进行create_session/get_session/free_session；
 - 当ObServer接收到断连接请求后，在on_disconnect接口中，对sessid 进行unused，并将相应的ObSQLSessionInfo设置为shadow
 - 如果proxy采取saved_login，并使用相同的sessid，observer如果判断出当前full_sessid对应的ObSQLSessionInfo为shadow，则会创建一个新的ObSQLSessionInfo，并指定一个可用的version。

@@ -717,18 +717,23 @@ int ObLS::offline_()
     LOG_WARN("checkpoint executor offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_restore_handler_.offline())) {
     LOG_WARN("failed to offline ls restore handler", K(ret));
+  } else if (OB_FAIL(log_handler_.offline())) {
+    LOG_WARN("failed to offline log", K(ret));
+  // TODO: delete it if apply sequence
+  // force release memtables and freeze their allocators to reduce active tenant_memory
+  } else if (OB_FAIL(ls_tablet_svr_.offline())) {
+    LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(offline_compaction_())) {
     LOG_WARN("compaction offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_wrs_handler_.offline())) {
     LOG_WARN("weak read handler offline failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(log_handler_.offline())) {
-    LOG_WARN("failed to offline log", K(ret));
   } else if (OB_FAIL(ls_ddl_log_handler_.offline())) {
     LOG_WARN("ddl log handler offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(offline_tx_())) {
     LOG_WARN("offline tx service failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(lock_table_.offline())) {
     LOG_WARN("lock table offline failed", K(ret), K(ls_meta_));
+  // force release memtables created by force_tablet_freeze called during major
   } else if (OB_FAIL(ls_tablet_svr_.offline())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(tablet_gc_handler_.offline())) {
@@ -891,12 +896,8 @@ int ObLS::get_ls_meta_package(const bool check_archive, ObLSMetaPackage &meta_pa
     } else if (OB_FAIL(log_handler_.get_begin_lsn(begin_lsn))) {
       LOG_WARN("get begin lsn failed", K(ret), K(id));
     } else if (begin_lsn > archive_lsn) {
-      if (archive_force) {
-        ret = OB_FILE_RECYCLED;
-        LOG_WARN("archive in mandatory mode and log recycled", K(ret));
-      } else {
-        curr_lsn = std::min(archive_lsn, curr_lsn);
-      }
+      ret = OB_CLOG_RECYCLE_BEFORE_ARCHIVE;
+      LOG_WARN("log recycled before archive", K(ret), K(archive_lsn), K(begin_lsn), K(archive_ignore));
     }
 
     if (OB_SUCC(ret) && OB_FAIL(log_handler_.get_palf_base_info(curr_lsn,
@@ -951,7 +952,6 @@ int ObLS::get_replica_status(ObReplicaStatus &replica_status)
 {
   int ret = OB_SUCCESS;
   ObMigrationStatus migration_status;
-  ObLSRestoreStatus restore_status;
   int64_t read_lock = LSLOCKLOGMETA;
   int64_t write_lock = 0;
   ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
@@ -960,17 +960,12 @@ int ObLS::get_replica_status(ObReplicaStatus &replica_status)
     LOG_WARN("ls is not inited", K(ret));
   } else if (OB_FAIL(get_migration_status(migration_status))) {
     LOG_WARN("failed to get migration status", K(ret), KPC(this));
-  } else if (OB_FAIL(get_restore_status(restore_status))) {
-    LOG_WARN("failed to get restore status", K(ret), KPC(this));
   } else if (migration_status < OB_MIGRATION_STATUS_NONE
       || migration_status > OB_MIGRATION_STATUS_MAX) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration status is not valid", K(ret), K(migration_status));
-  } else if (!restore_status.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("restore status is not valid", K(ret), K(restore_status));
   } else if (OB_MIGRATION_STATUS_NONE == migration_status
-      && restore_status.is_restore_none()) {
+      || OB_MIGRATION_STATUS_REBUILD == migration_status) {
     replica_status = REPLICA_STATUS_NORMAL;
   } else {
     replica_status = REPLICA_STATUS_OFFLINE;
@@ -1050,6 +1045,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     ls_info.checkpoint_scn_ = ls_meta_.get_clog_checkpoint_scn();
     ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
     ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
+    ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
   }
   return ret;
 }
@@ -1217,7 +1213,7 @@ int ObLS::finish_slog_replay()
 
   if (OB_FAIL(get_migration_status(current_migration_status))) {
     LOG_WARN("failed to get migration status", K(ret), KPC(this));
-  } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status,
+  } else if (OB_FAIL(ObMigrationStatusHelper::trans_reboot_status(current_migration_status,
                                                                 new_migration_status))) {
     LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status),
              K(new_migration_status));
@@ -1230,6 +1226,10 @@ int ObLS::finish_slog_replay()
     // so skip the following steps, otherwise load_ls_inner_tablet maybe encounter error.
   } else if (OB_FAIL(start())) {
     LOG_WARN("ls can not start to work", K(ret));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == new_migration_status) {
+    if (OB_FAIL(offline_())) {
+      LOG_WARN("failed to offline", K(ret), KPC(this));
+    }
   } else if (is_enable_for_restore()) {
     if (OB_FAIL(offline_())) {
       LOG_WARN("failed to offline", K(ret), KPC(this));
@@ -1342,7 +1342,7 @@ int ObLS::logstream_freeze(bool is_sync)
     }
   }
 
-  if (is_sync) {
+  if (OB_SUCC(ret) && is_sync) {
     ret = ls_freezer_.wait_freeze_finished(result);
   }
 
@@ -1374,7 +1374,7 @@ int ObLS::tablet_freeze(const ObTabletID &tablet_id, bool is_sync)
     }
   }
 
-  if (is_sync) {
+  if (OB_SUCC(ret) && is_sync) {
     ret = ls_freezer_.wait_freeze_finished(result);
   }
 

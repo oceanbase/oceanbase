@@ -36,11 +36,12 @@ ObTabletMemtableMgr::ObTabletMemtableMgr()
   : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
     ls_(NULL),
     lock_def_(common::ObLatchIds::TABLET_MEMTABLE_LOCK),
+    retry_times_(0),
     schema_recorder_(),
     medium_info_recorder_()
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTabletMemtableMgr) <= 448, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletMemtableMgr) <= 480, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -63,6 +64,7 @@ void ObTabletMemtableMgr::destroy()
     } else if (imemtable->is_data_memtable()) {
       memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
       memtable->remove_from_data_checkpoint();
+      memtable->set_frozen();
     }
   }
   reset_tables();
@@ -71,6 +73,7 @@ void ObTabletMemtableMgr::destroy()
   freezer_ = nullptr;
   schema_recorder_.destroy();
   medium_info_recorder_.destroy();
+  retry_times_ = 0;
   is_inited_ = false;
 }
 
@@ -106,6 +109,7 @@ int ObTabletMemtableMgr::init(const common::ObTabletID &tablet_id,
     t3m_ = t3m;
     table_type_ = ObITable::TableType::DATA_MEMTABLE;
     freezer_ = freezer;
+    retry_times_ = 0;
     is_inited_ = true;
     TRANS_LOG(DEBUG, "succeeded to init tablet memtable mgr", K(ret), K(ls_id), K(tablet_id));
   }
@@ -186,12 +190,13 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
     ret = OB_ENTRY_EXIST;
   } else if (get_memtable_count_() >= MAX_MEMSTORE_CNT) {
     ret = OB_MINOR_FREEZE_NOT_ALLOW;
-    if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
+    ob_usleep(1 * 1000);
+    if ((++retry_times_ % (60 * 1000)) == 0) { // 1 min
       ObTableHandleV2 first_frozen_memtable;
       get_first_frozen_memtable_(first_frozen_memtable);
-      LOG_WARN("cannot create more memtable", K(ret), K(ls_id), K(tablet_id_), K(MAX_MEMSTORE_CNT),
-               K(get_memtable_count_()),
-               KPC(first_frozen_memtable.get_table()));
+      LOG_ERROR("cannot create more memtable", K(ret), K(ls_id), K(tablet_id_), K(MAX_MEMSTORE_CNT),
+                K(get_memtable_count_()),
+                KPC(first_frozen_memtable.get_table()));
     }
   } else if (OB_FAIL(get_newest_clog_checkpoint_scn(new_clog_checkpoint_scn))) {
     LOG_WARN("failed to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id_), K(new_clog_checkpoint_scn));
@@ -206,6 +211,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
     table_key.scn_range_.end_scn_.set_max();
     memtable::ObMemtable *memtable = NULL;
     ObLSHandle ls_handle;
+    retry_times_ = 0;
 
     if (OB_FAIL(t3m_->acquire_memtable(memtable_handle))) {
       LOG_WARN("failed to create memtable", K(ret), K(ls_id), K(tablet_id_));
@@ -639,6 +645,7 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       memtable->remove_from_data_checkpoint();
       memtable->set_is_flushed();
       memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
+      memtable->set_frozen();
       release_head_memtable();
       FLOG_INFO("succeed to release head data memtable", K(ret), K(ls_id), K(tablet_id_));
     }
@@ -746,7 +753,15 @@ int64_t ObTabletMemtableMgr::get_unmerged_memtable_count_() const
 
 void ObTabletMemtableMgr::clean_tail_memtable_()
 {
-  ObIMemtableMgr::release_tail_memtable();
+  if (memtable_tail_ > memtable_head_) {
+    ObMemtable *memtable = get_memtable_(memtable_tail_ - 1);
+    if (OB_NOT_NULL(memtable)) {
+      memtable->set_frozen();
+    } else {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "memtable is null when clean_tail_memtable_", KPC(this));
+    }
+    ObIMemtableMgr::release_tail_memtable();
+  }
 }
 
 int ObTabletMemtableMgr::get_memtables_(ObTableHdlArray &handle, const int64_t start_point,

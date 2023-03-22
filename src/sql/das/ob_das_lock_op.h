@@ -62,6 +62,7 @@ public:
   ObDASLockResult();
   virtual ~ObDASLockResult();
   virtual int init(const ObIDASTaskOp &op, common::ObIAllocator &alloc) override;
+  virtual int reuse() override;
   int64_t get_affected_rows() const { return affected_rows_; }
   void set_affected_rows(int64_t affected_rows) { affected_rows_ = affected_rows; }
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,

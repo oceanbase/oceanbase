@@ -25,6 +25,8 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 
+#define BREAK_TASK_CNT(a) ((a) + 1)
+
 int ObBloomFilterSendCtx::generate_filter_indexes(
     int64_t each_group_size,
     int64_t channel_count)
@@ -132,6 +134,7 @@ int ObPxSQCProxy::link_sqc_qc_channel(ObPxRpcInitSqcArgs &sqc_arg)
     const ObDtlBasicChannel *basic_channel = static_cast<ObDtlBasicChannel*>(sqc.get_sqc_channel());
     sqc_ctx_.msg_loop_.set_tenant_id(basic_channel->get_tenant_id());
     sqc_ctx_.msg_loop_.set_process_query_time(get_process_query_time());
+    sqc_ctx_.msg_loop_.set_query_timeout_ts(get_query_timeout_ts());
     LOG_TRACE("register sqc-qc channel", K(sqc));
   }
   return ret;
@@ -627,4 +630,42 @@ int64_t ObPxSQCProxy::get_process_query_time()
   return res;
 }
 
+int64_t ObPxSQCProxy::get_query_timeout_ts()
+{
+  int64_t res = 0;
+  if (OB_NOT_NULL(sqc_arg_.exec_ctx_) && OB_NOT_NULL(sqc_arg_.exec_ctx_->get_physical_plan_ctx())) {
+    res = sqc_arg_.exec_ctx_->get_physical_plan_ctx()->get_timeout_timestamp();
+  }
+  return res;
+}
+
 int64_t ObPxSQCProxy::get_task_count() const { return sqc_ctx_.get_task_count(); }
+
+int ObPxSQCProxy::sync_wait_all(ObPxDatahubDataProvider &provider)
+{
+  int ret = OB_SUCCESS;
+  const int64_t task_cnt = get_task_count();
+  const int64_t idx = ATOMIC_AAF(&provider.dh_msg_cnt_, 1);
+  const int64_t curr_rescan_cnt = provider.rescan_cnt_ + 1;
+  int64_t loop_cnt = 0;
+  // The whole message should be reset in next rescan, we reset it after last piece msg
+  // firstly do sync wait until all piece threads are in loop
+  do {
+    ++loop_cnt;
+    if (task_cnt == idx % (BREAK_TASK_CNT(task_cnt))) { // last thread
+      provider.msg_set_ = false;
+      provider.reset(); // reset whole message
+      ATOMIC_AAF(&provider.rescan_cnt_, 1);
+      ATOMIC_AAF(&provider.dh_msg_cnt_, 1); // to break the loop
+    } else {
+      ob_usleep(1000);
+      if (0 == loop_cnt % 64) {
+        if (OB_FAIL(THIS_WORKER.check_status())) {
+          LOG_WARN("failed to sync wait", K(ret), K(task_cnt), K(provider.dh_msg_cnt_));
+        }
+      }
+    }
+  } while (OB_SUCC(ret) && provider.dh_msg_cnt_ < BREAK_TASK_CNT(task_cnt) * curr_rescan_cnt);
+
+  return ret;
+}

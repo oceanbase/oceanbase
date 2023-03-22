@@ -67,6 +67,7 @@ int ObIncrementalStatEstimator::drive_global_stat_by_direct_load(ObExecContext &
   ObSEArray<ObOptStat, 4> all_derive_opt_stats;
   ObArenaAllocator alloc("ObIncrStats");
   ObTableStatParam param;
+  param.allocator_ = &alloc;
   if (part_tab_stats.empty()) {
     //do nothing
   } else if (OB_ISNULL(part_tab_stats.at(0)) || OB_UNLIKELY(!part_tab_stats.at(0)->is_valid())) {
@@ -157,6 +158,8 @@ int ObIncrementalStatEstimator::write_all_opt_stats_by_dircet_load(
     LOG_WARN("failed to batch write history stats", K(ret));
   } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
     LOG_WARN("failed to update last modified count", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), param))) {
+    LOG_WARN("fail to update stat cache", K(ret));
   } else {/*do nothing*/}
   return ret;
 }
@@ -175,7 +178,10 @@ int ObIncrementalStatEstimator::drive_global_stat_from_part_stats(
   ObSEArray<int64_t, 4> no_regather_part_ids;
   bool need_drive_hist = true;
   bool need_gather_hybrid_hist = false;
-  if (OB_FAIL(append(opt_stats, approx_part_opt_stats))) {
+  if (OB_ISNULL(param.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(param));
+  } else if (OB_FAIL(append(opt_stats, approx_part_opt_stats))) {
     LOG_WARN("failed to append", K(ret));
   } else if (opt_stats.empty()) {
     /*do nothing*/
@@ -226,7 +232,7 @@ int ObIncrementalStatEstimator::drive_global_stat_from_part_stats(
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(do_derive_global_stat(ctx, ctx.get_allocator(), param, tmp_opt_stats, need_drive_hist,
+      if (OB_FAIL(do_derive_global_stat(ctx, *param.allocator_, param, tmp_opt_stats, need_drive_hist,
                                         TABLE_LEVEL,param.global_part_id_, need_gather_hybrid_hist,
                                         global_opt_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
@@ -252,13 +258,16 @@ int ObIncrementalStatEstimator::drive_part_stats_from_subpart_stats(
   ObSEArray<ObOptColumnStatHandle, 4> no_regather_col_handles;
   ObSEArray<ObOptStat, 4> no_regather_subpart_opt_stats;
   bool need_gather_hybrid_hist = false;
-  if (param.approx_part_infos_.empty()) {
+  if (OB_ISNULL(param.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(param));
+  } else if (param.approx_part_infos_.empty()) {
     /*do nothing*/
   } else if (OB_FAIL(get_no_regather_subpart_stats(param, no_regather_table_stats,
                                                    no_regather_col_handles,
                                                    no_regather_subpart_opt_stats))) {
     LOG_WARN("failed to get locked partition stats", K(ret));
-  } else if (OB_FAIL(do_derive_part_stats_from_subpart_stats(ctx, ctx.get_allocator(), param,
+  } else if (OB_FAIL(do_derive_part_stats_from_subpart_stats(ctx, *param.allocator_, param,
                                                              no_regather_subpart_opt_stats,
                                                              gather_opt_stats,
                                                              approx_part_opt_stats))) {
@@ -337,7 +346,7 @@ int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
   }
   if (OB_SUCC(ret) && !gather_hybrid_hist_opt_stats.empty()) {
     //gather partition hybird hist togather.
-    ObHybridHistEstimator hybrid_est(ctx);
+    ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
     ObExtraParam extra;
     extra.type_ = PARTITION_LEVEL;
     extra.nth_part_ = 0;
@@ -588,10 +597,11 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
   ObIArray<ObOptColumnStat *> &col_stats = global_opt_stat.column_stats_;
   if (OB_UNLIKELY(part_cnt <= 0 || column_cnt <= 0 ||
                   approx_level == INVALID_LEVEL || approx_level == SUBPARTITION_LEVEL) ||
-      OB_ISNULL(global_opt_stat.table_stat_)) {
+      OB_ISNULL(global_opt_stat.table_stat_) ||
+      OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(part_cnt), K(column_cnt), K(approx_level),
-                                     K(global_opt_stat.table_stat_), K(ret));
+                                     K(global_opt_stat.table_stat_), K(param.allocator_), K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
       ObOptColumnStat *col_stat = NULL;
@@ -687,7 +697,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
     }
     if (OB_SUCC(ret) && need_gather_hybrid_hist) {
       if (approx_level == TABLE_LEVEL) {//for partition level derive put together do it.
-        ObHybridHistEstimator hybrid_est(ctx);
+        ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
         ObExtraParam extra;
         extra.type_ = TABLE_LEVEL;
         extra.nth_part_ = 0;

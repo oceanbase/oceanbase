@@ -4,7 +4,7 @@ target_include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(ob_base INTERFACE cxx_std_11)
 target_link_libraries(ob_base INTERFACE oblib_base objit_base
-    -Wl,-znorelro -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
+  ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 target_compile_definitions(ob_base INTERFACE
   PACKAGE_NAME="${PROJECT_NAME}"
   PACKAGE_VERSION="${PROJECT_VERSION}"

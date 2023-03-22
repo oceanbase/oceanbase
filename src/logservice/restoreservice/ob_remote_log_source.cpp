@@ -52,13 +52,14 @@ const char *ObRemoteLogParent::get_source_type_str(const ObLogRestoreSourceType 
   return share::ObLogRestoreSourceItem::get_source_type_str(type);
 }
 
-void ObRemoteLogParent::set_to_end(const SCN &scn)
+bool ObRemoteLogParent::set_to_end(const SCN &scn)
 {
   if (scn >= upper_limit_scn_) {
     to_end_ = true;
     end_fetch_scn_ = scn;
     CLOG_LOG(INFO, "set_to_end succ", KPC(this));
   }
+  return to_end_;
 }
 
 void ObRemoteLogParent::base_copy_to_(ObRemoteLogParent &other)
@@ -222,6 +223,8 @@ int ObRemoteLocationParent::update_locate_info(ObRemoteLogParent &source)
   } else if (dst.root_path_ != root_path_) {
     // parent changed
     CLOG_LOG(WARN, "parent changed, just skip", K(dst), KPC(this));
+  } else if (OB_UNLIKELY(! dst.piece_context_.is_valid())) {
+    CLOG_LOG(TRACE, "piece_context not valid, just skip", K(dst));
   } else if (OB_FAIL(dst.piece_context_.deep_copy_to(piece_context_))) {
     CLOG_LOG(WARN, "deep copy to piece context failed", K(ret));
     piece_context_.reset_locate_info();

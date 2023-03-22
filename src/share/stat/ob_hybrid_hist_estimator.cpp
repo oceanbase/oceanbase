@@ -21,8 +21,8 @@ namespace oceanbase
 namespace common
 {
 
-ObHybridHistEstimator::ObHybridHistEstimator(ObExecContext &ctx)
-  : ObStatsEstimator(ctx)
+ObHybridHistEstimator::ObHybridHistEstimator(ObExecContext &ctx, ObIAllocator &allocator)
+  : ObStatsEstimator(ctx, allocator)
 {}
 
 template<class T>
@@ -32,7 +32,7 @@ int ObHybridHistEstimator::add_stat_item(const T &item, ObIArray<ObStatItem *> &
   ObStatItem *cpy = NULL;
   if (!item.is_needed()) {
     // do nothing
-  } else if (OB_ISNULL(cpy = copy_stat_item(ctx_.get_allocator(), item))) {
+  } else if (OB_ISNULL(cpy = copy_stat_item(allocator_, item))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to copy stat item", K(ret));
   } else if (OB_FAIL(stat_items.push_back(cpy))) {
@@ -46,6 +46,7 @@ int ObHybridHistEstimator::add_stat_item(const T &item, ObIArray<ObStatItem *> &
 // select hybrid_hist(c1,20)，hybrid_hist(c2,20)，.... from t1 partition(p1) simple ...
 // union all
 // select hybrid_hist(c1,20)，hybrid_hist(c2,20)，.... from t1 partition(p2) simple ...
+// no need to hit plan cache or rewrite
 int ObHybridHistEstimator::estimate(const ObTableStatParam &param,
                                     ObExtraParam &extra,
                                     ObIArray<ObOptStat> &dst_opt_stats)
@@ -314,10 +315,13 @@ int ObHybridHistEstimator::gen_query_sql(ObIAllocator &allocator,
   reset_select_items();
   sample_hint_ = simple_hint;
   int64_t duration_time = -1;
+  ObString hint_str("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS");
   //add select items
   if (OB_ISNULL(dst_opt_stat.table_stat_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(dst_opt_stat.table_stat_));
+  } else if (OB_FAIL(add_hint(hint_str, allocator))) {
+    LOG_WARN("failed to add hint");
   } else if (OB_FAIL(add_stat_item(ObPartitionId(&param, src_opt_stat.table_stat_, empty_str,
                                                  dst_opt_stat.table_stat_->get_partition_id()),
                                    stat_items))) {
@@ -435,7 +439,7 @@ int ObHybridHistEstimator::try_build_hybrid_hist(const ObColumnStatParam &param,
         LOG_WARN("failed to do build hybrid hist", K(ret));
       } else {
         col_stat.get_histogram().get_buckets().reset();
-        if (OB_FAIL(col_stat.get_histogram().prepare_allocate_buckets(ctx_.get_allocator(),
+        if (OB_FAIL(col_stat.get_histogram().prepare_allocate_buckets(allocator_,
                                                                       hybrid_hist.get_buckets().count()))) {
           LOG_WARN("failed to prepare allocate buckets", K(ret));
         } else if (OB_FAIL(col_stat.get_histogram().assign_buckets(hybrid_hist.get_buckets()))) {

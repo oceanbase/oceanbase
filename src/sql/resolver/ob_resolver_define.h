@@ -126,11 +126,12 @@ inline const char *get_scope_name(const ObStmtScope &scope)
 
 //don't use me in other place
 enum { CSTRING_BUFFER_LEN = 1024 };
+
 inline char *get_sql_string_buffer()
 {
   char *ret = nullptr;
   const int64_t BUF_COUNT = 8;
-  char *buf = reinterpret_cast<char *>(GET_TSI(char[BUF_COUNT*CSTRING_BUFFER_LEN]));
+  char *buf = reinterpret_cast<char *>(GET_TSI(ByteBuf<BUF_COUNT*CSTRING_BUFFER_LEN>));
   RLOCAL_INLINE(uint32_t, cur_buf_idx);
   if (OB_LIKELY(buf != nullptr)) {
     char (&BUFFERS)[BUF_COUNT][CSTRING_BUFFER_LEN]
@@ -326,6 +327,7 @@ struct ObResolverParams
        have_same_table_name_(false),
        is_default_param_(false),
        is_batch_stmt_(false),
+       batch_stmt_num_(0),
        new_gen_did_(common::OB_INVALID_ID - 1),
        new_gen_cid_(common::OB_MAX_TMP_COLUMN_ID),
        new_gen_qid_(1),
@@ -387,6 +389,7 @@ public:
   bool have_same_table_name_;
   bool is_default_param_;
   bool is_batch_stmt_;
+  int64_t batch_stmt_num_;
 private:
   uint64_t new_gen_did_;
   uint64_t new_gen_cid_;

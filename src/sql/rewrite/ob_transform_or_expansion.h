@@ -297,7 +297,7 @@ private:
   int transform_or_expansion(ObSelectStmt *stmt,
                              const uint64_t trans_id,
                              const int64_t expr_pos,
-                             bool do_classify,
+                             bool is_topk,
                              ObCostBasedRewriteCtx &ctx,
                              ObSelectStmt *&trans_stmt);
   int adjust_or_expansion_stmt(ObIArray<ObRawExpr*> *conds_exprs,
@@ -372,7 +372,8 @@ private:
                                  ObSelectStmt *&view_stmt,
                                  TableItem *&view_table,
                                  int64_t &expr_pos,
-                                 ObIArray<ObRawExpr*> *&conds_exprs);
+                                 ObIArray<ObRawExpr*> *&conds_exprs,
+                                 bool &is_set_distinct);
   int check_delay_expr(ObRawExpr* expr, bool &delay);
   int check_valid_rel_table(ObSelectStmt &stmt,
                             ObRelIds &rel_ids,

@@ -1511,7 +1511,7 @@ int DdlStmtTask::build_ddl_binlog_record_(
   uint64_t cluster_id = get_host().get_cluster_id();
   // DDL tenant_id records the tenant ID of the tls_id to which it belongs, not the executor tenant ID, to ensure that in schema split
   // scenarios, incremental backup DDLs are not incorrectly distributed to the tenant to which they belong, causing loci to get stuck
-  // https://work.aone.alibaba-inc.com/issue/22774670
+  //
   const uint64_t tenant_id = get_host().get_tenant_id();
   IBinlogRecord *br_data = NULL;
 
@@ -2192,7 +2192,7 @@ const char *PartTransTask::print_task_type(const TaskType type)
       task_type_str = "DDL_TRANS";
       break;
     }
-    case TASK_TYPE_LS_TABLE: {
+    case TASK_TYPE_LS_OP_TRANS: {
       task_type_str = "LS_OP";
       break;
     }
@@ -2584,7 +2584,10 @@ int PartTransTask::get_tenant_schema_info_with_inc_dict(const uint64_t tenant_id
   return ret;
 }
 
-int PartTransTask::get_database_schema_info_with_inc_dict(const uint64_t tenant_id, const uint64_t db_id, DBSchemaInfo &db_schema_info)
+int PartTransTask::get_database_schema_info_with_inc_dict(
+    const uint64_t tenant_id,
+    const uint64_t db_id,
+    DBSchemaInfo &db_schema_info)
 {
   int ret = OB_SUCCESS;
 
@@ -2944,7 +2947,8 @@ int PartTransTask::commit(
     const transaction::TransType &trans_type,
     const transaction::ObLSLogInfoArray &ls_info_array,
     const palf::LSN &commit_log_lsn,
-    const int64_t commit_log_submit_ts)
+    const int64_t commit_log_submit_ts,
+    const bool is_data_dict_mode)
 {
   int ret = OB_SUCCESS;
   trans_type_ = trans_type; // set trans_type first, will be used in following process.
@@ -2954,16 +2958,30 @@ int PartTransTask::commit(
     if (multi_data_source_info_.is_ddl_trans()) {
       type_ = TASK_TYPE_DDL_TRANS;
     } else if (multi_data_source_info_.has_ls_table_op()) {
-      type_ = TASK_TYPE_LS_TABLE;
+      type_ = TASK_TYPE_LS_OP_TRANS;
       const share::ObLSAttr &ls_attr = multi_data_source_info_.get_ls_attr();;
 
       if (OB_UNLIKELY(! ls_attr.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("ls_attr get from multi_data_source is not valid", KR(ret), K(ls_attr), KPC(this));
+        LOG_ERROR("ls_attr from multi_data_source is not valid", KR(ret), K(ls_attr), KPC(this));
       } else if (OB_FAIL(ObLogLSOpProcessor::process_ls_op(tls_id_.get_tenant_id(), commit_log_lsn, commit_log_submit_ts,
           ls_attr))) {
-        LOG_ERROR("ObLogLSOpProcessor process_ls_op failed", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
-            K(commit_log_submit_ts), K(ls_attr));
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_ERROR("ObLogLSOpProcessor process_ls_op failed", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
+              K(commit_log_submit_ts), K(ls_attr));
+        } else {
+          if (is_data_dict_mode) {
+            // In Data dictionary, it need to fetch the log of the baseline data dict before adding a tenant,
+            // and if it encounter a log stream operation in the process of building the data dictionary,
+            // it need to ignore it and rely on the incremental replay process of the data dictionary.
+            ret = OB_SUCCESS;
+            LOG_INFO("ObLogLSOpProcessor process_ls_op when tenant is not exist", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
+                K(commit_log_submit_ts), K(ls_attr));
+          } else {
+            LOG_ERROR("ObLogLSOpProcessor process_ls_op failed", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
+                K(commit_log_submit_ts), K(ls_attr));
+          }
+        }
       } else {
         LOG_INFO("ObLogLSOpProcessor process_ls_op succ", K(tls_id_), K(tx_id), K(commit_log_lsn),
             K(commit_log_submit_ts), K(ls_attr));
@@ -3327,7 +3345,7 @@ bool PartTransTask::is_task_info_valid() const
         bool_ret = (is_base_trans_info_valid_());
         break;
 
-      case TASK_TYPE_LS_TABLE:
+      case TASK_TYPE_LS_OP_TRANS:
         // Basic transaction information is valid
         bool_ret = (is_base_trans_info_valid_());
         break;
@@ -3598,19 +3616,15 @@ int PartTransTask::init_trace_info_(const ObString &trace_info)
       ret = OB_INVALID_ARGUMENT;
     } else {
       const int64_t trace_info_len = trace_info.length();
-      char *buf = static_cast<char*>(allocator_.alloc(trace_info_len));
+      char *buf = static_cast<char*>(allocator_.alloc(trace_info_len + 1));
 
       if (OB_ISNULL(buf)) {
         LOG_ERROR("allocate memory for trace id buffer fail", K(buf), K(trace_info_len));
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        trace_info_.assign_buffer(buf, static_cast<int32_t>(trace_info_len));
-        int64_t write_len = trace_info_.write(trace_info.ptr(), trace_info.length());
-
-        if (write_len != trace_info_len) {
-          LOG_ERROR("write trace id fail", K(write_len), K(trace_info_len), K(trace_info), K(trace_info_));
-          ret = OB_ERR_UNEXPECTED;
-        }
+        MEMCPY(buf, trace_info.ptr(), trace_info_len);
+        buf[trace_info_len] = '\0';
+        trace_info_.assign_ptr(buf, trace_info_len);
       }
     }
   }

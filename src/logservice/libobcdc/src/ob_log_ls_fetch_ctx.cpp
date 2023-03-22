@@ -463,7 +463,14 @@ int LSFetchCtx::read_log(
       }
       default:
       {
-        LOG_DEBUG("ignore palf log", K(log_base_header), K(log_entry));
+        char log_base_type_str[logservice::OB_LOG_BASE_TYPE_STR_MAX_LEN] = {'\0'};
+
+        if (OB_FAIL(log_base_type_to_string(base_type, log_base_type_str, logservice::OB_LOG_BASE_TYPE_STR_MAX_LEN))) {
+          LOG_ERROR("log_base_type_to_string failed", KR(ret), K(log_base_type_str));
+        } else {
+          LOG_DEBUG("ignore palf log", K(log_base_type_str), K(log_base_header), K(log_entry));
+        }
+
         break;
       }
     }

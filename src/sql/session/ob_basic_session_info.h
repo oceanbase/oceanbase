@@ -294,7 +294,7 @@ public:
     SqlScopeFlags &sql_scope_flags_;
   };
   // 切换自治事务一定需要切换嵌套语句，否则切回主事务后语句执行的上下文信息可能已经有变化，比如：
-  // https://work.aone.alibaba-inc.com/issue/30832457
+  //
   // 所以原则上TransSavedValue应该包含StmtSavedValue的所有属性，考虑将前者作为后者的子类，
   // 但有几个属性在两者中都存在、需要执行的操作却不同，最后决定将两者处理相同的属性抽出来放进
   // 公共基类BaseSavedValue，方便最大程度复用代码，将来新增属性时也要参考类似原则确定放在哪个类中。
@@ -468,7 +468,7 @@ public:
   const common::ObString get_tenant_name() const;
   uint64_t get_priv_tenant_id() const { return tenant_id_; }
   const common::ObString get_effective_tenant_name() const;
-  // 关于各种tenant_id的使用，可参考 https://lark.alipay.com/ob/rootservice/gkz8ex
+  // 关于各种tenant_id的使用，可参考
   uint64_t get_effective_tenant_id() const { return effective_tenant_id_; }
   // RPC framework use rpc_tenant_id() to deliver remote/distribute tasks.
   void set_rpc_tenant_id(uint64_t tenant_id) { rpc_tenant_id_ = tenant_id; }
@@ -1179,6 +1179,7 @@ public:
   // for SESSION_SYNC_SYS_VAR serialize and deserialize.
   int serialize_sync_sys_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, char *buf, const int64_t &buf_len, int64_t &pos);
   int deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count, const char *buf, const int64_t &data_len, int64_t &pos);
+  int sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_, SysVarIncInfo tmp_sys_var_inc_info);
   int get_sync_sys_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids) const;
   int get_sync_sys_vars_size(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, int64_t &len) const;
   bool is_sync_sys_var(share::ObSysVarClassType sys_var_id) const;
@@ -1327,7 +1328,8 @@ private:
   int deep_copy_sys_variable(share::ObBasicSysVar &sys_var,
                              const share::ObSysVarClassType sys_var_id,
                              const common::ObObj &src_val);
-  int defragment_sys_variable_to(common::ObStringBuf &allocator);
+  int defragment_sys_variable_from(ObArray<std::pair<int64_t, ObObj>> &tmp_value);
+  void defragment_sys_variable_to(ObArray<std::pair<int64_t, ObObj>> &tmp_value);
   int deep_copy_trace_id_var(const common::ObObj &src_val,
                              common::ObObj *dest_val_ptr);
   inline int store_query_string_(const ObString &stmt);
@@ -1933,7 +1935,12 @@ protected:
 
 private:
   common::ObStringBuf base_sys_var_alloc_; // for variables names and statement names
-  common::ObStringBuf inc_sys_var_alloc_; // for values in sys variables update
+  // Double buffer optimization
+  common::ObStringBuf *inc_sys_var_alloc_[2]; // for values in sys variables update
+  common::ObStringBuf inc_sys_var_alloc1_; // for values in sys variables update
+  common::ObStringBuf inc_sys_var_alloc2_; // for values in sys variables update
+  int32_t current_buf_index_; // for record current buf index
+  // Double buffer optimization end.
   common::ObWrapperAllocator bucket_allocator_wrapper_;
   ObSessionValMap user_var_val_map_; // user variables
   share::ObBasicSysVar *sys_vars_[share::ObSysVarFactory::ALL_SYS_VARS_COUNT]; // system variables

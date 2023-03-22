@@ -28,9 +28,9 @@
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/ob_server_blacklist.h"
 #include "common/ob_smart_call.h"
 #include "storage/ob_locality_manager.h"
+#include "rpc/obrpc/ob_net_keepalive.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -58,25 +58,6 @@ int ObPXServerAddrUtil::alloc_by_data_distribution(const ObIArray<ObTableLocatio
   return ret;
 }
 
-int ObPXServerAddrUtil::mark_virtual_table_dfo(common::ObIArray<const ObTableScanSpec*> &scan_ops,
-    ObDfo &dfo)
-{
-  int ret = OB_SUCCESS;
-  bool is_vtable = true;
-  for (int i = 0; i < scan_ops.count() && OB_SUCC(ret); ++i) {
-    if (OB_ISNULL(scan_ops.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("scan ops is null", K(ret));
-    } else if (!is_virtual_table(scan_ops.at(i)->get_ref_table_id())) {
-      is_vtable = false;
-      break;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    dfo.set_ignore_vtable_error(is_vtable && scan_ops.count() > 0);
-  }
-  return ret;
-}
 
 int ObPXServerAddrUtil::build_dynamic_partition_table_location(common::ObIArray<const ObTableScanSpec *> &scan_ops,
       const ObIArray<ObTableLocation> *table_locations, ObDfo &dfo)
@@ -172,9 +153,6 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
                                    ref_table_id,
                                    table_loc));
     } else {
-      if (OB_FAIL(mark_virtual_table_dfo(scan_ops, dfo))) {
-        LOG_WARN("fail to mark virtual table dfo", K(ret));
-      } else
       // 通过TSC或者DML获得当前的DFO的partition对应的location信息
       // 后续利用location信息构建对应的SQC meta
       if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
@@ -311,7 +289,6 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
         sqc.set_fulltree(dfo.is_fulltree());
         sqc.set_qc_server_id(dfo.get_qc_server_id());
         sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
-        sqc.set_ignore_vtable_error(dfo.is_ignore_vtable_error());
         sqc.set_single_tsc_leaf_dfo(dfo.is_single_tsc_leaf_dfo());
         for (auto iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
           if (addrs.at(i) == (*iter)->server_) {
@@ -1007,7 +984,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
 }
 
 /**
- * 算法文档：https://yuque.antfin-inc.com/ob/sql/pbaedu
+ * 算法文档：
  * 大致思路：
  * n为总线程数，p为涉及总的partition数，ni为第i个sqc被计算分的线程数，pi为第i个sqc的partition数量。
  * a. 一个adjust函数，递归的调整sqc的线程数。求得ni ＝ n*pi/p的值，保证每个都是大于等于1。
@@ -3503,14 +3480,12 @@ int ObExtraServerAliveCheck::do_check() const
     if (OB_FAIL(dfo_mgr_->get_running_dfos(dfos))) {
       LOG_WARN("fail find dfo", K(ret));
     } else {
-      share::ObServerBlacklist &server_black_list = share::ObServerBlacklist::get_instance();
       // need check all sqc because we set sqc need_report = false here and don't need wait sqc finish msg.
       for (int64_t i = 0; i < dfos.count(); i++) {
         ObIArray<ObPxSqcMeta> &sqcs = dfos.at(i)->get_sqcs();
         for (int64_t j = 0; j < sqcs.count(); j++) {
           if (sqcs.at(j).need_report()) {
-            if (OB_UNLIKELY(server_black_list.is_in_blacklist(
-                share::ObCascadMember(sqcs.at(j).get_exec_addr(), cluster_id_), true,
+            if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(sqcs.at(j).get_exec_addr(),
                 query_start_time_))) {
               sqcs.at(j).set_need_report(false);
               sqcs.at(j).set_thread_finish(true);
@@ -3526,12 +3501,50 @@ int ObExtraServerAliveCheck::do_check() const
       }
     }
   } else if (OB_LIKELY(qc_addr_.is_valid())) {
-    if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(share::ObCascadMember(
-          qc_addr_, cluster_id_), true, query_start_time_))) {
+    if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(qc_addr_, query_start_time_))) {
       ret = OB_RPC_CONNECT_ERROR;
       LOG_WARN("qc not in communication, maybe crashed", K(ret), K(qc_addr_));
     }
   }
   LOG_DEBUG("server alive do check", K(ret), K(qc_addr_), K(cluster_id_), K(dfo_mgr_));
   return ret;
+}
+
+bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
+{
+  bool should_ignore = false;
+  switch (error_code) {
+    case OB_ALLOCATE_MEMORY_FAILED: {
+      should_ignore = true;
+      break;
+    }
+    case OB_RPC_CONNECT_ERROR: {
+      should_ignore = true;
+      break;
+    }
+    case OB_RPC_SEND_ERROR: {
+      should_ignore = true;
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+  return should_ignore;
+}
+
+bool ObPxCheckAlive::is_in_blacklist(const common::ObAddr &addr, int64_t server_start_time)
+{
+  int ret = OB_SUCCESS;
+  bool in_blacklist = false;
+  obrpc::ObNetKeepAliveData alive_data;
+  if (OB_FAIL(ObNetKeepAlive::get_instance().in_black(addr, in_blacklist, &alive_data))) {
+    LOG_WARN("check in black failed", K(ret));
+  } else if (!in_blacklist && server_start_time > 0) {
+    in_blacklist = alive_data.start_service_time_ >= server_start_time;
+  }
+  if (in_blacklist) {
+    LOG_WARN("server in blacklist", K(addr), K(server_start_time), K(alive_data.start_service_time_));
+  }
+  return in_blacklist;
 }

@@ -172,8 +172,8 @@ public:
       const int64_t data_len,
       int64_t &pos);
   int64_t get_serialize_size() const;
-  TO_STRING_KV(K_(basic_meta), K_(column_checksums), K(column_checksums_.count()),
-               K_(data_root_info), K_(macro_info), KP_(allocator));
+  TO_STRING_KV(K_(basic_meta), K(column_checksums_.count()),
+               K_(data_root_info), K_(macro_info), KP_(allocator), K_(column_checksums));
 private:
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObIAllocator *allocator);

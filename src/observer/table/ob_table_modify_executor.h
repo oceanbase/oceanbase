@@ -15,6 +15,7 @@
 #include "ob_table_executor.h"
 #include "sql/engine/dml/ob_dml_ctx_define.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
+#include "sql/engine/dml/ob_conflict_checker.h" // for ObConflictChecker
 
 namespace oceanbase
 {
@@ -95,6 +96,9 @@ protected:
                         ObTableInsRtDef &ins_rtdef);
   int delete_row_to_das(const ObTableDelCtDef &del_ctdef,
                         ObTableDelRtDef &del_rtdef);
+  // for replace & insert_up
+  int get_next_conflict_rowkey(sql::DASTaskIter &task_iter,
+                               const sql::ObConflictChecker &conflict_checker);
 protected:
   sql::ObDMLRtCtx dml_rtctx_;
   int64_t affected_rows_;

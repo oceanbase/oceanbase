@@ -1089,7 +1089,7 @@ int ObReplayStatus::push_log_replay_task(ObLogReplayTask &task)
       if (OB_UNLIKELY(NULL == (task_buf = rp_sv_->alloc_replay_task(task_size)))) {
         ret = OB_EAGAIN;
         if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-          CLOG_LOG(WARN, "failed to alloc replay task buf when broadcast pre barrier", K(ret));
+          CLOG_LOG(WARN, "failed to alloc replay task buf when broadcast pre barrier", K(i), K(ret));
         }
       } else {
         ObLogReplayTask *replay_task = new (task_buf) ObLogReplayTask();
@@ -1120,7 +1120,7 @@ int ObReplayStatus::push_log_replay_task(ObLogReplayTask &task)
         task_queues_[index].set_batch_push_finish();
       }
     } else {
-      for (int64_t i = 1; OB_SUCC(ret) && i < broadcast_task_array.count(); ++i) {
+      for (int64_t i = 1; i < broadcast_task_array.count(); ++i) {
         free_replay_task(broadcast_task_array[i]);
       }
     }
@@ -1297,7 +1297,10 @@ bool ObReplayStatus::is_fatal_error(const int ret) const
   return (OB_SUCCESS != ret
           && OB_ALLOCATE_MEMORY_FAILED != ret
           && OB_EAGAIN != ret
-          && OB_NOT_RUNNING != ret);
+          && OB_NOT_RUNNING != ret
+          // for temporary positioning issue
+          && OB_IO_ERROR != ret
+          && OB_DISK_HUNG != ret);
 }
 
 int ObReplayStatus::submit_task_to_replay_service_(ObReplayServiceTask &task)
@@ -1377,8 +1380,10 @@ int ObReplayStatus::diagnose(ReplayDiagnoseInfo &diagnose_info)
   } else if (0 < retry_cost || 0 < replay_cost) {
     replay_ret = OB_EAGAIN;
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(diagnose_info.diagnose_str_.append_fmt("ret:%d; "
+  if (OB_SUCC(ret) || OB_STATE_NOT_MATCH == ret) {
+    ret = OB_SUCCESS;
+    if (OB_FAIL(diagnose_info.diagnose_str_.append_fmt("is_enabled:%s"
+                                                       "ret:%d; "
                                                        "min_unreplayed_lsn:%ld; "
                                                        "min_unreplayed_scn:%lu; "
                                                        "replay_hint:%ld; "
@@ -1386,6 +1391,7 @@ int ObReplayStatus::diagnose(ReplayDiagnoseInfo &diagnose_info)
                                                        "replay_cost:%ld; "
                                                        "retry_cost:%ld; "
                                                        "first_handle_time:%ld;" ,
+                                                       is_enabled_? "true" : "false",
                                                        replay_ret, min_unreplayed_lsn.val_,
                                                        min_unreplayed_scn.get_val_for_inner_table_field(), replay_hint,
                                                        is_submit_err ? "REPLAY_SUBMIT" : log_type_str,

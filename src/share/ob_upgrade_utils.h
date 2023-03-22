@@ -184,6 +184,7 @@ public:
   virtual int post_upgrade() override;
 private:
   int post_upgrade_for_srs();
+  int post_upgrade_for_backup();
   int init_rewrite_rule_version(const uint64_t tenant_id);
   static int recompile_all_views_and_synonyms(const uint64_t tenant_id);
 };

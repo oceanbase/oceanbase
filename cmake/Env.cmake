@@ -53,7 +53,7 @@ ob_define(THIN_LTO_CONCURRENCY_LINK "")
 
 if(ENABLE_THIN_LTO)
   set(THIN_LTO_OPT "-flto=thin")
-  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=16")
+  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=32")
 endif()
 
 
@@ -66,6 +66,13 @@ ob_define(OB_EXE_LINKER_OPT "")
 if (ENABLE_EXE_PIE)
   set(OB_EXE_LINKER_OPT "-pie")
 endif()
+
+set(OB_OBJCOPY_BIN "${DEVTOOLS_DIR}/bin/objcopy")
+
+# NO RELERO: -Wl,-znorelro
+# Partial RELRO: -Wl,-z,relro
+# Full RELRO: -Wl,-z,relro,-z,now
+ob_define(OB_RELRO_FLAG "-Wl,-z,relro,-z,now")
 
 if (OB_USE_CLANG)
   find_program(OB_CC clang
@@ -86,7 +93,7 @@ if (OB_USE_CLANG)
 
   if (OB_USE_LLD)
     set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld")
-    set(REORDER_COMP_OPT "-ffunction-sections -funique-internal-linkage-names -fdebug-info-for-profiling")
+    set(REORDER_COMP_OPT "-ffunction-sections -fdebug-info-for-profiling")
     set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
     set(OB_LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
   endif()

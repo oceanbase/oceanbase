@@ -254,6 +254,9 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
     CLOG_LOG(ERROR, "get_reporter failed", K(req.palf_id_));
   } else {
     switch (req.cmd_type_) {
+      case FORCE_SINGLE_MEMBER_CMD:
+        ret = palf_handle_->force_set_as_single_replica();
+        break;
       case CHANGE_REPLICA_NUM_CMD:
         ret = palf_handle_->change_replica_num(req.curr_member_list_, req.curr_replica_num_,
             req.new_replica_num_, req.timeout_us_);

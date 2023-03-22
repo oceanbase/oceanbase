@@ -324,6 +324,7 @@ share::SCN ObFreezerStat::get_freeze_snapshot_version()
 int ObFreezerStat::deep_copy_to(ObFreezerStat &other)
 {
   int ret = OB_SUCCESS;
+  other.reset();
   ObSpinLockGuard guard(lock_);
   other.set_tablet_id(tablet_id_);
   other.set_is_force(is_force_);
@@ -496,19 +497,30 @@ int ObFreezer::inner_logstream_freeze(ObFuture<int> *result)
   share::ObLSID ls_id = get_ls_id();
   ObTableHandleV2 handle;
 
-  if (OB_FAIL(get_ls_data_checkpoint()->ls_freeze(SCN::max_scn()))) {
-    // move memtables from active_list to frozen_list
-    TRANS_LOG(WARN, "[Freezer] data_checkpoint freeze failed", K(ret), K(ls_id));
-    stat_.add_diagnose_info("data_checkpoint freeze failed");
+  if (FALSE_IT(submit_checkpoint_task())) {
   } else if (FALSE_IT(submit_log_for_freeze())) {
   } else if (OB_FAIL(submit_freeze_task(true/*is_ls_freeze*/, result, handle))) {
-    TRANS_LOG(WARN, "failed to submit ls_freeze task", K(ret), K(ls_id));
+    TRANS_LOG(ERROR, "failed to submit ls_freeze task", K(ret), K(ls_id));
     stat_.add_diagnose_info("fail to submit ls_freeze_task");
+    ob_abort();
   } else {
     TRANS_LOG(INFO, "[Freezer] succeed to start ls_freeze_task", K(ret), K(ls_id));
   }
 
   return ret;
+}
+
+void ObFreezer::submit_checkpoint_task()
+{
+  int ret = OB_SUCCESS;
+
+  do {
+    if (OB_FAIL(get_ls_data_checkpoint()->ls_freeze(SCN::max_scn()))) {
+      TRANS_LOG(WARN, "[Freezer] data_checkpoint freeze failed", K(ret), K(ls_id));
+      stat_.add_diagnose_info("data_checkpoint freeze failed");
+      ob_usleep(100);
+    }
+  } while (OB_FAIL(ret));
 }
 
 int ObFreezer::ls_freeze_task()

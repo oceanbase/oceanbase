@@ -608,7 +608,7 @@ int ObSortOpImpl::init(
     LOG_WARN("invalid argument: argument is null", K(ret),
               K(tenant_id), K(sort_collations), K(sort_cmp_funs), K(eval_ctx));
   } else if (OB_FAIL(comp_.init(sort_collations, sort_cmp_funs,
-                      exec_ctx, enable_encode_sortkey))) {
+                      exec_ctx, enable_encode_sortkey && !(part_cnt > 0)))) {
     LOG_WARN("failed to init compare functions", K(ret));
   } else {
     local_merge_sort_ = in_local_order;
@@ -974,7 +974,8 @@ int ObSortOpImpl::before_add_row()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(!got_first_row_)) {
-    if (!comp_.is_inited() && OB_FAIL(comp_.init(sort_collations_, sort_cmp_funs_, exec_ctx_, enable_encode_sortkey_))) {
+    if (!comp_.is_inited() && OB_FAIL(comp_.init(sort_collations_, sort_cmp_funs_,
+                              exec_ctx_, enable_encode_sortkey_ && !(part_cnt_ > 0)))) {
       LOG_WARN("init compare failed", K(ret));
     } else {
       got_first_row_ = true;
@@ -1499,10 +1500,6 @@ int ObSortOpImpl::build_ems_heap(int64_t &merge_ways)
       max_ways += 1;
       c = c->get_next();
     }
-    merge_ways = get_memory_limit() / ObChunkDatumStore::BLOCK_SIZE;
-    merge_ways = std::max(2L, merge_ways);
-    merge_ways = std::min(merge_ways, max_ways);
-    LOG_TRACE("do merge sort", K(first->level_), K(merge_ways), K(sort_chunks_.get_size()));
 
     if (NULL == ems_heap_) {
       if (OB_ISNULL(ems_heap_ = OB_NEWx(EMSHeap, (&mem_context_->get_malloc_allocator()),
@@ -1513,6 +1510,26 @@ int ObSortOpImpl::build_ems_heap(int64_t &merge_ways)
     } else {
       ems_heap_->reset();
     }
+    if (OB_SUCC(ret)) {
+      merge_ways = get_memory_limit() / ObChunkDatumStore::BLOCK_SIZE;
+      merge_ways = std::max(2L, merge_ways);
+      if (merge_ways < max_ways) {
+        bool dumped = false;
+        int64_t need_size = max_ways * ObChunkDatumStore::BLOCK_SIZE;
+        if (OB_FAIL(sql_mem_processor_.extend_max_memory_size(
+            &mem_context_->get_malloc_allocator(),
+            [&](int64_t max_memory_size) {
+              return max_memory_size < need_size;
+            },
+            dumped, mem_context_->used()))) {
+          LOG_WARN("failed to extend memory size", K(ret));
+        }
+        merge_ways = std::max(merge_ways, get_memory_limit() / ObChunkDatumStore::BLOCK_SIZE);
+      }
+      merge_ways = std::min(merge_ways, max_ways);
+      LOG_TRACE("do merge sort ", K(first->level_), K(merge_ways), K(sort_chunks_.get_size()), K(get_memory_limit()), K(sql_mem_processor_.get_profile()));
+    }
+
     if (OB_SUCC(ret)) {
       ObSortOpChunk *chunk = sort_chunks_.get_first();
       for (int64_t i = 0; i < merge_ways && OB_SUCC(ret); i++) {
@@ -2548,7 +2565,8 @@ int ObPrefixSortImpl::add_immediate_prefix(const common::ObIArray<ObExpr *> &all
               immediate_prefix_rows_ + pos))) {
     LOG_WARN("add batch failed", K(ret));
   } else if (!comp_.is_inited()
-             && OB_FAIL(comp_.init(sort_collations_, sort_cmp_funs_, exec_ctx_, enable_encode_sortkey_))) {
+             && OB_FAIL(comp_.init(sort_collations_, sort_cmp_funs_,
+                 exec_ctx_, enable_encode_sortkey_ && !(part_cnt_ > 0)))) {
     LOG_WARN("init compare failed", K(ret));
   } else {
     std::sort(immediate_prefix_rows_ + pos, immediate_prefix_rows_ + pos + selector_size_,

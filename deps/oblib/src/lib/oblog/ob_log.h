@@ -31,6 +31,7 @@
 #include <cstring>
 #include <sys/uio.h>
 #include <sys/statfs.h>
+#include <signal.h>
 
 #include "lib/ob_errno.h"
 #include "ob_log_print_kv.h"
@@ -41,7 +42,6 @@
 #include "lib/oblog/ob_async_log_struct.h"
 #include "lib/utility/ob_defer.h"
 #include "lib/oblog/ob_syslog_rate_limiter.h"
-#include "common/ob_local_store.h"
 
 #define OB_LOG_MAX_PAR_MOD_SIZE 32
 #define OB_LOG_MAX_SUB_MOD_SIZE 32
@@ -161,8 +161,9 @@ public:
   static inline const ObLogIdLevelMap *get();
 
   static inline int8_t get_level();
-  //@brief Get the thread-only ObThreadLogLevel.
-  static inline ObThreadLogLevel *get_thread_log_level();
+private:
+  static inline const ObLogIdLevelMap*& get_id_level_map_();
+  static inline int8_t& get_level_();
 };
 
 class ObThreadFlags
@@ -238,6 +239,7 @@ enum class ProbeAction
  PROBE_BT,
  PROBE_ABORT,
  PROBE_DISABLE,
+ PROBE_STACK,
 };
 
 //@class ObLogger
@@ -834,64 +836,47 @@ inline int8_t ObLogIdLevelMap::get_level(uint64_t par_mod_id, uint64_t sub_mod_i
 
 inline void ObThreadLogLevelUtils::init()
 {
-  ObThreadLogLevel *trace_log_level = get_thread_log_level();
-  if (NULL != trace_log_level) {
-    trace_log_level->id_level_map_ = NULL;
-  }
+  get_id_level_map_() = NULL;
 }
 
 inline void ObThreadLogLevelUtils::init(const ObLogIdLevelMap *id_level_map)
 {
-  ObThreadLogLevel *trace_log_level = get_thread_log_level();
-  if (NULL != trace_log_level) {
-    trace_log_level->id_level_map_ = id_level_map;
-    trace_log_level->level_ = (id_level_map == NULL
-                               ? (int8_t)OB_LOG_LEVEL_NONE : id_level_map->non_mod_level_);
-  }
+  get_id_level_map_() = id_level_map;
+  get_level_() = (id_level_map == NULL
+                  ? (int8_t)OB_LOG_LEVEL_NONE : id_level_map->non_mod_level_);
 }
 
 inline void ObThreadLogLevelUtils::init(const int8_t level)
 {
-  ObThreadLogLevel *trace_log_level = get_thread_log_level();
-  if (NULL != trace_log_level) {
-    trace_log_level->level_ = level;
-  }
+  get_level_() = level;
 }
 
 inline void ObThreadLogLevelUtils::clear()
 {
-  ObThreadLogLevel *trace_log_level = get_thread_log_level();
-  if (NULL != trace_log_level) {
-    trace_log_level->id_level_map_ = NULL;
-    trace_log_level->level_ = OB_LOG_LEVEL_NONE;
-  }
+  get_id_level_map_() = NULL;
+  get_level_() = OB_LOG_LEVEL_NONE;
 }
 
 inline const ObLogIdLevelMap *ObThreadLogLevelUtils::get()
 {
-  const ObLogIdLevelMap *ret = NULL;
-  ObThreadLogLevel *trace_log_level = get_thread_log_level();
-  if (NULL != trace_log_level) {
-    ret = trace_log_level->id_level_map_;
-  }
-  return ret;
+  return get_id_level_map_();
 }
 
 inline int8_t ObThreadLogLevelUtils::get_level()
 {
-  int8_t level = OB_LOG_LEVEL_NONE;
-  ObThreadLogLevel *trace_log_level = get_thread_log_level();
-  if (NULL != trace_log_level) {
-    level = trace_log_level->level_;
-  }
-  return level;
+  return get_level_();;
 }
 
-inline ObThreadLogLevel *ObThreadLogLevelUtils::get_thread_log_level()
+inline const ObLogIdLevelMap*& ObThreadLogLevelUtils::get_id_level_map_()
 {
-  ObThreadLogLevel *ret = nullptr;
-  ret = &(common::get_local_store()->log_level_);
-  return ret;
+  thread_local const ObLogIdLevelMap* id_level_map = nullptr;
+  return id_level_map;
+}
+
+inline int8_t& ObThreadLogLevelUtils::get_level_()
+{
+  thread_local int8_t level = OB_LOG_LEVEL_NONE;
+  return level;
 }
 
 inline void ObLogger::check_log_end(ObPLogItem &log_item, int64_t pos)
@@ -1122,6 +1107,10 @@ inline void ObLogger::check_probe(
           }
           case ProbeAction::PROBE_DISABLE: {
             disable = true;
+            break;
+          }
+          case ProbeAction::PROBE_STACK: {
+            IGNORE_RETURN raise(60);
             break;
           }
           default: {

@@ -202,7 +202,14 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
     obrpc::ObMajorFreezeResponse resp;
     uint64_t tenant_id = freeze_info.tenant_id_;
 
-    if (OB_ISNULL(GCTX.location_service_)) {
+    uint64_t min_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (min_data_version < DATA_VERSION_4_1_0_0) {
+      ret = OB_MAJOR_FREEZE_NOT_ALLOW;
+      LOG_WARN("major freeze is not allowed now, please upgrade observer first", KR(ret),
+               K(tenant_id), K(min_data_version));
+    } else if (OB_ISNULL(GCTX.location_service_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid GCTX", KR(ret));
     } else if (OB_FAIL(proxy.init(&transport))) {
@@ -225,11 +232,19 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
         } else if (FALSE_IT(ret = resp.err_code_)) {
         } else if (OB_FAIL(ret)) {
           if (OB_LEADER_NOT_EXIST == ret || OB_EAGAIN == ret) {
-            const int64_t idle_time = 200 * 1000 * (i + 1);
-            LOG_WARN("leader may switch or ddl confilict, will retry", KR(ret), K(tenant_id), K(freeze_info),
-              "ori_leader", leader, K(idle_time));
-            USLEEP(idle_time);
-            ret = OB_SUCCESS;
+            const int64_t RESERVED_TIME_US = 600 * 1000; // 600 ms
+            const int64_t timeout_remain_us = THIS_WORKER.get_timeout_remain();
+            const int64_t idle_time_us = 200 * 1000 * (i + 1);
+            if (timeout_remain_us - idle_time_us > RESERVED_TIME_US) {
+              LOG_WARN("leader may switch or ddl confilict, will retry", KR(ret), K(tenant_id), K(freeze_info),
+                "ori_leader", leader, K(timeout_remain_us), K(idle_time_us), K(RESERVED_TIME_US));
+              USLEEP(idle_time_us);
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("leader may switch or ddl confilict, will not retry cuz timeout_remain is "
+                "not enough", KR(ret), K(tenant_id), K(freeze_info), "ori_leader", leader,
+                K(timeout_remain_us), K(idle_time_us), K(RESERVED_TIME_US));
+            }
           } else if ((OB_MAJOR_FREEZE_NOT_FINISHED != ret) && (OB_FROZEN_INFO_ALREADY_EXIST != ret)) {
             LOG_WARN("fail to major_freeze", KR(ret), K(tenant_id), K(leader), K(freeze_info));
           }
@@ -239,7 +254,7 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
       }
 
       if (OB_SUCC(ret) && !major_freeze_done) {
-        ret = OB_LEADER_NOT_EXIST;
+        ret = OB_EAGAIN;
         LOG_WARN("fail to retry major freeze cuz switching role", KR(ret), K(MAX_RETRY_COUNT));
       }
     }
@@ -354,10 +369,19 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
         } else if (FALSE_IT(ret = resp.err_code_)) {
         } else if (OB_FAIL(ret)) {
           if (OB_LEADER_NOT_EXIST == ret) {
-            const int64_t idle_time = 200 * 1000 * (i + 1);
-            LOG_WARN("leader may switch, will retry", K(tenant_id), K(admin_type), "ori_leader", leader, K(idle_time));
-            USLEEP(idle_time);
-            ret = OB_SUCCESS;
+            const int64_t RESERVED_TIME_US = 600 * 1000; // 600 ms
+            const int64_t timeout_remain_us = THIS_WORKER.get_timeout_remain();
+            const int64_t idle_time_us = 200 * 1000 * (i + 1);
+            if (timeout_remain_us - idle_time_us > RESERVED_TIME_US) {
+              LOG_WARN("leader may switch, will retry", KR(ret), K(tenant_id), K(admin_type),
+                "ori_leader", leader, K(timeout_remain_us), K(idle_time_us), K(RESERVED_TIME_US));
+              USLEEP(idle_time_us);
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("leader may switch, will not retry cuz timeout_remain is not enough",
+                KR(ret), K(tenant_id), K(admin_type), "ori_leader", leader, K(timeout_remain_us),
+                K(idle_time_us), K(RESERVED_TIME_US));
+            }
           } else {
             LOG_WARN("fail to execute tenant_admin_merge", K(tenant_id), K(leader), K(admin_type), KR(ret));
           }

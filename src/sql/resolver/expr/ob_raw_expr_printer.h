@@ -142,6 +142,8 @@ private:
   int print_order_items(ObWinFunRawExpr *expr);
   int print_window_clause(ObWinFunRawExpr *expr);
 
+  int print_type(const ObExprResType &dst_type);
+
   int inner_print_fun_params(ObSysFunRawExpr &expr);
 
   // disallow copy

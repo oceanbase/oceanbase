@@ -132,6 +132,9 @@ int ObIndexSSTableBuildTask::process()
       } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
                   oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
         LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+      } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+        LOG_WARN("fail to check sstable checksum_report_finish",
+          K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
       }
     }
   }
@@ -312,6 +315,7 @@ int ObIndexBuildTask::init(
     const int64_t snapshot_version /* = 0 */)
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_data_format_version = 0;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -336,6 +340,8 @@ int ObIndexBuildTask::init(
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("fail to get table schema", K(ret));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*GCTX.sql_proxy_, tenant_id, tenant_data_format_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
     is_global_index_ = index_schema->is_global_index_table();
     is_unique_index_ = index_schema->is_unique_index();
@@ -355,7 +361,7 @@ int ObIndexBuildTask::init(
     parent_task_id_ = parent_task_id;
     task_version_ = OB_INDEX_BUILD_TASK_VERSION;
     start_time_ = ObTimeUtility::current_time();
-    cluster_version_ = GET_MIN_CLUSTER_VERSION();
+    data_format_version_ = tenant_data_format_version;
     if (OB_SUCC(ret)) {
       task_status_ = static_cast<ObDDLTaskStatus>(task_status);
     }
@@ -394,7 +400,7 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
   } else if (!task_record.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_record));
-  } else if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
+  } else if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
     LOG_WARN("deserialize params from message failed", K(ret));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
           task_record.tenant_id_, schema_guard, schema_version))) {
@@ -714,7 +720,7 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
   return ret;
 }
 
-int ObIndexBuildTask::try_reap_old_replica_build_task()
+int ObIndexBuildTask::reap_old_replica_build_task(bool &need_exec_new_inner_sql)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -737,17 +743,19 @@ int ObIndexBuildTask::try_reap_old_replica_build_task()
     const ObTabletID unused_tablet_id;
     const ObDDLTaskInfo unused_addition_info;
     const int old_ret_code = OB_SUCCESS;
-    bool need_exec_new_inner_sql = true;
     ObAddr invalid_addr;
-    (void)ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_, dest_table_id,
+    if (old_execution_id < 0) {
+      need_exec_new_inner_sql = true;
+    } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_, dest_table_id,
         task_id_, old_execution_id, invalid_addr, trace_id_,
-        table_schema->get_schema_version(), snapshot_version_, need_exec_new_inner_sql);
-    if (!need_exec_new_inner_sql) {
+        table_schema->get_schema_version(), snapshot_version_, need_exec_new_inner_sql))) {
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("failed to check and wait old complement task", K(ret));
+      }
+    } else if (!need_exec_new_inner_sql) {
       if (OB_FAIL(update_complete_sstable_job_status(unused_tablet_id, snapshot_version_, old_execution_id, old_ret_code, unused_addition_info))) {
         LOG_INFO("succ to wait and complete old task finished!", K(ret));
       }
-    } else {
-      ret = OB_ENTRY_NOT_EXIST;
     }
   }
   return ret;
@@ -849,7 +857,14 @@ int ObIndexBuildTask::wait_data_complement()
 
   // submit a job to complete sstable for the index table on snapshot_version
   if (OB_SUCC(ret) && !state_finished && !is_sstable_complete_task_submitted_) {
-    if (OB_SUCCESS == try_reap_old_replica_build_task()) {
+    bool need_exec_new_inner_sql = false;
+    if (OB_FAIL(reap_old_replica_build_task(need_exec_new_inner_sql))) {
+      if (OB_EAGAIN == ret) {
+        ret = OB_SUCCESS; // retry
+      } else {
+        LOG_WARN("failed to reap old task", K(ret));
+      }
+    } else if (!need_exec_new_inner_sql) {
       state_finished = true;
     } else if (OB_FAIL(send_build_single_replica_request())) {
       LOG_WARN("fail to send build single replica request", K(ret));
@@ -1226,9 +1241,13 @@ int ObIndexBuildTask::clean_on_failed()
                && OB_FAIL(update_index_status_in_schema(*index_schema, ObIndexStatus::INDEX_STATUS_INDEX_ERROR))) {
       LOG_WARN("update index schema failed", K(ret));
     } else if (drop_index_on_failed) {
+      DEBUG_SYNC(CREATE_INDEX_FAILED);
       bool is_trans_end = false;
       int64_t tmp_snapshot_version = 0;
-      if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR != index_schema->get_index_status()) {
+      if (ObIndexStatus::INDEX_STATUS_AVAILABLE == index_schema->get_index_status()) {
+        LOG_INFO("index take effect but ddl task failed", K(ret), K(ret_code_), K(index_table_id_));
+        state_finished = true;
+      } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR != index_schema->get_index_status()) {
         state_finished = false;
       } else if (!wait_trans_ctx_.is_inited() && OB_FAIL(wait_trans_ctx_.init(
               tenant_id_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS, index_schema->get_schema_version()))) {
@@ -1337,7 +1356,8 @@ int ObIndexBuildTask::cleanup_impl()
   }
 
   if (OB_SUCC(ret) && parent_task_id_ > 0) {
-    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id_, get_task_key(), ret_code_, trace_id_);
+    const ObDDLTaskID parent_task_id(tenant_id_, parent_task_id_);
+    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id, get_task_key(), ret_code_, trace_id_);
   }
   LOG_INFO("clean task finished", K(ret), K(*this));
   return ret;
@@ -1451,43 +1471,33 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_len, pos))) {
+    LOG_WARN("ObDDLTask serialize failed", K(ret));
   } else if (OB_FAIL(create_index_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize create index arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, check_unique_snapshot_);
-    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, cluster_version_);
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ddl_tracing_.serialize(buf, buf_len, pos))) {
-        LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
-      }
-    }
   }
   return ret;
 }
 
-int ObIndexBuildTask::deserlize_params_from_message(const char *buf, const int64_t data_len, int64_t &pos)
+int ObIndexBuildTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   ObCreateIndexArg tmp_arg;
-  if (OB_UNLIKELY(nullptr == buf || data_len <= 0)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
+  } else if (ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos)) {
+    LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("deserialize table failed", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, create_index_arg_))) {
     LOG_WARN("deep copy create index arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_);
-    LST_DO_CODE(OB_UNIS_DECODE, parallelism_, cluster_version_);
-    if (OB_SUCC(ret) && pos < data_len) {
-      if (OB_FAIL(ddl_tracing_.deserialize(buf, data_len, pos))) {
-        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
-      }
-    }
   }
   return ret;
 }
@@ -1496,8 +1506,5 @@ int64_t ObIndexBuildTask::get_serialize_param_size() const
 {
   return create_index_arg_.get_serialize_size()
       + serialization::encoded_length_i64(check_unique_snapshot_)
-      + serialization::encoded_length_i64(task_version_)
-      + serialization::encoded_length_i64(parallelism_)
-      + serialization::encoded_length_i64(cluster_version_)
-      + ddl_tracing_.get_serialize_size();
+      + ObDDLTask::get_serialize_param_size();
 }

@@ -131,7 +131,7 @@ public:
   ObTabletDDLParam();
   ~ObTabletDDLParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(commit_scn), K_(snapshot_version), K_(cluster_version));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(commit_scn), K_(snapshot_version), K_(data_format_version));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -139,7 +139,7 @@ public:
   share::SCN start_scn_;
   share::SCN commit_scn_;
   int64_t snapshot_version_;
-  int64_t cluster_version_;
+  int64_t data_format_version_;
 };
 
 class ObTabletDDLUtil
@@ -148,31 +148,28 @@ public:
   static int prepare_index_data_desc(const share::ObLSID &ls_id,
                                      const ObTabletID &tablet_id,
                                      const int64_t snapshot_version,
-                                     const int64_t cluster_version,
+                                     const int64_t ddl_format_version,
                                      const blocksstable::ObSSTable *first_ddl_sstable,
                                      blocksstable::ObDataStoreDesc &data_desc);
 
-  static int prepare_index_builder(const ObTabletDDLParam &ddl_param,
-                                   ObIAllocator &allocator,
-                                   const blocksstable::ObSSTableIndexBuilder::ObSpaceOptimizationMode mode,
-                                   const blocksstable::ObSSTable *first_ddl_sstable,
-                                   blocksstable::ObSSTableIndexBuilder *&sstable_index_builder,
-                                   blocksstable::ObIndexBlockRebuilder *&index_block_rebuilder);
+  static int create_ddl_sstable(const ObTabletDDLParam &ddl_param,
+                                const ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array,
+                                const blocksstable::ObSSTable *first_ddl_sstable,
+                                ObTableHandleV2 &table_handle);
 
   static int create_ddl_sstable(blocksstable::ObSSTableIndexBuilder *sstable_index_builder,
                                 const ObTabletDDLParam &ddl_param,
                                 const blocksstable::ObSSTable *first_ddl_sstable,
                                 ObTableHandleV2 &table_handle);
 
-  static int update_ddl_table_store(blocksstable::ObSSTableIndexBuilder *sstable_index_builder,
-                                    const ObTabletDDLParam &ddl_param,
-                                    const blocksstable::ObSSTable *first_ddl_sstable,
-                                    ObTableHandleV2 &table_handle);
+  static int update_ddl_table_store(const ObTabletDDLParam &ddl_param,
+                                    const ObTableHandleV2 &table_handle);
 
-  static int compact_ddl_sstable(const ObIArray<ObITable *> &ddl_sstables,
+  static int compact_ddl_sstable(const ObTablesHandleArray &ddl_sstables,
                                  const ObTableReadInfo &read_info,
-                                 const ObTabletDDLParam &ddl_param,
-                                 const bool is_scn_overlap,
+                                 const bool is_commit,
+                                 const share::SCN &rec_scn,
+                                 ObTabletDDLParam &ddl_param,
                                  ObTableHandleV2 &table_handle);
 
   static int report_ddl_checksum(const share::ObLSID &ls_id,
@@ -188,8 +185,7 @@ public:
   static int check_data_integrity(const ObTablesHandleArray &ddl_sstables,
                                   const share::SCN &start_scn,
                                   const share::SCN &prepare_scn,
-                                  bool &is_data_complete,
-                                  bool &is_scn_overlap);
+                                  bool &is_data_complete);
 };
 
 } // namespace storage

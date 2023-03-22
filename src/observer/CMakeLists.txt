@@ -110,7 +110,6 @@ ob_set_subtarget(ob_server omt
   omt/ob_tenant_timezone.cpp
   omt/ob_tenant_timezone_mgr.cpp
   omt/ob_th_worker.cpp
-  omt/ob_worker_pool.cpp
   omt/ob_worker_processor.cpp
   omt/ob_multi_tenant_operator.cpp
   omt/ob_tenant_srs_mgr.cpp
@@ -123,6 +122,7 @@ ob_set_subtarget(ob_server table
   table/ob_htable_filter_operator.cpp
   table/ob_htable_filter_parser.cpp
   table/ob_htable_filters.cpp
+  table/ob_table_filter.cpp
   table/ob_htable_utils.cpp
   table/ob_table_batch_execute_processor.cpp
   table/ob_table_end_trans_cb.cpp
@@ -147,6 +147,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_cache.cpp
   table/ob_table_session_pool.cpp
   table/ob_table_op_wrapper.cpp
+  table/ob_table_query_common.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -228,6 +229,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_transaction_checkpoint.cpp
   virtual_table/ob_all_virtual_checkpoint.cpp
   virtual_table/ob_all_virtual_macro_block_marker_status.cpp
+  virtual_table/ob_all_virtual_malloc_sample_info.cpp
   virtual_table/ob_all_virtual_memory_context_stat.cpp
   virtual_table/ob_all_virtual_memory_info.cpp
   virtual_table/ob_all_virtual_memstore_info.cpp
@@ -360,7 +362,6 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_virtual_show_trace.cpp
   virtual_table/ob_all_virtual_sql_plan.cpp
   virtual_table/ob_all_virtual_plan_table.cpp
-  virtual_table/ob_all_virtual_plan_real_info.cpp
 )
 
 ob_server_add_target(ob_server)

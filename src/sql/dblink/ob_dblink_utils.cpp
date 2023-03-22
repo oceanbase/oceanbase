@@ -84,9 +84,8 @@ int ObDblinkService::get_length_from_type_text(ObString &type_text, int32_t &len
   return ret;
 }
 
-ObReverseLink::ObReverseLink(common::ObIAllocator &alloc)
-  : allocator_(alloc),
-    user_(),
+ObReverseLink::ObReverseLink()
+  : user_(),
     tenant_(),
     cluster_(),
     passwd_(),
@@ -100,6 +99,7 @@ ObReverseLink::ObReverseLink(common::ObIAllocator &alloc)
 
 ObReverseLink::~ObReverseLink()
 {
+  allocator_.reset();
 }
 
 OB_DEF_SERIALIZE(ObReverseLink)
@@ -312,7 +312,7 @@ int ObDblinkUtils::process_dblink_errno(common::sqlclient::DblinkDriverProto dbl
   return OB_SUCCESS;
 }
 
-int ObDblinkUtils::has_reverse_link(const ObDMLStmt *stmt, bool &has) {
+int ObDblinkUtils::has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &has, bool has_any_dblink) {
   int ret = OB_SUCCESS;
   const common::ObIArray<TableItem*> &table_items = stmt->get_table_items();
   ObArray<ObSelectStmt*> child_stmts;
@@ -321,12 +321,16 @@ int ObDblinkUtils::has_reverse_link(const ObDMLStmt *stmt, bool &has) {
     if (OB_ISNULL(table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null ptr", K(ret));
-    } else if (table_item->is_reverse_link_) {
+    } else if (has_any_dblink && (table_item->is_reverse_link_ || OB_INVALID_ID != table_item->dblink_id_)) {
+      has = true;
+      LOG_DEBUG("succ to find reverse link", K(table_item), K(i));
+      break;
+    } else if (!has_any_dblink && table_item->is_reverse_link_) {
       has = true;
       LOG_DEBUG("succ to find reverse link", K(table_item), K(i));
       break;
     } else if (table_item->is_temp_table()) {
-      if (OB_FAIL(SMART_CALL(has_reverse_link(table_item->ref_query_, has)))) {
+      if (OB_FAIL(SMART_CALL(has_reverse_link_or_any_dblink(table_item->ref_query_, has, has_any_dblink)))) {
           LOG_WARN("failed to exec has_reverse_link", K(ret));
       } else if (has) {
         break;
@@ -342,7 +346,7 @@ int ObDblinkUtils::has_reverse_link(const ObDMLStmt *stmt, bool &has) {
         if (OB_ISNULL(child_stmt)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null ptr", K(ret));
-        } else if (OB_FAIL(SMART_CALL(has_reverse_link(child_stmt, has)))) {
+        } else if (OB_FAIL(SMART_CALL(has_reverse_link_or_any_dblink(child_stmt, has, has_any_dblink)))) {
           LOG_WARN("failed to exec has_reverse_link", K(ret));
         } else if (has) {
           break;
@@ -381,7 +385,7 @@ int ObDblinkCtxInSession::register_dblink_conn_pool(common::sqlclient::ObCommonS
   return ret;
 }
 
-// When the session is about to be destroyed, the session will release all connections
+// When the session is about to be reset, the session will release all connections
 // from ObServerConnectionPool through this interface
 int ObDblinkCtxInSession::free_dblink_conn_pool()
 {
@@ -400,9 +404,7 @@ int ObDblinkCtxInSession::free_dblink_conn_pool()
       LOG_TRACE("free and close dblink connection in session", KP(this), K(session_info_->get_sessid()), K(i), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), KP(dblink_conn_pool), K(lbt()));
     }
   }
-  if (OB_SUCC(ret)) {
-    dblink_conn_pool_array_.reset();
-  }
+  dblink_conn_pool_array_.reset();
   return ret;
 }
 
@@ -425,6 +427,11 @@ int ObDblinkCtxInSession::get_dblink_conn(uint64_t dblink_id, common::sqlclient:
       break;
     }
   }
+  if (OB_SUCC(ret) && OB_NOT_NULL(dblink_conn) &&
+      (OB_SUCCESS != dblink_conn->ping())) {
+    ret = OB_ERR_DBLINK_SESSION_KILLED;
+    LOG_WARN("connection is invalid", K(ret), K(dblink_conn->usable()), KP(dblink_conn));
+  }
   return ret;
 }
 
@@ -444,7 +451,7 @@ int ObDblinkCtxInSession::set_dblink_conn(common::sqlclient::ObISQLConnection *d
   return ret;
 }
 
-int ObDblinkCtxInSession::clean_dblink_conn()
+int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
 {
   int ret = OB_SUCCESS;
   common::sqlclient::ObISQLConnection *dblink_conn =NULL;
@@ -464,7 +471,8 @@ int ObDblinkCtxInSession::clean_dblink_conn()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("server_conn_pool of dblink connection is NULL", K(this), K(dblink_conn), K(i), K(ret));
       } else {
-        if (OB_FAIL(server_conn_pool->release(dblink_conn, true, session_info_->get_sessid()))) {
+        const bool need_disconnect = force_disconnect || !dblink_conn->usable();
+        if (OB_FAIL(server_conn_pool->release(dblink_conn, !need_disconnect, session_info_->get_sessid()))) {
           LOG_WARN("session failed to release dblink connection", K(session_info_->get_sessid()), K(this), KP(dblink_conn), K(i), K(ret));
         } else {
           LOG_TRACE("session succ to release dblink connection", K(session_info_->get_sessid()), K(this), KP(dblink_conn), K(i), K(ret));
@@ -472,9 +480,12 @@ int ObDblinkCtxInSession::clean_dblink_conn()
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    dblink_conn_holder_array_.reset();
-  }
+  dblink_conn_holder_array_.reset();
+  arena_alloc_.reset();
+  reverse_dblink_ = NULL;
+  reverse_dblink_buf_ = NULL;
+  sys_var_reverse_info_buf_ = NULL;
+  sys_var_reverse_info_buf_size_ = 0;
   return ret;
 }
 
@@ -489,19 +500,30 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
   } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR__SET_REVERSE_DBLINK_INFOS, value))) {
     LOG_WARN("failed to get SYS_VAR_SET_REVERSE_DBLINK_INFOS", K(value), K(ret));
   } else if (NULL == reverse_dblink_ || 0 != last_reverse_info_values_.compare(value)) {
-    if (!value.empty()){
-      void *ptr = NULL;
-      if (OB_ISNULL(ptr = arena_alloc_.alloc(sizeof(ObReverseLink)))) {
+    if (!value.empty()){ // get a new valid REVERSE_DBLINK_INFOS, need create or update ObReverseLink
+      int64_t sys_var_length = value.length();
+      if (OB_ISNULL(reverse_dblink_buf_) &&
+                OB_ISNULL(reverse_dblink_buf_ = arena_alloc_.alloc(sizeof(ObReverseLink)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc memory", K(ret));
+        LOG_WARN("failed to alloc memory", K(ret), K(sizeof(ObReverseLink)));
+      } else if (sys_var_length > sys_var_reverse_info_buf_size_ &&
+          OB_ISNULL(sys_var_reverse_info_buf_ = arena_alloc_.alloc(2 * sys_var_length))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(ret), K(2 * sys_var_length));
       } else {
-        reverse_dblink_ = new(ptr) ObReverseLink(arena_alloc_);
+        sys_var_reverse_info_buf_size_ = 2 * sys_var_length;
+        MEMCPY(sys_var_reverse_info_buf_, value.ptr(), sys_var_length);
+        last_reverse_info_values_.assign((char *)sys_var_reverse_info_buf_, sys_var_length);
+        if (OB_NOT_NULL(reverse_dblink_)) {
+          reverse_dblink_->~ObReverseLink();
+        }
+        reverse_dblink_ = new(reverse_dblink_buf_) ObReverseLink();
         char *new_buff = NULL;
         int64_t new_size = 0;
         int64_t pos = 0;
-        LOG_DEBUG("get SYS_VAR_SET_REVERSE_DBLINK_INFOS", K(value));
-        if (OB_FAIL(ObHexUtilsBase::unhex(value, arena_alloc_, new_buff, new_size))) {
-          LOG_WARN("failed to unhex", K(value), K(new_size), K(ret));
+        LOG_DEBUG("get SYS_VAR_SET_REVERSE_DBLINK_INFOS", K(last_reverse_info_values_));
+        if (OB_FAIL(ObHexUtilsBase::unhex(last_reverse_info_values_, arena_alloc_, new_buff, new_size))) {
+          LOG_WARN("failed to unhex", K(last_reverse_info_values_), K(new_size), K(ret));
         } else if (OB_FAIL(reverse_dblink_->deserialize(new_buff, new_size, pos))) {
           LOG_WARN("failed to deserialize reverse_dblink_", K(new_size), K(ret));
         } else {
@@ -509,11 +531,16 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
           LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
         }
       }
+    } else if (OB_ISNULL(reverse_dblink_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL ptr", K(ret));
+    } else {
+      reverse_dblink = reverse_dblink_;
+      LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
     }
   } else {
     reverse_dblink = reverse_dblink_;
     LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
   }
-  last_reverse_info_values_.assign(value.ptr(), value.length());
   return ret;
 }

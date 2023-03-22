@@ -21,8 +21,8 @@ namespace oceanbase
 namespace common
 {
 
-ObIndexStatsEstimator::ObIndexStatsEstimator(ObExecContext &ctx)
-  : ObBasicStatsEstimator(ctx)
+ObIndexStatsEstimator::ObIndexStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator)
+  : ObBasicStatsEstimator(ctx, allocator)
 {}
 
 int ObIndexStatsEstimator::estimate(const ObTableStatParam &param,

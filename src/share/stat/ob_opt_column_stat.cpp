@@ -427,7 +427,7 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
 }
 
 // deep copy max/min, using inner_allocator
-int ObOptColumnStat::merge_obj(ObObj &obj)
+int ObOptColumnStat::merge_obj(const ObObj &obj)
 {
   int ret = OB_SUCCESS;
   //calc avg_len: avg_len should update before num_null, null_not_null -- since these are use in merge_avg_len.
@@ -442,17 +442,19 @@ int ObOptColumnStat::merge_obj(ObObj &obj)
     num_null_++;
   } else {
     num_not_null_++;
-    // max/min
-    if (min_value_.is_null() || obj < min_value_) {
-      inner_min_allocator_.reuse();
-      if (OB_FAIL(ob_write_obj(inner_min_allocator_, obj, min_value_))) {
-        LOG_WARN("fail to deep copy obj", K(ret));
+    if (!obj.get_meta().is_enum_or_set()) {//disable online gather enum/set max/min value. TODO,jiangxiu.wt
+      // max/min
+      if (min_value_.is_null() || obj < min_value_) {
+        inner_min_allocator_.reuse();
+        if (OB_FAIL(ob_write_obj(inner_min_allocator_, obj, min_value_))) {
+          LOG_WARN("fail to deep copy obj", K(ret));
+        }
       }
-    }
-    if (OB_SUCC(ret) && (max_value_.is_null() || obj > max_value_)) {
-      inner_max_allocator_.reuse();
-      if (OB_FAIL(ob_write_obj(inner_max_allocator_, obj, max_value_))) {
-        LOG_WARN("fail to deep copy obj", K(ret));
+      if (OB_SUCC(ret) && (max_value_.is_null() || obj > max_value_)) {
+        inner_max_allocator_.reuse();
+        if (OB_FAIL(ob_write_obj(inner_max_allocator_, obj, max_value_))) {
+          LOG_WARN("fail to deep copy obj", K(ret));
+        }
       }
     }
     if (OB_SUCC(ret)) {

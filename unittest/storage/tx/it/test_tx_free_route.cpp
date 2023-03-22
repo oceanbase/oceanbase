@@ -495,13 +495,13 @@ int MockObServer::do_handle_(ObReq &req, ObResp &resp)
     tx_desc = NULL;
     break;
   case ObReq::T::SAVEPOINT:
-    ret = tx_node_.create_explicit_savepoint(*tx_desc, ObString(req.savepoint_name_));
+    ret = tx_node_.create_explicit_savepoint(*tx_desc, ObString(req.savepoint_name_), 0, false);
     break;
   case ObReq::T::ROLLBACK_SAVEPOINT:
-    ret = tx_node_.rollback_to_explicit_savepoint(*tx_desc, ObString(req.savepoint_name_), 1 * 1000 * 1000);
+    ret = tx_node_.rollback_to_explicit_savepoint(*tx_desc, ObString(req.savepoint_name_), 1 * 1000 * 1000, 0);
     break;
   case ObReq::T::RELEASE_SAVEPOINT:
-    ret = tx_node_.release_explicit_savepoint(*tx_desc, ObString(req.savepoint_name_));
+    ret = tx_node_.release_explicit_savepoint(*tx_desc, ObString(req.savepoint_name_), 0);
     break;
   case ObReq::T::READ:
     if (req.is_serializable_isolation_) {

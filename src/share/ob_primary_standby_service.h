@@ -66,6 +66,21 @@ public:
 
   int write_upgrade_barrier_log(ObMySQLTransaction &trans, const uint64_t tenant_id, const uint64_t data_version);
 
+  /**
+   * @description:
+   *    do recover tenant
+   * @param[in] tenant_id recover tenant_id
+   * @param[in] working_sw_status recover tenant in expected switchover status
+   * @param[in] recover_type recover type UNTIL/CANCEL
+   * @param[in] recovery_until_scn
+   * @return return code
+   */
+  int do_recover_tenant(
+      const uint64_t tenant_id,
+      const share::ObTenantSwitchoverStatus &working_sw_status,
+      const obrpc::ObRecoverTenantArg::RecoverType &recover_type,
+      const share::SCN &recovery_until_scn);
+
 private:
   int check_inner_stat_();
 
@@ -77,15 +92,6 @@ private:
    * @return return code
    */
   int failover_to_primary(const uint64_t tenant_id, const obrpc::ObSwitchTenantArg::OpType &switch_optype);
-
-  /**
-   * @description:
-   *    do recover tenant
-   * @param[in] arg recover switch arguments
-   * @param[in] tenant_id recover tenant_id
-   * @return return code
-   */
-  int do_recover_tenant(const obrpc::ObRecoverTenantArg &arg, const uint64_t tenant_id);
 
   /**
    * @description:

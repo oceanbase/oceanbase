@@ -142,7 +142,7 @@ public:
                K_(max_sync_storage_schema_version),
                K_(max_serialized_medium_scn),
                K_(ddl_execution_id),
-               K_(ddl_cluster_version),
+               K_(ddl_data_format_version),
                K_(ddl_commit_scn));
 
 public:
@@ -174,12 +174,12 @@ public:
   // sync_schema_version > serialized_schema_version when replay schema clog but not mini merge yet
   int64_t max_sync_storage_schema_version_;
   int64_t ddl_execution_id_;
-  int64_t ddl_cluster_version_;
+  int64_t ddl_data_format_version_;
   int64_t max_serialized_medium_scn_; // update when serialized medium info
   share::SCN ddl_commit_scn_;
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
-  // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
+  // yuque :
 
 private:
   int inner_check_(
@@ -274,7 +274,7 @@ public:
   // max_sync_version may less than storage_schema.schema_version_ when major update schema
   int64_t max_sync_storage_schema_version_;
   int64_t ddl_execution_id_;
-  int64_t ddl_cluster_version_;
+  int64_t ddl_data_format_version_;
   int64_t max_serialized_medium_scn_;
   share::SCN ddl_commit_scn_;
 

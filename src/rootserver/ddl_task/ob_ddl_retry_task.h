@@ -39,7 +39,7 @@ public:
   virtual int process() override;
   virtual bool is_valid() const override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
+  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   static int update_task_status_wait_child_task_finish(
         common::ObMySQLTransaction &trans,

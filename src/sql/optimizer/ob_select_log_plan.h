@@ -85,7 +85,10 @@ private:
                           const GroupingOpHelper &groupby_helper,
                           const bool ignore_hint,
                           bool &use_hash_valid,
-                          bool &use_merge_valid);
+                          bool &use_merge_valid,
+                          bool &part_sort_valid,
+                          bool &normal_sort_valid);
+  int update_part_sort_method(bool &part_sort_valid, bool &normal_sort_valid);
   int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
@@ -160,6 +163,8 @@ private:
                               GroupingOpHelper &groupby_helper,
                               CandidatePlan &candidate_plan,
                               ObIArray<CandidatePlan> &candidate_plans,
+                              bool part_sort_valid,
+                              bool normal_sort_valid,
                               bool can_ignore_merge = false);
 
   int generate_merge_group_sort_keys(ObLogicalOperator *top,
@@ -596,7 +601,8 @@ private:
                                       const bool match_parallel,
                                       const bool is_partition_wise,
                                       const int32_t role_type,
-                                      const ObIArray<OrderItem> &range_dist_keys,
+                                      const ObIArray<OrderItem> &sort_keys,
+                                      const int64_t range_dist_keys_cnt,
                                       const int64_t range_dist_pby_prefix,
                                       ObLogicalOperator *&top,
                                       ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
@@ -670,9 +676,8 @@ private:
                                     const bool is_from_povit,
                                     GroupingOpHelper &groupby_helper,
                                     ObLogicalOperator *&top,
-                                    bool &is_plan_valid,
-                                    bool can_ignore_merge = false,
-                                    bool use_part_sort = false);
+                                    bool use_part_sort,
+                                    bool can_ignore_merge = false);
 
   DISALLOW_COPY_AND_ASSIGN(ObSelectLogPlan);
 };

@@ -2,7 +2,7 @@
  * ob_optimizer_trace_impl.h
  *
  * Authors:
- *   zhenling.zzg <zhenling.zzg@alipay.com>
+ *   zhenling.zzg <>
  *
  */
 

@@ -85,9 +85,11 @@ public:
   int wrunlock();
 
   int read_config();
+  int read_dump_config(int64_t tenant_id);
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_current_version() const { return current_version_; }
   const TenantConfigUpdateTask &get_update_task() const { return  update_task_; }
+  int64_t get_create_timestamp() const { return create_timestamp_; }
   int got_version(int64_t version, const bool remove_repeat);
   int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult &result,
                    bool save2file = true);
@@ -106,6 +108,7 @@ private:
   // protect this object from being deleted in OTC_MGR.del_tenant_config
   mutable common::DRWLock lock_;
   bool is_deleting_;
+  int64_t create_timestamp_;
 
 public:
 ///////////////////////////////////////////////////////////////////////////////

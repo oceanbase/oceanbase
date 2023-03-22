@@ -253,13 +253,24 @@ int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::O
     }
   } else if (ObFloatType <= val_type && val_type <= ObUDoubleType) {
     // double
-    ObJsonDouble* tmp_ans = static_cast<ObJsonDouble*> (allocator.alloc(sizeof(ObJsonDouble)));
-    if (OB_ISNULL(tmp_ans)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate row buffer failed at ObJsonDouble", K(ret));
+    if (val_type == ObUFloatType || val_type == ObFloatType) {
+      ObJsonOFloat* tmp_ans = static_cast<ObJsonOFloat*> (allocator.alloc(sizeof(ObJsonOFloat)));
+      if (OB_ISNULL(tmp_ans)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate row buffer failed at ObJsonDouble", K(ret));
+      } else {
+        tmp_ans = new (tmp_ans) ObJsonOFloat(json_datum->get_float());
+        j_base = tmp_ans;
+      }
     } else {
-      tmp_ans = new (tmp_ans) ObJsonDouble(json_datum->get_double());
-      j_base = tmp_ans;
+      ObJsonDouble* tmp_ans = static_cast<ObJsonDouble*> (allocator.alloc(sizeof(ObJsonDouble)));
+      if (OB_ISNULL(tmp_ans)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate row buffer failed at ObJsonDouble", K(ret));
+      } else {
+        tmp_ans = new (tmp_ans) ObJsonDouble(json_datum->get_double());
+        j_base = tmp_ans;
+      }
     }
   } else if (ObNumberType <= val_type && val_type <= ObUNumberType) {
     // decimal

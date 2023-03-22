@@ -300,13 +300,12 @@ int ObTransformDBlink::reverse_one_link_table(TableItem *table, uint64_t target_
     LOG_WARN("unexpect null table", K(ret));
   } else if (table->is_reverse_link_ && table->is_link_type()) {
     table->is_reverse_link_ = false;
-    if (table->dblink_name_.empty()) {
+    if (OB_FAIL(ob_write_string(*ctx_->allocator_,
+                                table->link_database_name_,
+                                table->database_name_))) {
+      LOG_WARN("failed to write string", K(ret));
+    } else if (table->dblink_name_.empty()) {
       table->type_ = TableItem::BASE_TABLE;
-      if (OB_FAIL(ob_write_string(*ctx_->allocator_,
-                                  table->link_database_name_,
-                                  table->database_name_))) {
-        LOG_WARN("failed to write string", K(ret));
-      }
     }
   } else if (table->is_link_type()) {
     if (table->dblink_id_ == target_dblink_id) {
@@ -420,6 +419,9 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
       LOG_WARN("failed to reverse link table", K(ret));
     } else if (OB_FAIL(formalize_link_table(stmt))) {
       LOG_WARN("failed to formalize link table stmt", K(ret));
+    } else if (lib::is_oracle_mode() &&
+               OB_FAIL(extract_limit(stmt, stmt))) {
+      LOG_WARN("failed to formalize limit", K(ret));
     } else {
       stmt->set_dblink_id(is_reverse_link ? 0 : dblink_id);
       trans_happened = true;
@@ -1062,6 +1064,26 @@ int ObTransformDBlink::get_from_item_idx(ObDMLStmt *stmt,
   return ret;
 }
 
+int ObTransformDBlink::check_can_pushdown(ObDMLStmt *stmt, const LinkTableHelper &helper, bool &can_push)
+{
+  int ret = OB_SUCCESS;
+  bool is_on_null_side = false;
+  JoinedTable *joined_table = helper.parent_table_;
+  TableItem *table = NULL;
+  if (NULL != joined_table) {
+    if (OB_UNLIKELY(1 != helper.table_items_.count()) ||
+        OB_ISNULL(table = helper.table_items_.at(0)) ||
+        OB_UNLIKELY(table != joined_table->left_table_ && table != joined_table->right_table_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected push down tables", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table->table_id_, is_on_null_side))) {
+      LOG_WARN("failed to check table on null side", K(ret));
+    }
+  }
+  can_push = !is_on_null_side;
+  return ret;
+}
+
 int ObTransformDBlink::collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<LinkTableHelper> &helpers)
 {
   int ret = OB_SUCCESS;
@@ -1072,27 +1094,33 @@ int ObTransformDBlink::collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<Lin
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < helpers.count(); ++i) {
     table_ids.reuse();
-    if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
-                                                          helpers.at(i).table_items_,
-                                                          table_ids))) {
+    bool can_push = false;
+    if (OB_FAIL(check_can_pushdown(stmt, helpers.at(i), can_push))) {
+      LOG_WARN("failed to check if conditions can be push", K(ret));
+    } else if (!can_push) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
+                                                                 helpers.at(i).table_items_,
+                                                                 table_ids))) {
       LOG_WARN("failed to get rel ids", K(ret));
-    }
-    bool has_special_expr = false;
-    for (int64_t j = 0; OB_SUCC(ret) && j < stmt->get_condition_size(); ++j) {
-      ObRawExpr *expr = stmt->get_condition_expr(j);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null expr", K(ret));
-      } else if (!expr->get_relation_ids().is_subset(table_ids)) {
-        //do nothing
-      }  else if (OB_FAIL(has_none_pushdown_expr(expr,
-                                                 helpers.at(i).dblink_id_,
-                                                 has_special_expr))) {
-        LOG_WARN("failed to check has none push down expr", K(ret));
-      } else if (has_special_expr) {
-        //do nothing
-      } else if (OB_FAIL(helpers.at(i).conditions_.push_back(expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
+    } else {
+      bool has_special_expr = false;
+      for (int64_t j = 0; OB_SUCC(ret) && j < stmt->get_condition_size(); ++j) {
+        ObRawExpr *expr = stmt->get_condition_expr(j);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null expr", K(ret));
+        } else if (!expr->get_relation_ids().is_subset(table_ids)) {
+          //do nothing
+        } else if (OB_FAIL(has_none_pushdown_expr(expr,
+                                                  helpers.at(i).dblink_id_,
+                                                  has_special_expr))) {
+          LOG_WARN("failed to check has none push down expr", K(ret));
+        } else if (has_special_expr) {
+          //do nothing
+        } else if (OB_FAIL(helpers.at(i).conditions_.push_back(expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
       }
     }
   }
@@ -1197,6 +1225,31 @@ int ObTransformDBlink::formalize_link_table(ObDMLStmt *stmt)
     LOG_WARN("failed to formalize select item", K(ret));
   } else if (OB_FAIL(formalize_column_item(stmt))) {
     LOG_WARN("failed to formalize column item", K(ret));
+  }
+  return ret;
+}
+
+// For compatibility with Oracle before 12c,
+// We can not send the sql with "fetch" clause.
+// So, we perform limit operations locally.
+int ObTransformDBlink::extract_limit(ObDMLStmt *stmt, ObDMLStmt *&dblink_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *child_stmt = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (!stmt->is_select_stmt()
+            || !stmt->has_limit()
+            || stmt->is_fetch_with_ties()
+            || NULL != stmt->get_limit_percent_expr()) {
+    dblink_stmt = stmt;
+  } else if (ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(stmt), &child_stmt)) {
+    LOG_WARN("failed to pack the stmt", K(ret));
+  } else {
+    stmt->set_limit_offset(child_stmt->get_limit_expr(), child_stmt->get_offset_expr());
+    child_stmt->set_limit_offset(NULL, NULL);
+    dblink_stmt = child_stmt;
   }
   return ret;
 }

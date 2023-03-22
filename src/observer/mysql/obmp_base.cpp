@@ -159,7 +159,6 @@ int ObMPBase::after_process(int error_code)
       PRINT_TRACE(THE_TRACE);
     }
   }
-  ObActiveSessionGuard::get_stat().exec_phase_ = 0;
   return ret;
 }
 
@@ -345,9 +344,8 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
     session.set_rpc_tenant_id(THIS_WORKER.get_rpc_tenant());
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
 
-    if (0 == multi_stmt_item.get_seq_num() && !session.is_in_transaction()) {
+    if (0 == multi_stmt_item.get_seq_num()) {
       // 第一条sql
-      // 并且还没开启事务时，这条sql才能二次路由
       ctx.can_reroute_sql_ = (pkt.can_reroute_pkt() && get_conn()->is_support_proxy_reroute());
     }
     ctx.is_protocol_weak_read_ = pkt.is_weak_read();
@@ -424,6 +422,8 @@ int ObMPBase::setup_user_resource_group(
   } else if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid tenant", K(tenant_id), K(ret));
+  } else if (conn.group_id_ == OBCG_DIAG_TENANT) {
+    // OBCG_DIAG_TENANT was set in check_update_tenant_id, DO NOT overlap it.
   } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
               tenant_id, user_id, group_id))) {
     LOG_WARN("fail get group id by user", K(user_id), K(tenant_id), K(ret));
@@ -446,7 +446,7 @@ int ObMPBase::check_and_refresh_schema(uint64_t login_tenant_id,
 
   if (login_tenant_id != effective_tenant_id) {
     // do nothing
-    // https://aone.alibaba-inc.com/issue/18698167
+    //
   } else if (OB_ISNULL(gctx_.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null schema service", K(ret), K(gctx_));

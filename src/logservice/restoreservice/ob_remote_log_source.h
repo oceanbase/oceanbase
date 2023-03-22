@@ -46,7 +46,7 @@ public:
   virtual int64_t to_string(char *buf, const int64_t buf_len) const = 0;
   virtual int update_locate_info(ObRemoteLogParent &source) = 0;
   bool to_end() const { return to_end_; }
-  void set_to_end(const share::SCN &scn);
+  bool set_to_end(const share::SCN &scn);
   void get_end_scn(share::SCN &scn) const { scn = end_fetch_scn_;}
   void get_upper_limit_scn(share::SCN &scn) const { scn = upper_limit_scn_; }
   ObLogRestoreSourceType get_source_type() const { return type_; }

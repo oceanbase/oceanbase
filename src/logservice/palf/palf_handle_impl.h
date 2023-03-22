@@ -111,6 +111,28 @@ struct PalfDiagnoseInfo {
                K(palf_proposal_id_));
 };
 
+struct FetchLogStat {
+  FetchLogStat() { reset(); }
+  ~FetchLogStat() { reset(); }
+  int64_t total_size_;
+  int64_t group_log_cnt_;
+  int64_t read_cost_;  // time cost of reading and deserializing log
+  int64_t get_cost_;   // time cost of checking integrity
+  int64_t send_cost_;  // time cost of sending logs by rpc
+  void reset() {
+    total_size_ = 0;
+    group_log_cnt_ = 0;
+    read_cost_ = 0;
+    get_cost_ = 0;
+    send_cost_ = 0;
+  }
+  TO_STRING_KV(K_(total_size),
+               K_(group_log_cnt),
+               K_(read_cost),
+               K_(get_cost),
+               K_(send_cost));
+};
+
 struct LSKey {
   LSKey() : id_(-1) {}
   explicit LSKey(const int64_t id) : id_(id) {}
@@ -255,6 +277,8 @@ public:
                                  const int64_t curr_replica_num,
                                  const int64_t new_replica_num,
                                  const int64_t timeout_us) = 0;
+  // @brief: force set self as single replica.
+  virtual int force_set_as_single_replica() = 0;
 
   // @brief, add a member into paxos group
   // @param[in] common::ObMember &member: member which will be added
@@ -395,6 +419,7 @@ public:
   virtual int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn) = 0;
   virtual int get_begin_lsn(LSN &lsn) const = 0;
   virtual int get_begin_scn(share::SCN &scn) = 0;
+  virtual int get_base_lsn(LSN &lsn) const = 0;
   virtual int get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info) = 0;
 
   virtual int get_min_block_info_for_gc(block_id_t &min_block_id, share::SCN &max_scn) = 0;
@@ -491,7 +516,8 @@ public:
                                      const int64_t fetch_log_size,
                                      const int64_t fetch_log_count,
                                      const int64_t accepted_mode_pid,
-                                     const SCN &replayable_point) = 0;
+                                     const SCN &replayable_point,
+                                     FetchLogStat &fetch_stat) = 0;
   virtual int receive_config_log(const common::ObAddr &server,
                                  const int64_t &msg_proposal_id,
                                  const int64_t &prev_log_proposal_id,
@@ -532,6 +558,11 @@ public:
                             const int64_t prev_log_id,
                             const int64_t &prev_log_proposal_id,
                             const LSN &committed_end_lsn) = 0;
+
+  // @brief: check whether the palf instance is allowed to vote for logs
+  // By default, return true;
+  // After calling disable_vote(), return false.
+  virtual bool is_vote_enabled() const = 0;
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
@@ -639,6 +670,7 @@ public:
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const override final;
   int get_election_leader(common::ObAddr &addr) const;
+  int force_set_as_single_replica() override final;
   int change_replica_num(const common::ObMemberList &member_list,
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
@@ -668,6 +700,7 @@ public:
   int advance_base_info(const PalfBaseInfo &palf_base_info, const bool is_rebuild) override final;
   int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn) override final;
   int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn) override final;
+  bool is_vote_enabled() const override final;
   int disable_vote() override final;
   int enable_vote() override final;
 public:
@@ -705,6 +738,7 @@ public:
 public:
   int get_begin_lsn(LSN &lsn) const override final;
   int get_begin_scn(share::SCN &scn)  override final;
+  int get_base_lsn(LSN &lsn) const override final;
   int get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info) override final;
   int get_min_block_info_for_gc(block_id_t &min_block_id, share::SCN &max_scn) override final;
   // return the block length which the previous data was committed
@@ -803,7 +837,8 @@ public:
                              const int64_t fetch_log_size,
                              const int64_t fetch_log_count,
                              const int64_t accepted_mode_pid,
-                             const SCN &replayable_point) override final;
+                             const SCN &replayable_point,
+                             FetchLogStat &fetch_stat) override final;
   int receive_config_log(const common::ObAddr &server,
                          const int64_t &msg_proposal_id,
                          const int64_t &prev_log_proposal_id,
@@ -867,6 +902,9 @@ private:
   int after_flush_replica_property_meta_(const bool allow_vote);
   int set_allow_vote_flag_(const bool allow_vote);
   int get_prev_log_info_(const LSN &lsn, LogInfo &log_info);
+  int get_prev_log_info_for_fetch_(const LSN &prev_lsn,
+                                   const LSN &curr_lsn,
+                                   LogInfo &prev_log_info);
   int submit_prepare_response_(const common::ObAddr &server,
                                const int64_t &proposal_id);
   int construct_palf_base_info_(const LSN &max_committed_lsn,
@@ -888,7 +926,8 @@ private:
                               const LSN &fetch_start_lsn,
                               const int64_t fetch_log_size,
                               const int64_t fetch_log_count,
-                              const SCN &replayable_point);
+                              const SCN &replayable_point,
+                              FetchLogStat &fetch_stat);
   int submit_fetch_log_resp_(const common::ObAddr &server,
                              const int64_t &msg_proposal_id,
                              const int64_t &prev_log_proposal_id,
@@ -1038,6 +1077,8 @@ private:
   bool diskspace_enough_;
   ObMiniStat::ObStatItem append_cost_stat_;
   ObMiniStat::ObStatItem flush_cb_cost_stat_;
+  int64_t last_accum_statistic_time_;
+  int64_t accum_write_log_size_;  // the accum size of written logs
   // a spin lock for read/write replica_meta mutex
   SpinLock replica_meta_lock_;
   SpinLock rebuilding_lock_;
@@ -1047,14 +1088,11 @@ private:
   SpinLock flashback_lock_;
   int64_t last_dump_info_time_us_;
   bool is_flashback_done_;
-  // a spin lock which protects cached PalfStat for query optimization
-  SpinLock cached_palf_stat_lock_;
-  // cached palf stat for view query, do not use this value for inner usages.
-  PalfStat cached_palf_stat_for_query_;
   int64_t last_check_sync_time_us_;
   int64_t last_renew_loc_time_us_;
   int64_t last_print_in_sync_time_us_;
   int64_t chaning_config_warn_time_;
+  bool cached_is_in_sync_;
   bool has_higher_prio_config_change_;
   bool is_inited_;
 };

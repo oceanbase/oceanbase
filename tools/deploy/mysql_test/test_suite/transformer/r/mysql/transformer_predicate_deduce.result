@@ -3674,7 +3674,7 @@ select /*+no_rewrite, use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzq
 | A100013208 | A100013208 | 20605     | NULL    | NULL    |
 +------------+------------+-----------+---------+---------+
 
-## bug: https://work.aone.alibaba-inc.com/issue/32926523
+## bug:
 drop table if exists t1, t2;
 create table t1 (c1 int, c2 int, primary key(c1));
 create table t2 (c1 int, c2 int, primary key(c2));
@@ -3951,16 +3951,16 @@ Query Plan
 ===========================================
 |ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------
-|0 |HASH JOIN  |    |5       |5           |
-|1 | TABLE SCAN|t3  |4       |3           |
+|0 |HASH JOIN  |    |1       |5           |
+|1 | TABLE SCAN|t3  |1       |2           |
 |2 | TABLE SCAN|t1  |5       |2           |
 ===========================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t3.c1], [t3.c2]), filter(nil), rowset=256
       equal_conds([cast(t1.c1, DOUBLE(-1, -1)) = cast(t3.c2, DOUBLE(-1, -1))]), other_conds(nil)
-  1 - output([t3.c2], [t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([cast(t3.c2, DOUBLE(-1, -1)) IN (cast(10, DOUBLE(-1, -1)), cast(20, DOUBLE(-1, -1)),
-cast(40, DOUBLE(-1, -1)))]), rowset=256
+  1 - output([t3.c2], [t3.c1]), filter([cast(t3.c2, DOUBLE(-1, -1)) IN (cast(10, DOUBLE(-1, -1)), cast(20, DOUBLE(-1, -1)), cast(40, DOUBLE(-1, -1)))]),
+rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -4133,15 +4133,15 @@ Query Plan
 ===========================================
 |ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------
-|0 |HASH JOIN  |    |5       |6           |
-|1 | TABLE SCAN|t3  |4       |3           |
+|0 |HASH JOIN  |    |1       |5           |
+|1 | TABLE SCAN|t3  |3       |2           |
 |2 | TABLE SCAN|t1  |5       |2           |
 ===========================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t3.c1], [t3.c2]), filter(nil), rowset=256
       equal_conds([cast(t1.c1, DOUBLE(-1, -1)) = cast(t3.c2, DOUBLE(-1, -1))]), other_conds(nil)
-  1 - output([t3.c2], [t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([cast(t3.c2, DOUBLE(-1, -1)) != cast(20, DOUBLE(-1, -1))]), rowset=256
+  1 - output([t3.c2], [t3.c1]), filter([cast(t3.c2, DOUBLE(-1, -1)) != cast(20, DOUBLE(-1, -1))]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -4166,23 +4166,23 @@ Query Plan
 ===========================================
 |ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------
-|0 |HASH JOIN  |    |1       |4           |
-|1 | TABLE SCAN|t3  |1       |2           |
-|2 | TABLE SCAN|t2  |1       |2           |
+|0 |HASH JOIN  |    |1       |5           |
+|1 | TABLE SCAN|t2  |1       |2           |
+|2 | TABLE SCAN|t3  |3       |2           |
 ===========================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t2.c1]), filter(nil), rowset=256
       equal_conds([cast(t3.c2, DOUBLE(-1, -1)) = t2.c2]), other_conds(nil)
-  1 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0,
+  1 - output([t2.c2], [t2.c1]), filter([(T_OP_BTW, t2.c2, cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, -1)), DOUBLE(-1, -1)))]), rowset=256
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0,
 -1)), DOUBLE(-1, -1)))]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t2.c2], [t2.c1]), filter([(T_OP_BTW, t2.c2, cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, -1)), DOUBLE(-1, -1)))]), rowset=256
-      access([t2.c2], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t2.c2 between 10 and cast(100 as float);
 +------+------+
 | c1   | c1   |
@@ -4197,16 +4197,16 @@ Query Plan
 ===========================================
 |ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------
-|0 |HASH JOIN  |    |1       |5           |
-|1 | TABLE SCAN|t3  |1       |2           |
+|0 |HASH JOIN  |    |3       |5           |
+|1 | TABLE SCAN|t3  |3       |2           |
 |2 | TABLE SCAN|t2  |5       |2           |
 ===========================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t2.c1]), filter(nil), rowset=256
       equal_conds([cast(t3.c2, DOUBLE(-1, -1)) = t2.c2]), other_conds(nil)
-  1 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0,
--1)), DOUBLE(-1, -1)))]), rowset=256
+  1 - output([t3.c2], [t3.c1]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, -1)), DOUBLE(-1, -1)))]),
+rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true

@@ -72,8 +72,14 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
         } else if (OB_FAIL(ok_pkt.add_system_var(str_kv))) {
           LOG_WARN("failed to add system variable", K(str_kv), K(ret));
         } else {
+#ifndef NDEBUG
           LOG_TRACE("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
                K(session.get_sessid()), K(session.get_proxy_sessid()));
+#else
+          // for autocommit change record.
+          LOG_INFO("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
+               K(session.get_sessid()), K(session.get_proxy_sessid()), K(change_var.id_));
+#endif
         }
       } else {
         LOG_TRACE("sys var not actully changed", K(changed), K(change_var), K(new_val),
@@ -167,7 +173,8 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
                                         sql::ObSQLSessionInfo &sess,
                                         ObIArray<ObObjKV> *extra_info,
                                         ObIArray<obmysql::Obp20Encoder*> *extra_info_ecds,
-                                        bool is_new_extra_info)
+                                        bool is_new_extra_info,
+                                        bool need_sync_sys_var)
 {
   int ret = OB_SUCCESS;
   if (!sess.has_sess_info_modified()) {
@@ -186,7 +193,9 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
       if (OB_FAIL(sess.get_sess_encoder(info_type, encoder))) {
         LOG_WARN("failed to get session encoder", K(ret));
       } else {
-        if (encoder->is_changed_) {
+        if (info_type == SESSION_SYNC_SYS_VAR && !need_sync_sys_var) {
+          // do nothing.
+        } else if (encoder->is_changed_) {
           sess_size[i] = encoder->get_serialize_size(sess);
           size += ObProtoTransUtil::get_serialize_size(sess_size[i]);
           LOG_DEBUG("get seri size", K(sess_size[i]), K(encoder->get_serialize_size(sess)));
@@ -214,6 +223,8 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
         oceanbase::sql::SessionSyncInfoType encoder_type = (oceanbase::sql::SessionSyncInfoType)(i);
         if (OB_FAIL(sess.get_sess_encoder(encoder_type, encoder))) {
           LOG_WARN("failed to get session encoder", K(ret));
+        } else if (encoder_type == SESSION_SYNC_SYS_VAR && !need_sync_sys_var) {
+          // do nothing.
         } else if (encoder->is_changed_) {
           int16_t info_type = (int16_t)i;
           int32_t info_len = sess_size[i];
@@ -495,7 +506,7 @@ int ObMPUtils::add_session_info_on_connect(OMPKOK &okp, sql::ObSQLSessionInfo &s
 }
 
 // response _min_cluster_version on connect,
-// design doc: https://yuque.antfin.com/ob/sql/ellssc7bdef7hy8c?singleDoc#
+// design doc:
 int ObMPUtils::add_min_cluster_version(OMPKOK &okp, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;

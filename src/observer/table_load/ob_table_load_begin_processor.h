@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #pragma once
 
@@ -13,12 +13,15 @@ namespace oceanbase
 {
 namespace observer
 {
+class ObTableLoadParam;
+class ObTableLoadDDLParam;
+class ObTableLoadTableCtx;
 
 class ObTableLoadBeginP : public obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LOAD_BEGIN> >
 {
 public:
-  explicit ObTableLoadBeginP(const ObGlobalContext &gctx) : gctx_(gctx) {}
-  virtual ~ObTableLoadBeginP() = default;
+  explicit ObTableLoadBeginP(const ObGlobalContext &gctx);
+  virtual ~ObTableLoadBeginP();
 
 protected:
   int process() override;
@@ -26,13 +29,17 @@ protected:
 private:
   int check_user_access(const ObString &credential_str);
   int init_idx_array(const ObTableSchema *table_schema);
+  int create_table_ctx(const ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array,
+                       sql::ObSQLSessionInfo &session_info, ObTableLoadTableCtx *&table_ctx);
 
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadBeginP);
 private:
   const ObGlobalContext &gctx_;
   common::ObArenaAllocator allocator_;
   table::ObTableApiCredential credential_;
+  sql::ObSQLSessionInfo session_info_;
   common::ObArray<int64_t> idx_array_;
+  ObTableLoadTableCtx *table_ctx_;
 };
 
 class ObTableLoadPreBeginPeerP : public obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LOAD_PRE_BEGIN_PEER> >
@@ -48,6 +55,8 @@ protected:
 
 private:
   int check_user_access(const ObString &credential_str);
+  int create_table_ctx(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param,
+                       ObTableLoadTableCtx *&table_ctx);
 
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadPreBeginPeerP);
 private:

@@ -267,6 +267,10 @@ public:
     UNUSEDx(member_list, curr_replica_num, new_replica_num, timeout_us);
     return OB_SUCCESS;
   }
+  int force_set_as_single_replica()
+  {
+    return OB_SUCCESS;
+  }
   int add_member(const common::ObMember &member,
                  const int64_t paxos_replica_num,
                  const int64_t timeout_ns)

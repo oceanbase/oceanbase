@@ -425,21 +425,26 @@ int ObTabletTableStore::update_memtables()
 {
   int ret = OB_SUCCESS;
   ObTableHandleArray inc_memtables;
+  ObTimeGuard time_guard("ObTabletTableStore::update_memtables", 5 * 1000);
 
   if (OB_ISNULL(tablet_ptr_) || OB_ISNULL(tablet_ptr_->get_memtable_mgr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected tablet_ptr or memtable_mgr", K(ret), KP(tablet_ptr_));
   } else if (!tablet_ptr_->get_memtable_mgr()->has_memtable()) {
     LOG_INFO("no memtable in memtable mgr", K(ret));
+  } else if (FALSE_IT(time_guard.click("has_memtable"))) {
   } else if (OB_FAIL(tablet_ptr_->get_memtable_mgr()->get_all_memtables(inc_memtables))) {
     LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
+  } else if (FALSE_IT(time_guard.click("get_all_memtable"))) {
   } else if (OB_FAIL(memtables_.rebuild(inc_memtables))) {
     LOG_ERROR("failed to rebuild table store memtables", K(ret), K(inc_memtables), KPC(this));
+  } else if (FALSE_IT(time_guard.click("memtables_.rebuild"))) {
   } else {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
       LOG_WARN("failed to rebuild read cache", K(tmp_ret));
     }
+    time_guard.click("init_read_cache");
   }
   return ret;
 }
@@ -1329,7 +1334,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = major_tables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),
@@ -1344,7 +1349,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = minor_tables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),
@@ -1360,7 +1365,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = ddl_sstables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),
@@ -1375,7 +1380,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = ddl_mem_sstables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),
@@ -1390,7 +1395,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
       ObITable *table = extend_tables_[i];
       if (NULL != table && table->is_sstable()) {
         J_OBJ_START();
-        J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
+        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
              "tablet_id", table->get_key().tablet_id_,
              "scn_range", table->get_key().scn_range_,
              "ref", table->get_ref(),
@@ -1549,7 +1554,7 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
     LOG_WARN("failed to get minor tables", K(ret), K(tables_handle));
   } else if (OB_FAIL(check_minor_tables_continue_(minor_tables.count(), minor_tables.get_data()))) {
     LOG_WARN("minor tables is not continue", K(ret), K(param), K(minor_tables), K(old_store));
-  } else if (minor_tables.at(0)->get_start_scn() != tablet_ptr_->get_tablet_meta().start_scn_
+  } else if (minor_tables.at(0)->get_start_scn() > tablet_ptr_->get_tablet_meta().start_scn_
       || minor_tables.at(minor_tables.count() - 1)->get_end_scn() != tablet_ptr_->get_tablet_meta().clog_checkpoint_scn_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(minor_tables), K(param), K(old_store));

@@ -356,18 +356,6 @@ private:
                                        const uint64_t tenant_id,
                                        const uint64_t table_id,
                                        const ObSqlString *extra_condition = NULL);
-  int delete_from_all_table_stat_history(ObISQLClient &sql_client,
-                                         const uint64_t tenant_id,
-                                         const uint64_t table_id,
-                                         ObSqlString *extra_condition = NULL);
-  int delete_from_all_column_stat_history(ObISQLClient &sql_client,
-                                          const uint64_t tenant_id,
-                                          const uint64_t table_id,
-                                          ObSqlString *extra_condition = NULL);
-  int delete_from_all_histogram_stat_history(ObISQLClient &sql_client,
-                                             const uint64_t tenant_id,
-                                             const uint64_t table_id,
-                                             ObSqlString *extra_condition = NULL);
   int delete_from_all_optstat_user_prefs(ObISQLClient &sql_client,
                                          const uint64_t tenant_id,
                                          const uint64_t table_id);

@@ -269,7 +269,8 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
     for (int i = 0; i < batch_count && OB_SUCC(ret); ++i) {
       if (need_fill_batch_info) {
         if (OB_FAIL(ctx.fill_px_batch_info(arg_.get_sqc_handler()->
-          get_sqc_init_arg().sqc_.get_rescan_batch_params(), i))) {
+          get_sqc_init_arg().sqc_.get_rescan_batch_params(), i,
+          arg_.des_phy_plan_->get_expr_frame_info().rt_exprs_))) {
           LOG_WARN("fail to fill batch info", K(ret));
         } else if (OB_FAIL(arg_.get_sqc_handler()->get_sub_coord().
           get_sqc_ctx().gi_pump_.regenerate_gi_task())) {
@@ -463,8 +464,8 @@ int ObPxTaskProcess::do_process()
       // nop
     } else if (IS_INTERRUPTED()) {
       //当前是被QC中断的，不再向QC发送中断，退出即可。
-    } else if (ret != OB_TIMEOUT &&
-        arg_.get_sqc_handler()->get_sqc_init_arg().sqc_.is_ignore_vtable_error()) {
+    } else if (arg_.get_sqc_handler()->get_sqc_init_arg().sqc_.is_ignore_vtable_error()
+               && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
       // 忽略虚拟表错误
     } else {
       (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret);
@@ -550,6 +551,7 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
         LOG_WARN("the partition-wise join's subplan contain a gi operator", K(*gi), K(ret));
       } else {
         input->set_worker_id(task_id_);
+        input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
         if (ObGranuleUtil::pwj_gi(gi->gi_attri_flag_)) {
           pw_gi_spec_ = gi;
           on_set_tscs_ = true;
@@ -585,14 +587,15 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
     }
   } else if (IS_PX_BLOOM_FILTER(op.get_type())) {
     ObJoinFilterSpec *filter_spec = reinterpret_cast<ObJoinFilterSpec *>(&op);
-    if (filter_spec->is_shared_join_filter()) {
-      /*do nothing*/
-    } else if (OB_ISNULL(kit->input_)) {
+    if (OB_ISNULL(kit->input_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("operator is NULL", K(ret), K(op.id_), KP(kit));
     } else {
       ObJoinFilterOpInput *input = static_cast<ObJoinFilterOpInput *>(kit->input_);
-      input->set_task_id(task_id_);
+      input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
+      if (!filter_spec->is_shared_join_filter()) {
+        input->set_task_id(task_id_);
+      }
     }
   } else if (PHY_TEMP_TABLE_INSERT == op.type_) {
     ObOperatorKit *kit = ctx.get_operator_kit(op.id_);

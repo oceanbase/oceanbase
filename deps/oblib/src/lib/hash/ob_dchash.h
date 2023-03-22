@@ -277,23 +277,23 @@ public:
   }
 
   int insert(const key_t& key, Node* node) {
+#ifdef ENABLE_DEBUG_LOG
     common::ObTimeGuard tg("dc_hash::insert", 100 * 1000);
+#endif
     int err = 0;
     HashNode* pre = NULL;
     Node key_node(key);
     {
       Handle handle(*this, err, 1);
-      tg.click();
       if (0 == (err = handle.search_pre(key_node.hash_, pre))) {
-        tg.click();
         err = _ol_insert((Node*)pre, node);
-        tg.click();
       }
     }
-    tg.click();
+#ifdef ENABLE_DEBUG_LOG
     if (tg.get_diff() > 100000) {
       _OB_LOG(INFO, "ObDCHash insert cost too much time, click diff (%s)", to_cstring(tg));
     }
+#endif
 
     return err;
   }

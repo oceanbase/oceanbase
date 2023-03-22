@@ -441,7 +441,7 @@ t2	CREATE TABLE `t2` (
 drop table t1;
 drop table t2;
 
-## bugfix#https://work.aone.alibaba-inc.com/issue/37018706
+## bugfix#
 SELECT CASE 'A' WHEN 0 THEN 0 ELSE 1 END VAL;
 +-----+
 | VAL |

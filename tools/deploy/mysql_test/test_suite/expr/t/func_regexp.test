@@ -401,7 +401,7 @@ select * from t1 where name regexp '(A[1])|(A[2])|(A[3])|(A[4])|(A[5])|(A[6])|(A
 select * from t1 where name regexp 'CC[13]1|a{21}[23][EO][123][Es][12]a{15}aa[34][EW]aaaaaaa[X]a';
 select * from t1 where name regexp 'a?b';
 
-##bug:https://aone.alibaba-inc.com/req/34761589
+##bug:
 select * from t1 where name regexp 'a' "bc" '|de';
 select * from t1 where name regexp "a" '|' "b" '|' "c";
 select * from t1 where name regexp "a"'()'"b";
@@ -437,7 +437,7 @@ insert into t1 values('abcde_');
  select a as c1u from t1 where a rlike 'ab\_def';
 drop table t1;
 
-##bug:https://work.aone.alibaba-inc.com/issue/25186566
+##bug:
 --disable_warnings
 drop table if exists t;
 --enable_warnings
@@ -455,3 +455,30 @@ create table t1(c1 blob);
 insert into t1 values('UNPRESS123');
 insert into t1 values('UNPRESS456');
 select * from t1 where c1 regexp '^U';
+
+
+
+##bug48378677
+set names gbk;
+select 'a' collate gbk_bin regexp 'A';
+select 'a' collate gbk_chinese_ci regexp 'A';
+select 'a' regexp 'A' collate gbk_chinese_ci;
+select 'a' regexp 'A' collate gbk_bin;
+select 'a' collate gbk_bin regexp 'A' collate gbk_bin;
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_chinese_ci;
+--error 1267
+select 'a' collate gbk_bin regexp 'A' collate gbk_chinese_ci;
+--error 1267
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_bin;
+
+set names latin1;
+select 'a' collate latin1_bin regexp 'A';
+select 'a' collate latin1_swedish_ci regexp 'A';
+select 'a' regexp 'A' collate latin1_swedish_ci;
+select 'a' regexp 'A' collate latin1_bin;
+select 'a' collate latin1_bin regexp 'A' collate latin1_bin;
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci;
+--error 1267
+select 'a' collate latin1_bin regexp 'A' collate latin1_swedish_ci;
+--error 1267
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_bin;

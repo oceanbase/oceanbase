@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -26,7 +26,7 @@ int ObTableLoadFinishP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -67,7 +67,7 @@ int ObTableLoadPreMergePeerP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -102,7 +102,7 @@ int ObTableLoadStartMergePeerP::process()
     LOG_WARN("fail to check_user_access", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObTableLoadKey key(credential_.tenant_id_, arg_.table_id_);
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {

@@ -1249,34 +1249,37 @@ int ObAdminUpgradeVirtualSchema::execute(
 
   // remove tables not exist on hard code tables
   ObSchemaGetterGuard schema_guard;
-  ObArray<const ObTableSchema *> in_mem_tables;
+  ObArray<uint64_t> tids;
   if (FAILEDx(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("get_schema_guard failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id, in_mem_tables))) {
-    LOG_WARN("get_table_schemas_in_tenant failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id, tids))) {
+    LOG_WARN("get_table_ids_in_tenant failed", KR(ret), K(tenant_id));
   } else {
-    FOREACH_CNT_X(in_mem_table, in_mem_tables, OB_SUCC(ret)) {
-      if (OB_ISNULL(in_mem_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("in mem table is null", KR(ret), K(tenant_id));
-      } else if (!is_inner_table((*in_mem_table)->get_table_id())
-                 || is_sys_table((*in_mem_table)->get_table_id())) {
+    FOREACH_CNT_X(tid, tids, OB_SUCC(ret)) {
+      const ObTableSchema *in_mem_table = NULL;
+      if (!is_inner_table(*tid) || is_sys_table(*tid)) {
         continue;
-      }
-      bool exist = false;
-      FOREACH_CNT_X(hard_code_table, hard_code_tables, OB_SUCC(ret) && !exist) {
-        if (OB_ISNULL(hard_code_table)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("hard code table is null", KR(ret), K(tenant_id));
-        } else if ((*in_mem_table)->get_table_id() == hard_code_table->get_table_id()) {
-          exist = true;
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, *tid, in_mem_table))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(*tid));
+      } else if (OB_ISNULL(in_mem_table)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table not exist", KR(ret), K(tenant_id), K(*tid));
+      } else {
+        bool exist = false;
+        FOREACH_CNT_X(hard_code_table, hard_code_tables, OB_SUCC(ret) && !exist) {
+          if (OB_ISNULL(hard_code_table)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("hard code table is null", KR(ret), K(tenant_id));
+          } else if (in_mem_table->get_table_id() == hard_code_table->get_table_id()) {
+            exist = true;
+          }
         }
-      }
-      if (!exist) {
-        if (FAILEDx(ctx_.ddl_service_->drop_inner_table(**in_mem_table))) {
-          LOG_WARN("drop table schema failed", KR(ret), K(tenant_id), KPC(*in_mem_table));
-        } else if (OB_FAIL(ctx_.ddl_service_->refresh_schema(tenant_id))) {
-          LOG_WARN("refresh_schema failed", KR(ret), K(tenant_id));
+        if (!exist) {
+          if (FAILEDx(ctx_.ddl_service_->drop_inner_table(*in_mem_table))) {
+            LOG_WARN("drop table schema failed", KR(ret), K(tenant_id), KPC(in_mem_table));
+          } else if (OB_FAIL(ctx_.ddl_service_->refresh_schema(tenant_id))) {
+            LOG_WARN("refresh_schema failed", KR(ret), K(tenant_id));
+          }
         }
       }
     }

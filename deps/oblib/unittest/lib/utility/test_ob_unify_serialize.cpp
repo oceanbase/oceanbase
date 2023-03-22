@@ -504,6 +504,7 @@ TEST_F(TestObUnifySerialize, CNested2)
   EXPECT_EQ(pos, n.get_serialize_size());
 }
 
+/*
 TEST_F(TestObUnifySerialize, CNestedCompatibility)
 {
   // encode a CNested object
@@ -565,6 +566,7 @@ TEST_F(TestObUnifySerialize, CNestedCompatibility)
     EXPECT_EQ(nn.et_, ns.et_);
   }
 }
+*/
 
 TEST_F(TestObUnifySerialize, Dummy)
 {
@@ -587,7 +589,6 @@ TEST_F(TestObUnifySerialize, Dummy)
 struct COptInt
 {
   OB_UNIS_VERSION(1);
-
 public:
   COptInt()
       : valid_(true), value_(0)
@@ -649,7 +650,7 @@ TEST_F(TestObUnifySerialize, OptionallySerialize)
 // unis compatibility support for refactor
 class CCompat {
   OB_UNIS_VERSION(1);
-  OB_UNIS_COMPAT(VER(2, 2, 3));
+  //OB_UNIS_COMPAT(VER(2, 2, 3));
 
 public:
   bool operator==(const CCompat &rhs) const {
@@ -661,9 +662,9 @@ public:
   int i2_;
 };
 
-OB_SERIALIZE_MEMBER(CCompat, i1_, i2_);
-OB_SERIALIZE_MEMBER_COMPAT(VER(2, 2, 3), CCompat, i2_, i1_);
-
+//OB_SERIALIZE_MEMBER(CCompat, i1_, i2_);
+//OB_SERIALIZE_MEMBER_COMPAT(VER(2, 2, 3), CCompat, i2_, i1_);
+/*
 class CCompat2 : public CCompat {
   OB_UNIS_VERSION(1);
   OB_UNIS_COMPAT(VER(2, 2, 3));
@@ -781,6 +782,7 @@ TEST_F(TestObUnifySerialize, Compat)
   }
 
 }
+*/
 
 int main(int argc, char *argv[])
 {

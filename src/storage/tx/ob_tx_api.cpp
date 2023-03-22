@@ -38,11 +38,11 @@
 // ::rollback to savepoint::
 //   1. advance In-Transaction-Clock to establish operation relation of Rollback-After-Write
 // -------------------------------------------------------------------------------------------
-#define TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE \
+#define TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(end_txn)                \
   do {                                                                  \
     bool inv = false;                                                   \
     if (tx.is_xa_trans()) {                                             \
-      inv = tx.xa_start_addr_ != self_;                                 \
+      inv = end_txn ? tx.addr_ != self_ : tx.xa_start_addr_ != self_;   \
     } else {                                                            \
       inv = tx.addr_ != self_;                                          \
     }                                                                   \
@@ -64,6 +64,7 @@ inline void ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
   tx.tenant_id_ = tenant_id_;
   tx.addr_      = self_;
   tx.sess_id_   = session_id;
+  tx.assoc_sess_id_ = session_id;
   tx.alloc_ts_  = ObClockGenerator::getClock();
   tx.expire_ts_ = INT64_MAX;
   tx.op_sn_     = 1;
@@ -94,17 +95,19 @@ int ObTransService::finalize_tx_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(tx.lock_);
-  tx.flags_.RELEASED_ = true;
-  if (tx.is_tx_active() && !tx.flags_.REPLICA_) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "release tx when tx is active", K(ret), KPC(this), K(tx));
-    tx.print_trace_();
-  } else if (tx.is_committing()) {
-    TRANS_LOG(WARN, "release tx when tx is committing", KPC(this), K(tx));
-  }
-  tx.cancel_commit_cb();
-  if (tx.tx_id_.is_valid()) {
-    tx_desc_mgr_.remove(tx);
+  if (!tx.flags_.RELEASED_) {
+    tx.flags_.RELEASED_ = true;
+    if (tx.is_tx_active() && !tx.flags_.REPLICA_) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "release tx when tx is active", K(ret), KPC(this), K(tx));
+      tx.print_trace_();
+    } else if (tx.is_committing()) {
+      TRANS_LOG(WARN, "release tx when tx is committing", KPC(this), K(tx));
+    }
+    tx.cancel_commit_cb();
+    if (tx.tx_id_.is_valid()) {
+      tx_desc_mgr_.remove(tx);
+    }
   }
   return ret;
 }
@@ -150,7 +153,7 @@ int ObTransService::release_tx(ObTxDesc &tx)
 #endif
       tx_desc_mgr_.revert(tx);
     } else {
-      ret = finalize_tx_(tx);
+      finalize_tx_(tx);
       tx_desc_mgr_.revert(tx);
     }
   }
@@ -270,7 +273,7 @@ int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param)
 
 int ObTransService::rollback_tx(ObTxDesc &tx)
 {
-  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE
+  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(true)
   int ret = OB_SUCCESS;
   TX_STAT_ROLLBACK_INC
   ObSpinLockGuard guard(tx.lock_);
@@ -405,7 +408,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
                                      ObITxCallback &cb,
                                      const ObString *trace_info)
 {
-  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE
+  TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(true)
   int ret = OB_SUCCESS;
   tx.lock_.lock();
   if (tx.commit_ts_ <= 0) {
@@ -582,9 +585,7 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
                                                    snapshot.uncertain_bound_))) {
     TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
   } else {
-    if (tx.is_can_elr() && MTL_IS_PRIMARY_TENANT()) {
-      snapshot.core_.version_ = std::max(snapshot.core_.version_, tx_version_mgr_.get_max_commit_ts(true));
-    }
+    // do nothing
   }
   if (OB_SUCC(ret)) {
     snapshot.source_ = ObTxReadSnapshot::SRC::GLOBAL;
@@ -703,6 +704,8 @@ int ObTransService::get_ls_read_snapshot_version(const share::ObLSID &local_ls_i
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_WEAK_READ_SNAPSHOT_DELAY_US);
+
 int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_time,
                                                    SCN &snapshot)
 {
@@ -721,7 +724,8 @@ int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_
     // do nothing
   }
   if (OB_SUCC(ret)) {
-    const int64_t snapshot_barrier = ObTimeUtility::current_time() - max_read_stale_time;
+    const int64_t snapshot_barrier = ObTimeUtility::current_time() - max_read_stale_time
+                                      + abs(ERRSIM_WEAK_READ_SNAPSHOT_DELAY_US);
     if (snapshot.convert_to_ts() < snapshot_barrier) {
       TRANS_LOG(WARN, "weak read snapshot too stale", K(snapshot),
                 K(snapshot_barrier), "delta", (snapshot_barrier - snapshot.convert_to_ts()));
@@ -1024,7 +1028,10 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
       break;
     case ObTxDesc::State::IMPLICIT_ACTIVE:
       tx.release_implicit_savepoint(savepoint);
-      if (!tx.has_implicit_savepoint() && tx.active_scn_ >= savepoint) {
+      if (!tx.flags_.REPLICA_             // on tx start node
+          && !tx.has_implicit_savepoint() // to first savepoint
+          && tx.active_scn_ >= savepoint  // rollback all dirty state
+          && !tx.has_extra_state_()) {    // hasn't explicit savepoint or serializable snapshot
         reset_tx = true;
       } else {
         normal_rollback = true;
@@ -1091,6 +1098,7 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                       OB_Y(ret), OB_Y(savepoint), OB_Y(expire_ts),
                       OB_ID(time_used), elapsed_us,
                       OB_ID(arg), (void*)extra_touched_ls,
+                      OB_ID(tag1), reset_tx,
                       OB_ID(opid), tx.op_sn_,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
@@ -1135,7 +1143,10 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
   return ret;
 }
 
-int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &savepoint)
+int ObTransService::create_explicit_savepoint(ObTxDesc &tx,
+                                              const ObString &savepoint,
+                                              const uint32_t session_id,
+                                              const bool user_create)
 {
   int ret = OB_SUCCESS;
   int64_t scn = 0;
@@ -1143,7 +1154,7 @@ int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &save
   tx.inc_op_sn();
   scn = ObSequence::inc_and_get_max_seq_no();
   ObTxSavePoint sp;
-  if (OB_SUCC(sp.init(scn, savepoint))) {
+  if (OB_SUCC(sp.init(scn, savepoint, session_id, user_create))) {
     if (OB_FAIL(tx.savepoints_.push_back(sp))) {
       TRANS_LOG(WARN, "push savepoint failed", K(ret));
     } else if (!tx.tx_id_.is_valid() && OB_FAIL(tx_desc_mgr_.add(tx))) {
@@ -1154,7 +1165,7 @@ int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &save
       ARRAY_FOREACH_X(tx.savepoints_, i, cnt, i != cnt - 1) {
         ObTxSavePoint &it = tx.savepoints_.at(cnt - 2 - i);
         if (it.is_stash()) { break; }
-        if (it.is_savepoint() && it.name_ == savepoint) {
+        if (it.is_savepoint() && it.name_ == savepoint && it.session_id_ == session_id) {
           TRANS_LOG(TRACE, "move savepoint", K(savepoint), "from", it.scn_, "to", scn, K(tx));
           it.release();
           break; // assume only one if exist
@@ -1180,7 +1191,8 @@ int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &save
 // 2. invalidate savepoint and snapshot after the savepoint Node.
 int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
                                                    const ObString &savepoint,
-                                                   const int64_t expire_ts)
+                                                   const int64_t expire_ts,
+                                                   const uint32_t session_id)
 {
   int ret = OB_SUCCESS;
   auto start_ts = ObTimeUtility::current_time();
@@ -1192,7 +1204,7 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
       const ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
       TRANS_LOG(TRACE, "sp iterate:", K(it));
       if (it.is_stash()) { break; }
-      if (it.is_savepoint() && it.name_ == savepoint) {
+      if (it.is_savepoint() && it.name_ == savepoint && it.session_id_ == session_id) {
         sp_scn = it.scn_;
         break;
       }
@@ -1242,7 +1254,7 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
 
 // impl note
 // registered snapshot keep valid
-int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &savepoint)
+int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &savepoint, const uint32_t session_id)
 {
   int ret = OB_SUCCESS;
   bool hit = false;
@@ -1252,7 +1264,7 @@ int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &sav
     tx.inc_op_sn();
     ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
       ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
-      if (it.is_savepoint() && it.name_ == savepoint) {
+      if (it.is_savepoint() && it.name_ == savepoint && it.session_id_ == session_id) {
         hit = true;
         sp_id = it.scn_;
         break;
@@ -1269,7 +1281,7 @@ int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &sav
           it.release();
         }
       }
-      TRANS_LOG(TRACE, "release savepoint", K(savepoint), K(sp_id), K(tx));
+      TRANS_LOG(TRACE, "release savepoint", K(savepoint), K(sp_id), K(session_id), K(tx));
     }
   }
   tx.state_change_flags_.EXTRA_CHANGED_ = true;
@@ -1288,7 +1300,7 @@ int ObTransService::create_stash_savepoint(ObTxDesc &tx, const ObString &name)
   tx.inc_op_sn();
   auto seq_no = ObSequence::inc_and_get_max_seq_no();
   ObTxSavePoint sp;
-  if (OB_SUCC(sp.init(seq_no, name, true))) {
+  if (OB_SUCC(sp.init(seq_no, name, 0, false, true))) {
     if (OB_FAIL(tx.savepoints_.push_back(sp))) {
       TRANS_LOG(WARN, "push savepoint failed", K(ret));
     }
@@ -1391,8 +1403,28 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
   if (OB_FAIL(get_tx_ctx_(ls, tx_id, ctx))) {
     if (OB_NOT_MASTER == ret) {
     } else if (OB_TRANS_CTX_NOT_EXIST == ret && verify_epoch <= 0) {
-      if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx))) {
-        TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
+      int tx_state = ObTxData::RUNNING;
+      share::SCN commit_version;
+      if (OB_FAIL(get_tx_state_from_tx_table_(ls, tx_id, tx_state, commit_version))) {
+        TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(ls), K(tx_id));
+        if (OB_TRANS_CTX_NOT_EXIST == ret) {
+          if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx))) {
+            TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
+          }
+        }
+      } else {
+        switch (tx_state) {
+        case ObTxData::COMMIT:
+          ret = OB_TRANS_COMMITED;
+          break;
+        case ObTxData::ABORT:
+          ret = OB_TRANS_KILLED;
+          break;
+        case ObTxData::RUNNING:
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "tx in-progress but ctx miss", K(ret), K(tx_state), K(tx_id), K(ls));
+        }
       }
     } else {
       TRANS_LOG(WARN, "get transaction context error", K(ret), K(tx_id), K(ls));
@@ -1517,7 +1549,7 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   int64_t start_ts = ObClockGenerator::getClock();
   retries = 0;
-  int64_t min_retry_intval = max_retry_intval / 3;
+  int64_t min_retry_intval = 10 * 1000; // 10 ms
   expire_ts = std::max(ObTimeUtility::current_time() + MIN_WAIT_TIME, expire_ts);
   while (OB_SUCC(ret)) {
     int64_t retry_intval = std::min(min_retry_intval * (1 + retries), max_retry_intval);
@@ -1625,6 +1657,15 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
   }
   // statistic
   if (tx.is_tx_end()) {
+    int64_t trans_used_time_us = 0;
+    if (tx.active_ts_ > 0) { // skip txn has not active
+      if (tx.finish_ts_ <= 0) {
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx finish ts is unset", K(tx));
+      } else if (tx.finish_ts_ > tx.active_ts_) {
+        trans_used_time_us = tx.finish_ts_ - tx.active_ts_;
+        TX_STAT_TIME_USED(trans_used_time_us);
+      }
+    }
     if (tx.is_committed()) {
       TX_STAT_COMMIT_INC;
       TX_STAT_COMMIT_TIME_USED(tx.finish_ts_ - tx.commit_ts_);
@@ -1640,15 +1681,13 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
     }
     switch(tx.parts_.count()) {
     case 0:  TX_STAT_READONLY_INC break;
-    case 1:  TX_STAT_LOCAL_INC break;
-    default: TX_STAT_DIST_INC;
-    }
-    if (tx.active_ts_ > 0) { // skip txn has not active
-      if (tx.finish_ts_ <= 0) {
-        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx finish ts is unset", K(tx));
-      } else if (tx.finish_ts_ > tx.active_ts_) {
-        TX_STAT_TIME_USED(tx.finish_ts_ - tx.active_ts_);
-      }
+    case 1:
+      TX_STAT_LOCAL_INC;
+      TX_STAT_LOCAL_TOTAL_TIME_USED(trans_used_time_us);
+      break;
+    default:
+      TX_STAT_DIST_INC;
+      TX_STAT_DIST_TOTAL_TIME_USED(trans_used_time_us);
     }
   }
   // release all savepoints
@@ -1678,7 +1717,12 @@ int ObTransService::start_epoch_(ObTxDesc &tx)
     TRANS_LOG(INFO, "tx start new epoch", K(ret), K(tx));
   }
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, start_epoch, OB_Y(ret), OB_ID(opid), tx.op_sn_);
+  int tlog_truncate_cnt = 0;
+  if (OB_SUCC(ret) && tlog.count() > 50) {
+    tlog_truncate_cnt = tlog.count() - 10;
+    tlog.set_count(10);
+  }
+  REC_TRANS_TRACE_EXT(&tlog, start_epoch, OB_Y(ret), OB_ID(opid), tx.op_sn_, OB_ID(tag1), tlog_truncate_cnt);
   return ret;
 }
 
@@ -1748,7 +1792,10 @@ int ObTransService::is_tx_active(const ObTransID &tx_id, bool &active)
   }
   return ret;
 }
-int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, const uint32_t session_id)
+int ObTransService::sql_stmt_start_hook(const ObXATransID &xid,
+                                        ObTxDesc &tx,
+                                        const uint32_t session_id,
+                                        const uint32_t real_session_id)
 {
   int ret = OB_SUCCESS;
   if (tx.is_xa_trans()) {
@@ -1760,7 +1807,7 @@ int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, co
         TRANS_LOG(WARN, "register tx fail", K(ret), K_(tx.tx_id), K(xid), KP(&tx));
       } else { registed = true; }
     }
-    if (OB_SUCC(ret) && OB_FAIL(MTL(ObXAService*)->start_stmt(xid, tx))) {
+    if (OB_SUCC(ret) && OB_FAIL(MTL(ObXAService*)->start_stmt(xid, real_session_id, tx))) {
       TRANS_LOG(WARN, "xa trans start stmt failed", K(ret), K_(tx.xid), K(xid));
       ObGlobalTxType global_tx_type = tx.get_global_tx_type(xid);
       if (ObGlobalTxType::DBLINK_TRANS == global_tx_type && OB_TRANS_XA_BRANCH_FAIL == ret) {
@@ -1773,7 +1820,9 @@ int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, co
           TRANS_LOG(WARN, "need rollback", K(ret), K(global_tx_type), K(xid));
         }
       }
-    } else {
+    } else if (tx.is_xa_tightly_couple()) {
+      // loosely couple mode txn-route use session_id to detect xa-start node's alive
+      // so, can not overwrite session_id
       tx.set_sessid(session_id);
     }
     if (OB_FAIL(ret) && registed) {

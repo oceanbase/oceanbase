@@ -64,7 +64,7 @@ public:
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
+  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
   virtual void flt_set_task_span_tag() const override;

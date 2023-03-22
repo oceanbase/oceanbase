@@ -584,6 +584,15 @@ int ObTmpMacroBlock::free(const int32_t start_page_id, const int32_t page_nums)
   return ret;
 }
 
+int64_t ObTmpMacroBlock::get_used_page_nums() const
+{
+  int64_t used_page_nums = 0;
+  for (int64_t i = using_extents_.count() - 1; i >= 0; --i) {
+    used_page_nums += std::ceil(using_extents_.at(i)->get_offset() / DEFAULT_PAGE_SIZE);
+  }
+  return used_page_nums;
+}
+
 void ObTmpMacroBlock::set_io_desc(const common::ObIOFlag &io_desc)
 {
   io_desc_ = io_desc;
@@ -1639,6 +1648,17 @@ int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStoreHand
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret), K(tenant_id));
   } else {
+    SpinRLockGuard guard(lock_);
+    if (OB_FAIL(tenant_file_stores_.get_refactored(tenant_id, handle))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        STORAGE_LOG(DEBUG, "ObTmpFileStore get tenant store failed", K(ret), K(tenant_id));
+      } else {
+        STORAGE_LOG(WARN, "ObTmpFileStore get tenant store failed", K(ret), K(tenant_id));
+      }
+    }
+  }
+
+  if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
     SpinWLockGuard guard(lock_);
     if (OB_FAIL(tenant_file_stores_.get_refactored(tenant_id, handle))) {
       if (OB_HASH_NOT_EXIST == ret) {

@@ -88,30 +88,118 @@ int ObCgroupCtrl::init()
   return ret;
 }
 
+int ObCgroupCtrl::which_type_dir_(const char *curr_path, int &type)
+{
+  DIR *dir = nullptr;
+  struct dirent *subdir = nullptr;
+  char sub_path[PATH_BUFSIZE];
+  bool tmp_result = false;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(FileDirectoryUtils::is_directory(curr_path, tmp_result))) {
+    LOG_WARN("judge is directory failed", K(curr_path));
+  } else if (false == tmp_result) {
+    type = NOT_DIR;
+  } else if (NULL == (dir = opendir(curr_path))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("open dir failed", K(curr_path));
+  } else {
+    type = LEAF_DIR;
+    while (OB_SUCCESS == ret && NULL != (subdir = readdir(dir))) {
+      tmp_result = false;
+      if (0 == strcmp(subdir->d_name, ".") || 0 == strcmp(subdir->d_name, "..")) {
+        // skip . and ..
+      } else {
+        snprintf(sub_path, PATH_BUFSIZE, "%s/%s", curr_path, subdir->d_name);
+        if (OB_FAIL(FileDirectoryUtils::is_directory(sub_path, tmp_result))) {
+          LOG_WARN("judge is directory failed", K(sub_path));
+        } else if (true == tmp_result) {
+          type = REGULAR_DIR;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCgroupCtrl::remove_dir_(const char *curr_dir)
+{
+  int ret = OB_SUCCESS;
+  char group_task_path[PATH_BUFSIZE];
+  char parent_task_path[PATH_BUFSIZE];
+  snprintf(group_task_path, PATH_BUFSIZE, "%s/tasks", curr_dir);
+  snprintf(parent_task_path, PATH_BUFSIZE, "%s/../tasks", curr_dir);
+  FILE* group_task_file = nullptr;
+  if (OB_ISNULL(group_task_file = fopen(group_task_path, "r"))) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("open group failed", K(ret), K(group_task_path), K(errno), KERRMSG);
+  } else {
+    char tid_buf[VALUE_BUFSIZE];
+    while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
+      if (OB_FAIL(write_string_to_file_(parent_task_path, tid_buf))) {
+        LOG_WARN("remove tenant task failed", K(ret), K(parent_task_path));
+        break;
+      }
+    }
+    fclose(group_task_file);
+  }
+  if (OB_SUCC(ret) && OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
+    LOG_WARN("remove group directory failed", K(ret), K(curr_dir));
+  } else {
+    LOG_INFO("remove group directory success", K(curr_dir));
+  }
+  return ret;
+}
+
+int ObCgroupCtrl::recursion_remove_group_(const char *curr_path)
+{
+  int ret = OB_SUCCESS;
+  int type = NOT_DIR;
+  if (OB_FAIL(which_type_dir_(curr_path, type))) {
+    LOG_WARN("check dir type failed", K(ret), K(curr_path));
+  } else if (NOT_DIR == type) {
+    // not directory, skip
+  } else if (LEAF_DIR == type) {
+    if (OB_FAIL(remove_dir_(curr_path))) {
+      LOG_WARN("remove sub group directory failed", K(ret), K(curr_path));
+    } else {
+      LOG_INFO("remove sub group directory success", K(curr_path));
+    }
+  } else {
+    DIR *dir = nullptr;
+    if (NULL == (dir = opendir(curr_path))){
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("open dir failed", K(curr_path));
+    } else {
+      struct dirent *subdir = nullptr;
+      char sub_path[PATH_BUFSIZE];
+      while (OB_SUCCESS == ret && (NULL != (subdir = readdir(dir)))) {
+        if (0 == strcmp(subdir->d_name, ".") || 0 == strcmp(subdir->d_name, "..")) {
+          // skip . and ..
+        } else if (PATH_BUFSIZE <= snprintf(sub_path, PATH_BUFSIZE, "%s/%s", curr_path, subdir->d_name)) { // to prevent infinite recursion when path string is over size and cut off
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sub_path is oversize has been cut off", K(ret), K(sub_path), K(curr_path));
+        } else if (OB_FAIL(recursion_remove_group_(sub_path))) {
+            LOG_WARN("remove path failed", K(sub_path));
+        }
+      }
+      if (OB_FAIL(remove_dir_(curr_path))) {
+        LOG_WARN("remove sub group directory failed", K(ret), K(curr_path));
+      } else {
+        LOG_INFO("remove sub group directory success", K(curr_path));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObCgroupCtrl::remove_tenant_cgroup(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   char tenant_path[PATH_BUFSIZE];
-  char tenant_task_path[PATH_BUFSIZE];
-  char other_task_path[PATH_BUFSIZE];
-  snprintf(tenant_path, PATH_BUFSIZE, "%s/tenant_%04lu", root_cgroup_, tenant_id);
-  snprintf(tenant_task_path, PATH_BUFSIZE, "%s/tenant_%04lu/tasks", root_cgroup_, tenant_id);
-  snprintf(other_task_path, PATH_BUFSIZE, "%s/tasks", other_cgroup_);
-  FILE* tenant_task_file = nullptr;
-  if (OB_ISNULL(tenant_task_file = fopen(tenant_task_path, "r"))) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("open tenant task path failed", K(ret), K(tenant_task_path), K(errno), KERRMSG);
-  } else {
-    char tid_buf[VALUE_BUFSIZE];
-    while (fgets(tid_buf, VALUE_BUFSIZE, tenant_task_file)) {
-      if (OB_FAIL(write_string_to_file_(other_task_path, tid_buf))) {
-        LOG_WARN("remove tenant task failed", K(ret), K(other_task_path), K(tenant_id));
-        break;
-      }
-    }
-    fclose(tenant_task_file);
-  }
-  if (OB_SUCC(ret) && OB_FAIL(FileDirectoryUtils::delete_directory(tenant_path))) {
+  if (OB_FAIL(get_group_path(tenant_path, PATH_BUFSIZE, tenant_id))) {
+    LOG_WARN("fail get group path", K(tenant_id), K(ret));
+  } else if (OB_FAIL(recursion_remove_group_(tenant_path))) {
     LOG_WARN("remove tenant cgroup directory failed", K(ret), K(tenant_path), K(tenant_id));
   } else {
     LOG_INFO("remove tenant cgroup directory success", K(tenant_path), K(tenant_id));
@@ -186,14 +274,20 @@ int ObCgroupCtrl::get_group_path(
   int ret = OB_SUCCESS;
   char *group_name = nullptr;
   share::ObGroupName g_name;
+  char tenant_path[PATH_BUFSIZE];
+  if (is_meta_tenant(tenant_id)) {
+    snprintf(tenant_path, PATH_BUFSIZE, "tenant_%04lu/tenant_%04lu", gen_user_tenant_id(tenant_id), tenant_id);
+  } else {
+    snprintf(tenant_path, PATH_BUFSIZE, "tenant_%04lu", tenant_id);
+  }
   if (INT64_MAX == group_id) {
-    snprintf(group_path, path_bufsize, "%s/tenant_%04lu",
-              root_cgroup_, tenant_id);
+    snprintf(group_path, path_bufsize, "%s/%s",
+              root_cgroup_, tenant_path);
   } else if (group_id < OBCG_MAXNUM) {
     ObCgSet &set = ObCgSet::instance();
     group_name = const_cast<char*>(set.name_of_id(group_id));
-    snprintf(group_path, path_bufsize, "%s/tenant_%04lu/%s",
-          root_cgroup_, tenant_id, group_name);
+    snprintf(group_path, path_bufsize, "%s/%s/%s",
+          root_cgroup_, tenant_path, group_name);
   } else if (OB_FAIL(get_group_info_by_group_id(tenant_id, group_id, g_name))){
     LOG_WARN("get group_name by id failed", K(group_id), K(ret));
   } else {
@@ -274,7 +368,7 @@ int ObCgroupCtrl::create_user_tenant_group_dir(
   return ret;
 }
 
-int ObCgroupCtrl::add_thread_to_cgroup(const pid_t tid, const uint64_t tenant_id, int64_t group_id)
+int ObCgroupCtrl::add_self_to_cgroup(const uint64_t tenant_id, int64_t group_id)
 {
   int ret = OB_SUCCESS;
   char group_path[PATH_BUFSIZE];
@@ -289,7 +383,7 @@ int ObCgroupCtrl::add_thread_to_cgroup(const pid_t tid, const uint64_t tenant_id
   } else {
     char task_path[PATH_BUFSIZE];
     char tid_value[VALUE_BUFSIZE];
-    snprintf(tid_value, VALUE_BUFSIZE, "%d", tid);
+    snprintf(tid_value, VALUE_BUFSIZE, "%ld", syscall(__NR_gettid));
     snprintf(task_path, PATH_BUFSIZE, "%s/tasks", group_path);
     if(OB_FAIL(write_string_to_file_(task_path, tid_value))) {
       LOG_WARN("add tid to cgroup failed", K(ret), K(task_path), K(tid_value), K(tenant_id));
@@ -315,14 +409,14 @@ int ObCgroupCtrl::get_group_info_by_group_id(const uint64_t tenant_id,
   return ret;
 }
 
-int ObCgroupCtrl::remove_thread_from_cgroup(const pid_t tid, const uint64_t tenant_id)
+int ObCgroupCtrl::remove_self_from_cgroup(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   char task_path[PATH_BUFSIZE];
   char tid_value[VALUE_BUFSIZE];
   // 把该tid加入other_cgroup目录的tasks文件中就会从其它tasks中删除
   snprintf(task_path, PATH_BUFSIZE, "%s/tasks", other_cgroup_);
-  snprintf(tid_value, VALUE_BUFSIZE, "%d", tid);
+  snprintf(tid_value, VALUE_BUFSIZE, "%ld", syscall(__NR_gettid));
   if(OB_FAIL(write_string_to_file_(task_path, tid_value))) {
     LOG_WARN("remove tid from cgroup failed", K(ret), K(task_path), K(tid_value), K(tenant_id));
   } else {
@@ -331,18 +425,17 @@ int ObCgroupCtrl::remove_thread_from_cgroup(const pid_t tid, const uint64_t tena
   return ret;
 }
 
-int ObCgroupCtrl::add_thread_to_group(const pid_t tid,
-                                      const uint64_t tenant_id,
+int ObCgroupCtrl::add_self_to_group(const uint64_t tenant_id,
                                       const uint64_t group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("invalid config", K(ret), K(tenant_id));
-  } else if (OB_FAIL(add_thread_to_cgroup(tid, tenant_id, group_id))) {
-    LOG_WARN("fail to add thread to group", K(ret), K(tid), K(group_id), K(tenant_id));
+  } else if (OB_FAIL(add_self_to_cgroup(tenant_id, group_id))) {
+    LOG_WARN("fail to add thread to group", K(ret), K(group_id), K(tenant_id));
   } else {
-    LOG_INFO("set backup pid to group success", K(tenant_id), K(group_id), K(tid));
+    LOG_INFO("set backup pid to group success", K(tenant_id), K(group_id));
   }
   return ret;
 }

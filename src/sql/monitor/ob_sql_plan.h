@@ -6,7 +6,7 @@
 #ifndef SRC_OBSERVER_SQL_PLAN_H_
 #define SRC_OBSERVER_SQL_PLAN_H_
 #include "sql/ob_sql_define.h"
-#include "ob_plan_real_info_manager.h"
+#include "ob_plan_info_manager.h"
 
 namespace oceanbase
 {

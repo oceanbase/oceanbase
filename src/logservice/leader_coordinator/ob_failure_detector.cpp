@@ -312,8 +312,10 @@ bool ObFailureDetector::is_clog_disk_has_fatal_error()
          || ATOMIC_LOAD(&has_add_clog_full_event_);
 }
 
-bool ObFailureDetector::is_data_disk_has_fatal_error()
+bool ObFailureDetector::is_data_disk_has_fatal_error(bool &slog_hang, bool &data_hang)
 {
+  ATOMIC_SET(&slog_hang, has_add_slog_hang_event_);
+  ATOMIC_SET(&data_hang, has_add_sstable_hang_event_);
   return ATOMIC_LOAD(&has_add_slog_hang_event_)
          || ATOMIC_LOAD(&has_add_sstable_hang_event_);
 }
@@ -340,7 +342,7 @@ void ObFailureDetector::detect_palf_hang_failure_()
       COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(clog_disk_hang_event));
     } else {
       ATOMIC_SET(&has_add_clog_hang_event_, true);
-      LOG_DBA_ERROR(OB_DISK_CORRUPTED, "msg", "clog disk may be hung, add failure event", K(clog_disk_hang_event),
+      LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "clog disk may be hung, add failure event", K(clog_disk_hang_event),
                     K(clog_disk_last_working_time), "hung time", now - clog_disk_last_working_time);
     }
   } else {
@@ -376,7 +378,7 @@ void ObFailureDetector::detect_slog_writer_hang_failure_()
       COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(slog_writer_hang_event));
     } else {
       ATOMIC_SET(&has_add_slog_hang_event_, true);
-      LOG_DBA_ERROR(OB_DISK_CORRUPTED, "msg", "slog writer may be hung, add failure event", K(slog_writer_hang_event),
+      LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "slog writer may be hung, add failure event", K(slog_writer_hang_event),
                     K(slog_writer_last_working_time), "hung time", now - slog_writer_last_working_time);
     }
   } else {
@@ -412,7 +414,7 @@ void ObFailureDetector::detect_sstable_io_failure_()
       COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(sstable_io_hang_event));
     } else {
       ATOMIC_SET(&has_add_sstable_hang_event_, true);
-      LOG_DBA_ERROR(OB_DISK_CORRUPTED, "msg", "data disk may be hung, add failure event", K(sstable_io_hang_event),
+      LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk may be hung, add failure event", K(sstable_io_hang_event),
                     K(data_disk_error_start_ts));
     }
   } else {

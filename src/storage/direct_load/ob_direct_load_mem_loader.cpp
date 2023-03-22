@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -120,11 +120,15 @@ int ObDirectLoadMemLoader::work()
   }
 
   if (OB_SUCC(ret)) {
-    if (chunk != nullptr) {
-      if (OB_FAIL(close_chunk(chunk))) {
-        LOG_WARN("fail to close chunk", KR(ret));
-      }
+    if (chunk != nullptr && OB_FAIL(close_chunk(chunk))) {
+      LOG_WARN("fail to close chunk", KR(ret));
     }
+  }
+
+  if (chunk != nullptr) {
+    chunk->~ChunkType();
+    ob_free(chunk);
+    chunk = nullptr;
   }
 
   return ret;

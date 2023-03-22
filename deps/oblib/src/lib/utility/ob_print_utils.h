@@ -147,36 +147,46 @@ public:
 class CStringBufMgr
 {
 public:
-  static const int BUF_SIZE = 12 * 1024;
-  static const int BUF_NUM = 5;
+  static const int BUF_SIZE = 8 * 1024;
+  static const int MIN_REST_SIZE = 1024;
   struct BufNode
   {
     char buf_[BUF_SIZE];
     int64_t level_;
     struct BufNode *next_;
   };
-  struct BufArray
-  {
-    BufNode node_[BUF_NUM];
-  };
   struct BufList
   {
     BufList() : head_(nullptr) {}
     BufNode *head_;
   };
-  CStringBufMgr() : list_(), level_(-1), idx_(0) {}
+  CStringBufMgr() : list_(), level_(-1), pos_(0) {}
   ~CStringBufMgr() {}
+  static CStringBufMgr &get_thread_local_instance()
+  {
+    thread_local CStringBufMgr mgr;
+    return mgr;
+  }
   void inc_level() { level_++; }
   void dec_level() { level_--; }
-  BufNode *acquire()
+  int64_t get_pos() { return pos_; }
+  void set_pos(int64_t pos)
   {
-    BufNode *node = nullptr;
     if (0 == level_) {
-      BufArray *array = GET_TSI(__typeof__(*array));
-      if (NULL != array) {
-        node = &array->node_[(idx_++ % BUF_NUM)];
+      if (MIN_REST_SIZE > BUF_SIZE - pos) {
+        pos_ = 0;
+      } else {
+        pos_ = pos;
       }
+    }
+  }
+  char *acquire()
+  {
+    char *buffer = NULL;
+    if (0 == level_) {
+      buffer = local_buf_ + pos_;
     } else {
+      BufNode *node = NULL;
       node = list_.head_;
       while (NULL != node) {
         if (node->level_ > level_) {
@@ -191,8 +201,11 @@ public:
         node->next_ = list_.head_;
         list_.head_ = node;
       }
+      if (NULL != node) {
+        buffer = node->buf_;
+      }
     }
-    return node;
+    return buffer;
   }
   void try_clear_list()
   {
@@ -205,36 +218,35 @@ public:
     }
   }
 private:
+  char local_buf_[BUF_SIZE];
   BufList list_;
   int64_t level_;
-  uint64_t idx_;
+  int64_t pos_;
 };
 
 template <typename T>
 const char *to_cstring(const T &obj, const bool verbose)
 {
   char *buffer = NULL;
-  int64_t pos = 0;
-  CStringBufMgr *mgr = GET_TSI(CStringBufMgr);
-  mgr->inc_level();
-  CStringBufMgr::BufNode *node = mgr->acquire();
-  if (OB_ISNULL(node)) {
-    LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "buffer is NULL");
+  int64_t str_len = 0;
+  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
+  mgr.inc_level();
+  buffer = mgr.acquire();
+  if (OB_ISNULL(buffer)) {
+    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    buffer = node->buf_;
-    if (NULL == &obj) {
-      snprintf(buffer, CStringBufMgr::BUF_SIZE -1, "NULL");
+    int64_t pos = mgr.get_pos();
+    const int64_t buf_len = CStringBufMgr::BUF_SIZE - pos;
+    str_len = obj.to_string(buffer, buf_len -1, verbose);
+    if (str_len >= 0 && str_len < buf_len) {
+      buffer[str_len] = '\0';
     } else {
-      pos = obj.to_string(buffer, CStringBufMgr::BUF_SIZE -1, verbose);
-      if (pos >= 0 && pos < CStringBufMgr::BUF_SIZE) {
-        buffer[pos] = '\0';
-      } else {
-        buffer[0] = '\0';
-      }
+      buffer[0] = '\0';
     }
+    mgr.set_pos(pos + str_len + 1);
   }
-  mgr->try_clear_list();
-  mgr->dec_level();
+  mgr.try_clear_list();
+  mgr.dec_level();
   return buffer;
 }
 
@@ -242,23 +254,25 @@ template <typename T>
 const char *to_cstring(const T &obj, FalseType)
 {
   char *buffer = NULL;
-  int64_t pos = 0;
-  CStringBufMgr *mgr = GET_TSI(CStringBufMgr);
-  mgr->inc_level();
-  CStringBufMgr::BufNode *node = mgr->acquire();
-  if (OB_ISNULL(node)) {
-    LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "buffer is NULL");
+  int64_t str_len = 0;
+  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
+  mgr.inc_level();
+  buffer = mgr.acquire();
+  if (OB_ISNULL(buffer)) {
+    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    buffer = node->buf_;
-    pos = to_string(obj, buffer, CStringBufMgr::BUF_SIZE -1);
-    if (pos >= 0 && pos < CStringBufMgr::BUF_SIZE) {
-      buffer[pos] = '\0';
+    int64_t pos = mgr.get_pos();
+    const int64_t buf_len = CStringBufMgr::BUF_SIZE - pos;
+    str_len = to_string(obj, buffer, buf_len -1);
+    if (str_len >= 0 && str_len < buf_len) {
+      buffer[str_len] = '\0';
     } else {
       buffer[0] = '\0';
     }
+    mgr.set_pos(pos + str_len + 1);
   }
-  mgr->try_clear_list();
-  mgr->dec_level();
+  mgr.try_clear_list();
+  mgr.dec_level();
   return buffer;
 }
 

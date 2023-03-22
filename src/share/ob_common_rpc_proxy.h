@@ -399,25 +399,6 @@ protected:
   }
 
   template <typename Input>
-  int rpc_call(ObRpcPacketCode pcode,
-               const Input &args, Handle *handle, const ObRpcOpts &opts)
-  {
-    CALL_WITH_RETRY(ObRpcProxy::rpc_call(pcode, args, handle, opts));
-  }
-
-  template <typename Output>
-  int rpc_call(ObRpcPacketCode pcode, Output &result,
-               Handle *handle, const ObRpcOpts &opts)
-  {
-    CALL_WITH_RETRY(ObRpcProxy::rpc_call(pcode, result, handle, opts));
-  }
-
-  int rpc_call(ObRpcPacketCode pcode, Handle *handle, const ObRpcOpts &opts)
-  {
-    CALL_WITH_RETRY(ObRpcProxy::rpc_call(pcode, handle, opts));
-  }
-
-  template <typename Input>
   int rpc_post(ObRpcPacketCode pcode, const Input &args,
                rpc::frame::ObReqTransport::AsyncCB *cb, const ObRpcOpts &opts)
   {

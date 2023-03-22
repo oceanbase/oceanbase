@@ -91,8 +91,8 @@ int ObSqlPlan::store_sql_plan(ObLogPlan* plan,
                                             sql_id,
                                             plan_text))) {
     LOG_WARN("failed to set plan id", K(ret));
-  } else if (OB_FAIL(inner_store_sql_plan(sql_plan_infos, false))) {
-    LOG_WARN("failed to store sql plan", K(ret));
+  // } else if (OB_FAIL(inner_store_sql_plan(sql_plan_infos, false))) {
+  //   LOG_WARN("failed to store sql plan", K(ret));
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to store sql plan", K(ret));
@@ -121,15 +121,12 @@ int ObSqlPlan::store_sql_plan_for_explain(ObLogPlan* plan,
     LOG_WARN("failed to get sql plan infos", K(ret));
   } else if (OB_FAIL(set_plan_id_for_explain(sql_plan_infos))) {
     LOG_WARN("failed to set plan id", K(ret));
+  // } else if (OB_FAIL(inner_store_sql_plan(sql_plan_infos, true))) {
+  //   LOG_WARN("failed to store sql plan", K(ret));
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(inner_store_sql_plan(sql_plan_infos, true))) {
-      LOG_WARN("failed to store sql plan", K(ret));
-    }
-    if (OB_FAIL(ret)) {
-      LOG_WARN("failed to store sql plan", K(ret));
-      ret = OB_SUCCESS;
-    }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to store sql plan", K(ret));
+    ret = OB_SUCCESS;
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(format_sql_plan(sql_plan_infos,
@@ -2054,7 +2051,7 @@ int ObSqlPlan::inner_format_plan_to_json(ObIArray<ObSqlPlanItem*> &sql_plan_info
 int ObSqlPlan::init_buffer(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
-  plan_text.buf_len_ = ObLogValues::MAX_EXPLAIN_BUFFER_SIZE;
+  plan_text.buf_len_ = 1024 * 1024;
   plan_text.buf_ = static_cast<char*>(allocator_.alloc(plan_text.buf_len_));
   if (OB_ISNULL(plan_text.buf_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2118,6 +2115,11 @@ int ObSqlPlan::plan_text_to_strings(PlanText &plan_text,
     } else {
       last_pos = i + 1;
     }
+  }
+  if (OB_SUCC(ret) &&
+      plan_strs.empty() &&
+      OB_FAIL(plan_strs.push_back(""))) {
+    LOG_WARN("failed to push back plan text", K(ret));
   }
   return ret;
 }

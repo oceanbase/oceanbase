@@ -218,7 +218,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
         pos += db_len;
       }
       int64_t timestamp = common::ObTimeUtility::current_time();
-      //for find bug http://k3.alibaba-inc.com/issue/5689896?stat=1.5.1&toPage=1&versionId=1043200
+      //for find bug
       // only print this log if enable_perf_event is enable,
       // for `receive_ts_` might be invalid if `enable_perf_event` is false
       if (lib::is_diagnose_info_enabled()
@@ -301,12 +301,15 @@ int ObMySQLRequestManager::mtl_init(ObMySQLRequestManager* &req_mgr)
   } else {
     uint64_t tenant_id = lib::current_resource_owner_id();
     int64_t mem_limit = lib::get_tenant_memory_limit(tenant_id);
-    int64_t queue_size = (lib::is_mini_mode() || MTL_IS_MINI_MODE())? MINI_MODE_MAX_QUEUE_SIZE : MAX_QUEUE_SIZE;
+    mem_limit = static_cast<int64_t>(static_cast<double>(mem_limit) * SQL_AUDIT_MEM_FACTOR);
+    bool use_mini_queue = lib::is_mini_mode() || MTL_IS_MINI_MODE() || is_meta_tenant(tenant_id);
+    int64_t queue_size = use_mini_queue ? MINI_MODE_MAX_QUEUE_SIZE : MAX_QUEUE_SIZE;
     if (OB_FAIL(req_mgr->init(tenant_id, mem_limit, queue_size))) {
       LOG_WARN("failed to init request manager", K(ret));
     } else {
       // do nothing
     }
+    LOG_INFO("mtl init finish", K(tenant_id), K(mem_limit), K(queue_size), K(ret));
   }
   if (OB_FAIL(ret) && req_mgr != nullptr) {
     // cleanup

@@ -87,7 +87,7 @@ int parallel_create_table_schema(uint64_t tenant_id, ObDDLService &ddl_service, 
         while (OB_SUCC(ret)) {
           if (OB_FAIL(batch_create_schema_local(tenant_id, ddl_service, table_schemas, begin, i + 1))) {
             LOG_WARN("batch create schema failed", K(ret), "table count", i + 1 - begin);
-            // bugfix:https://work.aone.alibaba-inc.com/issue/34030283
+            // bugfix:
             if (retry_times <= MAX_RETRY_TIMES) {
               retry_times++;
               ret = OB_SUCCESS;

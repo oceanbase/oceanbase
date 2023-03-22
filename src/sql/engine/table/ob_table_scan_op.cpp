@@ -694,7 +694,7 @@ int ObTableScanOp::prepare_pushdown_limit_param()
 
   } else if (tsc_rtdef_.has_lookup_limit() || das_ref_.get_das_task_cnt() > 1) {
     //for index back, need to final limit output rows in TableScan operator,
-    //please see me for the reason: https://work.aone.alibaba-inc.com/issue/43232745
+    //please see me for the reason:
     /* for multi-partition scanning, */
     /* the limit operation pushed down to the partition TSC needs to be adjusted */
     /* its rule: */
@@ -880,6 +880,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   if (MY_SPEC.batch_scan_flag_ || is_lookup) {
     das_rtdef.scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
   }
+  das_rtdef.scan_flag_.is_lookup_ = is_lookup;
   das_rtdef.need_check_output_datum_ = MY_SPEC.need_check_output_datum_;
   das_rtdef.sql_mode_ = my_session->get_sql_mode();
   das_rtdef.stmt_allocator_.set_alloc(&das_ref_.get_das_alloc());
@@ -3249,6 +3250,7 @@ bool ObGlobalIndexLookupOpImpl::need_next_index_batch() const
 int ObGlobalIndexLookupOpImpl::check_lookup_row_cnt()
 {
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(table_scan_op_->get_exec_ctx());
   if (GCONF.enable_defensive_check()
       && get_lookup_ctdef()->pd_expr_spec_.pushdown_filters_.empty()) {
     if (OB_UNLIKELY(lookup_rowkey_cnt_ != lookup_row_cnt_)
@@ -3257,13 +3259,18 @@ int ObGlobalIndexLookupOpImpl::check_lookup_row_cnt()
       ObString func_name = ObString::make_string("check_lookup_row_cnt");
       LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
       LOG_ERROR("Fatal Error!!! Catch a defensive error!",
-                K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt));
+                K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
+                "index_group_cnt", get_index_group_cnt(),
+                "lookup_group_cnt", get_lookup_group_cnt(),
+                "index_table_id", table_scan_op_->get_tsc_spec().get_ref_table_id(),
+                KPC(my_session->get_tx_desc()));
       //now to dump lookup das task info
       for (DASTaskIter task_iter = das_ref_.begin_task_iter(); !task_iter.is_end(); ++task_iter) {
         ObDASScanOp *das_op = static_cast<ObDASScanOp*>(*task_iter);
         LOG_INFO("dump TableLookup DAS Task range",
                  "scan_range", das_op->get_scan_param().key_ranges_,
-                 "range_array_pos", das_op->get_scan_param().range_array_pos_);
+                 "range_array_pos", das_op->get_scan_param().range_array_pos_,
+                 "tablet_id", das_op->get_tablet_id());
       }
     }
   }

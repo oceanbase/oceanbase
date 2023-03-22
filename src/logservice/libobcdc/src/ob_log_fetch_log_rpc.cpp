@@ -182,7 +182,7 @@ int FetchLogSRpc::RpcCB::process()
   if (OB_FAIL(do_process_(rcode, &result))) {
     LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr));
   }
-  // Aone: https://work.aone.alibaba-inc.com/issue/13156448
+  // Aone:
   // Note: destruct response after asynchronous RPC processing
   result.reset();
 
@@ -1113,7 +1113,7 @@ int FetchLogARpc::RpcCB::process()
   if (OB_FAIL(do_process_(rcode, &result))) {
     LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr), K_(host));
   }
-  // Aone: https://work.aone.alibaba-inc.com/issue/13156448
+  // Aone:
   // Note: Active destructe response after asynchronous RPC processing
   result.reset();
 
@@ -1248,7 +1248,7 @@ void FetchLogARpc::RpcRequestList::add(RpcRequest *req)
       tail_ = req;
     } else {
       tail_->next_ = req;
-      // fix https://work.aone.alibaba-inc.com/issue/30951328
+      // fix
       tail_ = req;
     }
 

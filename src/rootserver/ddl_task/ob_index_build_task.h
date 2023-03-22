@@ -47,6 +47,7 @@ public:
   int set_nls_format(const ObString &nls_date_format,
                      const ObString &nls_timestamp_format,
                      const ObString &nls_timestamp_tz_format);
+  ObDDLTaskID get_ddl_task_id() { return ObDDLTaskID(tenant_id_, task_id_); }
   virtual int process() override;
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
@@ -107,7 +108,7 @@ public:
   virtual bool is_valid() const override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
+  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   virtual bool support_longops_monitoring() const override { return true; }
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
@@ -127,7 +128,7 @@ private:
       const share::schema::ObTableSchema &index_schema,
       const share::schema::ObIndexStatus new_status);
   int check_health();
-  int try_reap_old_replica_build_task();
+  int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   int send_build_single_replica_request();
   int check_build_single_replica(bool &is_end);
   int check_need_verify_checksum(bool &need_verify);

@@ -33,11 +33,18 @@ public:
   {
     Key() : tenant_id_(0),
             table_id_(OB_INVALID_ID),
-            partition_id_(OB_INVALID_INDEX)
+            partition_id_(OB_INVALID_INDEX),
+            tablet_id_(ObTabletID::INVALID_TABLET_ID)
     {
     }
     explicit Key(uint64_t tenant_id, uint64_t table_id, int64_t partition_id) :
-      tenant_id_(tenant_id), table_id_(table_id), partition_id_(partition_id)
+      tenant_id_(tenant_id), table_id_(table_id), partition_id_(partition_id),
+      tablet_id_(ObTabletID::INVALID_TABLET_ID)
+    {
+    }
+    explicit Key(uint64_t tenant_id, uint64_t table_id, uint64_t tablet_id) :
+      tenant_id_(tenant_id), table_id_(table_id), partition_id_(OB_INVALID_INDEX),
+      tablet_id_(tablet_id)
     {
     }
     void init(uint64_t tenant_id, uint64_t table_id, int64_t partition_id)
@@ -45,6 +52,7 @@ public:
       tenant_id_ = tenant_id;
       table_id_ = table_id;
       partition_id_ = partition_id;
+      tablet_id_ = ObTabletID::INVALID_TABLET_ID;
     }
     uint64_t hash() const
     {
@@ -55,7 +63,8 @@ public:
       const Key &other_key = reinterpret_cast<const Key&>(other);
       return tenant_id_ == other_key.tenant_id_ &&
              table_id_ == other_key.table_id_ &&
-             partition_id_ == other_key.partition_id_;
+             partition_id_ == other_key.partition_id_ &&
+             tablet_id_ == other_key.tablet_id_;
     }
     uint64_t get_tenant_id() const
     {
@@ -98,13 +107,15 @@ public:
       tenant_id_ = 0;
       table_id_ = OB_INVALID_ID;
       partition_id_ = OB_INVALID_INDEX;
+      tablet_id_ = ObTabletID::INVALID_TABLET_ID;
     }
 
-    TO_STRING_KV(K_(tenant_id), K_(table_id), K_(partition_id));
+    TO_STRING_KV(K_(tenant_id), K_(table_id), K_(partition_id), K_(tablet_id));
 
     uint64_t tenant_id_;
     uint64_t table_id_;
     int64_t partition_id_;
+    uint64_t tablet_id_;
   };
   ObOptTableStat()
     : table_id_(OB_INVALID_ID),
@@ -123,7 +134,9 @@ public:
       last_analyzed_(0),
       stattype_locked_(0),
       modified_count_(0),
-      sample_size_(0) {}
+      sample_size_(0),
+      tablet_id_(ObTabletID::INVALID_TABLET_ID),
+      stat_expired_time_(-1) {}
   ObOptTableStat(uint64_t table_id,
                  int64_t partition_id,
                  int64_t object_type,
@@ -153,7 +166,9 @@ public:
       last_analyzed_(0),
       stattype_locked_(0),
       modified_count_(0),
-      sample_size_(0) {}
+      sample_size_(0),
+      tablet_id_(ObTabletID::INVALID_TABLET_ID),
+      stat_expired_time_(-1) {}
 
   virtual ~ObOptTableStat() {}
 
@@ -161,6 +176,9 @@ public:
 
   uint64_t get_table_id() const { return table_id_; }
   void set_table_id(uint64_t table_id) { table_id_ = table_id; }
+
+  uint64_t get_tablet_id() const { return tablet_id_; }
+  void set_tablet_id(uint64_t tablet_id) { tablet_id_ = tablet_id; }
 
   int64_t get_partition_id() const { return partition_id_; }
   void set_partition_id(int64_t partition_id) { partition_id_ = partition_id; }
@@ -211,6 +229,11 @@ public:
 
   int64_t get_sample_size() const { return sample_size_; }
   void set_sample_size(int64_t sample_size) {  sample_size_ = sample_size; }
+
+  bool is_arrived_expired_time() const {
+    return stat_expired_time_ != -1 && stat_expired_time_ <= ObTimeUtility::current_time(); }
+
+  void set_stat_expired_time(int64_t expired_time) {  stat_expired_time_ = expired_time; }
 
   void add_row_count(int64_t rc) { row_count_ += rc; }
 
@@ -287,6 +310,8 @@ public:
     stattype_locked_ = 0;
     modified_count_ = 0;
     sample_size_ = 0;
+    tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+    stat_expired_time_ = -1;
   }
 
   TO_STRING_KV(K(table_id_),
@@ -305,7 +330,9 @@ public:
                K(last_analyzed_),
                K(stattype_locked_),
                K(modified_count_),
-               K(sample_size_));
+               K(sample_size_),
+               K(tablet_id_),
+               K(stat_expired_time_));
 
 private:
   uint64_t table_id_;
@@ -327,6 +354,8 @@ private:
   uint64_t stattype_locked_;
   int64_t modified_count_;
   int64_t sample_size_;
+  uint64_t tablet_id_;//now only use estimate table rowcnt by meta table.
+  int64_t stat_expired_time_;//mark the stat in cache is arrived expired time, if arrived at expired time need reload, -1 meanings no expire forever.
 };
 
 }

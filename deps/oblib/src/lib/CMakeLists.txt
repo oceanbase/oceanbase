@@ -134,7 +134,6 @@ ob_set_subtarget(oblib_lib common_mixed
   string/ob_string_buffer.cpp
   task/ob_timer.cpp
   task/ob_timer_monitor.cpp
-  thread_local/ob_tsi_factory.cpp
   thread_local/ob_tsi_utils.cpp
   thread_local/thread_buffer.cpp
   time/Time.cpp
@@ -215,6 +214,7 @@ ob_set_subtarget(oblib_lib thread
   thread/protected_stack_allocator.cpp
   thread/thread.cpp
   thread/threads.cpp
+  thread/ob_tenant_hook.cpp
 )
 
 ob_set_subtarget(oblib_lib utility
@@ -248,6 +248,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/memory_dump.cpp
   alloc/ob_malloc_allocator.cpp
   alloc/ob_malloc_callback.cpp
+  alloc/ob_malloc_sample_struct.cpp
   alloc/ob_tenant_ctx_allocator.cpp
   alloc/object_mgr.cpp
   alloc/object_set.cpp

@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #define USING_LOG_PREFIX SERVER
 
@@ -107,39 +107,6 @@ int ObTableLoadSchema::get_column_names(const ObTableSchema *table_schema, ObIAl
   return ret;
 }
 
-int ObTableLoadSchema::get_schema_version(uint64_t tenant_id, uint64_t table_id,
-                                          int64_t &schema_version)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(
-        ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else {
-    schema_version = table_schema->get_schema_version();
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::check_constraints(uint64_t tenant_id,
-                                         ObSchemaGetterGuard &schema_guard,
-                                         const ObTableSchema *table_schema)
-{
-  int ret = OB_SUCCESS;
-  bool trigger_enabled = false;
-  ObArray<ObAuxTableMetaInfo> simple_index_infos;
-  if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("failed to get simple index infos", KR(ret));
-  } else if (OB_FAIL(table_schema->check_has_trigger_on_table(schema_guard, trigger_enabled))) {
-    LOG_WARN("failed to check has trigger in table", KR(ret));
-  } else if (trigger_enabled) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("direct-load does not support table with trigger enabled", KR(ret), K(trigger_enabled));
-  }
-  return ret;
-}
-
 ObTableLoadSchema::ObTableLoadSchema()
   : allocator_("TLD_Schema"),
     is_partitioned_table_(false),
@@ -147,7 +114,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     has_autoinc_column_(false),
     has_identity_column_(false),
     rowkey_column_count_(0),
-    column_count_(0),
+    store_column_count_(0),
     collation_type_(CS_TYPE_INVALID),
     schema_version_(0),
     is_inited_(false)
@@ -169,7 +136,7 @@ void ObTableLoadSchema::reset()
   has_autoinc_column_ = false;
   has_identity_column_ = false;
   rowkey_column_count_ = 0;
-  column_count_ = 0;
+  store_column_count_ = 0;
   collation_type_ = CS_TYPE_INVALID;
   schema_version_ = 0;
   column_descs_.reset();
@@ -212,15 +179,16 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     is_heap_table_ = table_schema->is_heap_table();
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
     rowkey_column_count_ = table_schema->get_rowkey_column_num();
-    column_count_ = table_schema->get_column_count();
     collation_type_ = table_schema->get_collation_type();
     schema_version_ = table_schema->get_schema_version();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));
-    } else if (OB_FAIL(table_schema->get_column_ids(column_descs_))) {
+    } else if (OB_FAIL(table_schema->get_store_column_count(store_column_count_))) {
+      LOG_WARN("fail to get store column count", KR(ret));
+    } else if (OB_FAIL(table_schema->get_column_ids(column_descs_, false))) {
       LOG_WARN("fail to get column descs", KR(ret));
-     } else if (OB_FAIL(table_schema->get_multi_version_column_descs(multi_version_column_descs_))) {
+    } else if (OB_FAIL(table_schema->get_multi_version_column_descs(multi_version_column_descs_))) {
       LOG_WARN("fail to get multi version column descs", KR(ret));
     } else if (OB_FAIL(datum_utils_.init(multi_version_column_descs_, rowkey_column_count_,
                                          lib::is_oracle_mode(), allocator_))) {

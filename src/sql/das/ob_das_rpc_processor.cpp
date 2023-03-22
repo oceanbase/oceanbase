@@ -209,9 +209,17 @@ int ObDASAsyncAccessP::process()
 
 void ObRpcDasAsyncAccessCallBack::on_timeout()
 {
-  int ret = OB_SUCCESS;
-  LOG_WARN("das async task timeout", K(get_task_ops()));
-  result_.set_err_code(OB_TIMEOUT);
+  int ret = OB_TIMEOUT;
+  int64_t current_ts = ObTimeUtility::current_time();
+  int64_t timeout_ts = context_->get_timeout_ts();
+  // ESTIMATE_PS_RESERVE_TIME = 100 * 1000
+  if (timeout_ts - current_ts > 100 * 1000) {
+    LOG_DEBUG("rpc return OB_TIMEOUT before actual timeout, change error code to OB_RPC_CONNECT_ERROR", KR(ret),
+              K(timeout_ts), K(current_ts));
+    ret = OB_RPC_CONNECT_ERROR;
+  }
+  LOG_WARN("das async task timeout", KR(ret), K(get_task_ops()));
+  result_.set_err_code(ret);
   result_.get_op_results().reuse();
   context_->get_das_ref().inc_concurrency_limit_with_signal();
 }

@@ -214,7 +214,6 @@ static ObSysPackageFile mysql_sys_package_file_table[] = {
   {"dbms_application", "dbms_application_mysql.sql", "dbms_application_body_mysql.sql"},
   {"dbms_session", "dbms_session_mysql.sql", "dbms_session_body_mysql.sql"},
   {"dbms_monitor", "dbms_monitor_mysql.sql", "dbms_monitor_body_mysql.sql"},
-  {"dbms_xplan", "dbms_xplan_mysql.sql", "dbms_xplan_mysql_body.sql"},
   {"dbms_resource_manager", "dbms_resource_manager_mysql.sql", "dbms_resource_manager_body_mysql.sql"},
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"}
 };
@@ -1194,7 +1193,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
       OZ (resolve_ctx.session_info_.add_package_state(package_id, package_state));
       if (OB_SUCC(ret)) {
         // TODO bin.lb: how about the memory?
-        // https://aone.alibaba-inc.com/project/81079/task/34962640
+        //
         OZ(package.get_frame_info().pre_alloc_exec_memory(exec_ctx));
       }
       if (OB_SUCC(ret)
@@ -1215,7 +1214,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
         }
       }
       if (package.get_expr_op_size() > 0) {
-        //Memory leak https://work.aone.alibaba-inc.com/issue/33582334
+        //Memory leak
         //Must be reset before free expr_op_ctx!
         exec_ctx.reset_expr_op();
         exec_ctx.get_allocator().free(exec_ctx.get_expr_op_ctx_store());

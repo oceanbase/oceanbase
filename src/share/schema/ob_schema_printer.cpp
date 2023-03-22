@@ -443,7 +443,7 @@ int ObSchemaPrinter::print_generated_column_definition(const ObColumnSchemaV2 &g
       SHARE_SCHEMA_LOG(WARN, "fail to init session", K(ret));
     } else if (OB_FAIL(session.load_default_sys_variable(false, false))) {
       SHARE_SCHEMA_LOG(WARN, "session load default system variable failed", K(ret));
-      /* bug: https://work.aone.alibaba-inc.com/issue/29573244
+      /* bug:
         构建ObRawExpr对象,当 expr_str = "CONCAT(first_name,' ',last_name)"
         避免错误的打印成： CONCAT(first_name,\' \',last_name) */
     } else if(OB_FAIL(sql::ObRawExprUtils::build_generated_column_expr(NULL,
@@ -3903,17 +3903,26 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
     OZ (print_routine_param_type(routine_param, return_type, buf, buf_len, pos, tz_info));
   }
   if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    if (routine_info->is_no_sql()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nNO SQL"));
+    } else if (routine_info->is_reads_sql_data()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nREADS SQL DATA"));
+    } else if (routine_info->is_modifies_sql_data()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nMODIFIES SQL DATA"));
+    }
     OZ (databuff_printf(buf, buf_len, pos, "%s",
-        routine_info->is_deterministic() ? "\nDETERMINISTIC\n" : ""));
+        routine_info->is_deterministic() ? "\nDETERMINISTIC" : ""));
+    OZ (databuff_printf(buf, buf_len, pos, "%s",
+        routine_info->is_invoker_right() ? "\nINVOKER" : ""));
     if (OB_SUCC(ret) && OB_NOT_NULL(routine_info->get_comment())) {
-      OZ (databuff_printf(buf, buf_len, pos, "%s%.*s%s\n","COMMENT `",
+      OZ (databuff_printf(buf, buf_len, pos, "\n%s%.*s%s\n","COMMENT `",
           routine_info->get_comment().length(),
           routine_info->get_comment().ptr(),
           "`"));
     }
   }
   if (OB_SUCC(ret) && lib::is_oracle_mode() && !clause.empty()) {
-    OZ (databuff_printf(buf, buf_len, pos, " %.*s", clause.length(), clause.ptr()));
+    OZ (databuff_printf(buf, buf_len, pos, " %.*s\n", clause.length(), clause.ptr()));
   }
   OZ (databuff_printf(buf, buf_len, pos,
       lib::is_oracle_mode() ? (routine_info->is_aggregate() ? "\nAGGREGATE USING %.*s" : " IS\n%.*s")

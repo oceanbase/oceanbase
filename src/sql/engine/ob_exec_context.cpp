@@ -124,7 +124,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     is_ps_prepare_stage_(false),
     register_op_id_(OB_INVALID_ID),
     tmp_alloc_used_(false),
-    table_direct_insert_ctx_()
+    table_direct_insert_ctx_(),
+    errcode_(OB_SUCCESS)
 {
 }
 
@@ -181,6 +182,7 @@ ObExecContext::~ObExecContext()
     temp_expr_ctx_map_.destroy();
   }
   update_columns_ = nullptr;
+  errcode_ = OB_SUCCESS;
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -493,7 +495,7 @@ int ObExecContext::check_status()
   if (OB_ISNULL(phy_plan_ctx_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical plan ctx is null");
-  } else if (phy_plan_ctx_->is_timeout()) {
+  } else if (phy_plan_ctx_->is_exec_timeout()) {
     ret = OB_TIMEOUT;
     LOG_WARN("query is timeout", K(ret));
   } else if (OB_ISNULL(my_session_)) {
@@ -858,7 +860,8 @@ int ObExecContext::get_pwj_map(PWJTabletIdMap *&pwj_map)
   return ret;
 }
 
-int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch_id)
+int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params,
+    int64_t batch_id, sql::ObExpr::ObExprIArray &array)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(phy_plan_ctx_)) {
@@ -870,7 +873,6 @@ int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch
   } else {
     common::ObIArray<common::ObObjParam> &one_params =
         params.get_one_batch_params(batch_id);
-    sql::ObExpr::ObExprIArray *array = sql::ObExpr::get_serialize_array();
     ObEvalCtx eval_ctx(*this);
     for (int i = 0; OB_SUCC(ret) && i < one_params.count(); ++i) {
       if (i > params.param_idxs_.count()) {
@@ -882,11 +884,11 @@ int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch
           sql::ObExpr *expr = NULL;
           int64_t idx = params.param_expr_idxs_.at(i);
           if (OB_FAIL(ret)) {
-          } else if (OB_UNLIKELY(NULL == array) || OB_UNLIKELY(idx > array->count())) {
+          } else if (OB_UNLIKELY(idx > array.count())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("expr index out of expr array range", K(ret), KP(array), K(idx), K(array->count()));
+            LOG_WARN("expr index out of expr array range", K(ret), K(array), K(idx), K(array.count()));
           } else {
-            expr = &array->at(idx - 1);
+            expr = &array.at(idx - 1);
             expr->get_eval_info(eval_ctx).clear_evaluated_flag();
             ObDynamicParamSetter::clear_parent_evaluated_flag(eval_ctx, *expr);
             ObDatum &param_datum = expr->locate_datum_for_write(eval_ctx);

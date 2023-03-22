@@ -39,7 +39,7 @@ select str_val, dt_val, ts_val, d_val, t_val from dt order by dt_val, ts_val, d_
 set time_zone='-8:00';
 select str_val, ts_val from dt order by ts_val, str_val;
 set time_zone='+8:00';
-# date_format bug:https://work.aone.alibaba-inc.com/issue/30862145
+# date_format bug:
 select str_val, date_format(dt_val, '%Y-%b-%D %T %a'), date_format(ts_val, '%Y-%b-%D %T %a') from dt order by dt_val, ts_val, str_val;
 
 drop table dt;

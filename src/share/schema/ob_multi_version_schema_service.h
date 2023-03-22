@@ -142,7 +142,6 @@ public:
   // 1. tenant_schema_version is the schema_version of the corresponding tenant
   // 2. sys_schema_version is the schema_version of the system tenant. For system tenants,
   //  the value will be reset to tenant_schema_version
-  // https://yuque.antfin-inc.com/ob/rootservice/gxom1e
   virtual int get_tenant_schema_guard(const uint64_t tenant_id,
                                       ObSchemaGetterGuard &guard,
                                       int64_t tenant_schema_version = common::OB_INVALID_VERSION,

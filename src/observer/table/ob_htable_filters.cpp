@@ -97,6 +97,12 @@ bool CompareFilter::compare(CompareOperator op, int cmp_ret)
     case CompareOperator::NOT_EQUAL:
       bret = (cmp_ret == 0);
       break;
+    case CompareOperator::IS:
+      bret = (0 != cmp_ret);
+      break;
+    case CompareOperator::IS_NOT:
+      bret = (0 != cmp_ret);
+      break;
     default:
       break;
   }

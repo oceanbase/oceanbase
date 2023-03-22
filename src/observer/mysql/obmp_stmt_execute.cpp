@@ -1294,6 +1294,13 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
               result.get_exec_context().get_is_evolution(),
               table_row_count_list);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
+        } else if (ctx_.self_add_plan_ && ctx_.plan_cache_hit_) {
+          // spm evolution plan first execute
+          plan->update_plan_stat(audit_record,
+              true,
+              result.get_exec_context().get_is_evolution(),
+              table_row_count_list);
+          plan->update_cache_access_stat(audit_record.table_scan_stat_);
         }
       }
     }
@@ -1531,17 +1538,23 @@ int ObMPStmtExecute::try_batch_multi_stmt_optimization(ObSQLSessionInfo &session
     LOG_WARN("fail to trans_form extend type params_store", K(ret), K(arraybinding_size_));
   } else if (OB_FAIL(do_process_single(session, array_binding_params, has_more_result, force_sync_resp, async_resp_used))) {
     // 调用do_single接口
-    if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
+    if (THIS_WORKER.need_retry()) {
+      // just go back to large query queue and retry
+    } else if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
       LOG_TRACE("batched multi_stmt needs rollback", K(ret));
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("failed to process single stmt", K(ret));
+      // 无论什么报错，都走单行执行一次，用于容错
+      int ret_tmp = ret;
+      ret = OB_SUCCESS;
+      LOG_WARN("failed to process batch stmt, cover the error code, reset retry flag, then execute with single row",
+          K(ret_tmp), K(ret), K(THIS_WORKER.need_retry()));
     }
   } else {
     optimization_done = true;
   }
   LOG_TRACE("after try batched multi-stmt optimization", K(ret), K(stmt_type_), K(use_plan_cache),
-      K(optimization_done), K(enable_batch_opt), K(is_ab_returning), K(arraybinding_size_));
+      K(optimization_done), K(enable_batch_opt), K(is_ab_returning), K(THIS_WORKER.need_retry()), K(arraybinding_size_));
   return ret;
 }
 
@@ -1970,6 +1983,7 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
   OZ (pl_type->deserialize(*(ctx_.schema_guard_), allocator, charset, cs_type, ncs_type,
         tz_info, data, reinterpret_cast<char *>(param.get_ext()), param_size,
         param_pos));
+  OX (param.set_need_to_check_extend_type(true));
   return ret;
 }
 
@@ -2026,7 +2040,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
         } else if (FALSE_IT(buf_len = ob_gcvt_strict(value, OB_GCVT_ARG_DOUBLE, alloc_size,
                                                      buf, NULL, TRUE/*is_oracle_mode*/,
                                                      FALSE/*is_binary_double*/, FALSE))) {
-        } else if (OB_FAIL(nb.from(buf, buf_len, allocator))) {
+        } else if (OB_FAIL(nb.from_sci_opt(buf, buf_len, allocator))) {
           LOG_WARN("decode double param to number failed", K(ret));
         } else {
           param.set_number(nb);

@@ -87,6 +87,9 @@ int ObTxCycleTwoPhaseCommitter::drive_self_2pc_phase(ObTxState next_phase)
     // do nothing about in-memory operation
   } else {
     switch (next_phase) {
+    case ObTxState::REDO_COMPLETE: {
+      break;
+    }
     case ObTxState::PREPARE: {
       if (OB_FAIL(do_prepare(no_need_submit_log))) {
         TRANS_LOG(WARN, "do prepare in memory failed", K(ret), KPC(this));
@@ -529,7 +532,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_abort_response(const int64_t particip
     // receive the abort response even we commit successfully.
     //
     // If you are interested in the similar problem, take a look at
-    // https://yuque.antfin-inc.com/ob/transaction/gqif91
+    //
     case ObTxState::ABORT: {
       if (OB_FAIL(handle_2pc_ack_response_impl_(participant))) {
         TRANS_LOG(WARN, "retransmit msg failed", K(ret), K(*this));

@@ -1,6 +1,6 @@
 // Copyright (c) 2018-present Alibaba Inc. All Rights Reserved.
 // Author:
-//   Junquan Chen <jianming.cjq@alipay.com>
+//   Junquan Chen <>
 
 #ifndef OB_DIRECT_LOAD_MEM_CONTEXT_H_
 #define OB_DIRECT_LOAD_MEM_CONTEXT_H_
@@ -32,6 +32,9 @@ public:
   int pop(void *&p);
   int init(int64_t capacity) {
     return queue_.init(capacity);
+  }
+  int64_t size() const {
+    return queue_.size();
   }
 private:
   common::LightyQueue queue_;

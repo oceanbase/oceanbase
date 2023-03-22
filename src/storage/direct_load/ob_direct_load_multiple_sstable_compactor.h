@@ -1,6 +1,6 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   yiren.ly<yiren.ly@oceanbase.com>
+//   yiren.ly<>
 
 #pragma once
 

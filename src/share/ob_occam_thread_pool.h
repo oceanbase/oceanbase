@@ -341,6 +341,7 @@ private:
     int ret = OB_SUCCESS;
     ObFunction<void()> function;
     while (true) { // keep fetching task and do the task until thread pool is stopped
+      IGNORE_RETURN lib::Thread::update_loop_ts(ObTimeUtility::fast_current_time());
       bool is_stopped = false;
       {
         ObThreadCondGuard guard(cv_);

@@ -15,6 +15,7 @@
 #include "lib/thread/ob_thread_name.h"        // lib::set_thread_name
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/utility.h"
+#include "share/config/ob_server_config.h"    // GCONF
 #include "ob_archive_define.h"
 #include "ob_archive_round_mgr.h"             // ObArchiveRoundMgr
 #include "share/rc/ob_tenant_base.h"          // MTL
@@ -100,6 +101,7 @@ void ObArchiveTimer::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveTimer thread start", K(tenant_id_));
   lib::set_thread_name("ArcTimer");
+  common::ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
     ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "ObArchiveTimer not init", K(tenant_id_));

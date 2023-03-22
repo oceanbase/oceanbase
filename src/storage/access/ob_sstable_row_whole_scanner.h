@@ -62,7 +62,8 @@ public:
       micro_scanner_(nullptr),
       is_inited_(false),
       last_micro_block_recycled_(false),
-      last_mvcc_row_already_output_(false)
+      last_mvcc_row_already_output_(false),
+      iter_macro_cnt_(0)
   {}
 
   virtual ~ObSSTableRowWholeScanner();
@@ -120,6 +121,7 @@ private:
   bool is_inited_;
   bool last_micro_block_recycled_;
   bool last_mvcc_row_already_output_;
+  int64_t iter_macro_cnt_;
 };
 
 }

@@ -287,7 +287,7 @@ int LogNetService::post_sync_request_to_server_(const common::ObAddr &server,
 {
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(log_rpc_->post_sync_request(server, palf_id_, timeout_us, req, resp))) {
-    CLOG_LOG(WARN, "ObLogRpc post_sync_request failed", K(ret), K(palf_id_),
+    CLOG_LOG(WARN, "ObLogRpc post_sync_request failed", K(ret), K_(palf_id),
         K(req), K(server));
   } else {
     CLOG_LOG(TRACE, "post_sync_request_to_server_ success", K(ret), K(server), K(palf_id_), K(req));

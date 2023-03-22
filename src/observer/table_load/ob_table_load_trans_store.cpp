@@ -1,12 +1,11 @@
 // Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
 // Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
+//   suzhi.yt <>
 
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "observer/table/ob_table_service.h"
 #include "observer/table_load/ob_table_load_autoinc_nextval.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_stat.h"
@@ -107,7 +106,6 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     param_(trans_ctx_->ctx_->param_),
     allocator_("TLD_TSWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_),
     table_data_desc_(nullptr),
-    column_descs_(nullptr),
     ref_count_(0),
     is_flush_(false),
     is_inited_(false)
@@ -135,13 +133,12 @@ int ObTableLoadTransStoreWriter::init()
   } else if (OB_UNLIKELY(trans_store_->session_store_array_.count() != param_.session_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(trans_store_));
-  } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(param_.tenant_id_, tz_info_.get_tz_map_wrap()))) {
-    LOG_WARN("fail to get tenant time zone", KR(ret), K(param_.tenant_id_));
   } else {
-    table_data_desc_ = &trans_ctx_->ctx_->store_ctx_->table_data_desc_;
+    table_data_desc_ = &store_ctx_->table_data_desc_;
     collation_type_ = trans_ctx_->ctx_->schema_.collation_type_;
-    column_descs_ = &(trans_ctx_->ctx_->schema_.column_descs_);
-    if (OB_FAIL(init_session_ctx_array())) {
+    if (OB_FAIL(OTTZ_MGR.get_tenant_tz(param_.tenant_id_, tz_info_.get_tz_map_wrap()))) {
+      LOG_WARN("fail to get tenant time zone", KR(ret), K(param_.tenant_id_));
+    } else if (OB_FAIL(init_session_ctx_array())) {
       LOG_WARN("fail to init session ctx array", KR(ret));
     } else if (OB_FAIL(init_column_schemas())) {
       LOG_WARN("fail to init column schemas", KR(ret));
@@ -155,15 +152,15 @@ int ObTableLoadTransStoreWriter::init()
 int ObTableLoadTransStoreWriter::init_column_schemas()
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
+  const ObIArray<ObColDesc> &column_descs = store_ctx_->ctx_->schema_.column_descs_;
   const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(ObTableLoadSchema::get_table_schema(param_.tenant_id_, param_.table_id_, schema_guard,
+  if (OB_FAIL(ObTableLoadSchema::get_table_schema(param_.tenant_id_, param_.table_id_, schema_guard_,
                                                   table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(param_));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_column_count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColumnSchemaV2 *column_schema =
-      table_schema->get_column_schema(column_descs_->at(i).col_id_);
+      table_schema->get_column_schema(column_descs.at(i).col_id_);
     if (column_schema->is_hidden()) {
     } else if (OB_FAIL(column_schemas_.push_back(column_schema))) {
       LOG_WARN("failed to push back column schema", K(ret), K(i), KPC(column_schema));
@@ -190,6 +187,7 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
     }
   }
   ObDirectLoadTableStoreParam param;
+  param.snapshot_version_ = trans_ctx_->ctx_->ddl_param_.snapshot_version_;
   param.table_data_desc_ = *table_data_desc_;
   param.datum_utils_ = &(trans_ctx_->ctx_->schema_.datum_utils_);
   param.col_descs_ = &(trans_ctx_->ctx_->schema_.column_descs_);
@@ -366,7 +364,7 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
     out_obj.set_null();
     const ObColumnSchemaV2 *column_schema = column_schemas_.at(i);
     ObCastCtx cast_ctx(&cast_allocator, &cast_params, CM_NONE, column_schema->get_collation_type());
-    ObTableLoadCastObjCtx cast_obj_ctx(&time_cvrt_, &cast_ctx, true);
+    ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
     if ((!row.cells_[i].is_null() ||
          (!column_schema->is_autoincrement() && !column_schema->is_identity_column())) &&
         OB_FAIL(
@@ -379,7 +377,7 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
                                              column_schema->get_meta_type().get_type_class(),
                                              session_id))) {
       LOG_WARN("fail to handle autoinc column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
-    } else if (column_schema->is_identity_column() &&
+    } else if (column_schema->is_identity_column() && !column_schema->is_tbl_part_key_column() &&
                OB_FAIL(handle_identity_column(column_schema, datum_row.storage_datums_[i], cast_allocator))) {
       LOG_WARN("fail to handle identity column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
     }

@@ -92,7 +92,7 @@ public:
    */
   void detect_failure();
   bool is_clog_disk_has_fatal_error();
-  bool is_data_disk_has_fatal_error();
+  bool is_data_disk_has_fatal_error(bool &slog_hang, bool &data_hang);
 private:
   bool check_is_running_() const { return is_running_; }
   int insert_event_to_table_(const FailureEvent &event, const ObFunction<bool()> &recover_operation, ObString info);

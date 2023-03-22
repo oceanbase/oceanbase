@@ -114,7 +114,8 @@ enum JtColType {
   COL_TYPE_EXISTS, // 2
   COL_TYPE_QUERY, // 3
   COL_TYPE_VALUE, // 4
-  NESTED_COL_TYPE = 5,
+  NESTED_COL_TYPE, // 5
+  COL_TYPE_QUERY_JSON_COL = 6,
 };
 
 enum ObNameTypeClass
@@ -512,6 +513,7 @@ enum PXParallelRule
   SESSION_FORCE_PARALLEL, // alter session force parallel query parallel 3;
   MANUAL_TABLE_DOP, // create table t1 (...) parallel 3;
   PL_UDF_DAS_FORCE_SERIALIZE, //stmt has_pl_udf will use das, force serialize;
+  DBLINK_FORCE_SERIALIZE, //stmt has dblink will use das, force seialize;
   MAX_OPTION
 };
 
@@ -527,6 +529,7 @@ inline const char *ob_px_parallel_rule_str(PXParallelRule px_parallel_ruel)
     "SESSION_FORCE_PARALLEL",
     "MANUAL_TABLE_DOP",
     "PL_UDF_DAS_FORCE_SERIALIZE",
+    "DBLINK_FORCE_SERIALIZE",
     "MAX_OPTION",
   };
   if (OB_LIKELY(px_parallel_ruel >= NOT_USE_PX)

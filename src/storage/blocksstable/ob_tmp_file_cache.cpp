@@ -744,10 +744,12 @@ int ObTmpTenantMemBlockManager::try_sync(const int64_t block_id)
     } else {
       STORAGE_LOG(DEBUG, "the tmp macro block has been washed", K(ret), K(block_id));
     }
-  } else if (t_mblk->is_washing()){
+  } else if (t_mblk->is_washing()) {
     STORAGE_LOG(WARN, "the tmp macro block is washing", K(ret), K(block_id));
-  } else if (t_mblk->is_disked()){
+  } else if (t_mblk->is_disked()) {
     STORAGE_LOG(WARN, "the tmp macro block has been disked", K(ret), K(block_id));
+  } else if (0 == t_mblk->get_used_page_nums()) {
+    STORAGE_LOG(WARN, "the tmp macro block has not been written", K(ret), K(block_id));
   } else {
     t_mblk->set_washing_status(true);
     common::ObIArray<ObTmpFileExtent* > &extents = t_mblk->get_extents();
@@ -998,7 +1000,8 @@ int ObTmpTenantMemBlockManager::wash(const int64_t block_nums,
     int64_t cur_time = ObTimeUtility::fast_current_time();
     for (iter = t_mblk_map_.begin(); OB_SUCC(ret) && iter != t_mblk_map_.end(); ++iter) {
       ObTmpMacroBlock *m_blk = iter->second;
-      if (OB_UNLIKELY(NULL != m_blk) && OB_UNLIKELY(m_blk->is_inited()) && OB_UNLIKELY(!m_blk->is_disked())) {
+      if (OB_UNLIKELY(NULL != m_blk) && OB_UNLIKELY(m_blk->is_inited()) && OB_UNLIKELY(!m_blk->is_disked()) &&
+          OB_UNLIKELY(0 != m_blk->get_used_page_nums())) {
         BlockInfo info;
         info.block_id_ = m_blk->get_block_id();
         info.wash_score_ = m_blk->get_wash_score(cur_time);
@@ -1208,6 +1211,9 @@ int ObTmpTenantMemBlockManager::write_io(
       STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(write_info), K(handle));
     } else if (OB_FAIL(block_write_ctx_.add_macro_block_id(handle.get_macro_id()))) {
       STORAGE_LOG(WARN, "fail to add macro id", K(ret), "macro id", handle.get_macro_id());
+    } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(handle.get_macro_id(),
+        true/*update_to_max_time*/))) { //just to skip bad block inspect
+      STORAGE_LOG(WARN, "fail to update macro id write time", K(ret), "macro id", handle.get_macro_id());
     }
   }
   return ret;

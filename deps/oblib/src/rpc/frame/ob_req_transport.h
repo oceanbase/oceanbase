@@ -93,7 +93,7 @@ public:
   {
   public:
     AsyncCB(int pcode)
-        : dst_(), timeout_(0), tenant_id_(0),
+        : low_level_cb_(NULL), dst_(), timeout_(0), tenant_id_(0),
           err_(0), pcode_(pcode), send_ts_(0), payload_(0)
     {}
     virtual ~AsyncCB() {}
@@ -124,6 +124,7 @@ public:
     void set_payload(const int64_t payload) { payload_ = payload; }
     int64_t get_payload() { return payload_; }
 
+    void* low_level_cb_;
   private:
     static const int64_t REQUEST_ITEM_COST_RT = 100 * 1000; // 100ms
   protected:

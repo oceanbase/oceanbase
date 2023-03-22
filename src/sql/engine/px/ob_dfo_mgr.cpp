@@ -22,6 +22,7 @@
 #include "sql/engine/join/ob_join_filter_op.h"
 #include "sql/engine/px/exchange/ob_px_repart_transmit_op.h"
 #include "sql/optimizer/ob_px_resource_analyzer.h"
+#include "sql/engine/px/ob_px_scheduler.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -317,7 +318,8 @@ int ObDfoMgr::init(ObExecContext &exec_ctx,
                    const ObOpSpec &root_op_spec,
                    int64_t expected_worker_count,
                    int64_t admited_worker_count,
-                   const ObDfoInterruptIdGen &dfo_int_gen)
+                   const ObDfoInterruptIdGen &dfo_int_gen,
+                   ObPxCoordInfo &px_coord_info)
 {
   int ret = OB_SUCCESS;
   root_dfo_ = NULL;
@@ -325,7 +327,7 @@ int ObDfoMgr::init(ObExecContext &exec_ctx,
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("dfo mgr init twice", K(ret));
-  } else if (OB_FAIL(do_split(exec_ctx, allocator_, &root_op_spec, root_dfo_, dfo_int_gen))) {
+  } else if (OB_FAIL(do_split(exec_ctx, allocator_, &root_op_spec, root_dfo_, dfo_int_gen, px_coord_info))) {
     LOG_WARN("fail split ops into dfo", K(ret));
   } else if (OB_ISNULL(root_dfo_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -350,7 +352,8 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
                        ObIAllocator &allocator,
                        const ObOpSpec *phy_op,
                        ObDfo *&parent_dfo,
-                       const ObDfoInterruptIdGen &dfo_int_gen) const
+                       const ObDfoInterruptIdGen &dfo_int_gen,
+                       ObPxCoordInfo &px_coord_info) const
 {
   int ret = OB_SUCCESS;
   bool top_px = (nullptr == parent_dfo);
@@ -371,6 +374,14 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
   } else if (phy_op->is_table_scan() && NULL != parent_dfo) {
     parent_dfo->set_scan(true);
     parent_dfo->inc_tsc_op_cnt();
+    auto tsc_op = static_cast<const ObTableScanSpec *>(phy_op);
+    if (TableAccessType::HAS_USER_TABLE == px_coord_info.table_access_type_){
+      // nop
+    } else if (!is_virtual_table(tsc_op->get_ref_table_id())) {
+      px_coord_info.table_access_type_ = TableAccessType::HAS_USER_TABLE;
+    } else {
+      px_coord_info.table_access_type_ = TableAccessType::PURE_VIRTUAL_TABLE;
+    }
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
     parent_dfo->set_dml_op(true);
@@ -494,7 +505,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       for (int32_t i = 0; OB_SUCC(ret) && i < phy_op->get_child_cnt(); ++i) {
         ObDfo *tmp_parent_dfo = parent_dfo;
         if (OB_FAIL(do_split(exec_ctx, allocator, phy_op->get_child(i),
-                             tmp_parent_dfo, dfo_int_gen))) {
+                             tmp_parent_dfo, dfo_int_gen, px_coord_info))) {
           LOG_WARN("fail split op into dfo", K(ret));
         }
       }

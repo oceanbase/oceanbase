@@ -313,7 +313,7 @@ int ObLogCommitter::push(PartTransTask *task,
     if (OB_FAIL(handle_not_served_trans_(*task))) {
       LOG_ERROR("handle_not_served_trans_ fail", KR(ret), KPC(task));
     }
-  } else if (task->is_ls_table_trans()) {
+  } else if (task->is_ls_op_trans()) {
     if (OB_FAIL(push_ls_table_task_(*task))) {
       LOG_ERROR("push_ls_table_task_ fail", KR(ret), KPC(task));
     }
@@ -1249,8 +1249,13 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(trans_ctx.has_valid_br(stop_flag_))) {
     if (OB_EMPTY_RESULT == ret) {
-      ret = OB_SUCCESS;
-      LOG_DEBUG("trans has no valid br to output, skip this trans", K(trans_ctx));
+      if (0 < trans_ctx.get_total_br_count()) {
+        // unexpected
+        LOG_ERROR("trans has no valid br to output, skip this trans", K(trans_ctx));
+      } else {
+        LOG_INFO("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
+        ret = OB_SUCCESS;
+      }
     } else {
       LOG_ERROR("failed to wait for valid br", KR(ret), K(trans_ctx));
     }

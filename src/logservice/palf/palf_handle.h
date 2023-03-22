@@ -150,6 +150,9 @@ public:
   int get_begin_lsn(LSN &lsn) const;
   int get_begin_scn(share::SCN &scn) const;
 
+  // return the max recyclable point of Palf
+  int get_base_lsn(LSN &lsn) const;
+
   // PalfBaseInfo include the 'base_lsn' and the 'prev_log_info' of sliding window.
   // @param[in] const LSN&, base_lsn of ls.
   // @param[out] PalfBaseInfo&, palf_base_info
@@ -195,6 +198,8 @@ public:
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
                          const int64_t timeout_us);
+  // @brief: force set self as single member
+  int force_set_as_single_replica();
 
   int get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                          common::GlobalLearnerList &degraded_list) const;
@@ -313,6 +318,11 @@ public:
   //   OB_SUCCESS
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const;
   int get_access_mode(AccessMode &access_mode) const;
+
+  // @brief: check whether the palf instance is allowed to vote for logs
+  // By default, return true;
+  // After calling disable_vote(), return false.
+  bool is_vote_enabled() const;
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.

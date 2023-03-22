@@ -198,7 +198,7 @@ int ObModifyAutoincTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_UNLIKELY(!task_record.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_record));
-  } else if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
+  } else if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
     LOG_WARN("deserialize params from message failed", K(ret));
   } else if (OB_FAIL(set_ddl_stmt_str(task_record.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
@@ -465,6 +465,7 @@ int ObModifyAutoincTask::set_schema_available()
   } else {
     ObSArray<uint64_t> unused_ids;
     alter_table_arg_.ddl_task_type_ = share::UPDATE_AUTOINC_SCHEMA;
+    alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
       LOG_WARN("get rpc timeout failed", K(ret));
     } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
@@ -590,43 +591,36 @@ int ObModifyAutoincTask::serialize_params_to_message(char *buf, const int64_t bu
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize ObDDLTask", K(ret));
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
-  } else if (OB_FAIL(ddl_tracing_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
   }
   return ret;
 }
 
-int ObModifyAutoincTask::deserlize_params_from_message(const char *buf, const int64_t data_len, int64_t &pos)
+int ObModifyAutoincTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   obrpc::ObAlterTableArg tmp_arg;
-  if (OB_UNLIKELY(nullptr == buf || data_len <= 0)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
+  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos))) {
+    LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
-  } else {
-    if (pos < data_len) {
-      if (OB_FAIL(ddl_tracing_.deserialize(buf, data_len, pos))) {
-        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
-      }
-    }
   }
   return ret;
 }
 
 int64_t ObModifyAutoincTask::get_serialize_param_size() const
 {
-  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_)
-    + ddl_tracing_.get_serialize_size();
+  return alter_table_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size();
 }
 
 void ObModifyAutoincTask::flt_set_task_span_tag() const

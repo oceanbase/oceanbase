@@ -30,7 +30,6 @@
 #include <limits.h>
 #include <string.h>
 #include "share/rc/ob_tenant_base.h"
-#include "share/ob_thread_mgr.h"
 
 namespace oceanbase
 {
@@ -565,7 +564,7 @@ int ObStorageLogWriter::advance_file_id()
     write_offset_ = 0;
     cursor_.offset_ = write_offset_;
     batch_write_buf_.reuse();
-    STORAGE_REDO_LOG(WARN, "Successfully open slog file", K(cursor_.file_id_));
+    STORAGE_REDO_LOG(INFO, "Successfully open slog file", K(cursor_.file_id_));
   }
 
   return ret;
@@ -663,7 +662,7 @@ int ObStorageLogWriter::ObSLogWriteRunner::start()
     ret = OB_NOT_INIT;
     STORAGE_REDO_LOG(WARN, "ObSLogWriteRunner hasn't been inited.", K(ret), K(is_inited_));
   } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(tg_id_, *this))) {
-    STORAGE_REDO_LOG(WARN, "Fail to start log writer thread.", K(tg_id_));
+    STORAGE_REDO_LOG(WARN, "Fail to start log writer thread.", K(ret), K(tg_id_));
   }
   return ret;
 }
@@ -689,7 +688,7 @@ void ObStorageLogWriter::ObSLogWriteRunner::wait()
 void ObStorageLogWriter::ObSLogWriteRunner::run1()
 {
   STORAGE_REDO_LOG(INFO, "ObSLogWriteRunner run", K(tg_id_), K(is_inited_));
-  lib::set_thread_name_inner(log_writer_->get_thread_name());
+  lib::set_thread_name(log_writer_->get_thread_name());
   log_writer_->flush_log();
 }
 

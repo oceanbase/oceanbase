@@ -597,6 +597,7 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
 {
   int ret = OB_SUCCESS;
   can_be = true;
+  bool has_rollup = false;
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -604,6 +605,8 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
     LOG_WARN("failed to check", K(ret));
   } else if (!can_be) {
   } else {
+    has_rollup = parent_stmt->is_select_stmt() &&
+                 static_cast<ObSelectStmt *>(parent_stmt)->has_rollup();
     //select expr不能包含subquery
     for (int64_t i = 0; OB_SUCC(ret) && can_be && i < child_stmt->get_select_item_size(); i++) {
       ObRawExpr *expr = child_stmt->get_select_item(i).expr_;
@@ -613,9 +616,12 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
       } else if (expr->has_flag(CNT_SUB_QUERY)) {
         can_be = false;
         OPT_TRACE("view`s select expr contain subquery, can not merge");
+      } else if (expr->is_const_expr() && has_rollup) {
+        can_be = false;
+        OPT_TRACE("const expr can not be merged into rollup stmt");
       }
     }
-    //stmt不能包含rand函数 https://work.aone.alibaba-inc.com/issue/35875561
+    //stmt不能包含rand函数
     if (OB_SUCC(ret) && can_be) {
       bool has_rand = false;
       if (OB_FAIL(child_stmt->has_rand(has_rand))) {

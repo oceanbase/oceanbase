@@ -13,6 +13,8 @@
 #include "storage/checkpoint/ob_data_checkpoint.h"
 #include "storage/tx_storage/ob_checkpoint_service.h"
 #include "storage/ls/ob_ls.h"
+#include "storage/memtable/ob_memtable.h"
+#include "storage/ls/ob_freezer.h"
 
 namespace oceanbase
 {
@@ -524,11 +526,39 @@ int ObDataCheckpoint::add_to_new_create(ObFreezeCheckpoint *ob_freeze_checkpoint
 {
   ObSpinLockGuard guard(lock_);
   int ret = OB_SUCCESS;
+
   if (OB_FAIL(insert_(ob_freeze_checkpoint, new_create_list_, false))) {
     STORAGE_LOG(ERROR, "Add To Active Failed");
+  } else if (OB_FAIL(decide_freeze_clock_(ob_freeze_checkpoint))) {
+    STORAGE_LOG(WARN, "fail to decide freeze_clock", K(ret));
   } else {
     ob_freeze_checkpoint->location_ = NEW_CREATE;
   }
+
+  return ret;
+}
+
+int ObDataCheckpoint::decide_freeze_clock_(ObFreezeCheckpoint *ob_freeze_checkpoint)
+{
+  int ret = OB_SUCCESS;
+  ObFreezer *freezer = nullptr;
+  memtable::ObMemtable *memtable = nullptr;
+
+  if (OB_ISNULL(ls_) || OB_ISNULL(ob_freeze_checkpoint)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls or ob_freeze_checkpoint cannot be null", K(ret), K(ls_), K(ob_freeze_checkpoint));
+  } else if (FALSE_IT(freezer = ls_->get_freezer())) {
+  } else if (OB_ISNULL(freezer)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "freezer cannot be null", K(ret));
+  } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(ob_freeze_checkpoint))) {
+  } else {
+    // freeze_snapshot_version requires that two memtables of a tablet
+    // cannot join in the same logstream_freeze task
+    // otherwise freeze_snapshot_version of the old memtable will be too large
+    (void)memtable->set_freeze_clock(freezer->get_freeze_clock());
+  }
+
   return ret;
 }
 
@@ -752,12 +782,12 @@ int ObDataCheckpoint::freeze_base_on_needs_(share::SCN recycle_scn)
         } else {
           int need_flush_num = need_flush_tablets.count();
           logstream_freeze =
-            need_flush_num * 100 / wait_flush_num <= TABLET_FREEZE_PERCENT;
+            need_flush_num * 100 / wait_flush_num > TABLET_FREEZE_PERCENT;
         }
       }
 
       if (logstream_freeze) {
-        if (OB_FAIL(ls_->logstream_freeze())) {
+        if (OB_FAIL(ls_->logstream_freeze(true/*is_sync*/))) {
           STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
         }
       } else {

@@ -169,11 +169,12 @@ int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null child expr", K(ret), K(i));
       } else {
+        const ObObjMeta &param_meta = child->get_result_meta();
         need_check = child->is_const_expr();
-        if (need_check) {
-          const ObObjMeta &param_meta = child->get_result_meta();
-          need_check = param_meta.is_null() ||
-            (col_meta.get_type() == param_meta.get_type() && col_meta.get_collation_type() == param_meta.get_collation_type());
+        if (need_check && !param_meta.is_null()) {
+          const ObCmpOp cmp_op = sql::ObRelationalExprOperator::get_cmp_op(raw_expr->get_expr_type());
+          obj_cmp_func cmp_func = nullptr;
+          need_check = ObObjCmpFuncs::can_cmp_without_cast(col_meta, param_meta, cmp_op, cmp_func);
         }
       }
     }
@@ -826,8 +827,8 @@ int ObPushdownFilterExecutor::init_filter_param(
           } else if (!def_cell.is_nop_value()) {
             if (OB_FAIL(default_datum.from_obj(def_cell))) {
               LOG_WARN("convert obj to datum failed", K(ret), K(col_params_.count()), K(def_cell));
-            } else {
-              // def value must have no lob header
+            } else if (col_params.at(idx)->get_meta_type().is_lob_storage() && !def_cell.is_null()) {
+              // lob def value must have no lob header when not null
               // When do lob pushdown, should add lob header for default value
               ObString data = default_datum.get_string();
               ObString out;

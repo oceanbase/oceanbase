@@ -36,7 +36,7 @@ namespace transaction {
 
 class ObFakeTxDataTable : public ObTxDataTable {
 public:
-  ObFakeTxDataTable() : map_(1 << 20 /*2097152*/)
+  ObFakeTxDataTable() : arena_allocator_(), map_(arena_allocator_, 1 << 20 /*2097152*/)
   {
     IGNORE_RETURN map_.init();
     ObMemAttr mem_attr;
@@ -109,6 +109,7 @@ public:
     if (OB_ENTRY_NOT_EXIST == ret) { ret = OB_TRANS_CTX_NOT_EXIST; }
     return ret;
   }
+  ObArenaAllocator arena_allocator_;
   ObTxDataHashMap map_;
 };
 

@@ -278,15 +278,18 @@ int ObDASTaskFactory::create_das_extra_data(ObDASExtraData *&extra_result)
 }
 
 int ObDASTaskFactory::create_das_async_cb(
-    const common::ObSEArray<ObIDASTaskOp *, 2> &task_ops, const ObMemAttr &attr,
-    ObDASRef &das_ref, ObRpcDasAsyncAccessCallBack *&async_cb) {
+    const common::ObSEArray<ObIDASTaskOp *, 2> &task_ops,
+    const ObMemAttr &attr,
+    ObDASRef &das_ref,
+    ObRpcDasAsyncAccessCallBack *&async_cb,
+    int64_t timeout_ts) {
   int ret = OB_SUCCESS;
   void *buffer = nullptr;
   ObDasAsyncRpcCallBackContext *context = nullptr;
   if (OB_ISNULL(buffer = allocator_.alloc(sizeof(ObDasAsyncRpcCallBackContext)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate das async cb context memory", K(ret), K(sizeof(ObDasAsyncRpcCallBackContext)));
-  } else if (FALSE_IT(context = new (buffer) ObDasAsyncRpcCallBackContext(das_ref, task_ops))) {
+  } else if (FALSE_IT(context = new (buffer) ObDasAsyncRpcCallBackContext(das_ref, task_ops, timeout_ts))) {
   } else if (OB_FAIL(context->init(attr))) {
     LOG_WARN("fail to init das async cb context", K(ret));
   } else if (OB_ISNULL(buffer = allocator_.alloc(sizeof(ObRpcDasAsyncAccessCallBack)))) {

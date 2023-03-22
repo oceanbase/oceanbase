@@ -24,9 +24,9 @@ using namespace oceanbase::observer;
 
 void *thread_func(void *args)
 {
-  int *tid = static_cast<int *>(args);
-  *tid = static_cast<int>(syscall(SYS_gettid));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.add_self_to_cgroup(1001));
   sleep(3);
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.remove_self_from_cgroup(1001));
   return nullptr;
 }
 
@@ -37,29 +37,16 @@ TEST(TestCgroupCtrl, AddDelete)
   ASSERT_EQ(OB_SUCCESS, cg_ctrl.init());
   ASSERT_TRUE(cg_ctrl.is_valid());
 
-  int tids[4];
   pthread_t ts[4];
   for (int i = 0; i < 4; i++) {
-    pthread_create(&ts[i], nullptr, thread_func, &tids[i]);
+    pthread_create(&ts[i], nullptr, thread_func, NULL);
   }
   sleep(1);
-
-  const uint64_t tenant_id1 = 1001;
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.add_thread_to_cgroup(tids[0],tenant_id1));
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.add_thread_to_cgroup(tids[1],tenant_id1));
-
-  const uint64_t tenant_id2 = 1002;
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.add_thread_to_cgroup(tids[2], tenant_id2));
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.add_thread_to_cgroup(tids[3], tenant_id2));
-
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.remove_thread_from_cgroup(tids[2], tenant_id2));
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.remove_thread_from_cgroup(tids[3], tenant_id2));
-
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.remove_tenant_cgroup(tenant_id1));
 
   for (int i = 0; i < 4; i++) {
     pthread_join(ts[i], nullptr);
   }
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.remove_tenant_cgroup(1001));
 }
 
 TEST(TestCgroupCtrl, SetGetValue)
@@ -68,27 +55,22 @@ TEST(TestCgroupCtrl, SetGetValue)
   ASSERT_EQ(OB_SUCCESS, cg_ctrl.init());
   ASSERT_TRUE(cg_ctrl.is_valid());
 
-  int tids[4];
   pthread_t ts[4];
   for (int i = 0; i < 4; i++) {
-    pthread_create(&ts[i], nullptr, thread_func, &tids[i]);
+    pthread_create(&ts[i], nullptr, thread_func, NULL);
   }
   sleep(1);
 
-  const uint64_t tenant_id1 = 1001;
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.add_thread_to_cgroup(tids[0],tenant_id1));
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.add_thread_to_cgroup(tids[1],tenant_id1));
-
   const int32_t cpu_shares = 2048;
   int32_t cpu_shares_v = 0;
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.set_cpu_shares(cpu_shares, tenant_id1));
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.get_cpu_shares(cpu_shares_v, tenant_id1));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.set_cpu_shares(cpu_shares, 1001));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.get_cpu_shares(cpu_shares_v, 1001));
   ASSERT_EQ(cpu_shares, cpu_shares_v);
 
   const int32_t cpu_cfs_quota = 80000;
   int32_t cpu_cfs_quota_v = 0;
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.set_cpu_cfs_quota(cpu_cfs_quota, tenant_id1));
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.get_cpu_cfs_quota(cpu_cfs_quota_v, tenant_id1));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.set_cpu_cfs_quota(cpu_cfs_quota, 1001));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.get_cpu_cfs_quota(cpu_cfs_quota_v, 1001));
   ASSERT_EQ(cpu_cfs_quota, cpu_cfs_quota_v);
 
   for (int i = 0; i < 4; i++) {

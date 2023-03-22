@@ -231,6 +231,7 @@ int ObRootBlockInfo::transform_root_block_data(const ObTableReadInfo &read_info)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate decoder allocator", K(ret));
     } else if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
+      // There must be get_decoder_allocator before GET_TSI_MULT(ObIndexBlockDataTransformer)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate transformer", K(ret));
     } else {

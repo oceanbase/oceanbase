@@ -452,26 +452,43 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
     const ObLobCommon *lob_common =
       (payload.length() == 0 ? NULL : reinterpret_cast<const ObLobCommon *>(payload.ptr()));
     int64_t out_payload_len = payload.length();
+    int64_t byte_size = lob_common->get_byte_size(out_payload_len);
     bool is_src_inrow = (is_simple ? true : lob_common->in_row_);
     // systable read always get full lob data and output inrow lobs
-    bool is_dst_inrow = (is_systable ? true : is_src_inrow);
+    bool is_dst_inrow = ((is_systable) ? true : is_src_inrow);
+    if (byte_size <= LOB_FORCE_INROW_SIZE) {
+      // if lob is smaller than datum allow size
+      // let lob obj force inrow for hash/cmp cannot handle error
+      is_dst_inrow = true;
+    }
     // oracle user table lobs and mysql user table outrow lobs need extern.
     bool has_extern = (!is_simple) && (lib::is_oracle_mode() || !is_dst_inrow);
     ObMemLobExternFlags extern_flags(has_extern);
 
+    bool padding_char_size = false;
+    if (!lob_common->in_row_ && is_dst_inrow &&
+        out_payload_len == ObLobManager::LOB_WITH_OUTROW_CTX_SIZE) {
+      // for 4.0 lob, outrow disk lob locator do force inrow
+      // not have char len, should do padding
+      out_payload_len += sizeof(uint64_t);
+      padding_char_size = true;
+    }
+
     if (!is_src_inrow && is_dst_inrow) {
       // read outrow lobs but output as inrow lobs, need to calc the output payload lens
       // get byte size of out row lob, and calc total disk lob handle size if it is inrow
-      out_payload_len = lob_common->get_byte_size(out_payload_len);
-      out_payload_len = ObLobCommon::calc_inrow_handle_size(lob_common->is_init_, out_payload_len);
+      out_payload_len += byte_size; // need whole disk locator
     }
 
     int64_t full_loc_size = ObLobLocatorV2::calc_locator_full_len(extern_flags,
                                                                   rowid_str.length(),
                                                                   out_payload_len,
                                                                   is_simple);
-
-    if (OB_ISNULL(buf = reinterpret_cast<char *>(locator_allocator_.alloc(full_loc_size)))) {
+    if (full_loc_size > OB_MAX_LONGTEXT_LENGTH) {
+      ret = OB_SIZE_OVERFLOW;
+      STORAGE_LOG(WARN, "Failed to get lob data over size", K(ret), K(full_loc_size),
+                  K(rowid_str.length()), K(out_payload_len));
+    } else if (OB_ISNULL(buf = reinterpret_cast<char *>(locator_allocator_.alloc(full_loc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to alloc memory for lob locator", K(ret), K(full_loc_size));
     } else if (FALSE_IT(MEMSET(buf, 0, full_loc_size))) {
@@ -525,22 +542,24 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
           }
         } else if ((!is_src_inrow) && is_dst_inrow) { //src outrow, load to inrow result
           OB_ASSERT(payload.length() >= sizeof(ObLobCommon));
+          storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
           ObString disk_loc_str;
           if (OB_FAIL(locator.get_disk_locator(disk_loc_str))) {
             STORAGE_LOG(WARN, "Lob: get disk locator failed", K(ret), K(column_id));
+          } else if (OB_ISNULL(lob_mngr)) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "Lob: get ObLobManager null", K(ret));
           } else {
             char *buffer = disk_loc_str.ptr();
-            MEMCPY(buffer, lob_common, sizeof(ObLobCommon));
-            int64_t offset = sizeof(ObLobCommon);
-            if (lob_common->is_init_) {
-              MEMCPY(buffer + offset, lob_common->buffer_, sizeof(ObLobData));
-              offset += sizeof(ObLobData); // copy lob id
+            MEMCPY(buffer, lob_common, payload.length());
+            int64_t offset = payload.length();
+            uint64_t *char_len_ptr = nullptr;
+            if (padding_char_size) {
+              char_len_ptr = reinterpret_cast<uint64_t*>(buffer + offset);
+              offset += sizeof(uint64_t);
             }
-            ObLobCommon *new_lob_common = reinterpret_cast<ObLobCommon *>(buffer);
-            new_lob_common->in_row_ = 1; // set to inrow
 
             // read full data to new locator
-            storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
             ObLobAccessParam param;
             param.tx_desc_ = NULL;
             param.snapshot_.core_.tx_id_ = tx_id_;
@@ -561,16 +580,23 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             param.timeout_ = access_ctx.timeout_;
             param.scan_backward_ = false;
             param.offset_ = 0;
-            param.len_ = (disk_loc_str.length() - offset);
+            param.len_ = param.byte_size_;
             ObString output_data;
             output_data.assign_buffer(buffer + offset, param.len_);
             if (OB_FAIL(lob_mngr->query(param, output_data))) {
               COMMON_LOG(WARN,"Lob: falied to query lob tablets.", K(ret), K(param));
-            } else { // Debug only
+            } else if (padding_char_size) {
               ObString data_str;
-              locator.get_inrow_data(data_str);
-              STORAGE_LOG(DEBUG, "Lob: read lob data",
-                K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+              if (OB_FAIL(locator.get_inrow_data(data_str))) {
+                STORAGE_LOG(WARN, "Lob: read lob data failed",
+                  K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+              } else if (OB_ISNULL(char_len_ptr)) {
+                ret = OB_ERR_UNEXPECTED;
+                STORAGE_LOG(WARN, "Lob: get null char len ptr when need padding char len",
+                  K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+              } else {
+                *char_len_ptr = ObCharset::strlen_char(param.coll_type_, data_str.ptr(), data_str.length());
+              }
             }
           }
         } else if (is_src_inrow && (!is_dst_inrow)){

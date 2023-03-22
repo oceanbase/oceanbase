@@ -128,6 +128,13 @@ int ObMemoryDump::init()
         w_stat_ = new (r_stat_ + 1) Stat();
         dump_context_ = context;
         is_inited_ = true;
+        if (OB_FAIL(r_stat_->malloc_sample_map_.create(1000, "MallocInfoMap",
+                                                       "MallocInfoMap"))) {
+          LOG_WARN("create memory info map for reading failed", K(ret));
+        } else if (OB_FAIL(w_stat_->malloc_sample_map_.create(1000, "MallocInfoMap",
+                                                              "MallocInfoMap"))) {
+          LOG_WARN("create memory info map for writing failed", K(ret));
+        }
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(TG_SET_RUNNABLE_AND_START(TGDefIDs::MEMORY_DUMP, *this))) {
@@ -175,6 +182,17 @@ int ObMemoryDump::push(void *task)
     if (OB_SIZE_OVERFLOW == ret) {
       ret = OB_EAGAIN;
     }
+  }
+  return ret;
+}
+
+int ObMemoryDump::load_malloc_sample_map(ObMallocSampleMap &malloc_sample_map)
+{
+  int ret = OB_SUCCESS;
+  ObLatchRGuard guard(iter_lock_, ObLatchIds::MEM_DUMP_ITER_LOCK);
+  auto &map = r_stat_->malloc_sample_map_;
+  for (auto it = map.begin(); OB_SUCC(ret) && it != map.end(); ++it) {
+    ret = malloc_sample_map.set_refactored(it->first, it->second);
   }
   return ret;
 }
@@ -365,11 +383,12 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
     ObString str(len, label);
     LabelItem *litem = nullptr;
     LabelInfoItem *linfoitem = lmap.get(str);
+    int64_t bt_size = object->on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0;
     if (NULL != linfoitem) {
       // exist
       litem = linfoitem->litem_;
       litem->hold_ += hold;
-      litem->used_ += object->alloc_bytes_;
+      litem->used_ += (object->alloc_bytes_ - bt_size);
       litem->count_++;
       if (chunk != linfoitem->chunk_) {
         litem->chunk_cnt_ += 1;
@@ -389,12 +408,41 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
         litem->str_[len] = '\0';
         litem->str_len_ = len;
         litem->hold_ = hold;
-        litem->used_ = object->alloc_bytes_;
+        litem->used_ = (object->alloc_bytes_ - bt_size);
         litem->count_ = 1;
         litem->block_cnt_ = 1;
         litem->chunk_cnt_ = 1;
         ret = lmap.set_refactored(ObString(litem->str_len_, litem->str_), LabelInfoItem(litem, chunk, block));
       }
+    }
+  }
+  return ret;
+}
+
+int malloc_sample_stat(uint64_t tenant_id, uint64_t ctx_id,
+                       AObject *object, ObMallocSampleMap &malloc_sample_map)
+{
+  int ret = OB_SUCCESS;
+  if (object->in_use_ && object->on_malloc_sample_) {
+    int64_t offset = object->alloc_bytes_ - AOBJECT_BACKTRACE_SIZE;
+    ObMallocSampleKey key;
+    key.tenant_id_ = tenant_id;
+    key.ctx_id_ = ctx_id;
+    void **backtrace = reinterpret_cast<void**>(&object->data_[offset]);
+    int32_t bt_size = 0;
+    while (bt_size < AOBJECT_BACKTRACE_COUNT && nullptr != backtrace[bt_size]) {
+      key.bt_[bt_size] = backtrace[bt_size];
+      ++bt_size;
+    }
+    key.bt_size_ = bt_size;
+    STRNCPY(key.label_, object->label_, sizeof(key.label_));
+    key.label_[sizeof(key.label_) - 1] = '\0';
+    ObMallocSampleValue *item = malloc_sample_map.get(key);
+    if (NULL != item) {
+      item->alloc_count_ += 1;
+      item->alloc_bytes_ += offset;
+    } else {
+      ret = malloc_sample_map.set_refactored(key, ObMallocSampleValue(1, offset));
     }
   }
   return ret;
@@ -415,6 +463,7 @@ void ObMemoryDump::handle(void *task)
     get_tenant_ids(tenant_ids_, MAX_TENANT_CNT, tenant_cnt);
     std::sort(tenant_ids_, tenant_ids_ + tenant_cnt);
     w_stat_->tcr_cnt_ = 0;
+    w_stat_->malloc_sample_map_.clear();
     int64_t item_used = 0;
     int64_t log_pos = 0;
     IGNORE_RETURN databuff_printf(log_buf_, LOG_BUF_LEN, log_pos,
@@ -456,8 +505,9 @@ void ObMemoryDump::handle(void *task)
                     UNUSEDx(chunk, block);
                     return OB_SUCCESS;
                   },
-                  [tenant_id, &lmap, w_stat, &item_used]
+                  [tenant_id, ctx_id, &lmap, w_stat, &item_used]
                   (AChunk *chunk, ABlock *block, AObject *object) {
+                    int ret = OB_SUCCESS;
                     if (object->in_use_) {
                       bool expect = AOBJECT_TAIL_MAGIC_CODE ==
                         reinterpret_cast<uint64_t&>(object->data_[object->alloc_bytes_]);
@@ -470,9 +520,14 @@ void ObMemoryDump::handle(void *task)
                                   K(length), K(label));
                       }
                     }
-                    return label_stat(chunk, block, object, lmap,
+                    ret = label_stat(chunk, block, object, lmap,
                                       w_stat->up2date_items_, ARRAYSIZEOF(w_stat->up2date_items_),
                                       item_used);
+                    if (OB_SUCC(ret)) {
+                      ret = malloc_sample_stat(tenant_id, ctx_id,
+                                               object, w_stat->malloc_sample_map_);
+                    }
+                    return ret;
                   });
               if (OB_FAIL(ret)) {
                 LOG_WARN("parse_chunk_meta failed", K(ret), KP(chunk));

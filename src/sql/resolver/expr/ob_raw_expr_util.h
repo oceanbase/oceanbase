@@ -370,6 +370,8 @@ public:
                                 const ObIArray<ObRawExpr*> *except_exprs = NULL);
 
   static bool is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exprs);
+  static int extract_set_op_exprs(const ObRawExpr *raw_expr,
+                                  common::ObIArray<ObRawExpr*> &set_op_exprs);
   /// extract column exprs from the raw expr
   static int extract_column_exprs(const ObRawExpr *raw_expr,
                                   common::ObIArray<ObRawExpr*> &column_exprs,
@@ -472,7 +474,8 @@ public:
                                      ObRawExpr *src_expr,
                                      ObSysFunRawExpr *&out_expr,
                                      ObSQLSessionInfo *session_info,
-                                     bool is_type_to_str);
+                                     bool is_type_to_str,
+                                     ObObjType dst_type = ObMaxType);
 
   static int get_exec_param_expr(ObRawExprFactory &expr_factory,
                                  ObQueryRefRawExpr *query_ref,
@@ -1055,6 +1058,11 @@ public:
                                   const share::schema::ObTableSchema &index_schema,
                                   ObColumnRefRawExpr *&spk_expr);
   static int check_contain_case_when_exprs(const ObRawExpr *raw_expr, bool &contain);
+
+  static int create_type_expr(ObRawExprFactory &expr_factory,
+                              ObConstRawExpr *&type_expr,
+                              const ObExprResType &dst_type,
+                              bool avoid_zero_len = false);
 
 private :
 

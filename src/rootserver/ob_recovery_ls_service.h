@@ -67,10 +67,10 @@ public:
   ObRecoveryLSService() : inited_(false),
   tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL) {}
   virtual ~ObRecoveryLSService() {}
-  static int mtl_init(ObRecoveryLSService *&ka);
   int init();
   void destroy();
   virtual void do_work() override;
+  DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
  //get log iterator by start_scn
  int seek_log_iterator_(const share::SCN &syn_scn,

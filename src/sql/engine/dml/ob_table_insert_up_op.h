@@ -207,6 +207,7 @@ protected:
   int init_insert_up_rtdef();
 
   int deal_hint_part_selection(ObObjectID partition_id);
+  virtual int check_need_exec_single_row() override;
 
 private:
   int check_insert_up_ctdefs_valid() const;

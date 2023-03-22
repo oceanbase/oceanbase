@@ -36,12 +36,13 @@ OB_SERIALIZE_MEMBER(ObXAStartRPCRequest,
                     sender_,
                     is_new_branch_,
                     is_tightly_coupled_,
-                    need_response_,
+                    is_first_branch_,
                     timeout_seconds_,
                     flags_);
 OB_SERIALIZE_MEMBER(ObXAStartRPCResponse,
                     tx_id_,
-                    tx_info_);
+                    tx_info_,
+                    is_first_branch_);
 OB_SERIALIZE_MEMBER(ObXAEndRPCRequest,
                     tx_id_,
                     stmt_info_,
@@ -162,7 +163,7 @@ int ObXAStartRPCRequest::init(const ObTransID &tx_id,
                               const bool is_tightly_coupled,
                               const int64_t timeout_seconds,
                               const int64_t flags,
-                              const bool need_response)
+                              const bool is_first_branch)
 {
   int ret = OB_SUCCESS;
   if (!tx_id.is_valid() ||
@@ -178,7 +179,7 @@ int ObXAStartRPCRequest::init(const ObTransID &tx_id,
     sender_ = sender;
     is_new_branch_ = is_new_branch;
     is_tightly_coupled_ = is_tightly_coupled;
-    need_response_ = need_response;  // false by default
+    is_first_branch_ = is_first_branch;  // false by default
     timeout_seconds_ = timeout_seconds;
     flags_ = flags;
   }
@@ -214,7 +215,7 @@ int ObXAStartP::process()
     if (xa_ctx->is_tightly_coupled() != is_tightly_coupled) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected tight couple flag", K(is_tightly_coupled), K(xid), K(trans_id));
-    } else if (arg_.need_response() && OB_FAIL(xa_ctx->wait_xa_start_complete())) {
+    } else if (arg_.is_first_branch() && OB_FAIL(xa_ctx->wait_xa_start_complete())) {
       TRANS_LOG(WARN, "wait xa start complete failed", K(ret));
     } else if (OB_FAIL(xa_ctx->process_xa_start(arg_))) {
       TRANS_LOG(WARN, "xa ctx remote pull failed", K(ret), K(trans_id), K(xid));
@@ -228,7 +229,8 @@ int ObXAStartP::process()
 }
 
 int ObXAStartRPCResponse::init(const ObTransID &tx_id,
-                               ObTxDesc &tx_desc)
+                               ObTxDesc &tx_desc,
+                               const bool is_first_branch)
 {
   int ret = OB_SUCCESS;
   if (!tx_desc.is_valid()) {
@@ -238,6 +240,7 @@ int ObXAStartRPCResponse::init(const ObTransID &tx_id,
     TRANS_LOG(WARN, "get tx info failed", KR(ret));
   } else {
     tx_id_ = tx_id;
+    is_first_branch_ = is_first_branch;
   }
   return ret;
 }
@@ -362,7 +365,11 @@ int ObXACommitP::process()
     TRANS_LOG(WARN, "xa ctx is null", K(ret), K(arg_));
   } else {
     if (OB_FAIL(xa_ctx->one_phase_end_trans(xid, false/*is_rollback*/, timeout_us, request_id))) {
-      TRANS_LOG(WARN, "one phase end trans failed", K(ret), K(xid));
+      if (OB_TRANS_COMMITED != ret) {
+         TRANS_LOG(WARN, "one phase xa commit failed", K(ret), K(xid));
+      } else {
+        ret = OB_SUCCESS;
+      }
     } else if (OB_FAIL(xa_ctx->wait_one_phase_end_trans(false/*is_rollback*/, timeout_us))) {
       TRANS_LOG(WARN, "fail to wait one phase xa end trans", K(ret), K(xid));
     }

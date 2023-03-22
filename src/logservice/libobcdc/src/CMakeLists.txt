@@ -12,7 +12,7 @@ target_include_directories(obcdc_base INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(obcdc_base
   INTERFACE ob_base
   obcdc_msg rocksdb
-  -Wl,-znorelro -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
+  ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 
 ob_set_subtarget(obcdc_object_list common
   libobcdc.cpp

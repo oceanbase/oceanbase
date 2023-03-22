@@ -85,11 +85,8 @@ void ClientLSKey::reset()
 
 ClientLSCtx::ClientLSCtx()
   : is_inited_(false),
+    source_lock_(ObLatchIds::CDC_SERVICE_LS_CTX_LOCK),
     source_(NULL),
-    get_source_func_(*this),
-    update_source_func_(*this),
-    iter_(get_source_func_, update_source_func_),
-    iter_next_lsn_(palf::LOG_INVALID_LSN_VAL),
     fetch_mode_(FetchMode::FETCHMODE_UNKNOWN),
     last_touch_ts_(OB_INVALID_TIMESTAMP),
     client_progress_(OB_INVALID_TIMESTAMP)
@@ -105,7 +102,6 @@ int ClientLSCtx::init(int64_t client_progress)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TIMESTAMP != client_progress) {
-    iter_next_lsn_ = palf::LSN(palf::LOG_INVALID_LSN_VAL);
     is_inited_ = true;
     set_progress(client_progress);
     set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "ClientLSCtxInit");
@@ -124,8 +120,6 @@ void ClientLSCtx::reset()
     logservice::ObResSrcAlloctor::free(source_);
     source_ = NULL;
   }
-  iter_.reset();
-  iter_next_lsn_ = palf::LSN(palf::LOG_INVALID_LSN_VAL);
   fetch_mode_ = FetchMode::FETCHMODE_UNKNOWN;
   last_touch_ts_ = OB_INVALID_TIMESTAMP;
   client_progress_ = OB_INVALID_TIMESTAMP;
@@ -143,6 +137,7 @@ void ClientLSCtx::set_source(logservice::ObRemoteLogParent *source)
 //////////////////////////////////////////////////////////////////////////
 int ObCdcGetSourceFunctor::operator()(const share::ObLSID &id, logservice::ObRemoteSourceGuard &guard) {
   int ret = OB_SUCCESS;
+  ObSpinLockGuard ctx_source_guard(ctx_.source_lock_);
   logservice::ObRemoteLogParent *ctx_source = ctx_.get_source();
   if (OB_ISNULL(ctx_source)) {
     ret = OB_ERR_UNEXPECTED;
@@ -164,6 +159,7 @@ int ObCdcGetSourceFunctor::operator()(const share::ObLSID &id, logservice::ObRem
 int ObCdcUpdateSourceFunctor::operator()(const share::ObLSID &id, logservice::ObRemoteLogParent *source) {
   int ret = OB_SUCCESS;
   UNUSED(id);
+  ObSpinLockGuard ctx_source_guard(ctx_.source_lock_);
   logservice::ObRemoteLogParent *ctx_source = ctx_.get_source();
   if (OB_ISNULL(source)) {
     ret = OB_ERR_UNEXPECTED;

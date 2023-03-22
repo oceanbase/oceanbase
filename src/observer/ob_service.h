@@ -146,6 +146,7 @@ public:
   int delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg);
   int get_ls_sync_scn(const obrpc::ObGetLSSyncScnArg &arg,
                            obrpc::ObGetLSSyncScnRes &result);
+  int force_set_ls_as_single_replica(const obrpc::ObForceSetLSAsSingleReplicaArg &arg);
   int refresh_tenant_info(const obrpc::ObRefreshTenantInfoArg &arg,
                           obrpc::ObRefreshTenantInfoRes &result);
   int estimate_partition_rows(const obrpc::ObEstPartArg &arg,

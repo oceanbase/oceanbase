@@ -33,7 +33,7 @@ int ObCdcService::get_backup_dest(const share::ObLSID &ls_id, share::ObBackupDes
     EXTLOG_LOG(WARN, "cdc service is null, unexpected", KR(ret));
   } else if (FALSE_IT(archive_dest = cdc_service->get_archive_dest_info())) {
   } else if (archive_dest.empty()) {
-    ret = OB_ENTRY_NOT_EXIST;
+    ret = OB_ALREADY_IN_NOARCHIVE_MODE;
     EXTLOG_LOG(WARN, "archivelog is off yet", KR(ret), K(MTL_ID()));
   } else if (OB_FAIL(backup_dest.set(archive_dest.at(0).second))) {
     EXTLOG_LOG(WARN, "failed to set backup dest info", KR(ret), K(archive_dest));
@@ -103,6 +103,7 @@ void ObCdcService::run1()
     while(! is_stoped()) {
       // archive is always off for sys tenant, no need to query archive dest
       int64_t current_ts = ObTimeUtility::current_time();
+      IGNORE_RETURN lib::Thread::update_loop_ts(current_ts);
       if (OB_SYS_TENANT_ID != tenant_id) {
         if (current_ts - last_query_ts >= QUERY_INTERVAL) {
           // the change of archive dest info is not supported

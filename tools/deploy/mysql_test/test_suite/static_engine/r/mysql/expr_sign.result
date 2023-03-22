@@ -883,7 +883,7 @@ select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2 f
 |                              1 |                             -1 |
 +--------------------------------+--------------------------------+
 
-#https://work.aone.alibaba-inc.com/issue/32398792
+#
 select sign(1E-300) from dual;
 +--------------+
 | sign(1E-300) |
