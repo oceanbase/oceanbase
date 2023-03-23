@@ -239,14 +239,14 @@ int ObUDRUtils::match_udr_and_refill_ctx(const ObString &pattern,
                                          ObUDRItemMgr::UDRItemRefGuard &item_guard)
 {
   int ret = OB_SUCCESS;
+  bool enable_udr = false;
   is_match_udr = false;
   ObSQLSessionInfo &session = result.get_session();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
-  if (!tenant_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant config is invalid", K(ret));
-  } else if (tenant_config->enable_user_defined_rewrite_rules
-             && !(pc_ctx.is_inner_sql() || PC_PL_MODE == pc_ctx.mode_)) {
+  if (tenant_config.is_valid()) {
+    enable_udr = tenant_config->enable_user_defined_rewrite_rules;
+  }
+  if (enable_udr && !(pc_ctx.is_inner_sql() || PC_PL_MODE == pc_ctx.mode_)) {
     ObIAllocator &allocator = result.get_mem_pool();
     PatternConstConsList cst_cons_list;
     if (OB_FAIL(match_udr_item(pattern, session, allocator, item_guard, &cst_cons_list))) {
