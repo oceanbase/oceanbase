@@ -38,7 +38,7 @@ public:
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
   virtual const ObDASBaseCtDef *get_ctdef() const override { return ins_ctdef_; }
   virtual ObDASBaseRtDef *get_rtdef() override { return ins_rtdef_; }
-  int write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, bool &buffer_full);
+  int write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, bool &buffer_full, ObChunkDatumStore::StoredRow* &stored_row);
   int64_t get_row_cnt() const { return insert_buffer_.get_row_cnt(); }
   void set_das_ctdef(const ObDASInsCtDef *ins_ctdef) { ins_ctdef_ = ins_ctdef; }
   void set_das_rtdef(ObDASInsRtDef *ins_rtdef) { ins_rtdef_ = ins_rtdef; }

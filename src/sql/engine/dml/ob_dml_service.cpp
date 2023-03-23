@@ -1403,21 +1403,24 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     }
     //2. try add row to das dml buffer
     if (OB_SUCC(ret)) {
+      ObChunkDatumStore::StoredRow* stored_row = nullptr;
       int64_t simulate_row_cnt = - EVENT_CALL(EventTable::EN_DAS_DML_BUFFER_OVERFLOW);
       if (OB_UNLIKELY(simulate_row_cnt > 0 && dml_op->get_row_cnt() >= simulate_row_cnt)) {
         buffer_full = true;
-      } else if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), buffer_full))) {
+      } else if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), buffer_full, stored_row))) {
         LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
+      } else if (OB_NOT_NULL(stored_row)) {
+        dml_rtctx.add_cached_row_size(stored_row->row_size_);
       }
       LOG_DEBUG("write row to das op", K(ret), K(buffer_full), "op_type", N,
                 "table_id", ctdef.table_id_, "index_tid", ctdef.index_tid_,
-                "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row));
+                "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row), "row_size", stored_row->row_size_);
     }
     //3. if buffer is full, flush das task, and retry to add row
     if (OB_SUCC(ret) && buffer_full) {
       need_retry = true;
       if (REACH_COUNT_INTERVAL(10)) { // print log per 10 times.
-        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()));
+        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()), K(dml_rtctx.get_cached_row_size()));
       }
       if (OB_UNLIKELY(dml_rtctx.need_non_sub_full_task())) {
         // 因为replace into 和 insert up在做try_insert时，需要返回duplicated row，

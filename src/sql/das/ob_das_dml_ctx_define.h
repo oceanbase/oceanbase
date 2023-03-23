@@ -376,7 +376,8 @@ public:
                   ObEvalCtx *ctx,
                   const int64_t memory_limit,
                   bool &row_added,
-                  bool strip_lob_locator);
+                  bool strip_lob_locator,
+                  DmlRow* &stored_row);
   int try_add_row(const DmlShadowRow &sr, const int64_t memory_limit, bool &row_added, DmlRow **stored_row = nullptr);
   int begin(Iterator &it);
   int begin(NewRowIterator &it, const common::ObIArray<common::ObObjMeta> &col_types);
