@@ -56,17 +56,17 @@ public:
   virtual int revert_scan_iter(common::ObNewRowIterator *iter) override;
   virtual int fetch_lob_id(const ObLobAccessParam& param, uint64_t &lob_id) override;
   // write meta tablet
-  int write_lob_meta_tablet(ObLobAccessParam &param, ObLobMetaInfo& row_info);
+  virtual int write_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info) override;
   // write piece tablet
   int write_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row);
   // erase meta tablet item
-  int erase_lob_meta_tablet(ObLobAccessParam &param, ObLobMetaInfo& row_info);
+  virtual int erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info) override;
   // erase piece tablet item
   int erase_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row);
   // update piece tabliet item
   int update_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row);
   // update lob meta tablet item
-  int update_lob_meta_tablet(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row);
+  virtual int update_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row) override;
 private:
   // get schema from schema service 
   int get_lob_tablet_schema(
