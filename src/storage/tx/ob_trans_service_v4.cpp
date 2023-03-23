@@ -1777,7 +1777,8 @@ int ObTransService::handle_tx_batch_req(int msg_type,
     } else if (OB_FAIL(get_tx_ctx_(msg.get_receiver(), msg.get_trans_id(), ctx))) { \
       TRANS_LOG(WARN, "get tx context fail", K(ret),  K(msg));          \
       if (OB_TRANS_CTX_NOT_EXIST == ret ||                              \
-          OB_PARTITION_NOT_EXIST == ret) {                              \
+          OB_PARTITION_NOT_EXIST == ret ||                              \
+          OB_LS_NOT_EXIST == ret) {                                     \
         /* need_check_leader : just for unittest case*/                 \
         handle_orphan_2pc_msg_(msg, need_check_leader);                 \
       }                                                                 \
@@ -1974,11 +1975,18 @@ void ObTransService::handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_
   bool leader = false;
 
   if (need_check_leader && OB_FAIL(check_ls_status_(msg.get_receiver(), leader))) {
-    TRANS_LOG(WARN, "check ls status error", K(ret), K(msg));
+    if (OB_LS_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      TRANS_LOG(INFO, "check ls status with ls not exist", K(ret), K(msg), K(need_check_leader));
+    } else {
+      TRANS_LOG(WARN, "check ls status error", K(ret), K(msg), K(need_check_leader));
+    }
   } else if (need_check_leader && !leader) {
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "receiver not master", K(ret), K(msg));
-  } else if (OB_FAIL(ObPartTransCtx::handle_tx_orphan_2pc_msg(msg, get_server(), get_trans_rpc()))) {
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(ObPartTransCtx::handle_tx_orphan_2pc_msg(msg, get_server(), get_trans_rpc()))) {
     TRANS_LOG(WARN, "handle tx orphan 2pc msg failed", K(ret), K(msg));
   } else {
     // do nothing
