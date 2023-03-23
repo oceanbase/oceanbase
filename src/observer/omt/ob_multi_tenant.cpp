@@ -940,7 +940,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     do {
       tmp_ret = OB_SUCCESS;
       if (create_step >= ObTenantCreateStep::STEP_LOG_DISK_SIZE_PINNED) {
-        if (!is_valid_tenant_id(tenant_id) && !is_hidden_sys) {
+        if (!is_virtual_tenant_id(tenant_id) && !is_hidden_sys) {
           GCTX.log_block_mgr_->abort_create_tenant(log_disk_size);
         }
       }
