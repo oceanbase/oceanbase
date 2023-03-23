@@ -208,7 +208,7 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
   ObCastCtx cast_ctx(&autoinc_allocator, &cast_params, CM_NONE,
                       ObCharset::get_system_collation());
   ObTableLoadCastObjCtx cast_obj_ctx(param_, &(coordinator_ctx_->partition_calc_.time_cvrt_), &cast_ctx,
-                                      false);
+                                      true);
   ObObj out_obj;
   for (int64_t j = 0; OB_SUCC(ret) && j < row_count; ++j) {
     ObStorageDatum storage_datum;

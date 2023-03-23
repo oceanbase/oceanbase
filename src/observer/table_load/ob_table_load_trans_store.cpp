@@ -365,8 +365,7 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
     const ObColumnSchemaV2 *column_schema = column_schemas_.at(i);
     ObCastCtx cast_ctx(&cast_allocator, &cast_params, CM_NONE, column_schema->get_collation_type());
     ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
-    if ((!row.cells_[i].is_null() ||
-         (!column_schema->is_autoincrement() && !column_schema->is_identity_column())) &&
+    if ((!row.cells_[i].is_null()) &&
         OB_FAIL(
           ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema, row.cells_[i], out_obj))) {
       LOG_WARN("fail to cast obj and check", KR(ret), K(i), K(row.cells_[i]));
