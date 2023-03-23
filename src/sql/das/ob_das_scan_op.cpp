@@ -501,9 +501,9 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
         has_more = true;
       }
       if (OB_SUCC(ret) && has_more) {
-        LOG_DEBUG("try fill task result", K(simulate_row_cnt),
-                   K(datum_store.get_row_cnt()), K(has_more),
-                  "output_row", ROWEXPR2STR(eval_ctx, result_output));
+        PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx, result_output, remain_row_cnt_,
+                              K(simulate_row_cnt), K(datum_store.get_row_cnt()),
+                              K(has_more));
       }
     }
   }
