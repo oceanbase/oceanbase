@@ -204,7 +204,8 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
                                          expire_ts,
                                          tx.trace_info_.get_app_trace_info(),
                                          tx.op_sn_,
-                                         commit_version))
+                                         commit_version,
+                                         self_))
              || !commit_need_retry_(ret))) {
     if (OB_FAIL(ret)) {
       TRANS_LOG(WARN, "local ls commit tx fail", K(ret), K_(tx.coord_id), K(tx));
@@ -1699,7 +1700,8 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
                                   msg.expire_ts_,
                                   msg.app_trace_info_,
                                   msg.request_id_,
-                                  commit_version))) {
+                                  commit_version,
+                                  msg.sender_addr_))) {
     TRANS_LOG(WARN, "handle tx commit request fail", K(ret), K(msg));
   }
   result.reset();
@@ -1721,7 +1723,8 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
                                         const int64_t &expire_ts,
                                         const common::ObString &app_trace_info,
                                         const int64_t &request_id,
-                                        SCN &commit_version)
+                                        SCN &commit_version,
+                                        const common::ObAddr &caller)
 {
   int ret = OB_SUCCESS;
   MonotonicTs commit_time = get_req_receive_mts_();
@@ -1750,10 +1753,11 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
         }
       }
     }
-  } else {
-    if (OB_FAIL(ctx->commit(parts, commit_time, expire_ts, app_trace_info, request_id))) {
-      TRANS_LOG(WARN, "commit fail", K(ret), K(coord), K(tx_id));
-    }
+  } else if (ctx->get_scheduler() != caller) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "receive commit from not scheduler", K(ret), K(caller), K(ctx->get_scheduler()));
+  } else if (OB_FAIL(ctx->commit(parts, commit_time, expire_ts, app_trace_info, request_id))) {
+    TRANS_LOG(WARN, "commit fail", K(ret), K(coord), K(tx_id));
   }
   if (OB_NOT_NULL(ctx)) {
     revert_tx_ctx_(ctx);
@@ -1794,10 +1798,13 @@ int ObTransService::handle_trans_abort_request(ObTxAbortMsg &abort_req, ObTransR
     // We donot respond with the abort response, because we think the abort is
     // eventually always successful if we have never send the commit request
     TRANS_LOG(WARN, "get transaction context error", KR(ret), K(abort_req.get_trans_id()));
-  } else {
-    if (OB_FAIL(ctx->abort(abort_req.reason_))) {
-      TRANS_LOG(WARN, "trans rollback error", KR(ret), K(abort_req));
-    }
+  } else if (ctx->get_scheduler() != abort_req.sender_addr_ && ctx->get_scheduler().is_valid()
+             // xa tmp scheduler will send abort when session is break
+             && !ctx->is_xa_trans()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "receive abort request not from scheduler.", K(ret), K(ctx->get_scheduler()));
+  } else if (OB_FAIL(ctx->abort(abort_req.reason_))) {
+    TRANS_LOG(WARN, "trans rollback error", KR(ret), K(abort_req));
   }
   if (OB_NOT_NULL(ctx)) {
     revert_tx_ctx_(ctx);

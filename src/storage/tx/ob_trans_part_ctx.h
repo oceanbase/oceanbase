@@ -701,6 +701,7 @@ public:
   int set_block_frozen_memtable(memtable::ObMemtable *memtable);
   void clear_block_frozen_memtable();
   bool is_logging_blocked();
+  bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
 private:
   int check_status_();
   int tx_keepalive_response_(const int64_t status);

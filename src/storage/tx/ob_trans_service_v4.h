@@ -264,7 +264,8 @@ int local_ls_commit_tx_(const ObTransID &tx_id,
                         const int64_t &expire_ts,
                         const common::ObString &app_trace_info,
                         const int64_t &request_id,
-                        share::SCN &commit_version);
+                        share::SCN &commit_version,
+                        const common::ObAddr &caller);
 int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                 const ObTransID &tx_id,
                                 int &state,

@@ -400,6 +400,7 @@ public:
   int init_ctx();
   int init(const ObTenantMeta &meta);
   void stop() { ATOMIC_STORE(&stopped_, true); }
+  void start() { ATOMIC_STORE(&stopped_, false); }
   void wait();
   void destroy();
   bool has_stopped() const { return ATOMIC_LOAD(&stopped_); }
