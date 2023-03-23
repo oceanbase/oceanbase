@@ -136,8 +136,7 @@ int ObDASExtraData::get_next_rows(int64_t &count, int64_t capacity)
       }
     } else {
       got_row = true;
-      LOG_DEBUG("get next batch from result iter", KR(ret),
-                "output", ROWEXPR2STR(*eval_ctx_, *output_exprs_));
+      PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_exprs_, count, KR(ret));
     }
   }
   return ret;

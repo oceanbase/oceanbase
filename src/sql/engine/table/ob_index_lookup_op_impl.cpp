@@ -157,7 +157,10 @@ int ObIndexLookupOpImpl::get_next_rows(int64_t &count, int64_t capacity)
         } else {
           got_next_row = true;
           update_state_in_output_rows_state(count);
-          LOG_DEBUG("got next row from table lookup",  K(ret), K(lookup_row_cnt_), K(lookup_rowkey_cnt_), K(lookup_group_cnt_), K(index_group_cnt_), "main table output", ROWEXPR2STR(get_eval_ctx(), get_output_expr()) );        }
+          PRINT_VECTORIZED_ROWS(SQL, DEBUG, get_eval_ctx(), get_output_expr(), count,
+                                K(ret), K(lookup_row_cnt_), K(lookup_rowkey_cnt_),
+                                K(lookup_group_cnt_), K(index_group_cnt_));
+        }
         break;
       }
       case FINISHED: {
