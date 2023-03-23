@@ -330,10 +330,12 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
     } else if (OB_ISNULL(tenant)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant is NULL", KR(ret), K(tenant_id), K(tenant));
-    }
-    else if (OB_FAIL(store_service->create_column_family(std::to_string(tenant_id) + ":" + std::string(tenant_name),
-            column_family_handle))) {
-      LOG_ERROR("create_column_family fail", KR(ret), K(tenant_id), K(tenant_name), K(column_family_handle));
+    } else if (OB_FAIL(store_service->create_column_family(
+        std::to_string(tenant_id) + ":" + std::string(tenant_name),
+        column_family_handle))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("create_column_family fail", KR(ret), K(tenant_id), K(tenant_name), K(column_family_handle));
+      }
     }
     // init tenant
     else if (OB_FAIL(tenant->init(tenant_id, tenant_name, tenant_start_serve_ts_ns, start_seq,
@@ -992,7 +994,9 @@ int ObLogTenantMgr::remove_tenant_(const uint64_t tenant_id, ObLogTenant *tenant
     ret= OB_ERR_UNEXPECTED;
     LOG_ERROR("cf is NULL", KR(ret), K(tid), KPC(tenant));
   } else if (OB_FAIL(store_service->drop_column_family(cf))) {
-    LOG_ERROR("store_service drop_column_family fail", KR(ret), K(tid), KPC(tenant));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("store_service drop_column_family fail", KR(ret), K(tid), KPC(tenant));
+    }
   } else if (OB_FAIL(tenant_hash_map_.del(tid))) {
     LOG_ERROR("tenant_hash_map_ del failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_server_provider->del_tenant(tenant_id))) {

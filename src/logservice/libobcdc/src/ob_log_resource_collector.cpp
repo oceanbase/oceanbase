@@ -112,6 +112,7 @@ int ObLogResourceCollector::init(const int64_t thread_num,
 
 void ObLogResourceCollector::destroy()
 {
+  LOG_INFO("resource_collector destroy begin");
   RCThread::destroy();
   inited_ = false;
   br_pool_ = NULL;
@@ -126,6 +127,7 @@ void ObLogResourceCollector::destroy()
   dml_part_trans_task_count_ = 0;
   hb_part_trans_task_count_ = 0;
   other_part_trans_task_count_ = 0;
+  LOG_INFO("resource_collector destroy end");
 }
 
 int ObLogResourceCollector::start()
@@ -154,6 +156,7 @@ void ObLogResourceCollector::mark_stop_flag()
 {
   if (inited_) {
     RCThread::mark_stop_flag();
+    LOG_INFO("resource_collector mark_stop_flag");
   }
 }
 
@@ -225,7 +228,9 @@ int ObLogResourceCollector::revert_log_entry_task(ObLogEntryTask *log_entry_task
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("host of log_entry_task is invalid, failed cast to PartTransTask" ,KR(ret), KPC(log_entry_task));
   } else if (OB_FAIL(revert_log_entry_task_(log_entry_task))) {
-    LOG_ERROR("revert_log_entry_task_ fail", KR(ret), KPC(log_entry_task));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("revert_log_entry_task_ fail", KR(ret), KPC(log_entry_task));
+    }
   } else if (OB_FAIL(dec_ref_cnt_and_try_to_revert_task_(part_trans_task))) {
     LOG_ERROR("dec_ref_cnt_and_try_to_revert_task_ fail", KR(ret), KPC(part_trans_task));
   } else {
@@ -304,8 +309,10 @@ int ObLogResourceCollector::revert_log_entry_task_(ObLogEntryTask *log_entry_tas
         if (OB_FAIL(log_entry_task->get_storage_key(key))) {
           LOG_ERROR("get_storage_key fail", KR(ret), "key", key.c_str());
         } else if (OB_FAIL(del_store_service_data_(tenant_id, key))) {
-          LOG_ERROR("del_store_service_data_ fail", KR(ret), KPC(log_entry_task));
-        } else {}
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("del_store_service_data_ fail", KR(ret), KPC(log_entry_task));
+          }
+        }
       }
     }
 
@@ -330,9 +337,11 @@ int ObLogResourceCollector::del_store_service_data_(const uint64_t tenant_id,
     column_family_handle = tenant->get_cf();
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && ! RCThread::is_stoped()) {
     if (OB_FAIL(store_service_->del(column_family_handle, key))) {
-      LOG_ERROR("store_service_ del fail", KR(ret), K(tenant_id), K(key.c_str()));
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("store_service_ del fail", KR(ret), K(tenant_id), K(key.c_str()));
+      }
     } else {
       LOG_DEBUG("store_service_ del succ", K(tenant_id), K(key.c_str()));
     }
@@ -355,7 +364,7 @@ int ObLogResourceCollector::revert_participants_(const int64_t thread_index,
   } else {
     PartTransTask *task = participants;
 
-    while (OB_SUCCESS == ret && NULL != task) {
+    while (OB_SUCC(ret) && OB_NOT_NULL(task) && ! RCThread::is_stoped()) {
       PartTransTask *next = task->next_task();
       task->set_next_task(NULL);
 
@@ -366,6 +375,10 @@ int ObLogResourceCollector::revert_participants_(const int64_t thread_index,
       } else {
         task = next;
       }
+    }
+
+    if (RCThread::is_stoped()) {
+      ret = OB_IN_STOP_STATE;
     }
 
     task = NULL;
@@ -434,8 +447,10 @@ int ObLogResourceCollector::recycle_part_trans_task_(const int64_t thread_index,
   } else {
     if (task->is_ddl_trans()) {
       if (OB_FAIL(revert_dll_all_binlog_records_(task))) {
-        // Reclaim all Binlog Records within a DDL partitioned transaction
-        LOG_ERROR("revert_dll_all_binlog_records_ fail", KR(ret), K(*task));
+        if (OB_IN_STOP_STATE != ret) {
+          // Reclaim all Binlog Records within a DDL partitioned transaction
+          LOG_ERROR("revert_dll_all_binlog_records_ fail", KR(ret), K(*task));
+        }
       }
     }
     LOG_DEBUG("[ResourceCollector] recycle part trans task", K(thread_index), K(*task));
@@ -476,7 +491,9 @@ int ObLogResourceCollector::handle(void *data,
 
       if (! task->is_served()) {
         if (OB_FAIL(revert_unserved_part_trans_task_(thread_index, *task))) {
-          LOG_ERROR("revert_unserved_part_trans_task_ fail", KR(ret), K(thread_index), KPC(task));
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("revert_unserved_part_trans_task_ fail", KR(ret), K(thread_index), KPC(task));
+          }
         }
       // DML/DDL
       } else if (task->is_ddl_trans() || task->is_dml_trans()) {
@@ -509,7 +526,7 @@ int ObLogResourceCollector::handle(void *data,
               LOG_ERROR("remove trans_ctx fail", KR(ret), K(tenant_id), K(trans_id), K(trans_ctx));
             }
             // recycle all participants
-            else if (NULL != participants && OB_FAIL(revert_participants_(thread_index, participants))) {
+            else if (OB_NOT_NULL(participants) && OB_FAIL(revert_participants_(thread_index, participants))) {
               if (OB_IN_STOP_STATE != ret) {
                 LOG_ERROR("revert_participants_ fail", KR(ret), K(thread_index), K(participants), K(trans_id));
               }
@@ -657,8 +674,10 @@ int ObLogResourceCollector::del_trans_(const uint64_t tenant_id,
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(store_service_->del_range(column_family_handle, begin_key, end_key))) {
-      LOG_ERROR("store_service_ del fail", KR(ret), "begin_key", begin_key.c_str(),
-          "end_key", end_key.c_str());
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("store_service_ del fail", KR(ret), "begin_key", begin_key.c_str(),
+            "end_key", end_key.c_str());
+      }
     } else {
       LOG_INFO("store_service_ del succ", KR(ret), "begin_key", begin_key.c_str(),
           "end_key", end_key.c_str());
@@ -687,7 +706,9 @@ int ObLogResourceCollector::dec_ref_cnt_and_try_to_recycle_log_entry_task_(ObLog
 
     if (need_revert_log_entry_task) {
       if (OB_FAIL(revert_log_entry_task_(log_entry_task))) {
-        LOG_ERROR("revert_log_entry_task_ fail", KR(ret), KPC(log_entry_task));
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("revert_log_entry_task_ fail", KR(ret), KPC(log_entry_task));
+        }
       } else {
         log_entry_task = NULL;
       }
@@ -726,7 +747,7 @@ int ObLogResourceCollector::revert_dll_all_binlog_records_(PartTransTask *task)
     // FIXME: the Binlog Record contains references to memory allocated by the PartTransTask.
     // They should be actively freed here, but as PartTransTask will release the memory uniformly when it is reclaimed
     // memory in the Binlog Record is not actively freed here
-    while (OB_SUCC(ret) && NULL != stmt_task) {
+    while (OB_SUCC(ret) && OB_NOT_NULL(stmt_task) && ! RCThread::is_stoped()) {
       DdlStmtTask *next = static_cast<DdlStmtTask *>(stmt_task->get_next());
       ObLogBR *br = stmt_task->get_binlog_record();
       stmt_task->set_binlog_record(NULL);
@@ -736,6 +757,9 @@ int ObLogResourceCollector::revert_dll_all_binlog_records_(PartTransTask *task)
       }
 
       stmt_task = next;
+    }
+    if (RCThread::is_stoped()) {
+      ret = OB_IN_STOP_STATE;
     }
   }
 
@@ -798,7 +822,7 @@ int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t threa
   SortedRedoLogList &sorted_redo_list =  task.get_sorted_redo_list();
   DmlRedoLogNode *dml_redo_node = static_cast<DmlRedoLogNode *>(sorted_redo_list.head_);
 
-  while (OB_SUCC(ret) && NULL != dml_redo_node) {
+  while (OB_SUCC(ret) && OB_NOT_NULL(dml_redo_node) && ! RCThread::is_stoped()) {
     if (dml_redo_node->is_stored()) {
       const palf::LSN &store_log_lsn = dml_redo_node->get_start_log_lsn();
       ObLogStoreKey store_key;
@@ -811,6 +835,10 @@ int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t threa
       } else if (OB_FAIL(del_store_service_data_(tenant_ls_id.get_tenant_id(), key))) {
         LOG_ERROR("del_store_service_data_ fail", KR(ret), K(task));
       } else {}
+    }
+
+    if (RCThread::is_stoped()) {
+      ret = OB_IN_STOP_STATE;
     }
 
     if (OB_SUCC(ret)) {

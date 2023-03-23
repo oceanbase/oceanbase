@@ -83,6 +83,7 @@ int ObLogStorager::init(const int64_t thread_num,
 void ObLogStorager::destroy()
 {
   if (inited_) {
+    LOG_INFO("store_service destroy begin");
     StoragerThread::destroy();
 
     inited_ = false;
@@ -94,6 +95,7 @@ void ObLogStorager::destroy()
     store_service_stat_.reset();
     store_service_ = NULL;
     err_handler_ = NULL;
+    LOG_INFO("store_service destroy end");
   }
 }
 
@@ -272,7 +274,9 @@ int ObLogStorager::handle_task_(IObLogBatchBufTask &batch_task,
 
             if (OB_FAIL(write_store_service_(key.c_str(), batch_buf + start_pos, data_len,
                     column_family_handle, thread_index))) {
-              LOG_ERROR("write_store_service_ fail", KR(ret), K(store_task));
+              if (OB_IN_STOP_STATE != ret) {
+                LOG_ERROR("write_store_service_ fail", KR(ret), K(store_task));
+              }
             } else if (OB_FAIL(store_task->st_after_consume(OB_SUCCESS))) {
               LOG_ERROR("st_after_consume fail", KR(ret));
             } else {
@@ -335,7 +339,9 @@ int ObLogStorager::write_store_service_(const char *key,
     ret = OB_INVALID_ARGUMENT;
   } else {
     if (OB_FAIL(store_service_->put(column_family_handle, key, ObSlice(log_str, log_str_len)))) {
-      LOG_ERROR("store_service_ put fail", KR(ret), K(thread_index), K(key), K(log_str_len));
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("store_service_ put fail", KR(ret), K(thread_index), K(key), K(log_str_len));
+      }
     } else {
       // Statistics rps
       rps_stat_.do_rps_stat(1);
@@ -393,7 +399,9 @@ int ObLogStorager::read_store_service_(const std::string &key)
   std::string br_string_res;
 
   if (OB_FAIL(store_service_->get(key, br_string_res))) {
-    LOG_ERROR("store_service_ get fail", KR(ret), K(key.c_str()), K(br_string_res.length()));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("store_service_ get fail", KR(ret), K(key.c_str()), K(br_string_res.length()));
+    }
   } else {
     LOG_DEBUG("store_service_ get succ", KR(ret), K(key.c_str()), K(br_string_res.length()), K(br_string_res.c_str()));
   }
