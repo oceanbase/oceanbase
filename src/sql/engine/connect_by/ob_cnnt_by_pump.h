@@ -28,7 +28,7 @@ private:
   class MallocWrapper: public common::ObMalloc
   {
   public:
-    explicit MallocWrapper(const char *label): allocator_(label), alloc_cnt_(0) {}
+    explicit MallocWrapper(): allocator_(NULL), alloc_cnt_(0) {}
     virtual ~MallocWrapper()
     {
       if (OB_UNLIKELY(alloc_cnt_ != 0)) {
@@ -37,31 +37,26 @@ private:
     }
     void *alloc(const int64_t sz)
     {
-      void *mem = allocator_.alloc(sz);
+      void *mem = allocator_->alloc(sz);
       alloc_cnt_ = nullptr == mem ? alloc_cnt_ : alloc_cnt_ + 1;
       return mem;
     }
     void *alloc(const int64_t sz, const common::ObMemAttr &attr)
     {
-      void *mem = allocator_.alloc(sz, attr);
+      void *mem = allocator_->alloc(sz, attr);
       alloc_cnt_ = nullptr == mem ? alloc_cnt_ : alloc_cnt_ + 1;
       return mem;
     }
     void free(void *ptr)
     {
       --alloc_cnt_;
-      allocator_.free(ptr);
+      allocator_->free(ptr);
     }
-    void set_tenant_id(int64_t tenant_id)
-    {
-      allocator_.set_tenant_id(tenant_id);
-    }
-    void set_ctx_id(int64_t ctx_id)
-    {
-      allocator_.set_ctx_id(ctx_id);
+    void set_allocator(common::ObIAllocator &alloc) {
+      allocator_ = &alloc;
     }
   private:
-    common::ObArenaAllocator allocator_;
+    common::ObIAllocator *allocator_;
     int64_t alloc_cnt_;
   };
 
@@ -75,7 +70,7 @@ public:
       right_prior_exprs_(NULL),
       eval_ctx_(NULL),
 //      connect_by_root_row_(NULL),
-      allocator_(ObModIds::OB_CONNECT_BY_PUMP),
+      allocator_(),
       is_inited_(false),
       cur_level_(1),
       never_meet_cycle_(true),
@@ -295,15 +290,16 @@ public:
 
 private:
 //  int alloc_prior_row_cells(uint64_t row_count);
-  int push_back_node_to_stack(PumpNode &node);
+  int push_back_node_to_stack(PumpNode &node, bool &is_push);
   int calc_prior_and_check_cycle(PumpNode &node, bool set_refactored, PumpNode *left_node);
   int check_cycle(const ObChunkDatumStore::StoredRow *row, bool set_refactored);
   int check_child_cycle(PumpNode &node, PumpNode *left_node);
-  int free_pump_node(PumpNode &node);
+  void free_pump_node(PumpNode &node);
   int alloc_iter(PumpNode &node);
   int free_pump_node_stack(ObIArray<PumpNode> &stack);
   void set_row_store_constructed() { datum_store_constructed_ = true; }
   bool get_row_store_constructed() { return datum_store_constructed_; }
+  void set_allocator(common::ObIAllocator &alloc) { allocator_.set_allocator(alloc); }
 
 private:
   static const int64_t SYS_PATH_BUFFER_INIT_SIZE = 128;
