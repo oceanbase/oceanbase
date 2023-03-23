@@ -310,11 +310,7 @@ int ObDDLServerClient::heart_beat_clear(const int64_t task_id)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_id));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.remove_register_task_id(task_id))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_ERROR("failed to remove register task id", K(ret), K(task_id));
-    }
+    LOG_WARN("failed to remove register task id", K(ret), K(task_id));
   }
   return ret;
 }
