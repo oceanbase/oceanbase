@@ -97,7 +97,8 @@ ObSchemaGetterGuard::ObSchemaGetterGuard()
     schema_guard_type_(INVALID_SCHEMA_GUARD_TYPE),
     is_standby_cluster_(false),
     restore_tenant_exist_(false),
-    is_inited_(false)
+    is_inited_(false),
+    pin_cache_size_(0)
 {
 }
 
@@ -112,13 +113,18 @@ ObSchemaGetterGuard::ObSchemaGetterGuard(const ObSchemaMgrItem::Mod mod)
     schema_guard_type_(INVALID_SCHEMA_GUARD_TYPE),
     is_standby_cluster_(false),
     restore_tenant_exist_(false),
-    is_inited_(false)
+    is_inited_(false),
+    pin_cache_size_(0)
 {
 }
 
 ObSchemaGetterGuard::~ObSchemaGetterGuard()
 {
   // Destruct handles_ will reduce reference count automatically.
+  if (pin_cache_size_ >= FULL_SCHEMA_MEM_THREHOLD) {
+    int ret = OB_SUCCESS;
+    FLOG_WARN("hold too much full schema memory", K(tenant_id_), K(pin_cache_size_), K(lbt()));
+  }
 }
 
 int ObSchemaGetterGuard::init(
@@ -130,6 +136,7 @@ int ObSchemaGetterGuard::init(
     LOG_WARN("init twice", KR(ret));
   } else {
     is_standby_cluster_ = is_standby_cluster;
+    pin_cache_size_ = 0;
     is_inited_ = true;
   }
   return ret;
@@ -143,8 +150,10 @@ int ObSchemaGetterGuard::reset()
 
   is_standby_cluster_ = false;
   restore_tenant_exist_ = false;
-
-
+  if (pin_cache_size_ >= FULL_SCHEMA_MEM_THREHOLD) {
+    FLOG_WARN("hold too much full schema memory", K(tenant_id_), K(pin_cache_size_), K(lbt()));
+  }
+  pin_cache_size_ = 0;
   tenant_id_ = OB_INVALID_TENANT_ID;
 
   for (int64_t i = 0; i < schema_mgr_infos_.count(); i++) {
@@ -4422,6 +4431,14 @@ int ObSchemaGetterGuard::put_to_local_cache(
     schema_obj.schema_id_ = schema_id;
     schema_obj.schema_ = const_cast<ObSchema*>(schema);
     schema_obj.handle_.move_from(handle);
+    if (schema_obj.handle_.is_valid()
+        && OB_NOT_NULL(schema)
+        && pin_cache_size_ < FULL_SCHEMA_MEM_THREHOLD) {
+        pin_cache_size_ += schema->get_convert_size();
+      if (pin_cache_size_ >= FULL_SCHEMA_MEM_THREHOLD) {
+        FLOG_WARN("hold too much full schema memory", K(tenant_id), K(pin_cache_size_), K(lbt()));
+      }
+    }
   }
   return ret;
 }

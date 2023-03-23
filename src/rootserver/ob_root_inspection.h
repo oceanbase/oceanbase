@@ -107,6 +107,7 @@ private:
   share::schema::ObMultiVersionSchemaService &schema_service_;
   ObTableGroupCheckInfoMap check_part_option_map_;
   common::hash::ObHashSet<uint64_t> part_option_not_match_set_;
+  common::ObArenaAllocator allocator_;
   bool is_inited_;
 };
 

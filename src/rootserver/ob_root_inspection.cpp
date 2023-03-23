@@ -227,6 +227,7 @@ ObTableGroupChecker::ObTableGroupChecker(share::schema::ObMultiVersionSchemaServ
     : schema_service_(schema_service),
       check_part_option_map_(),
       part_option_not_match_set_(),
+      allocator_(ObModIds::OB_SCHEMA),
       is_inited_(false)
 {
 }
@@ -283,6 +284,7 @@ int ObTableGroupChecker::inspect_(
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
+  allocator_.reset();
   check_part_option_map_.reuse();
   part_option_not_match_set_.reuse();
   ObArray<uint64_t> table_ids;
@@ -297,11 +299,14 @@ int ObTableGroupChecker::inspect_(
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
       const uint64_t table_id = table_ids.at(i);
       const ObTableSchema *table = NULL;
-      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table))) {
+      // schema guard cannot be used repeatedly in iterative logic,
+      // otherwise it will cause a memory hike in schema cache
+      if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("get schema guard failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table))) {
         LOG_WARN("get table schema failed", K(ret), KT(table_id));
       } else if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table not exist", K(ret), K(table_id));
+        //ignore table not exist
       } else if (is_sys_table(table->get_table_id()) || !table->has_partition()) {
         // skip, check the partitioned user table
       } else if (OB_FAIL(check_part_option(*table, schema_guard))) {
@@ -352,8 +357,11 @@ int ObTableGroupChecker::check_part_option(const ObTableSchema &table, ObSchemaG
       if (OB_FAIL(check_part_option_map_.get_refactored(tablegroup_id, table_in_map))) {
         //set into map while not in check_part_option_map_
         if (OB_HASH_NOT_EXIST == ret) {
-          if (OB_FAIL(check_part_option_map_.set_refactored(tablegroup_id, &table))) {
-            LOG_WARN("set table_schema in hashmap fail", K(ret), K(tablegroup_id), K(table));
+          ObTableSchema *new_table_schema = NULL;
+          if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_, table, new_table_schema))) {
+            LOG_WARN("alloc schema failed", K(ret), K(table));
+          } else if (OB_FAIL(check_part_option_map_.set_refactored(tablegroup_id, new_table_schema))) {
+            LOG_WARN("set table_schema in hashmap fail", K(ret), K(tablegroup_id), K(new_table_schema));
           }
         } else {
           LOG_WARN("check tablegroup_id in hashmap fail", K(ret), K(tablegroup_id));
