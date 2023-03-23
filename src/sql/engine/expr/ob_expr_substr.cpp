@@ -458,7 +458,7 @@ int ObExprSubstr::substr(common::ObString &varchar,
           res_len = min(length, mb_len - start);
           int64_t offset = ObCharset::charpos(cs_type, varchar.ptr(), varchar.length(), start);
           res_len = ObCharset::charpos(cs_type, varchar.ptr() + offset,
-              (offset == 0) ? varchar.length() : varchar.length() - offset + 1, res_len);
+              (offset == 0) ? varchar.length() : varchar.length() - offset, res_len);
           varchar.assign_ptr(varchar.ptr() + offset, static_cast<int32_t>(res_len));
         }
       }
@@ -586,8 +586,9 @@ static int eval_substr_text(const ObCollationType &cs_type,
       }
       if (OB_FAIL(ret)) {
       } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state));
+        ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                input_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
       } else {
         output_result.set_result();
       }

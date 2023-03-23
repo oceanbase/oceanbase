@@ -76,7 +76,7 @@ ObDISessionCache &ObDISessionCache::get_instance()
 int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session_collect)
 {
   int ret = OB_SUCCESS;
-  ObRandom *random = GET_TSI(ObRandom);
+  thread_local ObRandom random;
   ObSessionBucket &bucket = di_map_[session_id % OB_MAX_SERVER_SESSION_CNT];
   while (1) {
     bucket.lock_.rdlock();
@@ -90,7 +90,7 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
       bucket.lock_.unlock();
       int64_t pos = 0;
       while (1) {
-        pos = random->get(0, OB_MAX_SERVER_SESSION_CNT-1);
+        pos = random.get(0, OB_MAX_SERVER_SESSION_CNT-1);
         if (OB_SUCCESS == (ret = collects_[pos].lock_.try_wrlock())) {
           break;
         }

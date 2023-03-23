@@ -312,7 +312,7 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
         }
       }
     }
-    if (OB_FAIL(ret)) {
+    if (OB_UNLIKELY(OB_RPC_CONNECT_ERROR == ret)) {
     } else if (ignore_interrupt_) {
       // do nothing.
     } else if ((loop_times_ & (INTERRUPT_CHECK_TIMES - 1)) == 0 && OB_UNLIKELY(IS_INTERRUPTED())) {

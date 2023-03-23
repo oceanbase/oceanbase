@@ -758,7 +758,9 @@ int ObTableModifyOp::inner_rescan()
 
 int ObTableModifyOp::check_need_exec_single_row() {
   int ret = OB_SUCCESS;
-  execute_single_row_ = false;
+  if (MY_SPEC.is_returning_ && need_foreign_key_checks()) {
+    execute_single_row_ = true;
+  }
   return ret;
 }
 
@@ -1099,9 +1101,16 @@ int ObTableModifyOp::submit_all_dml_task()
 int ObTableModifyOp::discharge_das_write_buffer()
 {
   int ret = OB_SUCCESS;
-  if (dml_rtctx_.get_cached_row_size() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE || execute_single_row_) {
-    LOG_INFO("DASWriteBuffer full or need single row execution, now to write storage",
-             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(execute_single_row_), K(dml_rtctx_.get_cached_row_size()));
+  int64_t simulate_buffer_size = - EVENT_CALL(EventTable::EN_DAS_DML_BUFFER_OVERFLOW);
+  int64_t buffer_size_limit = is_meta_tenant(tenant_id_) ? das::OB_DAS_MAX_META_TENANT_PACKET_SIZE : das::OB_DAS_MAX_TOTAL_PACKET_SIZE;
+  if (OB_UNLIKELY(simulate_buffer_size > 0)) {
+    buffer_size_limit = simulate_buffer_size;
+  }
+  if (dml_rtctx_.get_cached_row_size() >= buffer_size_limit) {
+    LOG_INFO("DASWriteBuffer full, now to write storage",
+             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(dml_rtctx_.get_cached_row_size()));
+    ret = submit_all_dml_task();
+  } else if (execute_single_row_) {
     ret = submit_all_dml_task();
   }
   return ret;

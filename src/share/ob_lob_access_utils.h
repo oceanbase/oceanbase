@@ -115,7 +115,8 @@ public:
   ObTextStringIter(ObObjType type, ObCollationType cs_type, const ObString &datum_str,
                    bool has_lob_header) :
     type_(type), cs_type_(cs_type), is_init_(false), is_lob_(false), is_outrow_(false),
-    has_lob_header_(has_lob_header), state_(TEXTSTRING_ITER_INVALID), datum_str_(datum_str)
+    has_lob_header_(has_lob_header), state_(TEXTSTRING_ITER_INVALID), datum_str_(datum_str),
+    err_ret_(OB_SUCCESS)
   {
     if (is_lob_storage(type)) {
       validate_has_lob_header(has_lob_header_);
@@ -125,7 +126,7 @@ public:
   ObTextStringIter(const ObObj &obj) :
     type_(obj.get_type()), cs_type_(obj.get_collation_type()), is_init_(false), is_lob_(false),
     is_outrow_(false), has_lob_header_(obj.has_lob_header()), state_(TEXTSTRING_ITER_INVALID),
-    datum_str_(obj.get_string())
+    datum_str_(obj.get_string()), err_ret_(OB_SUCCESS)
   {
     if (is_lob_storage(obj.get_type())) {
       validate_has_lob_header(has_lob_header_);
@@ -134,7 +135,7 @@ public:
   ~ObTextStringIter();
 
   TO_STRING_KV(K_(type), K_(cs_type), K_(is_init), K_(is_lob), K_(is_outrow),
-    K_(state), K(datum_str_), KP_(ctx));
+    K_(state), K(datum_str_), KP_(ctx), K_(err_ret));
 
   int init(uint32_t buffer_len,
            const sql::ObBasicSessionInfo *session = NULL,
@@ -165,7 +166,7 @@ public:
   uint32_t get_last_accessed_byte_len();
   uint32_t get_accessed_len();
   uint32_t get_accessed_byte_len();
-
+  int get_inner_ret() { return err_ret_; }
   bool is_outrow_lob() { return is_outrow_; };
   int get_byte_len(int64_t &byte_len);
   int get_char_len(int64_t &char_length);
@@ -205,6 +206,7 @@ private:
   ObTextStringIterState state_;
   const ObString datum_str_;
   ObLobTextIterCtx *ctx_;
+  int err_ret_;
 };
 
 // wrapper class to handle templob output(including string types)

@@ -396,6 +396,7 @@ int ObDTLIntermResultManager::generate_monitor_info_rows(observer::ObDTLIntermRe
   if (OB_FAIL(map_.foreach_refactored(monitor_info_getter))) {
     LOG_WARN("fail to generate monitor info array from map", K(ret));
   }
+  LOG_TRACE("generate monitor info rows", K(ret), K(map_.size()));
   return ret;
 }
 

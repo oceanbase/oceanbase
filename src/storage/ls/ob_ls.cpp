@@ -896,12 +896,8 @@ int ObLS::get_ls_meta_package(const bool check_archive, ObLSMetaPackage &meta_pa
     } else if (OB_FAIL(log_handler_.get_begin_lsn(begin_lsn))) {
       LOG_WARN("get begin lsn failed", K(ret), K(id));
     } else if (begin_lsn > archive_lsn) {
-      if (archive_force) {
-        ret = OB_FILE_RECYCLED;
-        LOG_WARN("archive in mandatory mode and log recycled", K(ret));
-      } else {
-        curr_lsn = std::min(archive_lsn, curr_lsn);
-      }
+      ret = OB_CLOG_RECYCLE_BEFORE_ARCHIVE;
+      LOG_WARN("log recycled before archive", K(ret), K(archive_lsn), K(begin_lsn), K(archive_ignore));
     }
 
     if (OB_SUCC(ret) && OB_FAIL(log_handler_.get_palf_base_info(curr_lsn,

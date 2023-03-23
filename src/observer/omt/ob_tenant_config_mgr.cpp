@@ -434,11 +434,14 @@ int ObTenantConfigMgr::dump2file(const int64_t tenant_id)
 int ObTenantConfigMgr::read_dump_config(int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  DRWLock::RDLockGuard guard(rwlock_);
   ObTenantConfig *config = nullptr;
-  if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
-    LOG_WARN("No tenant config found", K(tenant_id), K(ret));
-  } else {
+  {
+    DRWLock::RDLockGuard guard(rwlock_);
+    if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
+      LOG_WARN("No tenant config found", K(tenant_id), K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     ret = config->read_dump_config(tenant_id);
   }
   return ret;

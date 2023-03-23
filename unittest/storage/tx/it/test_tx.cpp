@@ -74,27 +74,12 @@ TEST_F(ObTestTx, basic)
   GCONF._ob_trans_rpc_timeout = 50;
   ObTxNode::reset_localtion_adapter();
 
-  auto n1 = new ObTxNode(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 8888), bus_);
-  auto n2 = new ObTxNode(2, ObAddr(ObAddr::VER::IPV4, "127.0.0.2", 8888), bus_);
-
-  DEFER(delete(n1));
-  DEFER(delete(n2));
-
-  ASSERT_EQ(OB_SUCCESS, n1->start());
-  ASSERT_EQ(OB_SUCCESS, n2->start());
-  ObTxDesc *tx_ptr = NULL;
-  ASSERT_EQ(OB_SUCCESS, n1->acquire_tx(tx_ptr));
-  ObTxDesc &tx = *tx_ptr;
-  ObTxParam tx_param;
-  tx_param.timeout_us_ = 5000000;
-  tx_param.access_mode_ = ObTxAccessMode::RW;
-  tx_param.isolation_ = ObTxIsolationLevel::RC;
-  tx_param.cluster_id_ = 100;
-  int64_t sp0 = 0, sp1 = 0;
-  ObTxReadSnapshot snapshot;
-  ASSERT_EQ(OB_SUCCESS, n1->get_read_snapshot(tx, tx_param.isolation_, n1->ts_after_ms(100), snapshot));
-  ASSERT_EQ(OB_SUCCESS, n1->create_implicit_savepoint(tx, tx_param, sp0));
-  ASSERT_EQ(OB_SUCCESS, n1->create_implicit_savepoint(tx, tx_param, sp1));
+  START_TWO_TX_NODE(n1, n2);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp0);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp1);
   ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 112));
   ASSERT_EQ(OB_SUCCESS, n2->write(tx, snapshot, 101, 113));
   int64_t val1 = 0, val2 = 0;
@@ -103,7 +88,7 @@ TEST_F(ObTestTx, basic)
   ASSERT_EQ(112, val1);
   ASSERT_EQ(113, val2);
   // rollback to savepoint
-  ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp1, n1->ts_after_ms(1000), nullptr));
+  ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, sp1, 1000 * 1000);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 100, val1));
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, n2->read(tx, 101, val2));
   // write after rollback
@@ -114,9 +99,7 @@ TEST_F(ObTestTx, basic)
   ASSERT_EQ(OB_SUCCESS, n2->read(tx, 101, val2));
   ASSERT_EQ(114, val1);
   ASSERT_EQ(115, val2);
-  ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx, n1->ts_after_ms(500)));
-
-  ASSERT_EQ(OB_SUCCESS, n1->release_tx(tx));
+  COMMIT_TX(n1, tx, 500 * 1000);
 }
 
 TEST_F(ObTestTx, start_trans_expired)

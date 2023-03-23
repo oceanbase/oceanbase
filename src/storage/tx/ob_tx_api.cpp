@@ -1571,8 +1571,19 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
         int rpc_ret = OB_SUCCESS;
         if (OB_FAIL(tx.rpc_cond_.wait(waittime, rpc_ret))) {
           TRANS_LOG(WARN, "tx rpc condition wakeup", K(ret),
-                    K(waittime), K(rpc_ret), K(expire_ts), K(remain), K(remain_cnt), K(retries));
-          ret = OB_SUCCESS;
+                    K(waittime), K(rpc_ret), K(expire_ts), K(remain), K(remain_cnt), K(retries),
+                    K_(tx.state));
+          // if trans is terminated, rollback savepoint should be terminated
+          // NOTE that this case is only for xa trans
+          // EXAMPLE, tx desc is shared by branch 1 and branch 2
+          // 1. branch 1 starts to rollback savepoint
+          // 2. branch 2 is terminated
+          // 3. branch 1 receives callback of rollback savepoint
+          if (tx.is_terminated()) {
+            ret = OB_TRANS_HAS_DECIDED;
+          } else {
+            ret = OB_SUCCESS;
+          }
         }
         if (OB_SUCCESS != rpc_ret) {
           TRANS_LOG(WARN, "tx rpc fail", K(rpc_ret), K_(tx.tx_id), K(waittime), K(remain), K(remain_cnt), K(retries));

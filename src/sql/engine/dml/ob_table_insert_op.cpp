@@ -111,11 +111,14 @@ OB_DEF_SERIALIZE_SIZE(ObTableInsertSpec)
 int ObTableInsertOp::check_need_exec_single_row()
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ins_ctdefs_.count() && !execute_single_row_; ++i) {
-    const ObTableInsertSpec::InsCtDefArray &ctdefs = MY_SPEC.ins_ctdefs_.at(i);
-    const ObInsCtDef &ins_ctdef = *ctdefs.at(0);
-    if (has_before_row_trigger(ins_ctdef) || has_after_row_trigger(ins_ctdef)) {
-      execute_single_row_ = true;
+  ret = ObTableModifyOp::check_need_exec_single_row();
+  if (OB_SUCC(ret) && !execute_single_row_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ins_ctdefs_.count() && !execute_single_row_; ++i) {
+      const ObTableInsertSpec::InsCtDefArray &ctdefs = MY_SPEC.ins_ctdefs_.at(i);
+      const ObInsCtDef &ins_ctdef = *ctdefs.at(0);
+      if (has_before_row_trigger(ins_ctdef) || has_after_row_trigger(ins_ctdef)) {
+        execute_single_row_ = true;
+      }
     }
   }
   return ret;

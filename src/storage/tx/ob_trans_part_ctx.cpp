@@ -1658,10 +1658,11 @@ int ObPartTransCtx::compensate_abort_log_()
   int ret = OB_SUCCESS;
   if (is_force_abort_logging_()) {
     // do nothing
+  } else if(OB_FALSE_IT(sub_state_.set_force_abort())) {
+
   } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_ABORT_LOG))) {
     TRANS_LOG(WARN, "submit abort log failed", KR(ret), K(*this));
   } else {
-    sub_state_.set_force_abort();
   }
   TRANS_LOG(INFO, "compensate abort log", K(ret), KPC(this));
   return ret;
@@ -2556,7 +2557,11 @@ int ObPartTransCtx::submit_redo_commit_info_log_()
   ObTxLogBlockHeader
       log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_, exec_info_.scheduler_);
 
-  if (sub_state_.is_info_log_submitted()) {
+  if (need_force_abort_() || is_force_abort_logging_()
+      || get_downstream_state() == ObTxState::ABORT) {
+    ret = OB_TRANS_KILLED;
+    TRANS_LOG(WARN, "tx has been aborting, can not submit prepare log", K(ret));
+  } else if (sub_state_.is_info_log_submitted()) {
     // state log already submitted, do nothing
   } else if (OB_FAIL(log_block.init(replay_hint, log_block_header))) {
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
@@ -2789,19 +2794,26 @@ int ObPartTransCtx::submit_prepare_log_()
   ObTxLogBlockHeader
       log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_, exec_info_.scheduler_);
 
-  if (OB_FAIL(log_block.init(replay_hint, log_block_header))) {
-    TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
-  } else if (!sub_state_.is_info_log_submitted()) {
-    prev_lsn.reset();
-    if (OB_FAIL(submit_multi_data_source_(log_block))) {
-      TRANS_LOG(WARN, "submit multi source data failed", KR(ret), K(*this));
-    } else if (OB_FAIL(submit_redo_commit_info_log_(log_block, has_redo, helper))) {
-      TRANS_LOG(WARN, "submit redo commit state log failed", KR(ret), K(*this));
-    } else {
-      // do nothing
-    }
+  if (need_force_abort_() || is_force_abort_logging_()
+      || get_downstream_state() == ObTxState::ABORT) {
+    ret = OB_TRANS_KILLED;
+    TRANS_LOG(WARN, "tx has been aborting, can not submit prepare log", K(ret));
   }
   
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(log_block.init(replay_hint, log_block_header))) {
+      TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
+    } else if (!sub_state_.is_info_log_submitted()) {
+      prev_lsn.reset();
+      if (OB_FAIL(submit_multi_data_source_(log_block))) {
+        TRANS_LOG(WARN, "submit multi source data failed", KR(ret), K(*this));
+      } else if (OB_FAIL(submit_redo_commit_info_log_(log_block, has_redo, helper))) {
+        TRANS_LOG(WARN, "submit redo commit state log failed", KR(ret), K(*this));
+      } else {
+        // do nothing
+      }
+    }
+  }
 
   if (OB_SUCC(ret)) {
     ObTxLogCb *log_cb = NULL;
@@ -2912,7 +2924,11 @@ int ObPartTransCtx::submit_commit_log_()
       log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_, exec_info_.scheduler_);
   const bool local_tx = is_local_tx_();
 
-  if (OB_FAIL(gen_final_mds_array_(multi_source_data))) {
+  if (need_force_abort_() || is_force_abort_logging_()
+      || get_downstream_state() == ObTxState::ABORT) {
+    ret = OB_TRANS_KILLED;
+    TRANS_LOG(WARN, "tx has been aborting, can not submit prepare log", K(ret));
+  } else if (OB_FAIL(gen_final_mds_array_(multi_source_data))) {
     TRANS_LOG(WARN, "gen total multi source data failed", KR(ret), K(*this));
   } else {
     bool use_local_block_buf = local_tx
@@ -2979,6 +2995,10 @@ int ObPartTransCtx::submit_commit_log_()
     }
 
     if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (is_local_tx_() && exec_info_.upstream_.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected trans type with valid upstream", K(ret), KPC(this));
     } else if (OB_FAIL(log_block.add_new_log(commit_log))) {
       if (OB_BUF_NOT_ENOUGH == ret) {
         TRANS_LOG(WARN, "buf not enough", K(ret), K(commit_log));
@@ -4401,6 +4421,7 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
     TRANS_LOG(WARN, "set app trace id error", K(ret), K(commit_info_log), K(*this));
   } else {
     // NOTE that set xa variables before set trans type
+    set_2pc_upstream_(commit_info_log.get_upstream());
     exec_info_.xid_ = commit_info_log.get_xid();
     exec_info_.is_sub2pc_ = commit_info_log.is_sub2pc();
     if (exec_info_.participants_.count() > 1) {
@@ -4413,19 +4434,18 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
       exec_info_.trans_type_ = TransType::SP_TRANS;
     }
 
-    if (!is_local_tx_() && !commit_info_log.get_upstream().is_valid()) {
-      set_2pc_upstream_(ls_id_);
-      TRANS_LOG(INFO, "set upstream to self", K(*this), K(commit_info_log));
-    } else {
-      set_2pc_upstream_(commit_info_log.get_upstream());
-    }
-    can_elr_ = commit_info_log.is_elr();
-    cluster_version_ = commit_info_log.get_cluster_version();
-    sub_state_.set_info_log_submitted();
     if (commit_info_log.is_dup_tx()) {
       set_dup_table_tx();
       mt_ctx_.before_prepare(timestamp);
     }
+
+    if (!is_local_tx_() && !commit_info_log.get_upstream().is_valid()) {
+      set_2pc_upstream_(ls_id_);
+      TRANS_LOG(INFO, "set upstream to self", K(*this), K(commit_info_log));
+    }
+    can_elr_ = commit_info_log.is_elr();
+    cluster_version_ = commit_info_log.get_cluster_version();
+    sub_state_.set_info_log_submitted();
     reset_redo_lsns_();
     ObTwoPhaseCommitLogType two_phase_log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_MAX;
     if (is_incomplete_replay_ctx_) {
@@ -4958,7 +4978,14 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
       } else {
         TRANS_LOG(WARN, "txn data incomplete, will be aborted", K(contain_table_lock), KPC(this));
         if (has_persisted_log_()) {
-          if (OB_FAIL(do_local_tx_end_(TxEndAction::DELAY_ABORT_TX))) {
+          if (ObPartTransAction::COMMIT == part_trans_action_ || get_upstream_state() >= ObTxState::PREPARE) {
+
+            TRANS_LOG(WARN, "abort self instantly with a tx_commit request", K(contain_table_lock),
+                      KPC(this));
+            if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
+              TRANS_LOG(WARN, "abort tx failed", KR(ret), KPC(this));
+            }
+          } else if (OB_FAIL(do_local_tx_end_(TxEndAction::DELAY_ABORT_TX))) {
             TRANS_LOG(WARN, "abort tx failed", KR(ret), K(*this));
           }
         } else {

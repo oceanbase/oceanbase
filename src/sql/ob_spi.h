@@ -867,6 +867,9 @@ private:
                           const ObDataType *return_types,
                           int64_t return_type_count);
 
+  static int get_package_var_info_by_expr(const ObSqlExpression *expr,
+                                          uint64_t &package_id,
+                                          uint64_t &var_idx);
   static int store_result(ObIArray<pl::ObPLCollection*> &bulk_tables,
                           int64_t row_count,
                           int64_t column_count,

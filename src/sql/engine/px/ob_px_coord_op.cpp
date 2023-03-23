@@ -132,7 +132,8 @@ ObPxCoordOp::ObPxCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInpu
   px_dop_(1),
   time_recorder_(0),
   batch_rescan_param_version_(0),
-  server_alive_checker_(coord_info_.dfo_mgr_, exec_ctx.get_my_session()->get_process_query_time())
+  server_alive_checker_(coord_info_.dfo_mgr_, exec_ctx.get_my_session()->get_process_query_time()),
+  last_px_batch_rescan_size_(0)
 {}
 
 
@@ -889,6 +890,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());
+          last_px_batch_rescan_size_ = max(get_batch_id() + 1, get_rescan_param_count());
         }
       }
       LOG_TRACE("link qc-task channel and registered to qc msg loop. ready to receive task data msg",
@@ -961,6 +963,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());
+          last_px_batch_rescan_size_ = max(get_batch_id() + 1, get_rescan_param_count());
         }
       }
       LOG_TRACE("link qc-task channel and registered to qc msg loop. ready to receive task data msg",
@@ -1049,12 +1052,13 @@ int ObPxCoordOp::erase_dtl_interm_result()
         LOG_WARN("fail get channel info", K(ret));
       } else {
         key.channel_id_ = ci.chid_;
-        for (int j = 0; j < max(get_batch_id() + 1, get_rescan_param_count()); ++j) {
+        for (int j = 0; j < last_px_batch_rescan_size_; ++j) {
           key.batch_id_ = j;
           if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
             LOG_TRACE("fail to release recieve internal result", K(ret));
           }
         }
+        last_px_batch_rescan_size_ = 0;
       }
     }
   }

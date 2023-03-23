@@ -124,6 +124,9 @@ void ObTenantCheckpointSlogHandler::stop()
   if (IS_INIT) {
     TG_STOP(tg_id_);
   }
+  // since the ls service deletes tablets in the stop interface when observer stop,
+  // it must ensure that no checkpoint is in progress after stop, otherwise the tablet may be lost
+  wait();
 }
 
 void ObTenantCheckpointSlogHandler::wait()

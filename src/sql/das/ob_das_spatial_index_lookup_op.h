@@ -38,7 +38,7 @@ public:
                              is_sorted_(false),
                              is_whole_range_(false),
                              is_inited_(false) {}
-  virtual ~ObSpatialIndexLookupOp() {}
+  virtual ~ObSpatialIndexLookupOp();
 
   int init(const ObDASScanCtDef *lookup_ctdef,
            ObDASScanRtDef *lookup_rtdef,

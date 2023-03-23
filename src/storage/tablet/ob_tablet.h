@@ -287,7 +287,8 @@ public:
 
   // migration section
   // used for migration source generating create tablet rpc argument
-  int build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_param) const;
+  int build_migration_tablet_param(
+      ObMigrationTabletParam &mig_tablet_param) const;
   int build_migration_sstable_param(
       const ObITable::TableKey &table_key,
       blocksstable::ObMigrationSSTableParam &mig_sstable_param) const;

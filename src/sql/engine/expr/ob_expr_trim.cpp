@@ -483,8 +483,9 @@ static int text_trim2(ObTextStringIter &str_iter,
     }
     if (OB_FAIL(ret)) {
     } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-      ret = OB_INVALID_DATA;
-      LOG_WARN("iter state invalid", K(ret), K(state));
+      ret = (str_iter.get_inner_ret() != OB_SUCCESS) ?
+            str_iter.get_inner_ret() : OB_INVALID_DATA;
+      LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter));
     } else if (!output_result.is_init() && OB_FAIL(output_result.init(0))) { // nothing found build empty lob
       LOG_WARN("init stringtext result for empty lob failed", K(ret));
     } else {
@@ -650,8 +651,9 @@ static int text_trim(ObTextStringIter &str_iter,
     }
     if (OB_FAIL(ret)) {
     } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-      ret = OB_INVALID_DATA;
-      LOG_WARN("iter state invalid", K(ret), K(state));
+      ret = (str_iter.get_inner_ret() != OB_SUCCESS) ?
+            str_iter.get_inner_ret() : OB_INVALID_DATA;
+      LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter));
     } else if (!output_result.is_init() && OB_FAIL(output_result.init(0))) { // nothing found build empty lob
       LOG_WARN("init stringtext result for empty lob failed", K(ret));
     } else {

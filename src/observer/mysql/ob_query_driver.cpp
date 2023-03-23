@@ -528,7 +528,20 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
     ObLobLocatorV2 loc(value.get_string(), value.has_lob_header());
     if (loc.is_lob_locator_v1()) {// do nothing, lob locator version 1
     } else if (loc.is_valid()) { // lob locator v2
-      if (!loc.has_extern()) {
+      if (!loc.has_lob_header()) {
+        ObString data = value.get_string();
+        ObTextStringResult new_tmp_lob(value.get_type(), true, allocator);
+        if (OB_FAIL(new_tmp_lob.init(data.length()))) {
+          LOG_WARN("fail to init text string result", K(ret), K(new_tmp_lob), K(data.length()));
+        } else if (OB_FAIL(new_tmp_lob.append(data))) {
+          LOG_WARN("fail to append data", K(ret), K(new_tmp_lob), K(data.length()));
+        } else {
+          ObString res;
+          new_tmp_lob.get_result_buffer(res);
+          value.set_lob_value(value.get_type(), res.ptr(), res.length());
+          value.set_has_lob_header(); // must has lob header
+        }
+      } else if (!loc.has_extern()) {
         // currently all temp lobs have extern field in oracle mode
         // or the lob locator header cannot compatable with clients for 4.0
         ret = OB_INVALID_ARGUMENT;
@@ -704,6 +717,8 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
           // do nothing
         } else if (OB_FAIL(lob.get_inrow_data(inrow_data))) {
           LOG_WARN("fail to get inrow data", K(ret), K(lob));
+        } else if (inrow_data.length() == 0) {
+          // do nothing
         } else {
           int64_t lob_data_byte_len = inrow_data.length();
           int64_t offset_len = reinterpret_cast<uint64_t>(inrow_data.ptr()) - reinterpret_cast<uint64_t>(lob.ptr_);

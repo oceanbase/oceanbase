@@ -432,7 +432,7 @@ int ObStorageHATabletsBuilder::build_tablets_sstable_info_(
   } else if (OB_FAIL(param_.ha_table_info_mgr_->add_table_info(sstable_info.tablet_id_, sstable_info))) {
     LOG_WARN("failed to add table info", K(ret), K(sstable_info));
   } else {
-    LOG_INFO("add table info", K(sstable_info.tablet_id_), K(sstable_info));
+    LOG_DEBUG("add table info", K(sstable_info.tablet_id_), K(sstable_info));
   }
   return ret;
 }

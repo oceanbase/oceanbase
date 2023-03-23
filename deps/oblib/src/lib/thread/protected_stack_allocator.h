@@ -54,6 +54,7 @@ class StackMgr
   friend class ObMemoryCutter;
 public:
   StackMgr()
+    : flow_print_pos_(0)
   {
     dummy_.prev_ = dummy_.next_ = &dummy_;
   }
@@ -62,7 +63,11 @@ public:
   ObStackHeader *begin() { return dummy_.next_; }
   ObStackHeader *end() { return &dummy_; }
 private:
+  void add_flow(ObStackHeader *header, bool is_alloc);
+private:
   lib::ObMutex mutex_;
+  char flow_print_buf_[8192];
+  int64_t flow_print_pos_;
   ObStackHeader dummy_;
 };
 

@@ -894,6 +894,9 @@ int ObPxSubCoord::end_ddl(const bool need_commit)
     }
     LOG_INFO("end ddl sstable", K(ret), K(need_commit));
   }
+  if (OB_EAGAIN == ret) {
+    ret = OB_STATE_NOT_MATCH; // avoid px hang
+  }
   return ret;
 }
 

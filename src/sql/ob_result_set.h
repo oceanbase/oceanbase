@@ -352,18 +352,14 @@ private:
   // Always called in the ObResultSet constructor
   void update_start_time() const
   {
-    oceanbase::observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
-                                                       observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_start_time();
+    oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_start_time();
   }
   // Always called at the end of the ObResultSet destructor
   void update_end_time() const
   {
-    oceanbase::observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
-                                                       observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_end_time();
+    oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_end_time();
   }
 
 protected:

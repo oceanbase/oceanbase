@@ -560,7 +560,7 @@ ObTextStringIterState ObTextStringIter::get_next_block(ObString &str)
   str.reset();
   if (!is_init_ || state_ < TEXTSTRING_ITER_INIT) {
     state_ = TEXTSTRING_ITER_INVALID;
-    COMMON_LOG(WARN, "Lob: iter not initiated", K(ret));
+    COMMON_LOG(WARN, "Lob: iter not initiated", K(ret), K(*this));
   } else if (!is_lob_ || !is_outrow_ || !has_lob_header_) { // if not outrow lob, get full data
     switch (state_) {
       case TEXTSTRING_ITER_INIT: {
@@ -592,12 +592,13 @@ ObTextStringIterState ObTextStringIter::get_next_block(ObString &str)
       }
     }
   } else {
-    COMMON_LOG(WARN, "Lob: error case in of iter", K(*this));
+    COMMON_LOG(WARN, "Lob: error case in of iter", K(ret), K(*this));
     state_ = TEXTSTRING_ITER_INVALID;
   }
   if (OB_FAIL(ret)) {
-    COMMON_LOG(WARN, "Lob: iter get_next_block failed", K(*this));
+    COMMON_LOG(WARN, "Lob: iter get_next_block failed", K(ret), K(*this));
     state_ = TEXTSTRING_ITER_INVALID;
+    err_ret_ = ret;
   }
   return state_;
 }
@@ -1018,7 +1019,7 @@ int ObTextStringResult::calc_buffer_len(int64_t res_len)
       res_len += sizeof(ObLobCommon);
       buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), false);
     } else {
-      ret = OB_SIZE_OVERFLOW;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("Lob: out row temp lob not implemented, not support length bigger than 512M",
         K(ret), K(this), K(pos_), K(buff_len_), K(res_len));
     }

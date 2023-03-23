@@ -2138,7 +2138,8 @@ int ObTablet::try_update_table_store_flag(const ObUpdateTableStoreParam &param)
   return ret;
 }
 
-int ObTablet::build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_param) const
+int ObTablet::build_migration_tablet_param(
+    ObMigrationTabletParam &mig_tablet_param) const
 {
   int ret = OB_SUCCESS;
 
@@ -2168,7 +2169,7 @@ int ObTablet::build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_pa
     mig_tablet_param.ddl_execution_id_ = tablet_meta_.ddl_execution_id_;
     mig_tablet_param.ddl_data_format_version_ = tablet_meta_.ddl_data_format_version_;
     mig_tablet_param.ddl_commit_scn_ = tablet_meta_.ddl_commit_scn_;
-    mig_tablet_param.report_status_.reset();
+    mig_tablet_param.report_status_ = tablet_meta_.report_status_;
 
     if (OB_FAIL(mig_tablet_param.storage_schema_.init(mig_tablet_param.allocator_, storage_schema_))) {
       LOG_WARN("failed to copy storage schema", K(ret), K_(tablet_meta));

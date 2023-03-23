@@ -235,7 +235,7 @@ int ObTabletMeta::init(
     snapshot_version_ = param.snapshot_version_;
     multi_version_start_ = param.multi_version_start_;
     compat_mode_ = param.compat_mode_;
-    report_status_ = param.report_status_;
+    report_status_.reset();
     tx_data_ = param.tx_data_;
     table_store_flag_ = param.table_store_flag_;
     ddl_start_scn_ = param.ddl_start_scn_;
