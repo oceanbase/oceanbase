@@ -361,7 +361,7 @@ int ObTableLoadObjCaster::cast_obj_check(ObTableLoadCastObjCtx &cast_obj_ctx,
   bool is_fast_number = cast_obj_ctx.number_fast_ctx_.is_fast_number_;
    bool not_null_validate = (!column_schema->is_nullable() && lib::is_mysql_mode()) ||
                            (column_schema->is_not_null_enable_column() && lib::is_oracle_mode());
-  if (obj.is_null() && not_null_validate) {
+  if (obj.is_null() && not_null_validate && !column_schema->is_identity_column()) {
     const ObString &column_name = column_schema->get_column_name();
     ret = OB_BAD_NULL_ERROR;
     LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());

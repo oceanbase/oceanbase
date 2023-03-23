@@ -362,7 +362,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   return ret;
 }
 
-int ObPersistentLobApator::erase_lob_meta_tablet(ObLobAccessParam &param, ObLobMetaInfo& in_row)
+int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& in_row)
 {
   int ret = OB_SUCCESS;
 
@@ -477,7 +477,7 @@ int ObPersistentLobApator::erase_lob_piece_tablet(ObLobAccessParam& param, ObLob
   return ret;
 }
 
-int ObPersistentLobApator::write_lob_meta_tablet(ObLobAccessParam& param, ObLobMetaInfo& in_row)
+int ObPersistentLobApator::write_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& in_row)
 {
   int ret = OB_SUCCESS;
 
@@ -528,7 +528,7 @@ int ObPersistentLobApator::write_lob_meta_tablet(ObLobAccessParam& param, ObLobM
   return ret;
 }
 
-int ObPersistentLobApator::update_lob_meta_tablet(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row)
+int ObPersistentLobApator::update_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row)
 {
   int ret = OB_SUCCESS;
 

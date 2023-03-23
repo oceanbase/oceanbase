@@ -226,7 +226,7 @@ int ObTableLoadPartitionCalc::get_row(ObTableLoadPartitionCalcContext &ctx, cons
   ObObj *rowkey_objs = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * rowkey_obj_count));
   ObDataTypeCastParams cast_params(&tz_info_);
   ObCastCtx cast_ctx(&allocator, &cast_params, CM_NONE, ObCharset::get_system_collation());
-  ObTableLoadCastObjCtx cast_obj_ctx(ctx.param_, &time_cvrt_, &cast_ctx, false);
+  ObTableLoadCastObjCtx cast_obj_ctx(ctx.param_, &time_cvrt_, &cast_ctx, true);
   if (OB_ISNULL(rowkey_objs)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret));

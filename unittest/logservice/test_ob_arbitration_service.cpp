@@ -60,7 +60,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
   {
     // 2F, degrade 1, allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, NULL);
     const int64_t palf_id = 1;
     const int64_t replica_num = 2;
     paxos_list.add_server(addr1);
@@ -73,7 +73,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
   {
     // 4F, degrade 3, not allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, NULL);
     const int64_t palf_id = 1;
     paxos_list.add_server(addr3);
     paxos_list.add_server(addr4);
@@ -88,7 +88,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
   {
     // 4F, degrade 1, not allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, NULL);
     const int64_t palf_id = 1;
     const int64_t replica_num = 4;
     LogMemberStatusList dead_servers;
@@ -99,7 +99,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
   {
     // 3F1A, degrade 1, not allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, NULL);
     const int64_t palf_id = 1;
     paxos_list.remove_server(addr4);
     const int64_t replica_num = 3;
@@ -111,7 +111,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
   {
     // 4F1A, degrade 2(addr2, addr3), allow
     MockNetKeepAliveAdapter net_keepalive;
-    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL);
+    ObArbitrationService::DoDegradeFunctor do_degrade_func(addr1, NULL, NULL, NULL);
     const int64_t palf_id = 1;
     paxos_list.add_server(addr4);
     const int64_t replica_num = 4;

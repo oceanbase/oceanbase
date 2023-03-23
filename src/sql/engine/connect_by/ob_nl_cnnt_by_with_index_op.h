@@ -107,6 +107,7 @@ private:
   bool is_cycle_;//判断是否有循环的情况，用来生产connect_by_iscycle
   bool is_inited_;
   bool need_return_;
+  lib::MemoryContext mem_context_;
 };
 
 }//sql

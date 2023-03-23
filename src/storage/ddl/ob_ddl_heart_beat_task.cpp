@@ -104,7 +104,11 @@ int ObDDLHeartBeatTaskContainer::remove_register_task_id(const int64_t task_id)
   } else {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, task_id);
     if (OB_FAIL(register_tasks_.erase_refactored(task_id))) {
-      LOG_ERROR("remove register task id failed", KR(ret));
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("remove register task id failed", KR(ret), K(task_id));
+      }
     }
   }
   return ret;

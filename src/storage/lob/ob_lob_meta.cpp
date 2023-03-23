@@ -673,7 +673,7 @@ int ObLobMetaWriteIter::close()
 int ObLobMetaManager::write(ObLobAccessParam& param, ObLobMetaInfo& in_row)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(persistent_lob_adapter_.write_lob_meta_tablet(param, in_row))) {
+  if (OB_FAIL(persistent_lob_adapter_.write_lob_meta(param, in_row))) {
     LOG_WARN("write lob meta failed.", K(ret), K(param));
   }
   return ret;
@@ -721,7 +721,7 @@ int ObLobMetaManager::scan(ObLobAccessParam& param, ObLobMetaScanIter &iter)
 int ObLobMetaManager::erase(ObLobAccessParam& param, ObLobMetaInfo& in_row)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(persistent_lob_adapter_.erase_lob_meta_tablet(param, in_row))) {
+  if (OB_FAIL(persistent_lob_adapter_.erase_lob_meta(param, in_row))) {
     LOG_WARN("erase lob meta failed.", K(ret), K(param));
   }
   return ret;
@@ -731,7 +731,7 @@ int ObLobMetaManager::erase(ObLobAccessParam& param, ObLobMetaInfo& in_row)
 int ObLobMetaManager::update(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(persistent_lob_adapter_.update_lob_meta_tablet(param, old_row, new_row))) {
+  if (OB_FAIL(persistent_lob_adapter_.update_lob_meta(param, old_row, new_row))) {
     LOG_WARN("update lob meta failed.");
   }
   return ret;

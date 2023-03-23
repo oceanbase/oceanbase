@@ -3719,6 +3719,7 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
     LOG_DEBUG("total des sys vars", K(deserialize_sys_var_count));
     const bool check_timezone_valid = false;
     SysVarIncInfo tmp_sys_var_inc_info;
+    bool is_influence_plan_cache_sys_var = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < deserialize_sys_var_count; ++i) {
       ObObj tmp_val;
       ObBasicSysVar *sys_var = NULL;
@@ -3758,6 +3759,9 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
       } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
                                                   check_timezone_valid))) {
         LOG_ERROR("process system variable error",  K(ret), K(*sys_var));
+      } else if (sys_var->is_influence_plan()
+                && FALSE_IT(is_influence_plan_cache_sys_var = true)) {
+        // do nothing.
       } else {
         LOG_TRACE("deserialize sync sys var", K(sys_var_id), K(*sys_var),
                    K(sessid_), K(proxy_sessid_));
@@ -3768,7 +3772,8 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(sync_default_sys_vars(sys_var_inc_info_, tmp_sys_var_inc_info))) {
+      if (OB_FAIL(sync_default_sys_vars(sys_var_inc_info_, tmp_sys_var_inc_info,
+                                        is_influence_plan_cache_sys_var))) {
         LOG_WARN("fail to sync default sys vars",K(ret));
       } else if (OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
         LOG_WARN("fail to assign sys var delta info",K(ret));
@@ -3776,6 +3781,12 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         //do nothing.
       }
     }
+  if (OB_SUCC(ret)) {
+    if (is_influence_plan_cache_sys_var && OB_FAIL(gen_sys_var_in_pc_str())) {
+      LOG_ERROR("fail to gen sys var in pc str", K(ret));
+    }
+  }
+
     LOG_TRACE("after deserialize sync sys vars", "inc var ids",
                       sys_var_inc_info_.get_all_sys_var_ids(),
                       K(sessid_), K(proxy_sessid_));
@@ -3785,7 +3796,8 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
 
 // Deserialization scenario, synchronization of default system variables
 int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_,
-                                              SysVarIncInfo tmp_sys_var_inc_info)
+                                              SysVarIncInfo tmp_sys_var_inc_info,
+                                              bool &is_influence_plan_cache_sys_var)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
@@ -3810,6 +3822,9 @@ int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_,
       } else if (OB_FAIL(process_session_variable(sys_var_id, sys_vars_[store_idx]->get_value(),
                                                   false))) {
         LOG_WARN("process system variable error", K(ret), K(sys_var_id));
+      } else if (sys_var->is_influence_plan()
+                && FALSE_IT(is_influence_plan_cache_sys_var = true)) {
+        // do nothing.
       } else {
         LOG_TRACE("sync sys var set default value", K(sys_var_id),
         K(sessid_), K(proxy_sessid_));

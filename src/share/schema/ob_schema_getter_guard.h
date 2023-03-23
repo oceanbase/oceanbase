@@ -1159,7 +1159,7 @@ private:
                         // it's use to control if table is visable in some sessions
 
   static const int MAX_ID_SCHEMAS = 32;
-
+  const static int64_t FULL_SCHEMA_MEM_THREHOLD = 100 * 1024 * 1024L;//100M
   // tenant_id_ is valid means it's tenant schema guard
   uint64_t tenant_id_;
   SchemaMgrInfos schema_mgr_infos_;
@@ -1171,6 +1171,7 @@ private:
   bool is_standby_cluster_;
   bool restore_tenant_exist_;
   bool is_inited_;
+  int64_t pin_cache_size_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaGetterGuard);
 };

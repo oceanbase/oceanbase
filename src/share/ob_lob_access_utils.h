@@ -116,7 +116,7 @@ public:
                    bool has_lob_header) :
     type_(type), cs_type_(cs_type), is_init_(false), is_lob_(false), is_outrow_(false),
     has_lob_header_(has_lob_header), state_(TEXTSTRING_ITER_INVALID), datum_str_(datum_str),
-    err_ret_(OB_SUCCESS)
+    ctx_(nullptr), err_ret_(OB_SUCCESS)
   {
     if (is_lob_storage(type)) {
       validate_has_lob_header(has_lob_header_);
@@ -126,7 +126,7 @@ public:
   ObTextStringIter(const ObObj &obj) :
     type_(obj.get_type()), cs_type_(obj.get_collation_type()), is_init_(false), is_lob_(false),
     is_outrow_(false), has_lob_header_(obj.has_lob_header()), state_(TEXTSTRING_ITER_INVALID),
-    datum_str_(obj.get_string()), err_ret_(OB_SUCCESS)
+    datum_str_(obj.get_string()), ctx_(nullptr), err_ret_(OB_SUCCESS)
   {
     if (is_lob_storage(obj.get_type())) {
       validate_has_lob_header(has_lob_header_);

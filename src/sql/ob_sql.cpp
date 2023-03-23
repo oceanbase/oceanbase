@@ -930,6 +930,7 @@ int ObSql::do_real_prepare(const ObString &sql,
                            bool is_inner_sql)
 {
   int ret = OB_SUCCESS;
+  bool enable_udr = false;
   ParseResult parse_result;
   ObStmt *basic_stmt = NULL;
   stmt::StmtType stmt_type = stmt::T_NONE;
@@ -957,10 +958,10 @@ int ObSql::do_real_prepare(const ObString &sql,
 
   CHECK_COMPATIBILITY_MODE(context.session_info_);
 
-  if (!tenant_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant config is invalid", K(ret));
-  } else if (OB_ISNULL(context.session_info_) || OB_ISNULL(context.schema_guard_)) {
+  if (tenant_config.is_valid()) {
+    enable_udr = tenant_config->enable_user_defined_rewrite_rules;
+  }
+  if (OB_ISNULL(context.session_info_) || OB_ISNULL(context.schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
   } else if (OB_FAIL(parser.parse(sql,
@@ -1006,7 +1007,7 @@ int ObSql::do_real_prepare(const ObString &sql,
       LOG_WARN("generate stmt failed", K(ret));
     } else if (!is_from_pl
               && !is_inner_sql
-              && tenant_config->enable_user_defined_rewrite_rules
+              && enable_udr
               && OB_FAIL(ObUDRUtils::match_udr_item(sql, session, allocator, item_guard))) {
         LOG_WARN("failed to match rewrite rule", K(ret));
     } else if (ObStmt::is_dml_stmt(stmt_type)
@@ -4007,17 +4008,18 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
                        bool& plan_added)
 {
   int ret = OB_SUCCESS;
+  bool enable_udr = false;
   ObPhysicalPlan *phy_plan = result.get_physical_plan();
   pc_ctx.fp_result_.pc_key_.namespace_ = ObLibCacheNameSpace::NS_CRSR;
   plan_added = false;
   bool is_batch_exec = pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    enable_udr = tenant_config->enable_user_defined_rewrite_rules;
+  }
   if (OB_ISNULL(phy_plan) || OB_ISNULL(plan_cache)) {
     ret = OB_NOT_INIT;
     LOG_WARN("Fail to generate plan", K(phy_plan), K(plan_cache));
-  } else if (!tenant_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant config is invalid", K(ret));
   } else if (OB_USE_PLAN_CACHE_NONE == phy_plan->get_phy_plan_hint().plan_cache_policy_) {
     LOG_DEBUG("Hint not use plan cache");
   } else if (OB_FAIL(result.to_plan(pc_ctx.mode_, phy_plan))) {
@@ -4040,7 +4042,7 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
     phy_plan->stat_.db_id_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.db_id_;
     phy_plan->stat_.is_rewrite_sql_ = pc_ctx.is_rewrite_sql_;
     phy_plan->stat_.rule_version_ = rule_mgr->get_rule_version();
-    phy_plan->stat_.enable_udr_ = tenant_config->enable_user_defined_rewrite_rules;
+    phy_plan->stat_.enable_udr_ = enable_udr;
 
     if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
       //远程SQL第二次进入plan，将raw_sql作为pc_key存入plan cache中，

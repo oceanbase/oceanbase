@@ -2037,7 +2037,7 @@ int ObOptimizeTenantExecutor::optimize_tenant(const obrpc::ObOptimizeTenantArg &
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("tenant id mismatch", K(tenant_id), K(effective_tenant_id));
   } else {
-    ObArray<const ObTableSchema *> table_schemas;
+    ObSEArray<const ObSimpleTableSchemaV2 *, 512> table_schemas;
     if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("fail to get tenant schema guard", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id, table_schemas))) {
@@ -2045,7 +2045,7 @@ int ObOptimizeTenantExecutor::optimize_tenant(const obrpc::ObOptimizeTenantArg &
     } else {
       LOG_INFO("optimize tenant, table schema count", K(table_schemas.count()));
       for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
-        const ObTableSchema *table_schema = table_schemas.at(i);
+        const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
         const ObDatabaseSchema *database_schema = nullptr;
         obrpc::ObOptimizeTableArg optimize_table_arg;
         if (OB_ISNULL(table_schema)) {
