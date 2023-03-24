@@ -74,6 +74,16 @@ int ObPLAllocator::shrink()
   return ret;
 }
 
+int ObPLCollAllocator::free_child_coll(ObPLCollection &dest)
+{
+  int ret = OB_SUCCESS;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < dest.get_count(); ++i) {
+    OZ (ObUserDefinedType::destruct_obj(dest.get_data()[i], NULL));
+  }
+  return ret;
+}
+
 int ObPLCollAllocator::copy_all_element_with_new_allocator(ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;

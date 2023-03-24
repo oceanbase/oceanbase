@@ -81,6 +81,7 @@ public:
     ObPLAllocator(), coll_(coll) {}
 
   virtual int copy_all_element_with_new_allocator(ObIAllocator *allocator) override;
+  static int free_child_coll(ObPLCollection &dest);
 
 private:
   ObPLCollection* coll_;
