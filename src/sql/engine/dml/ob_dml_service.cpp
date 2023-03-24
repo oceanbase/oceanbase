@@ -1411,10 +1411,10 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
         LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
       } else if (OB_NOT_NULL(stored_row)) {
         dml_rtctx.add_cached_row_size(stored_row->row_size_);
-      }
-      LOG_DEBUG("write row to das op", K(ret), K(buffer_full), "op_type", N,
+        LOG_DEBUG("write row to das op", K(ret), K(buffer_full), "op_type", N,
                 "table_id", ctdef.table_id_, "index_tid", ctdef.index_tid_,
                 "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row), "row_size", stored_row->row_size_);
+      }
     }
     //3. if buffer is full, flush das task, and retry to add row
     if (OB_SUCC(ret) && buffer_full) {
