@@ -505,6 +505,10 @@ int PalfEnvImpl::create_directory(const char *base_dir)
   } else {
     PALF_LOG(INFO, "prepare_directory_for_creating_ls success", K(ret), K(base_dir));
   }
+  if (OB_FAIL(ret)) {
+    FileDirectoryUtils::delete_directory_rec(tmp_base_dir);
+    FileDirectoryUtils::delete_directory_rec(base_dir);
+  }
   return ret;
 }
 

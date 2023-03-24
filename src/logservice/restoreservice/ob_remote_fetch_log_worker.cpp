@@ -330,39 +330,42 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
   return ret;
 }
 
-int ObRemoteFetchWorker::submit_entries_(const ObLSID &id,
-    const int64_t proposal_id,
-    const palf::LSN &base_lsn,
-    ObRemoteLogGroupEntryIterator &iter)
+int ObRemoteFetchWorker::submit_entries_(ObFetchLogTask &task)
 {
   int ret = OB_SUCCESS;
   LogGroupEntry entry;
   const char *buf = NULL;
   int64_t size = 0;
   LSN lsn;
+  const ObLSID &id = task.id_;
   while (OB_SUCC(ret) && ! has_set_stop()) {
     bool quota_done = false;
-    if (OB_FAIL(iter.next(entry, lsn, buf, size))) {
+    if (OB_FAIL(task.iter_.next(entry, lsn, buf, size))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("ObRemoteLogIterator next failed", K(ret), K(iter));
+        LOG_WARN("ObRemoteLogIterator next failed", K(task));
       } else {
-        LOG_TRACE("ObRemoteLogIterator to end", K(iter));
+        LOG_TRACE("ObRemoteLogIterator to end", K(task.iter_));
       }
     } else if (OB_UNLIKELY(! entry.check_integrity())) {
       ret = OB_INVALID_DATA;
-      LOG_WARN("entry is invalid", K(ret), K(entry), K(lsn), K(iter));
-    } else if (base_lsn > lsn) {
-      LOG_INFO("repeated log, just skip", K(ret), K(id), K(lsn), K(base_lsn), K(entry));
+      LOG_WARN("entry is invalid", K(entry), K(lsn), K(task));
+    } else if (task.cur_lsn_ > lsn) {
+      LOG_INFO("repeated log, just skip", K(lsn), K(entry), K(task));
     } else if (OB_FAIL(wait_restore_quota_(entry.get_serialize_size(), quota_done))) {
-      LOG_WARN("wait restore quota failed", K(ret), K(entry));
+      LOG_WARN("wait restore quota failed", K(entry), K(task));
     } else if (! quota_done) {
       break;
-    } else if (OB_FAIL(submit_log_(id, proposal_id, lsn,
+    } else if (OB_FAIL(submit_log_(id, task.proposal_id_, lsn,
             entry.get_scn(), buf, entry.get_serialize_size()))) {
-      LOG_WARN("submit log failed", K(ret), K(iter), K(buf), K(entry), K(lsn));
+      LOG_WARN("submit log failed", K(buf), K(entry), K(lsn), K(task));
+    } else {
+      task.cur_lsn_ = lsn + entry.get_serialize_size();
     }
   } // while
   if (OB_ITER_END == ret) {
+    if (lsn.is_valid()) {
+      LOG_INFO("submit_entries_ succ", K(id), K(lsn), K(entry.get_scn()), K(task));
+    }
     ret = OB_SUCCESS;
   }
   return ret;
@@ -520,8 +523,7 @@ int ObRemoteFetchWorker::foreach_ls_(const ObLSID &id)
         }
       } else if (NULL == task) {
         break;
-      } else if (OB_FAIL(submit_entries_(task->id_, task->proposal_id_,
-              task->cur_lsn_, task->iter_))) {
+      } else if (OB_FAIL(submit_entries_(*task))) {
         if (OB_RESTORE_LOG_TO_END != ret) {
           LOG_WARN("submit_entries_ failed", K(ret), KPC(task));
         }

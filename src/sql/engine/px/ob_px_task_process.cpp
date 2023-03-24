@@ -225,6 +225,7 @@ int ObPxTaskProcess::process()
       }
     }
   }
+  release();
   ObActiveSessionGuard::get_stat().in_px_execution_ = false;
   return ret;
 }

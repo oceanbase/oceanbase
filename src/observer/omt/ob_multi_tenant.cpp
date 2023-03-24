@@ -940,7 +940,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     do {
       tmp_ret = OB_SUCCESS;
       if (create_step >= ObTenantCreateStep::STEP_LOG_DISK_SIZE_PINNED) {
-        if (!is_valid_tenant_id(tenant_id) && !is_hidden_sys) {
+        if (!is_virtual_tenant_id(tenant_id) && !is_hidden_sys) {
           GCTX.log_block_mgr_->abort_create_tenant(log_disk_size);
         }
       }
@@ -1463,14 +1463,22 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &try_clock_succ)
   } else if (OB_ISNULL(GCTX.session_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected condition", K(ret));
-  } else if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
-    LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
   } else {
     LOG_INFO("removed_tenant begin to stop", K(tenant_id));
     {
       SpinWLockGuard guard(lock_); //add a lock when set tenant stop, omt will check tenant has stop before calling timeup()
       removed_tenant->stop();
     }
+    LOG_INFO("removed_tenant begin to kill tenant session", K(tenant_id));
+    if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
+      LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
+      {
+        SpinWLockGuard guard(lock_);
+        removed_tenant->start();
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(removed_tenant)) {
     LOG_INFO("removed_tenant begin to wait", K(tenant_id));
     removed_tenant->wait();
     LOG_INFO("removed_tenant begin to try wlock", K(tenant_id));

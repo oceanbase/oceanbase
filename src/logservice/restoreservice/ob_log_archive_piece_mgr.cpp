@@ -1269,7 +1269,13 @@ int ObLogArchivePieceContext::get_max_log_in_piece_(const ObLogArchivePieceConte
   if (OB_FAIL(get_piece_meta_info_(piece_id))) {
     ARCHIVE_LOG(WARN, "get piece meta info failed", K(ret), K_(id), K_(round_context), K(piece_id));
   } else if (OB_FAIL(get_piece_file_range_())) {
-    ARCHIVE_LOG(WARN, "get piece file range failed", K(ret));
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+      exist = false;
+      // no file exist in this piece, return OB_SUCCESS
+    } else {
+      ARCHIVE_LOG(WARN, "get piece file range failed", K(ret));
+    }
   } else if (inner_piece_context_.is_empty_() || inner_piece_context_.max_file_id_ == 0) {
     ARCHIVE_LOG(INFO, "no file exist in piece, just skip", K(ret), K_(id), K_(round_context), K_(inner_piece_context));
   } else {

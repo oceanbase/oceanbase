@@ -210,17 +210,23 @@ int ObTransService::stop_tx(ObTxDesc &tx)
   tx.lock_.lock();
   TRANS_LOG(INFO, "stop_tx, print its trace as following", K(tx));
   tx.print_trace_();
-  if (tx.state_ < ObTxDesc::State::IN_TERMINATE) {
-    abort_tx_(tx, ObTxAbortCause::STOP, true);
-  } else if (!tx.is_terminated()) {
-    unregister_commit_retry_task_(tx);
-    // arm callback arguments
-    tx.commit_out_ = OB_TRANS_UNKNOWN;
-    tx.state_ = ObTxDesc::State::COMMIT_UNKNOWN;
+  if (tx.addr_ != self_) {
+    // either on txn temp node or xa temp node
+    // depends on session cleanup to quit
+    TRANS_LOG(INFO, "this is not txn start node.");
+  } else {
+    if (tx.state_ < ObTxDesc::State::IN_TERMINATE) {
+      abort_tx_(tx, ObTxAbortCause::STOP, true);
+    } else if (!tx.is_terminated()) {
+      unregister_commit_retry_task_(tx);
+      // arm callback arguments
+      tx.commit_out_ = OB_TRANS_UNKNOWN;
+      tx.state_ = ObTxDesc::State::COMMIT_UNKNOWN;
+    }
+    tx.lock_.unlock();
+    // run callback after unlock
+    tx.execute_commit_cb();
   }
-  tx.lock_.unlock();
-  // run callback after unlock
-  tx.execute_commit_cb();
   return ret;
 }
 

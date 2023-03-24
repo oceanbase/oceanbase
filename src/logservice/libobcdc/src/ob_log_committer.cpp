@@ -1251,7 +1251,7 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
     if (OB_EMPTY_RESULT == ret) {
       if (0 < trans_ctx.get_total_br_count()) {
         // unexpected
-        LOG_ERROR("trans has no valid br to output, skip this trans", K(trans_ctx));
+        LOG_ERROR("unexpected skiping trans with valid br", KR(ret), K(trans_ctx));
       } else {
         LOG_INFO("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
         ret = OB_SUCCESS;

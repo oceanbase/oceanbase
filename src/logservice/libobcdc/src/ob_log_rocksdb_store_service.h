@@ -16,6 +16,7 @@
 #define OCEANBASE_LIBOBCDC_OB_LOG_ROCKSDB_IMPL_H_
 
 #include "ob_log_store_service.h"
+#include "lib/atomic/ob_atomic.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
@@ -54,15 +55,18 @@ public:
   virtual int drop_column_family(void *cf_handle);
   virtual int destory_column_family(void *cf_handle);
 
-  virtual int close();
+  virtual void mark_stop_flag() override { ATOMIC_SET(&is_stopped_, true); }
+  virtual int close() override;
   virtual void get_mem_usage(const std::vector<uint64_t> ids,
       const std::vector<void *> cf_handles);
+  OB_INLINE bool is_stopped() const { return ATOMIC_LOAD(&is_stopped_); }
 
 private:
   int init_dir_(const char *dir_path);
 
 private:
   bool is_inited_;
+  bool is_stopped_;
   rocksdb::DB *m_db_;
   rocksdb::Options m_options_;
   std::string m_db_path_;
