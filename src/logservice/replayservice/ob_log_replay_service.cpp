@@ -1278,6 +1278,7 @@ int ObLogReplayService::submit_log_replay_task_(ObLogReplayTask &replay_task,
                                                 ObReplayStatus &replay_status)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t replay_hint = 0;
   if (OB_UNLIKELY(!replay_task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1293,8 +1294,11 @@ int ObLogReplayService::submit_log_replay_task_(ObLogReplayTask &replay_task,
     } else {
       // push error, dec pending count now
       if (replay_task.is_post_barrier_) {
-        if (OB_FAIL(replay_status.set_post_barrier_finished(replay_task.lsn_))) {
-          CLOG_LOG(ERROR, "revoke post barrier failed", K(replay_task), K(replay_status), K(ret));
+        if (OB_SUCCESS != (tmp_ret = replay_status.set_post_barrier_finished(replay_task.lsn_))) {
+          if (!replay_status.is_fatal_error(ret)) {
+            ret = tmp_ret;
+          }
+          CLOG_LOG(ERROR, "revoke post barrier failed", K(replay_task), K(replay_status), K(ret), K(tmp_ret));
         }
       }
       replay_status.dec_pending_task(replay_task.log_size_);
