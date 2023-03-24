@@ -1941,60 +1941,70 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
           TRANS_LOG(ERROR, "dist tx apply log failed", KR(ret), K(*this));
         }
       } else if (ObTxLogType::TX_COMMIT_LOG == log_type) {
-        if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
-            && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, log_ts, log_lsn, false))) {
-          TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(log_cb), KPC(this));
+        if (OB_SUCC(ret)) {
+          if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
+              && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, log_ts, log_lsn,
+                                                     false))) {
+            TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(log_cb), KPC(this));
+          }
         }
-        if (is_local_tx_()) {
-          if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
-            TRANS_LOG(WARN, "set end log ts failed", K(ret));
-          } else {
-            if (OB_FAIL(on_local_commit_tx_())) {
-              TRANS_LOG(WARN, "on local commit failed", KR(ret), K(*this));
+        if (OB_SUCC(ret)) {
+          if (is_local_tx_()) {
+            if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
+              TRANS_LOG(WARN, "set end log ts failed", K(ret));
+            } else {
+              if (OB_FAIL(on_local_commit_tx_())) {
+                TRANS_LOG(WARN, "on local commit failed", KR(ret), K(*this));
+              }
             }
-          }
-        } else {
-          const NotifyType type = NotifyType::ON_COMMIT;
-          if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
-            TRANS_LOG(WARN, "set end log ts failed", K(ret));
-          } else if (OB_FAIL(notify_data_source_(type, log_ts, false, exec_info_.multi_data_source_))) {
-            TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
-          }
-          ObTwoPhaseCommitLogType two_phase_log_type;
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(switch_log_type_(log_type, two_phase_log_type))) {
-            TRANS_LOG(WARN, "switch log type failed", KR(ret), K(*this), K(log_type));
-          } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::apply_log(two_phase_log_type))) {
-            TRANS_LOG(ERROR, "dist tx apply log failed", KR(ret), K(*this), K(two_phase_log_type));
+          } else {
+            const NotifyType type = NotifyType::ON_COMMIT;
+            if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
+              TRANS_LOG(WARN, "set end log ts failed", K(ret));
+            } else if (OB_FAIL(notify_data_source_(type, log_ts, false, exec_info_.multi_data_source_))) {
+              TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
+            }
+            ObTwoPhaseCommitLogType two_phase_log_type;
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(switch_log_type_(log_type, two_phase_log_type))) {
+              TRANS_LOG(WARN, "switch log type failed", KR(ret), K(*this), K(log_type));
+            } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::apply_log(two_phase_log_type))) {
+              TRANS_LOG(ERROR, "dist tx apply log failed", KR(ret), K(*this), K(two_phase_log_type));
+            }
           }
         }
       } else if (ObTxLogType::TX_ABORT_LOG == log_type) {
-        if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
-            && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, log_ts, log_lsn, false))) {
-          TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(log_cb), KPC(this));
+        if (OB_SUCC(ret)) {
+          if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
+              && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, log_ts, log_lsn,
+                                                     false))) {
+            TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(log_cb), KPC(this));
+          }
         }
-        if (is_local_tx_() || sub_state_.is_force_abort()) {
-          if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
-            TRANS_LOG(WARN, "set end log ts failed", K(ret));
-          } else if (OB_FAIL(on_local_abort_tx_())) {
-            TRANS_LOG(WARN, "on local abort failed", KR(ret), K(*this));
-          }
-        } else {
-          const NotifyType type = NotifyType::ON_ABORT;
-          tmp_array.reset();
-          if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
-            TRANS_LOG(WARN, "set end log ts failed", K(ret));
-          } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
-            TRANS_LOG(WARN, "gen total mds array failed", K(ret));
-          } else if (OB_FAIL(notify_data_source_(type, log_ts, false, tmp_array))) {
-            TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
-          }
-          ObTwoPhaseCommitLogType two_phase_log_type;
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(switch_log_type_(log_type, two_phase_log_type))) {
-            TRANS_LOG(WARN, "switch log type failed", KR(ret), K(*this), K(log_type));
-          } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::apply_log(two_phase_log_type))) {
-            TRANS_LOG(ERROR, "dist tx apply log failed", KR(ret), K(*this), K(two_phase_log_type));
+        if (OB_SUCC(ret)) {
+          if (is_local_tx_() || sub_state_.is_force_abort()) {
+            if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
+              TRANS_LOG(WARN, "set end log ts failed", K(ret));
+            } else if (OB_FAIL(on_local_abort_tx_())) {
+              TRANS_LOG(WARN, "on local abort failed", KR(ret), K(*this));
+            }
+          } else {
+            const NotifyType type = NotifyType::ON_ABORT;
+            tmp_array.reset();
+            if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
+              TRANS_LOG(WARN, "set end log ts failed", K(ret));
+            } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
+              TRANS_LOG(WARN, "gen total mds array failed", K(ret));
+            } else if (OB_FAIL(notify_data_source_(type, log_ts, false, tmp_array))) {
+              TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
+            }
+            ObTwoPhaseCommitLogType two_phase_log_type;
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(switch_log_type_(log_type, two_phase_log_type))) {
+              TRANS_LOG(WARN, "switch log type failed", KR(ret), K(*this), K(log_type));
+            } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::apply_log(two_phase_log_type))) {
+              TRANS_LOG(ERROR, "dist tx apply log failed", KR(ret), K(*this), K(two_phase_log_type));
+            }
           }
         }
       } else if (ObTxLogType::TX_CLEAR_LOG == log_type) {
@@ -4592,27 +4602,41 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
                  commit_log.get_incremental_participants()))) {
     TRANS_LOG(WARN, "set incremental_participants error", K(ret), K(*this));
   } else {
-    if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
-        && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, timestamp, offset, true))) {
-      TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(this));
+    if (OB_SUCC(ret)) {
+      if ((!commit_log.get_multi_source_data().empty() || !exec_info_.multi_data_source_.empty())
+          && is_incomplete_replay_ctx_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "mds part_ctx can not replay from the middle", K(ret), K(timestamp), K(offset),
+                  K(commit_log), KPC(this));
+      }
     }
-    if (is_local_tx_()) {
-      set_durable_state_(ObTxState::COMMIT);
-      set_upstream_state(ObTxState::COMMIT);
-    } else {
-      ObTwoPhaseCommitLogType two_phase_log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_MAX;
-      if (is_incomplete_replay_ctx_) {
-        // incomplete replay ctx will exiting by replay commit/abort/clear,  no need to depend on
-        // 2PC
-      } else if (OB_FAIL(switch_log_type_(commit_log.LOG_TYPE, two_phase_log_type))) {
-        TRANS_LOG(WARN, "switch log type failed", KR(ret), KPC(this));
-      } else if (OB_FAIL(coord_prepare_info_arr_.assign(commit_log.get_ls_log_info_arr()))) {
-        TRANS_LOG(WARN, "assign coord_prepare_info_arr_ failed", K(ret));
-      } else if (is_root()
-                 && OB_FAIL(exec_info_.prepare_log_info_arr_.assign(commit_log.get_ls_log_info_arr()))) {
-        TRANS_LOG(WARN, "assigin prepare_log_info_arr_ failed", K(ret));
-      } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::replay_log(two_phase_log_type))) {
-        TRANS_LOG(WARN, "replay_log failed", KR(ret), KPC(this));
+    if (OB_SUCC(ret)) {
+      if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
+          && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, timestamp, offset,
+                                                 true))) {
+        TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(this));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (is_local_tx_()) {
+        set_durable_state_(ObTxState::COMMIT);
+        set_upstream_state(ObTxState::COMMIT);
+      } else {
+        ObTwoPhaseCommitLogType two_phase_log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_MAX;
+        if (is_incomplete_replay_ctx_) {
+          // incomplete replay ctx will exiting by replay commit/abort/clear,  no need to depend on
+          // 2PC
+        } else if (OB_FAIL(switch_log_type_(commit_log.LOG_TYPE, two_phase_log_type))) {
+          TRANS_LOG(WARN, "switch log type failed", KR(ret), KPC(this));
+        } else if (OB_FAIL(coord_prepare_info_arr_.assign(commit_log.get_ls_log_info_arr()))) {
+          TRANS_LOG(WARN, "assign coord_prepare_info_arr_ failed", K(ret));
+        } else if (is_root()
+                   && OB_FAIL(
+                       exec_info_.prepare_log_info_arr_.assign(commit_log.get_ls_log_info_arr()))) {
+          TRANS_LOG(WARN, "assigin prepare_log_info_arr_ failed", K(ret));
+        } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::replay_log(two_phase_log_type))) {
+          TRANS_LOG(WARN, "replay_log failed", KR(ret), KPC(this));
+        }
       }
     }
   }
@@ -4760,21 +4784,34 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
   } else if (update_replaying_log_no_(timestamp, part_log_no)) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else {
-    if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
-        && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, timestamp, offset, true))) {
-      TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(this));
+    if (OB_SUCC(ret)) {
+      if ((!abort_log.get_multi_source_data().empty() || !exec_info_.multi_data_source_.empty())
+          && is_incomplete_replay_ctx_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "mds part_ctx can not replay from the middle", K(ret), K(timestamp), K(offset),
+                  K(abort_log), KPC(this));
+      }
     }
-    if (is_local_tx_()) {
-      set_durable_state_(ObTxState::ABORT);
-      set_upstream_state(ObTxState::ABORT);
-    } else {
-      ObTwoPhaseCommitLogType two_phase_log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_MAX;
-      if (is_incomplete_replay_ctx_) {
-        // incomplete replay ctx will exiting by replay commit/abort/clear,  no need to depend on 2PC
-      } else if (OB_FAIL(switch_log_type_(abort_log.LOG_TYPE, two_phase_log_type))) {
-        TRANS_LOG(WARN, "switch log type failed", KR(ret), KPC(this));
-      } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::replay_log(two_phase_log_type))) {
-        TRANS_LOG(WARN, "replay_log failed", KR(ret), KPC(this));
+    if (OB_SUCC(ret)) {
+      if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
+          && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, timestamp, offset,
+                                                 true))) {
+        TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(this));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (is_local_tx_()) {
+        set_durable_state_(ObTxState::ABORT);
+        set_upstream_state(ObTxState::ABORT);
+      } else {
+        ObTwoPhaseCommitLogType two_phase_log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_MAX;
+        if (is_incomplete_replay_ctx_) {
+          // incomplete replay ctx will exiting by replay commit/abort/clear,  no need to depend on 2PC
+        } else if (OB_FAIL(switch_log_type_(abort_log.LOG_TYPE, two_phase_log_type))) {
+          TRANS_LOG(WARN, "switch log type failed", KR(ret), KPC(this));
+        } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::replay_log(two_phase_log_type))) {
+          TRANS_LOG(WARN, "replay_log failed", KR(ret), KPC(this));
+        }
       }
     }
   }
@@ -4849,6 +4886,14 @@ int ObPartTransCtx::replay_multi_data_source(const ObTxMultiDataSourceLog &log,
   } else if (OB_FAIL(deep_copy_mds_array(log.get_data(), false))) {
     TRANS_LOG(WARN, "deep copy mds array failed", K(ret));
   } 
+
+  if (OB_SUCC(ret)) {
+    if (is_incomplete_replay_ctx_) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "mds part_ctx can not replay from the middle", K(ret), K(timestamp), K(lsn),
+                K(log), KPC(this));
+    }
+  }
 
   if (OB_FAIL(ret)) {
     // do nothing
@@ -5903,13 +5948,13 @@ int ObPartTransCtx::del_retain_ctx()
                   *this);
       } else {
         need_del = true;
-        TRANS_LOG(INFO, "del retain ctx after exiting", K(ctx_ref), KPC(this));
+        FLOG_INFO("del retain ctx after exiting", K(ctx_ref), KPC(this));
       }
     } else {
       // MDS trans : allowed gc before clear log on_success
       // del ctx by set_exiting_()
       clean_retain_cause_();
-      TRANS_LOG(INFO, "del retain ctx before exiting", KPC(this));
+      FLOG_INFO("del retain ctx before exiting", KPC(this));
     }
   }
   if (need_del && NULL != ls_tx_ctx_mgr_) {
