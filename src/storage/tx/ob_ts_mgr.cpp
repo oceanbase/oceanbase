@@ -764,9 +764,9 @@ int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const SCN &scn,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "ObTsMgr is not inited", K(ret));
-  } else if (OB_UNLIKELY(!is_running_)) {
-    ret = OB_NOT_RUNNING;
-    TRANS_LOG(WARN, "ObTsMgr not running", K(ret));
+  // } else if (OB_UNLIKELY(!is_running_)) {
+  //   ret = OB_NOT_RUNNING;
+  //   TRANS_LOG(WARN, "ObTsMgr not running", K(ret));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))
       || OB_UNLIKELY(!scn.is_valid())
       || OB_ISNULL(task)) {
