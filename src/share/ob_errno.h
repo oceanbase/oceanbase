@@ -1689,6 +1689,7 @@ constexpr int OB_ERR_MERGE_INTO_WITH_POLICY = -9742;
 constexpr int OB_ERR_SP_NO_DROP_SP = -9743;
 constexpr int OB_ERR_RECOMPILATION_OBJECT = -9744;
 constexpr int OB_ERR_VARIABLE_NOT_IN_SELECT_LIST = -9745;
+constexpr int OB_ERR_MULTI_RECORD = -9746;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3721,6 +3722,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SP_NO_DROP_SP__USER_ERROR_MSG "Can't drop or alter a '%s' from within another stored routine."
 #define OB_ERR_RECOMPILATION_OBJECT__USER_ERROR_MSG "errors during recompilation/revalidation of object"
 #define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__USER_ERROR_MSG "variable not in select list"
+#define OB_ERR_MULTI_RECORD__USER_ERROR_MSG "coercion into multiple record targets not supported"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -5753,6 +5755,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SP_NO_DROP_SP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9743, Can't drop or alter a '%s' from within another stored routine."
 #define OB_ERR_RECOMPILATION_OBJECT__ORA_USER_ERROR_MSG "ORA-04045: errors during recompilation/revalidation of %.*s.%.*s"
 #define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__ORA_USER_ERROR_MSG "ORA-01007: variable not in select list"
+#define OB_ERR_MULTI_RECORD__ORA_USER_ERROR_MSG "ORA-00494: coercion into multiple record targets not supported"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -5763,7 +5766,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2028];
+extern int g_all_ob_errnos[2029];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
