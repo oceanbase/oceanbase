@@ -75,12 +75,12 @@ private:
   const static int64_t MAGIC_VERSION = MAGIC_NUM + UNIS_VERSION;
 public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(const char *buf, const int64_t buf_len, int64_t &pos, ObSliceAlloc &slice_allocator);
+  int deserialize(const char *buf, const int64_t buf_len, int64_t &pos, ObTxDataTable &tx_data_table);
   int64_t get_serialize_size() const;
 
 private:
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize_(const char *buf, const int64_t buf_len, int64_t &pos, ObSliceAlloc &slice_allocator);
+  int deserialize_(const char *buf, const int64_t buf_len, int64_t &pos, ObTxDataTable &tx_data_table);
   int64_t get_serialize_size_() const;
 
 public:
@@ -92,16 +92,16 @@ public:
     tx_id_.reset();
     ls_id_.reset();
     cluster_id_ = OB_INVALID_CLUSTER_ID;
-    state_info_.reset();
+    tx_data_guard_.reset();
     exec_info_.reset();
     table_lock_info_.reset();
   }
   void destroy() { reset(); }
-  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(state_info), K_(exec_info));
+  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(tx_data_guard), K_(exec_info));
   transaction::ObTransID tx_id_;
   share::ObLSID ls_id_;
   int64_t cluster_id_;
-  ObTxData state_info_;
+  ObTxDataGuard tx_data_guard_;
   transaction::ObTxExecInfo exec_info_;
   transaction::tablelock::ObTableLockInfo table_lock_info_;
 };

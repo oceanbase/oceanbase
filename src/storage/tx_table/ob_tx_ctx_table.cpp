@@ -128,8 +128,8 @@ int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls
 }
 
 int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
-                                       ObSliceAlloc &slice_allocator,
-                                       transaction::ObLSTxCtxMgr* ls_tx_ctx_mgr)
+                                       ObTxDataTable &tx_data_table,
+                                       transaction::ObLSTxCtxMgr *ls_tx_ctx_mgr)
 {
   int ret = OB_SUCCESS;
 
@@ -206,7 +206,7 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
     int64_t pos = 0;
     bool tx_ctx_existed = true;
 
-    if (OB_FAIL(ctx_info_.deserialize(deserialize_buf, deserialize_buf_length, pos, slice_allocator))) {
+    if (OB_FAIL(ctx_info_.deserialize(deserialize_buf, deserialize_buf_length, pos, tx_data_table))) {
       STORAGE_LOG(WARN, "failed to deserialize status_info", K(ret), K_(ctx_info));
     } else if (OB_FAIL(recover_one_tx_ctx_(ls_tx_ctx_mgr, ctx_info_))) {
       STORAGE_LOG(WARN, "failed to recover_one_tx_ctx_", K(ret), K(ctx_info_));
@@ -313,9 +313,9 @@ int ObTxCtxTable::offline()
   return ret;
 }
 
-int ObTxCtxTable::recover(const blocksstable::ObDatumRow &row, ObSliceAlloc &slice_allocator)
+int ObTxCtxTable::recover(const blocksstable::ObDatumRow &row, ObTxDataTable &tx_data_table)
 {
-  return recover_helper_.recover(row, slice_allocator, ls_tx_ctx_mgr_);
+  return recover_helper_.recover(row, tx_data_table, ls_tx_ctx_mgr_);
 }
 
 int ObTxCtxTable::check_with_tx_data(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn)

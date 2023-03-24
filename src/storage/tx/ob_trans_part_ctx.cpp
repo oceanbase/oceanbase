@@ -1362,7 +1362,7 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
   //   TRANS_LOG(WARN, "unexpected null ptr", K(*this));
   } else if (OB_FAIL(mt_ctx_.recover_from_table_lock_durable_info(ctx_info.table_lock_info_))) {
     TRANS_LOG(ERROR, "recover_from_table_lock_durable_info failed", K(ret));
-  } else if (OB_FAIL(ctx_tx_data_.recover_tx_data(ctx_info.state_info_))) {
+  } else if (OB_FAIL(ctx_tx_data_.recover_tx_data(ctx_info.tx_data_guard_))) {
     TRANS_LOG(WARN, "recover tx data failed", K(ret), K(ctx_tx_data_));
   } else {
     trans_id_ = ctx_info.tx_id_;
@@ -5313,9 +5313,8 @@ int ObPartTransCtx::check_with_tx_data(ObITxDataCheckFunctor &fn)
 {
   // NB: You need notice the lock is not acquired during check
   int ret = OB_SUCCESS;
-  const ObTxData *tx_data_ptr = NULL;
-  auto guard = ctx_tx_data_.get_tx_data();
-  if (OB_FAIL(guard.get_tx_data(tx_data_ptr))) {
+  ObTxData *tx_data_ptr = NULL;
+  if (OB_FAIL(ctx_tx_data_.get_tx_data_ptr(tx_data_ptr))) {
   } else {
     // const ObTxData &tx_data = *tx_data_ptr;
     // NB: we must read the state then the version without lock. If you are interested in the
@@ -5434,41 +5433,24 @@ int ObPartTransCtx::refresh_rec_log_ts_()
 int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
 {
   int ret = OB_SUCCESS;
-  {
-    const ObTxData *tx_data = NULL;
-    const ObTxCommitData *tx_commit_data = NULL;
-    auto guard = ctx_tx_data_.get_tx_data();
-    if (OB_FAIL(guard.get_tx_data(tx_data))) {
-      TRANS_LOG(WARN, "get tx data failed", K(ret));
-      // rewrite ret
-      ret = OB_SUCCESS;
-      if (OB_FAIL(ctx_tx_data_.get_tx_commit_data(tx_commit_data))) {
-        TRANS_LOG(WARN, "get tx commit data failed", K(ret));
-      } else {
-        info.state_info_ = *tx_commit_data;
-      }
+
+  if (OB_FAIL(ctx_tx_data_.get_tx_data(info.tx_data_guard_))) {
+    TRANS_LOG(WARN, "get tx data failed", K(ret));
+  } else if (OB_FAIL(mt_ctx_.calc_checksum_before_scn(
+                 exec_info_.max_applied_log_ts_, exec_info_.checksum_, exec_info_.checksum_scn_))) {
+    TRANS_LOG(ERROR, "calc checksum before log ts failed", K(ret), KPC(this));
+  } else {
+    info.tx_id_ = trans_id_;
+    info.ls_id_ = ls_id_;
+    info.exec_info_ = exec_info_;
+    info.cluster_id_ = cluster_id_;
+    if (OB_FAIL(mt_ctx_.get_table_lock_store_info(info.table_lock_info_))) {
+      TRANS_LOG(WARN, "get_table_lock_store_info failed", K(ret), K(info));
     } else {
-      info.state_info_ = *tx_data;
+      TRANS_LOG(INFO, "store ctx_info: ", K(ret), K(info), KPC(this));
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(mt_ctx_.calc_checksum_before_scn(exec_info_.max_applied_log_ts_,
-                                                 exec_info_.checksum_,
-                                                 exec_info_.checksum_scn_))) {
-      TRANS_LOG(ERROR, "calc checksum before log ts failed", K(ret), KPC(this));
-    } else {
-      info.tx_id_ = trans_id_;
-      info.ls_id_ = ls_id_;
-      info.exec_info_ = exec_info_;
-      info.cluster_id_ = cluster_id_;
-      if (OB_FAIL(mt_ctx_.get_table_lock_store_info(info.table_lock_info_))) {
-        TRANS_LOG(WARN, "get_table_lock_store_info failed", K(ret), K(info));
-      } else {
-        TRANS_LOG(INFO, "store ctx_info: ", K(ret), K(info), KPC(this));
-      }
-    }
-  }
 
   return ret;
 }
@@ -6702,9 +6684,9 @@ int ObPartTransCtx::dump_2_text(FILE *fd)
 
   fprintf(fd, "********** ObPartTransCtx ***********\n\n");
   fprintf(fd, "%s\n", buf);
-  auto guard = ctx_tx_data_.get_tx_data();
-  if (OB_FAIL(guard.get_tx_data(tx_data_ptr))) {
-  } else if (OB_ISNULL(tx_data_ptr)) {
+  ObTxDataGuard tx_data_guard;
+  ctx_tx_data_.get_tx_data(tx_data_guard);
+  if (OB_ISNULL(tx_data_ptr = tx_data_guard.tx_data())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected nullptr", KR(ret));
   } else {

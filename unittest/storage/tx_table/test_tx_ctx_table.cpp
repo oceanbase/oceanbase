@@ -258,9 +258,10 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   // ObTransSSTableDurableCtxInfo ctx_info;
   ObTxCtxTableInfo ctx_info;
   ObSliceAlloc slice_allocator;
+  ObTxDataTable tx_data_table;
   ObMemAttr attr;
   attr.tenant_id_ = MTL_ID();
-  slice_allocator.init(sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, attr);
+  tx_data_table.slice_allocator_.init(sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, attr);
 
   ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01));
 
@@ -299,7 +300,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
       row_copy.storage_datums_[TX_CTX_TABLE_META_COLUMN] = row_copy.storage_datums_[meta_col];
       row_copy.storage_datums_[TX_CTX_TABLE_VAL_COLUMN] = row_copy.storage_datums_[value_col];
       TRANS_LOG(INFO, "row_info projected", K(row_copy));
-      ASSERT_EQ(OB_SUCCESS, recover_helper.recover(row_copy, slice_allocator, ls_tx_ctx_mgr_recover));
+      ASSERT_EQ(OB_SUCCESS, recover_helper.recover(row_copy, tx_data_table, ls_tx_ctx_mgr_recover));
     } while (tx_ctx_memtable_iter->has_unmerged_buf_);
 
     ObTxCtxTableInfo* ctx_info = recover_helper.get_tx_ctx_table_info();

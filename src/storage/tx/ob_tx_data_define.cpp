@@ -23,6 +23,7 @@ namespace storage
 
 int ObUndoStatusList::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
+  SpinRLockGuard guard(lock_);
   int ret = OB_SUCCESS;
   const int64_t len = get_serialize_size_();
   if (OB_UNLIKELY(OB_ISNULL(buf) || buf_len <= 0 || pos > buf_len)) {
@@ -73,6 +74,7 @@ int ObUndoStatusList::deserialize(const char *buf,
   int ret = OB_SUCCESS;
   int64_t version = 0;
   int64_t undo_status_list_len = 0;
+  SpinWLockGuard guard(lock_);
 
   if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &version))) {
     STORAGE_LOG(WARN, "decode version fail", K(version), K(data_len), K(pos), K(ret));
@@ -145,6 +147,7 @@ int ObUndoStatusList::deserialize_(const char *buf,
 
 int64_t ObUndoStatusList::get_serialize_size() const
 {
+  SpinRLockGuard guard(lock_);
   int64_t data_len = get_serialize_size_();
   int64_t len = 0;
   len += serialization::encoded_length_vi64(UNIS_VERSION);
@@ -485,7 +488,6 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
   if (OB_NOT_NULL(undo_node)) {
     tx_data_table->free_undo_status_node(undo_node);
   }
-
   return ret;
 }
 
@@ -506,6 +508,7 @@ int ObTxData::merge_undo_actions_(ObTxDataTable *tx_data_table,
     }
 
     if (0 == node->size_) {
+      // fprintf(stdout, "free undo node, node ptr = %p \n", node);
       // all undo actions in this node are merged, free it
       // STORAGE_LOG(DEBUG, "current node is empty, now free it");
       ObUndoStatusNode *node_to_free = node;

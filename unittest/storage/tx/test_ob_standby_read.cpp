@@ -314,7 +314,12 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   part1.set_downstream_state(ObTxState::PREPARE);
   part1.exec_info_.prepare_version_.convert_for_tx(90);
   part2.set_downstream_state(ObTxState::COMMIT);
-  part2.ctx_tx_data_.tx_commit_data_.commit_version_.convert_for_tx(90);
+  ObTxData part2_tx_data;
+  ObSliceAlloc slice_allocator;
+  part2_tx_data.ref_cnt_ = 1000;
+  part2_tx_data.slice_allocator_ = &slice_allocator;
+  part2.ctx_tx_data_.tx_data_guard_.init(&part2_tx_data);
+  part2.ctx_tx_data_.tx_data_guard_.tx_data()->commit_version_.convert_for_tx(90);
   part3.set_downstream_state(ObTxState::UNKNOWN);
   can_read = false;
   part1.state_info_array_.reset();
@@ -343,7 +348,7 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   part1.set_downstream_state(ObTxState::PREPARE);
   coord.exec_info_.prepare_version_.convert_for_tx(90);
   part2.set_downstream_state(ObTxState::COMMIT);
-  part2.ctx_tx_data_.tx_commit_data_.commit_version_.convert_for_tx(300);
+  part2.ctx_tx_data_.tx_data_guard_.tx_data()->commit_version_.convert_for_tx(300);
   part3.set_downstream_state(ObTxState::UNKNOWN);
   can_read = true;
   part1.state_info_array_.reset();
