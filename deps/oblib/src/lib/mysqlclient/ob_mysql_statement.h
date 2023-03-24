@@ -57,7 +57,7 @@ public:
    * use prepare method to read data instead
    * reference ObMySQLPrepareStatement
    */
-  ObMySQLResult *execute_query();
+  ObMySQLResult *execute_query(bool enable_use_result = false);
 
 private:
   ObMySQLConnection *conn_;

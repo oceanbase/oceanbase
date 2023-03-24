@@ -85,6 +85,7 @@ int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
   my_session = ctx_.get_my_session();
   transaction::ObTransID tx_id;
   bool have_lob = false;
+  res_.set_enable_use_result(true);
   if (OB_ISNULL(link_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), KP(link_stmt));

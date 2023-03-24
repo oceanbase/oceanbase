@@ -86,8 +86,8 @@ private:
   ObString tenant_;
   ObString cluster_;
   ObString passwd_;
-  common::ObAddr addr_;
-  common::ObAddr self_addr_;
+  common::ObAddr addr_; // for rm connect to tm
+  common::ObAddr self_addr_; // for proxy to route reverse link sql
   int64_t tx_id_;
   uint32_t tm_sessid_;
   bool is_close_;
