@@ -237,6 +237,7 @@ void ObPxPool::run(int64_t idx)
   set_thread_idx(idx);
   // Create worker for current thread.
   ObPxWorker worker;
+  Worker::set_worker_to_thread_local(&worker);
   run1();
 }
 

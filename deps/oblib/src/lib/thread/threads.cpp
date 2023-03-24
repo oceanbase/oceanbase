@@ -209,6 +209,7 @@ void Threads::run(int64_t idx)
   ObTLTaGuard ta_guard(GET_TENANT_ID() ?:OB_SERVER_TENANT_ID);
   thread_idx_ = static_cast<uint64_t>(idx);
   Worker worker;
+  Worker::set_worker_to_thread_local(&worker);
   run1();
 }
 
