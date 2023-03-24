@@ -104,10 +104,17 @@ private:
     OPT_JSON_OBJECT,
     OPT_JSON_ARRAY,
   };
+  enum ObJsonObjectEntry: int8_t {
+    JSON_OBJECT_KEY = 0,
+    JSON_OBJECT_VAL = 1,
+    JSON_OBJECT_FORMAT = 2
+  };
+  const int JSON_OBJECT_GROUP = 3;
   int remove_strict_opt_in_pl(ParseNode *node, int8_t expr_flag);
   int remove_format_json_opt_in_pl(ParseNode *node, int8_t expr_flag);
   int process_json_value_node(const ParseNode *node, ObRawExpr *&expr);
   int pre_check_json_path_valid(const ParseNode *node);
+  int get_column_raw_text_from_node(const ParseNode *node, ObString &col_name);
   int process_ora_json_object_node(const ParseNode *node, ObRawExpr *&expr);
   int process_is_json_node(const ParseNode *node, ObRawExpr *&expr);
   int process_json_equal_node(const ParseNode *node, ObRawExpr *&expr);
