@@ -47,7 +47,7 @@ public:
            transaction::ObTxDesc *tx_desc,
            transaction::ObTxReadSnapshot *snapshot,
            const ObMbrFilterArray *mbr_filters);
-  int reset_lookup_state(bool need_switch_param);
+  int reset_lookup_state();
   int filter_by_mbr(const ObObj &mbr_obj, bool &pass_through);
   int get_next_row();
 private:
