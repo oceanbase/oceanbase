@@ -509,10 +509,24 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
           value.set_lob_value(value.get_type(), res.ptr(), res.length());
           value.set_has_lob_header(); // must has lob header
         }
-      } else if (!loc.has_extern()) { // if has header but without extern header
-        // mock loc v2 with extern ? currently all temp lobs have extern field in oracle mode
-        // should not come here
-        OB_ASSERT(0);
+      } else if (!loc.has_extern()) {  // if has header but without extern header
+        if (!loc.has_inrow_data()) {
+          // mock loc v2 with extern ? currently all temp lobs have extern field in oracle mode
+          // should not come here
+          OB_ASSERT(0);
+        } else if (!is_support_outrow_locator_v2) {
+          // convert to full extern temp lob locator
+          ObString inrow_data;
+          if (OB_FAIL(loc.get_inrow_data(inrow_data))) {
+            LOG_WARN("Lob: get inrow data failed", K(ret), K(loc));
+          } else {
+            value.set_string(value.get_type(), inrow_data.ptr(), inrow_data.length());
+            value.set_inrow();
+            if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(value, alloc))) {
+              LOG_WARN("fail to convert temp lob locator", K(ret), K(value));
+            }
+          }
+        }
       } else if (!is_support_outrow_locator_v2 && !loc.has_inrow_data()) {
         if (OB_FAIL(ObTextStringIter::append_outrow_lob_fulldata(value, &my_session, alloc))) {
           LOG_WARN("Lob: convert lob to outrow failed", K(value), K(GET_MIN_CLUSTER_VERSION()));
