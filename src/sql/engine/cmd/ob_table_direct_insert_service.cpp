@@ -110,7 +110,15 @@ int ObTableDirectInsertService::open_task(const uint64_t table_id, const int64_t
   ObTableLoadTableCtx *table_ctx = nullptr;
   ObTableLoadKey key(MTL_ID(), table_id);
   if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
-    LOG_WARN("fail to get table ctx", KR(ret), K(key), K(table_id));
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+      LOG_WARN("fail to get table ctx", KR(ret), K(key));
+    } else {
+      ret = OB_NOT_MASTER;
+      LOG_WARN("not the master of store", KR(ret), K(key));
+    }
+  } else if (OB_UNLIKELY(nullptr == table_ctx->store_ctx_)) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("not the master of store", KR(ret), K(key));
   } else {
     table::ObTableLoadTransId trans_id;
     trans_id.segment_id_ = task_id;
