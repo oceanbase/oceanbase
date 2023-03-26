@@ -839,7 +839,7 @@ int ObReplayStatus::flashback()
   int ret = OB_SUCCESS;
   WLockGuardWithRetryInterval wguard(rwlock_, WRLOCK_TRY_THRESHOLD, WRLOCK_RETRY_INTERVAL);
   if (OB_FAIL(flashback_())) {
-    CLOG_LOG(WARN, "replay status flashback failed", K(ret), KPC(this));
+      CLOG_LOG(WARN, "replay status flashback failed", K(ret), KPC(this));
   } else {
     CLOG_LOG(INFO, "replay status flashback success", K(ret), KPC(this));
   }
@@ -849,14 +849,13 @@ int ObReplayStatus::flashback()
 int ObReplayStatus::flashback_()
 {
   int ret = OB_SUCCESS;
-  LSN next_to_submit_lsn;
-  SCN next_to_submit_scn;
   ObLogReplayTask *cache_task = NULL;
-  // committed_end_lsn may be smaller than exact value after flashback
-  if (OB_FAIL(submit_log_task_.get_next_to_submit_log_info(next_to_submit_lsn, next_to_submit_scn))) {
-    CLOG_LOG(WARN, "get_next_to_submit_log_info failed", K(ret), KPC(this));
-  } else if (OB_FAIL(submit_log_task_.set_committed_end_lsn(next_to_submit_lsn))) {
-    CLOG_LOG(WARN, "set_committed_end_lsn failed", K(ret), KPC(this), K(next_to_submit_lsn));
+  // bugfix:
+  LSN committed_end_lsn;
+  if (OB_FAIL(palf_handle_.get_end_lsn(committed_end_lsn))) {
+    CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(this));
+  } else if (OB_FAIL(submit_log_task_.set_committed_end_lsn(committed_end_lsn))) {
+    CLOG_LOG(WARN, "set_committed_end_lsn failed", K(ret), KPC(this), K(committed_end_lsn));
   } else {
     // do nothing
   }

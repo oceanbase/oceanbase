@@ -356,10 +356,10 @@ int LogRequestHandler::handle_request<LogFlashbackMsg>(const LogFlashbackMsg &re
       ret = OB_STATE_NOT_MATCH;
       CLOG_LOG(WARN, "access_mode do not match, can not do flashback", K(ret), K(palf_id), K(self), K(curr_mode_version),
           K(curr_access_mode), K(req));
-    } else if (OB_FAIL(replay_srv->flashback(ls_id))) {
-      CLOG_LOG(WARN, "replay_service flashback failed", K(ret), K(ls_id));
     } else if (OB_FAIL(palf_handle_guard.flashback(req.mode_version_, req.flashback_scn_, FLASHBACK_TIMEOUT_US))) {
       CLOG_LOG(WARN, "flashback failed", K(ret), K(palf_id), K(req));
+    } else if (OB_FAIL(replay_srv->flashback(ls_id))) {
+      CLOG_LOG(WARN, "replay_service flashback failed", K(ret), K(ls_id));
     } else if (OB_FAIL(get_rpc_proxy_(rpc_proxy))) {
       CLOG_LOG(WARN, "get_rpc_proxy_ failed", K(ret), K(palf_id));
     } else if (OB_FAIL(get_self_addr_(self))) {
