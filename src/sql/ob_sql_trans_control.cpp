@@ -1157,12 +1157,16 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("id service log stream not exist");
+    } else {
+      can_read = true;
+    }
+    /*
     } else if (ObTimeUtility::current_time() - max_stale_time_us
          < ls->get_ls_wrs_handler()->get_ls_weak_read_ts().convert_to_ts()) {
       can_read = true;
     } else if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
       LOG_WARN("log stream unreadable", K(ls_id), K(addr), K(max_stale_time_us));
-    }
+    }*/
   } else {
     LOG_TRACE("log stream is not local", K(ls_id), K(addr));
   }
