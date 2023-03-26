@@ -14,6 +14,7 @@
 #include "lib/list/ob_dlist.h"
 #include "share/ob_errno.h"
 #include "linux/falloc.h" // FALLOC_FL_ZERO_RANGE for linux kernel 4.9
+#include "log_block_pool_interface.h"
 
 namespace oceanbase
 {
@@ -165,7 +166,7 @@ int TrimLogDirectoryFunctor::func(const dirent *entry)
       // do nothing, skip invalid block like tmp
     } else {
 			if (true == str_is_flashback_block
-					&& OB_FAIL(rename_flashback_to_normal(entry_name))) {
+					&& OB_FAIL(rename_flashback_to_normal_(entry_name))) {
 				PALF_LOG(ERROR, "rename_flashback_to_normal failed", K(ret), K(dir_), K(entry_name));
 			}
 			if (OB_SUCC(ret)) {
@@ -182,7 +183,7 @@ int TrimLogDirectoryFunctor::func(const dirent *entry)
   return ret;
 }
 
-int TrimLogDirectoryFunctor::rename_flashback_to_normal(const char *file_name)
+int TrimLogDirectoryFunctor::rename_flashback_to_normal_(const char *file_name)
 {
   int ret = OB_SUCCESS;
 	int dir_fd = -1;
@@ -191,7 +192,9 @@ int TrimLogDirectoryFunctor::rename_flashback_to_normal(const char *file_name)
 	const int64_t SLEEP_TS_US = 10 * 1000;
 	if (-1 == (dir_fd = ::open(dir_, O_DIRECTORY | O_RDONLY))) {
 		ret = convert_sys_errno();
-	} else {
+	} else if (OB_FAIL(try_to_remove_block_(dir_fd, normal_file_name))) {
+    PALF_LOG(ERROR, "try_to_remove_block_ failed", K(file_name), K(normal_file_name));
+  } else {
     do {
       if (-1 == ::renameat(dir_fd, file_name, dir_fd, normal_file_name)) {
         ret = convert_sys_errno();
@@ -208,6 +211,31 @@ int TrimLogDirectoryFunctor::rename_flashback_to_normal(const char *file_name)
 		::close(dir_fd);
 	}
 
+  return ret;
+}
+
+int TrimLogDirectoryFunctor::try_to_remove_block_(const int dir_fd, const char *file_name)
+{
+  int ret = OB_SUCCESS;
+  int fd = -1;
+  if (-1 == (fd = ::openat(dir_fd, file_name, LOG_READ_FLAG))) {
+    ret = convert_sys_errno();
+  }
+  // if file not exist, return OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
+      ret = OB_SUCCESS;
+      PALF_LOG(INFO, "before rename flashback to normal and after delete normal file, restart!!!", K(file_name));
+    } else {
+      PALF_LOG(ERROR, "open file failed", K(file_name));
+    }
+  } else if (OB_FAIL(log_block_pool_->remove_block_at(dir_fd, file_name))) {
+    PALF_LOG(ERROR, "remove_block_at failed", K(dir_fd), K(file_name));
+  }
+  if (-1 != fd && -1 == ::close(fd)) {
+    ret = convert_sys_errno();
+    PALF_LOG(ERROR, "close fd failed", K(file_name));
+  }
   return ret;
 }
 

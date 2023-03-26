@@ -312,6 +312,11 @@ int LogStorage::inner_truncate_(const LSN &lsn)
   int ret = OB_SUCCESS;
   const block_id_t lsn_block_id = lsn_2_block(lsn, logical_block_size_);
   const block_id_t log_tail_block_id = lsn_2_block(log_tail_, logical_block_size_);
+  // 'expected_next_block_id' used to check whether disk is integral, we make sure that either it's
+  // empty or it doesn't exist.
+  // because the padding log is submitted by next log, even if the 'lsn' is the end lsn of padding
+  // the block after 'lsn_block_id' must exist. we just set expected_next_block_id to 'lsn_block_id' + 1
+  // and the block after 'lsn_block_id' will be reset to empty.
   const block_id_t expected_next_block_id = lsn_block_id + 1;
   if (lsn_block_id != log_tail_block_id && OB_FAIL(update_manifest_cb_(expected_next_block_id))) {
     PALF_LOG(WARN,
@@ -418,9 +423,12 @@ int LogStorage::end_flashback(const LSN &start_lsn_of_block)
 {
   int ret = OB_SUCCESS;
   const block_id_t block_id = lsn_2_block(start_lsn_of_block, logical_block_size_);
-  // update manifest
-  const block_id_t log_tail_block_id = lsn_2_block(log_tail_, logical_block_size_);
-  const block_id_t expected_next_block_id = log_tail_block_id + 1;
+  // NB: 'expected_next_block_id' is used to check whether disk is integral, we make sure that either it's
+  // empty or it doesn't exist.
+  // we can set 'expected_next_block_id' to 'block_id' + 1 because of the block of 'start_lsn_of_block'
+  // must exist. even if the block after 'block_id' have been deleted, the block of 'expected_next_block_id'
+  // will not exist.
+  const block_id_t expected_next_block_id = block_id + 1;
   if (OB_FAIL(update_manifest_cb_(expected_next_block_id))) {
     PALF_LOG(WARN, "update_manifest_cb_ failed", K(ret), KPC(this), K(block_id),
 				K(expected_next_block_id), K(start_lsn_of_block));
@@ -615,7 +623,7 @@ int LogStorage::inner_switch_block_()
 {
   int ret = OB_SUCCESS;
   const block_id_t block_id = lsn_2_block(log_tail_, logical_block_size_);
-  // 'expected_next_block_id' used to check whether disk is integral, we make sure that either it's
+  // 'expected_next_block_id' is used to check whether disk is integral, we make sure that either it's
   // empty or it doesn't exist.
   const block_id_t expected_next_block_id = block_id + 1;
   if (OB_FAIL(block_mgr_.switch_next_block(block_id))) {

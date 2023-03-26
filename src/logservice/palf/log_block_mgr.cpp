@@ -65,7 +65,7 @@ int LogBlockMgr::init(const char *log_dir,
     PALF_LOG(ERROR, "::open failed", K(ret), K(log_dir));
   } else if (OB_FAIL(curr_writable_handler_.init(dir_fd_, log_block_size, align_size, align_buf_size))) {
     PALF_LOG(ERROR, "init curr_writable_handler_ failed", K(ret), K(log_dir));
-  } else if (OB_FAIL(do_scan_dir_(log_dir, initial_block_id))) {
+  } else if (OB_FAIL(do_scan_dir_(log_dir, initial_block_id, log_block_pool))) {
     PALF_LOG(ERROR, "do_scan_dir_ failed", K(ret), K(log_dir));
   } else if (OB_FAIL(try_recovery_last_block_(log_dir))) {
     PALF_LOG(ERROR, "try_recovery_last_block_ failed", K(ret), KPC(this));
@@ -349,7 +349,7 @@ int LogBlockMgr::do_truncate_(const block_id_t block_id,
 		PALF_LOG(ERROR, "unexpected error, block id is not same sa curr_writable_block_id_", K(ret),
 				KPC(this), K(block_id));
 	} else if (OB_FAIL(block_id_to_string(block_id, block_path, OB_MAX_FILE_NAME_LENGTH))) {
-    PALF_LOG(ERROR, "block_id_ti_string failed", K(ret), K(block_id), KPC(this));
+    PALF_LOG(ERROR, "block_id_to_string failed", K(ret), K(block_id), KPC(this));
   } else if (OB_FAIL(curr_writable_handler_.close())) {
     PALF_LOG(ERROR, "close curr_writable_handler_ failed", K(ret), K(block_id), KPC(this));
   } else if (OB_FAIL(curr_writable_handler_.open(block_path))) {
@@ -458,14 +458,16 @@ int LogBlockMgr::do_delete_block_(const block_id_t block_id)
   return ret;
 }
 
-int LogBlockMgr::do_scan_dir_(const char *dir, const block_id_t initial_block_id)
+int LogBlockMgr::do_scan_dir_(const char *dir,
+                              const block_id_t initial_block_id,
+                              ILogBlockPool *log_block_pool)
 {
   int ret = OB_SUCCESS;
   if (LOG_INVALID_BLOCK_ID != min_block_id_ || LOG_INVALID_BLOCK_ID != max_block_id_) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "unexpected error, the cache data must be invalid", K(ret), K(min_block_id_), K(max_block_id_));
   } else {
-    TrimLogDirectoryFunctor functor(dir);
+    TrimLogDirectoryFunctor functor(dir, log_block_pool);
     if (OB_FAIL(scan_dir(dir, functor))) {
       PALF_LOG(WARN, "scan_dir failed", K(ret), K(dir));
     } else {

@@ -436,6 +436,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback_restart)
     EXPECT_EQ(OB_ITER_END, read_log(leader));
   }
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
   // 验证重启场景
   PalfHandleImplGuard new_leader;
   int64_t curr_mode_version = INVALID_PROPOSAL_ID;
@@ -448,14 +449,58 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback_restart)
   EXPECT_EQ(OB_ITER_END, read_log(new_leader));
     ref_scn.convert_for_tx(1000);
   LogEntryHeader header_new;
+  LogStorage *log_storage = &new_leader.palf_handle_impl_->log_engine_.log_storage_;
+  block_id_t max_block_id = log_storage->block_mgr_.max_block_id_;
 	EXPECT_EQ(OB_SUCCESS, get_middle_scn(1329, new_leader, max_scn, header_new));
+  // flashback跨文件场景重启
+  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 33, leader_idx, MAX_LOG_BODY_SIZE));
+	wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->sw_.get_max_lsn());
+  EXPECT_LE(max_block_id, log_storage->block_mgr_.max_block_id_);
   switch_append_to_flashback(new_leader, mode_version);
   EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->flashback(mode_version, max_scn, timeout_ts_us));
+  EXPECT_GE(max_block_id, log_storage->block_mgr_.max_block_id_);
   switch_flashback_to_append(new_leader, mode_version);
-  PALF_LOG(INFO, "flashback after restart");
+  }
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
+  PalfHandleImplGuard new_leader;
+  int64_t curr_mode_version = INVALID_PROPOSAL_ID;
+  AccessMode curr_access_mode = AccessMode::INVALID_ACCESS_MODE;
+  EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, leader_idx));
+  EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->get_access_mode(curr_mode_version, curr_access_mode));
+
+  // flashback到某个文件的尾部
+  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 65, leader_idx, MAX_LOG_BODY_SIZE));
+	wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->sw_.get_max_lsn());
+  switch_append_to_flashback(new_leader, mode_version);
+  LSN lsn(PALF_BLOCK_SIZE);
+  LogStorage *log_storage = &new_leader.palf_handle_impl_->log_engine_.log_storage_;
+  SCN block_end_scn;
+  {
+    PalfGroupBufferIterator iterator;
+    auto get_file_end_lsn = [](){
+      return LSN(PALF_BLOCK_SIZE);
+    };
+    EXPECT_EQ(OB_SUCCESS, iterator.init(LSN(0), get_file_end_lsn, log_storage));
+    LogGroupEntry entry;
+    LSN lsn;
+    while (OB_SUCCESS == iterator.next()) {
+      EXPECT_EQ(OB_SUCCESS, iterator.get_entry(entry, lsn));
+    }
+    block_end_scn = entry.get_scn();
+  }
+  EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->flashback(mode_version, block_end_scn, timeout_ts_us));
+  EXPECT_EQ(lsn, log_storage->log_tail_);
   EXPECT_EQ(OB_ITER_END, read_log(new_leader));
-  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 1000, leader_idx));
-  sleep(1);
+  }
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+
+  // 重启后继续提交日志
+  PalfHandleImplGuard new_leader;
+  EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, leader_idx));
+  switch_flashback_to_append(new_leader, mode_version);
+  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, leader_idx));
+	wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->sw_.get_max_lsn());
   EXPECT_EQ(OB_ITER_END, read_log(new_leader));
   new_leader.reset();
   delete_paxos_group(id);
@@ -491,8 +536,14 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_truncate_failed)
   FileDirectoryUtils::get_file_size(block_path, file_size);
   EXPECT_EQ(file_size, PALF_PHY_BLOCK_SIZE);
   get_leader(id, leader, leader_idx);
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 1000));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 32, id, MAX_LOG_BODY_SIZE));
+  wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
   EXPECT_EQ(OB_ITER_END, read_log(leader));
+  // 验证truncate文件尾后重启
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->log_engine_.truncate(LSN(PALF_BLOCK_SIZE)));
+  EXPECT_EQ(LSN(PALF_BLOCK_SIZE), leader.palf_handle_impl_->log_engine_.log_storage_.log_tail_);
+  leader.reset();
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
 }
 
 TEST_F(TestObSimpleLogClusterSingleReplica, test_meta)
