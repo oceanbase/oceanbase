@@ -31,7 +31,8 @@ ObNLConnectByWithIndexOp::ObNLConnectByWithIndexOp(ObExecContext& exec_ctx, cons
       is_match_(false),
       is_cycle_(false),
       is_inited_(false),
-      need_return_(false)
+      need_return_(false),
+      mem_context_(NULL)
 {
   state_operation_func_[CNTB_STATE_JOIN_END] = &ObNLConnectByWithIndexOp::join_end_operate;
   state_function_func_[CNTB_STATE_JOIN_END][FT_ITER_GOING] = NULL;
@@ -110,6 +111,19 @@ int ObNLConnectByWithIndexOp::inner_open()
              MY_SPEC.cmp_funcs_.count() != MY_SPEC.left_prior_exprs_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status: cmp func is not match with prior exprs", K(ret));
+  } else {
+    lib::ContextParam param;
+    int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    param.set_mem_attr(tenant_id, ObModIds::OB_CONNECT_BY_PUMP, ObCtxIds::WORK_AREA)
+      .set_properties(lib::USE_TL_PAGE_OPTIONAL);
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
+      LOG_WARN("create entity failed", K(ret));
+    } else if (OB_ISNULL(mem_context_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null memory entity returned", K(ret));
+    } else {
+      connect_by_pump_.set_allocator(mem_context_->get_malloc_allocator());
+    }
   }
   return ret;
 }

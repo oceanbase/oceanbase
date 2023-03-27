@@ -213,6 +213,7 @@ int ObConnectByPump::add_root_row(const ObNewRow* root_row, const ObNewRow& mock
   UNUSED(mock_right_row);
   int ret = OB_SUCCESS;
   PumpNode node;
+  bool is_push = false;
   node.level_ = 1;
   for (int64_t i = 0; OB_SUCC(ret) && i < connect_by_path_count_; i++) {
     if (OB_FAIL(node.sys_path_length_.push_back(0))) {
@@ -234,9 +235,12 @@ int ObConnectByPump::add_root_row(const ObNewRow* root_row, const ObNewRow& mock
     //    LOG_WARN("deep copy row failed", K(ret));
   } else if (OB_FAIL(alloc_iter(node))) {
     LOG_WARN("alloc iterator failed", K(ret));
-  } else if (OB_FAIL(push_back_node_to_stack(node))) {
+  } else if (OB_FAIL(push_back_node_to_stack(node, is_push))) {
     LOG_WARN("fail to push back row", K(ret));
   } else {
+  }
+  if (!is_push) {
+    free_pump_node(node);
   }
   UNUSED(mock_right_row);
   return ret;
@@ -270,37 +274,33 @@ void ObConnectByPump::free_memory()
   }
 }
 
-int ObConnectByPump::free_pump_node(PumpNode& pop_node)
+void ObConnectByPump::free_pump_node(PumpNode& pop_node)
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(pop_node.pump_row_) || OB_ISNULL(pop_node.output_row_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid pop node", K(ret));
-  } else {
-    allocator_.free(const_cast<ObNewRow*>(pop_node.pump_row_));
-    if (NULL != pop_node.right_row_) {
-      allocator_.free(const_cast<ObNewRow*>(pop_node.right_row_));
-    }
-    allocator_.free(const_cast<ObNewRow*>(pop_node.output_row_));
-    if (OB_ISNULL(pop_node.prior_exprs_result_)) {
-    } else {
-      allocator_.free(const_cast<ObNewRow*>(pop_node.prior_exprs_result_));
-    }
-    if (OB_ISNULL(pop_node.first_child_)) {
-    } else {
-      allocator_.free(const_cast<ObNewRow*>(pop_node.first_child_));
-    }
-    if (OB_NOT_NULL(pop_node.row_fetcher_.iterator_)) {
-      allocator_.free(pop_node.row_fetcher_.iterator_);
-    }
-    pop_node.pump_row_ = NULL;
-    pop_node.right_row_ = NULL;
-    pop_node.output_row_ = NULL;
-    pop_node.prior_exprs_result_ = NULL;
-    pop_node.first_child_ = NULL;
-    pop_node.row_fetcher_.iterator_ = NULL;
+  if (OB_NOT_NULL(pop_node.pump_row_)) {
+    allocator_.free(const_cast<ObNewRow *>(pop_node.pump_row_));
   }
-  return ret;
+  if (OB_NOT_NULL(pop_node.output_row_)) {
+    allocator_.free(const_cast<ObNewRow *>(pop_node.output_row_));
+  }
+  if (OB_NOT_NULL(pop_node.prior_exprs_result_)) {
+    allocator_.free(const_cast<ObNewRow *>(pop_node.prior_exprs_result_));
+  }
+  if (OB_NOT_NULL(pop_node.right_row_)) {
+    allocator_.free(const_cast<ObNewRow *>(pop_node.right_row_));
+  }
+  if (OB_NOT_NULL(pop_node.first_child_)) {
+    allocator_.free(const_cast<ObNewRow *>(pop_node.first_child_));
+  }
+  if (OB_NOT_NULL(pop_node.row_fetcher_.iterator_)) {
+    pop_node.row_fetcher_.iterator_->~Iterator();
+    allocator_.free(pop_node.row_fetcher_.iterator_);
+  }
+  pop_node.pump_row_ = NULL;
+  pop_node.output_row_ = NULL;
+  pop_node.prior_exprs_result_ = NULL;
+  pop_node.right_row_ = NULL;
+  pop_node.first_child_ = NULL;
+  pop_node.row_fetcher_.iterator_ = NULL;
 }
 
 int ObConnectByPump::free_pump_node_stack(ObIArray<PumpNode>& stack)
@@ -310,8 +310,8 @@ int ObConnectByPump::free_pump_node_stack(ObIArray<PumpNode>& stack)
   while (OB_SUCC(ret) && false == stack.empty()) {
     if (OB_FAIL(stack.pop_back(pop_node))) {
       LOG_WARN("fail to pop back pump_stack", K(ret));
-    } else if (OB_FAIL(free_pump_node(pop_node))) {
-      LOG_WARN("free pump node failed", K(ret));
+    } else {
+      free_pump_node(pop_node);
     }
   }
   return ret;
@@ -329,13 +329,18 @@ int ObConnectByPump::get_top_pump_node(PumpNode*& node)
   return ret;
 }
 
-int ObConnectByPump::push_back_node_to_stack(PumpNode& node)
+int ObConnectByPump::push_back_node_to_stack(PumpNode& node, bool &is_push)
 {
   int ret = OB_SUCCESS;
+  is_push = false;
   if (OB_FAIL(calc_prior_and_check_cycle(node, true /* add node to hashset */))) {
     LOG_WARN("fail to calc path node", K(ret));
-  } else if (false == node.is_cycle_ && OB_FAIL(pump_stack_.push_back(node))) {
-    LOG_WARN("fail to push back row", K(ret));
+  } else if (false == node.is_cycle_) {
+    if (OB_FAIL(pump_stack_.push_back(node))) {
+      LOG_WARN("fail to push back row", K(ret));
+    } else {
+      is_push = true;
+    }
   }
 
   if (OB_FAIL(ret)) {  // if fail free memory
@@ -382,9 +387,6 @@ int ObConnectByPump::init(const ObConnectBy& connect_by, common::ObExprCtx* expr
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_ISNULL(expr_ctx) || OB_ISNULL(expr_ctx->my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr_ctx or session is null", K(ret));
   } else if (OB_UNLIKELY(2 != connect_by.get_child_num())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid child num", K(ret));
@@ -400,8 +402,6 @@ int ObConnectByPump::init(const ObConnectBy& connect_by, common::ObExprCtx* expr
   } else if (OB_FAIL(hash_filter_rows_.create(CONNECT_BY_TREE_HEIGHT))) {
     LOG_WARN("create hash set failed", K(ret));
   } else {
-    uint64_t tenant_id = expr_ctx->my_session_->get_effective_tenant_id();
-    allocator_.set_tenant_id(tenant_id);
     pump_row_desc_ = connect_by.get_pump_row_desc();
     pseudo_column_row_desc_ = connect_by.get_pseudo_column_row_desc();
     connect_by_prior_exprs_ = connect_by.get_connect_by_prior_exprs();
@@ -452,6 +452,7 @@ int ObConnectByPump::join_right_table(PumpNode& node, bool& matched, ObPhyOperat
         LOG_WARN("calc other conds failed", K(ret));
       } else if (matched) {
         PumpNode next_node;
+        bool is_push = false;
         next_node.level_ = node.level_ + 1;
         if (next_node.level_ >= CONNECT_BY_MAX_NODE_NUM) {
           ret = OB_ERR_CBY_NO_MEMORY;
@@ -477,15 +478,15 @@ int ObConnectByPump::join_right_table(PumpNode& node, bool& matched, ObPhyOperat
           LOG_WARN("deep copy row failed", K(ret));
         } else if (OB_FAIL(alloc_iter(next_node))) {
           LOG_WARN("alloc iterator failed", K(ret));
-        } else if (OB_FAIL(push_back_node_to_stack(next_node))) {
+        } else if (OB_FAIL(push_back_node_to_stack(next_node, is_push))) {
           LOG_WARN("push back node to stack failed", K(ret));
         } else if (next_node.is_cycle_) {
           // nocycle mode, if the matched child node is the same as an ancestor node, then abandon
           // this child node and continue searching
           matched = false;
-          if (OB_FAIL(free_pump_node(next_node))) {
-            LOG_WARN("free pump node failed", K(ret));
-          }
+        }
+        if (!is_push) {
+          free_pump_node(next_node);
         }
       }
     }
@@ -538,8 +539,8 @@ int ObConnectByPump::get_next_row(ObPhyOperator::ObPhyOperatorCtx* phy_ctx)
           LOG_WARN("fail to erase prior_exprs_result from hashset", K(ret), KPC(pop_node.prior_exprs_result_));
         }
       }
-      if (OB_SUCC(ret) && OB_FAIL(free_pump_node(pop_node))) {
-        LOG_WARN("free pump node failed", K(ret));
+      if (OB_SUCC(ret)) {
+        free_pump_node(pop_node);
       }
     }
   }

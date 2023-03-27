@@ -330,15 +330,9 @@ int ObConnectBy::inner_open(ObExecContext& exec_ctx) const
     LOG_WARN("failed to get nested loop connect by ctx", K(ret));
   } else if (OB_FAIL(wrap_expr_ctx(exec_ctx, join_ctx->expr_ctx_))) {
     LOG_WARN("fail to wrap expr ctx", K(ret));
-  } else if (OB_FAIL(join_ctx->init(*this, &join_ctx->expr_ctx_))) {
-    LOG_WARN("fail to init Connect by Ctx", K(ret));
   } else if (OB_ISNULL(exec_ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
-  } else if (hash_key_exprs_.count() != hash_probe_exprs_.count() ||
-             hash_key_exprs_.count() != equal_cond_infos_.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("hash key exprs count != hash probe exprs count", K(ret));
   } else {
     tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
     param.set_mem_attr(lib::ObMemAttr(tenant_id, ObModIds::OB_CONNECT_BY_PUMP, ObCtxIds::WORK_AREA));
@@ -361,9 +355,21 @@ int ObConnectBy::inner_open(ObExecContext& exec_ctx) const
     LOG_WARN("init chunk row store failed", K(ret));
   } else {
     join_ctx->connect_by_pump_.row_store_.set_allocator(join_ctx->mem_context_->get_malloc_allocator());
+    join_ctx->connect_by_pump_.row_store_.set_callback(&join_ctx->sql_mem_processor_);
+    join_ctx->connect_by_pump_.set_allocator(join_ctx->mem_context_->get_malloc_allocator());
     join_ctx->expr_ctx_.phy_plan_ctx_ = exec_ctx.get_physical_plan_ctx();
     join_ctx->expr_ctx_.calc_buf_ = &join_ctx->get_calc_buf();
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(join_ctx->init(*this, &join_ctx->expr_ctx_))) {
+    LOG_WARN("fail to init Connect by Ctx", K(ret));
+  } else if (hash_key_exprs_.count() != hash_probe_exprs_.count() ||
+             hash_key_exprs_.count() != equal_cond_infos_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hash key exprs count != hash probe exprs count", K(ret));
+  }
+
   return ret;
 }
 
@@ -693,6 +699,10 @@ int ObConnectBy::calc_pseudo_flags(ObConnectByCtx& join_ctx, ObConnectByPump::Pu
             node.is_leaf_ = false;
           }
           finished = (false == output_cycle || node.is_cycle_) && (false == output_leaf || false == node.is_leaf_);
+        }
+        if (OB_NOT_NULL(next_node.prior_exprs_result_)) {
+          join_ctx.connect_by_pump_.allocator_.free(
+              const_cast<ObNewRow *>(next_node.prior_exprs_result_));
         }
       }
     }

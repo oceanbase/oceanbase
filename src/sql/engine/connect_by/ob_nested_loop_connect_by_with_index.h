@@ -30,7 +30,12 @@ public:
 
   public:
     ObConnectByWithIndexCtx(ObExecContext& ctx)
-        : ObConnectByBaseCtx(ctx), output_row_(NULL), connect_by_pump_(), is_match_(false), is_cycle_(false)
+        : ObConnectByBaseCtx(ctx),
+        output_row_(NULL),
+        connect_by_pump_(),
+        is_match_(false),
+        is_cycle_(false),
+        mem_context_(NULL)
     {}
     virtual ~ObConnectByWithIndexCtx()
     {}
@@ -61,6 +66,7 @@ public:
     ObConnectByPumpBFS connect_by_pump_;
     bool is_match_;  // whether there is a child, for calc connect_by_isleaf
     bool is_cycle_;  // whether part of a cycle, for calc connect_by_iscycle
+    lib::MemoryContext mem_context_;
   };
 
 public:

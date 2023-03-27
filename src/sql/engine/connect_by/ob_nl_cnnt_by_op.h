@@ -194,6 +194,7 @@ private:
   // common::ObNewRow mock_right_row_;//used for root row output
   bool is_inited_;
   bool output_generated_;
+  lib::MemoryContext mem_context_;
 };
 
 }  // namespace sql

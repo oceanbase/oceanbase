@@ -114,6 +114,7 @@ private:
   int check_cycle_path(const ObNewRow& row);
   int free_path_stack();
   int free_pump_node_stack(ObIArray<PumpNode>& stack);
+  void set_allocator(common::ObIAllocator &alloc) { allocator_.set_allocator(alloc); }
 
 private:
   static const int64_t CONNECT_BY_MAX_NODE_NUM = (2L << 30) / sizeof(PumpNode);

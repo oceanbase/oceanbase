@@ -115,6 +115,7 @@ private:
   bool is_cycle_;  // whether part of a cycle, for calc connect_by_iscycle
   bool is_inited_;
   bool need_return_;
+  lib::MemoryContext mem_context_;
 };
 
 }  // namespace sql

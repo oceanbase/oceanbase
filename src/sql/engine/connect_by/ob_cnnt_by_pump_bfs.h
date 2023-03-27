@@ -128,6 +128,7 @@ private:
   int check_cycle_path();
   int free_path_stack();
   int free_pump_node_stack(ObIArray<PumpNode>& stack);
+  void set_allocator(common::ObIAllocator &alloc) { allocator_.set_allocator(alloc); }
 
 private:
   common::ObArray<PumpNode> pump_stack_;

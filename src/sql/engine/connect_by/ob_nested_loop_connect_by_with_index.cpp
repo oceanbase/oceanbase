@@ -78,6 +78,8 @@ int ObConnectByWithIndex::inner_open(ObExecContext& exec_ctx) const
 {
   int ret = OB_SUCCESS;
   ObConnectByWithIndexCtx* join_ctx = NULL;
+  lib::ContextParam param;
+  int64_t tenant_id = OB_INVALID_ID;
   if (OB_ISNULL(my_phy_plan_)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("my phy plan is null", K(ret));
@@ -88,12 +90,32 @@ int ObConnectByWithIndex::inner_open(ObExecContext& exec_ctx) const
     LOG_WARN("failed to get nested loop connect by ctx", K(ret));
   } else if (OB_FAIL(wrap_expr_ctx(exec_ctx, join_ctx->expr_ctx_))) {
     LOG_WARN("fail to wrap expr ctx", K(ret));
-  } else if (OB_FAIL(join_ctx->init(*this, &join_ctx->expr_ctx_))) {
-    LOG_WARN("fail to init Connect by Ctx", K(ret));
+  } else if (OB_ISNULL(exec_ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
   } else {
+    tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
+    param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA)
+      .set_properties(lib::USE_TL_PAGE_OPTIONAL);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(join_ctx->mem_context_, param))) {
+    LOG_WARN("create entity failed", K(ret));
+  } else if (OB_ISNULL(join_ctx->mem_context_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null memory entity returned", K(ret));
+  } else {
+    join_ctx->connect_by_pump_.set_allocator(join_ctx->mem_context_->get_malloc_allocator());
     join_ctx->expr_ctx_.phy_plan_ctx_ = exec_ctx.get_physical_plan_ctx();
     join_ctx->expr_ctx_.calc_buf_ = &join_ctx->get_calc_buf();
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(join_ctx->init(*this, &join_ctx->expr_ctx_))) {
+    LOG_WARN("fail to init Connect by Ctx", K(ret));
+  }
+
   return ret;
 }
 
