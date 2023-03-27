@@ -78,7 +78,7 @@ int ObRemoteTaskExecutor::execute(ObExecContext &query_ctx, ObJob *job, ObTaskIn
         bool skip_failed_tasks = false;
         int check_ret = OB_SUCCESS;
         int add_ret = OB_SUCCESS;
-        if (is_data_not_readable_err(ret)) {
+        if (is_data_not_readable_err(ret) || is_server_down_error(ret)) {
           // 读到落后太多的备机或者正在回放日志的副本了，
           // 将远端的这个observer加进retry info的invalid servers中
           if (OB_UNLIKELY(OB_SUCCESS != (
