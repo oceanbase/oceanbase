@@ -11418,6 +11418,7 @@ def_table_schema(
 # 12377: __all_virtual_dup_ls_follower_lease_info
 # 12378: __all_virtual_dup_ls_tablet_set
 # 12379: __all_virtual_dup_ls_tablets
+# 12380: __all_virtual_tx_data
 #
 # 余留位置
 #
