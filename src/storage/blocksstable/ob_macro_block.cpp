@@ -822,7 +822,10 @@ int ObMacroBlock::get_macro_block_meta(ObDataMacroBlockMeta &macro_meta)
   macro_meta.val_.row_store_type_ = spec_->row_store_type_;
   macro_meta.val_.schema_version_ = spec_->schema_version_;
   macro_meta.val_.snapshot_version_ = spec_->snapshot_version_;
-  if (OB_NOT_NULL(macro_header_.column_checksum_)) {
+  if (OB_ISNULL(macro_header_.column_checksum_)) {
+  } else if (OB_FAIL(macro_meta.val_.column_checksums_.reserve(macro_meta.val_.column_count_))) {
+    STORAGE_LOG(WARN, "fail to reserve checksum array", K(ret), K(macro_meta));
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < macro_meta.val_.column_count_; ++i) {
       if (OB_FAIL(macro_meta.val_.column_checksums_.push_back(macro_header_.column_checksum_[i]))) {
         STORAGE_LOG(WARN, "fail to push column checksum", K(ret), K(macro_meta));

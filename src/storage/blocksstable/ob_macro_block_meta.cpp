@@ -47,7 +47,7 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     snapshot_version_(0),
     logic_id_(),
     macro_id_(),
-    column_checksums_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("MacroMetaChksum", MTL_ID()))
+    column_checksums_(sizeof(int64_t), ModulePageAllocator("MacroMetaChksum", MTL_ID()))
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -80,7 +80,7 @@ ObDataBlockMetaVal::ObDataBlockMetaVal(ObIAllocator &allocator)
     snapshot_version_(0),
     logic_id_(),
     macro_id_(),
-    column_checksums_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "MacroMetaChksum"))
+    column_checksums_(sizeof(int64_t), ModulePageAllocator(allocator, "MacroMetaChksum"))
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
