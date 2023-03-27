@@ -73,7 +73,7 @@ int ObRemoteTaskExecutor::execute(ObExecContext& query_ctx, ObJob* job, ObTaskIn
         bool skip_failed_tasks = false;
         int check_ret = OB_SUCCESS;
         int add_ret = OB_SUCCESS;
-        if (is_data_not_readable_err(ret)) {
+        if (is_data_not_readable_err(ret) || is_server_down_error(ret)) {
           // add server to retry info
           if (OB_UNLIKELY(OB_SUCCESS != (add_ret = retry_info->add_invalid_server_distinctly(
                                              task_info->get_task_location().get_server(), true)))) {
