@@ -2088,7 +2088,7 @@
 #      password = get_opt_password()
 #      timeout = int(get_opt_timeout())
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, log_filename)
+#          host, port, user, password, timeout, log_filename)
 #      do_check(host, port, user, password, timeout, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
