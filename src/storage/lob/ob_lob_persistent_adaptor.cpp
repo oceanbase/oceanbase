@@ -36,7 +36,7 @@ int ObPersistentLobApator::prepare_table_param(
   int ret = OB_SUCCESS;
   void *buf = NULL;
   ObTableParam *table_param = NULL;
-  HEAP_VAR(ObTableSchema, table_schema) {
+  HEAP_VAR(ObTableSchema, table_schema, param.allocator_) {
     // FIXME: use convert with ObStorageSchema intead of hard-code schema
     if (OB_UNLIKELY(scan_param.table_param_ != NULL)) {
       //do nothing
@@ -281,7 +281,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
     LOG_WARN("invalid seq no from param.", K(ret), K(param));
   }
 
-  HEAP_VAR(ObTableSchema, tbl_schema) {
+  HEAP_VAR(ObTableSchema, tbl_schema, param.allocator_) {
     ObTableSchema* table_schema = param.meta_table_schema_;
 
     for (int i = 0; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
@@ -581,7 +581,7 @@ int ObPersistentLobApator::build_lob_piece_table_dml(
   dml_base_param.sql_mode_ = SMO_DEFAULT;
   dml_base_param.encrypt_meta_ = &dml_base_param.encrypt_meta_legacy_;
 
-  HEAP_VAR(ObTableSchema, tbl_schema) {
+  HEAP_VAR(ObTableSchema, tbl_schema, param.allocator_) {
     ObTableSchema* table_schema = param.piece_table_schema_;
 
     for (int i = 0; OB_SUCC(ret) && i < ObLobPieceUtil::LOB_PIECE_COLUMN_CNT; ++i) {
