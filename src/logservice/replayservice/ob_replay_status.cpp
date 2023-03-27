@@ -849,8 +849,6 @@ int ObReplayStatus::flashback()
 int ObReplayStatus::flashback_()
 {
   int ret = OB_SUCCESS;
-  ObLogReplayTask *cache_task = NULL;
-  // bugfix:
   LSN committed_end_lsn;
   if (OB_FAIL(palf_handle_.get_end_lsn(committed_end_lsn))) {
     CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(this));
