@@ -525,7 +525,7 @@ int ObSql::fill_result_set(const ObPsStmtId stmt_id, const ObPsStmtInfo &stmt_in
 }
 
 int ObSql::do_add_ps_cache(const ObString &sql, int64_t param_cnt, ObSchemaGetterGuard &schema_guard,
-    stmt::StmtType stmt_type, ObResultSet &result, bool is_inner_sql, bool is_sensitive_sql)
+    stmt::StmtType stmt_type, ObResultSet &result, bool is_inner_sql, bool is_sensitive_sql, bool is_select_into_sql)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo &session = result.get_session();
@@ -551,6 +551,7 @@ int ObSql::do_add_ps_cache(const ObString &sql, int64_t param_cnt, ObSchemaGette
     }
     if (NULL != ref_stmt_info) {
       ref_stmt_info->set_is_sensitive_sql(is_sensitive_sql);
+      ref_stmt_info->set_is_select_into_sql(is_select_into_sql);
     }
     // add session info
     if (OB_SUCC(ret)) {
@@ -591,6 +592,7 @@ int ObSql::do_real_prepare(const ObString &sql, ObSqlCtx &context, ObResultSet &
   stmt::StmtType stmt_type = stmt::T_NONE;
   int64_t param_cnt = 0;
   ObString normalized_sql;
+  bool is_select_into_sql = false;
   ObIAllocator &allocator = result.get_mem_pool();
   ObSQLSessionInfo &session = result.get_session();
   ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
@@ -644,8 +646,20 @@ int ObSql::do_real_prepare(const ObString &sql, ObSqlCtx &context, ObResultSet &
       } else {
         normalized_sql = basic_stmt->get_sql_stmt();
       }
+      if (stmt::T_SELECT == stmt_type) {
+        ObSelectStmt *select_stmt = static_cast<ObSelectStmt *>(basic_stmt);
+        is_select_into_sql = select_stmt->has_select_into();
+      }
     }
     LOG_INFO("generate new stmt", K(param_cnt), K(stmt_type), K(normalized_sql), K(sql));
+  }
+  if (OB_SUCC(ret)) {
+    if (!is_inner_sql && obmysql::OB_MYSQL_COM_QUERY == result.get_session().get_mysql_cmd()
+        && stmt::T_SELECT == stmt_type && !is_select_into_sql) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("prepare statement contain select without into clause not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Prepare statement contain select without into clause");
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(do_add_ps_cache(normalized_sql,
@@ -654,7 +668,8 @@ int ObSql::do_real_prepare(const ObString &sql, ObSqlCtx &context, ObResultSet &
             stmt_type,
             result,
             is_inner_sql,
-            context.is_sensitive_))) {
+            context.is_sensitive_,
+            is_select_into_sql))) {
       LOG_WARN("add to ps plan cache failed", K(ret));
     }
   }
@@ -724,6 +739,11 @@ int ObSql::handle_ps_prepare(const ObString &stmt, ObSqlCtx &context, ObResultSe
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("stmt info is null", K(ret), K(inner_stmt_id));
         // check stmt_info whether expired, if expired, do nothing
+      } else if (!is_inner_sql && obmysql::OB_MYSQL_COM_QUERY == result.get_session().get_mysql_cmd() &&
+                 stmt::T_SELECT == stmt_info->get_stmt_type() && !stmt_info->get_is_select_into_sql()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("Prepare statement contain select without into clause not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Prepare statement contain select without into clause");
       } else if (OB_FAIL(ps_cache->check_schema_version(*context.schema_guard_, *stmt_info, is_expired))) {
         LOG_WARN("fail to check schema version", K(ret));
       } else if (is_expired) {

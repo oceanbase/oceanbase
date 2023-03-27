@@ -211,7 +211,7 @@ private:
   int do_real_prepare(const ObString& stmt, ObSqlCtx& context, ObResultSet& result, bool is_inner_sql);
 
   int do_add_ps_cache(const ObString& sql, int64_t param_cnt, share::schema::ObSchemaGetterGuard& schema_guard,
-      stmt::StmtType stmt_type, ObResultSet& result, bool is_inner_sql, bool is_sensitive_sql);
+      stmt::StmtType stmt_type, ObResultSet& result, bool is_inner_sql, bool is_sensitive_sql, bool is_select_into_sql);
 
   int fill_result_set(ObResultSet& result, ObSqlCtx* context, const bool is_ps_mode, ObStmt& stmt);
 

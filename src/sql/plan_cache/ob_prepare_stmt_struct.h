@@ -255,6 +255,14 @@ public:
   {
     return is_sensitive_sql_;
   }
+  inline void set_is_select_into_sql(const bool is_select_into_sql)
+  {
+    is_select_into_sql_ = is_select_into_sql;
+  }
+  inline bool get_is_select_into_sql() const
+  {
+    return is_select_into_sql_;
+  }
 
   bool is_valid() const;
   bool check_erase_inc_ref_count();
@@ -369,6 +377,7 @@ private:
   common::ObIAllocator* external_allocator_;
   // Whether it contains sensitive information. If so, it will not be recorded in sql audit.
   bool is_sensitive_sql_;
+  bool is_select_into_sql_;
 };
 
 struct TypeInfo {
