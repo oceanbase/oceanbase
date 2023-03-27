@@ -498,7 +498,7 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr& expr)
   } else {
     // these functions should not be calculated first
     if (T_FUN_SYS_AUTOINC_NEXTVAL == expr.get_expr_type() || T_FUN_SYS_SLEEP == expr.get_expr_type() ||
-        T_FUN_SYS_LAST_INSERT_ID == expr.get_expr_type() || T_FUN_SYS_PART_ID == expr.get_expr_type() ||
+        (T_FUN_SYS_LAST_INSERT_ID == expr.get_expr_type() && expr.get_param_count() > 0) || T_FUN_SYS_PART_ID == expr.get_expr_type() ||
         T_OP_GET_PACKAGE_VAR == expr.get_expr_type() || T_OP_GET_SUBPROGRAM_VAR == expr.get_expr_type() ||
         T_FUN_SYS_USER == expr.get_expr_type() || T_FUN_SYS_UID == expr.get_expr_type() ||
         (T_FUN_SYS_SYSDATE == expr.get_expr_type() && !lib::is_oracle_mode()) ||

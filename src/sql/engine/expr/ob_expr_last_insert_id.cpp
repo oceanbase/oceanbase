@@ -60,7 +60,12 @@ int ObExprLastInsertID::calc_resultN(
     } else {
       if (0 == param_num) {
         // last_insert_id should be updated int last insert or last_insert_id(#) in this insert
-        result.set_uint64(plan_ctx->get_last_insert_id_session());
+        if (OB_ISNULL(expr_ctx.my_session_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_ENG_LOG(WARN, "fail to get my session", K(ret));
+        } else {
+          result.set_uint64(expr_ctx.my_session_->get_local_last_insert_id());
+        }
       } else if (1 == param_num) {
         uint64_t param_value = 0;
         if (objs_array[0].is_null()) {
@@ -94,15 +99,16 @@ int ObExprLastInsertID::eval_last_insert_id(const ObExpr& expr, ObEvalCtx& ctx, 
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx* plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   ObDatum* arg = NULL;
-  if (NULL == plan_ctx) {
+  if (NULL == plan_ctx  || NULL == session) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy plan context is NULL", K(ret));
+    LOG_WARN("phy plan context or session is NULL", K(ret), K(plan_ctx), K(session));
   } else if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("evaluate parameter failed", K(ret));
   } else {
     if (0 == expr.arg_cnt_) {
-      expr_datum.set_uint(plan_ctx->get_last_insert_id_session());
+      expr_datum.set_uint(session->get_local_last_insert_id());
     } else if (1 == expr.arg_cnt_) {
       plan_ctx->set_last_insert_id_with_expr(true);
       plan_ctx->set_last_insert_id_changed(true);

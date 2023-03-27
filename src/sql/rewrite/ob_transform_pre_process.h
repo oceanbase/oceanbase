@@ -240,6 +240,12 @@ private:
   int extract_replace_expr_from_select_expr(
       ObRawExpr* expr, ObSelectStmt* select_stmt, ObIArray<ObRawExpr*>& old_exprs);
 
+  int transform_for_last_insert_id(ObDMLStmt *stmt, bool &trans_happened);
+  int expand_for_last_insert_id(ObDMLStmt &stmt, ObIArray<ObRawExpr *> &exprs, bool &is_happended);
+  int expand_last_insert_id_for_join(ObDMLStmt &stmt, JoinedTable *join_table, bool &is_happened);
+  int remove_last_insert_id(ObRawExpr *&expr);
+  int check_last_insert_id_removable(const ObRawExpr *expr, bool &is_removable);
+
 private:
   ObRelIds mock_table_set_;
   ObRelIds origin_table_set_;

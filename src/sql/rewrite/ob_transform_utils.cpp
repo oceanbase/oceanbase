@@ -7717,5 +7717,49 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRa
   return ret;
 }
 
+int ObTransformUtils::check_index_part_cond(
+    ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *left_expr, ObRawExpr *right_expr, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  ObRawExpr* check_expr = NULL;
+  if (OB_ISNULL(left_expr) || OB_ISNULL(right_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index", K(ret), K(left_expr), K(right_expr));
+  } else if (!left_expr->get_expr_levels().has_member(stmt.get_current_level())) {
+    check_expr = right_expr;
+  } else if (!right_expr->get_expr_levels().has_member(stmt.get_current_level())) {
+    check_expr = left_expr;
+  }
+  if (NULL != check_expr) {
+    if (check_expr->is_column_ref_expr() && check_expr->get_expr_level() == stmt.get_current_level()) {
+      ObColumnRefRawExpr* col = static_cast<ObColumnRefRawExpr*>(check_expr);
+      const share::schema::ObColumnSchemaV2* column_schema = NULL;
+      TableItem* table = stmt.get_table_item_by_id(col->get_table_id());
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is null", K(ret), K(table));
+      } else if (!table->is_basic_table()) {
+
+      } else if (OB_FAIL(ctx.schema_checker_->get_column_schema(
+                     table->ref_id_, col->get_column_id(), column_schema, true))) {
+        LOG_WARN("failed to get column schema", K(ret), K(table->ref_id_), K(col->get_column_id()));
+      } else if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null", K(ret));
+      } else if (column_schema->is_rowkey_column()) {
+        is_valid = true;
+      } else if (OB_FAIL(ctx.schema_checker_->check_column_has_index(table->ref_id_, col->get_column_id(), is_valid))) {
+        LOG_WARN("failed to check column is a key", K(ret));
+      } else if (is_valid) {
+        // do nothing
+      } else if (OB_FAIL(ctx.schema_checker_->check_if_partition_key(table->ref_id_, col->get_column_id(), is_valid))) {
+        LOG_WARN("failed to check if partition key", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

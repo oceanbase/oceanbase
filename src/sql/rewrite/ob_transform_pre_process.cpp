@@ -142,6 +142,14 @@ int ObTransformPreProcess::transform_one_stmt(
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_FAIL(transform_for_last_insert_id(stmt, is_happened))) {
+        LOG_WARN("failed to transform for last_insert_id.", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        LOG_TRACE("succeed to transform for last_insert_id.", K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       LOG_DEBUG("transform pre process succ", K(*stmt));
       if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
@@ -3966,6 +3974,191 @@ int ObTransformPreProcess::transform_generated_rownum_eq_cond(
   } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(
                  *ctx_->expr_factory_, and_expr, minus_expr, zero_expr, offset_expr))) {
     LOG_WARN("failed to build case when expr", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::transform_for_last_insert_id(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(stmt));
+  } else if (stmt->is_select_stmt()) {
+    ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
+    bool is_happened = false;
+    if (OB_FAIL(expand_for_last_insert_id(*stmt, sel_stmt->get_having_exprs(), is_happened))) {
+      LOG_WARN("fail to expand having exprs", K(ret));
+    } else {
+      trans_happened |= is_happened;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(expand_for_last_insert_id(*stmt, sel_stmt->get_condition_exprs(), is_happened))) {
+      LOG_WARN("fail to expand condition exprs", K(ret));
+    } else {
+      trans_happened |= is_happened;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_joined_tables().count(); ++i) {
+      if (OB_FAIL(expand_last_insert_id_for_join(*stmt, sel_stmt->get_joined_tables().at(i), is_happened))) {
+        LOG_WARN("failed to expand join conditions", K(ret));
+      } else {
+        trans_happened |= is_happened;
+      }
+    }
+  } else if (stmt->is_delete_stmt() || stmt->is_update_stmt()) {
+    bool is_happened = false;
+    if (OB_FAIL(expand_for_last_insert_id(*stmt, stmt->get_condition_exprs(), is_happened))) {
+      LOG_WARN("fail to expand having exprs", K(ret));
+    } else {
+      trans_happened |= is_happened;
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::expand_last_insert_id_for_join(ObDMLStmt &stmt, JoinedTable *join_table, bool &has_happened)
+{
+  int ret = OB_SUCCESS;
+  bool is_happened = false;
+  has_happened = false;
+  if (OB_ISNULL(join_table) || OB_ISNULL(join_table->left_table_) || OB_ISNULL(join_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(join_table));
+  } else if (OB_FAIL(expand_for_last_insert_id(stmt, join_table->join_conditions_, has_happened))) {
+    LOG_WARN("failed to expand join conditions", K(ret));
+  } else if (join_table->left_table_->is_joined_table() &&
+             OB_FAIL(expand_last_insert_id_for_join(
+                 stmt, static_cast<JoinedTable *>(join_table->left_table_), is_happened))) {
+    LOG_WARN("fail to expand last_insert_id in left join table", K(ret));
+  } else if (FALSE_IT(has_happened |= is_happened)) {
+  } else if (join_table->right_table_->is_joined_table() &&
+             OB_FAIL(expand_last_insert_id_for_join(
+                 stmt, static_cast<JoinedTable *>(join_table->right_table_), is_happened))) {
+    LOG_WARN("fail to expand last_insert_id in right join table", K(ret));
+  } else {
+    has_happened |= is_happened;
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::expand_for_last_insert_id(ObDMLStmt &stmt, ObIArray<ObRawExpr *> &exprs, bool &is_happended)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> new_exprs;
+  is_happended = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ObRawExpr *expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(expr), K(i));
+    } else if (expr->has_flag(CNT_LAST_INSERT_ID) &&
+               (IS_RANGE_CMP_OP(expr->get_expr_type()) || T_OP_EQ == expr->get_expr_type()) &&
+               !expr->has_flag(CNT_RAND_FUNC) && !expr->has_flag(CNT_SUB_QUERY) && !expr->has_flag(CNT_ROWNUM) &&
+               !expr->has_flag(CNT_SEQ_EXPR) && !expr->has_flag(CNT_USER_VARIABLE)) {
+      bool removable = false;
+      ObRawExpr *left = expr->get_param_expr(0);
+      ObRawExpr *right = expr->get_param_expr(1);
+      if (OB_ISNULL(left) || OB_ISNULL(right)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(left), K(right));
+      } else if (!(left->has_flag(CNT_LAST_INSERT_ID) && !left->has_flag(CNT_COLUMN) && right->has_flag(CNT_COLUMN)) &&
+                 !(right->has_flag(CNT_LAST_INSERT_ID) && !right->has_flag(CNT_COLUMN) && left->has_flag(CNT_COLUMN))) {
+        // do nothing
+      } else if (OB_FAIL(ObTransformUtils::check_index_part_cond(*ctx_, stmt, left, right, removable))) {
+        LOG_WARN("fail to check if it's a index/part condition", K(ret));
+      } else if (!removable) {
+        // do nothing if the param which does not contain last_insert_id is not a index key with lossless cast or a
+        // index key.
+      } else if (OB_FAIL(check_last_insert_id_removable(expr, removable))) {
+        LOG_WARN("fail to check whether last_insert_id can be removed", K(ret));
+      } else if (removable) {
+        ObRawExpr *new_expr = NULL;
+        if (OB_FAIL(ObRawExprUtils::copy_expr(*ctx_->expr_factory_, expr, new_expr, COPY_REF_DEFAULT))) {
+          LOG_WARN("failed to copy expr", K(ret));
+        } else if (OB_FAIL(remove_last_insert_id(new_expr))) {
+          LOG_WARN("failed to remove last insert id exprs", K(ret));
+        } else if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
+          LOG_WARN("failed to formalize expr", K(ret));
+        } else if (OB_ISNULL(left = new_expr->get_param_expr(0)) || OB_ISNULL(right = new_expr->get_param_expr(1))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(left), K(right));
+        } else if (!(right->has_flag(IS_CONST_EXPR) || right->has_flag(IS_CONST)) &&
+                   !(left->has_flag(IS_CONST_EXPR) || right->has_flag(IS_CONST))) {
+          // do nothing
+        } else if (OB_FAIL(new_expr->pull_relation_id_and_levels(stmt.get_current_level()))) {
+          LOG_WARN("failed to pull relation id and levels", K(ret));
+        } else if (OB_FAIL(new_exprs.push_back(new_expr))) {
+          LOG_WARN("failed to push back new pred", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !new_exprs.empty()) {
+    if (OB_FAIL(append(exprs, new_exprs))) {
+      LOG_WARN("fail to append new exprs", K(ret));
+    } else {
+      is_happended = true;
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::check_last_insert_id_removable(const ObRawExpr *expr, bool &is_removable)
+{
+  int ret = OB_SUCCESS;
+  is_removable = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(expr));
+  } else if (expr->has_flag(IS_LAST_INSERT_ID)) {
+    if (1 != expr->get_param_count()) {
+      is_removable = false;
+    } else {
+      const ObRawExpr *param = expr->get_param_expr(0);
+      if (OB_ISNULL(param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(param));
+      } else if (!param->has_flag(IS_CONST) && !param->has_flag(IS_CONST_EXPR)) {
+        is_removable = false;
+      }
+    }
+  } else if (expr->has_flag(CNT_LAST_INSERT_ID)) {
+    bool flag = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_removable && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(check_last_insert_id_removable(expr->get_param_expr(i), flag))) {
+        LOG_WARN("fail to check whether last insert id expr is removable", K(ret));
+      } else {
+        is_removable = is_removable & flag;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::remove_last_insert_id(ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (expr->has_flag(IS_LAST_INSERT_ID)) {
+    if (1 == expr->get_param_count()) {
+      ObRawExpr *new_expr = expr->get_param_expr(0);
+      if (OB_ISNULL(new_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(new_expr));
+      } else if (new_expr->has_flag(IS_CONST) || new_expr->has_flag(IS_CONST_EXPR)) {
+        expr = new_expr;
+      }
+    }
+  } else if (expr->has_flag(CNT_LAST_INSERT_ID)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(remove_last_insert_id(expr->get_param_expr(i)))) {
+        LOG_WARN("fail to check whether last insert id expr is removable", K(ret));
+      }
+    }
+  } else {
   }
   return ret;
 }

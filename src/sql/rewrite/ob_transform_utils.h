@@ -759,6 +759,9 @@ public:
 
   static int replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRawExpr*& expr);
 
+  static int check_index_part_cond(
+      ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *left_expr, ObRawExpr *right_expr, bool &is_valid);
+
 private:
   static int add_non_duplicated_select_expr(
       ObIArray<ObRawExpr*>& add_select_exprs, ObIArray<ObRawExpr*>& org_select_exprs);

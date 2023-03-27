@@ -184,9 +184,6 @@ private:
   int check_aggr_validity(ObRawExpr* expr, ObRawExpr*& param_expr, bool& is_valid);
 
   int get_expr_bound(ObRawExpr* target, ObRawExpr*& lower, Type& lower_type, ObRawExpr*& upper, Type& upper_type);
-
-  int check_index_part_cond(ObTransformerCtx& ctx, ObRawExpr* left_expr, ObRawExpr* right_expr, bool& is_valid);
-
 private:
   /// the compare meta used by all exprs in the graph
   ObObjMeta cmp_type_;
