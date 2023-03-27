@@ -3770,10 +3770,6 @@ int ObPartitionService::delete_rows(const transaction::ObTransDesc& trans_desc, 
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
-    //@NOTICE:(yuchen.wyc) avoid defensive check problem on foreign key self reference
-    if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
-      const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
-    }
     ctx_guard.get_store_ctx().trans_id_ = trans_desc.get_trans_id();
     ret = guard.get_partition_group()->delete_rows(
         ctx_guard.get_store_ctx(), dml_param, column_ids, row_iter, affected_rows);
@@ -3795,10 +3791,6 @@ int ObPartitionService::delete_row(const ObTransDesc& trans_desc, const ObDMLBas
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
-    //@NOTICE:(yuchen.wyc) avoid defensive check problem on foreign key self reference
-    if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
-      const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
-    }
     ctx_guard.get_store_ctx().trans_id_ = trans_desc.get_trans_id();
     ret = guard.get_partition_group()->delete_row(ctx_guard.get_store_ctx(), dml_param, column_ids, row);
     AUDIT_PARTITION_V2(ctx_guard.get_store_ctx().mem_ctx_, PART_AUDIT_DELETE_ROW, 1);

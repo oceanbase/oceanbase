@@ -161,57 +161,69 @@ inline int ObTableDelete::delete_rows(ObExecContext& ctx, ObDMLBaseParam& dml_pa
   ObSQLSessionInfo* my_session = ctx.get_my_session();
   ObPartitionService* partition_service = NULL;
   ObDMLRowIterator dml_row_iter(ctx, *this);
-  if (OB_ISNULL(my_session)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("my_session is null");
-  } else if (OB_ISNULL(executor_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get task executor ctx", K(ret));
-  } else if (OB_ISNULL(partition_service = executor_ctx->get_partition_service())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get partition service", K(ret));
-  } else if (OB_ISNULL(delete_ctx = GET_PHY_OPERATOR_CTX(ObTableDeleteCtx, ctx, get_id()))) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("get physical operator context failed", K_(id));
-  } else if (OB_UNLIKELY(part_infos.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("part infos is empty", K(part_infos.empty()));
-  } else if (OB_FAIL(dml_row_iter.init())) {
-    LOG_WARN("init dml row iterator", K(ret));
-  } else if (OB_LIKELY(part_infos.count() == 1)) {
-    if (OB_FAIL(partition_service->delete_rows(my_session->get_trans_desc(),
-            dml_param,
-            part_infos.at(0).partition_key_,
-            column_ids_,
-            &dml_row_iter,
-            affected_rows))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("delete row to partition storage failed", K(ret));
-      }
+  // Set read latest = 0 to avoid defensive check if have foreign key
+  ObPhysicalPlanCtx *plan_ctx = nullptr;
+  if (OB_NOT_NULL(plan_ctx = GET_PHY_PLAN_CTX(ctx))) {
+    if (plan_ctx->need_foreign_key_checks()) {
+      const_cast<ObDMLBaseParam&>(dml_param).query_flag_.read_latest_ = 0;
     }
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_infos.count(); ++i) {
-      const ObPartitionKey& part_key = part_infos.at(i).partition_key_;
-      delete_ctx->part_row_cnt_ = part_infos.at(i).part_row_cnt_;
-      ObNewRow* row = NULL;
-      while (OB_SUCC(ret) && OB_SUCC(dml_row_iter.get_next_row(row))) {
-        if (OB_FAIL(
-                partition_service->delete_row(my_session->get_trans_desc(), dml_param, part_key, column_ids_, *row))) {
-          if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-            LOG_WARN("delete row to partition storage failed", K(ret));
-          }
-        } else {
-          affected_rows += 1;
-          if (delete_ctx->part_row_cnt_ <= 0) {
-            break;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("phy_plan_ctx is NULL", K(ret), KP(plan_ctx));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(my_session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("my_session is null");
+    } else if (OB_ISNULL(executor_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get task executor ctx", K(ret));
+    } else if (OB_ISNULL(partition_service = executor_ctx->get_partition_service())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get partition service", K(ret));
+    } else if (OB_ISNULL(delete_ctx = GET_PHY_OPERATOR_CTX(ObTableDeleteCtx, ctx, get_id()))) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("get physical operator context failed", K_(id));
+    } else if (OB_UNLIKELY(part_infos.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part infos is empty", K(part_infos.empty()));
+    } else if (OB_FAIL(dml_row_iter.init())) {
+      LOG_WARN("init dml row iterator", K(ret));
+    } else if (OB_LIKELY(part_infos.count() == 1)) {
+      if (OB_FAIL(partition_service->delete_rows(my_session->get_trans_desc(),
+              dml_param,
+              part_infos.at(0).partition_key_,
+              column_ids_,
+              &dml_row_iter,
+              affected_rows))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+          LOG_WARN("delete row to partition storage failed", K(ret));
+        }
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_infos.count(); ++i) {
+        const ObPartitionKey& part_key = part_infos.at(i).partition_key_;
+        delete_ctx->part_row_cnt_ = part_infos.at(i).part_row_cnt_;
+        ObNewRow* row = NULL;
+        while (OB_SUCC(ret) && OB_SUCC(dml_row_iter.get_next_row(row))) {
+          if (OB_FAIL(
+                  partition_service->delete_row(my_session->get_trans_desc(), dml_param, part_key, column_ids_, *row))) {
+            if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+              LOG_WARN("delete row to partition storage failed", K(ret));
+            }
+          } else {
+            affected_rows += 1;
+            if (delete_ctx->part_row_cnt_ <= 0) {
+              break;
+            }
           }
         }
       }
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    } else if (OB_FAIL(ret)) {
-      LOG_WARN("process delete row failed", K(ret));
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else if (OB_FAIL(ret)) {
+        LOG_WARN("process delete row failed", K(ret));
+      }
     }
   }
   return ret;
