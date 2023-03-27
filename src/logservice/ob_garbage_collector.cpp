@@ -182,15 +182,15 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::handle_rpc_response_(const 
         } else {}
       } else if (OB_ISNULL(ls_service_)) {
         ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR, "log stream service is NULL", K(ret));
+        CLOG_LOG(WARN, "log stream service is NULL", K(ret));
       } else if (OB_SUCCESS != (tmp_ret = ls_service_->get_ls(id, handle, ObLSGetMod::OBSERVER_MOD))) {
-        CLOG_LOG(ERROR, "get log stream failed", K(id), K(tmp_ret));
+        CLOG_LOG(WARN, "get log stream failed", K(id), K(tmp_ret));
       } else if (OB_ISNULL(ls = handle.get_ls())) {
         tmp_ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR, " log stream not exist", K(id), K(tmp_ret));
+        CLOG_LOG(WARN, " log stream not exist", K(id), K(tmp_ret));
       } else if (OB_ISNULL(gc_handler = ls->get_gc_handler())) {
         tmp_ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR, "gc_handler is NULL", K(tmp_ret), K(id));
+        CLOG_LOG(WARN, "gc_handler is NULL", K(tmp_ret), K(id));
       } else if (is_normal_readonly_replica_(ls)) {
         // do nothing, remove by RS
         CLOG_LOG(INFO, "GC skip R replica", K(id));
