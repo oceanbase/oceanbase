@@ -106,6 +106,7 @@ ObMemtable::ObMemtable()
       pending_cb_cnt_(0),
       unsubmitted_cnt_(0),
       unsynced_cnt_(0),
+      memtable_mgr_op_cnt_(0),
       logging_blocked_(false),
       logging_blocked_start_time(0),
       unset_active_memtable_logging_blocked_(false),
@@ -257,6 +258,7 @@ void ObMemtable::destroy()
   freeze_state_ = ObMemtableFreezeState::INVALID;
   unsubmitted_cnt_ = 0;
   unsynced_cnt_ = 0;
+  memtable_mgr_op_cnt_ = 0;
   logging_blocked_ = false;
   logging_blocked_start_time = 0;
   unset_active_memtable_logging_blocked_ = false;
@@ -1533,24 +1535,34 @@ int ObMemtable::dec_unsynced_cnt()
 void ObMemtable::unset_logging_blocked_for_active_memtable()
 {
   int ret = OB_SUCCESS;
-  do {
-    if (OB_FAIL(memtable_mgr_->unset_logging_blocked_for_active_memtable(this))) {
-      TRANS_LOG(ERROR, "fail to unset logging blocked for active memtable", K(ret), K(ls_id), KPC(this));
-      ob_usleep(100);
-    }
-  } while (OB_FAIL(ret));
+  MemtableMgrOpGuard memtable_mgr_op_guard(this);
+  storage::ObTabletMemtableMgr *memtable_mgr = memtable_mgr_op_guard.get_memtable_mgr();
+
+  if (OB_NOT_NULL(memtable_mgr)) {
+    do {
+      if (OB_FAIL(memtable_mgr->unset_logging_blocked_for_active_memtable(this))) {
+        TRANS_LOG(ERROR, "fail to unset logging blocked for active memtable", K(ret), K(ls_id), KPC(this));
+        ob_usleep(100);
+      }
+    } while (OB_FAIL(ret));
+  }
 }
 
 void ObMemtable::resolve_left_boundary_for_active_memtable()
 {
   int ret = OB_SUCCESS;
+  MemtableMgrOpGuard memtable_mgr_op_guard(this);
+  storage::ObTabletMemtableMgr *memtable_mgr = memtable_mgr_op_guard.get_memtable_mgr();
   const SCN new_start_scn = MAX(get_end_scn(), get_migration_clog_checkpoint_scn());
-  do {
-    if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, new_start_scn, get_snapshot_version_scn()))) {
-      TRANS_LOG(ERROR, "fail to set start log ts for active memtable", K(ret), K(ls_id), KPC(this));
-      ob_usleep(100);
-    }
-  } while (OB_FAIL(ret));
+
+  if (OB_NOT_NULL(memtable_mgr)) {
+    do {
+      if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(this, new_start_scn, get_snapshot_version_scn()))) {
+        TRANS_LOG(ERROR, "fail to set start log ts for active memtable", K(ret), K(ls_id), KPC(this));
+        ob_usleep(100);
+      }
+    } while (OB_FAIL(ret));
+  }
 }
 
 int64_t ObMemtable::inc_write_ref_()
@@ -1853,7 +1865,10 @@ bool ObMemtable::ready_for_flush_()
     // ensure unset all frozen memtables'logging_block
     ObTableHandleV2 handle;
     ObMemtable *first_frozen_memtable = nullptr;
-    if (OB_FAIL(memtable_mgr_->get_first_frozen_memtable(handle))) {
+    MemtableMgrOpGuard memtable_mgr_op_guard(this);
+    storage::ObTabletMemtableMgr *memtable_mgr = memtable_mgr_op_guard.get_memtable_mgr();
+    if (OB_ISNULL(memtable_mgr)) {
+    } else if (OB_FAIL(memtable_mgr->get_first_frozen_memtable(handle))) {
       TRANS_LOG(WARN, "fail to get first_frozen_memtable", K(ret));
     } else if (OB_FAIL(handle.get_data_memtable(first_frozen_memtable))) {
       TRANS_LOG(WARN, "fail to get memtable", K(ret));
