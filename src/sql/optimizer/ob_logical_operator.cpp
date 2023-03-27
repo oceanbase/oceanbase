@@ -1548,6 +1548,8 @@ int ObLogicalOperator::allocate_expr_pre(ObAllocExprContext &ctx)
     LOG_WARN("failed to extract const exprs", K(ret));
   } else if (OB_FAIL(add_exprs_to_ctx(ctx, op_exprs_))) {
     LOG_WARN("failed to add exprs to ctx", K(ret));
+  } else if (OB_FAIL(force_pushdown_exprs(ctx))) {
+    LOG_WARN("failed to pushdown exprs", K(ret));
   } else {
     LOG_TRACE("succeed to allocate expr pre", K(id_), K(op_exprs_.count()),
         K(op_exprs_), K(get_name()), K(is_plan_root()));
@@ -1898,6 +1900,40 @@ int ObLogicalOperator::find_consumer_id_for_shared_expr(const ObIArray<ExprProdu
         }
       } else { /*do nothing*/}
     }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::force_pushdown_exprs(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (ObLogOpType::LOG_SORT != get_type()) {
+    // do nothing
+  } else {
+    ObSEArray<ObRawExpr*, 4> exprs;
+    uint64_t producer_id = OB_INVALID_ID;
+    if (OB_FAIL(static_cast<ObLogSort*>(this)->get_sort_exprs(exprs))) {
+      LOG_WARN("failed to get sort exprs", K(ret));
+    } else if (OB_FAIL(get_pushdown_producer_id(producer_id))) {
+      LOG_WARN("failed to get pushdown producer id", K(ret));
+    } else if (OB_INVALID_ID == producer_id) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unable to get pushdown producer id", K(producer_id), K(ret));
+    } else if (OB_FAIL(add_exprs_to_ctx(ctx, exprs, producer_id))) {
+      LOG_WARN("failed to add exprs to ctx");
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::get_pushdown_producer_id(uint64_t &producer_id)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    // do nothing
+  } else if (OB_FAIL(get_next_producer_id(child, producer_id))) {
+    LOG_WARN("failed to get next producer id", K(ret));
   }
   return ret;
 }
