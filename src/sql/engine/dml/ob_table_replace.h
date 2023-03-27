@@ -79,8 +79,8 @@ protected:
   };
 
 public:
-  explicit ObTableReplace(common::ObIAllocator& alloc)
-      : ObTableModify(alloc), only_one_unique_key_(false), res_obj_types_(alloc)
+  explicit ObTableReplace(common::ObIAllocator &alloc)
+      : ObTableModify(alloc), only_one_unique_key_(false), res_obj_types_(alloc), res_collation_types_(alloc)
   {}
   virtual ~ObTableReplace()
   {}
@@ -110,7 +110,12 @@ public:
   {
     return init_array_size<>(res_obj_types_, count);
   }
+  int init_column_collation_type_count(int64_t count)
+  {
+    return init_array_size<>(res_collation_types_, count);
+  }
   int add_column_res_type(const ObObjType type);
+  int add_column_collation_type(const ObCollationType type);
   OB_UNIS_VERSION_V(1);
 
 protected:
@@ -143,6 +148,7 @@ private:
 protected:
   bool only_one_unique_key_;
   common::ObFixedArray<ObObjType, common::ObIAllocator> res_obj_types_;
+  common::ObFixedArray<ObCollationType, common::ObIAllocator> res_collation_types_;
 };
 
 }  // end namespace sql

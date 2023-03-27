@@ -4733,6 +4733,8 @@ int ObCodeGeneratorImpl::convert_replace(ObLogInsert& op, const PhyOpsDesc& chil
         LOG_ERROR("unexpected", K(ret), K(input_row_desc), K(input_projector), K(input_projector_size));
       } else if (OB_FAIL(phy_op->init_column_res_type_count(input_projector_size))) {
         LOG_WARN("fail to init column infos count", K(ret));
+      } else if (OB_FAIL(phy_op->init_column_collation_type_count(input_projector_size))) {
+        LOG_WARN("fail to init column collations count", K(ret));
       } else {
         ObRawExpr* raw_expr = NULL;
         for (int64_t i = 0; OB_SUCC(ret) && i < input_projector_size; ++i) {
@@ -4740,6 +4742,8 @@ int ObCodeGeneratorImpl::convert_replace(ObLogInsert& op, const PhyOpsDesc& chil
             LOG_ERROR("invalid index", K(input_row_desc), K(input_projector[i]), K(input_projector_size), K(ret));
           } else if (OB_FAIL(phy_op->add_column_res_type(raw_expr->get_result_type().get_type()))) {
             LOG_WARN("failed to push res obj type", K(ret));
+          } else if (OB_FAIL(phy_op->add_column_collation_type(raw_expr->get_result_type().get_collation_type()))) {
+            LOG_WARN("failed to push res obj collation type", K(ret));
           }
         }
       }
