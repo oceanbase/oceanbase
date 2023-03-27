@@ -47,7 +47,8 @@ class IObStoreService
 public:
   virtual ~IObStoreService() {}
   virtual int init(const std::string &path) = 0;
-  virtual int close() = 0;
+  virtual void mark_stop_flag() = 0; // stop store service: won't handle more store task.
+  virtual int close() = 0; // close store service: including actual storager
 
 public:
   virtual int put(const std::string &key, const ObSlice &value) = 0;
