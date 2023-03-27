@@ -54,13 +54,25 @@ public:
                                   ObTxCtxTableInfo& ctx_info)
   {
     TRANS_LOG(INFO, "recover_one_tx_ctx_ called", K(ctx_info));
+    recover_tx_id_arr_.push_back(ctx_info.tx_id_);
     return 0;
   }
 
-  ObTxCtxTableInfo* get_tx_ctx_table_info()
+  bool tx_id_recovered(transaction::ObTransID tx_id)
   {
-    return &ctx_info_;
+    bool exist = false;
+
+    for (int64_t i = 0; i < recover_tx_id_arr_.size(); ++i) {
+      if (recover_tx_id_arr_[i] == tx_id) {
+        exist = true;
+        break;
+      }
+    }
+    return exist;
   }
+
+private:
+  std::vector<transaction::ObTransID> recover_tx_id_arr_;
 };
 
 class TestTxCtxTable : public ::testing::Test
@@ -273,8 +285,8 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
                                         key_range,
                                         row_iter));
 
+  recover_helper.reset();
   for (int64_t ctx_idx = 0; ctx_idx < 2; ++ctx_idx) {
-    recover_helper.reset();
     ls_tx_ctx_mgr_recover->reset();
     EXPECT_EQ(OB_SUCCESS,
               ls_tx_ctx_mgr_recover->init(TestTxCtxTable::tenant_id_, /*tenant_id*/
@@ -302,11 +314,10 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
       TRANS_LOG(INFO, "row_info projected", K(row_copy));
       ASSERT_EQ(OB_SUCCESS, recover_helper.recover(row_copy, tx_data_table, ls_tx_ctx_mgr_recover));
     } while (tx_ctx_memtable_iter->has_unmerged_buf_);
-
-    ObTxCtxTableInfo* ctx_info = recover_helper.get_tx_ctx_table_info();
-    EXPECT_EQ(true, ctx_info->tx_id_ == id1 ||  ctx_info->tx_id_ == id2);
-    TRANS_LOG(INFO, "[TX_CTX_TABLE] successfully recover", K(ctx_info->tx_id_));
   }
+  EXPECT_EQ(true, recover_helper.tx_id_recovered(id1));
+  EXPECT_EQ(true, recover_helper.tx_id_recovered(id2));
+  TRANS_LOG(INFO, "[TX_CTX_TABLE] successfully recover");
 /*
   TRANS_LOG(INFO, "[TX_CTX_TABLE] get next row return", KPC(row));
   EXPECT_EQ(OB_SUCCESS, ObTxCtxTable::TEST_recover(*row, idx, ctx_info, slice_allocator));

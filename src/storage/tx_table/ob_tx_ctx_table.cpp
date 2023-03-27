@@ -90,6 +90,13 @@ bool ObTxCtxTableRecoverHelper::is_in_multi_row_state_() const
   return in_multi_row_state_;
 }
 
+void ObTxCtxTableRecoverHelper::finish_recover_one_tx_ctx_()
+{
+  buf_.reset();
+  prev_end_pos_ = -1;
+  ctx_info_.reset();
+}
+
 int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls_tx_ctx_mgr,
                                                    ObTxCtxTableInfo& ctx_info)
 {
@@ -211,7 +218,7 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
     } else if (OB_FAIL(recover_one_tx_ctx_(ls_tx_ctx_mgr, ctx_info_))) {
       STORAGE_LOG(WARN, "failed to recover_one_tx_ctx_", K(ret), K(ctx_info_));
     } else {
-      //do nothing;
+      finish_recover_one_tx_ctx_();
     }
   }
 

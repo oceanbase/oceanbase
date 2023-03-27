@@ -48,6 +48,7 @@ private:
   void set_in_multi_row_state_();
   void clear_in_multi_row_state_();
   bool is_in_multi_row_state_() const;
+  void finish_recover_one_tx_ctx_();
   virtual int recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls_tx_ctx_mgr,
                                   ObTxCtxTableInfo& ctx_info);
 private:
