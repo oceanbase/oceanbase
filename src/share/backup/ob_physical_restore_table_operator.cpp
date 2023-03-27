@@ -205,6 +205,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(share::ObDMLSqlSplicer& dml
     DML_ADD_COLUMN(job_info, restore_data_version);
     DML_ADD_COLUMN(job_info, restore_start_ts);
     DML_ADD_COLUMN(job_info, restore_schema_version);
+    DML_ADD_COLUMN(job_info, rebuild_index_schema_version);
     DML_ADD_COLUMN(job_info, info);
     // pre_cluster_version
     if (OB_SUCC(ret)) {
@@ -514,6 +515,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_INT_VALUE(restore_data_version, job);
     RETRIEVE_INT_VALUE(restore_start_ts, job);
     RETRIEVE_INT_VALUE(restore_schema_version, job);
+    RETRIEVE_INT_VALUE(rebuild_index_schema_version, job);
     RETRIEVE_INT_VALUE(incarnation, job);
     RETRIEVE_INT_VALUE(full_backup_set_id, job);
     RETRIEVE_INT_VALUE(inc_backup_set_id, job);

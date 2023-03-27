@@ -199,6 +199,7 @@ private:
   void record_rs_event(const share::ObPhysicalRestoreJob& job, const share::PhysicalRestoreStatus next_status);
   share::PhysicalRestoreStatus get_next_status(int return_ret, share::PhysicalRestoreStatus current_status);
   int update_restore_schema_version(const share::ObPhysicalRestoreJob& job);
+  int update_rebuild_index_schema_version_(const share::ObPhysicalRestoreJob& job);
 
 private:
   int drop_tenant_force_if_necessary(const share::ObPhysicalRestoreJob& job_info);

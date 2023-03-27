@@ -99,6 +99,7 @@ public:
   PhysicalRestoreStatus status_;
   int64_t restore_start_ts_;
   int64_t restore_schema_version_;  // the lasted schema version from inner table after sys replicas have restored.
+  int64_t rebuild_index_schema_version_;  // the lasted schema version from inner table before modify index status.
   char info_[common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH];
   uint64_t pre_cluster_version_;
   uint64_t post_cluster_version_;

@@ -639,6 +639,30 @@ int ObRestoreScheduler::update_restore_schema_version(const ObPhysicalRestoreJob
   return ret;
 }
 
+int ObRestoreScheduler::update_rebuild_index_schema_version_(const ObPhysicalRestoreJob &job)
+{
+  int ret = OB_SUCCESS;
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = job.tenant_id_;
+  int64_t schema_version = OB_INVALID_VERSION;
+  ObPhysicalRestoreTableOperator restore_op;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", KR(ret));
+  } else if (OB_INVALID_VERSION != job.rebuild_index_schema_version_) {
+    // already init rebuild_index_schema_version, just skip
+  } else if (OB_FAIL(restore_op.init(sql_proxy_))) {
+    LOG_WARN("fail init", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_schema_version_in_inner_table(*sql_proxy_, schema_status, schema_version))) {
+    LOG_WARN("fail to get schema version from inner table", KR(ret), K(schema_status));
+  } else if (OB_FAIL(restore_op.update_restore_option(job.job_id_, "rebuild_index_schema_version", schema_version))) {
+    LOG_WARN("fail to update restore option", KR(ret), K(schema_status), K(schema_version));
+  }
+  return ret;
+}
+
 int ObRestoreScheduler::schedule_restore_task(
     const ObPhysicalRestoreJob &job_info, ObPhysicalRestoreStat &stat, int64_t &task_cnt)
 {
@@ -1707,15 +1731,15 @@ int ObRestoreScheduler::force_drop_index(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = job_info.tenant_id_;
-  const int64_t restore_schema_version = job_info.restore_schema_version_;
+  const int64_t rebuild_index_schema_version = job_info.rebuild_index_schema_version_;
   ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
   ObSchemaGetterGuard schema_guard;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_INVALID_TENANT_ID == tenant_id || OB_SYS_TENANT_ID == tenant_id || restore_schema_version <= 0) {
+  } else if (OB_INVALID_TENANT_ID == tenant_id || OB_SYS_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant id or restore schema version", KR(ret), K(tenant_id), K(restore_schema_version));
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("restore scheduler stopped", KR(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -1738,7 +1762,8 @@ int ObRestoreScheduler::force_drop_index(const ObPhysicalRestoreJob &job_info)
       } else if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table ptr is null", KR(ret));
-      } else if (!table->is_index_table() || table->get_schema_version() > restore_schema_version) {
+      } else if (!table->is_index_table() || (OB_INVALID_VERSION != rebuild_index_schema_version &&
+                                                 table->get_schema_version() > rebuild_index_schema_version)) {
         // skip the following cases:
         // 1. not index table
         // 2. index status changed after modify_schema()
@@ -1756,7 +1781,7 @@ int ObRestoreScheduler::force_drop_index(const ObPhysicalRestoreJob &job_info)
               K(timeout),
               "schema_version",
               table->get_schema_version(),
-              K(restore_schema_version));
+              K(rebuild_index_schema_version));
         }
       }
     }  // end for
@@ -2537,7 +2562,8 @@ int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob &job_inf
           LOG_WARN("error unexpected, table schema is NULL", KR(ret));
         } else if (is_inner_table(table_schema->get_table_id())) {
           // inner_table's index won't rebuild, just skip
-        } else if (table_schema->get_schema_version() > job_info.restore_schema_version_) {
+        } else if (OB_INVALID_VERSION != job_info.rebuild_index_schema_version_ &&
+                   table_schema->get_schema_version() > job_info.rebuild_index_schema_version_) {
           // skip changed index table after restore schema version
         } else if (table_schema->is_index_table()) {
           const uint64_t index_id = table_schema->get_table_id();
@@ -2552,6 +2578,8 @@ int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob &job_inf
     }
     if (FAILEDx(generate_unavaliable_index_ids_(job_info, avaliable_index_ids, unavaliable_index_ids))) {
       LOG_WARN("fail to generate unavaliable_index_ids", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(update_rebuild_index_schema_version_(job_info))) {
+      LOG_WARN("fail to update rebuild index schema version", KR(ret), K(job_info));
     } else if (OB_FAIL(update_index_status(unavaliable_index_ids, INDEX_STATUS_UNAVAILABLE))) {
       LOG_WARN("fail to update index status", KR(ret), K(tenant_id));
     }

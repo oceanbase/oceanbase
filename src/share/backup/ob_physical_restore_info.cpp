@@ -223,6 +223,7 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
       K_(status),
       K_(restore_start_ts),
       K_(restore_schema_version),
+      K_(rebuild_index_schema_version),
       K_(restore_job_id),
       K_(restore_timestamp),
       K_(cluster_id),
@@ -280,6 +281,7 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob& other)
   status_ = other.status_;
   restore_start_ts_ = other.restore_start_ts_;
   restore_schema_version_ = other.restore_schema_version_;
+  rebuild_index_schema_version_ = other.rebuild_index_schema_version_;
   STRNCPY(info_, other.info_, common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH);
   info_[common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH - 1] = '\0';
   pre_cluster_version_ = other.pre_cluster_version_;
@@ -405,6 +407,7 @@ void ObPhysicalRestoreJob::reset()
   status_ = PhysicalRestoreStatus::PHYSICAL_RESTORE_MAX_STATUS;
   restore_start_ts_ = 0;
   restore_schema_version_ = OB_INVALID_VERSION;
+  rebuild_index_schema_version_ = OB_INVALID_VERSION;
   MEMSET(info_, '\0', common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH);
   pre_cluster_version_ = 0;
   post_cluster_version_ = 0;
