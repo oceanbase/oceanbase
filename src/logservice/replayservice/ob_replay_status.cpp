@@ -1118,7 +1118,6 @@ int ObReplayStatus::push_log_replay_task(ObLogReplayTask &task)
         }
         task_queues_[index].set_batch_push_finish();
       }
-      CLOG_LOG(INFO, "broadcast push pre barrier log success", K(task));
     } else {
       for (int64_t i = 1; i < broadcast_task_array.count(); ++i) {
         free_replay_task(broadcast_task_array[i]);
