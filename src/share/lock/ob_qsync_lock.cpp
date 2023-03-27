@@ -55,11 +55,16 @@ int ObQSyncLock::wrlock()
     if (!ATOMIC_BCAS(&write_flag_, 0, 1)) {
       sched_yield();
     } else {
-      // write priority try sync to succ
-      while (!qsync_.try_sync()) {
+      bool sync_success = false;
+      for (int64_t i = 0; !sync_success && i < TRY_SYNC_COUNT; i++) {
+        sync_success = qsync_.try_sync();
+      }
+      if (sync_success) {
+        break;
+      } else {
+        ATOMIC_STORE(&write_flag_, 0);
         sched_yield();
       }
-      break;
     }
   } while (true);
   return common::OB_SUCCESS;
