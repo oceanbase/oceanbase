@@ -1437,6 +1437,12 @@ int ObSql::generate_stmt(ParseResult &parse_result, ObPlanCacheCtx *pc_ctx, ObSq
     LOG_DEBUG("got all const param constraints", K(resolver_ctx.query_ctx_->all_possible_const_param_constraints_));
 
     NG_TRACE(resolve_end);
+    //add ref obj schema version to PL and ps info
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(result.get_ref_objects().assign(resolver_ctx.query_ctx_->global_dependency_tables_))) {
+        LOG_WARN("assign ref obj schema version failed", K(ret));
+      }
+    }
     if (OB_FAIL(ret)) {
       /* for audit */
       if (NULL != stmt) {
