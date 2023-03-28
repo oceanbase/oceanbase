@@ -929,6 +929,7 @@ public:
            const ObString &rowkey_str,
            const ObLobCommon *disk_loc,
            uint32_t disk_lob_full_size,
+           uint32_t disk_lob_header_size,
            bool is_simple);
 
   int copy(const ObLobLocatorV2* src_locator) const;

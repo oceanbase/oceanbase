@@ -303,6 +303,7 @@ int ObLobLocatorHelper::fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, boo
                                  rowkey_str_,
                                  &lob_common,
                                  payload_size,
+                                 0,
                                  false))) {
           STORAGE_LOG(WARN, "Lob: init locator in build_lob_locatorv2", K(ret), K(column_id));
         } else if (OB_FAIL(locator.set_payload_data(&lob_common, def_obj.get_string()))) {
@@ -500,6 +501,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
                                rowid_str,
                                lob_common,
                                out_payload_len,
+                               is_dst_inrow ? 0 : payload.length(),
                                is_simple))) {
         STORAGE_LOG(WARN, "Lob: init locator in build_lob_locatorv2", K(ret), K(column_id));
       } else if (OB_SUCC(locator.get_mem_locator(mem_lob_common))) {
