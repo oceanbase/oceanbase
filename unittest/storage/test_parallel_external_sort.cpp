@@ -951,6 +951,29 @@ TEST_F(TestParallelExternalSort, test_multi_task_sort)
   test_multi_task_sort(buf_mem_limit, file_buf_size, 10000, task_cnt);
 }
 
+TEST_F(TestParallelExternalSort, test_get_before_sort)
+{
+  int ret = OB_SUCCESS;
+  const int64_t file_buf_size = MACRO_BLOCK_SIZE;
+  const int64_t buf_mem_limit = 8 * 1024 * 1024L;
+  typedef ObExternalSort<TestItem, TestItemCompare> ExternalSort;
+  ExternalSort external_sort;
+  ObVector<TestItem *>total_items;
+  TestItemCompare compare(ret);
+  const int64_t expire_timestamp = 0;
+  ret = external_sort.init(buf_mem_limit, file_buf_size, expire_timestamp, OB_SYS_TENANT_ID, &compare);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = generate_items(10, false, total_items);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
+    ret = external_sort.add_item(*total_items.at(i));
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+  const TestItem *item = NULL;
+  ret = external_sort.get_next_item(item);
+  ASSERT_EQ(OB_ITER_END, ret);
+}
+
 }  // end namespace common
 }  // end namespace oceanbase
 
