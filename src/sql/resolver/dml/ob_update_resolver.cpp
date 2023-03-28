@@ -696,10 +696,18 @@ int ObUpdateResolver::generate_batched_stmt_info()
         for (int64_t j = 0; OB_SUCC(ret) && j < assignments.count(); ++j) {
           ObAssignment &assignment = assignments.at(j);
           ObRawExpr *column_expr = assignment.column_expr_;
+          bool contain_case_when = false;
           if (has_exist_in_array(predicate_columns, column_expr)) {
             assignment.is_predicate_column_ = true;
+          } else if (OB_FAIL(ObRawExprUtils::check_contain_case_when_exprs(assignment.expr_,
+                                                                           contain_case_when))) {
+            LOG_WARN("fail to check contain case when", K(ret), K(assignment));
+          } else if (contain_case_when) {
+            ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+            LOG_TRACE("batched multi stmt contain case when expr", K(ret));
           }
         }
+
       }
     }
   }
