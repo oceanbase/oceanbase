@@ -1173,7 +1173,7 @@ int ObLSTabletService::update_tablet_table_store(
     LOG_WARN("old tablet handle is invalid", K(ret), K(old_tablet_handle), K(table_handles.count()));
   } else {
     ObTablet *old_tablet = old_tablet_handle.get_obj();
-    ObTimeGuard time_guard("ReplaceSSTable", 3000000/*3 seconds*/);
+    ObTimeGuard time_guard("ObLSTabletService::ReplaceSSTable", 3000000/*3 seconds*/);
     const common::ObTabletID &tablet_id = old_tablet->get_tablet_meta().tablet_id_;
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
     time_guard.click("Lock");
@@ -1234,7 +1234,7 @@ int ObLSTabletService::update_tablet_table_store(
   ObTabletHandle old_tablet_handle;
   ObTabletHandle new_tablet_handle;
   ObTablet *new_tablet = nullptr;
-  ObTimeGuard time_guard("UpdateTableStore", 3000000/*3 seconds*/);
+  ObTimeGuard time_guard("ObLSTabletService::UpdateTableStore", 3000000/*3 seconds*/);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1292,7 +1292,7 @@ int ObLSTabletService::update_medium_compaction_info(
 {
   int ret = OB_SUCCESS;
   ObTabletHandle old_tablet_handle;
-  ObTimeGuard time_guard("UpdateTableStore", 3000000/*3 seconds*/);
+  ObTimeGuard time_guard("ObLSTabletService::UpdateMediumCompactionInfo", 3000000/*3 seconds*/);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   time_guard.click("Lock");
 
