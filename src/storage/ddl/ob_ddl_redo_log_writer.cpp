@@ -805,7 +805,7 @@ int ObDDLRedoLogWriter::write_ddl_commit_log(ObTabletHandle &tablet_handle,
   } else if (ddl_kv_mgr_handle.get_obj()->get_commit_scn_nolock(tablet_handle.get_obj()->get_tablet_meta()).is_valid_and_not_min()) {
     ret = OB_TRANS_COMMITED;
     LOG_WARN("already committed", K(ret), K(log));
-  } else if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size)))) {
+  } else if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size, "DDL_COMMIT_LOG")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (OB_ISNULL(cb = op_alloc(ObDDLCommitClogCb))) {
@@ -1166,7 +1166,7 @@ int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_i
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret));
-  } else if (nullptr == buffer_ && OB_ISNULL(buffer_ = static_cast<char *>(ob_malloc(BUF_SIZE)))) {
+  } else if (nullptr == buffer_ && OB_ISNULL(buffer_ = static_cast<char *>(ob_malloc(BUF_SIZE, "DDL_REDO_LOG")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(BUF_SIZE));
   } else if (!remote_write_) {
