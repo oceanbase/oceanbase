@@ -95,6 +95,7 @@ void ObAllVirtualTableMgr::release_last_tenant()
     tablet_iter_->~ObTenantTabletIterator();
     tablet_iter_ = nullptr;
   }
+  tablet_allocator_.reset();
 }
 
 bool ObAllVirtualTableMgr::is_need_process(uint64_t tenant_id)
