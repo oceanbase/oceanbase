@@ -510,6 +510,47 @@ def check_archive_job_exist(query_cur):
       else:
         logging.info('check archive job success')
 
+# 12. 检查归档路径是否清空
+def check_archive_dest_exist(query_cur):
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    # archive dest need to be cleaned before upgrade from 4.0.
+    if min_cluster_version < get_version("4.1.0.0"):
+      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_ARCHIVE_DEST""")
+      if len(results) != 1 or len(results[0]) != 1:
+        fail_list.append('failed to archive dest cnt')
+      elif results[0][0] != 0:
+        fail_list.append("""still has archive destination, upgrade is not allowed temporarily""")
+      else:
+        logging.info('check archive destination success')
+
+# 13. 检查备份路径是否清空
+def check_backup_dest_exist(query_cur):
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    # backup dest need to be cleaned before upgrade from 4.0.
+    (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_BACKUP_PARAMETER where name='data_backup_dest' and (value!=NULL or value!='')""")
+    if len(results) != 1 or len(results[0]) != 1:
+      fail_list.append('failed to data backup dest cnt')
+    elif results[0][0] != 0:
+      fail_list.append("""still has backup destination, upgrade is not allowed temporarily""")
+    else:
+      logging.info('check backup destination success')
+
 # last check of do_check, make sure no function execute after check_fail_list
 def check_fail_list():
   if len(fail_list) != 0 :
@@ -546,6 +587,8 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_ddl_task_execute(query_cur)
       check_backup_job_exist(query_cur)
       check_archive_job_exist(query_cur)
+      check_archive_dest_exist(query_cur)
+      check_backup_dest_exist(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)
