@@ -543,8 +543,9 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
     } else {
       bool need_free_obj = false;
       T *t = nullptr;
+      t = new (buf) T();
       do {
-        t = new (buf) T();
+        t->reset();
         if (OB_FAIL(load_meta_obj(key, t_ptr, allocator, disk_addr, t, false/*using_obj_pool*/))) {
           STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(t_ptr), K(lbt()));
         } else {
