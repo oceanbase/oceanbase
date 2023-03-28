@@ -708,8 +708,11 @@ void ObPLContext::destory(
       } else if (!is_autonomous_ && reset_autocommit_ && !in_nested_sql_ctrl() &&
                 (lib::is_oracle_mode() || (lib::is_mysql_mode() && is_function_or_trigger_))) {
                 /* 非dml出发点的udf, 如set @a= f1(), 需要在udf内部提交 */
-        //如果当前事务是xa事务,则不提交当前事务,只设置ac=true.否则提交当前事务
-        if (!session_info.associated_xa()) {
+        if (has_implicit_savepoint_) {
+          // reset_autocommit_ && has_implicit_savepoint_ equal to scene of ac=1 && explict transaction.
+          // no need to commit
+        } else if (!session_info.associated_xa()) {
+          //如果当前事务是xa事务,则不提交当前事务,只设置ac=true.否则提交当前事务
           // 先COMMIT, 然后再修改AutoCommit
           int tmp_ret = OB_SUCCESS;
           if (OB_SUCCESS == ret
