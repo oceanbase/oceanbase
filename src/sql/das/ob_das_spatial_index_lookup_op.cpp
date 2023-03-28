@@ -63,10 +63,10 @@ ObSpatialIndexLookupOp::~ObSpatialIndexLookupOp()
   sorter_.~ObExternalSort();
 }
 
-int ObSpatialIndexLookupOp::reset_lookup_state(bool need_switch_param)
+int ObSpatialIndexLookupOp::reset_lookup_state()
 {
   is_inited_ = false;
-  return ObLocalIndexLookupOp::reset_lookup_state(need_switch_param);
+  return ObLocalIndexLookupOp::reset_lookup_state();
 }
 
 int ObSpatialIndexLookupOp::filter_by_mbr(const ObObj &mbr_obj, bool &pass_through)
@@ -209,7 +209,7 @@ int ObSpatialIndexLookupOp::get_next_row()
             ret = OB_SUCCESS;
             if (need_next_index_batch()) {
               // reuse lookup_iter_ only
-              ObLocalIndexLookupOp::reset_lookup_state(false);
+              ObLocalIndexLookupOp::reset_lookup_state();
               index_end_ = false;
               state_ = INDEX_SCAN;
             } else {

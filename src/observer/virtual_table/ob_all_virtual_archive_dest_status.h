@@ -52,6 +52,7 @@ private:
     ObFixedLengthString<MAX_SYNC_TYPE_LENTH> synchronized_;
     share::ObBackupDefaultFixedLenString comment_;
     void reset();
+    bool is_valid();
     TO_STRING_KV(K_(tenant_id), K_(dest_id), K_(status), K_(path), K_(checkpoint_scn),
       K_(synchronized),K_(comment));
   };

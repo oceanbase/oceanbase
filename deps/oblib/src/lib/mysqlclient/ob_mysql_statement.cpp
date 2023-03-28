@@ -119,7 +119,7 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
 }
 
 
-ObMySQLResult *ObMySQLStatement::execute_query()
+ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
 {
   ObMySQLResult *result = NULL;
   int ret = OB_SUCCESS;
@@ -150,7 +150,7 @@ ObMySQLResult *ObMySQLStatement::execute_query()
         ret = OB_ERR_SQL_CLIENT;
         LOG_WARN("can not get errno", K(ret));
       }
-    } else if (OB_FAIL(result_.init())) {
+    } else if (OB_FAIL(result_.init(enable_use_result))) {
       LOG_WARN("fail to init sql result", K(ret));
     } else {
       result = &result_;

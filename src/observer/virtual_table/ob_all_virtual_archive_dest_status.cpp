@@ -63,6 +63,15 @@ void ObVirtualArchiveDestStatus::ObArchiveDestStatusInfo::reset()
   comment_.reset();
 }
 
+bool ObVirtualArchiveDestStatus::ObArchiveDestStatusInfo::is_valid()
+{
+  return tenant_id_ != OB_INVALID_TENANT_ID
+         && dest_id_ != OB_INVALID_DEST_ID
+         && !status_.is_empty()
+         && checkpoint_scn_ != OB_INVALID_SCN_VAL
+         && !synchronized_.is_empty();
+}
+
 int ObVirtualArchiveDestStatus::init(ObMySQLProxy *sql_proxy)
 {
   int ret = OB_SUCCESS;
@@ -150,7 +159,8 @@ int ObVirtualArchiveDestStatus::inner_get_next_row(common::ObNewRow *&row)
                 if (OB_FAIL(get_ls_max_scn_(curr_tenant))) {
                   SERVER_LOG(WARN, "get ls max scn failed", K(curr_tenant), K(ret));
                 } else if (ls_checkpoint_map_.count() == 0 || ls_end_map_.count() == 0 || ls_checkpoint_map_.count() != ls_end_map_.count()) {
-                  SERVER_LOG(WARN, "map may be empty", K(ls_end_map_.count()), K(ls_checkpoint_map_.count()));
+                  SERVER_LOG(WARN, "map may be empty", K(curr_tenant), K(curr_dest), K(ls_end_map_.count()), K(ls_checkpoint_map_.count()));
+                  continue;
                 } else if (OB_FAIL(compare_scn_map_())) {
                   SERVER_LOG(WARN, "compare scn map failed", K(ret));
                 } else if (is_synced_) {
@@ -166,7 +176,11 @@ int ObVirtualArchiveDestStatus::inner_get_next_row(common::ObNewRow *&row)
                   }
                 }
 
-                if (OB_SUCC(ret) && OB_FAIL(get_full_row_(table_schema_, dest_status_info, columns))) {
+                if (OB_FAIL(ret)) {
+                  SERVER_LOG(WARN, "fail to get archive dest status", K(curr_tenant), K(curr_dest), KR(ret));
+                } else if (!dest_status_info.is_valid()) {
+                  SERVER_LOG(WARN, "dest status info is invalid", K(curr_tenant), K(curr_dest), K(dest_status_info));
+                } else if (OB_FAIL(get_full_row_(table_schema_, dest_status_info, columns))) {
                   SERVER_LOG(WARN, "failed to get full row", "table_schema", *table_schema_, K(dest_status_info), K(ret));
                 } else if (OB_FAIL(project_row(columns, cur_row_))) {
                   SERVER_LOG(WARN, "failed to project row", K(ret));

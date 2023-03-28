@@ -1295,13 +1295,13 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   2 - output([t7.a], [t7.b], [t7.c], [t7.d], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=256
       sort_keys([cast(t7.a, DECIMAL(10, 0)), ASC], [t7.d, ASC])
-  3 - output([t7.a], [t7.d], [t7.b], [t7.c]), filter(nil), rowset=256
+  3 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=256
       access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t2.a], [t2.b], [t2.c], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=256
       sort_keys([cast(t2.b, DECIMAL(-1, -1)), ASC], [t2.c, ASC])
-  5 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=256
+  5 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=256
       access([t2.b], [t2.c], [t2.a]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
@@ -1438,13 +1438,13 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   2 - output([t7.a], [t7.b], [t7.c], [t7.d], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=256
       sort_keys([cast(t7.a, DECIMAL(10, 0)), ASC], [t7.d, ASC])
-  3 - output([t7.a], [t7.d], [t7.b], [t7.c]), filter(nil), rowset=256
+  3 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=256
       access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t2.a], [t2.b], [t2.c], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=256
       sort_keys([cast(t2.b, DECIMAL(-1, -1)), ASC], [t2.c, ASC])
-  5 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=256
+  5 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=256
       access([t2.b], [t2.c], [t2.a]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
@@ -1587,13 +1587,13 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   2 - output([t7.a], [t7.b], [t7.c], [t7.d], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=256
       sort_keys([cast(t7.a, DECIMAL(10, 0)), ASC], [t7.d, ASC])
-  3 - output([t7.a], [t7.d], [t7.b], [t7.c]), filter(nil), rowset=256
+  3 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=256
       access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t2.a], [t2.b], [t2.c], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=256
       sort_keys([cast(t2.b, DECIMAL(-1, -1)), ASC], [t2.c, ASC])
-  5 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=256
+  5 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=256
       access([t2.b], [t2.c], [t2.a]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true

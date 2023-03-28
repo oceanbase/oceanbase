@@ -840,7 +840,6 @@ private:
   }
   int handle_cancel_backup_backup(const obrpc::ObBackupManageArg &arg);
   int handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg);
-  int wait_refresh_config();
   int clean_global_context();
 private:
   bool is_sys_tenant(const common::ObString &tenant_name);

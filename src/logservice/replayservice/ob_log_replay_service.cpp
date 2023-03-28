@@ -1129,7 +1129,7 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
             //TODO: @runlin 移除padding日志时此处特殊处理需要一并移除
             //当前palf最后一条日志为padding,直接推大to_submit_lsn
             if (lsn_2_offset(committed_end_lsn, PALF_BLOCK_SIZE) != 0) {
-              CLOG_LOG(ERROR, "no log to fetch but committed_end_lsn is not new file header",
+              CLOG_LOG(WARN, "no log to fetch but committed_end_lsn is not new file header",
                         KR(ret), K(to_submit_lsn), K(committed_end_lsn), KPC(replay_status));
             } else if (1 != lsn_2_block(committed_end_lsn, PALF_BLOCK_SIZE) -
                             lsn_2_block(to_submit_lsn, PALF_BLOCK_SIZE)) {
@@ -1278,6 +1278,7 @@ int ObLogReplayService::submit_log_replay_task_(ObLogReplayTask &replay_task,
                                                 ObReplayStatus &replay_status)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t replay_hint = 0;
   if (OB_UNLIKELY(!replay_task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1293,8 +1294,11 @@ int ObLogReplayService::submit_log_replay_task_(ObLogReplayTask &replay_task,
     } else {
       // push error, dec pending count now
       if (replay_task.is_post_barrier_) {
-        if (OB_FAIL(replay_status.set_post_barrier_finished(replay_task.lsn_))) {
-          CLOG_LOG(ERROR, "revoke post barrier failed", K(replay_task), K(replay_status), K(ret));
+        if (OB_SUCCESS != (tmp_ret = replay_status.set_post_barrier_finished(replay_task.lsn_))) {
+          if (!replay_status.is_fatal_error(ret)) {
+            ret = tmp_ret;
+          }
+          CLOG_LOG(ERROR, "revoke post barrier failed", K(replay_task), K(replay_status), K(ret), K(tmp_ret));
         }
       }
       replay_status.dec_pending_task(replay_task.log_size_);

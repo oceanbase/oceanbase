@@ -33,6 +33,7 @@ int ObTableServiceLibrary::init()
   ::oceanbase::common::USE_CO_LATCH = false;
   // Create worker for current thread.
   ::oceanbase::lib::Worker worker;
+  ::oceanbase::lib::Worker::set_worker_to_thread_local(&worker);
   // setup easy
   easy_log_set_format(easy_log_format_adaptor);
   easy_log_level = EASY_LOG_INFO;

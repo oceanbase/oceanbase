@@ -49,7 +49,8 @@ int ObISQLClient::ReadResult::close()
 }
 
 ObISQLClient::ReadResult::ReadResult()
-    : result_handler_(NULL)
+    : result_handler_(NULL),
+      enable_use_result_(false)
 {
 }
 
@@ -63,6 +64,7 @@ void ObISQLClient::ReadResult::reset()
   if (NULL != result_handler_) {
     result_handler_->~ObISQLResultHandler();
     result_handler_ = NULL;
+    enable_use_result_ = false;
   }
 }
 
@@ -71,6 +73,7 @@ void ObISQLClient::ReadResult::reuse()
   if (NULL != result_handler_) {
     result_handler_->~ObISQLResultHandler();
     result_handler_ = NULL;
+    enable_use_result_ = false;
   }
 }
 

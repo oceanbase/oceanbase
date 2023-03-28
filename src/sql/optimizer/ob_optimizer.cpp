@@ -517,7 +517,6 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt &stmt,
     LOG_WARN("failed to find dblink in stmt", K(ret));
   } else if (stmt_has_dblink) {
     is_use_pdml = false;
-    ctx_.add_plan_note(PARALLEL_DISABLED_BY_DBLINK);
     ctx_.set_has_dblink(true);
   } else if (ctx_.contain_user_nested_sql()) {
     //user nested sql can't use PDML plan, force to use DAS plan
@@ -687,7 +686,6 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     }
     if (ctx_.has_dblink()) {
       //if stmt contain dblink, force das, parallel should be 1
-      ctx_.set_parallel_rule(PXParallelRule::DBLINK_FORCE_SERIALIZE);
       ctx_.set_parallel(1);
       ctx_.add_plan_note(PARALLEL_DISABLED_BY_DBLINK, 1);
     }

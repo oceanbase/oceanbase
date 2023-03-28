@@ -526,7 +526,7 @@ int main(int argc, char *argv[])
       // thread has already had a worker, which can prevent binding
       // new worker with it.
       lib::Worker worker;
-
+      lib::Worker::set_worker_to_thread_local(&worker);
       ObServer &observer = ObServer::get_instance();
       LOG_INFO("observer starts", "observer_version", PACKAGE_STRING);
       // to speed up bootstrap phase, need set election INIT TS

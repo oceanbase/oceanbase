@@ -11,6 +11,7 @@
  */
 
 #include "storage/tx_table/ob_tx_table_define.h"
+#include "storage/tx_table/ob_tx_data_table.h"
 
 namespace oceanbase
 {
@@ -71,7 +72,10 @@ int ObTxCtxTableInfo::serialize(char *buf,
   int ret = OB_SUCCESS;
   const int64_t data_len = get_serialize_size_();
   ObTxCtxTableCommonHeader header(MAGIC_VERSION, data_len);
-  if (OB_FAIL(header.serialize(buf, buf_len, pos))) {
+  if (OB_ISNULL(tx_data_guard_.tx_data())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "invalid tx data guard", KR(ret), KPC(this));
+  } else if (OB_FAIL(header.serialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "encode header fail", K(buf_len), K(pos), K(ret));
   } else if (OB_FAIL(serialize_(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "serialize fail", K(ret));
@@ -91,7 +95,7 @@ int ObTxCtxTableInfo::serialize_(char *buf,
     TRANS_LOG(WARN, "serialize ls_id fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, cluster_id_))) {
     TRANS_LOG(WARN, "encode cluster id failed", K(cluster_id_), K(buf_len), K(pos), K(ret));
-  } else if (OB_FAIL(state_info_.serialize(buf, buf_len, pos))) {
+  } else if (OB_FAIL(tx_data_guard_.tx_data()->serialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "serialize state_info fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(exec_info_.serialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "serialize exec_info fail.", KR(ret), K(pos), K(buf_len));
@@ -105,14 +109,16 @@ int ObTxCtxTableInfo::serialize_(char *buf,
 int ObTxCtxTableInfo::deserialize(const char *buf,
                                   const int64_t buf_len,
                                   int64_t &pos,
-                                  ObSliceAlloc &slice_allocator)
+                                  ObTxDataTable &tx_data_table)
 {
   int ret = OB_SUCCESS;
   ObTxCtxTableCommonHeader header(MAGIC_VERSION, 0);
 
-  if (OB_FAIL(header.deserialize(buf, buf_len, pos))) {
+  if (OB_FAIL(tx_data_table.alloc_tx_data(tx_data_guard_))) {
+      STORAGE_LOG(WARN, "alloc tx data failed", KR(ret));
+  } else if (OB_FAIL(header.deserialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "deserialize header fail", K(buf_len), K(pos), K(ret));
-  } else if (OB_FAIL(deserialize_(buf, buf_len, pos, slice_allocator))) {
+  } else if (OB_FAIL(deserialize_(buf, buf_len, pos, tx_data_table))) {
     TRANS_LOG(INFO, "deserialize_ fail", "buf_len", buf_len, K(pos), K(ret));
   }
   return ret;
@@ -121,7 +127,7 @@ int ObTxCtxTableInfo::deserialize(const char *buf,
 int ObTxCtxTableInfo::deserialize_(const char *buf,
                                    const int64_t buf_len,
                                    int64_t &pos,
-                                   ObSliceAlloc &slice_allocator)
+                                   ObTxDataTable &tx_data_table)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(tx_id_.deserialize(buf, buf_len, pos))) {
@@ -130,7 +136,7 @@ int ObTxCtxTableInfo::deserialize_(const char *buf,
     TRANS_LOG(WARN, "deserialize ls_id fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(serialization::decode_vi64(buf, buf_len, pos, &cluster_id_))) {
     TRANS_LOG(WARN, "encode cluster_id fail", K(cluster_id_), K(buf_len), K(pos), K(ret));
-  } else if (OB_FAIL(state_info_.deserialize(buf, buf_len, pos, slice_allocator))) {
+  } else if (OB_FAIL(tx_data_guard_.tx_data()->deserialize(buf, buf_len, pos, *tx_data_table.get_slice_allocator()))) {
     TRANS_LOG(WARN, "deserialize state_info fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(exec_info_.deserialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "deserialize exec_info fail.", KR(ret), K(pos), K(buf_len));
@@ -159,7 +165,7 @@ int64_t ObTxCtxTableInfo::get_serialize_size_(void) const
   len += tx_id_.get_serialize_size();
   len += ls_id_.get_serialize_size();
   len += serialization::encoded_length_vi64(cluster_id_);
-  len += state_info_.get_serialize_size();
+  len += (OB_NOT_NULL(tx_data_guard_.tx_data()) ? tx_data_guard_.tx_data()->get_serialize_size() : 0);
   len += exec_info_.get_serialize_size();
   len += table_lock_info_.get_serialize_size();
   return len;

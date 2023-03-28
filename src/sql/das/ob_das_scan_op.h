@@ -329,7 +329,7 @@ public:
   void set_rowkey_iter(common::ObNewRowIterator *rowkey_iter) {rowkey_iter_ = rowkey_iter;}
   common::ObNewRowIterator *get_rowkey_iter() { return rowkey_iter_; }
   int reuse_iter();
-  virtual int reset_lookup_state(bool need_switch_param);
+  virtual int reset_lookup_state();
   int revert_iter();
   VIRTUAL_TO_STRING_KV(KPC_(lookup_ctdef),
                        KPC_(lookup_rtdef),

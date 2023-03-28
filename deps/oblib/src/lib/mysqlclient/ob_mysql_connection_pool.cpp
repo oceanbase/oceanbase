@@ -879,11 +879,8 @@ int ObMySQLConnectionPool::try_connect_dblink(ObISQLConnection *dblink_conn, int
     } else if (OB_FAIL(dblink_conn1->set_timeout_variable(config_.long_query_timeout_,
                                                          DEFAULT_TRANSACTION_TIMEOUT_US))) {
       LOG_WARN("fail to set mysql timeout variablse", K(ret));
+      dblink_conn1->close();
     }
-  } else if (OB_SUCCESS != dblink_conn1->ping()) {
-    ret = OB_ERR_UNEXPECTED;
-    dblink_conn1->close();
-    LOG_WARN("connection status is invalid", K(sql_request_level), KP(dblink_conn1), K(ret));
   }
   return ret;
 }

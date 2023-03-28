@@ -89,7 +89,7 @@ private:
   int do_delete_block_(const block_id_t block_id);
   int delete_block_from_back_to_front_until_(const block_id_t block_id);
   int do_truncate_(const block_id_t block_id, const offset_t offset);
-  int do_scan_dir_(const char *dir, const block_id_t initial_block_id);
+  int do_scan_dir_(const char *dir, const block_id_t initial_block_id, ILogBlockPool *log_block_pool);
   int do_rename_and_fsync_(const char *block_path, const char *tmp_block_path);
   bool empty_() const;
   int try_recovery_last_block_(const char *log_dir);

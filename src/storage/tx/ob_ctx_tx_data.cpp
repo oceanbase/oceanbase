@@ -68,7 +68,6 @@ void ObCtxTxData::reset()
   ctx_mgr_ = nullptr;
   tx_data_guard_.reset();
   read_only_ = false;
-  tx_commit_data_.reset();
 }
 
 void ObCtxTxData::destroy()
@@ -88,7 +87,6 @@ int ObCtxTxData::insert_into_tx_table()
     GET_TX_TABLE_(tx_table)
     if (OB_FAIL(ret)) {
     } else {
-      tx_commit_data_ = *(tx_data_guard_.tx_data());
       if (OB_FAIL(insert_tx_data_(tx_table, tx_data_guard_.tx_data()))) {
         TRANS_LOG(WARN, "insert tx data failed", K(ret), K(*this));
       } else {
@@ -100,7 +98,7 @@ int ObCtxTxData::insert_into_tx_table()
   return ret;
 }
 
-int ObCtxTxData::recover_tx_data(const ObTxData &tmp_tx_data)
+int ObCtxTxData::recover_tx_data(ObTxDataGuard &rhs)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
@@ -109,12 +107,12 @@ int ObCtxTxData::recover_tx_data(const ObTxData &tmp_tx_data)
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_tx_data_writable_())) {
-    TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
-  } else if (OB_FAIL(tx_table->alloc_tx_data(tx_data_guard_))) {
-    TRANS_LOG(WARN, "alloc tx data failed", KR(ret), K(tmp_tx_data));
-  } else {
-    ObTxData *tx_data = tx_data_guard_.tx_data();
-    *tx_data = tmp_tx_data;
+    TRANS_LOG(WARN, "tx data is not writeable", K(ret), KPC(this));
+  } else if (OB_ISNULL(rhs.tx_data())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "input tx data guard is unexpected nullptr", K(ret), KPC(this));
+  } else if (OB_FAIL(tx_data_guard_.init(rhs.tx_data()))) {
+    TRANS_LOG(WARN, "init tx data guard failed", K(ret), KPC(this));
   }
 
   return ret;
@@ -288,43 +286,86 @@ int32_t ObCtxTxData::get_state() const
 {
   RLockGuard guard(lock_);
   const ObTxData *tx_data = tx_data_guard_.tx_data();
-  return (NULL != tx_data ? ATOMIC_LOAD(&tx_data->state_): ATOMIC_LOAD(&tx_commit_data_.state_));
+  if (OB_ISNULL(tx_data)) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "tx data is unexpected nullptr", KPC(this));
+    return 0;
+  } else {
+    return ATOMIC_LOAD(&tx_data->state_);
+  }
 }
 
 const SCN ObCtxTxData::get_commit_version() const
 {
   RLockGuard guard(lock_);
   const ObTxData *tx_data = tx_data_guard_.tx_data();
-  return (NULL != tx_data ? tx_data->commit_version_.atomic_load() : tx_commit_data_.commit_version_.atomic_load());
+  if (OB_ISNULL(tx_data)) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "tx data is unexpected nullptr", KPC(this));
+    return SCN::invalid_scn();
+  } else {
+    return tx_data->commit_version_.atomic_load();
+  }
 }
 
 const SCN ObCtxTxData::get_start_log_ts() const
 {
   RLockGuard guard(lock_);
   const ObTxData *tx_data = tx_data_guard_.tx_data();
-  SCN ctx_scn = (NULL != tx_data ? tx_data->start_scn_.atomic_load() : tx_commit_data_.start_scn_.atomic_load());
-  // if (ctx_scn.is_max()) {
-  //  ctx_scn.reset();
-  // }
-  return ctx_scn;
+  if (OB_ISNULL(tx_data)) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "tx data is unexpected nullptr", KPC(this));
+    return SCN::invalid_scn();
+  } else {
+    return tx_data->start_scn_.atomic_load();
+  }
 }
 
 const SCN ObCtxTxData::get_end_log_ts() const
 {
   RLockGuard guard(lock_);
   const ObTxData *tx_data = tx_data_guard_.tx_data();
-  SCN ctx_scn = (NULL != tx_data ? tx_data->end_scn_.atomic_load() : tx_commit_data_.end_scn_.atomic_load());
-  // if (ctx_scn.is_max()) {
-  //  ctx_scn.reset();
-  // }
-  return ctx_scn;
+  if (OB_ISNULL(tx_data)) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "tx data is unexpected nullptr", KPC(this));
+    return SCN::invalid_scn();
+  } else {
+    return tx_data->end_scn_.atomic_load();
+  }
 }
 
 ObTransID ObCtxTxData::get_tx_id() const
 {
   RLockGuard guard(lock_);
   const ObTxData *tx_data = tx_data_guard_.tx_data();
-  return (NULL != tx_data ? tx_data->tx_id_ : tx_commit_data_.tx_id_);
+  if (OB_ISNULL(tx_data)) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "tx data is unexpected nullptr", KPC(this));
+    return ObTransID(0);
+  } else {
+    return tx_data->tx_id_;
+  }
+}
+
+int ObCtxTxData::get_tx_data(storage::ObTxDataGuard &tx_data_guard)
+{
+  int ret = OB_SUCCESS;
+  ObTxData *tx_data = tx_data_guard_.tx_data();
+  if (OB_ISNULL(tx_data)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "tx data is unexpected nullptr", KR(ret), KPC(this));
+  } else {
+    ret = tx_data_guard.init(tx_data);
+  }
+  return ret;
+}
+
+int ObCtxTxData::get_tx_data_ptr(storage::ObTxData *&tx_data_ptr)
+{
+  int ret = OB_SUCCESS;
+  ObTxData *tx_data = tx_data_guard_.tx_data();
+  if (OB_ISNULL(tx_data)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "tx data is unexpected nullptr", KR(ret), KPC(this));
+  } else {
+    tx_data_ptr = tx_data;
+  }
+  return ret;
 }
 
 int ObCtxTxData::prepare_add_undo_action(ObUndoAction &undo_action,
@@ -401,25 +442,6 @@ int ObCtxTxData::add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatu
   return ret;
 }
 
-int ObCtxTxData::Guard::get_tx_data(const ObTxData *&tx_data) const
-{
-  int ret = OB_SUCCESS;
-  auto tmp_tx_data = host_.tx_data_guard_.tx_data();
-  if (NULL == tmp_tx_data) {
-    ret = OB_TRANS_CTX_NOT_EXIST;
-  } else {
-    tx_data = tmp_tx_data;
-  }
-  return ret;
-}
-
-int ObCtxTxData::get_tx_commit_data(const ObTxCommitData *&tx_commit_data) const
-{
-  int ret = OB_SUCCESS;
-  tx_commit_data = &tx_commit_data_;
-  return ret;
-}
-
 int ObCtxTxData::check_tx_data_writable_()
 {
   int ret = OB_SUCCESS;
@@ -480,6 +502,7 @@ int ObCtxTxData::deep_copy_tx_data_(ObTxTable *tx_table, storage::ObTxDataGuard 
 
   return ret;
 }
+
 
 } // namespace transaction
 

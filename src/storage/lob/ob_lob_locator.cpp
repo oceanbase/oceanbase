@@ -37,7 +37,7 @@ ObLobLocatorHelper::ObLobLocatorHelper()
     rowid_version_(ObURowIDData::INVALID_ROWID_VERSION),
     rowid_project_(nullptr),
     rowid_objs_(),
-    locator_allocator_(),
+    locator_allocator_(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     rowkey_str_(),
     enable_locator_v2_(),
     is_inited_(false)

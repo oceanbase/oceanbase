@@ -315,8 +315,7 @@ void ObThWorker::set_th_worker_thread_name(uint64_t tenant_id)
 void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t &worker_level)
 {
   int ret = OB_SUCCESS;
-  lib::Worker::self_ = this;
-  lib::Worker::self_ = this;
+  Worker::set_worker_to_thread_local(static_cast<lib::Worker*>(this));
   int64_t wait_start_time = 0;
   int64_t wait_end_time = 0;
   int64_t req_start_time = 0;

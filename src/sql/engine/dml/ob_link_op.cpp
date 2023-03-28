@@ -153,6 +153,8 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
                                               next_sql_req_level_))) {
         ObDblinkUtils::process_dblink_errno(link_type_, dblink_conn_, ret);
         LOG_WARN("failed to acquire dblink", K(ret), K(dblink_id));
+      } else if (OB_FAIL(my_session->get_dblink_context().register_dblink_conn_pool(dblink_conn_->get_common_server_pool()))) {
+        LOG_WARN("failed to register dblink conn pool to current session", K(ret));
       } else if (in_xa_trascaction_ && OB_FAIL(my_session->get_dblink_context().set_dblink_conn(dblink_conn_))) {
         LOG_WARN("failed to set dblink connection to session", K(my_session), K(sessid_), K(ret));
       } else {

@@ -183,6 +183,74 @@ int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 
+// 验证flashback过程中宕机重启
+TEST_F(TestObSimpleLogClusterLogEngine, flashback_restart)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "flashback_restart");
+  OB_LOGGER.set_log_level("TRACE");
+  PALF_LOG(INFO, "begin flashback_restart");
+  PalfHandleImplGuard leader;
+  int64_t id_1 = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx_1 = 0;
+  PalfEnv *palf_env = NULL;
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_1, leader_idx_1, leader));
+  EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx_1, palf_env));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 66, leader_idx_1, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+  SCN scn;
+  LogStorage *log_storage = &leader.get_palf_handle_impl()->log_engine_.log_storage_;
+  LSN log_tail = log_storage->log_tail_;
+  scn = leader.get_palf_handle_impl()->get_end_scn();
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 33, leader_idx_1, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+  int64_t mode_version;
+  AccessMode mode;
+  EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->get_access_mode(mode_version, mode));
+  LSN flashback_lsn(PALF_BLOCK_SIZE*lsn_2_block(log_tail, PALF_BLOCK_SIZE));
+  EXPECT_EQ(OB_SUCCESS, log_storage->begin_flashback(flashback_lsn));
+  leader.reset();
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+
+  {
+    PalfHandleImplGuard leader1;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id_1, leader1, leader_idx_1));
+    LogStorage *log_storage = &leader1.get_palf_handle_impl()->log_engine_.log_storage_;
+    EXPECT_LE(2, log_storage->block_mgr_.max_block_id_);
+    EXPECT_EQ(OB_SUCCESS, log_storage->block_mgr_.create_tmp_block_handler(2));
+    EXPECT_EQ(OB_SUCCESS, log_storage->update_manifest_cb_(3));
+    EXPECT_EQ(OB_SUCCESS, log_storage->block_mgr_.delete_block_from_back_to_front_until(2));
+    {
+      LogBlockMgr *block_mgr = &log_storage->block_mgr_;
+      int block_id = 2;
+      int ret = OB_SUCCESS;
+      // 1. rename "block_id.tmp" to "block_id.flashback"
+      // 2. delete "block_id", make sure each block has returned into BlockPool
+      // 3. rename "block_id.flashback" to "block_id"
+      // NB: for restart, the block which named 'block_id.flashback' must be renamed to 'block_id'
+      char tmp_block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+      char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+      char flashback_block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+      if (block_id != block_mgr->curr_writable_block_id_) {
+        ret = OB_ERR_UNEXPECTED;
+        PALF_LOG(ERROR, "block_id is not same as curr_writable_handler_, unexpected error",
+            K(ret), K(block_id), KPC(block_mgr));
+      } else if (OB_FAIL(block_id_to_string(block_id, block_path, OB_MAX_FILE_NAME_LENGTH))) {
+	PALF_LOG(ERROR, "block_id_to_string failed", K(ret), K(block_id));
+      } else if (OB_FAIL(block_id_to_tmp_string(block_id, tmp_block_path, OB_MAX_FILE_NAME_LENGTH))) {
+	PALF_LOG(ERROR, "block_id_to_tmp_string failed", K(ret), K(block_id));
+      } else if (OB_FAIL(block_id_to_flashback_string(block_id, flashback_block_path, OB_MAX_FILE_NAME_LENGTH))) {
+	PALF_LOG(ERROR, "block_id_to_flashback_string failed", K(ret), K(block_id));
+      } else if (OB_FAIL(block_mgr->do_rename_and_fsync_(tmp_block_path, flashback_block_path))) {
+        PALF_LOG(ERROR, "do_rename_and_fsync_ failed", K(ret), KPC(block_mgr));
+      } else {
+        PALF_LOG(INFO, "rename_tmp_block_handler_to_normal success", K(ret), KPC(block_mgr));
+      }
+    }
+  }
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+}
+
 TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "exception_path");

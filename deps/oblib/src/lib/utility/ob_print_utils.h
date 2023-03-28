@@ -147,11 +147,11 @@ public:
 class CStringBufMgr
 {
 public:
-  static const int BUF_SIZE = 8 * 1024;
-  static const int MIN_REST_SIZE = 1024;
+  static const int BUF_SIZE = 32 * 1024;
+  static const int MIN_SIZE = 12 * 1024;
   struct BufNode
   {
-    char buf_[BUF_SIZE];
+    char buf_[MIN_SIZE];
     int64_t level_;
     struct BufNode *next_;
   };
@@ -169,16 +169,18 @@ public:
   }
   void inc_level() { level_++; }
   void dec_level() { level_--; }
-  int64_t get_pos() { return pos_; }
-  void set_pos(int64_t pos)
+  void update_position(int64_t pos)
   {
     if (0 == level_) {
-      if (MIN_REST_SIZE > BUF_SIZE - pos) {
+      pos_ += pos;
+      if (MIN_SIZE > BUF_SIZE - pos_) {
         pos_ = 0;
-      } else {
-        pos_ = pos;
       }
     }
+  }
+  int64_t get_buffer_len()
+  {
+    return 0 == level_ ? (BUF_SIZE - pos_) : MIN_SIZE;
   }
   char *acquire()
   {
@@ -235,15 +237,14 @@ const char *to_cstring(const T &obj, const bool verbose)
   if (OB_ISNULL(buffer)) {
     LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    int64_t pos = mgr.get_pos();
-    const int64_t buf_len = CStringBufMgr::BUF_SIZE - pos;
+    const int64_t buf_len = mgr.get_buffer_len();
     str_len = obj.to_string(buffer, buf_len -1, verbose);
     if (str_len >= 0 && str_len < buf_len) {
       buffer[str_len] = '\0';
     } else {
       buffer[0] = '\0';
     }
-    mgr.set_pos(pos + str_len + 1);
+    mgr.update_position(str_len + 1);
   }
   mgr.try_clear_list();
   mgr.dec_level();
@@ -261,15 +262,14 @@ const char *to_cstring(const T &obj, FalseType)
   if (OB_ISNULL(buffer)) {
     LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    int64_t pos = mgr.get_pos();
-    const int64_t buf_len = CStringBufMgr::BUF_SIZE - pos;
+    const int64_t buf_len = mgr.get_buffer_len();
     str_len = to_string(obj, buffer, buf_len -1);
     if (str_len >= 0 && str_len < buf_len) {
       buffer[str_len] = '\0';
     } else {
       buffer[0] = '\0';
     }
-    mgr.set_pos(pos + str_len + 1);
+    mgr.update_position(str_len + 1);
   }
   mgr.try_clear_list();
   mgr.dec_level();

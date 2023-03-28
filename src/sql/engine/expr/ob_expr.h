@@ -1120,8 +1120,7 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
   if (OB_ISNULL(buffer)) {
     LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    int64_t pos = mgr.get_pos();
-    const int64_t buf_len = CStringBufMgr::BUF_SIZE - pos;
+    const int64_t buf_len = mgr.get_buffer_len();
     databuff_printf(buffer, buf_len, str_len, "vectorized_rows(%ld)=", index);
     str_len += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + str_len, buf_len - str_len - 1);
     if (str_len >= 0 && str_len < buf_len) {
@@ -1129,6 +1128,7 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
     } else {
       buffer[0] = '\0';
     }
+    mgr.update_position(str_len + 1);
   }
   mgr.try_clear_list();
   mgr.dec_level();

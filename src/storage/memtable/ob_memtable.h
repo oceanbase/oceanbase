@@ -313,7 +313,9 @@ public:
   int set_freezer(storage::ObFreezer *handler);
   storage::ObFreezer *get_freezer() { return freezer_; }
   int get_ls_id(share::ObLSID &ls_id);
-  void set_memtable_mgr(storage::ObTabletMemtableMgr *mgr) { memtable_mgr_ = mgr; }
+  void set_memtable_mgr(storage::ObTabletMemtableMgr *mgr) { ATOMIC_STORE(&memtable_mgr_, mgr); }
+  void clear_memtable_mgr() { ATOMIC_STORE(&memtable_mgr_, nullptr); }
+  storage::ObTabletMemtableMgr *get_memtable_mgr() { return ATOMIC_LOAD(&memtable_mgr_); }
   void set_freeze_clock(const uint32_t freeze_clock) { ATOMIC_STORE(&freeze_clock_, freeze_clock); }
   uint32_t get_freeze_clock() { return ATOMIC_LOAD(&freeze_clock_); }
   int set_emergency(const bool emergency);
@@ -371,6 +373,9 @@ public:
   ObMvccEngine &get_mvcc_engine() { return mvcc_engine_; }
   const ObMvccEngine &get_mvcc_engine() const { return mvcc_engine_; }
   OB_INLINE bool is_inited() const { return is_inited_;}
+  int64_t get_memtable_mgr_op_cnt() { return ATOMIC_LOAD(&memtable_mgr_op_cnt_); }
+  int64_t inc_memtable_mgr_op_cnt() { return ATOMIC_AAF(&memtable_mgr_op_cnt_, 1); }
+  int64_t dec_memtable_mgr_op_cnt() { return ATOMIC_SAF(&memtable_mgr_op_cnt_, 1); }
 
   /* freeze */
   virtual int set_frozen() override { local_allocator_.set_frozen(); return OB_SUCCESS; }
@@ -551,6 +556,7 @@ private:
   int64_t pending_cb_cnt_; // number of transactions have to sync log
   int64_t unsubmitted_cnt_; // number of trans node to be submitted logs
   int64_t unsynced_cnt_; // number of trans node to be synced logs
+  int64_t memtable_mgr_op_cnt_; // number of operations for memtable_mgr
   bool logging_blocked_; // flag whether the memtable can submit log, cannot submit if true
   int64_t logging_blocked_start_time; // record the start time of logging blocked
   bool unset_active_memtable_logging_blocked_;
@@ -699,6 +705,30 @@ public:
 private:
   uint32_t modify_count_;
   uint32_t acc_checksum_;
+};
+
+class MemtableMgrOpGuard
+{
+public:
+  explicit MemtableMgrOpGuard(ObMemtable *memtable): memtable_(memtable),
+                                                     memtable_mgr_(nullptr)
+  {
+    if (OB_NOT_NULL(memtable_)) {
+      memtable_->inc_memtable_mgr_op_cnt();
+      memtable_mgr_ = memtable_->get_memtable_mgr();
+    }
+  }
+  ~MemtableMgrOpGuard()
+  {
+    if (OB_NOT_NULL(memtable_)) {
+      memtable_->dec_memtable_mgr_op_cnt();
+      memtable_mgr_ = nullptr;
+    }
+  }
+  storage::ObTabletMemtableMgr *get_memtable_mgr() { return memtable_mgr_; }
+private:
+  ObMemtable *memtable_;
+  storage::ObTabletMemtableMgr *memtable_mgr_;
 };
 
 }

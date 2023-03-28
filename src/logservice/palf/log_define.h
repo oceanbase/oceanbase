@@ -45,6 +45,7 @@ typedef uint64_t offset_t;
 constexpr int64_t INVALID_PALF_ID = -1;
 class LSN;
 class LogWriteBuf;
+class ILogBlockPool;
 
 // ==================== palf env start =============================
 const int64_t MIN_DISK_SIZE_PER_PALF_INSTANCE = 512 * 1024 * 1024ul;
@@ -351,22 +352,25 @@ private:
 class TrimLogDirectoryFunctor : public ObBaseDirFunctor
 {
 public:
-  TrimLogDirectoryFunctor(const char *dir)
+  TrimLogDirectoryFunctor(const char *dir, ILogBlockPool *log_block_pool)
     : dir_(dir),
       min_block_id_(LOG_INVALID_BLOCK_ID),
-      max_block_id_(LOG_INVALID_BLOCK_ID)
+      max_block_id_(LOG_INVALID_BLOCK_ID),
+      log_block_pool_(log_block_pool)
   {
   }
   virtual ~TrimLogDirectoryFunctor() = default;
 
-	int rename_flashback_to_normal(const char *file_name);
   int func(const dirent *entry) override final;
   block_id_t get_min_block_id() const { return min_block_id_; }
   block_id_t get_max_block_id() const { return max_block_id_; }
 private:
+	int rename_flashback_to_normal_(const char *file_name);
+  int try_to_remove_block_(const int dir_fd, const char *file_name);
   const char *dir_;
   block_id_t min_block_id_;
   block_id_t max_block_id_;
+  ILogBlockPool *log_block_pool_;
 
   DISALLOW_COPY_AND_ASSIGN(TrimLogDirectoryFunctor);
 };

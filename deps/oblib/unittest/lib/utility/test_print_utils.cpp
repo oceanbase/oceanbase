@@ -108,18 +108,12 @@ TEST(print_utility, to_cstring)
                to_cstring(*tuples[0]), to_cstring(*tuples[1]), to_cstring(*tuples[2]));
   _OB_LOG(INFO, "print tuple string, {%s}, {%s}, {%s}, {%s}, {%s}, {%s}, {%s}", to_cstring(*tuples[3]), to_cstring(*tuples[4]),
                to_cstring(*tuples[5]), to_cstring(*tuples[6]), to_cstring(*tuples[7]), to_cstring(*tuples[8]), to_cstring(*tuples[9]));
-  for (int i = 0; i < 10; ++i) {
-    int64_t pos = CStringBufMgr::get_thread_local_instance().get_pos();
-    _OB_LOG(INFO, "print tuple string, pos = %ld\n", pos);
-    to_cstring(*tuples[0]);
-  }
   // the performance of to_cstring when observer reach memory limit
   EventItem item;
   item.trigger_freq_ = 1;
   item.error_code_ = OB_ALLOCATE_MEMORY_FAILED;
   ::oceanbase::common::EventTable::instance().set_event(EventTable::EN_4, item);
-  int64_t pos = CStringBufMgr::get_thread_local_instance().get_pos();
-  _OB_LOG(INFO, "print tuple string, {%s}, pos = %ld\n", to_cstring(*tuples[0]), pos);
+  _OB_LOG(INFO, "print tuple string, {%s}\n", to_cstring(*tuples[0]));
 }
 
 int main(int argc, char **argv)

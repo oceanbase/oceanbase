@@ -542,10 +542,24 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
           value.set_has_lob_header(); // must has lob header
         }
       } else if (!loc.has_extern()) {
-        // currently all temp lobs have extern field in oracle mode
-        // or the lob locator header cannot compatable with clients for 4.0
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Lob: oracle lob locator v2 with out extern segment", K(value), K(GET_MIN_CLUSTER_VERSION()));
+        if (!loc.has_inrow_data()) {
+          // currently all temp lobs have extern field in oracle mode
+          // or the lob locator header cannot compatable with clients for 4.0
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Lob: oracle lob locator v2 with out extern segment", K(value), K(GET_MIN_CLUSTER_VERSION()));
+        } else if (!is_support_outrow_locator_v2) {
+          // convert to full extern temp lob locator
+          ObString inrow_data;
+          if (OB_FAIL(loc.get_inrow_data(inrow_data))) {
+            LOG_WARN("Lob: get inrow data failed", K(ret), K(loc));
+          } else {
+            value.set_string(value.get_type(), inrow_data.ptr(), inrow_data.length());
+            value.set_inrow();
+            if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(value, *allocator))) {
+              LOG_WARN("fail to convert temp lob locator", K(ret), K(value));
+            }
+          }
+        }
       } else {
         if (!is_support_outrow_locator_v2 && !loc.has_inrow_data()) {
           if (OB_FAIL(ObTextStringIter::append_outrow_lob_fulldata(value, session_info, *allocator))) {

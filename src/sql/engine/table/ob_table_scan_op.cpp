@@ -1517,10 +1517,6 @@ int ObTableScanOp::local_iter_rescan()
     for (; OB_SUCC(ret) && !task_iter.is_end(); ++task_iter) {
       ObDASScanOp *scan_op = DAS_SCAN_OP(*task_iter);
       if (MY_SPEC.gi_above_) {
-        ObTableScanParam &scan_param = scan_op->get_scan_param();
-        scan_op->set_tablet_id(MY_INPUT.tablet_loc_->tablet_id_);
-        scan_op->set_ls_id(MY_INPUT.tablet_loc_->ls_id_);
-        scan_op->set_tablet_loc(MY_INPUT.tablet_loc_);
         if (!MY_SPEC.is_index_global_ && MY_CTDEF.lookup_ctdef_ != nullptr) {
           //is local index lookup, need to set the lookup ctdef to the das scan op
           ObDASTableLoc *lookup_table_loc = tsc_rtdef_.lookup_rtdef_->table_loc_;
@@ -1563,7 +1559,11 @@ int ObTableScanOp::local_iter_reuse()
     ObDASScanOp *scan_op = DAS_SCAN_OP(*task_iter);
     bool need_switch_param = (scan_op->get_tablet_loc() != MY_INPUT.tablet_loc_ &&
                                 MY_INPUT.tablet_loc_ != nullptr);
-    scan_op->set_need_switch_param(need_switch_param);
+    if (MY_INPUT.tablet_loc_ != nullptr) {
+      scan_op->set_tablet_id(MY_INPUT.tablet_loc_->tablet_id_);
+      scan_op->set_ls_id(MY_INPUT.tablet_loc_->ls_id_);
+      scan_op->set_tablet_loc(MY_INPUT.tablet_loc_);
+    }
     scan_op->reuse_iter();
   }
   if (OB_FAIL(reuse_table_rescan_allocator())) {

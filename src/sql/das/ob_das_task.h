@@ -183,8 +183,6 @@ public:
   void set_can_part_retry(const bool flag) { can_part_retry_ = flag; }
   bool can_part_retry() const { return can_part_retry_; }
   bool is_in_retry() const { return in_part_retry_ || in_stmt_retry_; }
-  void set_need_switch_param(bool v) { need_switch_param_ = v; }
-  bool need_switch_param() const { return need_switch_param_; }
   void set_task_status(ObDasTaskStatus status);
   ObDasTaskStatus get_task_status() const { return task_status_; };
   const ObDasAggregatedTasks *get_agg_tasks() const { return agg_tasks_; };
@@ -223,7 +221,7 @@ protected:
       uint16_t task_started_     : 1;
       uint16_t in_part_retry_    : 1;
       uint16_t in_stmt_retry_    : 1;
-      uint16_t need_switch_param_ : 1; //need to switch param in gi table rescan
+      uint16_t need_switch_param_ : 1; //need to switch param in gi table rescan, this parameter has been deprecated
       uint16_t status_reserved_  : 12;
     };
   };

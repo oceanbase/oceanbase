@@ -116,6 +116,7 @@ public:
   static void set_compatibility_mode(CompatMode mode);
   static CompatMode get_compatibility_mode();
   static Worker& self();
+  static void set_worker_to_thread_local(Worker *worker);
 
 public:
   static __thread Worker *self_;
@@ -154,6 +155,12 @@ private:
 
 extern void *alloc_worker();
 extern void common_yield();
+
+inline void Worker::set_worker_to_thread_local(Worker *worker)
+{
+  self_ = worker;
+}
+
 inline Worker &Worker::self()
 {
   // wbuf won't been NULL.

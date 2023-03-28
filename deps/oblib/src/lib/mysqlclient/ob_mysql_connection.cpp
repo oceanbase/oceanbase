@@ -513,7 +513,7 @@ int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,
     LOG_ERROR("create result handler failed", K(ret));
   } else if (OB_FAIL(create_statement(read_ctx->stmt_, tenant_id, sql))) {
     LOG_WARN("create statement failed", KCSTRING(sql), K(ret));
-  } else if (OB_ISNULL(read_ctx->result_ = read_ctx->stmt_.execute_query())) {
+  } else if (OB_ISNULL(read_ctx->result_ = read_ctx->stmt_.execute_query(res.is_enable_use_result()))) {
     ret = get_last_error();
     const int ER_LOCK_WAIT_TIMEOUT = -1205;
     if (ER_LOCK_WAIT_TIMEOUT == ret) {

@@ -46,7 +46,7 @@ ObMySQLResultImpl::~ObMySQLResultImpl()
   // must call close() before destroy
 }
 
-int ObMySQLResultImpl::init()
+int ObMySQLResultImpl::init(bool enable_use_result)
 {
   int ret = OB_SUCCESS;
   int64_t field_count = 0;
@@ -55,18 +55,26 @@ int ObMySQLResultImpl::init()
   if (OB_ISNULL(stmt = stmt_.get_stmt_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt handler is null", K(ret));
-  } else if (OB_ISNULL(result_ = mysql_store_result(stmt))) {
-    ret = -mysql_errno(stmt_.get_conn_handler());
-    LOG_WARN("fail to store mysql result", "err_msg", mysql_error(stmt_.get_conn_handler()), K(ret));
-    if (OB_SUCC(ret)) {
-      // if we execute a ResultSet sql, but observer just return an ok packet(casued by bugs),
-      // we will arrive here.
-      ret = OB_ERR_SQL_CLIENT;
-      LOG_WARN("fail to store mysql result, but can not get mysql errno,"
-                     " maybe recieved an ok pkt, covert it to ob err", K(ret));
-    }
   } else {
-    result_column_count_ = static_cast<int>(mysql_num_fields(result_));
+    if (enable_use_result) {
+      result_ = mysql_use_result(stmt);
+      LOG_DEBUG("enabled mysql_use_result", K(enable_use_result), K(result_), K(mysql_get_client_version()), K(mysql_get_client_info()));
+    } else {
+      result_ = mysql_store_result(stmt);
+    }
+    if (OB_ISNULL(result_)) {
+      ret = -mysql_errno(stmt_.get_conn_handler());
+      LOG_WARN("fail to store mysql result", "err_msg", mysql_error(stmt_.get_conn_handler()), K(ret));
+      if (OB_SUCC(ret)) {
+        // if we execute a ResultSet sql, but observer just return an ok packet(casued by bugs),
+        // we will arrive here.
+        ret = OB_ERR_SQL_CLIENT;
+        LOG_WARN("fail to store mysql result, but can not get mysql errno,"
+                      " maybe recieved an ok pkt, covert it to ob err", K(ret));
+      }
+    } else {
+      result_column_count_ = static_cast<int>(mysql_num_fields(result_));
+    }
   }
 
   if (OB_SUCC(ret)) {

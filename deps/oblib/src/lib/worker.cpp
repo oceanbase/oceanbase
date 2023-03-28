@@ -58,15 +58,6 @@ Worker::Worker()
       disable_wait_(false)
 {
   worker_node_.get_data() = this;
-  if (OB_ISNULL(self_)) {
-    self_ = this;
-  } else {
-    // Ideally, there won't be worker creating when a routine, or
-    // thread, has a worker, i.e. self_ isn't null. Whereas ObThWorker
-    // which derived from Worker doesn't create instance on the same
-    // routine as it is. So we can't assert self_ is null when new
-    // Worker is initializing right now.
-  }
 }
 
 Worker::~Worker()

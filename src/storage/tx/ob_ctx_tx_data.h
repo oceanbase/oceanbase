@@ -38,7 +38,7 @@ public:
 
   bool is_read_only() const { return read_only_; }
   int insert_into_tx_table();
-  int recover_tx_data(const storage::ObTxData &tmp_tx_data);
+  int recover_tx_data(storage::ObTxDataGuard &rhs);
   int replace_tx_data(storage::ObTxData *tmp_tx_data);
   int deep_copy_tx_data_out(storage::ObTxDataGuard &tmp_tx_data_guard);
   int alloc_tmp_tx_data(storage::ObTxDataGuard &tmp_tx_data);
@@ -66,19 +66,13 @@ public:
   int commit_add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status);
   int add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status = NULL);
 
-  int get_tx_commit_data(const storage::ObTxCommitData *&tx_commit_data) const;
+  int get_tx_data(storage::ObTxDataGuard &tx_data_guard);
 
-  TO_STRING_KV(KP(ctx_mgr_), K(tx_data_guard_), K(tx_commit_data_), K(read_only_));
-public:
-  class Guard { // TODO(yunxing.cyx): remove it
-    friend class ObCtxTxData;
-    Guard(ObCtxTxData &host) : host_(host) { }
-    ObCtxTxData &host_;
-  public:
-    ~Guard() { }
-    int get_tx_data(const storage::ObTxData *&tx_data) const;
-  };
-  Guard get_tx_data() { return Guard(*this); }
+  // ATTENTION : use get_tx_data_ptr only if you can make sure the life cycle of ctx_tx_data is longer than your usage
+  int get_tx_data_ptr(storage::ObTxData *&tx_data_ptr);
+
+  TO_STRING_KV(KP(ctx_mgr_), K(tx_data_guard_), K(read_only_));
+
 public:
   //only for unittest
   void test_init(storage::ObTxData &tx_data, ObLSTxCtxMgr *ctx_mgr)
@@ -113,7 +107,6 @@ private:
 private:
   ObLSTxCtxMgr *ctx_mgr_;
   storage::ObTxDataGuard tx_data_guard_;
-  storage::ObTxCommitData tx_commit_data_;
   bool read_only_;
   // lock for tx_data_ pointer
   RWLock lock_;

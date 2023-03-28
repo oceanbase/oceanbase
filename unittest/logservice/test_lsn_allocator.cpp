@@ -63,7 +63,7 @@ constexpr int MAX_BUF_SIZE = 2 * 1024 * 1024;
 const int64_t LOG_LOG_CNT = 1000;
 int64_t log_size_array[LOG_LOG_CNT];
 
-LSNAllocator golbal_lsn_allocator;
+LSNAllocator global_lsn_allocator;
 
 void init_size_array()
 {
@@ -75,7 +75,7 @@ void init_size_array()
 void init_offset_allocator()
 {
   LSN start_lsn(0);
-  EXPECT_EQ(OB_SUCCESS, golbal_lsn_allocator.init(0, share::SCN::base_scn(), start_lsn));
+  EXPECT_EQ(OB_SUCCESS, global_lsn_allocator.init(0, share::SCN::base_scn(), start_lsn));
 }
 
 TEST_F(TestLSNAllocator, test_struct_field_value_upper_bound)
@@ -281,7 +281,9 @@ TEST_F(TestLSNAllocator, test_lsn_allocator_truncate)
 TEST_F(TestLSNAllocator, test_alloc_offset_single_thread)
 {
   init_size_array();
-  init_offset_allocator();
+  LSNAllocator lsn_allocator;
+  LSN start_lsn(0);
+  EXPECT_EQ(OB_SUCCESS, lsn_allocator.init(0, share::SCN::base_scn(), start_lsn));
 
   int64_t avg_cost = 0;
   int64_t ROUND = 1;
@@ -301,7 +303,7 @@ TEST_F(TestLSNAllocator, test_alloc_offset_single_thread)
       bool need_gen_padding_entry = false;
       int64_t padding_len = 0;
 
-      EXPECT_EQ(OB_SUCCESS, golbal_lsn_allocator.alloc_lsn_scn(b_scn, size, log_id_upper_bound, lsn_upper_bound, ret_offset, ret_log_id, ret_scn,
+      EXPECT_EQ(OB_SUCCESS, lsn_allocator.alloc_lsn_scn(b_scn, size, log_id_upper_bound, lsn_upper_bound, ret_offset, ret_log_id, ret_scn,
             is_new_log, need_gen_padding_entry, padding_len));
     }
     int64_t cost = ObTimeUtility::current_time_ns() - begin_ts;
@@ -353,7 +355,7 @@ public:
     const int64_t begin_ts = ObTimeUtility::current_time_ns();
     for (int i = 0; i < 1000; i++) {
 //      size = log_size_array[i % LOG_LOG_CNT];
-      EXPECT_EQ(OB_SUCCESS, golbal_lsn_allocator.alloc_lsn_scn(scn, size, log_id_upper_bound, lsn_upper_bound, ret_offset, ret_log_id, ret_scn,
+      EXPECT_EQ(OB_SUCCESS, global_lsn_allocator.alloc_lsn_scn(scn, size, log_id_upper_bound, lsn_upper_bound, ret_offset, ret_log_id, ret_scn,
             is_new_log, need_gen_padding_entry, padding_len));
     }
     int64_t cost = ObTimeUtility::current_time_ns() - begin_ts;
@@ -371,6 +373,7 @@ public:
 TEST_F(TestLSNAllocator, test_alloc_offset_multi_thread)
 {
   init_size_array();
+  init_offset_allocator();
   const int64_t THREAD_CNT = 128;
   TestThread threads[THREAD_CNT];
   for (int tidx = 0; tidx < THREAD_CNT; ++tidx) {

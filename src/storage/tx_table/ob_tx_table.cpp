@@ -688,7 +688,7 @@ int ObTxTable::restore_tx_ctx_table_(ObITable &trans_sstable)
         if (OB_ITER_END != ret) {
           LOG_WARN("failed to get next row", K(ret));
         }
-      } else if (OB_FAIL(tx_ctx_table_.recover(*row, *tx_data_table_.get_slice_allocator()))) {
+      } else if (OB_FAIL(tx_ctx_table_.recover(*row, tx_data_table_))) {
         LOG_WARN("failed to recover tx ctx table", K(ret));
       }
     }

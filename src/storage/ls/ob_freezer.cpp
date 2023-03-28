@@ -601,6 +601,7 @@ int ObFreezer::tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result)
 int ObFreezer::freeze_normal_tablet_(const ObTabletID &tablet_id, ObFuture<int> *result)
 {
   int ret = OB_SUCCESS;
+  share::ObLSID ls_id = get_ls_id();
   ObTabletHandle handle;
   ObTablet *tablet = nullptr;
   ObTabletMemtableMgr *memtable_mgr = nullptr;

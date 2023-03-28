@@ -1195,6 +1195,8 @@ public:
 
   int extract_non_const_exprs(const ObIArray<ObRawExpr*> &input_exprs,
                               ObIArray<ObRawExpr*> &non_const_exprs);
+  int force_pushdown_exprs(ObAllocExprContext &ctx);
+  int get_pushdown_producer_id(uint64_t &producer_id);
 
   int extract_shared_exprs(const ObIArray<ObRawExpr*> &exprs,
                            ObAllocExprContext &ctx,

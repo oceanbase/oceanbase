@@ -85,6 +85,8 @@ public:
     int close();
     void reset();
     void reuse();
+    void set_enable_use_result(bool val) { enable_use_result_ = val; }
+    bool is_enable_use_result() { return enable_use_result_; }
 
     template <typename T, typename... Args>
     int create_handler(T *&res, Args &... args)
@@ -100,6 +102,7 @@ public:
   private:
     sqlclient::ObISQLResultHandler *result_handler_;
     char buf_[BUF_SIZE];
+    bool enable_use_result_; // only dblink set will it to true, in order to use mysql_use_result()
   };
 
   bool is_active() const { return active_; }

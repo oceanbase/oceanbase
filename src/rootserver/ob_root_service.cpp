@@ -4733,40 +4733,6 @@ int ObRootService::refresh_config()
   return ret;
 }
 
-int ObRootService::wait_refresh_config()
-{
-  int ret = OB_SUCCESS;
-  int64_t lastest_config_version = 0;
-  const int64_t retry_time_limit = 3;
-  int64_t retry_time = 0;
-  const int64_t sleep_us = 1000 * 1000LL;// 1s
-
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(zone_manager_.get_config_version(lastest_config_version))) {
-    LOG_WARN("get_config_version failed", K(ret));
-  } else {
-    while (OB_SUCC(ret)) {
-      const int64_t current_version = config_mgr_->get_current_version();
-      ++retry_time;
-      if (current_version >= lastest_config_version) {
-        break;
-      } else if (retry_time > retry_time_limit) {
-        ret = OB_CONFIG_NOT_SYNC;
-        LOG_ERROR("failed to wait refresh config, config version is too old",
-            K(ret), K(retry_time), K(retry_time_limit), K(lastest_config_version), K(current_version));
-      } else {
-        LOG_INFO("config version too old, retry after 1s",
-            K(retry_time), K(retry_time_limit), K(lastest_config_version), K(current_version));
-        ob_usleep(sleep_us);
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObRootService::root_minor_freeze(const ObRootMinorFreezeArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -9490,8 +9456,6 @@ int ObRootService::handle_archive_log(const obrpc::ObArchiveLogArg &arg)
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(wait_refresh_config())) {
-    LOG_WARN("failed to wait refresh config", K(ret));
   } else if (arg.enable_ && OB_FAIL(archive_service_.open_archive_mode(arg.tenant_id_, arg.archive_tenant_ids_))) {
     LOG_WARN("failed to open archive mode", K(ret), K(arg));
   } else if (!arg.enable_ && OB_FAIL(archive_service_.close_archive_mode(arg.tenant_id_, arg.archive_tenant_ids_))) {
@@ -9507,9 +9471,7 @@ int ObRootService::handle_backup_database(const obrpc::ObBackupDatabaseArg &in_a
 	if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(wait_refresh_config())) {
-    LOG_WARN("failed to wait_refresh_schema", K(ret));
-	} else if (OB_FAIL(backup_service_.handle_backup_database(in_arg))) {
+  } else if (OB_FAIL(backup_service_.handle_backup_database(in_arg))) {
     LOG_WARN("failed to handle backup database", K(ret), K(in_arg));
   }
   FLOG_INFO("handle_backup_database", K(ret), K(in_arg));
@@ -9625,9 +9587,7 @@ int ObRootService::handle_backup_delete(const obrpc::ObBackupCleanArg &arg)
 	if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(wait_refresh_config())) {
-    LOG_WARN("failed to wait_refresh_schema", K(ret));
-	} else if (OB_FAIL(backup_service_.handle_backup_delete(arg))) {
+  } else if (OB_FAIL(backup_service_.handle_backup_delete(arg))) {
     LOG_WARN("failed to handle backup delete", K(ret), K(arg));
   }
   return ret;
@@ -9729,8 +9689,6 @@ int ObRootService::handle_cancel_all_backup_force(const obrpc::ObBackupManageArg
   ROOTSERVICE_EVENT_ADD("root_service", "force_cancel_backup", "result", ret, K_(self_addr));
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(wait_refresh_config())) {
-    LOG_WARN("failed to wait refresh schema", K(ret), K(arg));
   } else if (OB_FAIL(backup_lease_service_.force_cancel(arg.tenant_id_))) {
     LOG_WARN("failed to force stop", K(ret), K(arg));
   }

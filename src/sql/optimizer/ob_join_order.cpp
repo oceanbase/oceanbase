@@ -8430,33 +8430,32 @@ int ObJoinOrder::set_nl_filters(JoinPath *join_path,
   if (OB_ISNULL(join_path) || OB_ISNULL(right_path)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(join_path), K(right_path), K(ret));
+  } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type)) {
+    if (OB_FAIL(append_array_no_dup(join_path->filter_, where_conditions))) {
+      LOG_WARN("failed to append conditions", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < on_conditions.count(); ++i) {
+      if (right_path->is_inner_path() && //如果是条件下降的NL
+          ObOptimizerUtil::find_item(right_path->pushdown_filters_, on_conditions.at(i))) {
+         /*do nothing*/
+      } else if (OB_FAIL(join_path->other_join_conditions_.push_back(on_conditions.at(i)))) { //未下降的nl条件
+        LOG_WARN("failed to push back conditions", K(ret));
+      }
+    }
   } else {
-    //首先处理where条件
+    if (OB_FAIL(append_array_no_dup(join_path->other_join_conditions_, on_conditions))) {
+      LOG_WARN("failed to append conditions", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < where_conditions.count(); ++i) {
       //只有能在本级处理的qual才能放在join条件里，处理AB时，遇到a+b=c条件是不能放在本级join条件里的
       if (OB_ISNULL(where_conditions.at(i))) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("raw expr is null", K(ret));
-      } else if (where_conditions.at(i)->get_relation_ids().is_subset(get_tables())) {
-        if (right_path->is_inner_path() && //如果是条件下降的NL
-            ObOptimizerUtil::find_item(right_path->pushdown_filters_, where_conditions.at(i))) {
+      } else if (right_path->is_inner_path() && //如果是条件下降的NL
+                 ObOptimizerUtil::find_item(right_path->pushdown_filters_, where_conditions.at(i))) {
           /*do nothing*/
-        } else { //未下降的nl条件
-          if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type)) { //如果是外连接，where条件只能作为普通的filter
-            ret = join_path->filter_.push_back(where_conditions.at(i));
-          } else { //如果不是外连接，where条件只能作为join filter
-            ret = join_path->other_join_conditions_.push_back(where_conditions.at(i));
-          }
-        }
-      } else { /*不能在本级join中处理的qual跳过*/ }
-    }
-    //处理on条件（这时是在处理OJ）
-    for (int64_t i = 0; OB_SUCC(ret) && i < on_conditions.count(); ++i) {
-      if (right_path->is_inner_path() && //如果是条件下降的NL
-          ObOptimizerUtil::find_item(right_path->pushdown_filters_, on_conditions.at(i))) {
-         /*do nothing*/
-      } else { //未下降的nl条件
-        ret = join_path->other_join_conditions_.push_back(on_conditions.at(i));//on条件必须放在join层
+      } else if (OB_FAIL(join_path->other_join_conditions_.push_back(where_conditions.at(i)))) { //未下降的nl条件
+        LOG_WARN("failed to push back conditions", K(ret));
       }
     }
   }

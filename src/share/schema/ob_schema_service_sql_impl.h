@@ -866,15 +866,7 @@ private:
                            const int64_t schema_version,
                            common::ObISQLClient &sql_client,
                            ObTablegroupSchema *&tablegroup_schema);
-  int fetch_desc_table(uint64_t dblink_id,
-                       common::sqlclient::DblinkDriverProto &link_type,
-                       const ObString &database_name,
-                       const ObString &table_name,
-                       const common::sqlclient::dblink_param_ctx &param_ctx,
-                       sql::ObSQLSessionInfo *session_info,
-                       ObIAllocator &alloctor,
-                       int64_t row_idx,
-                       int32_t &length);
+
   template<typename T>
   int fetch_link_table_info(uint64_t tenant_id,
                             uint64_t dblink_id,

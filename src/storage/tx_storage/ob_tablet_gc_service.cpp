@@ -76,9 +76,9 @@ int ObTabletGCService::start()
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
   } else if (OB_FAIL(timer_for_tablet_gc_.init())) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
-  } else if (OB_FAIL(timer_for_tablet_change_.schedule(tablet_gc_task_, GC_CHECK_INTERVAL, true))) {
+  } else if (OB_FAIL(timer_for_tablet_change_.schedule(tablet_change_task_, GC_CHECK_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule task", KR(ret));
-  } else if (OB_FAIL(timer_for_tablet_gc_.schedule(tablet_change_task_, GC_CHECK_DELETE_INTERVAL, true))) {
+  } else if (OB_FAIL(timer_for_tablet_gc_.schedule(tablet_gc_task_, GC_CHECK_DELETE_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule task", KR(ret));
   }
   return ret;
@@ -170,7 +170,7 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
             STORAGE_LOG(WARN, "decide_max_decided_scn failed", KR(ret), K(freezer->get_ls_id()));
           } else if (!checkpoint_scn.is_valid()
                      || SCN::min_scn() == checkpoint_scn
-                     || checkpoint_scn <= ls->get_tablet_change_checkpoint_scn()) {
+                     || checkpoint_scn < ls->get_tablet_change_checkpoint_scn()) {
             STORAGE_LOG(INFO, "no any log callback and no need to update clog checkpoint",
               K(freezer->get_ls_id()), K(checkpoint_scn), KPC(ls), K(ls->get_ls_meta()));
           }
@@ -190,7 +190,8 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
             STORAGE_LOG(WARN, "failed to flush_unpersist_tablet_ids", KPC(ls), KR(ret), K(unpersist_tablet_ids));
           }
           // 5. update tablet_change_checkpoint in log meta
-          else if (OB_FAIL(ls->set_tablet_change_checkpoint_scn(checkpoint_scn))) {
+          else if (checkpoint_scn > ls->get_tablet_change_checkpoint_scn()
+                   && OB_FAIL(ls->set_tablet_change_checkpoint_scn(checkpoint_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set_tablet_change_checkpoint_scn", KPC(ls), KR(ret), K(checkpoint_scn));
           }
