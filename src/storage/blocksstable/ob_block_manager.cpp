@@ -751,7 +751,7 @@ int ObBlockManager::dec_disk_ref(const MacroBlockId &macro_id)
   return ret;
 }
 
-int ObBlockManager::update_write_time(const MacroBlockId &macro_id)
+int ObBlockManager::update_write_time(const MacroBlockId &macro_id, const bool update_to_max_time)
 {
   int ret = OB_SUCCESS;
   BlockInfo block_info;
@@ -766,7 +766,7 @@ int ObBlockManager::update_write_time(const MacroBlockId &macro_id)
     if (OB_FAIL(block_map_.get(macro_id, block_info))) {
       LOG_WARN("get block_info fail", K(ret), K(macro_id));
     } else {
-      block_info.last_write_time_ = ObTimeUtility::fast_current_time();
+      block_info.last_write_time_ = update_to_max_time ? INT64_MAX : ObTimeUtility::fast_current_time();
       if (OB_FAIL(block_map_.insert_or_update(macro_id, block_info))) {
         LOG_WARN("update block info fail", K(ret), K(macro_id), K(block_info));
       }

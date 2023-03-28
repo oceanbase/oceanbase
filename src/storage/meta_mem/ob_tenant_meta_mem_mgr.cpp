@@ -1823,6 +1823,8 @@ int ObTenantTabletPtrWithInMemObjIterator::get_next_tablet_pointer(
           if (OB_ENTRY_NOT_EXIST != ret){
             LOG_WARN("fail to get in memory tablet handle", K(ret), K(key));
           }
+        } else if (success) {
+          in_memory_tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
         }
         if (OB_SUCC(ret) || ignore_err_code(ret)) {
           ++idx_;

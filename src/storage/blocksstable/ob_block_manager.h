@@ -215,7 +215,9 @@ public:
   int dec_ref(const MacroBlockId &macro_id);
   int inc_disk_ref(const MacroBlockId &macro_id);
   int dec_disk_ref(const MacroBlockId &macro_id);
-  int update_write_time(const MacroBlockId &macro_id);
+  // If update_to_max_time is true, it means modify the last_write_time_ of the block to max,
+  // which is used to skip the bad block inspection.
+  int update_write_time(const MacroBlockId &macro_id, const bool update_to_max_time = false);
 
   // mark and sweep
   int get_marker_status(ObMacroBlockMarkerStatus &status);
