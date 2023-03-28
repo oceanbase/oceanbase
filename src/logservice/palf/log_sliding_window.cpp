@@ -2888,8 +2888,7 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
       if (OB_SUCC(ret)) {
         int64_t min_log_ts_ns = OB_INVALID_TIMESTAMP;
         if (log_task->is_valid()) {
-          if (group_entry_header.get_log_proposal_id() != log_task->get_proposal_id()
-              || lsn != log_task->get_begin_lsn()
+          if (lsn != log_task->get_begin_lsn()
               || group_entry_header.get_max_timestamp() != log_task->get_max_log_ts()
               || group_entry_header.get_accum_checksum() != log_task->get_accum_checksum()) {
             ret = OB_ERR_UNEXPECTED;

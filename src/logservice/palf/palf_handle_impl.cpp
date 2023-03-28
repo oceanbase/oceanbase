@@ -2559,10 +2559,12 @@ int PalfHandleImpl::submit_group_log(const PalfAppendOptions &opts,
           if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
             PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(opts), K(lsn));
           }
-        } else if (!state_mgr_.can_raw_write()) {
+        } else if (!state_mgr_.can_raw_write(opts.proposal_id, opts.need_check_proposal_id)) {
           ret = OB_NOT_MASTER;
           PALF_LOG(WARN, "cannot submit_group_log", K(ret), K_(self), K_(palf_id), KP(buf), K(buf_len),
-              "role", state_mgr_.get_role(), "state", state_mgr_.get_state(), K(opts));
+              "role", state_mgr_.get_role(), "state", state_mgr_.get_state(),
+              "current proposal_id", state_mgr_.get_proposal_id(),
+              "mode_mgr can_raw_write", mode_mgr_.can_raw_write(), K(opts));
         } else if (OB_FAIL(sw_.submit_group_log(lsn, buf, buf_len))) {
           PALF_LOG(WARN, "submit_group_log failed", K(ret), K_(palf_id), K_(self), KP(buf), K(buf_len));
         } else {
