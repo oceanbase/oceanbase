@@ -11700,6 +11700,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 
 # 15291: __all_virtual_backup_transferring_tablets
 # 15292: __all_virtual_external_table_file
+# 15293: __all_data_dictionary_in_log
 
 ################################################################################
 # System View (20000,30000]
@@ -25612,6 +25613,8 @@ def_table_schema(
 # 21371: V$OB_TABLET_STATS
 # 21372: CDB_OB_ACCESS_POINT
 # 21373: DBA_OB_ACCESS_POINT
+# 21374: CDB_OB_DATA_DICTIONARY_IN_LOG
+# 21375: DBA_OB_DATA_DICTIONARY_IN_LOG
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -48455,6 +48458,7 @@ def_table_schema(
 # 28179:  GV$OB_LOCKS
 # 28180:  V$OB_LOCKS
 # 28181:  DBA_OB_ACCESS_POINT
+# 28182:  DBA_OB_DATA_DICTIONARY_IN_LOG
 
 ################################################################################
 # Lob Table (50000, 70000)
