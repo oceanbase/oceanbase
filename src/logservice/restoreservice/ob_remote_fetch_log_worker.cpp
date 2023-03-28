@@ -337,7 +337,7 @@ int ObRemoteFetchWorker::submit_entries_(ObFetchLogTask &task)
   const char *buf = NULL;
   int64_t size = 0;
   LSN lsn;
-  const ObLSID &id = task.id_;
+  const ObLSID id = task.id_;
   while (OB_SUCC(ret) && ! has_set_stop()) {
     bool quota_done = false;
     if (OB_FAIL(task.iter_.next(entry, lsn, buf, size))) {
@@ -447,7 +447,7 @@ int ObRemoteFetchWorker::try_retire_(ObFetchLogTask *&task)
 int ObRemoteFetchWorker::push_submit_array_(ObFetchLogTask &task)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = task.id_;
+  const ObLSID id = task.id_;
   DEBUG_SYNC(BEFORE_RESTORE_SERVICE_PUSH_FETCH_DATA);
   GET_RESTORE_HANDLER_CTX(id) {
     if (OB_FAIL(restore_handler->submit_sorted_task(task))) {
