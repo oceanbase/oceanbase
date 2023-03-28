@@ -1240,6 +1240,7 @@ void ObLogInstance::mark_stop_flag()
     formatter_->mark_stop_flag();
     storager_->mark_stop_flag();
     reader_->mark_stop_flag();
+    store_service_->mark_stop_flag();
     trans_msg_sorter_->mark_stop_flag();
     committer_->mark_stop_flag();
     resource_collector_->mark_stop_flag();

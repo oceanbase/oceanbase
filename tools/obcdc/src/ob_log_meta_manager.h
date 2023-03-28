@@ -296,6 +296,9 @@ private:
       const char *table_name,
       const int64_t non_hidden_column_cnt,
       TableSchemaInfo &tb_schema_info);
+  int try_erase_table_schema_(
+      const uint64_t table_id,
+      const int64_t version);
 
 private:
   bool                  inited_;

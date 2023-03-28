@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX OBLOG_STORAGER
 
 #include "ob_log_rocksdb_store_service.h"
 #include "ob_log_utils.h"
@@ -28,6 +28,7 @@ namespace liboblog
 RocksDbStoreService::RocksDbStoreService()
 {
   is_inited_ = false;
+  is_stopped_ = true;
   m_db_ = NULL;
   m_db_path_.clear();
 }
@@ -71,6 +72,7 @@ int RocksDbStoreService::init(const std::string &path)
       ret = OB_ERR_UNEXPECTED;
     } else {
       _LOG_INFO("RocksDbStoreService init success, path:%s, total_threads=%d", m_db_path_.c_str(), total_threads);
+      is_stopped_ = false;
       is_inited_ = true;
     }
 
@@ -84,6 +86,10 @@ int RocksDbStoreService::close()
   int ret = OB_SUCCESS;
 
   if (NULL != m_db_) {
+    LOG_INFO("closing rocksdb ...");
+    mark_stop_flag();
+    usleep(100 * _MSEC_);
+
     rocksdb::Status status = m_db_->Close();
 
     if (! status.ok()) {
@@ -125,6 +131,7 @@ int RocksDbStoreService::init_dir_(const char *dir_path)
 void RocksDbStoreService::destroy()
 {
   if (is_inited_) {
+    LOG_INFO("rocksdb service destroy begin");
     close();
 
     if (OB_NOT_NULL(m_db_)) {
@@ -132,6 +139,7 @@ void RocksDbStoreService::destroy()
       m_db_ = NULL;
     }
     is_inited_ = false;
+    LOG_INFO("rocksdb service destroy end");
   }
 }
 
@@ -141,13 +149,19 @@ int RocksDbStoreService::put(const std::string &key, const ObSlice &value)
   rocksdb::WriteOptions writer_options;
   writer_options.disableWAL = true;
 
-  // find column family handle for cf
-  rocksdb::Status s = m_db_->Put(writer_options, rocksdb::Slice(key.c_str(), key.size()),
-      rocksdb::Slice(value.buf_, value.buf_len_));
+  if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+  } else {
+    // find column family handle for cf
+    rocksdb::Status s = m_db_->Put(
+        writer_options,
+        rocksdb::Slice(key.c_str(), key.size()),
+        rocksdb::Slice(value.buf_, value.buf_len_));
 
-  if (!s.ok()) {
-    _LOG_ERROR("RocksDbStoreService put value into rocksdb failed, error %s", s.ToString().c_str());
-    ret = OB_ERR_UNEXPECTED;
+    if (!s.ok()) {
+      _LOG_ERROR("RocksDbStoreService put value into rocksdb failed, error %s", s.ToString().c_str());
+      ret = OB_ERR_UNEXPECTED;
+    }
   }
 
   return ret;
@@ -163,6 +177,8 @@ int RocksDbStoreService::put(void *cf_handle, const std::string &key, const ObSl
   if (OB_ISNULL(column_family_handle)) {
     LOG_ERROR("column_family_handle is NULL");
     ret = OB_ERR_UNEXPECTED;
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
   } else {
     rocksdb::Status s = m_db_->Put(writer_options, column_family_handle, rocksdb::Slice(key),
         rocksdb::Slice(value.buf_, value.buf_len_));
@@ -191,15 +207,28 @@ int RocksDbStoreService::batch_write(void *cf_handle,
   } else {
     rocksdb::WriteBatch batch;
 
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < keys.size(); ++idx) {
-      batch.Put(column_family_handle, rocksdb::Slice(keys[idx]), rocksdb::Slice(values[idx].buf_, values[idx].buf_len_));
+    for (int64_t idx = 0; OB_SUCC(ret) && !is_stopped() && idx < keys.size(); ++idx) {
+      rocksdb::Status s = batch.Put(
+          column_family_handle,
+          rocksdb::Slice(keys[idx]),
+          rocksdb::Slice(values[idx].buf_, values[idx].buf_len_));
+      if (!s.ok()) {
+        ret = OB_IO_ERROR;
+        _LOG_ERROR("RocksDbStoreService build batch failed, error %s", s.ToString().c_str());
+      }
     }
 
-    rocksdb::Status s = m_db_->Write(writer_options, &batch);
+    if (OB_SUCC(ret) && !is_stopped()) {
+      rocksdb::Status s = m_db_->Write(writer_options, &batch);
 
-    if (!s.ok()) {
-      _LOG_ERROR("RocksDbStoreService WriteBatch put value into rocksdb failed, error %s", s.ToString().c_str());
-      ret = OB_IO_ERROR;
+      if (!s.ok()) {
+        _LOG_ERROR("RocksDbStoreService WriteBatch put value into rocksdb failed, error %s", s.ToString().c_str());
+        ret = OB_IO_ERROR;
+      }
+    }
+
+    if (is_stopped()) {
+      ret = OB_IN_STOP_STATE;
     }
   }
 
@@ -209,13 +238,18 @@ int RocksDbStoreService::batch_write(void *cf_handle,
 int RocksDbStoreService::get(const std::string &key, std::string &value)
 {
   int ret = OB_SUCCESS;
-  //rocksdb::PinnableSlice slice(&value);
-  rocksdb::Status s = m_db_->Get(rocksdb::ReadOptions(), key, &value);
 
-  if (!s.ok()) {
-    _LOG_ERROR("RocksDbStoreService get value from rocksdb failed, error %s, key:%s",
-        s.ToString().c_str(), key.c_str());
-    ret = OB_ERR_UNEXPECTED;
+  if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+  } else {
+    //rocksdb::PinnableSlice slice(&value);
+    rocksdb::Status s = m_db_->Get(rocksdb::ReadOptions(), key, &value);
+
+    if (!s.ok()) {
+      _LOG_ERROR("RocksDbStoreService get value from rocksdb failed, error %s, key:%s",
+          s.ToString().c_str(), key.c_str());
+      ret = OB_ERR_UNEXPECTED;
+    }
   }
 
   return ret;
@@ -229,6 +263,8 @@ int RocksDbStoreService::get(void *cf_handle, const std::string &key, std::strin
   if (OB_ISNULL(column_family_handle)) {
     LOG_ERROR("column_family_handle is NULL");
     ret = OB_ERR_UNEXPECTED;
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
   } else {
     rocksdb::Status s = m_db_->Get(rocksdb::ReadOptions(), column_family_handle, key, &value);
 
@@ -245,11 +281,16 @@ int RocksDbStoreService::get(void *cf_handle, const std::string &key, std::strin
 int RocksDbStoreService::del(const std::string &key)
 {
   int ret = OB_SUCCESS;
-  // find column family handle for cf
-  rocksdb::Status s = m_db_->Delete(rocksdb::WriteOptions(), key);
-  if (!s.ok()) {
-    LOG_ERROR("delete %s from rocksdb failed, error %s", key.c_str(), s.ToString().c_str());
-    ret = OB_ERR_UNEXPECTED;
+
+  if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+  } else {
+    // find column family handle for cf
+    rocksdb::Status s = m_db_->Delete(rocksdb::WriteOptions(), key);
+    if (!s.ok()) {
+      ret = OB_IO_ERROR;
+      _LOG_ERROR("delete %s from rocksdb failed, error %s", key.c_str(), s.ToString().c_str());
+    }
   }
 
   return ret;
@@ -261,8 +302,10 @@ int RocksDbStoreService::del(void *cf_handle, const std::string &key)
   rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
 
   if (OB_ISNULL(column_family_handle)) {
-    LOG_ERROR("column_family_handle is NULL");
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("column_family_handle is NULL", KR(ret));
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
   } else {
     rocksdb::Status s = m_db_->Delete(rocksdb::WriteOptions(), column_family_handle, key);
 
@@ -283,6 +326,8 @@ int RocksDbStoreService::del_range(void *cf_handle, const std::string &begin_key
   if (OB_ISNULL(column_family_handle)) {
     LOG_ERROR("column_family_handle is NULL");
     ret = OB_ERR_UNEXPECTED;
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
   } else {
     rocksdb::Status s = m_db_->DeleteRange(rocksdb::WriteOptions(), column_family_handle,
         begin_key, end_key);
@@ -319,16 +364,20 @@ int RocksDbStoreService::create_column_family(const std::string& column_family_n
   // Column Family's default memtable size is 64M, when the maximum limit is exceeded, memtable -> immutable memtable, increase write_buffer_size, can reduce write amplification
   cf_options.write_buffer_size = rocksdb_write_buffer_size << 20;
 
-  rocksdb::Status status = m_db_->CreateColumnFamily(cf_options, column_family_name, &column_family_handle);
-
-  if (! status.ok()) {
-    _LOG_ERROR("rocksdb CreateColumnFamily [%s] failed, error %s", column_family_name.c_str(), status.ToString().c_str());
-    ret = OB_ERR_UNEXPECTED;
+  if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
   } else {
-    cf_handle = reinterpret_cast<void *>(column_family_handle);
+    rocksdb::Status status = m_db_->CreateColumnFamily(cf_options, column_family_name, &column_family_handle);
 
-    LOG_INFO("rocksdb CreateColumnFamily succ", "column_family_name", column_family_name.c_str(),
-        K(column_family_handle), K(cf_handle), K(rocksdb_write_buffer_size));
+    if (! status.ok()) {
+      _LOG_ERROR("rocksdb CreateColumnFamily [%s] failed, error %s", column_family_name.c_str(), status.ToString().c_str());
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      cf_handle = reinterpret_cast<void *>(column_family_handle);
+
+      LOG_INFO("rocksdb CreateColumnFamily succ", "column_family_name", column_family_name.c_str(),
+          K(column_family_handle), K(cf_handle), K(rocksdb_write_buffer_size));
+    }
   }
 
   return ret;
@@ -342,6 +391,8 @@ int RocksDbStoreService::drop_column_family(void *cf_handle)
   if (OB_ISNULL(column_family_handle)) {
     LOG_ERROR("column_family_handle is NULL");
     ret = OB_INVALID_ARGUMENT;
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
   } else {
     rocksdb::Status status = m_db_->DropColumnFamily(column_family_handle);
 
@@ -364,6 +415,8 @@ int RocksDbStoreService::destory_column_family(void *cf_handle)
   if (OB_ISNULL(column_family_handle)) {
     LOG_ERROR("column_family_handle is NULL");
     ret = OB_INVALID_ARGUMENT;
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
   } else {
     rocksdb::Status status = m_db_->DestroyColumnFamilyHandle(column_family_handle);
 
@@ -387,7 +440,7 @@ void RocksDbStoreService::get_mem_usage(const std::vector<uint64_t> ids,
   int64_t total_table_readers_usage = 0;
   int64_t total_block_cache_pinned_usage = 0;
 
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < cf_handles.size(); ++idx) {
+  for (int64_t idx = 0; OB_SUCC(ret) && !is_stopped() && idx < cf_handles.size(); ++idx) {
     rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handles[idx]);
 
     if (OB_ISNULL(column_family_handle)) {
