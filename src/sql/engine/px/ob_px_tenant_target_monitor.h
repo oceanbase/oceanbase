@@ -130,7 +130,12 @@ public:
   int update_peer_target_used(const ObAddr &server, int64_t peer_used);
   int rollback_local_report_target_used(const ObAddr &server, int64_t local_report);
   int get_global_target_usage(const hash::ObHashMap<ObAddr, ServerTargetUsage> *&global_target_usage);
-  int reset_statistics(uint64_t version);
+  // if role is follower and find that its version is different with leader's
+  // call this function to reset statistics, the param version is from the leader.
+  int reset_follower_statistics(uint64_t version);
+  // if role is leader and wants to start a new round of statistics, call this function.
+  // A new version is generated in this function and will be sync to all followers later.
+  int reset_leader_statistics();
 
   // for px_admission
   int apply_target(hash::ObHashMap<ObAddr, int64_t> &worker_map,
@@ -140,6 +145,7 @@ public:
 
   // for virtual_table iter
   int get_all_target_info(common::ObIArray<ObPxTargetInfo> &target_info_array);
+  static uint64_t get_server_id(uint64_t version);
 
   TO_STRING_KV(K_(is_init), K_(tenant_id), K_(server), K_(dummy_cache_leader), K_(role));
 
@@ -149,8 +155,10 @@ private:
   int get_role(ObRole &role);
   int refresh_dummy_location();
   int query_statistics(ObAddr &leader);
+  uint64_t get_new_version();
 
 private:
+  static const int64_t SERVER_ID_SHIFT = 48;
   bool is_init_;
   uint64_t tenant_id_;
   ObAddr server_;
@@ -166,6 +174,7 @@ private:
   int64_t parallel_session_count_;
   ObPxTargetCond target_cond_;
   bool print_debug_log_;
+  bool need_send_refresh_all_;
 };
 
 }
