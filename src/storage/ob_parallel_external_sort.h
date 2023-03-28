@@ -1859,7 +1859,7 @@ int ObExternalSort<T, Compare>::get_next_item(const T *&item)
   if (OB_SUCC(ret)) {
     get_count_++;
   }
-  if (common::OB_ITER_END == ret && add_count_ != get_count_) {
+  if (common::OB_ITER_END == ret && is_sorted_ && add_count_ != get_count_) {
     ret = common::OB_ERR_SYS;
     STORAGE_LOG(WARN, "add count not match get count", K(ret), K_(add_count), K_(get_count));
   }
