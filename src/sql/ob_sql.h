@@ -274,7 +274,8 @@ private:
   int transform_stmt_with_outline(ObPlanCacheCtx& pc_ctx, ObOutlineState& outline_state, common::ObString& rewrite_sql);
   int get_outline_info(ObPlanCacheCtx& pc_ctx, const ObString& outline_key,
       const share::schema::ObOutlineInfo*& outline_info, bool& outline_with_sql_id);
-  int handle_large_query(int tmp_ret, ObResultSet& result, bool& need_disconnect, ObExecContext& exec_ctx);
+  int handle_large_query(
+      int tmp_ret, ObResultSet &result, bool &need_disconnect, ObSqlCtx &context, ObExecContext &exec_ctx);
   int handle_parallel_query(ObResultSet& result, bool& need_disconnect);
   int pc_get_plan_and_fill_result(
       ObPlanCacheCtx& pc_ctx, ObResultSet& result_set, int& get_plan_err, bool& need_disconnect);

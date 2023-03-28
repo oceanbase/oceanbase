@@ -1219,7 +1219,7 @@ inline int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, ObR
   }
 
   int tmp_ret = ret;
-  if (OB_FAIL(handle_large_query(tmp_ret, result, ectx.get_need_disconnect_for_update(), ectx))) {
+  if (OB_FAIL(handle_large_query(tmp_ret, result, ectx.get_need_disconnect_for_update(), context, ectx))) {
     // do nothing
   }
 
@@ -1251,10 +1251,15 @@ inline int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, ObR
   return ret;
 }
 
-int ObSql::handle_large_query(int tmp_ret, ObResultSet &result, bool &need_disconnect, ObExecContext &exec_ctx)
+int ObSql::handle_large_query(
+    int tmp_ret, ObResultSet &result, bool &need_disconnect, ObSqlCtx &context, ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
-  if (tmp_ret != OB_SUCCESS && tmp_ret != OB_PC_LOCK_CONFLICT) {
+
+  if (context.multi_stmt_item_.get_seq_num() > 0) {
+    /* not first item of a multi stmt, can not be checked as large query */
+    ret = tmp_ret;
+  } else if (tmp_ret != OB_SUCCESS && tmp_ret != OB_PC_LOCK_CONFLICT) {
     ret = tmp_ret;
   } else if (result.get_session().is_inner() || !ObStmt::is_dml_stmt(result.get_stmt_type())) {
     ret = (tmp_ret == OB_PC_LOCK_CONFLICT) ? OB_SUCCESS : tmp_ret;
