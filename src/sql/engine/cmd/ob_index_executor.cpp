@@ -140,8 +140,8 @@ int ObCreateIndexExecutor::set_drop_index_stmt_str(
   return ret;
 }
 
-// is_update_global_indexes = true: drop/truncate partition will trigger index buiding, no need delete failed index at exception
-// is_update_global_indexes = false: create index/alter table add index will trigger index buiding, need delete failed index at exception
+// is_update_global_indexes = true: drop/truncate partition will trigger index building, no need delete failed index at exception
+// is_update_global_indexes = false: create index/alter table add index will trigger index building, need delete failed index at exception
 int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo &my_session,
     obrpc::ObCommonRpcProxy &common_rpc_proxy,
     const obrpc::ObCreateIndexArg &create_index_arg,
@@ -321,7 +321,7 @@ int ObDropIndexExecutor::wait_drop_index_finish(
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(session.check_session_status())) {
-          LOG_WARN("session exeception happened", K(ret));
+          LOG_WARN("session exception happened", K(ret));
         } else {
           ob_usleep(retry_interval);
         }
