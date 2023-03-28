@@ -148,6 +148,7 @@ public:
         || ObRollupStatus::ROLLUP_DISTRIBUTOR == rollup_adaptive_info_.rollup_status_; }
 
   virtual int compute_const_exprs() override;
+  virtual int compute_equal_set() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_op_ordering() override;
   double get_distinct_card() const { return distinct_card_; }
