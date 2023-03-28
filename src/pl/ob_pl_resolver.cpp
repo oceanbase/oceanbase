@@ -3511,8 +3511,18 @@ int ObPLResolver::resolve_cursor_for_loop(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("user type is null", K(ret));
       } else {
-        stmt->set_user_type(user_type);
-        stmt->set_index_index(func.get_symbol_table().get_count() - 1);
+        // cursor nested complex type, report not support
+        for (int64_t i = 0; OB_SUCC(ret) && i < user_type->get_member_count(); ++i) {
+          if (!user_type->get_member(i)->is_obj_type()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("cursor nested complex type", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
+          }
+        }
+        if (OB_SUCC(ret)) {
+          stmt->set_user_type(user_type);
+          stmt->set_index_index(func.get_symbol_table().get_count() - 1);
+        }
       }
     }
     // 将index作为fetch into变量
@@ -3783,13 +3793,15 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
     for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
       ObRawExpr* exec_param = func.get_expr(params.at(i));
       bool need_modify = false;
+      bool is_array_binding = true;
       CK (OB_NOT_NULL(exec_param));
-      OZ (check_raw_expr_in_forall(exec_param, stmt.get_ident(), need_modify, can_array_binding));
+      OZ (check_raw_expr_in_forall(exec_param, stmt.get_ident(), need_modify, is_array_binding));
       if (OB_SUCC(ret)) {
         if (need_modify) {
           OZ (need_modify_exprs.push_back(i));
         }
       }
+      can_array_binding &= is_array_binding;
     }
     if (OB_SUCC(ret) && 0 == need_modify_exprs.count()) {
       ret = OB_ERR_FORALL_DML_WITHOUT_BULK;
@@ -6905,6 +6917,27 @@ int ObPLResolver::resolve_fetch(
             ret = OB_ERR_WRONG_FETCH_INTO_NUM;
             LOG_WARN("wrong number of values in the INTO list of a FETCH statement", K(ret));
           } else {
+            // cursor nested complex type, report not support
+            for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_into().count(); ++i) {
+              const ObRawExpr *raw_expr = NULL;
+              CK (OB_NOT_NULL(raw_expr = func.get_expr(stmt->get_into(i))));
+              if (OB_FAIL(ret)) {
+              } else if (raw_expr->get_result_type().is_ext()) {
+                int64_t udt_id = raw_expr->get_result_type().get_accuracy().accuracy_;
+                const ObUserDefinedType *into_var_type = NULL;
+                OZ (current_block_->get_namespace().get_user_type(udt_id, into_var_type));
+                CK (OB_NOT_NULL(into_var_type));
+                if (OB_SUCC(ret) && into_var_type->is_record_type()) {
+                  for (int64_t j = 0; OB_SUCC(ret) && j < into_var_type->get_member_count(); ++j) {
+                    if (!into_var_type->get_member(j)->is_obj_type()) {
+                      ret = OB_NOT_SUPPORTED;
+                      LOG_WARN("cursor nested complex type", K(ret));
+                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
+                    }
+                  }
+                }
+              }
+            }
             for (int64_t i = 0;
                  OB_SUCC(ret) && is_compatible && i < return_type->get_record_member_count();
                  ++i) {

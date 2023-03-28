@@ -5952,7 +5952,7 @@ int ObSPIService::store_result(ObIArray<ObPLCollection*> &bulk_tables,
         //初始化所有的ObObj
         OX (append_mode && old_count > 0 ? MEMCPY(bulk_addr, old_data, old_count * sizeof(ObObj)) : (void*)(NULL));
         for (int64_t j = 0; OB_SUCC(ret) && j < row_count; ++j) {
-          OX (new (&reinterpret_cast<ObObj*>(table->get_data())[old_count + j])ObObj(ObNullType));
+          OX (new (&reinterpret_cast<ObObj*>(table->get_data())[append_mode ? old_count + j : j])ObObj(ObNullType));
         }
 
         if (OB_SUCC(ret)) {

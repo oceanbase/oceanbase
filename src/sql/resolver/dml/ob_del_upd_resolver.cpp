@@ -2183,11 +2183,17 @@ int ObDelUpdResolver::expand_record_to_columns(const ParseNode &record_node,
         const pl::ObRecordType *record_type = NULL;
         const pl::ObUserDefinedType *user_type = NULL;
         ParseNode *column_node = NULL;
+        bool multi_level_count = 0;
         const ParseNode *member_node = &record_node;
-        while (NULL != member_node && NULL != member_node->children_[1]) {
+        while (NULL != member_node && member_node->num_child_ > 1 && NULL != member_node->children_[1]) {
           member_node = member_node->children_[1];
+          multi_level_count++;
         }
-        if (OB_ISNULL(column_node = new_terminal_node(allocator_, T_IDENT))) {
+        if (multi_level_count > 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support to expand", K(composite_type), K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutil level record reference");
+        } else if (OB_ISNULL(column_node = new_terminal_node(allocator_, T_IDENT))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("make db name T_IDENT node failed", K(ret));
         } else if (OB_ISNULL(member_node->children_[1] = new_non_terminal_node(allocator_,
