@@ -650,7 +650,7 @@ int ObIOCalibration::get_io_ability(ObIOAbility &io_ability)
   return ret;
 }
 
-int ObIOCalibration::get_iops_scale(const ObIOMode mode, const int64_t size, double &iops_scale)
+int ObIOCalibration::get_iops_scale(const ObIOMode mode, const int64_t size, double &iops_scale, bool &is_io_ability_valid)
 {
   int ret = OB_SUCCESS;
   iops_scale = 0;
@@ -663,6 +663,7 @@ int ObIOCalibration::get_iops_scale(const ObIOMode mode, const int64_t size, dou
     DRWLock::RDLockGuard guard(lock_);
     if (!io_ability_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
+      is_io_ability_valid = false;
     } else {
       double iops = 0;
       if (OB_FAIL(io_ability_.get_iops(mode, size, iops))) {

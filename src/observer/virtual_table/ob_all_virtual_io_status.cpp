@@ -351,12 +351,13 @@ int ObAllVirtualIOQuota::init(const common::ObAddr &addr)
               item.real_iops_ = avg_iops[i][j];
               int64_t category_min_iops = 0, category_max_iops = 0, category_iops_weight = 0;
               double iops_scale = 0;
+              bool is_io_ability_valid = true;
               if (OB_FAIL(io_config.get_category_config(static_cast<ObIOCategory>(i),
                                                         category_min_iops,
                                                         category_max_iops,
                                                         category_iops_weight))) {
                 LOG_WARN("get category config failed", K(ret), "category", get_io_category_name(static_cast<ObIOCategory>(i)));
-              } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(j), avg_size[i][j], iops_scale))) {
+              } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(j), avg_size[i][j], iops_scale, is_io_ability_valid))) {
                 LOG_WARN("get iops scale failed", K(ret), "mode", get_io_mode_string(static_cast<ObIOMode>(j)));
               } else {
                 item.min_iops_ = category_min_iops * iops_scale;
