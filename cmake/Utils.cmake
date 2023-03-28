@@ -85,6 +85,15 @@ function(config_ccls_flag target)
   endif()
 endfunction()
 
+function(config_remove_coverage_flag target)
+  # 针对于特定的目标，由于某种写法会命中clang的DAG解析的bug，将少量文件不参与coverage编译
+  if (WITH_COVERAGE)
+    get_target_property(EXTLIB_COMPILE_FLAGS ${target} COMPILE_OPTIONS)
+    list(REMOVE_ITEM EXTLIB_COMPILE_FLAGS ${CMAKE_COVERAGE_COMPILE_OPTIONS})
+    set_target_properties(${target} PROPERTIES COMPILE_OPTIONS "${EXTLIB_COMPILE_FLAGS}")
+  endif()
+endfunction()
+
 function(ob_add_object_target target)
   add_library(${target} OBJECT "${${target}_cache_objects_}")
   config_target_unity(${target})
