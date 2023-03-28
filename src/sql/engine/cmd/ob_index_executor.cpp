@@ -140,7 +140,7 @@ int ObCreateIndexExecutor::set_drop_index_stmt_str(
   return ret;
 }
 
-// is_update_global_indexes = true: drop/truncate partition will trigger index buiding, no need delete failed index at exception
+// is_update_global_indexes = true: drop/truncate partition will trigger index building, no need delete failed index at exception
 // is_update_global_indexes = false: create index/alter table add index will trigger index buiding, need delete failed index at exception
 int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo &my_session,
     obrpc::ObCommonRpcProxy &common_rpc_proxy,
@@ -235,7 +235,7 @@ int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo &my_ses
       if (OB_SESSION_KILLED != ret) {
         LOG_WARN("fail to handle switchover status", KR(ret));
       } else {
-        LOG_WARN("fail to add index while swithover", KR(ret));
+        LOG_WARN("fail to add index while switchover", KR(ret));
       }
     }
 
@@ -263,7 +263,7 @@ int ObCreateIndexExecutor::handle_switchover()
   int ret = OB_SUCCESS;
   if (GCTX.is_standby_cluster()) {
     ret = OB_SESSION_KILLED;
-    LOG_INFO("create index while switchoverd, kill session", KR(ret));
+    LOG_INFO("create index while switchover, kill session", KR(ret));
   }
   return ret;
 }
@@ -321,7 +321,7 @@ int ObDropIndexExecutor::wait_drop_index_finish(
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(session.check_session_status())) {
-          LOG_WARN("session exeception happened", K(ret));
+          LOG_WARN("session exception happened", K(ret));
         } else {
           ob_usleep(retry_interval);
         }

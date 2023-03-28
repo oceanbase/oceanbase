@@ -247,7 +247,7 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
               int64_t t_id = stmt.flush_cache_arg_.tenant_ids_.at(i);
               MTL_SWITCH(t_id) {
                 ObPlanCache* plan_cache = MTL(ObPlanCache*);
-                // not specified db_name, evcit all dbs
+                // not specified db_name, evict all dbs
                 if (db_num == 0) {
                   ret = plan_cache->flush_plan_cache_by_sql_id(OB_INVALID_ID, sql_id);
                 } else { // evict db by db
@@ -895,7 +895,7 @@ int ObAdminZoneExecutor::construct_servers_in_zone_(
   } else if (OB_FAIL(st_operator.init(&sql_proxy))) {
     LOG_WARN("fail to init ObServerTableOperator", KR(ret));
   } else if (OB_FAIL(st_operator.get(server_statuses))) {
-    LOG_WARN("build server statused from __all_server failed", KR(ret));
+    LOG_WARN("build server statuses from __all_server failed", KR(ret));
   } else {
     for (int64_t idx = 0; OB_SUCC(ret) && idx < server_statuses.count(); ++idx) {
       if (arg.zone_ == server_statuses.at(idx).zone_) {
@@ -1520,7 +1520,7 @@ int ObBootstrapExecutor::execute(ObExecContext &ctx, ObBootstrapStmt &stmt)
 	const int64_t BS_TIMEOUT = 600 * 1000 * 1000;  // 10 minutes
 	ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObSrvRpcProxy *srv_rpc_proxy = NULL;
-  obrpc::ObBootstrapArg &bootstarp_arg = stmt.bootstrap_arg_;
+  obrpc::ObBootstrapArg &bootstrap_arg = stmt.bootstrap_arg_;
   int64_t rpc_timeout = BS_TIMEOUT;
   if (INT64_MAX != THIS_WORKER.get_timeout_ts()) {
     rpc_timeout = max(THIS_WORKER.get_timeout_remain(), BS_TIMEOUT);
@@ -1532,7 +1532,7 @@ int ObBootstrapExecutor::execute(ObExecContext &ctx, ObBootstrapStmt &stmt)
 	} else if (OB_ISNULL(srv_rpc_proxy = task_exec_ctx->get_srv_rpc())) {
 		ret = OB_NOT_INIT;
 		LOG_WARN("get common rpc proxy failed");
-	} else if (OB_FAIL(srv_rpc_proxy->to(task_exec_ctx->get_self_addr()).timeout(rpc_timeout).bootstrap(bootstarp_arg))) {
+	} else if (OB_FAIL(srv_rpc_proxy->to(task_exec_ctx->get_self_addr()).timeout(rpc_timeout).bootstrap(bootstrap_arg))) {
 		LOG_WARN("rpc proxy bootstrap failed", K(ret), K(rpc_timeout));
 		BOOTSTRAP_LOG(WARN, "STEP_0.1:alter_system execute fail");
 	} else {
@@ -1799,7 +1799,7 @@ int ObClearBalanceTaskExecutor::execute(ObExecContext &ctx, ObClearBalanceTaskSt
 }
 
 /*
- * change tenant should statisfy the following factors:
+ * change tenant should satisfy the following factors:
  * 0. can't change tenant by proxy.
  * 1. login tenant is sys.
  * 2. session is not in trans.
@@ -2081,7 +2081,7 @@ int ObBackupDatabaseExecutor::execute(ObExecContext &ctx, ObBackupDatabaseStmt &
   ObString passwd;
   ObObj value;
   obrpc::ObBackupDatabaseArg arg;
-  //rs会尝试更新冻结点的schema_version的intervale 5s
+  //rs会尝试更新冻结点的schema_version的interval 5s
   const int64_t SECOND = 1* 1000 * 1000; //1s
   const int64_t MAX_RETRY_NUM = UPDATE_SCHEMA_ADDITIONAL_INTERVAL / SECOND + 1;
   if (OB_ISNULL(task_exec_ctx)) {
@@ -2445,7 +2445,7 @@ int ObSetRegionBandwidthExecutor::execute(ObExecContext &ctx, ObSetRegionBandwid
   } else if (OB_FAIL(sql_proxy->write(session_info->get_effective_tenant_id()/*get_priv_tenant_id ???*/,
                                         sql_str.ptr(),
                                         affected_rows))) {
-    LOG_WARN("failed to excutet sql write", K(ret), K(sql_str));
+    LOG_WARN("failed to execute sql write", K(ret), K(sql_str));
   } else {
     LOG_INFO("ObSetRegionBandwidthExecutor::execute", K(stmt), K(ctx), K(sql_str));
   }
