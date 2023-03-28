@@ -125,6 +125,8 @@ int ObTabletPointer::dump_meta_obj(bool &is_washed)
   } else if (OB_UNLIKELY(tablet->get_ref() < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, tablet ref is less than 1", K(ret), KPC(tablet));
+  } else if (OB_UNLIKELY(!phy_addr_.is_disked())) {
+    LOG_INFO("tablet may be removed, and created again, continue", K(phy_addr_));
   } else if (OB_FAIL(wash_obj())) {
     LOG_WARN("fail to wash obj", K(ret));
   } else {
