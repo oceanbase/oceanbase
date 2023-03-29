@@ -2117,7 +2117,9 @@ int ObPrefetchBackupInfoTask::inner_process_()
     if (OB_SUCC(ret)) {
       ObArray<ObBackupProviderItem> items;
       int64_t file_id = 0;
-      if (OB_FAIL(task_mgr_->deliver(items, file_id))) {
+      if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
+        LOG_INFO("backup task already failed", "result_code", ls_backup_ctx_->get_result_code());
+      } else if (OB_FAIL(task_mgr_->deliver(items, file_id))) {
         if (OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
           if (!is_run_out) {
