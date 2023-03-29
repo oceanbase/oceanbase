@@ -322,7 +322,7 @@ int ObArchiveFetcher::handle_single_task_()
     ARCHIVE_LOG(ERROR, "data is NULL", K(ret), K(data));
   } else {
     ObArchiveLogFetchTask *task = static_cast<ObArchiveLogFetchTask*>(data);
-    ObLSID id = task->get_ls_id_copy();
+    ObLSID id = task->get_ls_id();
     ArchiveKey key = task->get_station().get_round();
 
     // task will be submit to fetch_log_queue or re-submit to handle or free due to fatal error
@@ -511,7 +511,7 @@ int ObArchiveFetcher::init_helper_(ObArchiveLogFetchTask &task, const LSN &commi
 {
   int ret = OB_SUCCESS;
   LSN start_offset;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
   const LSN &end_offset = task.get_end_offset();
   const ObArchivePiece &cur_piece = task.get_piece();
   const ObArchivePiece &next_piece = task.get_next_piece();
@@ -771,7 +771,7 @@ int ObArchiveFetcher::update_log_fetch_task_(ObArchiveLogFetchTask &fetch_task,
 int ObArchiveFetcher::submit_fetch_log_(ObArchiveLogFetchTask &task, bool &submitted)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
   submitted = false;
 
   if (! task.has_fetch_log()) {
@@ -779,10 +779,10 @@ int ObArchiveFetcher::submit_fetch_log_(ObArchiveLogFetchTask &task, bool &submi
   } else {
     GET_LS_TASK_CTX(ls_mgr_, id) {
       if (OB_FAIL(ls_archive_task->push_fetch_log(task))) {
-        ARCHIVE_LOG(WARN, "push fetch log failed", K(ret), K(task));
+        ARCHIVE_LOG(WARN, "push fetch log failed", K(ret), K(id), K(task));
       } else {
         submitted = true;
-        ARCHIVE_LOG(INFO, "push fetch log succ", KP(&task));
+        ARCHIVE_LOG(INFO, "push fetch log succ", K(id), KP(&task));
       }
     }
   }

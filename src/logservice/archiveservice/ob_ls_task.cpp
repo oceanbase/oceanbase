@@ -713,7 +713,7 @@ int ObLSArchiveTask::ArchiveDest::push_fetch_log(ObArchiveLogFetchTask &task)
 int ObLSArchiveTask::ArchiveDest::push_send_task(ObArchiveSendTask &task, ObArchiveWorker &worker)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
   if (NULL == send_task_queue_) {
     if (OB_ISNULL(send_task_queue_ = allocator_->alloc_send_task_status(id))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

@@ -479,7 +479,7 @@ int ObArchiveLSMgr::add_task_(const ObLSID &id,
 int ObArchiveLSMgr::insert_or_update_ls_(const StartArchiveHelper &helper)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = helper.get_ls_id();
+  const ObLSID id = helper.get_ls_id();
 
   if (OB_UNLIKELY(! helper.is_valid())) {
     ARCHIVE_LOG(WARN, "helper is not valid", KR(ret), K(helper));

@@ -217,14 +217,14 @@ int ObArchiveSender::modify_thread_count(const int64_t thread_count)
 int ObArchiveSender::submit_send_task_(ObArchiveSendTask *task)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = task->get_ls_id();
+  const ObLSID id = task->get_ls_id();
   if (OB_ISNULL(ls_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "ls_mgr_ is NULL", K(ret), K(ls_mgr_));
   } else {
     GET_LS_TASK_CTX(ls_mgr_, id) {
       if (OB_FAIL(ls_archive_task->push_send_task(*task, *this))) {
-        ARCHIVE_LOG(WARN, "push_send_task fail", K(ret), KPC(task));
+        ARCHIVE_LOG(WARN, "push_send_task fail", K(ret), K(id), KPC(task));
       }
     }
   }
@@ -428,7 +428,7 @@ bool ObArchiveSender::in_normal_status_(const ArchiveKey &key) const
 void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume_status)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
   const ArchiveWorkStation &station = task.get_station();
   share::ObBackupDest backup_dest;
   if (OB_UNLIKELY(! task.is_valid())) {
@@ -507,7 +507,7 @@ int ObArchiveSender::check_piece_continuous_(const ObArchiveSendTask &task,
 {
   int ret = OB_SUCCESS;
   ObLSArchivePersistInfo info;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
   const ObArchivePiece &piece = task.get_piece();
   const ArchiveWorkStation &station = task.get_station();
   if (! ls_task_tuple.get_piece().is_valid()) {

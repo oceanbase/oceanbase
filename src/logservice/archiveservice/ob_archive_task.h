@@ -71,8 +71,7 @@ public:
            const LSN &start_lsn,
            const LSN &end_lsn);
   uint64_t get_tenant_id() const { return tenant_id_; }
-  const ObLSID &get_ls_id() const { return id_; }
-  ObLSID get_ls_id_copy() { return id_; }
+  ObLSID get_ls_id() const { return id_; }
   const ArchiveWorkStation &get_station() { return station_; }
   const LSN &get_start_offset() const { return start_offset_; }
   const LSN &get_cur_offset() const { return cur_offset_; }
@@ -163,7 +162,7 @@ public:
            const share::SCN &max_scn);
   bool is_valid() const;
   uint64_t get_tenant_id() const { return tenant_id_;}
-  const ObLSID &get_ls_id() const { return id_; }
+  ObLSID get_ls_id() const { return id_; }
   const ArchiveWorkStation &get_station() const { return station_; }
   const ObArchivePiece &get_piece() const { return piece_; }
   const LSN &get_start_lsn() const { return start_offset_; }
