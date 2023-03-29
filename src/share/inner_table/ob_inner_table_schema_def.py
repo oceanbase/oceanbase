@@ -11709,6 +11709,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15294: __all_task_opt_stat_gather_history
 # 15295: __all_table_opt_stat_gather_history
 # 15296: __all_virtual_opt_stat_gather_monitor
+# 15297: __all_virtual_long_ops_status_ora
 
 ################################################################################
 # System View (20000,30000]
@@ -48476,6 +48477,8 @@ def_table_schema(
 # 28182:  DBA_OB_DATA_DICTIONARY_IN_LOG
 # 28183:  GV$OB_OPT_STAT_GATHER_MONITOR
 # 28184:  V$OB_OPT_STAT_GATHER_MONITOR
+# 28185   GV$SESSION_LONGOPS_ORA
+# 28186   V$SESSION_LONGOPS_ORA
 
 ################################################################################
 # Lob Table (50000, 70000)
