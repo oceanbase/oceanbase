@@ -5457,6 +5457,8 @@ def_table_schema(
 
 # 449 : __all_wait_for_partition_split_tablet
 # 450 : __all_external_table_file
+# 451 : __all_task_opt_stat_gather_history
+# 452 : __all_table_opt_stat_gather_history
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -11419,6 +11421,9 @@ def_table_schema(
 # 12378: __all_virtual_dup_ls_tablet_set
 # 12379: __all_virtual_dup_ls_tablets
 # 12380: __all_virtual_tx_data
+# 12381: __all_virtual_task_opt_stat_gather_history
+# 12382: __all_virtual_table_opt_stat_gather_history
+# 12383: __all_virtual_opt_stat_gather_monitor
 #
 # 余留位置
 #
@@ -11701,6 +11706,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15291: __all_virtual_backup_transferring_tablets
 # 15292: __all_virtual_external_table_file
 # 15293: __all_data_dictionary_in_log
+# 15294: __all_task_opt_stat_gather_history
+# 15295: __all_table_opt_stat_gather_history
+# 15296: __all_virtual_opt_stat_gather_monitor
 
 ################################################################################
 # System View (20000,30000]
@@ -25615,6 +25623,10 @@ def_table_schema(
 # 21373: DBA_OB_ACCESS_POINT
 # 21374: CDB_OB_DATA_DICTIONARY_IN_LOG
 # 21375: DBA_OB_DATA_DICTIONARY_IN_LOG
+# 21376: GV$OB_OPT_STAT_GATHER_MONITOR
+# 21377: V$OB_OPT_STAT_GATHER_MONITOR
+# 21378: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
+# 21379: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -43019,6 +43031,9 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+# 25227: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
+# 25228: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
+
 #### End Data Dictionary View
 ################################################################################
 
@@ -48459,6 +48474,8 @@ def_table_schema(
 # 28180:  V$OB_LOCKS
 # 28181:  DBA_OB_ACCESS_POINT
 # 28182:  DBA_OB_DATA_DICTIONARY_IN_LOG
+# 28183:  GV$OB_OPT_STAT_GATHER_MONITOR
+# 28184:  V$OB_OPT_STAT_GATHER_MONITOR
 
 ################################################################################
 # Lob Table (50000, 70000)
