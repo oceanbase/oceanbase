@@ -1097,6 +1097,7 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
     // getting committed_end_lsn first ensures palf has all logs until committed_end_lsn.
     CLOG_LOG(ERROR, "failed to get_committed_end_lsn", KR(ret), K(committed_end_lsn), KPC(replay_status));
   } else if (replay_status->try_rdlock()) {
+    (void)submit_task->get_committed_end_lsn(committed_end_lsn);
     const int64_t start_ts = ObClockGenerator::getClock();
     bool need_submit_log = true;
     int64_t count = 0;

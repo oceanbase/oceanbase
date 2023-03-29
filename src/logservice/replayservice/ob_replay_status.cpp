@@ -255,6 +255,10 @@ int ObReplayServiceSubmitTask::set_committed_end_lsn(const LSN &lsn)
 {
   int ret = OB_SUCCESS;
   ATOMIC_SET(&committed_end_lsn_.val_, lsn.val_);
+  if (next_to_submit_lsn_ > committed_end_lsn_) {
+    CLOG_LOG(INFO, "need rollback next_to_submit_lsn_", K(lsn), KPC(this));
+    next_to_submit_lsn_ = committed_end_lsn_;
+  }
   return ret;
 }
 
@@ -854,6 +858,9 @@ int ObReplayStatus::flashback_()
     CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(this));
   } else if (OB_FAIL(submit_log_task_.set_committed_end_lsn(committed_end_lsn))) {
     CLOG_LOG(WARN, "set_committed_end_lsn failed", K(ret), KPC(this), K(committed_end_lsn));
+  } else if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
+      CLOG_LOG(ERROR, "failed to submit submit_log_task to replay service", K(submit_log_task_),
+                  KPC(this), K(ret));
   } else {
     // do nothing
   }
