@@ -1868,44 +1868,55 @@ int ObSPIService::spi_build_record_type_by_result_set(common::ObIAllocator &allo
                                                       const sql::ObResultSet &result_set,
                                                       int64_t hidden_column_count,
                                                       ObRecordType *&record_type,
-                                                      uint64_t &rowid_table_id)
+                                                      uint64_t &rowid_table_id,
+                                                      pl::ObPLBlockNS *secondary_namespace)
 {
   int ret = OB_SUCCESS;
   const common::ColumnsFieldIArray *columns = result_set.get_field_columns();
-  if (OB_ISNULL(columns) || OB_ISNULL(record_type) || 0 == columns->count()) {
+  if (OB_ISNULL(columns) || OB_ISNULL(record_type) || 0 == columns->count() || OB_ISNULL(secondary_namespace)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(columns), K(record_type), K(ret));
   } else {
     int dup_idx = 0;
     OZ (record_type->record_members_init(&allocator, columns->count() - hidden_column_count));
     for (int64_t i = 0; OB_SUCC(ret) && i < columns->count() - hidden_column_count; ++i) {
-      ObDataType data_type;
       ObPLDataType pl_type;
-      data_type.set_meta_type(columns->at(i).type_.get_meta());
-      data_type.set_accuracy(columns->at(i).accuracy_);
-      pl_type.set_data_type(data_type);
-      char* name_buf = NULL;
-      if (OB_ISNULL(name_buf = static_cast<char*>(allocator.alloc(columns->at(i).cname_.length() + 10)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc column name buf", K(ret), K(columns->at(i).cname_));
+      if (columns->at(i).type_.is_ext() && columns->at(i).accuracy_.accuracy_ != OB_INVALID_ID) {
+        uint64_t udt_id = columns->at(i).accuracy_.accuracy_;
+        const ObUserDefinedType *user_type = NULL;
+        OZ (secondary_namespace->get_pl_data_type_by_id(udt_id, user_type));
+        CK (OB_NOT_NULL(user_type));
+        OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
       } else {
-        bool duplicate = false;
-        for (int64_t j = 0; OB_SUCC(ret) && j < columns->count() - hidden_column_count; ++j) {
-          if (i != j && columns->at(j).cname_ == columns->at(i).cname_) {
-            duplicate = true;
-            break;
-          }
-        }
-        if (duplicate) {
-          sprintf(name_buf, "%.*s&%d",
-                  columns->at(i).cname_.length(), columns->at(i).cname_.ptr(), dup_idx);
-          dup_idx++;
+        ObDataType data_type;
+        data_type.set_meta_type(columns->at(i).type_.get_meta());
+        data_type.set_accuracy(columns->at(i).accuracy_);
+        pl_type.set_data_type(data_type);
+      }
+      if (OB_SUCC(ret)) {
+        char* name_buf = NULL;
+        if (OB_ISNULL(name_buf = static_cast<char*>(allocator.alloc(columns->at(i).cname_.length() + 10)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc column name buf", K(ret), K(columns->at(i).cname_));
         } else {
-          sprintf(name_buf, "%.*s", columns->at(i).cname_.length(), columns->at(i).cname_.ptr());
-        }
-        ObString deep_copy_name(name_buf);
-        if (OB_FAIL(record_type->add_record_member(deep_copy_name, pl_type))) {
-          LOG_WARN("add record member failed", K(ret));
+          bool duplicate = false;
+          for (int64_t j = 0; OB_SUCC(ret) && j < columns->count() - hidden_column_count; ++j) {
+            if (i != j && columns->at(j).cname_ == columns->at(i).cname_) {
+              duplicate = true;
+              break;
+            }
+          }
+          if (duplicate) {
+            sprintf(name_buf, "%.*s&%d",
+                    columns->at(i).cname_.length(), columns->at(i).cname_.ptr(), dup_idx);
+            dup_idx++;
+          } else {
+            sprintf(name_buf, "%.*s", columns->at(i).cname_.length(), columns->at(i).cname_.ptr());
+          }
+          ObString deep_copy_name(name_buf);
+          if (OB_FAIL(record_type->add_record_member(deep_copy_name, pl_type))) {
+            LOG_WARN("add record member failed", K(ret));
+          }
         }
       }
     }
@@ -1982,7 +1993,8 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                                       inner_result->result_set(),
                                                       prepare_result.has_hidden_rowid_ ? 1 : 0,
                                                       prepare_result.record_type_,
-                                                      prepare_result.rowid_table_id_));
+                                                      prepare_result.rowid_table_id_,
+                                                      secondary_namespace));
             } else {
               HEAP_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
                 ObInnerSQLConnection *spi_conn = NULL;
@@ -2010,7 +2022,8 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                                         result->result_set(),
                                                         prepare_result.has_hidden_rowid_ ? 1 : 0,
                                                         prepare_result.record_type_,
-                                                        prepare_result.rowid_table_id_));
+                                                        prepare_result.rowid_table_id_,
+                                                        secondary_namespace));
               }
             }
           }

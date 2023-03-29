@@ -6934,15 +6934,28 @@ int ObPLResolver::resolve_fetch(
               if (OB_FAIL(ret)) {
               } else if (raw_expr->get_result_type().is_ext()) {
                 int64_t udt_id = raw_expr->get_result_type().get_accuracy().accuracy_;
-                const ObUserDefinedType *into_var_type = NULL;
-                OZ (current_block_->get_namespace().get_user_type(udt_id, into_var_type));
-                CK (OB_NOT_NULL(into_var_type));
-                if (OB_SUCC(ret) && into_var_type->is_record_type()) {
-                  for (int64_t j = 0; OB_SUCC(ret) && j < into_var_type->get_member_count(); ++j) {
-                    if (!into_var_type->get_member(j)->is_obj_type()) {
-                      ret = OB_NOT_SUPPORTED;
-                      LOG_WARN("cursor nested complex type", K(ret));
-                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
+                if (T_OBJ_ACCESS_REF == raw_expr->get_expr_type() && OB_INVALID_ID == udt_id) {
+                  //objaccess expr udt id is invalid if final type is basic data type.
+                  const ObObjAccessRawExpr *obj_access_expr = static_cast<const ObObjAccessRawExpr *>(raw_expr);
+                  ObExprResType result_type;
+                  pl::ObPLDataType final_type;
+                  if (OB_FAIL(obj_access_expr->get_final_type(final_type))) {
+                    LOG_WARN("failed to get final type", K(ret));
+                  } else if (!final_type.is_obj_type()) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("fetch into var type is unexpected", K(ret));
+                  }
+                } else {
+                  const ObUserDefinedType *into_var_type = NULL;
+                  OZ (current_block_->get_namespace().get_user_type(udt_id, into_var_type));
+                  CK (OB_NOT_NULL(into_var_type));
+                  if (OB_SUCC(ret) && into_var_type->is_record_type()) {
+                    for (int64_t j = 0; OB_SUCC(ret) && j < into_var_type->get_member_count(); ++j) {
+                      if (!into_var_type->get_member(j)->is_obj_type()) {
+                        ret = OB_NOT_SUPPORTED;
+                        LOG_WARN("cursor nested complex type", K(ret));
+                        LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
+                      }
                     }
                   }
                 }

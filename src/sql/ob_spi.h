@@ -438,7 +438,8 @@ public:
                                                  const sql::ObResultSet &result_set,
                                                  int64_t hidden_column_count,
                                                  pl::ObRecordType *&record_type,
-                                                 uint64_t &rowid_table_id);
+                                                 uint64_t &rowid_table_id,
+                                                 pl::ObPLBlockNS *secondary_namespace);
 
   static int spi_construct_collection(
     pl::ObPLExecCtx *ctx, uint64_t package_id, ObObjParam *result);
