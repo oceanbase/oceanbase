@@ -419,11 +419,10 @@ int ObPxReceiveOp::drain_exch()
     } else if (OB_FAIL(active_all_receive_channel())) {
       LOG_WARN("failed to active all receive channel", K(ret));
     }
-    if (OB_SUCC(ret)) {
-      LOG_TRACE("drain px receive", K(get_spec().id_), K(ret), K(lbt()));
-      dfc_.drain_all_channels();
-      exch_drained_ = true;
-    } else if (OB_ITER_END == ret) {
+    LOG_TRACE("drain px receive", K(get_spec().id_), K(ret), K(lbt()));
+    dfc_.drain_all_channels();
+    exch_drained_ = true;
+    if (OB_ITER_END == ret) {
       /**
        * active_all_receive_channel有拿行的操作，可能会产生OB_ITER_END，
        * 所以这里错误码是OB_ITER_END，我们已经达到了drain的目的，将错误码
