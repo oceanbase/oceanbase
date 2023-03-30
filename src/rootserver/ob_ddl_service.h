@@ -266,7 +266,7 @@ public:
   virtual int alter_database(const obrpc::ObAlterDatabaseArg &arg);
   virtual int drop_database(const obrpc::ObDropDatabaseArg &arg,
                             obrpc::ObDropDatabaseRes &res,
-                            ObMySQLTransaction *trans = NULL);
+                            ObDDLSQLTransaction *trans = NULL);
   virtual int create_tablegroup(const bool if_not_exist,
                                 share::schema::ObTablegroupSchema &tablegroup_schema,
                                 const common::ObString *ddl_stmt_str);
@@ -2349,6 +2349,7 @@ public:
                        const transaction::ObTxDataSourceType &type,
                        const char *buf,
                        const int64_t buf_len);
+  void disable_serialize_inc_schemas() { trans_start_schema_version_ = 0; }
   // serialize inc schemas from (start_schema_version, ]
   int serialize_inc_schemas(const int64_t start_schema_version);
 private:
@@ -2393,7 +2394,8 @@ private:
   // Used for fetch increment schemas generate by this DDL trans.
   // 1. when bootstrap/create tenant, trans_start_schema_version_ is 0, won't fetch increment schema.
   // 2. when enable_ddl_parallel_ = true(truncate table in 4.1), trans_start_schema_version_ is meaningless, it needs fetch increment schema alone.
-  // 3. other situations, fetch increament schemas in (trans_start_schema_version_, ].
+  // 3. in some situations, serialize inc schemas may be useless(eg. drop database to recyclebin). Can disable serialize logic by disable_serialize_inc_schemas().
+  // 4. other situations, fetch increament schemas in (trans_start_schema_version_, ].
   int64_t trans_start_schema_version_;
   // enable ddl parallel
   bool enable_ddl_parallel_;

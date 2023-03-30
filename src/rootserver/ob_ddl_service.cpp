@@ -23799,7 +23799,7 @@ int ObDDLService::alter_database(const ObAlterDatabaseArg &arg)
 
 int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
                                 obrpc::ObDropDatabaseRes &res,
-                                ObMySQLTransaction *ora_user_trans)
+                                ObDDLSQLTransaction *ora_user_trans)
 {
   int ret = OB_SUCCESS;
   const bool if_exist = arg.if_exist_;
@@ -23849,6 +23849,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
         && OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
+      ObDDLSQLTransaction &actual_trans = OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans;
       const ObTableSchema *schema = NULL;
       // lock table when drop data table
       for (int64_t i = 0; OB_SUCC(ret) && i < table_count; i++) {
@@ -23861,7 +23862,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("offline ddl is being executed, other ddl operations are not allowed",
                    K(schema), K(ret));
-        } else if (OB_FAIL(lock_table(OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans, *schema))) {
+        } else if (OB_FAIL(lock_table(actual_trans, *schema))) {
           LOG_WARN("fail to lock_table", KR(ret), KPC(schema));
           // for ddl retry task, upper layer only focus on `OB_TRY_LOCK_ROW_CONFLICT`, and then retry it.
           const bool is_ddl_scheduled_task = arg.task_id_ > 0 ? true : false;
@@ -23878,8 +23879,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
           LOG_WARN("offline ddl is being executed, other ddl operations are not allowed",
                    K(schema), K(ret));
         } else if (schema && schema->is_materialized_view()) {
-          if (OB_FAIL(ddl_operator.drop_table(*schema,
-                         OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans))) {
+          if (OB_FAIL(ddl_operator.drop_table(*schema, actual_trans))) {
             LOG_WARN("fail to drop mv", K(ret), K(*schema));
           }
         }
@@ -23887,24 +23887,21 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
 
       if (OB_SUCC(ret) && arg.to_recyclebin_ && !is_inner_db(db_schema->get_database_id())) {
         if (OB_FAIL(ddl_operator.drop_database_to_recyclebin(*db_schema,
-            OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans,
-            schema_guard,
-            &arg.ddl_stmt_str_))) {
+            actual_trans, schema_guard, &arg.ddl_stmt_str_))) {
           LOG_WARN("drop database to recyclebin failed", K(arg), K(ret));
         }
+        (void) actual_trans.disable_serialize_inc_schemas();
       } else {
         if (OB_FAIL(ret)) {
           // FAIL
-        } else if (OB_FAIL(ddl_operator.drop_database(*db_schema,
-            OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans,
-            schema_guard,
-            &arg.ddl_stmt_str_))) {
+        } else if (OB_FAIL(ddl_operator.drop_database(*db_schema, actual_trans,
+                   schema_guard, &arg.ddl_stmt_str_))) {
           LOG_WARN("ddl_operator drop_database failed", K(tenant_id), KT(database_id), K(ret));
         }
       }
       if (OB_FAIL(ret)) {
       } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(
-          OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans, tenant_id, arg.task_id_))) {
+                 actual_trans, tenant_id, arg.task_id_))) {
         LOG_WARN("update ddl task status to success failed", K(ret));
       }
     }
