@@ -1285,7 +1285,7 @@ int Iterator::estimate_element_count(int64_t& physical_row_count, int64_t& eleme
   STORAGE_LOG(TRACE, "finish sample leaf level", K(physical_row_count), K(element_count), K(node_count));
   if (OB_SUCCESS == ret && node_count >= MAX_SAMPLE_LEAF_COUNT) {
     avg_element_count_per_leaf =
-        std::lround(static_cast<double>(level_element_count) / static_cast<double>(node_count));
+        MAX(std::lround(static_cast<double>(level_element_count) / static_cast<double>(node_count)), 1);
     limit = limit / avg_element_count_per_leaf + 1;
     if (OB_FAIL(estimate_one_level(
             1, 64, 1024, INT64_MAX, limit, ratio, level_physical_row_count, level_element_count, node_count))) {
