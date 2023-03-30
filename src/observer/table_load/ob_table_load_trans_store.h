@@ -64,8 +64,6 @@ public:
   int flush(int32_t session_id);
   int clean_up(int32_t session_id);
 public:
-  void set_is_flush() { is_flush_ = true; }
-  bool is_flush() const { return is_flush_; }
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
   int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
@@ -112,7 +110,6 @@ private:
   };
   SessionContext *session_ctx_array_;
   int64_t ref_count_ CACHE_ALIGNED;
-  bool is_flush_;
   bool is_inited_;
   ObSchemaGetterGuard schema_guard_;
 };

@@ -107,7 +107,6 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     allocator_("TLD_TSWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_),
     table_data_desc_(nullptr),
     ref_count_(0),
-    is_flush_(false),
     is_inited_(false)
 {
 }

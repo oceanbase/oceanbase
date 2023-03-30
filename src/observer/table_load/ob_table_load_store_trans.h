@@ -57,9 +57,7 @@ public:
 private:
   int advance_trans_status(table::ObTableLoadTransStatusType trans_status);
 public:
-  int get_store_writer_for_write(ObTableLoadTransStoreWriter *&store_writer) const;
-  int get_store_writer_for_flush(ObTableLoadTransStoreWriter *&store_writer) const;
-  int get_store_writer_for_clean_up(ObTableLoadTransStoreWriter *&store_writer) const;
+  int get_store_writer(ObTableLoadTransStoreWriter *&store_writer) const;
   void put_store_writer(ObTableLoadTransStoreWriter *store_writer);
   // 取出store
   int output_store(ObTableLoadTransStore *&trans_store);

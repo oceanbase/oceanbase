@@ -369,8 +369,6 @@ int ObTableLoadStore::pre_finish_trans(const ObTableLoadTransId &trans_id)
     ObTableLoadStoreTrans *trans = nullptr;
     if (OB_FAIL(store_ctx_->get_trans(trans_id, trans))) {
       LOG_WARN("fail to get trans", KR(ret));
-    } else if (OB_FAIL(trans->set_trans_status_frozen())) {
-      LOG_WARN("fail to freeze trans", KR(ret));
     } else if (OB_FAIL(flush(trans))) {
       LOG_WARN("fail to flush", KR(ret));
     }
@@ -497,7 +495,7 @@ int ObTableLoadStore::clean_up_trans(ObTableLoadStoreTrans *trans)
   LOG_DEBUG("store clean up trans");
   ObTableLoadTransStoreWriter *store_writer = nullptr;
   // 取出当前store_writer
-  if (OB_FAIL(trans->get_store_writer_for_clean_up(store_writer))) {
+  if (OB_FAIL(trans->get_store_writer(store_writer))) {
     LOG_WARN("fail to get store writer", KR(ret));
   } else {
     for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.session_count_;
@@ -660,7 +658,7 @@ int ObTableLoadStore::write(const ObTableLoadTransId &trans_id, int32_t session_
       LOG_WARN("fail to get trans", KR(ret));
     }
     // 取出store_writer
-    else if (OB_FAIL(trans->get_store_writer_for_write(store_writer))) {
+    else if (OB_FAIL(trans->get_store_writer(store_writer))) {
       LOG_WARN("fail to get store writer", KR(ret));
     //} else if (OB_FAIL(store_writer->advance_sequence_no(session_id, partition_id, sequence_no, guard))) {
     //  if (OB_UNLIKELY(OB_ENTRY_EXIST != ret)) {
@@ -796,8 +794,12 @@ int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
     LOG_DEBUG("store flush");
     ObTableLoadTransStoreWriter *store_writer = nullptr;
     // 取出当前store_writer
-    if (OB_FAIL(trans->get_store_writer_for_flush(store_writer))) {
+    if (OB_FAIL(trans->get_store_writer(store_writer))) {
       LOG_WARN("fail to get store writer", KR(ret));
+    }
+    // after get store writer, avoid early commit
+    else if (OB_FAIL(trans->set_trans_status_frozen())) {
+      LOG_WARN("fail to freeze trans", KR(ret));
     } else {
       for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.session_count_; ++session_id) {
         ObTableLoadTask *task = nullptr;
@@ -866,8 +868,6 @@ int ObTableLoadStore::px_finish_trans(const ObTableLoadTransId &trans_id)
     ObTableLoadStoreTrans *trans = nullptr;
     if (OB_FAIL(store_ctx_->get_trans(trans_id, trans))) {
       LOG_WARN("fail to get trans", KR(ret));
-    } else if (OB_FAIL(trans->set_trans_status_frozen())) {
-      LOG_WARN("fail to freeze trans", KR(ret));
     } else if (OB_FAIL(px_flush(trans))) {
       LOG_WARN("fail to do px flush", KR(ret));
     } else if (OB_FAIL(store_ctx_->commit_trans(trans))) {
@@ -928,7 +928,7 @@ int ObTableLoadStore::px_write(const ObTableLoadTransId &trans_id,
     ObTableLoadTransStoreWriter *store_writer = nullptr;
     if (OB_FAIL(store_ctx_->get_trans(trans_id, trans))) {
       LOG_WARN("fail to get trans", KR(ret));
-    } else if (OB_FAIL(trans->get_store_writer_for_write(store_writer))) {
+    } else if (OB_FAIL(trans->get_store_writer(store_writer))) {
       LOG_WARN("fail to get store writer", KR(ret));
     } else {
       if (OB_SUCC(trans->check_trans_status(ObTableLoadTransStatusType::RUNNING)) ||
@@ -960,8 +960,8 @@ int ObTableLoadStore::px_clean_up_trans(ObTableLoadStoreTrans *trans)
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     ObTableLoadTransStoreWriter *store_writer = nullptr;
-    if (OB_FAIL(trans->get_store_writer_for_clean_up(store_writer))) {
-      LOG_WARN("fail to get store writer for clean up", KR(ret));
+    if (OB_FAIL(trans->get_store_writer(store_writer))) {
+      LOG_WARN("fail to get store writer", KR(ret));
     } else if (OB_FAIL(store_writer->clean_up(PX_DEFAULT_SESSION_ID))) {
       LOG_WARN("fail to clean up store writer", KR(ret));
     }
@@ -981,8 +981,12 @@ int ObTableLoadStore::px_flush(ObTableLoadStoreTrans *trans)
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     ObTableLoadTransStoreWriter *store_writer = nullptr;
-    if (OB_FAIL(trans->get_store_writer_for_flush(store_writer))) {
+    if (OB_FAIL(trans->get_store_writer(store_writer))) {
       LOG_WARN("fail to get store writer", KR(ret));
+    }
+    // after get store writer, avoid early commit
+    else if (OB_FAIL(trans->set_trans_status_frozen())) {
+      LOG_WARN("fail to freeze trans", KR(ret));
     } else if (OB_FAIL(store_writer->flush(PX_DEFAULT_SESSION_ID))) {
       LOG_WARN("fail to flush store", KR(ret));
     } else {
