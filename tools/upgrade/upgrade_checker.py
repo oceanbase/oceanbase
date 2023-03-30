@@ -551,6 +551,19 @@ def check_backup_dest_exist(query_cur):
     else:
       logging.info('check backup destination success')
 
+# 14. 检查内存超卖
+def check_memory_limit(query_cur):
+  page_size = os.sysconf("SC_PAGE_SIZE")
+  phys_pages = os.sysconf("SC_PHYS_PAGES")
+  phy_mem_size = page_size * phys_pages
+  sql = """select distinct MEMORY_LIMIT from GV$OB_SERVERS"""
+  (desc, results) = query_cur.exec_query(sql)
+  for item in results:
+    if item[0] >= phy_mem_size:
+      fail_list.append('memory_limit:{0} is bigger than physical memory:{1}'.format(item[0], phy_mem_size))
+      break
+  logging.info('check memory_limit success')
+
 # last check of do_check, make sure no function execute after check_fail_list
 def check_fail_list():
   if len(fail_list) != 0 :
@@ -589,6 +602,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_archive_job_exist(query_cur)
       check_archive_dest_exist(query_cur)
       check_backup_dest_exist(query_cur)
+      check_memory_limit(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)
