@@ -1185,7 +1185,7 @@ private:
   common::ObIAllocator *alloc_; // for buckets
   ModulePageAllocator *bloom_filter_alloc_;
   ObGbyBloomFilter *bloom_filter_;
-  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator, true>
+  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator>
                                                                                     right_bit_set_;
   int64_t nth_right_row_;
   int64_t ltb_size_;
