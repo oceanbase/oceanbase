@@ -642,6 +642,7 @@ int ObMacroRowIterator::open_curr_macro_block_()
       micro_block_count_ = -1;
       reuse_micro_block_count_ = -1;
       micro_scanner_->reset();
+      allocator_.reuse();
     }
   }
   return ret;
