@@ -878,9 +878,9 @@ int ObReplayStatus::check_and_submit_task(const ObPartitionKey& pkey, const uint
   // check when log slide out
   const int64_t last_slide_out_log_id = get_last_slide_out_log_id();
   if (OB_UNLIKELY(!is_enabled())) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_STATE_NOT_MATCH;
     REPLAY_LOG(
-        ERROR, "replay status is not enabled", K(need_replay), K(pkey), K(log_id), K(log_type), K(log_ts), K(ret));
+        WARN, "replay status is not enabled", K(need_replay), K(pkey), K(log_id), K(log_type), K(log_ts), K(ret));
   } else if (OB_UNLIKELY(!pkey.is_valid() || OB_INVALID_TIMESTAMP == log_ts || OB_INVALID_ID == log_id ||
                          OB_INVALID_TIMESTAMP == next_replay_log_ts || next_replay_log_ts > log_ts)) {
     ret = OB_INVALID_ARGUMENT;
