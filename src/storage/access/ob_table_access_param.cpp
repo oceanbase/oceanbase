@@ -216,8 +216,10 @@ int ObTableAccessParam::init(
 
     iter_param_.pd_storage_flag_ = scan_param.pd_storage_flag_;
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
-     //disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
-    if (OB_UNLIKELY(ObQueryFlag::KeepOrder == scan_param.scan_flag_.scan_order_)) {
+     // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
+     // disable blockscan if use index skip scan as no large range to scan
+    if (OB_UNLIKELY(ObQueryFlag::KeepOrder == scan_param.scan_flag_.scan_order_ ||
+        scan_param.use_index_skip_scan())) {
       iter_param_.disable_blockscan();
 
     }
