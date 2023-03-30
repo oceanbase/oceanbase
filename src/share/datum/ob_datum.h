@@ -220,23 +220,23 @@ struct ObDatum : public ObDatumPtr, public ObDatumDesc {
   }
   inline int8_t get_int8() const
   {
-    return static_cast<int8_t>(*int_);
+    return *(reinterpret_cast<const int8_t *>(int_));
   }
   inline int8_t get_tinyint() const
   {
-    return static_cast<int8_t>(*int_);
+    return *(reinterpret_cast<const int8_t *>(int_));
   }
   inline int16_t get_smallint() const
   {
-    return static_cast<int16_t>(*int_);
+    return *(reinterpret_cast<const int16_t *>(int_));
   }
   inline int32_t get_mediumint() const
   {
-    return static_cast<int32_t>(*int_);
+    return *(reinterpret_cast<const int32_t *>(int_));
   }
   inline int32_t get_int32() const
   {
-    return static_cast<int32_t>(*int_);
+    return *(reinterpret_cast<const int32_t *>(int_));
   }
   inline int64_t get_int() const
   {
@@ -244,23 +244,23 @@ struct ObDatum : public ObDatumPtr, public ObDatumDesc {
   }
   inline uint8_t get_uint8() const
   {
-    return static_cast<uint8_t>(*uint_);
+    return *(reinterpret_cast<const uint8_t *>(uint_));
   }
   inline uint8_t get_utinyint() const
   {
-    return static_cast<uint8_t>(*uint_);
+    return *(reinterpret_cast<const uint8_t *>(uint_));
   }
   inline uint16_t get_usmallint() const
   {
-    return static_cast<uint16_t>(*uint_);
+    return *(reinterpret_cast<const uint16_t *>(uint_));
   }
   inline uint32_t get_umediumint() const
   {
-    return static_cast<uint32_t>(*uint_);
+    return *(reinterpret_cast<const uint32_t *>(uint_));
   }
   inline uint32_t get_uint32() const
   {
-    return static_cast<uint32_t>(*uint_);
+    return *(reinterpret_cast<const uint32_t *>(uint_));
   }
   inline uint64_t get_uint64() const
   {

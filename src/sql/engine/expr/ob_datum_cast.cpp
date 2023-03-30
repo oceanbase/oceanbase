@@ -3325,7 +3325,7 @@ CAST_FUNC_NAME(date, float)
 {
   EVAL_ARG()
   {
-    int32_t in_val = child_res->get_int32();
+    int32_t in_val = child_res->get_date();
     int64_t out_val = 0;
     if (OB_FAIL(ObTimeConverter::date_to_int(in_val, out_val))) {
     } else {
@@ -3339,7 +3339,7 @@ CAST_FUNC_NAME(date, double)
 {
   EVAL_ARG()
   {
-    int32_t in_val = child_res->get_int32();
+    int32_t in_val = child_res->get_date();
     int64_t out_val = 0;
     if (OB_FAIL(ObTimeConverter::date_to_int(in_val, out_val))) {
     } else {
@@ -3377,7 +3377,7 @@ CAST_FUNC_NAME(date, datetime)
     {
       ObObjType out_type = expr.datum_meta_.type_;
       ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), ObTimestampType == out_type);
-      int32_t in_val = child_res->get_int32();
+      int32_t in_val = child_res->get_date();
       int64_t out_val = 0;
       if (OB_FAIL(ObTimeConverter::date_to_datetime(in_val, cvrt_ctx, out_val))) {
         LOG_WARN("date_to_datetime failed", K(ret), K(in_val));
@@ -3416,7 +3416,7 @@ CAST_FUNC_NAME(date, string)
 {
   EVAL_ARG()
   {
-    int32_t in_val = child_res->get_int32();
+    int32_t in_val = child_res->get_date();
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     if (OB_FAIL(ObTimeConverter::date_to_str(in_val, buf, sizeof(buf), len))) {
@@ -3435,7 +3435,7 @@ CAST_FUNC_NAME(date, bit)
 {
   EVAL_ARG()
   {
-    int32_t in_val = child_res->get_int32();
+    int32_t in_val = child_res->get_date();
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     if (OB_FAIL(ObTimeConverter::date_to_str(in_val, buf, sizeof(buf), len))) {
@@ -3479,7 +3479,7 @@ CAST_FUNC_NAME(year, int)
 {
   EVAL_ARG()
   {
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     int64_t out_val = 0;
     ObObjType out_type = expr.datum_meta_.type_;
     if (OB_FAIL(common_year_int(expr, out_type, in_val, out_val))) {
@@ -3516,7 +3516,7 @@ CAST_FUNC_NAME(year, float)
 {
   EVAL_ARG()
   {
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     int64_t val_int = 0;
     if (OB_FAIL(ObTimeConverter::year_to_int(in_val, val_int))) {
       LOG_WARN("year_to_int failed", K(ret), K(in_val));
@@ -3531,7 +3531,7 @@ CAST_FUNC_NAME(year, double)
 {
   EVAL_ARG()
   {
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     int64_t val_int = 0;
     if (OB_FAIL(ObTimeConverter::year_to_int(in_val, val_int))) {
       LOG_WARN("year_to_int failed", K(ret), K(in_val));
@@ -3546,7 +3546,7 @@ CAST_FUNC_NAME(year, number)
 {
   EVAL_ARG()
   {
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     int64_t val_int = 0;
     ObNumStackOnceAlloc tmp_alloc;
     number::ObNumber number;
@@ -3567,7 +3567,7 @@ CAST_FUNC_NAME(year, string)
   {
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     if (OB_FAIL(ObTimeConverter::year_to_str(in_val, buf, sizeof(buf), len))) {
       LOG_WARN("year_to_str failed", K(ret), K(in_val));
     } else {
@@ -3584,7 +3584,7 @@ CAST_FUNC_NAME(year, datetime)
 {
   EVAL_ARG()
   {
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     int64_t val_int = 0;
     if (OB_FAIL(common_year_int(expr, ObIntType, in_val, val_int))) {
       LOG_WARN("common_year_int failed", K(ret), K(in_val));
@@ -3599,7 +3599,7 @@ CAST_FUNC_NAME(year, date)
 {
   EVAL_ARG()
   {
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     int64_t val_int = 0;
     if (OB_FAIL(common_year_int(expr, ObIntType, in_val, val_int))) {
       LOG_WARN("common_year_int failed", K(ret), K(in_val));
@@ -3615,7 +3615,7 @@ CAST_FUNC_NAME(year, bit)
   EVAL_ARG()
   {
     int64_t year_int = 0;
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     if (OB_FAIL(ObTimeConverter::year_to_int(in_val, year_int))) {
       LOG_WARN("year_to_int failed", K(ret), K(in_val));
     } else if (OB_FAIL(common_uint_bit(expr, year_int, ctx, res_datum))) {
@@ -5692,7 +5692,7 @@ CAST_ENUMSET_FUNC_NAME(date, enum)
   EVAL_ARG()
   {
     int warning = 0;
-    int32_t in_val = child_res->get_int32();
+    int32_t in_val = child_res->get_date();
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     if (OB_FAIL(ObTimeConverter::date_to_str(in_val, buf, sizeof(buf), len))) {
@@ -5719,7 +5719,7 @@ CAST_ENUMSET_FUNC_NAME(date, set)
   EVAL_ARG()
   {
     int warning = 0;
-    int32_t in_val = child_res->get_int32();
+    int32_t in_val = child_res->get_date();
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     if (OB_FAIL(ObTimeConverter::date_to_str(in_val, buf, sizeof(buf), len))) {
@@ -5802,7 +5802,7 @@ CAST_ENUMSET_FUNC_NAME(year, enum)
   EVAL_ARG()
   {
     int warning = 0;
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     int64_t tmp_int = 0;
     if (OB_FAIL(ObTimeConverter::year_to_int(in_val, tmp_int))) {
       LOG_WARN("year_to_int failed", K(ret));
@@ -5821,7 +5821,7 @@ CAST_ENUMSET_FUNC_NAME(year, set)
   EVAL_ARG()
   {
     int warning = 0;
-    uint8_t in_val = child_res->get_uint8();
+    uint8_t in_val = child_res->get_year();
     int64_t tmp_int = 0;
     if (OB_FAIL(ObTimeConverter::year_to_int(in_val, tmp_int))) {
       LOG_WARN("year_to_int failed", K(ret));
