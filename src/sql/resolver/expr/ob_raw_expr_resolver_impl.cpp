@@ -5054,7 +5054,7 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
   ObVector<const ParseNode*> key_value_arr;
   ParseNode* data_node = NULL;
   ParseNode* cur_node_kv = NULL;
-  int cur_col_size = 0;
+  int cur_col_size = ctx_.columns_->count();
   ParseNode key_node;
   CK(OB_NOT_NULL(node));
   int32_t num = 0;
