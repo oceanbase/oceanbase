@@ -240,12 +240,28 @@ int64_t ObMultiSourceData::get_all_unsync_cnt_for_multi_data()
 {
   int ret = OB_SUCCESS;
   int64_t unsynced_cnt_for_multi_data = 0;
+  const int64_t num = MAX_LIST_COUNT + MAX_PTR_COUNT;
 
-  for (int i = 0; i < MAX_PTR_COUNT; ++i) {
-    ObIMultiSourceDataUnit *value = units_[i];
-    if (nullptr != value && value->is_valid()) {
-      int64_t cnt = value->get_unsync_cnt_for_multi_data();
-      unsynced_cnt_for_multi_data += cnt;
+  for (int i = 0; i < num; ++i) {
+    if (i < MAX_PTR_COUNT) {
+      ObIMultiSourceDataUnit *value = units_[i];
+      if (nullptr != value && value->is_valid()) {
+        int64_t cnt = value->get_unsync_cnt_for_multi_data();
+        unsynced_cnt_for_multi_data += cnt;
+        if (0 != cnt) {
+          TRANS_LOG(INFO, "unsync_cnt of unsync_cnt of data_unit is not 0", KPC(value));
+        }
+      }
+    } else {
+      const int64_t list_pos = get_unit_list_array_idx(i);
+      if (unit_list_array_[list_pos].get_size() > 0) {
+        const ObIMultiSourceDataUnit *last_data_unit = unit_list_array_[list_pos].get_last();
+        int64_t cnt = last_data_unit->get_unsync_cnt_for_multi_data();
+        if (0 != cnt) {
+          TRANS_LOG(INFO, "unsync_cnt of last_data_unit in unit_list_array is not 0", KPC(last_data_unit), K(unit_list_array_[list_pos].get_size()));
+        }
+        unsynced_cnt_for_multi_data += cnt;
+      }
     }
   }
 
