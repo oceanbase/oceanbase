@@ -2719,7 +2719,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_COUNT_ERRORS,
 DEFINE_SHOW_CLAUSE_SET(SHOW_PARAMETERS,
                        NULL,
                        "SELECT zone, svr_type, svr_ip, svr_port, name, data_type, value, info, section, scope, source, edit_level from %s.%s where name not like '\\_%%' and (tenant_id = %ld or tenant_id is null)",
-                       R"(SELECT "ZONE", "SVR_TYPE", "SVR_IP", "SVR_PORT", "NAME", "DATA_TYPE", "VALUE", "INFO", "SECTION", "SCOPE", "SOURCE", "EDIT_LEVEL" FROM %s.%s WHERE NAME NOT LIKE '\\_%%' and  (tenant_id = %ld or tenant_id is null))",
+                       R"(SELECT "ZONE", "SVR_TYPE", "SVR_IP", "SVR_PORT", "NAME", "DATA_TYPE", "VALUE", "INFO", "SECTION", "SCOPE", "SOURCE", "EDIT_LEVEL" FROM %s.%s WHERE NAME NOT LIKE '\_%%' ESCAPE '\' and  (tenant_id = %ld or tenant_id is null))",
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_PARAMETERS_UNSYS,
                        NULL,
