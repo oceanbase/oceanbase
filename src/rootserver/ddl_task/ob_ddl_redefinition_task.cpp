@@ -284,9 +284,7 @@ int ObDDLRedefinitionTask::check_table_empty(const ObDDLTaskStatus next_task_sta
   } else if (OB_FAIL(check_need_check_table_empty(need_check_table_empty))) {
     LOG_WARN("failed to check need check table empty", K(ret));
   } else if (need_check_table_empty) {
-    if (OB_FAIL(check_check_table_empty_end(is_check_replica_end))) {
-      LOG_WARN("check build replica end", K(ret));
-    } else if (!is_check_replica_end && check_table_empty_job_time_ == 0) {
+    if (!is_check_replica_end && 0 == check_table_empty_job_time_) {
       ObCheckConstraintValidationTask task(tenant_id_, object_id_, -1/*constraint id*/, target_object_id_,
                                            schema_version_, trace_id_, task_id_, true/*check_table_empty*/,
                                            obrpc::ObAlterTableArg::AlterConstraintType::ADD_CONSTRAINT);
@@ -295,6 +293,13 @@ int ObDDLRedefinitionTask::check_table_empty(const ObDDLTaskStatus next_task_sta
       } else {
         check_table_empty_job_time_ = ObTimeUtility::current_time();
         LOG_INFO("send check constraint request", K(object_id_), K(target_object_id_), K(schema_version_));
+      }
+    }
+    if (OB_SUCC(ret) && !is_check_replica_end) {
+      if (OB_FAIL(check_check_table_empty_end(is_check_replica_end))) {
+        LOG_WARN("check build replica end failed", K(ret));
+      } else if (is_check_replica_end) {
+        ret = check_table_empty_job_ret_code_;
       }
     }
   }
@@ -1258,10 +1263,20 @@ int ObDDLRedefinitionTask::check_check_table_empty_end(bool &is_end)
   int ret = OB_SUCCESS;
   if (INT64_MAX == check_table_empty_job_ret_code_) {
     // not finish
+  } else if (OB_SUCCESS != check_table_empty_job_ret_code_) {
+    ret_code_ = check_table_empty_job_ret_code_;
+    is_end = true;
+    LOG_WARN("check table empty job failed", K(ret_code_), K(object_id_), K(target_object_id_));
+    if (is_replica_build_need_retry(ret_code_)) {
+      check_table_empty_job_time_ = 0;
+      check_table_empty_job_ret_code_ = INT64_MAX;
+      ret_code_ = OB_SUCCESS;
+      is_end = false;
+      LOG_INFO("check table empty need retry", K(*this));
+    }
   } else {
     is_end = true;
     ret_code_ = check_table_empty_job_ret_code_;
-    ret = ret_code_;
   }
   return ret;
 }
