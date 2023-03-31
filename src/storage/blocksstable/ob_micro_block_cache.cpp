@@ -1312,6 +1312,11 @@ int ObIndexMicroBlockCache::load_block(
         EVENT_INC(ObStatEventIds::IO_READ_PREFETCH_MICRO_COUNT);
         EVENT_ADD(ObStatEventIds::IO_READ_PREFETCH_MICRO_BYTES, micro_block_id.size_);
       }
+      if (OB_FAIL(ret) && OB_NOT_NULL(extra_buf)) {
+        allocator->free(extra_buf);
+        block_data.extra_buf_ = nullptr;
+        block_data.extra_size_ = 0;
+      }
     }
   }
   return ret;
