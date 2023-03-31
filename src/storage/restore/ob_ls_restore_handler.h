@@ -85,6 +85,7 @@ public:
       const share::ObLSRestoreStatus &leader_restore_status, const int64_t leader_proposal_id);
   static int check_tablet_restore_finish_(const share::ObLSRestoreStatus &ls_restore_status, 
       const ObTabletMeta &tablet_meta, bool &is_finish);
+  static int check_tablet_deleted(const ObTabletHandle &tablet_handle, bool &is_deleted);
   void wakeup();
   void stop() { ATOMIC_STORE(&is_stop_, true); } // when remove ls, set this
   int safe_to_destroy(bool &is_safe);

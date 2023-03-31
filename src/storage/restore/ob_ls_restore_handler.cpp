@@ -590,6 +590,24 @@ int ObLSRestoreHandler::check_tablet_restore_finish_(
   return ret;
 }
 
+int ObLSRestoreHandler::check_tablet_deleted(const ObTabletHandle &tablet_handle, bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+  // TODO(chongrong.th) need to think about transfer out deleted in 4.2
+  is_deleted = false;
+  ObTabletStatus::Status tablet_status = ObTabletStatus::Status::MAX;
+  if (!tablet_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", K(ret));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_tablet_status(tablet_status))) {
+    LOG_WARN("failed to get tablet status", K(ret));
+  } else if (ObTabletStatus::Status::DELETED == tablet_status) {
+    is_deleted = true;
+    const ObTabletID tablet_id = tablet_handle.get_obj()->get_tablet_meta().tablet_id_;
+    LOG_INFO("tablet deleted", K(tablet_id), K(tablet_status));
+  }
+  return ret;
+}
 void ObLSRestoreHandler::wakeup()
 {
   int ret = OB_SUCCESS;
@@ -982,6 +1000,7 @@ int ObILSRestoreState::reload_tablet_()
     }
 
     while (OB_SUCC(ret)) {
+      bool is_deleted = false;
       if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -989,6 +1008,9 @@ int ObILSRestoreState::reload_tablet_()
         } else {
           LOG_WARN("fail to get next tablet", K(ret));
         }
+      } else if (OB_FAIL(ObLSRestoreHandler::check_tablet_deleted(tablet_handle, is_deleted))) {
+        LOG_WARN("failed to check tablet need schedule restore", K(ret), K(tablet_handle));
+      } else if (is_deleted) {
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("tablet is nullptr", K(ret));
@@ -1081,6 +1103,7 @@ int ObILSRestoreState::upload_wait_restore_tablet_()
     bool is_finish = false;
     while (OB_SUCC(ret)) {
       is_finish = false;
+      bool is_deleted = false;
       if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -1088,6 +1111,9 @@ int ObILSRestoreState::upload_wait_restore_tablet_()
         } else {
           LOG_WARN("fail to get next tablet", K(ret));
         }
+      } else if (OB_FAIL(ObLSRestoreHandler::check_tablet_deleted(tablet_handle, is_deleted))) {
+        LOG_WARN("failed to check tablet need schedule restore", K(ret), K(tablet_handle));
+      } else if (is_deleted) {
       } else if (nullptr == (tablet = tablet_handle.get_obj())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("tablet is nullptr", K(ret));

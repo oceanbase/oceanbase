@@ -391,6 +391,9 @@ int ObLSRestoreTaskMgr::check_tablet_deleted_or_restored_(storage::ObLS &ls, con
   } else if (nullptr == (tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("nullptr tablet", K(ret));
+  } else if (OB_FAIL(ObLSRestoreHandler::check_tablet_deleted(tablet_handle, is_deleted))) {
+    LOG_WARN("failed to check tablet deleted", K(ret), K(tablet_handle));
+  } else if (is_deleted) { // do nothing
   } else {
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
     if (OB_FAIL(ObLSRestoreHandler::check_tablet_restore_finish_(ls_restore_status, tablet_meta, is_restored))) {
