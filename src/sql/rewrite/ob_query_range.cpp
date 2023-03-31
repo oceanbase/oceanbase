@@ -1884,37 +1884,34 @@ int ObQueryRange::pre_extract_ne_op(const ObOpRawExpr *t_expr,
     const ObRawExpr *l_expr = t_expr->get_param_expr(0);
     const ObRawExpr *r_expr = t_expr->get_param_expr(1);
     ObKeyPartList key_part_list;
-    if (lib::is_oracle_mode()
-      && T_OP_ROW == l_expr->get_expr_type() && T_OP_ROW == r_expr->get_expr_type()) {
-      if (1 == r_expr->get_param_count()
-          && T_OP_ROW == r_expr->get_param_expr(0)->get_expr_type()) {
-        r_expr = r_expr->get_param_expr(0);
+    if (T_OP_ROW == l_expr->get_expr_type() && T_OP_ROW == r_expr->get_expr_type()) {
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+        ObKeyPart *tmp = NULL;
+        if (OB_FAIL(get_basic_query_range(l_expr,
+                                          r_expr,
+                                          NULL,
+                                          i == 0 ? T_OP_LT : T_OP_GT,
+                                          t_expr->get_result_type(),
+                                          tmp,
+                                          dtc_params))) {
+          LOG_WARN("Get basic query range failed", K(ret));
+        } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
+          LOG_WARN("push back failed", K(ret));
+        } else {
+          // A != B 表达式被拆分成了两个表达式, A < B OR A > B
+          // 要保证每个表达式都是精确的，整个表达式才是精确的
+          is_precise = (is_precise && query_range_ctx_->cur_expr_is_precise_);
+        }
       }
-    }
-    for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
-      query_range_ctx_->cur_expr_is_precise_ = false;
-      ObKeyPart *tmp = NULL;
-      if (OB_FAIL(get_basic_query_range(l_expr,
-                                        r_expr,
-                                        NULL,
-                                        i == 0 ? T_OP_LT : T_OP_GT,
-                                        t_expr->get_result_type(),
-                                        tmp,
-                                        dtc_params))) {
-        LOG_WARN("Get basic query range failed", K(ret));
-      } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
-        LOG_WARN("push back failed", K(ret));
-      } else {
-        // A != B 表达式被拆分成了两个表达式, A < B OR A > B
-        // 要保证每个表达式都是精确的，整个表达式才是精确的
-        is_precise = (is_precise && query_range_ctx_->cur_expr_is_precise_);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      query_range_ctx_->cur_expr_is_precise_ = is_precise;
-      //not need params when preliminary extract
-      if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
-        LOG_WARN("or range graph failed", K(ret));
+      if (OB_SUCC(ret)) {
+        query_range_ctx_->cur_expr_is_precise_ = is_precise;
+        //not need params when preliminary extract
+        if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
+          LOG_WARN("or range graph failed", K(ret));
+        }
       }
     }
   }
@@ -2187,7 +2184,7 @@ int ObQueryRange::pre_extract_not_in_op(const ObOpRawExpr *b_expr,
              OB_ISNULL(r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("r_expr is null.", K(ret));
-  } else if (r_expr->get_param_count() > MAX_NOT_IN_SIZE) {
+  } else if (r_expr->get_param_count() > MAX_NOT_IN_SIZE || l_expr->get_expr_type() == T_OP_ROW) {
     // do not extract range over MAX_NOT_IN_SIZE
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     query_range_ctx_->cur_expr_is_precise_ = false;
