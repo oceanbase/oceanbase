@@ -1902,7 +1902,9 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   }
 
   int tmp_ret = ret;
-  if (!is_begin_commit_stmt && GCONF.enable_perf_event
+  if (!is_begin_commit_stmt
+      && GCONF.enable_perf_event
+      && 0 == context.multi_stmt_item_.get_seq_num() /* only first item of a multi stmt, or single stmt */
       && OB_FAIL(handle_large_query(tmp_ret,
                                     result,
                                     ectx.get_need_disconnect_for_update(),

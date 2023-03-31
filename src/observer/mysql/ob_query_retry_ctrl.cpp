@@ -43,6 +43,7 @@ void ObRetryPolicy::try_packet_retry(ObRetryParam &v) const
     // muti stmt，并且不是第一句，不能扔回队列重试，因为前面的无法回滚
     v.retry_type_ = RETRY_TYPE_LOCAL;
   } else if (!THIS_WORKER.can_retry()) {
+    // false == THIS_WORKER.can_retry() means throw back to queue disabled by SOME logic
     v.retry_type_ = RETRY_TYPE_LOCAL;
   } else {
     v.retry_type_ = RETRY_TYPE_PACKET;

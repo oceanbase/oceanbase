@@ -460,7 +460,9 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
                                          force_sync_resp,
                                          async_resp_used,
                                          need_disconnect))) {
-    if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
+    if (THIS_WORKER.need_retry()) {
+      // fail optimize, is a large query, just go back to large query queue and retry
+    } else if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
       ret = OB_SUCCESS;
       LOG_TRACE("batched multi_stmt needs rollback", K(ret));
     } else {
