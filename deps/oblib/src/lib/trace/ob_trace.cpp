@@ -90,7 +90,7 @@ void flush_trace()
             }
           }
           INIT_SPAN(span->source_span_);
-          _OBTRACE_LOG(INFO,
+          _FLT_LOG(INFO,
                         TRACE_PATTERN "%s}",
                         UUID_TOSTRING(trace.get_trace_id()),
                         __span_type_mapper[span->span_type_],
@@ -111,7 +111,7 @@ void flush_trace()
         span = next;
       }
     };
-    PRINT_WITH_TRACE_MODE(OBTRACE, INFO, func());
+    PRINT_WITH_TRACE_MODE(FLT, INFO, func());
     trace.offset_ = trace.buffer_size_ / 2;
   }
 }

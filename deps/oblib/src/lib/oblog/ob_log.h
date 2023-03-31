@@ -1150,7 +1150,7 @@ inline void ObLogger::do_log_message(const bool is_async,
   const int64_t log_size = limited_left_log_size_ + NORMAL_LOG_SIZE;
   limited_left_log_size_ = 0;
   const int64_t logging_time_us_begin = get_cur_us();
-  if (OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size, allow))) {
+  if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size, allow))) {
     LOG_STDERR("precheck_tl_log_limiter error, ret=%d\n", ret);
   } else if (OB_UNLIKELY(!allow) && !need_print_log_limit_msg()) {
     inc_dropped_log_count(level);

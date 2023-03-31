@@ -82,8 +82,8 @@ ObPLogFDType get_fd_type(const char *mod_name)
   ObPLogFDType type = FD_SVR_FILE;
   static const size_t RS_MODULE_LEN = strlen("[RS");
   static const size_t ELEC_MODULE_LEN = strlen("[ELECT");
-  static const size_t OBTRACE_MODULE_LEN = strlen("[OBTRACE");
-  if (0 == STRNCMP(mod_name, "[OBTRACE", OBTRACE_MODULE_LEN)) {
+  static const size_t FLT_MODULE_LEN = strlen("[FLT");
+  if (0 == STRNCMP(mod_name, "[FLT", FLT_MODULE_LEN)) {
     type = FD_TRACE_FILE;
   } else if (ObThreadFlags::is_rs_thread()
              || 0 == STRNCMP(mod_name, "[RS", RS_MODULE_LEN)) {
