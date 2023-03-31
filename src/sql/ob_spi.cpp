@@ -5787,6 +5787,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
     for (int i = 0; OB_SUCC(ret) && i < obj_array.count(); ++i) {
       ObObj &obj = obj_array.at(i);
       tmp_obj.reset();
+      obj.set_collation_type(result_types[i].get_collation_type());
       obj.set_collation_level(result_types[i].get_collation_level());
       LOG_DEBUG("column convert", K(obj.get_meta()), K(result_types[i].get_meta_type()),
                K(row_desc.at(i)), K(result_types[i].get_accuracy()));
