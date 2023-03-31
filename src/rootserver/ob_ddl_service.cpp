@@ -1906,17 +1906,14 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
                                   schema_guard,
                                   sql_proxy_);
         common::ObArray<share::ObLSID> ls_id_array;
-        const int64_t last_schema_version = ddl_operator.get_last_operation_schema_version();
-        if (OB_INVALID_VERSION == last_schema_version) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid last schema version", K(ret));
-        } else if (OB_FAIL(table_creator.init())) {
+        if (OB_FAIL(table_creator.init())) {
           LOG_WARN("fail to init table creator", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.init())) {
           LOG_WARN("fail to init new table tablet allocator", KR(ret));
         }
 
         ObArray<const ObTableSchema*> schemas;
+        int64_t last_schema_version = OB_INVALID_VERSION;
         for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
           const share::schema::ObTableSchema &this_table = table_schemas.at(i);
           const int64_t table_id = this_table.get_table_id();
@@ -1934,12 +1931,13 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
             } else if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(
                 this_table,
                 ls_id_array))) {
-              LOG_WARN("create table partitions failed", KR(ret), K(this_table),
-                  K(last_schema_version));
+              LOG_WARN("create table partitions failed", KR(ret), K(this_table));
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(ddl_operator.insert_ori_schema_version(
+            if (OB_INVALID_VERSION == last_schema_version
+              && OB_FALSE_IT(last_schema_version = ddl_operator.get_last_operation_schema_version())) {
+            } else if (OB_FAIL(ddl_operator.insert_ori_schema_version(
                 trans, tenant_id, table_id, last_schema_version))) {
               LOG_WARN("failed to insert_ori_schema_version!",
                        K(ret), K(tenant_id), K(table_id), K(last_schema_version));
@@ -12733,16 +12731,14 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
                                   schema_guard,
                                   sql_proxy_);
         common::ObArray<share::ObLSID> ls_id_array;
-        const int64_t last_schema_version = ddl_operator.get_last_operation_schema_version();
-        if (OB_INVALID_VERSION == last_schema_version) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid last schema version", K(ret));
-        } else if (OB_FAIL(table_creator.init())) {
+
+        if (OB_FAIL(table_creator.init())) {
           LOG_WARN("fail to init table creator", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.init())) {
           LOG_WARN("fail to init new table tablet allocator", KR(ret));
         }
         ObArray<const ObTableSchema*> schemas;
+        int64_t last_schema_version = OB_INVALID_VERSION;
         for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
           const share::schema::ObTableSchema &this_table = table_schemas.at(i);
           const int64_t table_id = this_table.get_table_id();
@@ -12760,12 +12756,13 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
             } else if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(
                 this_table,
                 ls_id_array))) {
-              LOG_WARN("create table partitions failed", KR(ret), K(this_table),
-                  K(last_schema_version));
+              LOG_WARN("create table partitions failed", KR(ret), K(this_table));
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(ddl_operator.insert_ori_schema_version(
+            if (OB_INVALID_VERSION == last_schema_version
+              && OB_FALSE_IT(last_schema_version = ddl_operator.get_last_operation_schema_version())) {
+            } else if (OB_FAIL(ddl_operator.insert_ori_schema_version(
                 trans, tenant_id, table_id, last_schema_version))) {
               LOG_WARN("failed to insert_ori_schema_version!",
                        K(ret), K(tenant_id), K(table_id), K(last_schema_version));
@@ -13313,14 +13310,12 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
         LOG_WARN("failed to insert temp table info", K(ret), KPC(table_schema));
       }
     }
-    const int64_t last_schema_version = ddl_operator.get_last_operation_schema_version();
-    if (OB_SUCC(ret) && OB_INVALID_VERSION == last_schema_version) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid schema version" , K(last_schema_version));
-    }
+    int64_t last_schema_version = OB_INVALID_VERSION;
     for (int64_t i = 0; OB_SUCC(ret) && i < schemas.count(); i++) {
       share::schema::ObTableSchema *table_schema = const_cast<ObTableSchema*>(schemas.at(i));
-      if (OB_FAIL(ddl_operator.insert_ori_schema_version(trans, tenant_id,
+      if (OB_INVALID_VERSION == last_schema_version
+        && OB_FALSE_IT(last_schema_version = ddl_operator.get_last_operation_schema_version())) {
+      } else if (OB_FAIL(ddl_operator.insert_ori_schema_version(trans, tenant_id,
                   table_schema->get_table_id(), last_schema_version))) {
         LOG_WARN("failed to insert_ori_schema_version!", K(ret), KPC(table_schema), K(last_schema_version));
       }
@@ -13967,7 +13962,7 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(
       }
     }
     if (OB_SUCC(ret)) {
-      const int64_t last_schema_version = ddl_operator.get_last_operation_schema_version();
+      int64_t last_schema_version = OB_INVALID_VERSION;
       for (int64_t i = 0; OB_SUCC(ret) && i < new_table_schemas.count(); i++) {
         const share::schema::ObTableSchema &this_table = new_table_schemas.at(i);
         uint64_t table_id = this_table.get_table_id();
@@ -13982,7 +13977,9 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(
           LOG_WARN("create table tablets failed", K(ret), K(this_table));
         } else {}
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ddl_operator.insert_ori_schema_version(
+          if (OB_INVALID_VERSION == last_schema_version
+            && OB_FALSE_IT(last_schema_version = ddl_operator.get_last_operation_schema_version())) {
+          } else if (OB_FAIL(ddl_operator.insert_ori_schema_version(
               trans, tenant_id, table_id, last_schema_version))) {
             LOG_WARN("failed to insert_ori_schema_version!",
                      K(ret), K(tenant_id), K(table_id), K(last_schema_version));
