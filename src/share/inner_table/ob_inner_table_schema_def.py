@@ -11425,6 +11425,7 @@ def_table_schema(
 # 12382: __all_virtual_table_opt_stat_gather_history
 # 12383: __all_virtual_opt_stat_gather_monitor
 # 12384: __all_virtual_thread
+# 12385: __all_virtual_arbitration_member_info
 #
 # 余留位置
 #
@@ -25632,6 +25633,8 @@ def_table_schema(
 # 21379: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
 # 21380: GV$OB_THREAD
 # 21381: V$OB_THREAD
+# 21382: GV$OB_ARBITRATION_MEMBER_INFO
+# 21383: V$OB_ARBITRATION_MEMBER_INFO
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -48485,6 +48488,8 @@ def_table_schema(
 # 28186:  V$SESSION_LONGOPS_ORA
 # 28187:  GV$OB_THREAD
 # 28188:  V$OB_THREAD
+# 28189:  GV$OB_ARBITRATION_MEMBER_INFO
+# 28190:  V$OB_ARBITRATION_MEMBER_INFO
 
 ################################################################################
 # Lob Table (50000, 70000)
