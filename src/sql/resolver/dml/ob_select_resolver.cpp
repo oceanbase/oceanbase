@@ -1407,7 +1407,8 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
   //如果是PL里的可更新游标，增加rowid属性
   if (OB_SUCC(ret) && ((NULL != params_.secondary_namespace_ && params_.is_cursor_)
                        || (session_info_->is_client_return_rowid()
-                           && NULL == params_.secondary_namespace_))) {
+                           && NULL == params_.secondary_namespace_
+                           && NULL == session_info_->get_pl_context()))) {
     SelectItem rowid_item;
     ObSelectStmt *select_stmt = stmt;
     TableItem *table_item = NULL;
