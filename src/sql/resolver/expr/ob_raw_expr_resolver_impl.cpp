@@ -3225,8 +3225,12 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param_list_ is null", K(ret), K(ctx_.param_list_));
       } else if (escape_node->value_ < 0 || escape_node->value_ >= ctx_.param_list_->count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("index is out of range", K(escape_node->value_), K(ctx_.param_list_->count()));
+        if (OB_NOT_NULL(ctx_.session_info_) && ctx_.session_info_->is_ps_prepare_stage()) {
+          // skip check question mark about escape node in prepare statement
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index is out of range", K(escape_node->value_), K(ctx_.param_list_->count()));
+        }
         // c1 like '123' escape null is illegal in oracle mode, but legal in mysql mode
       } else if (ctx_.param_list_->at(escape_node->value_).is_null() && lib::is_oracle_mode()) {
         ret = OB_ERR_INVALID_ESCAPE_CHAR_LENGTH;
