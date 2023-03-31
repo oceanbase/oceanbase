@@ -68,16 +68,9 @@ int ObEliminateTask::check_config_mem_limit(bool& is_change)
   }
   if (config_mem_limit_ != mem_limit) {
     LOG_INFO("before change config mem", K(config_mem_limit_));
-    if (mem_limit < MINIMUM_LIMIT) {
-      if (lib::is_mini_mode()) {
-        // do nothing
-      } else {
-        config_mem_limit_ = MINIMUM_LIMIT;
-      }
-    } else if (mem_limit > MAXIMUM_LIMIT) {
-      config_mem_limit_ = MAXIMUM_LIMIT;
-    } else {
-      config_mem_limit_ = mem_limit;
+    config_mem_limit_ = mem_limit;
+    if (mem_limit < MINIMUM_LIMIT && !lib::is_mini_mode()) {
+      config_mem_limit_ = MINIMUM_LIMIT;
     }
     is_change = true;
     LOG_INFO("after change config mem", K(config_mem_limit_));
