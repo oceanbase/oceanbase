@@ -566,11 +566,12 @@ int ObDASScanOp::reuse_iter()
   int &ret = errcode_;
   ObITabletScan &tsc_service = get_tsc_service();
   ObLocalIndexLookupOp *lookup_op = get_lookup_op();
-  scan_param_.need_switch_param_ = need_switch_param();
-  if (OB_FAIL(tsc_service.reuse_scan_iter(need_switch_param(), get_storage_scan_iter()))) {
+  const ObTabletID &storage_tablet_id = scan_param_.tablet_id_;
+  scan_param_.need_switch_param_ = (storage_tablet_id.is_valid() && storage_tablet_id != tablet_id_ ? true : false);
+  if (OB_FAIL(tsc_service.reuse_scan_iter(scan_param_.need_switch_param_, get_storage_scan_iter()))) {
     LOG_WARN("reuse scan iterator failed", K(ret));
   } else if (lookup_op != nullptr
-      && OB_FAIL(lookup_op->reset_lookup_state(need_switch_param()))) {
+      && OB_FAIL(lookup_op->reset_lookup_state())) {
     LOG_WARN("reuse lookup iterator failed", K(ret));
   } else {
     scan_param_.key_ranges_.reuse();
@@ -834,7 +835,7 @@ int ObLocalIndexLookupOp::get_next_row()
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           if (need_next_index_batch()) {
-            reset_lookup_state(false);
+            reset_lookup_state();
             index_end_ = false;
             state_ = INDEX_SCAN;
           } else {
@@ -944,7 +945,7 @@ int ObLocalIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
             if (OB_FAIL(check_lookup_row_cnt())) {
               LOG_WARN("check lookup row cnt failed", K(ret));
             } else if (need_next_index_batch()) {
-              reset_lookup_state(false);
+              reset_lookup_state();
               index_end_ = false;
               state_ = INDEX_SCAN;
               ret = OB_SUCCESS;
@@ -1081,6 +1082,8 @@ OB_INLINE int ObLocalIndexLookupOp::do_index_lookup()
       }
     }
   } else {
+    const ObTabletID &storage_tablet_id = scan_param_.tablet_id_;
+    scan_param_.need_switch_param_ = (storage_tablet_id.is_valid() && storage_tablet_id != tablet_id_ ? true : false);
     scan_param_.tablet_id_ = tablet_id_;
     scan_param_.ls_id_ = ls_id_;
     if (OB_FAIL(reuse_iter())) {
@@ -1162,13 +1165,12 @@ int ObLocalIndexLookupOp::reuse_iter()
   }
   return ret;
 }
-int ObLocalIndexLookupOp::reset_lookup_state(bool need_switch_param)
+int ObLocalIndexLookupOp::reset_lookup_state()
 {
   int ret = OB_SUCCESS;
   state_ = INDEX_SCAN;
   index_end_ = false;
   if (lookup_iter_ != nullptr) {
-    scan_param_.need_switch_param_ = need_switch_param;
     scan_param_.key_ranges_.reuse();
   }
   if (OB_SUCC(ret) && lookup_memctx_ != nullptr) {
