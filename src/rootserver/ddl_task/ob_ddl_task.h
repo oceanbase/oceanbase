@@ -420,7 +420,7 @@ public:
   bool is_inited() const { return is_inited_; }
   int try_wait(bool &is_column_checksum_ready);
   int update_status(const common::ObTabletID &tablet_id, const int ret_code);
-  TO_STRING_KV(K(is_inited_), K(is_calc_done_), K(source_table_id_), K(target_table_id_),
+  TO_STRING_KV(K(is_inited_), K(source_table_id_), K(target_table_id_),
       K(schema_version_), K(snapshot_version_), K(execution_id_), K(timeout_us_),
       K(last_drive_ts_), K(stat_array_), K_(tenant_id));
 
@@ -430,7 +430,6 @@ private:
 
 private:
   bool is_inited_;
-  bool is_calc_done_;
   uint64_t source_table_id_;
   uint64_t target_table_id_;
   int64_t schema_version_;
