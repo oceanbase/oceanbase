@@ -28,7 +28,6 @@ IteratorStorage::IteratorStorage() :
   read_buf_(),
   block_size_(0),
   log_storage_(NULL),
-  read_buf_has_log_block_header_(false),
   is_inited_(false) {}
 
 IteratorStorage::~IteratorStorage()
@@ -61,7 +60,6 @@ int IteratorStorage::init(
 void IteratorStorage::destroy()
 {
   is_inited_ = false;
-  read_buf_has_log_block_header_ = false;
   start_lsn_.reset();
   end_lsn_.reset();
   read_buf_.reset();
@@ -235,8 +233,6 @@ int DiskIteratorStorage::read_data_from_storage_(
   if (OB_FAIL(ensure_memory_layout_correct_(pos, in_read_size, remain_valid_data_size))) {
     PALF_LOG(WARN, "ensure_memory_layout_correct_ failed", K(ret), K(pos), K(in_read_size), KPC(this));
   } else {
-    // NB: LogBlockHeader not consider by LSN, ignore it when no need to read('pos' need decrease MAX_INFO_BLOCK_SIZE).
-    pos = (true == read_buf_has_log_block_header_ ? pos - MAX_INFO_BLOCK_SIZE : pos);
     // avoid read repeated data from disk
     const LSN curr_round_read_lsn = start_lsn_ + pos + remain_valid_data_size;
     const int64_t real_in_read_size = in_read_size - remain_valid_data_size;
@@ -254,9 +250,6 @@ int DiskIteratorStorage::read_data_from_storage_(
       buf = read_buf_.buf_;
       out_read_size += remain_valid_data_size;
       // check the 'read_buf_' whether has LogBlockHeader, if has, the return LSN need decrese MAX_INFO_BLOCK_SIZE
-      read_buf_has_log_block_header_ = false;
-      //read_buf_has_log_block_header_ =
-      //  (lsn_2_offset(curr_round_read_lsn, block_size_) == 0 ? true : false);
       PALF_LOG(TRACE, "read_data_from_storage_ success", K(ret), KPC(this), K(pos), K(in_read_size),
           K(curr_round_read_lsn), K(remain_valid_data_size), K(real_in_read_size), K(out_read_size));
     }

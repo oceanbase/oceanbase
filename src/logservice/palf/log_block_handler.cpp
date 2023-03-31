@@ -20,7 +20,7 @@
 #include "share/ob_errno.h"                             // errno
 #include "share/rc/ob_tenant_base.h"                    // mtl_malloc
 #include "log_writer_utils.h"                           // LogWriteBuf
-
+#include "log_io_uitls.h"                               // close_with_ret
 namespace oceanbase
 {
 using namespace common;
@@ -186,7 +186,10 @@ void LogBlockHandler::destroy()
   if (IS_INIT) {
     is_inited_ = false;
     dir_fd_ = -1;
-    io_fd_ = -1;
+    if (-1 != io_fd_) {
+      close_with_ret(io_fd_);
+      io_fd_ = -1;
+    }
     log_block_size_ = 0;
     dio_aligned_buf_.destroy();
     PALF_LOG(INFO, "LogFileHandler destroy success");
@@ -442,7 +445,7 @@ int LogBlockHandler::inner_write_impl_(const int fd, const char *buf, const int6
     if (count != (write_size = ob_pwrite(fd, buf, count, offset))) {
       if (palf_reach_time_interval(1000 * 1000, time_interval)) {
         ret = convert_sys_errno();
-        PALF_LOG(ERROR, "ob_pwrite failed", K(ret), K(fd), K(offset), K(count));
+        PALF_LOG(ERROR, "ob_pwrite failed", K(ret), K(fd), K(offset), K(count), K(errno));
       }
       ob_usleep(RETRY_INTERVAL);
     } else {

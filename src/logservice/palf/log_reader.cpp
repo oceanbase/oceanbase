@@ -87,7 +87,7 @@ int LogReader::pread(const block_id_t block_id,
             K(remained_read_size), K(block_path));
       } else {
         out_read_size += curr_out_read_size;
-        remained_read_size -= step;
+        remained_read_size -= curr_out_read_size;
         PALF_LOG(TRACE, "inner_pread_ success", K(ret), K(read_io_fd), K(block_id), K(offset), K(in_read_size),
             K(out_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_lsn), K(curr_out_read_size),
             K(remained_read_size), K(block_path));
@@ -96,7 +96,7 @@ int LogReader::pread(const block_id_t block_id,
   }
 
   if (-1 != read_io_fd && -1 == ::close(read_io_fd)) {
-    ret = OB_IO_ERROR;
+    ret = convert_sys_errno();
     PALF_LOG(ERROR, "close read_io_fd failed", K(ret), K(read_io_fd));
   }
   return ret;
@@ -113,6 +113,7 @@ int LogReader::inner_pread_(const int read_io_fd,
   offset_t backoff = start_offset - aligned_start_offset;
   int64_t aligned_in_read_size = upper_align(in_read_size + backoff, LOG_DIO_ALIGN_SIZE);
   int64_t limited_and_aligned_in_read_size = 0;
+  ReadBufGuard read_buf_guard("LogReader", aligned_in_read_size);
   if (MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE < aligned_in_read_size) {
     ret = OB_BUF_NOT_ENOUGH;
     PALF_LOG(ERROR, "aligned_in_read_size is greater than MAX BUFFER LEN",

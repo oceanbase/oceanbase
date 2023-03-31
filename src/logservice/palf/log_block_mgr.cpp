@@ -22,6 +22,7 @@
 #include "share/ob_errno.h"                             // OB_NO_SUCH_FILE_OR_DIRECTORY
 #include "log_writer_utils.h"                           // LogWriteBuf
 #include "lsn.h"                                        // LSN
+#include "log_io_uitls.h"                               // close_with_ret
 
 namespace oceanbase
 {
@@ -92,7 +93,10 @@ void LogBlockMgr::destroy()
 {
   PALF_LOG(INFO, "destroy LogBlockMgr success");
   is_inited_ = false;
-  dir_fd_ = -1;
+  if (-1 != dir_fd_) {
+    close_with_ret(dir_fd_);
+    dir_fd_ = -1;
+  }
   log_block_pool_ = NULL;
   curr_writable_handler_.destroy();
   curr_writable_block_id_ = LOG_INVALID_BLOCK_ID;
