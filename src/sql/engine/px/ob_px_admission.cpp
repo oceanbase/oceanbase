@@ -95,12 +95,16 @@ int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
 
 int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
                                          ObExecContext &exec_ctx,
+                                         sql::stmt::StmtType stmt_type,
                                          ObPhysicalPlan &plan)
 {
   int ret = OB_SUCCESS;
   // 对于只有dop=1 的场景跳过检查，因为这种场景走 RPC 线程，不消耗 PX 线程
   // https://yuque.antfin-inc.com/ob/sql/xzrw9m
-  if (plan.is_use_px() && 1 != plan.get_px_dop() && plan.get_expected_worker_count() > 0) {
+  if (stmt::T_EXPLAIN != stmt_type
+      && plan.is_use_px()
+      && 1 != plan.get_px_dop()
+      && plan.get_expected_worker_count() > 0) {
     // use for appointment
     const ObHashMap<ObAddr, int64_t> &req_px_worker_map = plan.get_expected_worker_map();
     ObHashMap<ObAddr, int64_t> &acl_px_worker_map = exec_ctx.get_admission_addr_map();
@@ -167,9 +171,13 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
 
 void ObPxAdmission::exit_query_admission(ObSQLSessionInfo &session,
                                          ObExecContext &exec_ctx,
+                                         sql::stmt::StmtType stmt_type,
                                          ObPhysicalPlan &plan)
 {
-  if (plan.is_use_px() && 1 != plan.get_px_dop() && exec_ctx.get_admission_version() != UINT64_MAX) {
+  if (stmt::T_EXPLAIN != stmt_type
+      && plan.is_use_px()
+      && 1 != plan.get_px_dop()
+      && exec_ctx.get_admission_version() != UINT64_MAX) {
     int ret = OB_SUCCESS;
     uint64_t tenant_id = session.get_effective_tenant_id();
     hash::ObHashMap<ObAddr, int64_t> &addr_map = exec_ctx.get_admission_addr_map();

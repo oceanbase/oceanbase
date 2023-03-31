@@ -110,8 +110,10 @@ OB_INLINE int ObResultSet::open_plan()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObPxAdmission::enter_query_admission(my_session_,
                                                        get_exec_context(),
+                                                       get_stmt_type(),
                                                        *get_physical_plan()))) {
         // query is not admitted to run
+        // Note: explain statement's phy plan is target query's plan, don't enable admission test
         LOG_DEBUG("Query is not admitted to run, try again", K(ret));
       } else if (THIS_WORKER.is_timeout()) {
         // packet有可能在队列里面呆的时间过长，到这里已经超时，
@@ -673,6 +675,9 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
     } else if (OB_SUCCESS != (close_ret = executor_.close(ctx))) { // executor_.close里面会等到调度线程结束才返回。
       SQL_LOG(WARN, "fail to close executor", K(ret), K(close_ret));
     }
+
+    ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), get_stmt_type(), *get_physical_plan());
+
 //    // 必须要在executor_.execute_plan运行之后再调用exec_result_的一系列函数。
 //    if (OB_FAIL(exec_result_.close(ctx))) {
 //      SQL_LOG(WARN, "fail close main query", K(ret));
@@ -703,9 +708,6 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 
   // 无论如何都reset掉executor_，否则前面调executor_.init的时候可能会报init twice
   executor_.reset();
-
-  ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), *get_physical_plan());
-
   NG_TRACE(close_plan_end);
   return ret;
 }
