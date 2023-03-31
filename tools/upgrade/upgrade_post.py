@@ -1965,13 +1965,22 @@
 #
 ## 7. 升级前需要primary zone只有一个
 #def check_tenant_primary_zone(query_cur):
-#  (desc, results) = query_cur.exec_query("""select tenant_name,primary_zone from DBA_OB_TENANTS where  tenant_id != 1""");
-#  for item in results:
-#    if cmp(item[1], "RANDOM") == 0:
-#      fail_list.append('{0} tenant primary zone random before update not allowed'.format(item[0]))
-#    elif check_is_primary_zone_distributed(item[1]):
-#      fail_list.append('{0} tenant primary zone distributed before update not allowed'.format(item[0]))
-#  logging.info('check tenant primary zone success')
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    if min_cluster_version < get_version("4.1.0.0"):
+#      (desc, results) = query_cur.exec_query("""select tenant_name,primary_zone from DBA_OB_TENANTS where  tenant_id != 1""");
+#      for item in results:
+#        if cmp(item[1], "RANDOM") == 0:
+#          fail_list.append('{0} tenant primary zone random before update not allowed'.format(item[0]))
+#        elif check_is_primary_zone_distributed(item[1]):
+#          fail_list.append('{0} tenant primary zone distributed before update not allowed'.format(item[0]))
+#      logging.info('check tenant primary zone success')
 #
 ## 8. 修改永久下线的时间，避免升级过程中缺副本
 #def modify_server_permanent_offline_time(cur):
@@ -2050,26 +2059,14 @@
 #  else:
 #    min_cluster_version = get_version(results[0][0])
 #    # backup dest need to be cleaned before upgrade from 4.0.
-#    (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_BACKUP_PARAMETER where name='data_backup_dest' and (value!=NULL or value!='')""")
-#    if len(results) != 1 or len(results[0]) != 1:
-#      fail_list.append('failed to data backup dest cnt')
-#    elif results[0][0] != 0:
-#      fail_list.append("""still has backup destination, upgrade is not allowed temporarily""")
-#    else:
-#      logging.info('check backup destination success')
-#
-## 14. 检查内存超卖
-#def check_memory_limit(query_cur):
-#  page_size = os.sysconf("SC_PAGE_SIZE")
-#  phys_pages = os.sysconf("SC_PHYS_PAGES")
-#  phy_mem_size = page_size * phys_pages
-#  sql = """select distinct MEMORY_LIMIT from GV$OB_SERVERS"""
-#  (desc, results) = query_cur.exec_query(sql)
-#  for item in results:
-#    if item[0] >= phy_mem_size:
-#      fail_list.append('memory_limit:{0} is bigger than physical memory:{1}'.format(item[0], phy_mem_size))
-#      break
-#  logging.info('check memory_limit success')
+#    if min_cluster_version < get_version("4.1.0.0"):
+#      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_BACKUP_PARAMETER where name='data_backup_dest' and (value!=NULL or value!='')""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        fail_list.append('failed to data backup dest cnt')
+#      elif results[0][0] != 0:
+#        fail_list.append("""still has backup destination, upgrade is not allowed temporarily""")
+#      else:
+#        logging.info('check backup destination success')
 #
 ## last check of do_check, make sure no function execute after check_fail_list
 #def check_fail_list():
@@ -2109,7 +2106,6 @@
 #      check_archive_job_exist(query_cur)
 #      check_archive_dest_exist(query_cur)
 #      check_backup_dest_exist(query_cur)
-#      check_memory_limit(query_cur)
 #      # all check func should execute before check_fail_list
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
