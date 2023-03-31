@@ -205,13 +205,16 @@ OB_INLINE int ObTableLookupOp::check_lookup_row_cnt()
       ObString func_name = ObString::make_string("check_lookup_row_cnt");
       LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
       LOG_ERROR("Fatal Error!!! Catch a defensive error!",
-                K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt));
+                K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
+                "index_group_cnt", index_group_cnt_,
+                "lookup_group_cnt", lookup_group_cnt_);
       //now to dump lookup das task info
       for (DASTaskIter task_iter = das_ref_.begin_task_iter(); !task_iter.is_end(); ++task_iter) {
         ObDASScanOp *das_op = static_cast<ObDASScanOp*>(*task_iter);
         LOG_INFO("dump TableLookup DAS Task range",
                  "scan_range", das_op->get_scan_param().key_ranges_,
-                 "range_array_pos", das_op->get_scan_param().range_array_pos_);
+                 "range_array_pos", das_op->get_scan_param().range_array_pos_,
+                 "tablet_id", das_op->get_tablet_id());
       }
       LOG_INFO("dump TableLookup Info", "batch_scan", MY_SPEC.batch_rescan_,
                "lookup_ctdef", MY_SPEC.scan_ctdef_,
