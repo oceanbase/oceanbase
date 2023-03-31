@@ -632,8 +632,8 @@ DEFINE_ERROR_EXT(OB_DELETE_SERVER_NOT_ALLOWED, -4745, -1, "HY000", "delete serve
 DEFINE_ERROR(OB_PACKET_STATUS_UNKNOWN, -4746, -1, "HY000", "Network error and packet status unknown. Abort auto retry.");
 DEFINE_ERROR(OB_ARBITRATION_SERVICE_NOT_EXIST, -4747, -1, "HY000", "arbitration service does not exist");
 DEFINE_ERROR(OB_ARBITRATION_SERVICE_ALREADY_EXIST, -4748, -1, "HY000", "arbitration service already exist");
-//-4749: OB_UNEXPECTED_TABLET_STATUS
-//-4750: OB_INVALID_TABLE_STORE
+DEFINE_ERROR_EXT(OB_UNEXPECTED_TABLET_STATUS, -4749, -1, "HY000", "unexpected tablet status", "%s");
+DEFINE_ERROR_EXT(OB_INVALID_TABLE_STORE, -4750, -1, "HY000", "invalid table store", "%s");
 DEFINE_ERROR(OB_WAIT_DEGRATION_TIMEOUT, -4751, -1, "HY000", "wait degration finished timeout")
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_START, -4752, -1, "HY000", "rootservice start process has failure");
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_STOP, -4753, -1, "HY000", "rootservice stop process has failure");
@@ -1702,6 +1702,7 @@ DEFINE_ERROR(OB_TOO_MANY_LOG_TASK, -6320, -1, "HY000", "too many log tasks");
 DEFINE_ERROR(OB_INVALID_BATCH_SIZE, -6321, -1, "HY000", "ob invalid batch size");
 DEFINE_ERROR(OB_CLOG_SLIDE_TIMEOUT, -6322, -1, "HY000", "ob clog slide timeout");
 DEFINE_ERROR(OB_LOG_REPLAY_ERROR, -6323, -1, "HY000", "log replay error");
+DEFINE_ERROR(OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT, -6324, -1, "HY000", "ob trying to lock config change conflicts");
 
 // for freeze
 // DEFINE_ERROR(OB_TABLET_FREEZE_TIMEOUT, -6400, -1, "HY000", "tablet_freeze timeout");
@@ -1755,7 +1756,9 @@ DEFINE_ERROR(OB_RG_NOT_MATCH, -7105, -1, "HY000", "replication group not match")
 DEFINE_ERROR(OB_TRANSFER_TASK_ABORTED, -7106, -1, "HY000", "transfer task aborted");
 DEFINE_ERROR(OB_TRANSFER_INVALID_MESSAGE, -7107, -1, "HY000", "transfer invalid message");
 DEFINE_ERROR(OB_TRANSFER_CTX_TS_NOT_MATCH, -7108, -1, "HY000", "transfer ctx_ts not match");
-//-7109: OB_TRANSFER_SYS_ERROR
+DEFINE_ERROR(OB_TRANSFER_SYS_ERROR, -7109, -1, "HY000", "transfer system error");
+DEFINE_ERROR(OB_TRANSFER_MEMBER_LIST_NOT_SAME, -7110, -1, "HY000", "transfer src ls and dest ls member list not same");
+DEFINE_ERROR(OB_ERR_UNEXPECTED_LOCK_OWNER, -7111, -1, "HY000", "lock owner id is not expected");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for gis  -7201 ---- -7300
