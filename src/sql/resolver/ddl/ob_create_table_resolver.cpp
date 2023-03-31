@@ -1660,6 +1660,11 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             column.set_charset_type(table_schema.get_charset_type());
             column.set_collation_type(expr->get_collation_type());
             column.set_accuracy(expr->get_accuracy());
+            if (lib::is_mysql_mode() && ob_is_number_tc(expr->get_result_type().get_type())) {
+              // TODO@zuojiao.hzj: add decimal int type here
+              column.set_data_precision(MIN(OB_MAX_DECIMAL_PRECISION, expr->get_accuracy().get_precision()));
+              column.set_data_scale(MIN(OB_MAX_DECIMAL_SCALE, expr->get_accuracy().get_scale()));
+            }
             OZ (adjust_string_column_length_within_max(column, lib::is_oracle_mode()));
             LOG_DEBUG("column expr debug", K(*expr));
           }
