@@ -3702,7 +3702,6 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
           gi_op->set_tablet_id_expr(tablet_id_expr);
           gi_op->set_join_filter_info(table_scan->get_join_filter_info());
           gi_op->add_flag(GI_USE_PARTITION_FILTER);
-          table_scan->set_tablet_id_expr(tablet_id_expr);
         }
       } else if (LOG_GROUP_BY == get_type()) {
         if (static_cast<ObLogGroupBy*>(this)->force_partition_gi()) {

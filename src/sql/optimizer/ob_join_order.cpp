@@ -299,7 +299,7 @@ int ObJoinOrder::compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &ac
                      path->index_id_ == cur_path->index_id_ &&
                      path->use_das_ == cur_path->use_das_) {
             if (path->use_das_) {
-              path->strong_sharding_ = opt_ctx->get_match_all_sharding();  
+              path->strong_sharding_ = opt_ctx->get_match_all_sharding();
             } else {
               path->strong_sharding_ = cur_path->strong_sharding_;
             }
@@ -312,7 +312,7 @@ int ObJoinOrder::compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &ac
                                                           path->strong_sharding_))) {
             LOG_WARN("failed to calc sharding info", K(ret));
           } else if (!path->use_das_ && (1 < access_paths.count() || path->is_inner_path_) &&
-                     (path->is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) && 
+                     (path->is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) &&
                      !is_virtual_table(path->ref_table_id_) &&
                      !ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), path->ref_table_id_) &&
                      opt_ctx->get_parallel() > path->strong_sharding_->get_part_cnt()) {
@@ -869,7 +869,7 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
         bool is_create_basic_path = false;
         AccessPath *das_access_path = NULL;
         AccessPath *basic_access_path = NULL; // the path does not use DAS, maybe optimal sometime.
-        if (OB_FAIL(will_use_das(table_id, 
+        if (OB_FAIL(will_use_das(table_id,
                                  ref_table_id,
                                  index_to_use,
                                  index_info_cache,
@@ -877,7 +877,7 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
                                  is_create_das_path,
                                  is_create_basic_path))) {
           LOG_WARN("failed to check will use das", K(ret));
-        } else if (is_create_das_path && 
+        } else if (is_create_das_path &&
                    OB_FAIL(create_one_access_path(table_id,
                                                   ref_table_id,
                                                   index_to_use,
@@ -1236,7 +1236,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                              const ObIndexInfoCache &index_info_cache,
                              PathHelper &helper,
                              bool &create_das_path,
-                             bool &create_basic_path) 
+                             bool &create_basic_path)
 {
   int ret = OB_SUCCESS;
   create_das_path = false;
@@ -1291,7 +1291,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                get_plan()->get_optimizer_context().get_parallel() < 2) {
       create_das_path = true;
       create_basic_path = false;
-    } else if ((helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) && 
+    } else if ((helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) &&
                !is_virtual_table(ref_id) &&
                !ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), ref_id)) {
       create_das_path = true;
@@ -2095,7 +2095,7 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
       AccessPath *das_access_path = NULL;
       AccessPath *basic_access_path = NULL; // the path does not use DAS, maybe optimal sometime.
       OptSkipScanState use_skip_scan = OptSkipScanState::SS_UNSET;
-      if (OB_FAIL(will_use_das(table_id, 
+      if (OB_FAIL(will_use_das(table_id,
                                ref_table_id,
                                skyline_index_ids.at(i),
                                index_info_cache,
@@ -3680,7 +3680,7 @@ int ObJoinOrder::add_path(Path* path)
                  K(*cur_path), K(*path), K(ret));
       } else if (DominateRelation::OBJ_LEFT_DOMINATE == plan_rel ||
                  DominateRelation::OBJ_EQUAL == plan_rel) {
-        should_add = false;    
+        should_add = false;
         LOG_TRACE("current path has been dominated, no need to add", K(*cur_path),
             K(*path), K(ret));
         OPT_TRACE("current path has been dominated by path:", cur_path);
@@ -4608,9 +4608,9 @@ int JoinPath::compute_join_path_sharding()
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo_ ||
         (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_ && JoinAlgo::HASH_JOIN == join_algo_)) {
       if (right_path_->parallel_more_than_part_cnt()) {
-        //If the degree of parallelism is greater than the number of partitions,		
-        //sharding will not be inherited to avoid thread waste.		
-        strong_sharding_ = opt_ctx.get_distributed_sharding();		
+        //If the degree of parallelism is greater than the number of partitions,
+        //sharding will not be inherited to avoid thread waste.
+        strong_sharding_ = opt_ctx.get_distributed_sharding();
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
         inherit_sharding_index_ = 1;
@@ -4635,10 +4635,10 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       }
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_) {
-      if (left_path_->parallel_more_than_part_cnt()) {		
-        //If the degree of parallelism is greater than the number of partitions,		
-        //sharding will not be inherited to avoid thread waste.		
-        strong_sharding_ = opt_ctx.get_distributed_sharding();		
+      if (left_path_->parallel_more_than_part_cnt()) {
+        //If the degree of parallelism is greater than the number of partitions,
+        //sharding will not be inherited to avoid thread waste.
+        strong_sharding_ = opt_ctx.get_distributed_sharding();
       } else {
         strong_sharding_ = left_path_->strong_sharding_;
         inherit_sharding_index_ = 0;
@@ -6353,7 +6353,7 @@ int ObJoinOrder::try_pruning_base_table_access_path(ObIArray<AccessPath*> &acces
                     ap->est_cost_info_.index_meta_info_.is_geo_index_;
     }
   }
-  
+
   if (OB_SUCC(ret) && need_prune) {
     for (int64_t i = base_path_positions.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
       int64_t base_path_pos = base_path_positions.at(i);
@@ -6372,7 +6372,7 @@ int ObJoinOrder::try_pruning_base_table_access_path(ObIArray<AccessPath*> &acces
       }
     }
   }
-  
+
   return ret;
 }
 
@@ -7614,7 +7614,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   distributed_methods = path_info.distributed_methods_;
   bool use_shared_hash_join = get_plan()->get_optimizer_context().get_parallel() > 1;
   ObSQLSessionInfo *session = NULL;
-  const ObLogPlanHint *log_hint = NULL;		
+  const ObLogPlanHint *log_hint = NULL;
   const LogJoinHint *log_join_hint = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(left_sharding = left_path.get_sharding()) ||
       OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info()) ||
@@ -7655,7 +7655,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   }
 
   if (OB_SUCC(ret)) {
-    log_hint = &get_plan()->get_log_plan_hint();		
+    log_hint = &get_plan()->get_log_plan_hint();
     log_join_hint = log_hint->get_join_hint(right_path.parent_->get_tables());
     if (HASH_JOIN == join_algo) {
       if (use_shared_hash_join) {
@@ -8710,6 +8710,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
       JoinFilterInfo info;
       info.table_id_ = access.table_id_;
       info.filter_table_id_ = access.table_id_;
+      info.index_id_ = access.index_id_;
       info.ref_table_id_ = access.ref_table_id_;
       info.sharding_ = access.strong_sharding_;
       info.row_count_ = access.get_output_row_count();
@@ -9046,7 +9047,7 @@ int ObJoinOrder::check_partition_join_filter_valid(const DistAlgo join_dist_algo
     } else if (!match) {
       info.need_partition_join_filter_ = false;
       OPT_TRACE("hash join will not use partition join filter");
-    } else if (OB_FAIL(build_join_filter_part_expr(info.ref_table_id_,
+    } else if (OB_FAIL(build_join_filter_part_expr(info.index_id_,
                                                   info.lexprs_,
                                                   info.rexprs_,
                                                   info.sharding_,
@@ -10473,8 +10474,8 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("index schema should not be null", K(ret), K(index_id));
-        } else if (OB_FAIL(init_est_info_for_index(index_id, 
-                                                   index_meta_info, 
+        } else if (OB_FAIL(init_est_info_for_index(index_id,
+                                                   index_meta_info,
                                                    ap->table_partition_info_,
                                                    ap->is_global_index_ ? *index_schema : *table_schema,
                                                    has_opt_stat))) {
@@ -10488,7 +10489,7 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
                   static_cast<double>(table_meta_info_.table_column_count_));
             index_meta_info.index_micro_block_count_ = table_meta_info_.has_opt_stat_ ?
                 table_meta_info_.micro_block_count_
-                    * (static_cast<double>(index_meta_info.index_column_count_) / 
+                    * (static_cast<double>(index_meta_info.index_column_count_) /
                       static_cast<double>(table_meta_info_.table_column_count_)) : -1;
           }
         }
@@ -11348,7 +11349,7 @@ int ObJoinOrder::compute_fd_item_set_for_table_scan(const uint64_t table_id,
       LOG_WARN("failed to try add fd item", K(ret));
     }
   }
-  if (OB_SUCC(ret) && stmt->is_select_stmt()) { 
+  if (OB_SUCC(ret) && stmt->is_select_stmt()) {
     ObSqlBitSet<> table_set;
     if (OB_FAIL(stmt->get_table_rel_ids(table_id, table_set))) {
       LOG_WARN("fail to get table relids", K(ret));

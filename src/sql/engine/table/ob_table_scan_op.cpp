@@ -937,26 +937,28 @@ int ObTableScanOp::update_output_tablet_id()
   const ObDASTabletLoc *data_tablet_loc = MY_SPEC.should_scan_index() ?
       ObDASUtils::get_related_tablet_loc(*scan_result_.get_tablet_loc(), MY_SPEC.ref_table_id_) :
       scan_result_.get_tablet_loc();
-  if (is_vectorized()) {
-    const int64_t batch_size = MY_SPEC.max_batch_size_;
-    if (NULL != MY_SPEC.pdml_partition_id_) {
-      ObExpr *expr = MY_SPEC.pdml_partition_id_;
-      ObDatum *datums = expr->locate_datums_for_update(eval_ctx_, batch_size);
-      for (int64_t i = 0; i < batch_size; i++) {
-        datums[i].set_int(data_tablet_loc->tablet_id_.id());
+  if (OB_NOT_NULL(data_tablet_loc)) {
+    if (is_vectorized()) {
+      const int64_t batch_size = MY_SPEC.max_batch_size_;
+      if (NULL != MY_SPEC.pdml_partition_id_) {
+        ObExpr *expr = MY_SPEC.pdml_partition_id_;
+        ObDatum *datums = expr->locate_datums_for_update(eval_ctx_, batch_size);
+        for (int64_t i = 0; i < batch_size; i++) {
+          datums[i].set_int(data_tablet_loc->tablet_id_.id());
+        }
+        expr->set_evaluated_projected(eval_ctx_);
+        LOG_TRACE("find the partition id expr in pdml table scan", K(ret), KPC(expr), KPC(data_tablet_loc));
       }
-      expr->set_evaluated_projected(eval_ctx_);
-      LOG_TRACE("find the partition id expr in pdml table scan", K(ret), KPC(expr), KPC(data_tablet_loc));
-    }
-  } else {
-    // handle PDML partition id:
-    // if partition id expr in TSC output_exprs,
-    // set the TSC partition id to the corresponding expr frame
-    if (NULL != MY_SPEC.pdml_partition_id_) {
-      ObExpr *expr = MY_SPEC.pdml_partition_id_;
-      expr->locate_datum_for_write(eval_ctx_).set_int(data_tablet_loc->tablet_id_.id());
-      expr->set_evaluated_projected(eval_ctx_);
-      LOG_TRACE("find the partition id expr in pdml table scan", K(ret), KPC(data_tablet_loc));
+    } else {
+      // handle PDML partition id:
+      // if partition id expr in TSC output_exprs,
+      // set the TSC partition id to the corresponding expr frame
+      if (NULL != MY_SPEC.pdml_partition_id_) {
+        ObExpr *expr = MY_SPEC.pdml_partition_id_;
+        expr->locate_datum_for_write(eval_ctx_).set_int(data_tablet_loc->tablet_id_.id());
+        expr->set_evaluated_projected(eval_ctx_);
+        LOG_TRACE("find the partition id expr in pdml table scan", K(ret), KPC(data_tablet_loc));
+      }
     }
   }
   return ret;
