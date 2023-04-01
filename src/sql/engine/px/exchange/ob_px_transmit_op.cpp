@@ -629,7 +629,11 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
     }
     uint64_t begin_cpu_time = rdtsc();
     if (dfc_.all_ch_drained()) {
-      LOG_DEBUG("all channel has been drained");
+      int tmp_ret = drain_exch();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("drain exchange data failed", K(tmp_ret));
+      }
+      LOG_TRACE("all channel has been drained");
       break;
     }
     const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
